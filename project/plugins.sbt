@@ -1,6 +1,6 @@
 
 addSbtPlugin("com.geirsson" % "sbt-scalafmt" % "1.4.0")
-addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.0.0")
+addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.2.0")
 addSbtPlugin("com.dwijnand" % "sbt-dynver" % "2.1.0")
 addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.9.0")
 addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.12")
