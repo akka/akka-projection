@@ -22,9 +22,15 @@ lazy val akkaProjectionCore = Project(
     base = file("akka-projection-core")
   ).settings(Dependencies.core)
 
+lazy val akkaProjectionPoc = Project(
+  id = "akka-projection-poc",
+  base = file("akka-projection-poc")
+).settings(Dependencies.core)
+  .dependsOn(akkaProjectionCore)
+
 
 
 lazy val root = Project(
     id = "akka-projection",
     base = file(".")
-  ).aggregate(akkaProjectionCore)
+  ).aggregate(akkaProjectionCore, akkaProjectionPoc)
