@@ -13,6 +13,10 @@ class InMemoryRepository {
   private var list: List[String] = Nil
 
   def save(str: String): DBIO[Done] = {
+    println(s"""
+                | Saving '$str' in repository!
+                | -----------------------------------------
+              """.stripMargin)
     list = str :: list
     DBIO(Done)
   }
