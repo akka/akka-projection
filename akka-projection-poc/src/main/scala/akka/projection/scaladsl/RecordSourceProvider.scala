@@ -7,7 +7,7 @@ import akka.stream.scaladsl.Source
 
 import scala.collection.immutable
 
-class RecordSourceProvider extends SourceProvider[Record, String, Long]{
+class RecordSourceProvider extends SourceProvider[Long, Record]{
 
   private val records = for (i <- 1 to 100) yield Record(i, s"record-$i")
   private val stream = Source(records)
@@ -18,8 +18,12 @@ class RecordSourceProvider extends SourceProvider[Record, String, Long]{
       case _ => stream
     }
   }
+}
 
-  override def extractOffset(envelope: Record): Long = envelope.offset
+object RecordExtractors extends EnvelopeExtractor[Record, String, Long] {
+  override def extractOffset(record: Record): Long = record.offset
 
-  override def extractPayload(envelope: Record): String = envelope.payload
+  override def extractPayload(record: Record): String = record.payload
+
+  def exposeEnvelope = EnvelopeExtractor.exposeEnvelope(this)
 }

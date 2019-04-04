@@ -6,7 +6,7 @@ package akka.projection.scaladsl.transactional
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.projection.scaladsl.{Projection, ProjectionHandler, Record, RecordSourceProvider}
+import akka.projection.scaladsl._
 import akka.stream.ActorMaterializer
 
 import scala.concurrent.Await
@@ -29,9 +29,9 @@ object AppFakeDb extends App {
   }
 
   val proj = Projection(
-    name = "fake-db",
     sourceProvider = new RecordSourceProvider,
-    offsetManagement = new TransactionalOffsetStore,
+    envelopeExtractor = RecordExtractors,
+    runner = new TransactionalDbRunner("fake-db"),
     handler = projectionHandler
   )
 
