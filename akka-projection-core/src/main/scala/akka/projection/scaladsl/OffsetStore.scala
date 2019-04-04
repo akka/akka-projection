@@ -18,7 +18,7 @@ trait ProjectionRunner[Offset, IO] {
 
   def offsetStore: OffsetStore[Offset, IO]
   def run(offset: Offset)
-         (block: => IO)
+         (handler: => IO)
          (implicit ec: ExecutionContext): Future[Done]
 
 }
