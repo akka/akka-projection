@@ -5,12 +5,12 @@
 package akka.projection.scaladsl.transactional
 
 import akka.Done
-import akka.projection.scaladsl.OffsetManagement
+import akka.projection.scaladsl.OffsetStore
 
 import scala.concurrent.{ExecutionContext, Future}
 
 
-class TransactionalOffsetManagement extends OffsetManagement[Long, DBIO[Done]] {
+class TransactionalOffsetStore extends OffsetStore[Long, DBIO[Done]] {
 
   private var lastOffset: Option[Long] = None
 
