@@ -15,7 +15,7 @@ import scala.concurrent.duration._
 
 /**
  * This example is exactly the same as AppFakeDb except that the ProjectionHandler takes
- * the 'Record' (ie: the Envelope type). 
+ * the 'Record' (ie: the Envelope type).
  */
 object AppFakeDbWithEnvelope extends App {
 
@@ -36,7 +36,7 @@ object AppFakeDbWithEnvelope extends App {
     val proj = Projection(
       name = "fake-db-with-envelope",
       sourceProvider = SourceProvider.exposeEnvelope(new RecordSourceProvider),
-      offsetManagement = new TransactionalOffsetManagement,
+      offsetManagement = new TransactionalOffsetStore,
       handler = projectionHandler
     )
 

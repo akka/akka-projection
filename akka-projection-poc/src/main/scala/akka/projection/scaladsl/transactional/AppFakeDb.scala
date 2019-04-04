@@ -31,7 +31,7 @@ object AppFakeDb extends App {
   val proj = Projection(
     name = "fake-db",
     sourceProvider = new RecordSourceProvider,
-    offsetManagement = new TransactionalOffsetManagement,
+    offsetManagement = new TransactionalOffsetStore,
     handler = projectionHandler
   )
 

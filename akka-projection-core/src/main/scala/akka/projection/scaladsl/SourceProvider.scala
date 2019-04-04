@@ -6,7 +6,7 @@ package akka.projection.scaladsl
 
 import akka.stream.scaladsl.Source
 
-trait SourceProvider[Envelope, Payload, Offset] {
+trait SourceProvider[Offset, Envelope] {
 
   /**
    * Provides a Source[S, _] starting from the passed offset.
@@ -14,10 +14,6 @@ trait SourceProvider[Envelope, Payload, Offset] {
    *
    */
   def source(offset: Option[Offset]): Source[Envelope, _]
-
-  def extractOffset(envelope: Envelope): Offset
-
-  def extractPayload(envelope: Envelope): Payload
 
 
 }
