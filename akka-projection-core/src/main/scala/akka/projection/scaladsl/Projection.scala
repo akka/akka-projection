@@ -25,9 +25,9 @@ case class Projection[Envelope, Event, Offset, IO](sourceProvider: SourceProvide
 
     val src =
       source.mapAsync(1) { envelope =>
-        // OffsetManagement is responsible for the call to ProjectionHandler
+        // the runner is responsible for the call to ProjectionHandler
         // so it can define what to do with the Offset: at-least-once, at-most-once, effectively-once
-        runner.run(envelopeExtractor.extractOffset(envelope))  {
+        runner.run(envelopeExtractor.extractOffset(envelope))  { () =>
           handler.onEvent(envelopeExtractor.extractPayload(envelope))
         }
       }

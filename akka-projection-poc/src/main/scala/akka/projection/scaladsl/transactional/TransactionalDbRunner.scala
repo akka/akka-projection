@@ -28,10 +28,10 @@ class TransactionalDbRunner(name: String) extends ProjectionRunner[Long, DBIO[Do
       }
     }
 
-  override def run(offset: Long)(handler: => DBIO[Done])(implicit ec: ExecutionContext): Future[Done] = {
+  override def run(offset: Long)(handler: () => DBIO[Done])(implicit ec: ExecutionContext): Future[Done] = {
     println(s"saving offset '$offset' for projection '$name'")
     // a real implementation would run the DBIO on a real DB
-    val dbio = handler.flatMap(_ => offsetStore.saveOffset(offset))
+    val dbio = handler().flatMap(_ => offsetStore.saveOffset(offset))
     Database.run(dbio).map(_ => Done)
   }
 }
