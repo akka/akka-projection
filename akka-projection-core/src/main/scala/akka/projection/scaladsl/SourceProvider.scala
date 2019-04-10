@@ -9,7 +9,7 @@ import akka.stream.scaladsl.Source
 trait SourceProvider[Offset, Envelope] {
 
   /**
-   * Provides a Source[S, _] starting from the passed offset.
+   * Provides a Source[Envelope, _] starting from the passed offset.
    * When Offset is None, the Source will start from the first element.
    *
    */
