@@ -28,9 +28,28 @@ lazy val akkaProjectionPoc = Project(
 ).settings(Dependencies.core)
   .dependsOn(akkaProjectionCore)
 
+// provides Runner and OffsetStore for transactional projections
+// lazy val akkaProjectionJdbc = Project(
+//   id = "akka-projection-jdbc",
+//   base = file("akka-projection-jdbc")
+// ).settings(Dependencies.jdbc)
 
+// provides Sources backed by Alpakka 
+// and Runners that commits on Topic (at-least-once, at-most-once)
+lazy val akkaProjectionAlpakkaKafka = Project(
+  id = "akka-projection-alpakka-kafka",
+  base = file("akka-projection-alpakka-kafka")
+).settings(Dependencies.alpakkaKafka)
+  .dependsOn(akkaProjectionCore)
+
+
+// // provides Sources backed Akka Persistence Query
+// lazy val akkaProjectionAkkaPersistence = Project(
+//   id = "akka-projection-akka-persistence",
+//   base = file("akka-projection-akka-persistence")
+//   ).settings(Dependencies.akkaPersistence)
 
 lazy val root = Project(
     id = "akka-projection",
     base = file(".")
-  ).aggregate(akkaProjectionCore, akkaProjectionPoc)
+  ).aggregate(akkaProjectionCore, akkaProjectionPoc, akkaProjectionAlpakkaKafka)
