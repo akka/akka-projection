@@ -22,11 +22,6 @@ lazy val akkaProjectionCore = Project(
     base = file("akka-projection-core")
   ).settings(Dependencies.core)
 
-lazy val akkaProjectionPoc = Project(
-  id = "akka-projection-poc",
-  base = file("akka-projection-poc")
-).settings(Dependencies.core)
-  .dependsOn(akkaProjectionCore)
 
 // provides Runner and OffsetStore for transactional projections
 // lazy val akkaProjectionJdbc = Project(
@@ -40,8 +35,15 @@ lazy val akkaProjectionAlpakkaKafka = Project(
   id = "akka-projection-alpakka-kafka",
   base = file("akka-projection-alpakka-kafka")
 ).settings(Dependencies.alpakkaKafka)
-  .dependsOn(akkaProjectionCore)
+  .settings(libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
+  .dependsOn(akkaProjectionCore, akkaProjectionMocks)
 
+
+lazy val akkaProjectionMocks = Project(
+  id = "akka-projection-mocks",
+  base = file("akka-projection-mocks")
+).settings(libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
+  .dependsOn(akkaProjectionCore)
 
 // // provides Sources backed Akka Persistence Query
 // lazy val akkaProjectionAkkaPersistence = Project(
@@ -52,4 +54,4 @@ lazy val akkaProjectionAlpakkaKafka = Project(
 lazy val root = Project(
     id = "akka-projection",
     base = file(".")
-  ).aggregate(akkaProjectionCore, akkaProjectionPoc, akkaProjectionAlpakkaKafka)
+  ).aggregate(akkaProjectionCore, akkaProjectionAlpakkaKafka, akkaProjectionMocks)
