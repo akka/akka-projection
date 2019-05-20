@@ -16,20 +16,13 @@ object KafkaSourceProvider {
 
   class PlainSourceProvider[K, V](topicPartition: TopicPartition,
                                   settings: ConsumerSettings[K, V]) extends SourceProvider[Long, ConsumerRecord[K, V]] {
-    override def source(offset: Option[Long]): Source[ConsumerRecord[K, V], _] = {
 
-      def buildSource(fromOffset: Long): Source[ConsumerRecord[K, V], Consumer.Control] = {
-        Consumer.plainSource(
-          settings,
-          Subscriptions.assignmentWithOffset(topicPartition -> fromOffset)
-        )
-      }
+    override def source(offset: Option[Long]): Source[ConsumerRecord[K, V], _] =
+      Consumer.plainSource(
+        settings,
+        Subscriptions.assignmentWithOffset(topicPartition -> offset.getOrElse(0L))
+      )
 
-      offset match {
-        case Some(fromOffset) => buildSource(fromOffset)
-        case None => buildSource(0)
-      }
-    }
   }
 
   def committableSource[K, V](subscription: Subscription,
@@ -40,6 +33,7 @@ object KafkaSourceProvider {
 
     override def source(offset: Option[CommittableOffset]): Source[CommittableMessage[K, V], _] =
       Consumer.committableSource(settings, subscription)
+
   }
 
 }
