@@ -9,17 +9,17 @@ import akka.Done
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
 
-trait OffsetStore[Offset, IO] {
+trait OffsetStore[Offset, Result] {
   def readOffset(): Future[Option[Offset]]
-  def saveOffset(offset: Offset): IO
+  def saveOffset(offset: Offset): Result
 }
 
-trait ProjectionRunner[Offset, IO] {
+trait ProjectionRunner[Offset, Result] {
 
-  def offsetStore: OffsetStore[Offset, IO]
+  def offsetStore: OffsetStore[Offset, Result]
 
   def run(offset: Offset)
-         (handler: () => IO)
+         (handler: () => Result)
          (implicit ec: ExecutionContext): Future[Done]
 
 }

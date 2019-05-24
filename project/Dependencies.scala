@@ -1,34 +1,43 @@
 package akka.projections
 
+import akka.projections.Dependencies.Libraries
 import sbt._
 import sbt.Keys._
 
 object Dependencies {
 
   object Versions {
-    val akka = "2.5.17"
+    val akka = "2.5.23"
 
     val scalaTest = "3.0.5"
     val scalaJava8Compat = "0.9.0"
+    val alpakkaKafka = "1.0.3"
+    val testContainers = "1.11.2"
+
   }
 
-  object Compile {
+  object Libraries {
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
-    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % "1.0.1"
+    val akkaSlf4j = "com.typesafe.akka" %% "akka-slf4j" % Versions.akka
+    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
+    val aplakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % Test
+
+    val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest % Test
+    val testContainers = "org.testcontainers" % "kafka" % Versions.testContainers % Test
   }
 
-  object Test {
-    val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest % "test" // ApacheV2
-  }
 
-  private val deps = libraryDependencies
-
-  val core = deps ++= Seq(
-    Compile.akkaStream
+  val core = libraryDependencies ++= Seq(
+    Libraries.akkaStream
   )
 
-  val alpakkaKafka = deps ++= Seq(
-    Compile.akkaStream,
-    Compile.alpakkaKafka
+  val alpakkaKafka = libraryDependencies ++= Seq(
+    Libraries.akkaStream,
+    Libraries.alpakkaKafka,
+    // test
+    Libraries.akkaSlf4j % Test,
+    Libraries.aplakkaKafkaTestkit,
+    Libraries.testContainers,
+    Libraries.scalaTest
   )
 }
