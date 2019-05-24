@@ -12,6 +12,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 object KafkaProjectionRunners {
 
+  // TOOD: make it a def with a batch size
   val atLeastOnceRunner = AtLeastOnceRunner
 
   object AtLeastOnceRunner extends ProjectionRunner[CommittableOffset, Future[Done]] {
@@ -22,7 +23,7 @@ object KafkaProjectionRunners {
     }
   }
 
-
+  // TOOD: make it a def with a batch size
   val atMostOnceRunner = AtMostOnceRunner
 
   object AtMostOnceRunner extends ProjectionRunner[CommittableOffset, Future[Done]] {

@@ -10,13 +10,13 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
 import scala.util.control.NonFatal
 
-trait ProjectionHandler[Event, IO] {
+trait ProjectionHandler[Event, Result] {
 
-  def handleEvent(event: Event): IO
+  def handleEvent(event: Event): Result
 
-  def onFailure(event: Event, throwable: Throwable): IO
+  def onFailure(event: Event, throwable: Throwable): Result
 
-  def onEvent(event: Event): IO
+  def onEvent(event: Event): Result
 }
 
 trait AsyncProjectionHandler[Event] extends ProjectionHandler[Event, Future[Done]]{
