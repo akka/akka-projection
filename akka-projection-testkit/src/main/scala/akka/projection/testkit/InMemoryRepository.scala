@@ -2,19 +2,21 @@
  * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.fakedb
+package akka.projection.testkit
 
 import akka.Done
 
 class InMemoryRepository[T] {
 
-  private var list: List[T] = Nil
+  private var internalList: List[T] = Nil
 
   def save(value: T): DBIO[Done] = {
-    list = value :: list
+    internalList = value :: internalList
     DBIO(Done)
   }
 
-  def size = list.size
+  def size = internalList.size
+
+  def list = internalList.reverse
 
 }

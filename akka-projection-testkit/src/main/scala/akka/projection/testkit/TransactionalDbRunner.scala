@@ -2,7 +2,7 @@
  * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.fakedb
+package akka.projection.testkit
 
 import akka.Done
 import akka.projection.scaladsl.{OffsetStore, ProjectionRunner}

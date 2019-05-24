@@ -35,14 +35,14 @@ lazy val akkaProjectionAlpakkaKafka = Project(
   id = "akka-projection-alpakka-kafka",
   base = file("akka-projection-alpakka-kafka")
 ).settings(Dependencies.alpakkaKafka)
-  .settings(libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
+
   .dependsOn(akkaProjectionCore, akkaProjectionFakeDb)
 
 
 lazy val akkaProjectionFakeDb = Project(
-  id = "akka-projection-fakedb",
-  base = file("akka-projection-fakedb")
-).settings(libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
+  id = "akka-projection-testkit",
+  base = file("akka-projection-testkit")
+).settings(libraryDependencies ++= Seq(Dependencies.Libraries.scalaTest))
   .dependsOn(akkaProjectionCore)
 
 // // provides Sources backed Akka Persistence Query
