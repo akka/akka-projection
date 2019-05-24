@@ -35,11 +35,10 @@ lazy val akkaProjectionAlpakkaKafka = Project(
   id = "akka-projection-alpakka-kafka",
   base = file("akka-projection-alpakka-kafka")
 ).settings(Dependencies.alpakkaKafka)
+  .dependsOn(akkaProjectionCore, akkaProjectionTestkit)
 
-  .dependsOn(akkaProjectionCore, akkaProjectionFakeDb)
 
-
-lazy val akkaProjectionFakeDb = Project(
+lazy val akkaProjectionTestkit = Project(
   id = "akka-projection-testkit",
   base = file("akka-projection-testkit")
 ).settings(libraryDependencies ++= Seq(Dependencies.Libraries.scalaTest))
@@ -54,4 +53,4 @@ lazy val akkaProjectionFakeDb = Project(
 lazy val root = Project(
     id = "akka-projection",
     base = file(".")
-  ).aggregate(akkaProjectionCore, akkaProjectionAlpakkaKafka, akkaProjectionFakeDb)
+  ).aggregate(akkaProjectionCore, akkaProjectionAlpakkaKafka, akkaProjectionTestkit)
