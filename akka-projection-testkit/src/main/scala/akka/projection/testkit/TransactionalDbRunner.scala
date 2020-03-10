@@ -6,30 +6,38 @@ package akka.projection.testkit
 
 import akka.Done
 import akka.projection.scaladsl.{OffsetStore, ProjectionRunner}
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}
 
 
-class TransactionalDbRunner(name: String) extends ProjectionRunner[Long, DBIO[Done]] {
+class TransactionalDbRunner[Offset](name: String) extends ProjectionRunner[Offset, DBIO[Done]] {
 
-  override def offsetStore: OffsetStore[Long, DBIO[Done]] =
-    new OffsetStore[Long, DBIO[Done]] {
-      private var lastOffset: Option[Long] = None
+  val logger = LoggerFactory.getLogger(this.getClass)
 
-      override def readOffset(): Future[Option[Long]] = {
-        println(s"reading offset for projection '$name' '$lastOffset'")
+  // FIXME: not safe, we need to harden it as test cases get more evolved
+  private var _lastOffset: Option[Offset] = None
+
+  override def offsetStore: OffsetStore[Offset, DBIO[Done]] =
+    new OffsetStore[Offset, DBIO[Done]] {
+
+      override def readOffset(): Future[Option[Offset]] = {
+        logger.info(s"reading offset for projection '$name' '${_lastOffset}'")
         // a real implementation would read it from a DB
-        Database.run(DBIO(lastOffset))
+        Future.successful(_lastOffset)
       }
 
-      override def saveOffset(offset: Long): DBIO[Done] = {
-        lastOffset = Some(offset)
+      override def saveOffset(offset: Offset): DBIO[Done] = {
+        logger.info(s"saving offset for projection '$name' '${_lastOffset}'")
+        _lastOffset = Some(offset)
         DBIO(Done)
       }
     }
 
-  override def run(offset: Long)(handler: () => DBIO[Done])(implicit ec: ExecutionContext): Future[Done] = {
-    println(s"saving offset '$offset' for projection '$name'")
+  def lastOffset: Option[Offset] = _lastOffset
+
+  override def run(offset: Offset)(handler: () => DBIO[Done])(implicit ec: ExecutionContext): Future[Done] = {
+    logger.info(s"saving offset '$offset' for projection '$name'")
     // a real implementation would run the DBIO on a real DB
     val dbio = handler().flatMap(_ => offsetStore.saveOffset(offset))
     Database.run(dbio).map(_ => Done)

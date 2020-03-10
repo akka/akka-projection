@@ -5,7 +5,8 @@
         </encoder>
     </appender>
 
-    <logger name="akka" level="WARN"/>
+    <logger name="akka" level="DEBUG"/>
+    <logger name="akka.actor.TimerScheduler" level="INFO"/>
     <logger name="akka.kafka" level="DEBUG"/>
 
     <logger name="org.apache.zookeeper" level="WARN"/>
@@ -15,6 +16,9 @@
     <logger name="org.apache.kafka" level="WARN"/>
     <logger name="org.apache.kafka.common.utils.AppInfoParser" level="ERROR"/>
     <logger name="org.apache.kafka.clients.NetworkClient" level="ERROR"/>
+
+    <logger name="com.github.dockerjava" level="WARN"/>
+    <logger name="org.testcontainers" level="WARN"/>
 
     <root level="DEBUG">
         <appender-ref ref="STDOUT" />

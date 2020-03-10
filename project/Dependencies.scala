@@ -22,6 +22,10 @@ object Dependencies {
     val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
     val aplakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % Test
 
+
+    val logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
+    val logbackTest = logback % Test
+
     val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest % Test
     val testContainers = "org.testcontainers" % "kafka" % Versions.testContainers % Test
   }
