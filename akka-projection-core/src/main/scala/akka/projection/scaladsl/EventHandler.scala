@@ -10,7 +10,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
 import scala.util.control.NonFatal
 
-trait ProjectionHandler[Event, Result] {
+trait EventHandler[Event, Result] {
 
   def handleEvent(event: Event): Result
 
@@ -19,7 +19,7 @@ trait ProjectionHandler[Event, Result] {
   def onEvent(event: Event): Result
 }
 
-trait AsyncProjectionHandler[Event] extends ProjectionHandler[Event, Future[Done]]{
+trait AsyncEventHandler[Event] extends EventHandler[Event, Future[Done]]{
 
   implicit def exc: ExecutionContext
 

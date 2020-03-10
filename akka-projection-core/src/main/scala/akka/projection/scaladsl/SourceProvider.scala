@@ -10,7 +10,7 @@ trait SourceProvider[Offset, Envelope] {
 
   /**
    * Provides a Source[Envelope, _] starting from the passed offset.
-   * When Offset is None, the Source will start from the first element.
+   * When Offset is None, the Source should start from the first element.
    *
    */
   def source(offset: Option[Offset]): Source[Envelope, _]

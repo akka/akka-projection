@@ -1,19 +1,20 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.scaladsl.kafka
 
-import akka.Done
 import akka.kafka.Subscriptions
-import akka.projection.testkit.{DBIO, DbProjectionHandler, InMemoryRepository}
+import akka.projection.testkit.InMemoryRepository
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
-import scala.concurrent.duration._
-import scala.concurrent.Await
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
 
-class AtMostOnceRunnerSpec extends TestcontainersKafkaSpec {
+import scala.concurrent.duration._
+
+class CommittableSourceAtMostOnceRunnerSpec extends TestcontainersKafkaSpec {
 
   implicit val patience: PatienceConfig = PatienceConfig(30.seconds, 500.millis)
+
 
   "Kafka Projection using at-most-once delivery" must {
 
@@ -23,19 +24,15 @@ class AtMostOnceRunnerSpec extends TestcontainersKafkaSpec {
       val topic1 = createTopic(1)
       val group1 = createGroupId(1)
 
-      Await.result(produceString(topic1, Messages), remainingOrDefault)
+      produceString(topic1, Messages).futureValue(Timeout(remainingOrDefault))
 
       val repository = new InMemoryRepository[String]
-      val handler = new DbProjectionHandler[String] {
-        override def handleEvent(event: String): DBIO[Done] =
-          repository.save(event)
-      }
 
       val projection =
         KafkaProjections
           .committableSource(consumerDefaults.withGroupId(group1), Subscriptions.topics(topic1))
+          .withEventHandler(TestEventHandler.dbEventHandlerAsync(repository))
           .withAtMostOnce
-          .withEventHandler(handler.asAsyncHandler)
 
       runProjection(projection) {
         eventually {
@@ -56,24 +53,16 @@ class AtMostOnceRunnerSpec extends TestcontainersKafkaSpec {
       val topic1 = createTopic(1)
       val group1 = createGroupId(1)
 
-      Await.result(produceString(topic1, Messages), remainingOrDefault)
+      produceString(topic1, Messages).futureValue(Timeout(remainingOrDefault))
 
       val repository = new InMemoryRepository[String]
-
-      def handler(failPredicate: String => Boolean = _ => false) = new DbProjectionHandler[String] {
-        override def handleEvent(event: String): DBIO[Done] =
-          if (failPredicate(event))
-            throw new RuntimeException(s"Failed on event $event")
-          else
-            repository.save(event)
-      }
 
       val projection1 =
         KafkaProjections
           .committableSource(consumerDefaults.withGroupId(group1), Subscriptions.topics(topic1))
-          .withAtMostOnce
           // fail handler on "def"
-          .withEventHandler(handler(failPredicate = _ == "def").asAsyncHandler)
+          .withEventHandler(TestEventHandler.dbEventHandlerAsync(repository, failPredicate = _ == "def"))
+          .withAtMostOnce
 
       runProjection(projection1) {
         eventually {
@@ -81,7 +70,7 @@ class AtMostOnceRunnerSpec extends TestcontainersKafkaSpec {
             repository.size shouldBe 1
           }
 
-          withClue("projected stream contains only one element ") {
+          withClue("projected list contains only one element, 'def' failed") {
             repository.list shouldBe List("abc")
           }
         }
@@ -91,8 +80,8 @@ class AtMostOnceRunnerSpec extends TestcontainersKafkaSpec {
       val projection2 =
         KafkaProjections
           .committableSource(consumerDefaults.withGroupId(group1), Subscriptions.topics(topic1))
+          .withEventHandler(TestEventHandler.dbEventHandlerAsync(repository))
           .withAtMostOnce
-          .withEventHandler(handler().asAsyncHandler)
 
       runProjection(projection2) {
         eventually {
@@ -100,7 +89,7 @@ class AtMostOnceRunnerSpec extends TestcontainersKafkaSpec {
             repository.size shouldBe 2
           }
 
-          withClue("projected list contains all elements") {
+          withClue("projected list is missing 'def'") {
             repository.list shouldBe List("abc", "ghi")
           }
         }

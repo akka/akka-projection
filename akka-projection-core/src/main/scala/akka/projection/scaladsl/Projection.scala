@@ -12,7 +12,7 @@ import scala.concurrent.ExecutionContext
 case class Projection[Envelope, Event, Offset, Result](sourceProvider: SourceProvider[Offset, Envelope],
                                                        envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
                                                        runner: ProjectionRunner[Offset, Result],
-                                                       handler: ProjectionHandler[Event, Result]) {
+                                                       handler: EventHandler[Event, Result]) {
 
 
   private var shutdown: Option[KillSwitch] = None
@@ -28,9 +28,9 @@ case class Projection[Envelope, Event, Offset, Result](sourceProvider: SourcePro
 
     val src =
       // TODO: runner could return a Flow that defines the mapAsync 
-      // so different implemenations could decide if it makes sense of not
+      // so different implementations could decide if it makes sense or not
       source.mapAsync(1) { envelope =>
-        // the runner is responsible for the call to ProjectionHandler
+        // the runner is responsible for the call to EventHandler
         // so it can define what to do with the Offset: at-least-once, at-most-once, effectively-once
         runner.run(envelopeExtractor.extractOffset(envelope))  { () =>
           handler.onEvent(envelopeExtractor.extractPayload(envelope))

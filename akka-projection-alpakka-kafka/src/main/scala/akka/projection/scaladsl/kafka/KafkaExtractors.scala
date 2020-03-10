@@ -22,7 +22,7 @@ object KafkaExtractors {
 
   }
 
-  def committableSource[K, V] = new CommittableMessageExtractor[K, V]
+  def committableMessage[K, V] = new CommittableMessageExtractor[K, V]
 
   class CommittableMessageExtractor[K, V] extends EnvelopeExtractor[CommittableMessage[K, V], V, CommittableOffset] {
     override def extractOffset(envelope: CommittableMessage[K, V]): CommittableOffset = envelope.committableOffset
