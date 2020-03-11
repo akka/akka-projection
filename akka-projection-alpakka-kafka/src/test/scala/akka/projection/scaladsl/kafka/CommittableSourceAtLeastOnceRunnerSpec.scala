@@ -5,7 +5,7 @@
 package akka.projection.scaladsl.kafka
 
 import akka.kafka.Subscriptions
-import akka.projection.testkit.InMemoryRepository
+import akka.projection.testkit.{TestEventHandler, TestInMemoryRepository}
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 
@@ -25,12 +25,12 @@ class CommittableSourceAtLeastOnceRunnerSpec extends TestcontainersKafkaSpec {
       val group1 = createGroupId(1)
       produceString(topic1, Messages).futureValue(Timeout(remainingOrDefault))
 
-      val repository = new InMemoryRepository[String]
+      val repository = new TestInMemoryRepository[String]
 
       val projection =
         KafkaProjections
           .committableSource(consumerDefaults.withGroupId(group1), Subscriptions.topics(topic1))
-          .withEventHandler(TestEventHandler.dbEventHandlerAsync(repository))
+          .withEventHandler(TestEventHandler(repository).asAsyncHandler)
           .withAtLeastOnce
 
       runProjection(projection) {
@@ -54,13 +54,13 @@ class CommittableSourceAtLeastOnceRunnerSpec extends TestcontainersKafkaSpec {
       val group1 = createGroupId(1)
       produceString(topic1, Messages).futureValue(Timeout(remainingOrDefault))
 
-      val repository = new InMemoryRepository[String]
+      val repository = new TestInMemoryRepository[String]
 
       val projection1 =
         KafkaProjections
           .committableSource(consumerDefaults.withGroupId(group1), Subscriptions.topics(topic1))
           // fail handler on "def"
-          .withEventHandler(TestEventHandler.dbEventHandlerAsync(repository, failPredicate = _ == "def"))
+          .withEventHandler(TestEventHandler(repository, failPredicate = (s: String) => s == "def").asAsyncHandler)
           .withAtLeastOnce
 
       runProjection(projection1) {
@@ -79,7 +79,7 @@ class CommittableSourceAtLeastOnceRunnerSpec extends TestcontainersKafkaSpec {
       val projection2 =
         KafkaProjections
           .committableSource(consumerDefaults.withGroupId(group1), Subscriptions.topics(topic1))
-          .withEventHandler(TestEventHandler.dbEventHandlerAsync(repository))
+          .withEventHandler(TestEventHandler(repository).asAsyncHandler)
           .withAtLeastOnce
 
       runProjection(projection2) {

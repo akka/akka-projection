@@ -7,7 +7,7 @@ package akka.projection.testkit
 import akka.Done
 import org.slf4j.LoggerFactory
 
-class InMemoryRepository[T] {
+class TestInMemoryRepository[T] {
 
   val logger = LoggerFactory.getLogger(this.getClass)
 
