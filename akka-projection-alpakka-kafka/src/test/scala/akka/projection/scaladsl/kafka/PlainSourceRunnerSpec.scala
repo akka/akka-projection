@@ -4,7 +4,7 @@
 
 package akka.projection.scaladsl.kafka
 
-import akka.projection.testkit.{InMemoryRepository, TransactionalDbRunner}
+import akka.projection.testkit.{TestEventHandler, TestInMemoryRepository, TestTransactionalDbRunner}
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import org.apache.kafka.common.TopicPartition
 import org.scalatest.OptionValues
@@ -24,13 +24,13 @@ class PlainSourceRunnerSpec extends TestcontainersKafkaSpec with OptionValues {
       val topic1 = createTopic(1)
       produceString(topic1, Messages).futureValue(Timeout(remainingOrDefault))
 
-      val repository = new InMemoryRepository[String]
-      val runner = new TransactionalDbRunner[Long]("plain-source-kafka")
+      val repository = new TestInMemoryRepository[String]
+      val runner = new TestTransactionalDbRunner[Long]("plain-source-kafka")
 
       val projection =
         KafkaProjections
             .plainSource(consumerDefaults, new TopicPartition(topic1, 0))
-            .withEventHandler(TestEventHandler.dbEventHandler(repository))
+            .withEventHandler(TestEventHandler(repository))
             .withProjectionRunner(runner)
 
       runProjection(projection) {
@@ -54,14 +54,14 @@ class PlainSourceRunnerSpec extends TestcontainersKafkaSpec with OptionValues {
       val topic1 = createTopic(1)
       produceString(topic1, Messages).futureValue(Timeout(remainingOrDefault))
 
-      val repository = new InMemoryRepository[String]
-      val runner = new TransactionalDbRunner[Long]("plain-source-kafka")
+      val repository = new TestInMemoryRepository[String]
+      val runner = new TestTransactionalDbRunner[Long]("plain-source-kafka")
 
       val projection1 =
         KafkaProjections
           .plainSource(consumerDefaults, new TopicPartition(topic1, 0))
           // fail handler on "def"
-          .withEventHandler(TestEventHandler.dbEventHandler(repository, failPredicate = _ == "def"))
+          .withEventHandler(TestEventHandler(repository, failPredicate = _ == "def"))
           .withProjectionRunner(runner)
 
       runProjection(projection1) {
@@ -81,7 +81,7 @@ class PlainSourceRunnerSpec extends TestcontainersKafkaSpec with OptionValues {
       val projection2 =
         KafkaProjections
           .plainSource(consumerDefaults, new TopicPartition(topic1, 0))
-          .withEventHandler(TestEventHandler.dbEventHandler(repository))
+          .withEventHandler(TestEventHandler(repository))
           .withProjectionRunner(runner)
 
       runProjection(projection2) {

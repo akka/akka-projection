@@ -12,7 +12,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import scala.util.control.NonFatal
 
-trait DbEventHandler[E] extends EventHandler[E, DBIO[Done]] { self =>
+trait TestEventHandler[E] extends EventHandler[E, DBIO[Done]] { self =>
 
   override def onFailure(event: E, throwable: Throwable): DBIO[Done] = throw throwable
 
@@ -40,4 +40,20 @@ trait DbEventHandler[E] extends EventHandler[E, DBIO[Done]] { self =>
       Database.run(self.handleEvent(event))
     }
   }
+}
+
+object TestEventHandler {
+
+  def apply[E](repository: TestInMemoryRepository[E]): TestEventHandler[E] =
+    TestEventHandler.apply(repository, (_:E) => false)
+
+  def apply[E](repository: TestInMemoryRepository[E], failPredicate: E => Boolean): TestEventHandler[E] =
+    new TestEventHandler[E] {
+      override def handleEvent(event: E): DBIO[Done] = {
+        if (failPredicate(event))
+          throw new RuntimeException(s"Failed on event $event")
+        else
+          repository.save(event)
+      }
+    }
 }

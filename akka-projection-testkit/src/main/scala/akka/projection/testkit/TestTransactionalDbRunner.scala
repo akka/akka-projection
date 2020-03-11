@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.{ExecutionContext, Future}
 
 
-class TransactionalDbRunner[Offset](name: String) extends ProjectionRunner[Offset, DBIO[Done]] {
+class TestTransactionalDbRunner[Offset](name: String) extends ProjectionRunner[Offset, DBIO[Done]] {
 
   val logger = LoggerFactory.getLogger(this.getClass)
 
