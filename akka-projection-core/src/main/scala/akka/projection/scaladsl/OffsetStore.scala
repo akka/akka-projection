@@ -4,22 +4,19 @@
 
 package akka.projection.scaladsl
 
-import akka.Done
-
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 import scala.language.higherKinds
 
-trait OffsetStore[Offset, IO] {
-  def readOffset(): Future[Option[Offset]]
-  def saveOffset(offset: Offset): IO
+trait OffsetStore[OffsetType, IO] {
+  def readOffset(): Future[Option[Offset[OffsetType]]]
+  def saveOffset(offset: Offset[OffsetType]): IO
 }
 
-trait ProjectionRunner[Offset, IO] {
+trait ProjectionRunner[OffsetType, IO] {
 
-  def offsetStore: OffsetStore[Offset, IO]
+  def offsetStore: OffsetStore[Offset[OffsetType], IO]
 
-  def run(offset: Offset)
-         (handler: () => IO)
-         (implicit ec: ExecutionContext): Future[Done]
+  def run(offset: Offset[OffsetType])(handler: () => IO)(implicit ec: ExecutionContext): Future[Offset[OffsetType]]
 
 }

@@ -6,14 +6,13 @@ package akka.projection.scaladsl
 
 import akka.stream.scaladsl.Source
 
-trait SourceProvider[Offset, Envelope] {
+trait SourceProvider[OffsetType, Envelope] {
 
   /**
    * Provides a Source[S, _] starting from the passed offset.
    * When Offset is None, the Source will start from the first element.
    *
    */
-  def source(offset: Option[Offset]): Source[Envelope, _]
-
+  def source(offset: Option[Offset[OffsetType]]): Source[Envelope, _]
 
 }

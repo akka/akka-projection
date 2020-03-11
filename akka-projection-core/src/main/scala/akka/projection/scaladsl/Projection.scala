@@ -5,14 +5,17 @@
 package akka.projection.scaladsl
 
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.Source
 
 import scala.concurrent.ExecutionContext
 
-case class Projection[Envelope, Event, Offset, IO](sourceProvider: SourceProvider[Offset, Envelope],
-                                                   envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
-                                                   runner: ProjectionRunner[Offset, IO],
-                                                   handler: ProjectionHandler[Event, IO]) {
+case class Projection[Envelope, Event, OffsetType, IO](
+    sourceProvider: SourceProvider[Offset[OffsetType], Envelope],
+    envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset[OffsetType]],
+    runner: ProjectionRunner[Offset[OffsetType], IO],
+    handler: ProjectionHandler[Event, IO]
+) {
 
   def start(implicit ex: ExecutionContext, materializer: Materializer): Unit = {
 
@@ -27,7 +30,7 @@ case class Projection[Envelope, Event, Offset, IO](sourceProvider: SourceProvide
       source.mapAsync(1) { envelope =>
         // the runner is responsible for the call to ProjectionHandler
         // so it can define what to do with the Offset: at-least-once, at-most-once, effectively-once
-        runner.run(envelopeExtractor.extractOffset(envelope))  { () =>
+        runner.run(envelopeExtractor.extractOffset(envelope)) { () =>
           handler.onEvent(envelopeExtractor.extractPayload(envelope))
         }
       }

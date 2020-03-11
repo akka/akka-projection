@@ -1,9 +1,8 @@
 package akka.projection.scaladsl
 
+trait EnvelopeExtractor[Envelope, Payload, OffsetType] {
 
-trait EnvelopeExtractor[Envelope, Payload, Offset] {
-
-  def extractOffset(envelope: Envelope): Offset
+  def extractOffset(envelope: Envelope): Offset[OffsetType]
 
   def extractPayload(envelope: Envelope): Payload
 
@@ -11,9 +10,11 @@ trait EnvelopeExtractor[Envelope, Payload, Offset] {
 
 object EnvelopeExtractor {
 
-  def exposeEnvelope[Envelope, Payload, Offset](extractor: EnvelopeExtractor[Envelope, Payload, Offset]): EnvelopeExtractor[Envelope, Envelope, Offset] =
-    new EnvelopeExtractor[Envelope, Envelope, Offset] {
-      override def extractOffset(envelope: Envelope): Offset = extractor.extractOffset(envelope)
+  def exposeEnvelope[Envelope, Payload, OffsetType](
+      extractor: EnvelopeExtractor[Envelope, Payload, OffsetType]
+  ): EnvelopeExtractor[Envelope, Envelope, OffsetType] =
+    new EnvelopeExtractor[Envelope, Envelope, OffsetType] {
+      override def extractOffset(envelope: Envelope): Offset[OffsetType] = extractor.extractOffset(envelope)
       override def extractPayload(envelope: Envelope): Envelope = envelope
     }
 
