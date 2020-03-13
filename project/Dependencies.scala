@@ -6,14 +6,13 @@ import sbt.Keys._
 object Dependencies {
 
   object Versions {
-    val akka = "2.5.17"
+    val akka = "2.6.3"
 
-    val scalaTest = "3.0.5"
-    val scalaJava8Compat = "0.9.0"
+    val scalaTest = "3.1.1"
   }
 
   object Compile {
-    val akkaStream        = "com.typesafe.akka" %% "akka-stream" % Versions.akka
+    val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
   }
 
   object Test {
@@ -22,11 +21,7 @@ object Dependencies {
 
   private val deps = libraryDependencies
 
-  val core = deps ++= Seq(
-    Compile.akkaStream
-  )
+  val core = deps ++= Seq(Compile.akkaStream)
 
-  val kafka = deps ++= Seq(
-    Compile.akkaStream
-  )
+  val kafka = deps ++= Seq(Compile.akkaStream)
 }
