@@ -4,22 +4,28 @@
 
 package akka.projection.scaladsl
 
+import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
+
 import akka.Done
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.language.higherKinds
+object OffsetStore {
+  sealed trait Strategy
+  case object NoOffsetStorage extends Strategy
+  case object AtMostOnce extends Strategy
+  case class AtLeastOnce(afterNumberOfEvents: Int, orAfterDuration: FiniteDuration) extends Strategy
 
-trait OffsetStore[Offset, IO] {
-  def readOffset(): Future[Option[Offset]]
-  def saveOffset(offset: Offset): IO
+  private val _noOffsetStore = new OffsetStore[Any] {
+    override def readOffset(): Future[Option[Any]] = Future.successful(None)
+    override def saveOffset(offset: Any): Future[Done] = Future.successful(Done)
+  }
+
+  def noOffsetStore[Offset]: OffsetStore[Offset] =
+    _noOffsetStore.asInstanceOf[OffsetStore[Offset]]
+
 }
 
-trait ProjectionRunner[Offset, IO] {
-
-  def offsetStore: OffsetStore[Offset, IO]
-
-  def run(offset: Offset)
-         (handler: () => IO)
-         (implicit ec: ExecutionContext): Future[Done]
-
+trait OffsetStore[Offset] {
+  def readOffset(): Future[Option[Offset]]
+  def saveOffset(offset: Offset): Future[Done]
 }

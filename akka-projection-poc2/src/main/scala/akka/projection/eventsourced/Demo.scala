@@ -5,11 +5,13 @@ package akka.projection.eventsourced
 
 import scala.concurrent.Future
 
+import scala.concurrent.duration._
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.eventsourced.cassandra.CassandraEventSourcedProjection
+import akka.projection.scaladsl.OffsetStore
 
 object Demo {
 
@@ -19,6 +21,7 @@ object Demo {
 
   object ShoppingCartProjection {
     def start(system: ActorSystem[_]) = {
+
       val eventProcessorId = "ShoppingCartProcessor"
       val tag = "CartSlice-1"
 
@@ -28,10 +31,12 @@ object Demo {
       }
 
       implicit val ec = system.executionContext
-      val projection = CassandraEventSourcedProjection(system, eventProcessorId, tag, eventHandler)
+      val offsetStrategy = OffsetStore.AtLeastOnce(100, 250.millis)
+      val projection = CassandraEventSourcedProjection(system, eventProcessorId, tag, eventHandler, offsetStrategy)
 
       projection.start()
     }
+
   }
 
   object Guardian {

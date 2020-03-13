@@ -15,7 +15,7 @@ import com.datastax.driver.core.PreparedStatement
 import com.datastax.driver.core.Row
 
 class CassandraOffsetStore(session: CassandraSession, eventProcessorId: String, tag: String)
-    extends OffsetStore[Offset, Future[Done]] {
+    extends OffsetStore[Offset] {
 
   private implicit val ec: ExecutionContext = session.ec
 
