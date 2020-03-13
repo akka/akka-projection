@@ -1,14 +1,14 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.scaladsl.kafka
 
 import akka.Done
 import akka.kafka.ConsumerMessage.CommittableOffset
-import akka.projection.scaladsl.{OffsetStore, ProjectionRunner}
+import akka.projection.scaladsl.{ OffsetStore, ProjectionRunner }
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 
 object KafkaProjectionRunners {
 
@@ -18,7 +18,8 @@ object KafkaProjectionRunners {
   object AtLeastOnceRunner extends ProjectionRunner[CommittableOffset, Future[Done]] {
     override def offsetStore: OffsetStore[CommittableOffset, Future[Done]] = NoopsOffsetStore
 
-    override def run(offset: CommittableOffset)(handler: () => Future[Done])(implicit ec: ExecutionContext): Future[Done] = {
+    override def run(offset: CommittableOffset)(handler: () => Future[Done])(
+        implicit ec: ExecutionContext): Future[Done] = {
       handler().flatMap(_ => offset.commitScaladsl())
     }
   }
@@ -29,7 +30,8 @@ object KafkaProjectionRunners {
   object AtMostOnceRunner extends ProjectionRunner[CommittableOffset, Future[Done]] {
     override def offsetStore: OffsetStore[CommittableOffset, Future[Done]] = NoopsOffsetStore
 
-    override def run(offset: CommittableOffset)(handler: () => Future[Done])(implicit ec: ExecutionContext): Future[Done] = {
+    override def run(offset: CommittableOffset)(handler: () => Future[Done])(
+        implicit ec: ExecutionContext): Future[Done] = {
       offset.commitScaladsl().flatMap(_ => handler())
     }
   }

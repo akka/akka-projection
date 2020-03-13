@@ -1,14 +1,14 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.testkit
 
 import akka.Done
-import akka.projection.scaladsl.{AsyncEventHandler, EventHandler}
+import akka.projection.scaladsl.{ AsyncEventHandler, EventHandler }
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Try
 import scala.util.control.NonFatal
 
@@ -21,7 +21,6 @@ trait TestEventHandler[E] extends EventHandler[E, DBIO[Done]] { self =>
       case NonFatal(ex) => onFailure(event, ex)
     }.get
 
-
   /**
    * Lift this DbProjectionHandler return type from DBIO[Done] to Future[Done].
    *
@@ -29,14 +28,14 @@ trait TestEventHandler[E] extends EventHandler[E, DBIO[Done]] { self =>
    * a Kafka Projection with committable offsets, the Result type must be Future[Done]
    *
    */
-  def asAsyncHandler(implicit execCtx: ExecutionContext) = new AsyncEventHandler[E] {
+  def asAsyncHandler(implicit execCtx: ExecutionContext): AsyncEventHandler[E] = new AsyncEventHandler[E] {
 
     val logger = LoggerFactory.getLogger(this.getClass)
 
     override implicit def exc: ExecutionContext = execCtx
 
     override def handleEvent(event: E): Future[Done] = {
-      logger.info(s"handling event $event")
+      logger.info(s"handling event '$event'")
       Database.run(self.handleEvent(event))
     }
   }
@@ -45,14 +44,18 @@ trait TestEventHandler[E] extends EventHandler[E, DBIO[Done]] { self =>
 object TestEventHandler {
 
   def apply[E](repository: TestInMemoryRepository[E]): TestEventHandler[E] =
-    TestEventHandler.apply(repository, (_:E) => false)
+    TestEventHandler.apply(repository, (_: E) => false)
 
   def apply[E](repository: TestInMemoryRepository[E], failPredicate: E => Boolean): TestEventHandler[E] =
     new TestEventHandler[E] {
+
+      val logger = LoggerFactory.getLogger(this.getClass)
+
       override def handleEvent(event: E): DBIO[Done] = {
-        if (failPredicate(event))
-          throw new RuntimeException(s"Failed on event $event")
-        else
+        if (failPredicate(event)) {
+          logger.info(s"failing on '$event'")
+          throw new RuntimeException(s"Failed on event '$event'")
+        } else
           repository.save(event)
       }
     }

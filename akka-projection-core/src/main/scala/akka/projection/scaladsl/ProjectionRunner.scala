@@ -1,22 +1,19 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.scaladsl
 
 import akka.Done
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.language.higherKinds
-
 
 trait ProjectionRunner[Offset, Result] {
 
   def offsetStore: OffsetStore[Offset, Result]
 
-  def run(offset: Offset)
-         (handler: () => Result)
-         (implicit ec: ExecutionContext): Future[Done]
+  def run(offset: Offset)(handler: () => Result)(implicit ec: ExecutionContext): Future[Done]
 
 }
 

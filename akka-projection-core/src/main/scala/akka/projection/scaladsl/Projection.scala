@@ -1,51 +1,54 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.scaladsl
 
-import akka.stream.{KillSwitch, KillSwitches, Materializer}
-import akka.stream.scaladsl.{Keep, Sink, Source}
+import akka.Done
+import akka.stream.{ KillSwitch, KillSwitches, Materializer }
+import akka.stream.scaladsl.{ Keep, Sink, Source }
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ ExecutionContext, Future }
 
-case class Projection[Envelope, Event, Offset, Result](sourceProvider: SourceProvider[Offset, Envelope],
-                                                       envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
-                                                       runner: ProjectionRunner[Offset, Result],
-                                                       handler: EventHandler[Event, Result]) {
+trait Projection[Envelope, Event, Offset, Result] {
+  def processEnvelope(envelope: Envelope)(implicit ex: ExecutionContext): Future[Done]
+  def start()(implicit ex: ExecutionContext, materializer: Materializer): Unit
+  def stop()(implicit ex: ExecutionContext): Future[Done]
+}
 
+case class ProjectionBase[Envelope, Event, Offset, Result](
+    sourceProvider: SourceProvider[Offset, Envelope, _],
+    envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
+    runner: ProjectionRunner[Offset, Result],
+    handler: EventHandler[Event, Result])
+    extends Projection[Envelope, Event, Offset, Result] {
 
   private var shutdown: Option[KillSwitch] = None
+
+  def processEnvelope(envelope: Envelope)(implicit ex: ExecutionContext): Future[Done] =
+    runner.run(envelopeExtractor.extractOffset(envelope)) { () =>
+      handler.onEvent(envelopeExtractor.extractPayload(envelope))
+    }
 
   def start()(implicit ex: ExecutionContext, materializer: Materializer): Unit = {
 
     val offsetFut = runner.offsetStore.readOffset()
 
-    val source =
+    val (killSwitch, streamDone) =
       Source
         .fromFuture(offsetFut.map(sourceProvider.source))
         .flatMapConcat(identity)
-
-    val src =
-      // TODO: runner could return a Flow that defines the mapAsync 
-      // so different implementations could decide if it makes sense or not
-      source.mapAsync(1) { envelope =>
-        // the runner is responsible for the call to EventHandler
-        // so it can define what to do with the Offset: at-least-once, at-most-once, effectively-once
-        runner.run(envelopeExtractor.extractOffset(envelope))  { () =>
-          handler.onEvent(envelopeExtractor.extractPayload(envelope))
-        }
-      }
-
-
-    val (killSwitch, streamDone) = src
-      .viaMat(KillSwitches.single)(Keep.right)
-      .toMat(Sink.ignore)(Keep.both)
-      .run()
+        .mapAsync(1)(processEnvelope)
+        .viaMat(KillSwitches.single)(Keep.right)
+        .toMat(Sink.ignore)(Keep.both)
+        .run()
 
     shutdown = Some(killSwitch)
 
   }
 
-  def stop(): Unit = shutdown.foreach( _.shutdown() )
+  def stop()(implicit ex: ExecutionContext): Future[Done] = {
+    shutdown.foreach(_.shutdown())
+    Future.successful(Done)
+  }
 }

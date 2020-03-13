@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.testkit
@@ -15,7 +15,7 @@ class TestInMemoryRepository[T] {
   private var internalList: List[T] = Nil
 
   def save(value: T): DBIO[Done] = {
-    logger.info(s"Saving event: $value")
+    logger.info(s"Saving event: '$value'")
     internalList = value :: internalList
     DBIO(Done)
   }

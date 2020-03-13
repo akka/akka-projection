@@ -1,9 +1,8 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.scaladsl
-
 
 trait EnvelopeExtractor[Envelope, Payload, Offset] {
 
@@ -15,7 +14,8 @@ trait EnvelopeExtractor[Envelope, Payload, Offset] {
 
 object EnvelopeExtractor {
 
-  def exposeEnvelope[Envelope, Payload, Offset](extractor: EnvelopeExtractor[Envelope, Payload, Offset]): EnvelopeExtractor[Envelope, Envelope, Offset] =
+  def exposeEnvelope[Envelope, Payload, Offset](
+      extractor: EnvelopeExtractor[Envelope, Payload, Offset]): EnvelopeExtractor[Envelope, Envelope, Offset] =
     new EnvelopeExtractor[Envelope, Envelope, Offset] {
       override def extractOffset(envelope: Envelope): Offset = extractor.extractOffset(envelope)
       override def extractPayload(envelope: Envelope): Envelope = envelope

@@ -6,12 +6,11 @@ package akka.projection.scaladsl.kafka
 
 import akka.kafka.testkit.scaladsl.ScalatestKafkaSpec
 import akka.projection.testkit.ProjectionTestRunner
-import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.{Matchers, WordSpecLike}
-
+import org.scalatest.concurrent.{ Eventually, ScalaFutures }
+import org.scalatest.{ Matchers, WordSpecLike }
 
 abstract class SpecBase(kafkaPort: Int)
-  extends ScalatestKafkaSpec(kafkaPort)
+    extends ScalatestKafkaSpec(kafkaPort)
     with WordSpecLike
     with Matchers
     with ScalaFutures
@@ -19,6 +18,5 @@ abstract class SpecBase(kafkaPort: Int)
     with Eventually {
 
   protected def this() = this(kafkaPort = -1)
-
 
 }

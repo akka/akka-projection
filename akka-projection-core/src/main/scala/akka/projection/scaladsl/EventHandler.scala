@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.scaladsl
 
 import akka.Done
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.language.higherKinds
 import scala.util.control.NonFatal
 
@@ -19,7 +19,7 @@ trait EventHandler[Event, Result] {
   def onEvent(event: Event): Result
 }
 
-trait AsyncEventHandler[Event] extends EventHandler[Event, Future[Done]]{
+trait AsyncEventHandler[Event] extends EventHandler[Event, Future[Done]] {
 
   implicit def exc: ExecutionContext
 
@@ -29,10 +29,9 @@ trait AsyncEventHandler[Event] extends EventHandler[Event, Future[Done]]{
     Future.failed(throwable)
 
   final def onEvent(event: Event): Future[Done] = {
-    handleEvent(event)
-      .recoverWith {
-        case NonFatal(exp) => onFailure(event, exp)
-      }
+    handleEvent(event).recoverWith {
+      case NonFatal(exp) => onFailure(event, exp)
+    }
   }
 
 }

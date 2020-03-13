@@ -4,7 +4,7 @@
 
 package akka.projection.scaladsl.kafka
 
-import akka.projection.testkit.{TestEventHandler, TestInMemoryRepository, TestTransactionalDbRunner}
+import akka.projection.testkit.{ TestEventHandler, TestInMemoryRepository, TestTransactionalDbRunner }
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import org.apache.kafka.common.TopicPartition
 import org.scalatest.OptionValues
@@ -28,10 +28,10 @@ class PlainSourceRunnerSpec extends TestcontainersKafkaSpec with OptionValues {
       val runner = new TestTransactionalDbRunner[Long]("plain-source-kafka")
 
       val projection =
-        KafkaProjections
-            .plainSource(consumerDefaults, new TopicPartition(topic1, 0))
-            .withEventHandler(TestEventHandler(repository))
-            .withProjectionRunner(runner)
+        KafkaProjection(
+          KafkaSourceProviders.plainSource(consumerDefaults, new TopicPartition(topic1, 0)),
+          TestEventHandler(repository),
+          runner)
 
       runProjection(projection) {
         eventually {
@@ -47,7 +47,6 @@ class PlainSourceRunnerSpec extends TestcontainersKafkaSpec with OptionValues {
       }
     }
 
-
     "re-delivered an event after a failure (at-least-once)" in assertAllStagesStopped {
 
       val Messages = "abc" :: "def" :: "ghi" :: Nil
@@ -58,11 +57,11 @@ class PlainSourceRunnerSpec extends TestcontainersKafkaSpec with OptionValues {
       val runner = new TestTransactionalDbRunner[Long]("plain-source-kafka")
 
       val projection1 =
-        KafkaProjections
-          .plainSource(consumerDefaults, new TopicPartition(topic1, 0))
+        KafkaProjection(
+          KafkaSourceProviders.plainSource(consumerDefaults, new TopicPartition(topic1, 0)),
           // fail handler on "def"
-          .withEventHandler(TestEventHandler(repository, failPredicate = _ == "def"))
-          .withProjectionRunner(runner)
+          TestEventHandler(repository, failPredicate = (s: String) => s == "def"),
+          runner)
 
       runProjection(projection1) {
         eventually {
@@ -79,10 +78,10 @@ class PlainSourceRunnerSpec extends TestcontainersKafkaSpec with OptionValues {
 
       //re-try without failing
       val projection2 =
-        KafkaProjections
-          .plainSource(consumerDefaults, new TopicPartition(topic1, 0))
-          .withEventHandler(TestEventHandler(repository))
-          .withProjectionRunner(runner)
+        KafkaProjection(
+          KafkaSourceProviders.plainSource(consumerDefaults, new TopicPartition(topic1, 0)),
+          TestEventHandler(repository),
+          runner)
 
       runProjection(projection2) {
         eventually {

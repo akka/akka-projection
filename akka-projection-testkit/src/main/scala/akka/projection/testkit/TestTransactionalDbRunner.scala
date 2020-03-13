@@ -1,15 +1,14 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.testkit
 
 import akka.Done
-import akka.projection.scaladsl.{OffsetStore, ProjectionRunner}
+import akka.projection.scaladsl.{ OffsetStore, ProjectionRunner }
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.{ExecutionContext, Future}
-
+import scala.concurrent.{ ExecutionContext, Future }
 
 class TestTransactionalDbRunner[Offset](name: String) extends ProjectionRunner[Offset, DBIO[Done]] {
 
@@ -28,7 +27,7 @@ class TestTransactionalDbRunner[Offset](name: String) extends ProjectionRunner[O
       }
 
       override def saveOffset(offset: Offset): DBIO[Done] = {
-        logger.info(s"saving offset for projection '$name' '${_lastOffset}'")
+        logger.info(s"saving offset for projection '$name', last offset: '${_lastOffset}', current offset: '$offset'")
         _lastOffset = Some(offset)
         DBIO(Done)
       }

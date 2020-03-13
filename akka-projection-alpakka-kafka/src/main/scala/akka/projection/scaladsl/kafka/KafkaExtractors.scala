@@ -1,19 +1,18 @@
 /*
- * Copyright (C) 2019 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2019-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.scaladsl.kafka
 
-import akka.kafka.ConsumerMessage.{CommittableMessage, CommittableOffset}
+import akka.kafka.ConsumerMessage.{ CommittableMessage, CommittableOffset }
 import akka.projection.scaladsl.EnvelopeExtractor
 import org.apache.kafka.clients.consumer.ConsumerRecord
-
 
 object KafkaExtractors {
 
   def consumerRecover[K, V] = new ConsumerRecordExtractor[K, V]
 
-  class ConsumerRecordExtractor[K, V] extends EnvelopeExtractor[ConsumerRecord[K, V], V, Long]{
+  class ConsumerRecordExtractor[K, V] extends EnvelopeExtractor[ConsumerRecord[K, V], V, Long] {
     override def extractOffset(record: ConsumerRecord[K, V]): Long = record.offset()
     override def extractPayload(record: ConsumerRecord[K, V]): V = record.value()
 
