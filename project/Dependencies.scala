@@ -12,7 +12,11 @@ object Dependencies {
   }
 
   object Compile {
+    val akkaActorTyped = "com.typesafe.akka" %% "akka-actor-typed" % Versions.akka
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
+    val persistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
+    val persistenceCassandra = "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.103"
+    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % "2.0.2"
   }
 
   object Test {
@@ -24,4 +28,11 @@ object Dependencies {
   val core = deps ++= Seq(Compile.akkaStream)
 
   val kafka = deps ++= Seq(Compile.akkaStream)
+
+  val poc2 = deps ++= Seq(
+        Compile.akkaActorTyped,
+        Compile.akkaStream,
+        Compile.persistenceQuery,
+        Compile.persistenceCassandra,
+        Compile.alpakkaKafka)
 }
