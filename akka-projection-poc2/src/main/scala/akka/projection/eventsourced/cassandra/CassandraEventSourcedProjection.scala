@@ -26,7 +26,7 @@ object CassandraEventSourcedProjection {
       systemProvider: ClassicActorSystemProvider,
       eventProcessorId: String,
       tag: String,
-      eventHandler: Event => Future[Done],
+      projectionHandler: ProjectionHandler[Event],
       offsetStrategy: OffsetStore.Strategy)(implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
     val offsetStore = offsetStrategy match {
       case OffsetStore.NoOffsetStorage => OffsetStore.noOffsetStore[Offset]
@@ -36,7 +36,7 @@ object CassandraEventSourcedProjection {
       systemProvider,
       new EventSourcedProvider(systemProvider, tag),
       new EventEnvelopeExtractor[Event],
-      new ProjectionHandler[Event](eventHandler),
+      projectionHandler,
       offsetStore,
       offsetStrategy)
   }

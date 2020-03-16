@@ -33,10 +33,16 @@ case class Projection[Envelope, Event, Offset](
         .map(env => envelopeExtractor.extractOffset(env) -> envelopeExtractor.extractPayload(env))
         .mapMaterializedValue(_ => NotUsed)
 
-    val eventHandler = handler.eventHandler
     val handlerFlow: Flow[(Offset, Event), Offset, NotUsed] =
-      Flow[(Offset, Event)].mapAsync(parallelism = 1) {
-        case (offset, event) => eventHandler(event).map(_ => offset)
+      handler match {
+        case SingleEventHandler(eventHandler) =>
+          Flow[(Offset, Event)].mapAsync(parallelism = 1) {
+            case (offset, event) => eventHandler(event).map(_ => offset)
+          }
+        case GroupedEventsHandler(n, d, eventHandler) =>
+          Flow[(Offset, Event)].groupedWithin(n, d).filterNot(_.isEmpty).mapAsync(1) { group =>
+            eventHandler(group.map(_._2)).map(_ => group.last._1)
+          }
       }
 
     (offsetStrategy match {
