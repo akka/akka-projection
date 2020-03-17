@@ -26,25 +26,26 @@ object Demo {
 
       implicit val ec = system.executionContext
 
-      val projectionHandler = new JdbcSingleEventHandlerWithTxOffset[ShoppingCart.Event](eventProcessorId, tag) {
-        override def getConnection(): Future[Connection] = ???
+      val projectionHandler: JdbcSingleEventHandlerWithTxOffset[ShoppingCart.Event] =
+        new JdbcSingleEventHandlerWithTxOffset[ShoppingCart.Event](eventProcessorId, tag) {
+          override def getConnection(): Future[Connection] = ???
 
-        override def onEvent(event: ShoppingCart.Event): Future[Done] = {
-          for {
-            c <- getConnection()
-            _ <- saveEventProjection(c, event)
-            _ <- saveOffset(c) // in same tx
-          } yield Done
+          override def onEvent(event: ShoppingCart.Event): Future[Done] = {
+            for {
+              c <- getConnection()
+              _ <- saveEventProjection(c, event)
+              _ <- saveOffset(c) // in same tx
+            } yield Done
+          }
+
+          private def saveEventProjection(c: Connection, event: ShoppingCart.Event): Future[Done] = {
+            // save something
+            Future.successful(Done)
+          }
+
         }
 
-        private def saveEventProjection(c: Connection, event: ShoppingCart.Event): Future[Done] = {
-          // save something
-          Future.successful(Done)
-        }
-
-      }
-
-      val projection = JdbcEventSourcedProjection(system, eventProcessorId, tag, projectionHandler)
+      val projection = JdbcEventSourcedProjection.onceAndOnlyOnce(system, eventProcessorId, tag, projectionHandler)
 
       projection.start()
     }

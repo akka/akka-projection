@@ -7,6 +7,7 @@ package akka.projection.scaladsl
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.NotUsed
@@ -16,7 +17,51 @@ import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 
-case class Projection[Envelope, Event, Offset](
+object Projection {
+  def atLeastOnce[Envelope, Event, Offset](
+      systemProvider: ClassicActorSystemProvider,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
+      handler: ProjectionHandler[Event],
+      offsetStore: OffsetStore[Offset],
+      afterNumberOfEvents: Int,
+      orAfterDuration: FiniteDuration)(implicit ec: ExecutionContext): Projection[Envelope, Event, Offset] = {
+    new Projection(
+      systemProvider,
+      sourceProvider,
+      envelopeExtractor,
+      handler,
+      OffsetStore.AtLeastOnce(afterNumberOfEvents, orAfterDuration),
+      offsetStore)
+  }
+
+  def atMostOnce[Envelope, Event, Offset](
+      systemProvider: ClassicActorSystemProvider,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
+      handler: ProjectionHandler[Event],
+      offsetStore: OffsetStore[Offset])(implicit ec: ExecutionContext): Projection[Envelope, Event, Offset] = {
+    new Projection(systemProvider, sourceProvider, envelopeExtractor, handler, OffsetStore.AtMostOnce, offsetStore)
+  }
+
+  def onceAndOnlyOnce[Envelope, Event, Offset](
+      systemProvider: ClassicActorSystemProvider,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
+      handler: ProjectionHandler[Event] with OffsetManagedByProjectionHandler[Offset])(
+      implicit ec: ExecutionContext): Projection[Envelope, Event, Offset] = {
+    new Projection(
+      systemProvider,
+      sourceProvider,
+      envelopeExtractor,
+      handler,
+      OffsetStore.OnceAnOnlyOnce,
+      OffsetStore.noOffsetStore)
+  }
+
+}
+
+class Projection[Envelope, Event, Offset] private (
     systemProvider: ClassicActorSystemProvider,
     sourceProvider: SourceProvider[Offset, Envelope],
     envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],

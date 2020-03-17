@@ -12,7 +12,6 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.scaladsl.GroupedEventsHandler
-import akka.projection.scaladsl.OffsetStore
 import akka.projection.scaladsl.SingleEventHandler
 
 object Demo {
@@ -34,8 +33,13 @@ object Demo {
       val projectionHandler = new SingleEventHandler(eventHandler)
 
       implicit val ec = system.executionContext
-      val offsetStrategy = OffsetStore.AtLeastOnce(100, 250.millis)
-      val projection = CassandraEventSourcedProjection(system, eventProcessorId, tag, projectionHandler, offsetStrategy)
+      val projection = CassandraEventSourcedProjection.atLeastOnce(
+        system,
+        eventProcessorId,
+        tag,
+        projectionHandler,
+        afterNumberOfEvents = 100,
+        orAfterDuration = 250.millis)
 
       projection.start()
     }
@@ -55,8 +59,13 @@ object Demo {
       val projectionHandler = new GroupedEventsHandler(10, 100.millis, eventHandler)
 
       implicit val ec = system.executionContext
-      val offsetStrategy = OffsetStore.AtLeastOnce(100, 250.millis)
-      val projection = CassandraEventSourcedProjection(system, eventProcessorId, tag, projectionHandler, offsetStrategy)
+      val projection = CassandraEventSourcedProjection.atLeastOnce(
+        system,
+        eventProcessorId,
+        tag,
+        projectionHandler,
+        afterNumberOfEvents = 100,
+        orAfterDuration = 250.millis)
 
       projection.start()
     }

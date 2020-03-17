@@ -5,6 +5,7 @@ package akka.projection.eventsourced.cassandra
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
@@ -22,22 +23,36 @@ import akka.projection.scaladsl.ProjectionHandler
 
 object CassandraEventSourcedProjection {
 
-  def apply[Event](
+  def atLeastOnce[Event](
       systemProvider: ClassicActorSystemProvider,
       eventProcessorId: String,
       tag: String,
       projectionHandler: ProjectionHandler[Event],
-      offsetStrategy: OffsetStore.Strategy)(implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
-    val offsetStore = offsetStrategy match {
-      case OffsetStore.NoOffsetStorage => OffsetStore.noOffsetStore[Offset]
-      case _                           => new CassandraOffsetStore(session(systemProvider), eventProcessorId, tag)
-    }
-    Projection(
+      afterNumberOfEvents: Int,
+      orAfterDuration: FiniteDuration)(implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
+    val offsetStore = new CassandraOffsetStore(session(systemProvider), eventProcessorId, tag)
+    Projection.atLeastOnce(
       systemProvider,
       new EventSourcedProvider(systemProvider, tag),
       new EventEnvelopeExtractor[Event],
       projectionHandler,
-      offsetStrategy,
+      offsetStore,
+      afterNumberOfEvents,
+      orAfterDuration)
+  }
+
+  def atMostOnce[Event](
+      systemProvider: ClassicActorSystemProvider,
+      eventProcessorId: String,
+      tag: String,
+      projectionHandler: ProjectionHandler[Event])(
+      implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
+    val offsetStore = new CassandraOffsetStore(session(systemProvider), eventProcessorId, tag)
+    Projection.atMostOnce(
+      systemProvider,
+      new EventSourcedProvider(systemProvider, tag),
+      new EventEnvelopeExtractor[Event],
+      projectionHandler,
       offsetStore)
   }
 
