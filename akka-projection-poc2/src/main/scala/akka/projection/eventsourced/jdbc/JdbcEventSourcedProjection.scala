@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
-package akka.projection.eventsourced.cassandra
+package akka.projection.eventsourced.jdbc
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -20,25 +20,21 @@ import akka.projection.scaladsl.OffsetStore
 import akka.projection.scaladsl.Projection
 import akka.projection.scaladsl.ProjectionHandler
 
-object CassandraEventSourcedProjection {
+object JdbcEventSourcedProjection {
 
   def apply[Event](
       systemProvider: ClassicActorSystemProvider,
       eventProcessorId: String,
       tag: String,
-      projectionHandler: ProjectionHandler[Event],
-      offsetStrategy: OffsetStore.Strategy)(implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
-    val offsetStore = offsetStrategy match {
-      case OffsetStore.NoOffsetStorage => OffsetStore.noOffsetStore[Offset]
-      case _                           => new CassandraOffsetStore(session(systemProvider), eventProcessorId, tag)
-    }
+      projectionHandler: JdbcSingleEventHandlerWithTxOffset[Event])(
+      implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
     Projection(
       systemProvider,
       new EventSourcedProvider(systemProvider, tag),
       new EventEnvelopeExtractor[Event],
       projectionHandler,
-      offsetStrategy,
-      offsetStore)
+      OffsetStore.OnceAnOnlyOnce,
+      OffsetStore.noOffsetStore[Offset])
   }
 
   private def session(systemProvider: ClassicActorSystemProvider): CassandraSession = {

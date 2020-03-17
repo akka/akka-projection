@@ -4,7 +4,9 @@
 
 package akka.projection.scaladsl
 
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 import akka.Done
 import akka.NotUsed
@@ -19,13 +21,19 @@ case class Projection[Envelope, Event, Offset](
     sourceProvider: SourceProvider[Offset, Envelope],
     envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
     handler: ProjectionHandler[Event],
-    offsetStore: OffsetStore[Offset],
-    offsetStrategy: OffsetStore.Strategy)(implicit ec: ExecutionContext) {
+    offsetStrategy: OffsetStore.Strategy,
+    offsetStore: OffsetStore[Offset])(implicit ec: ExecutionContext) {
 
   def start(): Unit = {
     implicit val system: ActorSystem = systemProvider.classicSystem
 
-    val offset = offsetStore.readOffset()
+    val offset: Future[Option[Offset]] =
+      handler match {
+        case offsetHandler: OffsetManagedByProjectionHandler[Offset] =>
+          offsetHandler.readOffset()
+        case _ =>
+          offsetStore.readOffset()
+      }
 
     val source: Source[(Offset, Event), NotUsed] =
       Source
@@ -33,15 +41,39 @@ case class Projection[Envelope, Event, Offset](
         .map(env => envelopeExtractor.extractOffset(env) -> envelopeExtractor.extractPayload(env))
         .mapMaterializedValue(_ => NotUsed)
 
+    def currentOffsetFlow: Flow[(Offset, Event), (Offset, Event), NotUsed] =
+      handler match {
+        case offsetHandler: OffsetManagedByProjectionHandler[Offset] =>
+          Flow[(Offset, Event)].map {
+            case (offset, event) =>
+              offsetHandler.setCurrentOffset(offset)
+              offset -> event
+          }
+        case _ =>
+          Flow[(Offset, Event)]
+      }
+
+    def groupedCurrentOffsetFlow: Flow[immutable.Seq[(Offset, Event)], immutable.Seq[(Offset, Event)], NotUsed] =
+      handler match {
+        case offfsetHandler: OffsetManagedByProjectionHandler[Offset] =>
+          Flow[immutable.Seq[(Offset, Event)]].map { group =>
+            offfsetHandler.setCurrentOffset(group.last._1)
+            group
+          }
+        case _ =>
+          Flow[immutable.Seq[(Offset, Event)]]
+      }
+
     val handlerFlow: Flow[(Offset, Event), Offset, NotUsed] =
       handler match {
-        case SingleEventHandler(eventHandler) =>
-          Flow[(Offset, Event)].mapAsync(parallelism = 1) {
-            case (offset, event) => eventHandler(event).map(_ => offset)
+        case h: AbstractSingleEventHandler[Event] =>
+          Flow[(Offset, Event)].via(currentOffsetFlow).mapAsync(parallelism = 1) {
+            case (offset, event) => h.onEvent(event).map(_ => offset)
           }
-        case GroupedEventsHandler(n, d, eventHandler) =>
-          Flow[(Offset, Event)].groupedWithin(n, d).filterNot(_.isEmpty).mapAsync(1) { group =>
-            eventHandler(group.map(_._2)).map(_ => group.last._1)
+        case h: AbstractGroupedEventsHandler[Event] =>
+          Flow[(Offset, Event)].groupedWithin(h.n, h.d).filterNot(_.isEmpty).via(groupedCurrentOffsetFlow).mapAsync(1) {
+            group =>
+              h.onEvents(group.map(_._2)).map(_ => group.last._1)
           }
       }
 
@@ -75,6 +107,9 @@ case class Projection[Envelope, Event, Offset](
           .mapAsync(parallelism = 1) { offset =>
             offsetStore.saveOffset(offset)
           }
+
+      case OffsetStore.OnceAnOnlyOnce =>
+        source.via(handlerFlow).map(_ => Done)
 
     }).runWith(Sink.ignore)
 

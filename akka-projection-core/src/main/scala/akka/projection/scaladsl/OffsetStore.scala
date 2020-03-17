@@ -13,7 +13,8 @@ object OffsetStore {
   sealed trait Strategy
   case object NoOffsetStorage extends Strategy
   case object AtMostOnce extends Strategy
-  case class AtLeastOnce(afterNumberOfEvents: Int, orAfterDuration: FiniteDuration) extends Strategy
+  final case class AtLeastOnce(afterNumberOfEvents: Int, orAfterDuration: FiniteDuration) extends Strategy
+  case object OnceAnOnlyOnce extends Strategy
 
   private val _noOffsetStore = new OffsetStore[Any] {
     override def readOffset(): Future[Option[Any]] = Future.successful(None)
@@ -28,4 +29,9 @@ object OffsetStore {
 trait OffsetStore[Offset] {
   def readOffset(): Future[Option[Offset]]
   def saveOffset(offset: Offset): Future[Done]
+}
+
+trait OffsetManagedByProjectionHandler[Offset] {
+  def readOffset(): Future[Option[Offset]]
+  def setCurrentOffset(offset: Offset): Unit
 }

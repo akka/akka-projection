@@ -1,17 +1,16 @@
 /*
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
-package akka.projection.eventsourced
+package akka.projection.eventsourced.cassandra
 
-import scala.concurrent.Future
 import scala.collection.immutable
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import akka.projection.eventsourced.cassandra.CassandraEventSourcedProjection
 import akka.projection.scaladsl.GroupedEventsHandler
 import akka.projection.scaladsl.OffsetStore
 import akka.projection.scaladsl.SingleEventHandler
@@ -32,7 +31,7 @@ object Demo {
         // do something
         Future.successful(Done)
       }
-      val projectionHandler = SingleEventHandler(eventHandler)
+      val projectionHandler = new SingleEventHandler(eventHandler)
 
       implicit val ec = system.executionContext
       val offsetStrategy = OffsetStore.AtLeastOnce(100, 250.millis)
@@ -53,7 +52,7 @@ object Demo {
         // do something
         Future.successful(Done)
       }
-      val projectionHandler = GroupedEventsHandler(10, 100.millis, eventHandler)
+      val projectionHandler = new GroupedEventsHandler(10, 100.millis, eventHandler)
 
       implicit val ec = system.executionContext
       val offsetStrategy = OffsetStore.AtLeastOnce(100, 250.millis)
