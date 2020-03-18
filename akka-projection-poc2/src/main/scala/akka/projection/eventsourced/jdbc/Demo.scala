@@ -6,6 +6,7 @@ package akka.projection.eventsourced.jdbc
 import java.sql.Connection
 
 import scala.concurrent.Future
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -28,19 +29,27 @@ object Demo {
 
       val projectionHandler: JdbcSingleEventHandlerWithTxOffset[ShoppingCart.Event] =
         new JdbcSingleEventHandlerWithTxOffset[ShoppingCart.Event](eventProcessorId, tag) {
-          override def getConnection(): Future[Connection] = ???
+          override def getConnection(): Connection = ???
 
           override def onEvent(event: ShoppingCart.Event): Future[Done] = {
-            for {
-              c <- getConnection()
-              _ <- saveEventProjection(c, event)
-              _ <- saveOffset(c) // in same tx
-            } yield Done
+            val c = getConnection()
+            try {
+              saveEventProjection(c, event)
+              saveOffset(c) // in same tx
+              c.commit()
+              Future.successful(Done)
+            } catch {
+              case NonFatal(e) =>
+                c.rollback()
+                throw e
+            } finally {
+              c.close()
+            }
           }
 
-          private def saveEventProjection(c: Connection, event: ShoppingCart.Event): Future[Done] = {
+          private def saveEventProjection(c: Connection, event: ShoppingCart.Event): Unit = {
             // save something
-            Future.successful(Done)
+            ()
           }
 
         }

@@ -44,28 +44,27 @@ abstract class JdbcProjectionHandlerWithTxOffset[Event](eventProcessorId: String
 
   private var currentOffset: Offset = Offset.noOffset
 
-  def getConnection(): Future[Connection]
+  def getConnection(): Connection
 
   override def readOffset(): Future[Option[Offset]] = {
-    getConnection().map { c =>
-      val pstmt =
-        c.prepareStatement("SELECT offset FROM akka_cqrs_sample.offsetStore WHERE eventProcessorId = ? AND tag = ?")
-      pstmt.setString(1, eventProcessorId)
-      pstmt.setString(2, tag)
-      val rs = pstmt.executeQuery()
-      try {
-        if (rs.next()) {
-          // FIXME other types of offsets
-          Some(Offset.sequence(rs.getLong(1)))
-        } else {
-          None
-        }
-      } finally {
-        // FIXME better resource closing
-        rs.close()
-        pstmt.close()
-        c.close()
+    val c = getConnection()
+    val pstmt =
+      c.prepareStatement("SELECT offset FROM akka_cqrs_sample.offsetStore WHERE eventProcessorId = ? AND tag = ?")
+    pstmt.setString(1, eventProcessorId)
+    pstmt.setString(2, tag)
+    val rs = pstmt.executeQuery()
+    try {
+      if (rs.next()) {
+        // FIXME other types of offsets
+        Future.successful(Some(Offset.sequence(rs.getLong(1))))
+      } else {
+        Future.successful(None)
       }
+    } finally {
+      // FIXME better resource closing
+      rs.close()
+      pstmt.close()
+      c.close()
     }
   }
 
@@ -76,7 +75,7 @@ abstract class JdbcProjectionHandlerWithTxOffset[Event](eventProcessorId: String
   def getCurrentOffset: Offset =
     currentOffset
 
-  def saveOffset(c: Connection): Future[Done] = {
+  def saveOffset(c: Connection): Unit = {
     currentOffset match {
       case Sequence(value) =>
         val pstmt = c.prepareStatement(
@@ -86,7 +85,6 @@ abstract class JdbcProjectionHandlerWithTxOffset[Event](eventProcessorId: String
           pstmt.setString(2, tag)
           pstmt.setLong(3, value)
           pstmt.execute()
-          Future.successful(Done)
         } finally {
           // FIXME better resource closing
           pstmt.close()
