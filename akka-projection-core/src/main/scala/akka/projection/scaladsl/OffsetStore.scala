@@ -14,7 +14,7 @@ object OffsetStore {
   case object NoOffsetStorage extends Strategy
   case object AtMostOnce extends Strategy
   final case class AtLeastOnce(afterNumberOfEvents: Int, orAfterDuration: FiniteDuration) extends Strategy
-  case object OnceAnOnlyOnce extends Strategy
+  case object ExactlyOnce extends Strategy
 
   private val _noOffsetStore = new OffsetStore[Any] {
     override def readOffset(): Future[Option[Any]] = Future.successful(None)

@@ -13,6 +13,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.eventsourced.EventEnvelope
+import akka.projection.eventsourced.EventSourcedProjection
 
 object Demo {
 
@@ -55,7 +56,7 @@ object Demo {
 
         }
 
-      val projection = JdbcEventSourcedProjection.onceAndOnlyOnce(system, eventProcessorId, tag, projectionHandler)
+      val projection = EventSourcedProjection.exactlyOnce(system, eventProcessorId, tag, projectionHandler)
 
       projection.start()
     }

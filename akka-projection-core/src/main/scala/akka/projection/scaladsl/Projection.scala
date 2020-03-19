@@ -23,14 +23,14 @@ object Projection {
       envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
       handler: ProjectionHandler[Event],
       offsetStore: OffsetStore[Offset],
-      afterNumberOfEvents: Int,
-      orAfterDuration: FiniteDuration)(implicit ec: ExecutionContext): Projection[Envelope, Event, Offset] = {
+      saveOffsetAfterNumberOfEvents: Int,
+      saveOffsetAfterDuration: FiniteDuration)(implicit ec: ExecutionContext): Projection[Envelope, Event, Offset] = {
     new Projection(
       systemProvider,
       sourceProvider,
       envelopeExtractor,
       handler,
-      OffsetStore.AtLeastOnce(afterNumberOfEvents, orAfterDuration),
+      OffsetStore.AtLeastOnce(saveOffsetAfterNumberOfEvents, saveOffsetAfterDuration),
       offsetStore)
   }
 
@@ -43,7 +43,7 @@ object Projection {
     new Projection(systemProvider, sourceProvider, envelopeExtractor, handler, OffsetStore.AtMostOnce, offsetStore)
   }
 
-  def onceAndOnlyOnce[Envelope, Event, Offset](
+  def exactlyOnce[Envelope, Event, Offset](
       systemProvider: ClassicActorSystemProvider,
       sourceProvider: SourceProvider[Offset, Envelope],
       envelopeExtractor: EnvelopeExtractor[Envelope, Event, Offset],
@@ -54,7 +54,7 @@ object Projection {
       sourceProvider,
       envelopeExtractor,
       handler,
-      OffsetStore.OnceAnOnlyOnce,
+      OffsetStore.ExactlyOnce,
       OffsetStore.noOffsetStore)
   }
 
@@ -128,7 +128,7 @@ class Projection[Envelope, Event, Offset] private (
             offsetStore.saveOffset(offset)
           }
 
-      case OffsetStore.OnceAnOnlyOnce =>
+      case OffsetStore.ExactlyOnce =>
         source.via(handlerFlow).map(_ => Done)
 
     }).runWith(Sink.ignore)

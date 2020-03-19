@@ -8,10 +8,16 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
+import akka.actor.ClassicActorSystemProvider
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import akka.event.Logging
+import akka.persistence.cassandra.ConfigSessionProvider
+import akka.persistence.cassandra.session.CassandraSessionSettings
+import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.projection.eventsourced.EventEnvelope
+import akka.projection.eventsourced.EventSourcedProjection
 import akka.projection.scaladsl.GroupedEventsHandler
 import akka.projection.scaladsl.SingleEventHandler
 
@@ -33,14 +39,17 @@ object Demo {
       }
       val projectionHandler = new SingleEventHandler[EventEnvelope[ShoppingCart.Event]](eventHandler)
 
+      val offsetStore = new CassandraOffsetStore(session(system), eventProcessorId, tag)
+
       implicit val ec = system.executionContext
-      val projection = CassandraEventSourcedProjection.atLeastOnce(
+      val projection = EventSourcedProjection.atLeastOnce(
         system,
         eventProcessorId,
         tag,
         projectionHandler,
-        afterNumberOfEvents = 100,
-        orAfterDuration = 250.millis)
+        offsetStore,
+        saveOffsetAfterNumberOfEvents = 100,
+        saveOffsetAfterDuration = 250.millis)
 
       projection.start()
     }
@@ -59,14 +68,17 @@ object Demo {
       }
       val projectionHandler = new GroupedEventsHandler[EventEnvelope[ShoppingCart.Event]](10, 100.millis, eventHandler)
 
+      val offsetStore = new CassandraOffsetStore(session(system), eventProcessorId, tag)
+
       implicit val ec = system.executionContext
-      val projection = CassandraEventSourcedProjection.atLeastOnce(
+      val projection = EventSourcedProjection.atLeastOnce(
         system,
         eventProcessorId,
         tag,
         projectionHandler,
-        afterNumberOfEvents = 100,
-        orAfterDuration = 250.millis)
+        offsetStore,
+        saveOffsetAfterNumberOfEvents = 100,
+        saveOffsetAfterDuration = 250.millis)
 
       projection.start()
     }
@@ -84,6 +96,20 @@ object Demo {
 
   def main(args: Array[String]): Unit = {
     ActorSystem[Nothing](Guardian(), "Demo")
+  }
+
+  private def session(systemProvider: ClassicActorSystemProvider): CassandraSession = {
+    // FIXME this will change with APC 1.0 / Alpakka Cassandra
+    val system = systemProvider.classicSystem
+    val sessionConfig = system.settings.config.getConfig("cassandra-journal")
+    new CassandraSession(
+      system,
+      new ConfigSessionProvider(system, sessionConfig),
+      CassandraSessionSettings(sessionConfig),
+      system.dispatcher,
+      Logging(system, getClass),
+      metricsCategory = "sample",
+      init = _ => Future.successful(Done))
   }
 
 }
