@@ -11,6 +11,7 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.GroupedEventsHandler
 import akka.projection.scaladsl.SingleEventHandler
 
@@ -26,11 +27,11 @@ object Demo {
       val eventProcessorId = "ShoppingCartProcessor"
       val tag = "CartSlice-1"
 
-      val eventHandler: ShoppingCart.Event => Future[Done] = { event =>
+      val eventHandler: EventEnvelope[ShoppingCart.Event] => Future[Done] = { eventEnvelope =>
         // do something
         Future.successful(Done)
       }
-      val projectionHandler = new SingleEventHandler(eventHandler)
+      val projectionHandler = new SingleEventHandler[EventEnvelope[ShoppingCart.Event]](eventHandler)
 
       implicit val ec = system.executionContext
       val projection = CassandraEventSourcedProjection.atLeastOnce(
@@ -52,11 +53,11 @@ object Demo {
       val eventProcessorId = "ShoppingCartProcessor"
       val tag = "CartSlice-1"
 
-      val eventHandler: immutable.Seq[ShoppingCart.Event] => Future[Done] = { events =>
+      val eventHandler: immutable.Seq[EventEnvelope[ShoppingCart.Event]] => Future[Done] = { eventEnvelopes =>
         // do something
         Future.successful(Done)
       }
-      val projectionHandler = new GroupedEventsHandler(10, 100.millis, eventHandler)
+      val projectionHandler = new GroupedEventsHandler[EventEnvelope[ShoppingCart.Event]](10, 100.millis, eventHandler)
 
       implicit val ec = system.executionContext
       val projection = CassandraEventSourcedProjection.atLeastOnce(

@@ -6,8 +6,8 @@ package akka.projection.eventsourced.jdbc
 import scala.concurrent.ExecutionContext
 
 import akka.actor.ClassicActorSystemProvider
-import akka.persistence.query.EventEnvelope
 import akka.persistence.query.Offset
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.EventEnvelopeExtractor
 import akka.projection.eventsourced.EventSourcedProvider
 import akka.projection.scaladsl.Projection
@@ -19,7 +19,7 @@ object JdbcEventSourcedProjection {
       eventProcessorId: String,
       tag: String,
       projectionHandler: JdbcSingleEventHandlerWithTxOffset[Event])(
-      implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
+      implicit ec: ExecutionContext): Projection[akka.persistence.query.EventEnvelope, EventEnvelope[Event], Offset] = {
     Projection.onceAndOnlyOnce(
       systemProvider,
       new EventSourcedProvider(systemProvider, tag),

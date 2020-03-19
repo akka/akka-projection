@@ -12,6 +12,7 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import akka.projection.eventsourced.EventEnvelope
 
 object Demo {
 
@@ -31,11 +32,11 @@ object Demo {
         new JdbcSingleEventHandlerWithTxOffset[ShoppingCart.Event](eventProcessorId, tag) {
           override def getConnection(): Connection = ???
 
-          override def onEvent(event: ShoppingCart.Event): Future[Done] = {
+          override def onEvent(eventEnvelope: EventEnvelope[ShoppingCart.Event]): Future[Done] = {
             val c = getConnection()
             try {
-              saveEventProjection(c, event)
-              saveOffset(c) // in same tx
+              saveEventProjection(c, eventEnvelope.event)
+              saveOffset(c, eventEnvelope.offset) // in same tx
               c.commit()
               Future.successful(Done)
             } catch {

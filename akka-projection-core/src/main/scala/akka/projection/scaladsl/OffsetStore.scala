@@ -33,5 +33,4 @@ trait OffsetStore[Offset] {
 
 trait OffsetManagedByProjectionHandler[Offset] {
   def readOffset(): Future[Option[Offset]]
-  def setCurrentOffset(offset: Offset): Unit
 }

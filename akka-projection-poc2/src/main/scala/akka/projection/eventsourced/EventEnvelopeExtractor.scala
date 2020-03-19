@@ -3,12 +3,21 @@
  */
 package akka.projection.eventsourced
 
-import akka.persistence.query.EventEnvelope
 import akka.persistence.query.Offset
 import akka.projection.scaladsl.EnvelopeExtractor
 
-class EventEnvelopeExtractor[Event] extends EnvelopeExtractor[EventEnvelope, Event, Offset] {
-  override def extractOffset(envelope: EventEnvelope): Offset = envelope.offset
+class EventEnvelopeExtractor[Event]
+    extends EnvelopeExtractor[akka.persistence.query.EventEnvelope, EventEnvelope[Event], Offset] {
 
-  override def extractPayload(envelope: EventEnvelope): Event = envelope.event.asInstanceOf[Event]
+  override def extractOffset(envelope: akka.persistence.query.EventEnvelope): Offset =
+    envelope.offset
+
+  override def extractPayload(envelope: akka.persistence.query.EventEnvelope): EventEnvelope[Event] =
+    EventEnvelope(
+      envelope.offset,
+      envelope.persistenceId,
+      envelope.sequenceNr,
+      envelope.event.asInstanceOf[Event],
+      envelope.timestamp)
+
 }

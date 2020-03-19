@@ -13,6 +13,7 @@ import scala.concurrent.duration.FiniteDuration
 import akka.Done
 import akka.persistence.query.Offset
 import akka.persistence.query.Sequence
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.AbstractGroupedEventsHandler
 import akka.projection.scaladsl.AbstractSingleEventHandler
 import akka.projection.scaladsl.OffsetManagedByProjectionHandler
@@ -20,9 +21,9 @@ import akka.projection.scaladsl.OffsetManagedByProjectionHandler
 abstract class JdbcSingleEventHandlerWithTxOffset[Event](eventProcessorId: String, tag: String)(
     implicit ec: ExecutionContext)
     extends JdbcProjectionHandlerWithTxOffset[Offset](eventProcessorId, tag)(ec)
-    with AbstractSingleEventHandler[Event] {
+    with AbstractSingleEventHandler[EventEnvelope[Event]] {
 
-  override def onEvent(event: Event): Future[Done]
+  override def onEvent(event: EventEnvelope[Event]): Future[Done]
 
 }
 
@@ -32,17 +33,15 @@ abstract class JdbcGroupedEventsHandlerWithTxOffset[Event](
     override val n: Int,
     override val d: FiniteDuration)(implicit ec: ExecutionContext)
     extends JdbcProjectionHandlerWithTxOffset[Offset](eventProcessorId, tag)(ec)
-    with AbstractGroupedEventsHandler[Event] {
+    with AbstractGroupedEventsHandler[EventEnvelope[Event]] {
 
-  def onEvents(events: immutable.Seq[Event]): Future[Done]
+  def onEvents(events: immutable.Seq[EventEnvelope[Event]]): Future[Done]
 
 }
 
 abstract class JdbcProjectionHandlerWithTxOffset[Event](eventProcessorId: String, tag: String)(
     implicit val ec: ExecutionContext)
     extends OffsetManagedByProjectionHandler[Offset] {
-
-  private var currentOffset: Offset = Offset.noOffset
 
   def getConnection(): Connection
 
@@ -68,15 +67,8 @@ abstract class JdbcProjectionHandlerWithTxOffset[Event](eventProcessorId: String
     }
   }
 
-  override final def setCurrentOffset(offset: Offset): Unit = {
-    currentOffset = offset
-  }
-
-  def getCurrentOffset: Offset =
-    currentOffset
-
-  def saveOffset(c: Connection): Unit = {
-    currentOffset match {
+  def saveOffset(c: Connection, offset: Offset): Unit = {
+    offset match {
       case Sequence(value) =>
         val pstmt = c.prepareStatement(
           "INSERT INTO akka_cqrs_sample.offsetStore (eventProcessorId, tag, offset) VALUES (?, ?, ?)")

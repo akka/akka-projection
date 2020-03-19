@@ -13,11 +13,10 @@ import akka.event.Logging
 import akka.persistence.cassandra.ConfigSessionProvider
 import akka.persistence.cassandra.session.CassandraSessionSettings
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.query.EventEnvelope
 import akka.persistence.query.Offset
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.EventEnvelopeExtractor
 import akka.projection.eventsourced.EventSourcedProvider
-import akka.projection.scaladsl.OffsetStore
 import akka.projection.scaladsl.Projection
 import akka.projection.scaladsl.ProjectionHandler
 
@@ -27,9 +26,10 @@ object CassandraEventSourcedProjection {
       systemProvider: ClassicActorSystemProvider,
       eventProcessorId: String,
       tag: String,
-      projectionHandler: ProjectionHandler[Event],
+      projectionHandler: ProjectionHandler[EventEnvelope[Event]],
       afterNumberOfEvents: Int,
-      orAfterDuration: FiniteDuration)(implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
+      orAfterDuration: FiniteDuration)(
+      implicit ec: ExecutionContext): Projection[akka.persistence.query.EventEnvelope, EventEnvelope[Event], Offset] = {
     val offsetStore = new CassandraOffsetStore(session(systemProvider), eventProcessorId, tag)
     Projection.atLeastOnce(
       systemProvider,
@@ -45,8 +45,8 @@ object CassandraEventSourcedProjection {
       systemProvider: ClassicActorSystemProvider,
       eventProcessorId: String,
       tag: String,
-      projectionHandler: ProjectionHandler[Event])(
-      implicit ec: ExecutionContext): Projection[EventEnvelope, Event, Offset] = {
+      projectionHandler: ProjectionHandler[EventEnvelope[Event]])(
+      implicit ec: ExecutionContext): Projection[akka.persistence.query.EventEnvelope, EventEnvelope[Event], Offset] = {
     val offsetStore = new CassandraOffsetStore(session(systemProvider), eventProcessorId, tag)
     Projection.atMostOnce(
       systemProvider,

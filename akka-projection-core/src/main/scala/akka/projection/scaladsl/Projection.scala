@@ -4,7 +4,6 @@
 
 package akka.projection.scaladsl
 
-import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
@@ -86,39 +85,15 @@ class Projection[Envelope, Event, Offset] private (
         .map(env => envelopeExtractor.extractOffset(env) -> envelopeExtractor.extractPayload(env))
         .mapMaterializedValue(_ => NotUsed)
 
-    def currentOffsetFlow: Flow[(Offset, Event), (Offset, Event), NotUsed] =
-      handler match {
-        case offsetHandler: OffsetManagedByProjectionHandler[Offset] =>
-          Flow[(Offset, Event)].map {
-            case (offset, event) =>
-              offsetHandler.setCurrentOffset(offset)
-              offset -> event
-          }
-        case _ =>
-          Flow[(Offset, Event)]
-      }
-
-    def groupedCurrentOffsetFlow: Flow[immutable.Seq[(Offset, Event)], immutable.Seq[(Offset, Event)], NotUsed] =
-      handler match {
-        case offfsetHandler: OffsetManagedByProjectionHandler[Offset] =>
-          Flow[immutable.Seq[(Offset, Event)]].map { group =>
-            offfsetHandler.setCurrentOffset(group.last._1)
-            group
-          }
-        case _ =>
-          Flow[immutable.Seq[(Offset, Event)]]
-      }
-
     val handlerFlow: Flow[(Offset, Event), Offset, NotUsed] =
       handler match {
         case h: AbstractSingleEventHandler[Event] =>
-          Flow[(Offset, Event)].via(currentOffsetFlow).mapAsync(parallelism = 1) {
+          Flow[(Offset, Event)].mapAsync(parallelism = 1) {
             case (offset, event) => h.onEvent(event).map(_ => offset)
           }
         case h: AbstractGroupedEventsHandler[Event] =>
-          Flow[(Offset, Event)].groupedWithin(h.n, h.d).filterNot(_.isEmpty).via(groupedCurrentOffsetFlow).mapAsync(1) {
-            group =>
-              h.onEvents(group.map(_._2)).map(_ => group.last._1)
+          Flow[(Offset, Event)].groupedWithin(h.n, h.d).filterNot(_.isEmpty).mapAsync(1) { group =>
+            h.onEvents(group.map(_._2)).map(_ => group.last._1)
           }
       }
 
