@@ -23,8 +23,29 @@ lazy val akkaProjectionCore = Project(
   ).settings(Dependencies.core)
 
 
+// provides Sources backed by Alpakka 
+// and Runners that commits on Topic (at-least-once, at-most-once)
+lazy val akkaProjectionAlpakkaKafka = Project(
+  id = "akka-projection-alpakka-kafka",
+  base = file("akka-projection-alpakka-kafka")
+).settings(Dependencies.alpakkaKafka)
+  .dependsOn(akkaProjectionCore, akkaProjectionTestkit)
+
+
+lazy val akkaProjectionSamples = Project(
+  id = "akka-projection-samples",
+  base = file("akka-projection-samples")
+).settings(Dependencies.sample)
+  .dependsOn(akkaProjectionCore, akkaProjectionAlpakkaKafka, akkaProjectionTestkit)
+
+lazy val akkaProjectionTestkit = Project(
+  id = "akka-projection-testkit",
+  base = file("akka-projection-testkit")
+).settings(libraryDependencies ++= Seq(Dependencies.Test.scalaTest, Dependencies.Compile.logback))
+  .dependsOn(akkaProjectionCore)
+
 
 lazy val root = Project(
     id = "akka-projection",
     base = file(".")
-  ).aggregate(akkaProjectionCore)
+  ).aggregate(akkaProjectionCore, akkaProjectionAlpakkaKafka, akkaProjectionTestkit)
