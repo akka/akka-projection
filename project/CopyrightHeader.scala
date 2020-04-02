@@ -50,8 +50,8 @@ object CopyrightHeader extends AutoPlugin {
       existingText.map(updateLightbendHeader).getOrElse(commentCreator(text, existingText)).trim
     }
   }
-  val cStyleComment = HeaderCommentStyle.cStyleBlockComment.copy(
-    commentCreator = lightbendCommentCreator(HeaderCommentStyle.cStyleBlockComment.commentCreator))
-  val twirlStyleBlockComment = HeaderCommentStyle.twirlStyleBlockComment.copy(
-    commentCreator = lightbendCommentCreator(HeaderCommentStyle.twirlStyleBlockComment.commentCreator))
+  val cStyleComment = HeaderCommentStyle.cStyleBlockComment
+    .copy(commentCreator = lightbendCommentCreator(HeaderCommentStyle.cStyleBlockComment.commentCreator))
+  val twirlStyleBlockComment = HeaderCommentStyle.twirlStyleBlockComment
+    .copy(commentCreator = lightbendCommentCreator(HeaderCommentStyle.twirlStyleBlockComment.commentCreator))
 }
