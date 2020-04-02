@@ -4,7 +4,14 @@ scalaVersion := "2.13.1"
 
 val commonSettings = Seq(
   organization := "com.lightbend.akka",
-  scalacOptions ++= List("-unchecked", "-deprecation", "-language:_", "-encoding", "UTF-8"),
+  scalacOptions ++= List(
+      "-unchecked",
+      "-deprecation",
+      "-language:_",
+      "-Xfatal-warnings",
+      "-Ywarn-unused",
+      "-encoding",
+      "UTF-8"),
   javacOptions ++= List("-Xlint:unchecked", "-Xlint:deprecation"))
 
 lazy val akkaProjectionCore =

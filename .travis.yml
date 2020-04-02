@@ -1,0 +1,66 @@
+language: scala
+sudo: true
+services:
+  - docker
+
+before_install:
+  # make comparing to origin/master work and fetch full history for correct current and previous version detection
+  - git remote set-branches --add origin master && git fetch --unshallow
+  # using jabba for custom jdk management
+  - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.2/install.sh | bash && . ~/.jabba/jabba.sh
+
+# default script for jobs, that do not have any specified
+script:
+  - jabba install ${JDK:=adopt@~1.8-0}
+  - jabba use ${JDK:=adopt@~1.8-0}
+  - java -version
+  - sbt -jvm-opts .jvmopts-travis "$CMD"
+
+jobs:
+  include:
+    - stage: check
+      env: CMD="verifyCodeStyle"
+      name: "Code style check. Run locally with: sbt verifyCodeStyle"
+    - env: CMD="Test/compile"
+      name: "Compile all code with 2.13"
+
+    - stage: test
+      env:
+        - CMD="test"
+      name: "Run tests with Scala 2.13 and AdoptOpenJDK 8"
+    - env:
+        - JDK="adopt@~1.11-0"
+        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
+        - CMD="test"
+      name: "Run tests with Scala 2.13 and AdoptOpenJDK 11"
+
+    - stage: publish
+      env: CMD="publish"
+      name: "Publish artifacts to Bintray"
+
+
+stages:
+  # runs on master commits and PRs
+  - name: check
+    if: NOT tag =~ ^v
+
+  # runs on master commits and PRs
+  - name: test
+    if: NOT tag =~ ^v
+
+  # runs on main repo master commits and version-tagged commits
+  - name: publish
+    if: repo = akka/akka-projection AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+
+before_cache:
+  - find $HOME/.ivy2 -name "ivydata-*.properties" -delete
+  - find $HOME/.sbt -name "*.lock" -delete
+
+cache:
+  directories:
+   - $HOME/.m2
+   - $HOME/.ivy2/cache
+   - $HOME/.sbt/boot
+   - $HOME/.sbt/launchers
+   - $HOME/.cache/coursier
+   - $HOME/.jabba/jdk
