@@ -13,7 +13,7 @@ object Dependencies {
   }
 
   object Compile {
-    val akkaStream        = "com.typesafe.akka" %% "akka-stream" % Versions.akka
+    val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
   }
 
   object Test {
@@ -22,11 +22,7 @@ object Dependencies {
 
   private val deps = libraryDependencies
 
-  val core = deps ++= Seq(
-    Compile.akkaStream
-  )
+  val core = deps ++= Seq(Compile.akkaStream)
 
-  val kafka = deps ++= Seq(
-    Compile.akkaStream
-  )
+  val kafka = deps ++= Seq(Compile.akkaStream)
 }
