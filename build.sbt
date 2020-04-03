@@ -17,7 +17,11 @@ val commonSettings = Seq(
 lazy val akkaProjectionCore =
   Project(id = "akka-projection-core", base = file("akka-projection-core")).settings(Dependencies.core)
 
-lazy val root = Project(id = "akka-projection", base = file(".")).aggregate(akkaProjectionCore)
+lazy val akkaProjectionTestkit = Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
+  .settings(libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
+  .dependsOn(akkaProjectionCore)
+
+lazy val root = Project(id = "akka-projection", base = file(".")).aggregate(akkaProjectionCore, akkaProjectionTestkit)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {
