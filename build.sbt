@@ -16,6 +16,13 @@ lazy val testkit = project
   .settings(Dependencies.testKit)
   .dependsOn(core)
 
+// provides offset storage backed by a JDBC (Slick) table
+// commits can be transctional or non-transactional (at-least-once with buffering)
+lazy val slick = Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
+  .settings(Dependencies.slick)
+  .dependsOn(core)
+  .dependsOn(testkit % "test->test")
+
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
   .dependsOn(core, testkit)
@@ -57,7 +64,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, docs)
+  .aggregate(core, testkit, slick, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 
