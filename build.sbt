@@ -14,25 +14,14 @@ val commonSettings = Seq(
       "UTF-8"),
   javacOptions ++= List("-Xlint:unchecked", "-Xlint:deprecation"))
 
+lazy val akkaProjectionCore =
+  Project(id = "akka-projection-core", base = file("akka-projection-core")).settings(Dependencies.core)
 
-
-lazy val akkaProjectionCore = Project(
-  id = "akka-projection-core",
-  base = file("akka-projection-core")
-).settings(Dependencies.core)
-
-
-lazy val akkaProjectionTestkit = Project(
-  id = "akka-projection-testkit",
-  base = file("akka-projection-testkit")
-).settings(libraryDependencies ++= Seq(Dependencies.Test.scalaTest, Dependencies.Compile.logback))
+lazy val akkaProjectionTestkit = Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
+  .settings(libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
   .dependsOn(akkaProjectionCore)
 
-
-lazy val root = Project(
-  id = "akka-projection",
-  base = file(".")
-).aggregate(akkaProjectionCore, akkaProjectionTestkit)
+lazy val root = Project(id = "akka-projection", base = file(".")).aggregate(akkaProjectionCore, akkaProjectionTestkit)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {
