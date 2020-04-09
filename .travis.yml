@@ -5,7 +5,7 @@ services:
 
 # make comparing to origin/master work and fetch full history for correct current and previous version detection
 git:
-  depth: false
+  depth: 500
 
 before_install:
   # using jabba for custom jdk management
