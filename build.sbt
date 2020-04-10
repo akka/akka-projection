@@ -54,6 +54,10 @@ lazy val docs = project
     publishRsyncArtifacts += (makeSite.value -> "www/"),
     publishRsyncHost := "akkarepo@gustav.akka.io",
     apidocRootPackage := "akka")
+    
+lazy val akkaProjectionTestkit = Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
+  .settings(Dependencies.testKit)
+  .dependsOn(akkaProjectionCore)
 
 lazy val root = Project(id = "akka-projection", base = file("."))
   .aggregate(core, testkit, docs)
