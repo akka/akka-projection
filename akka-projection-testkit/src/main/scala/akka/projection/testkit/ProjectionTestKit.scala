@@ -24,21 +24,21 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
   private implicit val system = testKit.system
   private implicit val settings: TestKitSettings = TestKitSettings(system)
 
-  def run(proj: Projection[_])(testFunc: => Unit): Future[Done] =
-    runInternal(proj, testFunc, settings.SingleExpectDefaultTimeout.dilated, 100.millis)
+  def run(proj: Projection[_])(assertFunc: => Unit): Future[Done] =
+    runInternal(proj, assertFunc, settings.SingleExpectDefaultTimeout, 100.millis)
 
-  def run(proj: Projection[_], max: FiniteDuration)(testFunc: => Unit): Future[Done] = {
-    runInternal(proj, testFunc, max, 100.millis)
+  def run(proj: Projection[_], max: FiniteDuration)(assertFunc: => Unit): Future[Done] = {
+    runInternal(proj, assertFunc, max, 100.millis)
   }
 
   def run(proj: Projection[_], max: FiniteDuration, interval: FiniteDuration = 100.millis)(
-      testFunc: => Unit): Future[Done] = {
-    runInternal(proj, testFunc, max, 100.millis)
+      assertFunc: => Unit): Future[Done] = {
+    runInternal(proj, assertFunc, max, 100.millis)
   }
 
   private def runInternal(
       proj: Projection[_],
-      testFunc: => Unit,
+      assertFunc: => Unit,
       max: FiniteDuration,
       interval: FiniteDuration = 100.millis): Future[Done] = {
 
@@ -47,7 +47,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
     val promiseToStop = Promise[Done]
     try {
       proj.start()
-      probe.awaitAssert(testFunc, max, interval)
+      probe.awaitAssert(assertFunc, max.dilated, interval)
     } finally {
       promiseToStop.completeWith(proj.stop())
     }
