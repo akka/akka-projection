@@ -14,10 +14,10 @@ import scala.concurrent.{ Await, ExecutionContext }
 @ApiMayChange
 trait ProjectionTestRunner {
 
-  def runProjection(proj: Projection)(testFunc: => Unit)(implicit systemProvider: ClassicActorSystemProvider): Unit =
+  def runProjection(proj: Projection[_])(testFunc: => Unit)(implicit systemProvider: ClassicActorSystemProvider): Unit =
     runProjection(proj, 5.seconds)(testFunc)
 
-  def runProjection(proj: Projection, timeout: FiniteDuration)(testFunc: => Unit)(
+  def runProjection(proj: Projection[_], timeout: FiniteDuration)(testFunc: => Unit)(
       implicit systemProvider: ClassicActorSystemProvider): Unit = {
     try {
       proj.start()
