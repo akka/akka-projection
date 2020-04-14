@@ -36,8 +36,6 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
           probe.expectMessage(4)
           probe.expectMessage(5)
         }
-
-      stopped.futureValue shouldBe Done
     }
 
   }

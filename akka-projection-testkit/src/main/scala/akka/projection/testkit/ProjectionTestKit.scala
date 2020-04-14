@@ -12,6 +12,7 @@ import akka.projection.Projection
 
 import scala.concurrent.duration._
 import scala.concurrent.{ Future, Promise }
+import scala.concurrent.Await
 @ApiMayChange
 object ProjectionTestKit {
   def apply(testKit: ActorTestKit): ProjectionTestKit =
@@ -24,33 +25,28 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
   private implicit val system = testKit.system
   private implicit val settings: TestKitSettings = TestKitSettings(system)
 
-  def run(proj: Projection[_])(assertFunc: => Unit): Future[Done] =
+  def run(proj: Projection[_])(assertFunc: => Unit): Unit =
     runInternal(proj, assertFunc, settings.SingleExpectDefaultTimeout, 100.millis)
 
-  def run(proj: Projection[_], max: FiniteDuration)(assertFunc: => Unit): Future[Done] = {
+  def run(proj: Projection[_], max: FiniteDuration)(assertFunc: => Unit): Unit =
     runInternal(proj, assertFunc, max, 100.millis)
-  }
 
-  def run(proj: Projection[_], max: FiniteDuration, interval: FiniteDuration)(
-      assertFunc: => Unit): Future[Done] = {
+  def run(proj: Projection[_], max: FiniteDuration, interval: FiniteDuration)(assertFunc: => Unit): Unit =
     runInternal(proj, assertFunc, max, 100.millis)
-  }
 
   private def runInternal(
       proj: Projection[_],
       assertFunc: => Unit,
       max: FiniteDuration,
-      interval: FiniteDuration = 100.millis): Future[Done] = {
+      interval: FiniteDuration = 100.millis): Unit = {
 
     val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
 
-    val promiseToStop = Promise[Done]
     try {
       proj.start()
       probe.awaitAssert(assertFunc, max.dilated, interval)
     } finally {
-      promiseToStop.completeWith(proj.stop())
+      Await.ready(proj.stop(), max)
     }
-    promiseToStop.future
   }
 }
