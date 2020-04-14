@@ -31,7 +31,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
     runInternal(proj, assertFunc, max, 100.millis)
   }
 
-  def run(proj: Projection[_], max: FiniteDuration, interval: FiniteDuration = 100.millis)(
+  def run(proj: Projection[_], max: FiniteDuration, interval: FiniteDuration)(
       assertFunc: => Unit): Future[Done] = {
     runInternal(proj, assertFunc, max, 100.millis)
   }
