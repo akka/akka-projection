@@ -56,7 +56,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit)
+  .aggregate(core, testkit, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 

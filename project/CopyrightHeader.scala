@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
+ */
 import sbt._, Keys._
 import de.heikoseeberger.sbtheader.{ CommentCreator, HeaderPlugin }
 
@@ -14,9 +17,7 @@ object CopyrightHeader extends AutoPlugin {
           headerLicense := Some(HeaderLicense.Custom(headerFor(CurrentYear))),
           headerMappings := headerMappings.value ++ Map(
               HeaderFileType.scala -> cStyleComment,
-              HeaderFileType.java -> cStyleComment,
-              HeaderFileType("txt") -> twirlStyleBlockComment),
-          unmanagedResourceDirectories in headerCreate += baseDirectory.value / "src" / "main" / "twirl"))
+              HeaderFileType.java -> cStyleComment)))
     })
 
   val CurrentYear = java.time.Year.now.getValue.toString
@@ -46,6 +47,4 @@ object CopyrightHeader extends AutoPlugin {
   }
   val cStyleComment = HeaderCommentStyle.cStyleBlockComment
     .copy(commentCreator = lightbendCommentCreator(HeaderCommentStyle.cStyleBlockComment.commentCreator))
-  val twirlStyleBlockComment = HeaderCommentStyle.twirlStyleBlockComment
-    .copy(commentCreator = lightbendCommentCreator(HeaderCommentStyle.twirlStyleBlockComment.commentCreator))
 }
