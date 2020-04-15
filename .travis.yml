@@ -58,7 +58,7 @@ stages:
 
   # runs on main repo master commits and version-tagged commits
   - name: whitesource
-    #if: repo = akka/akka-projection AND ( ( branch = master AND type = push ) OR tag =~ ^v)
+    if: repo = akka/akka-projection AND ( ( branch = master AND type = push ) OR tag =~ ^v)
 
   # runs on main repo master commits and version-tagged commits
   - name: publish
