@@ -5,6 +5,13 @@ import sbt.Keys._
 
 object Dependencies {
 
+  val Scala213 = "2.13.1"
+  val ScalaVersions = Seq(Scala213)
+
+  val AkkaVersionInDocs = "2.6"
+  val AlpakkaVersionInDocs = "2.0"
+  val AlpakkaKafkaVersionInDocs = "2.0"
+
   object Versions {
     val akka = "2.6.4"
     val scalaTest = "3.1.1"
