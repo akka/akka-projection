@@ -2,19 +2,17 @@ import akka.projections.Dependencies
 
 scalaVersion := Dependencies.Scala213
 
-lazy val core = project.in(file("akka-projection-core"))
-    .settings(Dependencies.core)
-    .settings(
-      name := "akka-projection-core",
-      Compile / packageBin / packageOptions += Package.ManifestAttributes(
-        "Automatic-Module-Name" -> "akka.projection.core")
-    )
-
-lazy val testkit = project.in(file("akka-projection-testkit"))
+lazy val core = project
+  .in(file("akka-projection-core"))
+  .settings(Dependencies.core)
   .settings(
-    name := "akka-projection-testkit",
-    libraryDependencies ++= Seq(Dependencies.Test.scalaTest)
-  )
+    name := "akka-projection-core",
+    Compile / packageBin / packageOptions += Package.ManifestAttributes(
+        "Automatic-Module-Name" -> "akka.projection.core"))
+
+lazy val testkit = project
+  .in(file("akka-projection-testkit"))
+  .settings(name := "akka-projection-testkit", libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
   .dependsOn(core)
 
 lazy val docs = project
@@ -30,25 +28,26 @@ lazy val docs = project
     Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
     Paradox / siteSubdirName := s"docs/akka-projection/${projectInfoVersion.value}",
     paradoxProperties ++= Map(
-      "akka.version" -> Dependencies.Versions.akka,
-      // Akka
-      "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.AkkaVersionInDocs}/%s",
-      "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.AkkaVersionInDocs}/",
-      "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${Dependencies.AkkaVersionInDocs}/",
-      // Alpakka
-      "extref.alpakka.base_url" -> s"https://doc.akka.io/docs/alpakka/${Dependencies.AlpakkaVersionInDocs}/%s",
-      "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
-      "javadoc.akka.stream.alpakka.base_url" -> "",
-      // Alpakka Kafka
-      "extref.alpakka-kafka.base_url" -> s"https://doc.akka.io/docs/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/%s",
-      "scaladoc.akka.kafka.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/",
-      "javadoc.akka.kafka.base_url" -> "",
-      // Java
-      "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
-      // Scala
-      "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
-      "scaladoc.akka.projection.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
-      "javadoc.akka.projection.base_url" -> ""), // no Javadoc is published
+        "akka.version" -> Dependencies.Versions.akka,
+        // Akka
+        "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.AkkaVersionInDocs}/%s",
+        "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.AkkaVersionInDocs}/",
+        "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${Dependencies.AkkaVersionInDocs}/",
+        // Alpakka
+        "extref.alpakka.base_url" -> s"https://doc.akka.io/docs/alpakka/${Dependencies.AlpakkaVersionInDocs}/%s",
+        "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
+        "javadoc.akka.stream.alpakka.base_url" -> "",
+        // Alpakka Kafka
+        "extref.alpakka-kafka.base_url" -> s"https://doc.akka.io/docs/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/%s",
+        "scaladoc.akka.kafka.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/",
+        "javadoc.akka.kafka.base_url" -> "",
+        // Java
+        "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
+        // Scala
+        "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
+        "scaladoc.akka.projection.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
+        "javadoc.akka.projection.base_url" -> ""
+      ), // no Javadoc is published
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,
@@ -56,7 +55,8 @@ lazy val docs = project
     publishRsyncHost := "akkarepo@gustav.akka.io",
     apidocRootPackage := "akka")
 
-lazy val root = Project(id = "akka-projection", base = file(".")).aggregate(core, testkit)
+lazy val root = Project(id = "akka-projection", base = file("."))
+  .aggregate(core, testkit)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 
