@@ -32,13 +32,13 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
     runInternal(proj, assertFunc, max, 100.millis)
 
   def run(proj: Projection[_], max: FiniteDuration, interval: FiniteDuration)(assertFunc: => Unit): Unit =
-    runInternal(proj, assertFunc, max, 100.millis)
+    runInternal(proj, assertFunc, max, interval)
 
   private def runInternal(
       proj: Projection[_],
       assertFunc: => Unit,
       max: FiniteDuration,
-      interval: FiniteDuration = 100.millis): Unit = {
+      interval: FiniteDuration): Unit = {
 
     val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
 
