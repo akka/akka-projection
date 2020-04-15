@@ -23,7 +23,7 @@ This plugin requires **Akka $akka.version$** or later. See [Akka's Binary Compat
 
 Note that it is important that all `akka-*` dependencies are in the same version, so it is recommended to depend on them explicitly to avoid problems with transient dependencies causing an unlucky mix of versions.
 
-The table below shows Akka Projection’s direct dependencies and the second tab shows all libraries it depends on transitively.
+The table below shows Akka Projection's direct dependencies and the second tab shows all libraries it depends on transitively.
 
 @@dependencies{ projectId="core" }
 
