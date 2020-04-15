@@ -8,8 +8,8 @@ import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.concurrent.{ Await, ExecutionContext }
 
 @ApiMayChange
 trait ProjectionTestRunner {
