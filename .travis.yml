@@ -38,6 +38,10 @@ jobs:
         - CMD="test"
       name: "Run tests with Scala 2.13 and AdoptOpenJDK 11"
 
+    - stage: whitesource
+      name: WhiteSource
+      script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt -jvm-opts .jvmopts-travis whitesourceCheckPolicies whitesourceUpdate
+
     - stage: publish
       env: CMD="publish"
       name: "Publish artifacts to Bintray"
@@ -51,6 +55,10 @@ stages:
   # runs on master commits and PRs
   - name: test
     if: NOT tag =~ ^v
+
+  # runs on main repo master commits and version-tagged commits
+  - name: whitesource
+    if: repo = akka/akka-projection AND ( ( branch = master AND type = push ) OR tag =~ ^v)
 
   # runs on main repo master commits and version-tagged commits
   - name: publish
@@ -68,3 +76,8 @@ cache:
    - $HOME/.sbt/launchers
    - $HOME/.cache/coursier
    - $HOME/.jabba/jdk
+
+env:
+  global:
+  # encrypt with: travis encrypt --pro WHITESOURCE_PASSWORD=...
+  - secure: "viFrZz1ODA9xUHGsxoRmF4hXwZjiIT7esLPr+xCqXCtBFEbvj09T6Y30xW8oYJcKBhh17Nm1thXhHvGjpM5CGlph1w9uTcAKrLjiblA1Ok6SVx2dBcg5aZfphvKkHglYgskeceSSpZH/9j+u9DTgKzZ3Hb1fj2o14YaYhjEr0fCfaa3yHgaVXjXMTFeaDLnHkmPkvehZUHSNhTniPMRDK2jt0sAib2y1PEUEEixY78rnkh1yP2fy2Qy6k2EpWgrtnRmn6pt/LidnEF7MHJrGjBQT6rZPAGJigeGNokiG7DbasBR39/wBPzm4OLH0tlYJA2fIx2fZuxfwIt8jNajJBKzwnzAaAm5JkHwVF8/oLbDr8rxR2r4AtQRSYhoCsCFDBZZm0jnZE87mvOof4DiTDlFWt4xqA/OQtzVhe8kS0PjmcYVyQYBvcQyrgmy+ARJKgNcZLFw2Qdq5APub8tnSHpTop6fBwt/vtzAzZzpspp6IvTX0bbRAqsEn/B3cG+HC8yN1eSIJ2b/zfqvCKBIU550hoSa6qpNa57flplYiZY7P0LAcj4Z2IeBrxC0Xhv77ercXCuS5cG7EStb3ZXXoR6TqIFmbmuSxIDV6IPm4bvuAvkeifo1amyZMns5pgL+1G0xdSnR7wsmFlTGi8prTE29CyFC4NnKa03eEF/PPqr8="
