@@ -19,9 +19,14 @@ object Dependencies {
 
   object Compile {
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
+
+    // TestKit in compile scope for ProjectionTestKit
+    val akkaTypedTestkit = "com.typesafe.akka" %% "akka-actor-testkit-typed" % Versions.akka
+    val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Versions.akka
   }
 
   object Test {
+    val akkaTypedTestkit = Compile.akkaTypedTestkit % sbt.Test
     val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
   }
 
@@ -29,4 +34,5 @@ object Dependencies {
 
   val core = deps ++= Seq(Compile.akkaStream)
 
+  val testKit = deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalaTest)
 }

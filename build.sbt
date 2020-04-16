@@ -12,7 +12,8 @@ lazy val core = project
 
 lazy val testkit = project
   .in(file("akka-projection-testkit"))
-  .settings(name := "akka-projection-testkit", libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
+  .settings(name := "akka-projection-testkit")
+  .settings(Dependencies.testKit)
   .dependsOn(core)
 
 lazy val docs = project
