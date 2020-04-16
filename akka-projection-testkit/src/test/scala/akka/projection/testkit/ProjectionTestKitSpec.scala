@@ -71,9 +71,52 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
         }
       }
     }
+
+    "failure inside Projection propagates to TestKit" in {
+
+      val streamFailureMsg = "stream failure"
+
+      val concatenatedRef = new StringBuffer("")
+      val src = Source(1 to 20)
+
+      val prj = TestProjection(src, concatenatedRef, {
+        case elt if elt < 3 => true
+        case _              => throw new RuntimeException(streamFailureMsg)
+      })
+
+      val exp =
+        intercept[RuntimeException] {
+          projectionTestKit.run(prj) {
+            concatenatedRef.toString shouldBe "1-2-3-4"
+          }
+        }
+
+      exp.getMessage shouldBe streamFailureMsg
+    }
+
+    "failure inside Stream propagates to TestKit" in {
+
+      val streamFailureMsg = "stream failure"
+
+      val concatenatedRef = new StringBuffer("")
+
+      // this source will 'emit' an exception and fail the stream
+      val src = Source.single(1).concat(Source.failed(new RuntimeException(streamFailureMsg)))
+
+      val prj = TestProjection(src, concatenatedRef, _ <= 4)
+
+      val exp =
+        intercept[RuntimeException] {
+          projectionTestKit.run(prj) {
+            concatenatedRef.toString shouldBe "1-2-3-4"
+          }
+        }
+
+      exp.getMessage shouldBe streamFailureMsg
+    }
   }
 
-  case class TestProjection(src: Source[Int, NotUsed], concatenatedRef: StringBuffer, concatCond: Int => Boolean)
+  case class TestProjection(src: Source[Int, NotUsed], concatenatedRef: StringBuffer, eltPredicate: Int => Boolean)
       extends Projection[Int] {
 
     override def name: String = "test-projection"
@@ -88,9 +131,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
     }
 
     override def processElement(elt: Int): Future[Int] = {
-      if (concatCond(elt)) {
-        concat(elt)
-      }
+      if (eltPredicate(elt)) concat(elt)
       Future.successful(elt)
     }
     override def start()(implicit systemProvider: ClassicActorSystemProvider): Unit = {

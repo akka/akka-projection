@@ -4,15 +4,13 @@
 
 package akka.projection.testkit
 
-import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.scaladsl.{ ActorTestKit, _ }
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
-
 import scala.concurrent.duration._
-import scala.concurrent.{ Future, Promise }
 import scala.concurrent.Await
+
 @ApiMayChange
 object ProjectionTestKit {
   def apply(testKit: ActorTestKit): ProjectionTestKit =
@@ -46,7 +44,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
       proj.start()
       probe.awaitAssert(assertFunc, max.dilated, interval)
     } finally {
-      Await.ready(proj.stop(), max)
+      Await.result(proj.stop(), max)
     }
   }
 }

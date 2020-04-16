@@ -12,7 +12,8 @@ lazy val core = project
 
 lazy val testkit = project
   .in(file("akka-projection-testkit"))
-  .settings(name := "akka-projection-testkit", libraryDependencies ++= Seq(Dependencies.Test.scalaTest))
+  .settings(name := "akka-projection-testkit")
+  .settings(Dependencies.testKit)
   .dependsOn(core)
 
 lazy val docs = project
@@ -54,10 +55,6 @@ lazy val docs = project
     publishRsyncArtifacts += (makeSite.value -> "www/"),
     publishRsyncHost := "akkarepo@gustav.akka.io",
     apidocRootPackage := "akka")
-    
-lazy val akkaProjectionTestkit = Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
-  .settings(Dependencies.testKit)
-  .dependsOn(akkaProjectionCore)
 
 lazy val root = Project(id = "akka-projection", base = file("."))
   .aggregate(core, testkit, docs)
