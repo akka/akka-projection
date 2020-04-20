@@ -14,6 +14,7 @@ object Dependencies {
 
   object Versions {
     val akka = "2.6.4"
+    val alpakka = "2.0.0-RC2"
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
   }
@@ -27,6 +28,8 @@ object Dependencies {
     val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Versions.akka
 
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
+
+    val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
   }
 
   object Test {
@@ -44,4 +47,7 @@ object Dependencies {
 
   val slick =
     deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+
+  val cassandra =
+    deps ++= Seq(Compile.alpakkaCassandra, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.logback)
 }
