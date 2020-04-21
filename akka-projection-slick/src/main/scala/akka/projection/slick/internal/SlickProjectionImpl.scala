@@ -64,7 +64,9 @@ private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcPr
     // run user function and offset storage on the same transaction
     // any side-effect in user function is at-least-once
     val txDBIO =
-      offsetStore.saveOffset(projectionId, offsetExtractor(elt)).flatMap(_ => eventHandler(elt))
+      offsetStore
+        .saveOffset(projectionId, offsetExtractor(elt))
+        .flatMap(_ => eventHandler(elt))
 
     databaseConfig.db.run(txDBIO.transactionally).map(_ => Done)
   }
@@ -89,6 +91,9 @@ private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcPr
       sourceProvider(offsetOpt)
     }
 
-    Source.futureSource(futSource).via(killSwitch.flow).mapAsync(1)(processElement)
+    Source
+      .futureSource(futSource)
+      .via(killSwitch.flow)
+      .mapAsync(1)(processElement)
   }
 }
