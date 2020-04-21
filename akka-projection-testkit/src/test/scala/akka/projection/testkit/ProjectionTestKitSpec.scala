@@ -24,20 +24,20 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     "assert progress of a projection" in {
 
-      val concatenatedRef = new StringBuffer("")
+      val strBuffer = new StringBuffer("")
       val src =
         Source(1 to 20)
-      val prj = TestProjection(src, concatenatedRef, _ <= 6)
+      val prj = TestProjection(src, strBuffer, _ <= 6)
 
       // stop as soon we observe that all expected elements passed through
       projectionTestKit.run(prj) {
-        concatenatedRef.toString shouldBe "1-2-3-4-5-6"
+        strBuffer.toString shouldBe "1-2-3-4-5-6"
       }
     }
 
     "retry assertion function until it succeeds within a max timeout" in {
 
-      val concatenatedRef = new StringBuffer("")
+      val strBuffer = new StringBuffer("")
 
       // simulate slow stream by adding some delay on each element
       val src =
@@ -45,17 +45,17 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
           () => DelayStrategy.linearIncreasingDelay(200.millis, _ => true),
           DelayOverflowStrategy.backpressure)
 
-      val prj = TestProjection(src, concatenatedRef, _ <= 6)
+      val prj = TestProjection(src, strBuffer, _ <= 6)
 
       // total processing time expected to be around 1.2 seconds
       projectionTestKit.run(prj, max = 2.seconds) {
-        concatenatedRef.toString shouldBe "1-2-3-4-5-6"
+        strBuffer.toString shouldBe "1-2-3-4-5-6"
       }
     }
 
     "retry assertion function and fail if timeout expires" in {
 
-      val concatenatedRef = new StringBuffer("")
+      val strBuffer = new StringBuffer("")
 
       // simulate slow stream by adding some delay on each element
       val src =
@@ -63,11 +63,11 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
           () => DelayStrategy.linearIncreasingDelay(1000.millis, _ => true),
           DelayOverflowStrategy.backpressure)
 
-      val prj = TestProjection(src, concatenatedRef, _ <= 2)
+      val prj = TestProjection(src, strBuffer, _ <= 2)
 
       assertThrows[TestFailedException] {
         projectionTestKit.run(prj, max = 1.seconds) {
-          concatenatedRef.toString shouldBe "1-2"
+          strBuffer.toString shouldBe "1-2"
         }
       }
     }
@@ -76,10 +76,10 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
       val streamFailureMsg = "stream failure"
 
-      val concatenatedRef = new StringBuffer("")
+      val strBuffer = new StringBuffer("")
       val src = Source(1 to 20)
 
-      val prj = TestProjection(src, concatenatedRef, {
+      val prj = TestProjection(src, strBuffer, {
         case elt if elt < 3 => true
         case _              => throw new RuntimeException(streamFailureMsg)
       })
@@ -87,7 +87,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       val exp =
         intercept[RuntimeException] {
           projectionTestKit.run(prj) {
-            concatenatedRef.toString shouldBe "1-2-3-4"
+            strBuffer.toString shouldBe "1-2-3-4"
           }
         }
 
@@ -98,25 +98,39 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
       val streamFailureMsg = "stream failure"
 
-      val concatenatedRef = new StringBuffer("")
+      val strBuffer = new StringBuffer("")
 
       // this source will 'emit' an exception and fail the stream
       val src = Source.single(1).concat(Source.failed(new RuntimeException(streamFailureMsg)))
 
-      val prj = TestProjection(src, concatenatedRef, _ <= 4)
+      val prj = TestProjection(src, strBuffer, _ <= 4)
 
       val exp =
         intercept[RuntimeException] {
           projectionTestKit.run(prj) {
-            concatenatedRef.toString shouldBe "1-2-3-4"
+            strBuffer.toString shouldBe "1-2-3-4"
           }
         }
 
       exp.getMessage shouldBe streamFailureMsg
     }
+
+    "run a projection with a TestSink" in {
+
+      val strBuffer = new StringBuffer("")
+      val projection = TestProjection(Source(1 to 5), strBuffer, _ <= 5)
+
+      val sinkProbe = projectionTestKit.runWithTestSink(projection)
+
+      sinkProbe.request(5)
+      sinkProbe.expectNextN(5)
+      sinkProbe.expectComplete()
+
+      strBuffer.toString shouldBe "1-2-3-4-5"
+    }
   }
 
-  case class TestProjection(src: Source[Int, NotUsed], concatenatedRef: StringBuffer, eltPredicate: Int => Boolean)
+  case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, eltPredicate: Int => Boolean)
       extends Projection[Int] {
 
     override def name: String = "test-projection"
@@ -125,29 +139,25 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
     private var shutdown: Option[KillSwitch] = None
     private val promiseToStop = Promise[Done]
 
-    private def concat(elt: Int) = {
-      if (concatenatedRef.toString == "") concatenatedRef.append(elt)
-      else concatenatedRef.append("-" + elt)
-    }
-
-    override def processElement(elt: Int): Future[Int] = {
-      if (eltPredicate(elt)) concat(elt)
-      Future.successful(elt)
-    }
-    override def start()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
-
-      implicit val ec = systemProvider.classicSystem.dispatcher
-
+    override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
       val (killSwitch, sinkMat) =
-        src
-          .viaMat(KillSwitches.single)(Keep.right)
-          .mapAsync(1) { elt => processElement(elt).map(_ => Done) }
-          .toMat(Sink.ignore)(Keep.both)
-          .run()
-
+        mappedSource.toMat(Sink.ignore)(Keep.both).run()
       shutdown = Some(killSwitch)
       promiseToStop.completeWith(sinkMat)
     }
+
+    private def concat(elt: Int) = {
+      if (strBuffer.toString == "") strBuffer.append(elt)
+      else strBuffer.append("-" + elt)
+    }
+
+    override def processElement(elt: Int): Future[Done] = {
+      if (eltPredicate(elt)) concat(elt)
+      Future.successful(Done)
+    }
+
+    override private[projection] def mappedSource =
+      src.viaMat(KillSwitches.single)(Keep.right).mapAsync(1) { elt => processElement(elt) }
 
     override def stop(): Future[Done] = {
       shutdown.foreach(_.shutdown())

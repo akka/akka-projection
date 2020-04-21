@@ -6,7 +6,8 @@ package akka.projection
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
-import akka.annotation.ApiMayChange
+import akka.annotation.{ ApiMayChange, InternalApi }
+import akka.stream.scaladsl.Source
 
 import scala.concurrent.Future
 
@@ -44,17 +45,27 @@ trait Projection[StreamElement] {
    * @return A [[scala.concurrent.Future]] that represents the asynchronous completion of the user EventHandler
    *         function.
    */
-  def processElement(elt: StreamElement): Future[StreamElement]
+  def processElement(elt: StreamElement): Future[Done]
 
   /**
-   * Start to run a Projection.
+   * INTERNAL API
    *
-   * @param systemProvider An Akka ActorSystem.
+   * This method returns the projection Source mapped with `processElement`, but before any sink attached.
+   * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
-  def start()(implicit systemProvider: ClassicActorSystemProvider): Unit
+  @InternalApi
+  private[projection] def mappedSource: Source[Done, _]
+
+  /**
+   * Run the Projection.
+   */
+  def run()(implicit systemProvider: ClassicActorSystemProvider): Unit
 
   /**
    * Stop the projection if it's running.
+   *
+   * @return Future[Done] - the returned Future should return the stream materialized value.
    */
   def stop(): Future[Done]
+
 }
