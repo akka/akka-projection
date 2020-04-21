@@ -21,13 +21,13 @@ import slick.jdbc.JdbcProfile
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 
 @InternalApi
-private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcProfile](
+private[projection] class SlickProjectionImpl[Offset, Element, P <: JdbcProfile](
     val projectionId: ProjectionId,
-    sourceProvider: Option[Offset] => Source[StreamElement, _],
-    offsetExtractor: StreamElement => Offset,
+    sourceProvider: Option[Offset] => Source[Element, _],
+    offsetExtractor: Element => Offset,
     databaseConfig: DatabaseConfig[P],
-    eventHandler: StreamElement => DBIO[Done])
-    extends Projection[StreamElement] {
+    eventHandler: Element => DBIO[Done])
+    extends Projection[Element] {
 
   private val offsetStore = new OffsetStore(databaseConfig.db, databaseConfig.profile)
 
@@ -58,7 +58,7 @@ private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcPr
    * @return A [[scala.concurrent.Future]] that represents the asynchronous completion of the user EventHandler
    *         function.
    */
-  override def processElement(elt: StreamElement)(implicit ec: ExecutionContext): Future[Done] = {
+  override def processElement(elt: Element)(implicit ec: ExecutionContext): Future[Done] = {
     import databaseConfig.profile.api._
 
     // run user function and offset storage on the same transaction

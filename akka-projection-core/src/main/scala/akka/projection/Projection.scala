@@ -14,15 +14,15 @@ import scala.concurrent.{ ExecutionContext, Future }
 /**
  * The core abstraction in Akka Projections.
  *
- * A projection instance may share the same name and [[StreamElement]], but must have a unique key. The key is used
+ * A projection instance may share the same name and [[Element]], but must have a unique key. The key is used
  * to achieve processing parallelism for a projection.
  *
  * For example, many projections may share the same name "user-events-projection", but can process elements for
  * different sharded entities within Akka Cluster, where key could be the Akka Cluster shardId.
- * @tparam StreamElement The entity type of the projection.
+ * @tparam Element The element type of the projection.
  */
 @ApiMayChange
-trait Projection[StreamElement] {
+trait Projection[Element] {
 
   def projectionId: ProjectionId
 
@@ -32,7 +32,7 @@ trait Projection[StreamElement] {
    * @return A [[scala.concurrent.Future]] that represents the asynchronous completion of the user EventHandler
    *         function.
    */
-  def processElement(elt: StreamElement)(implicit ec: ExecutionContext): Future[Done]
+  def processElement(elt: Element)(implicit ec: ExecutionContext): Future[Done]
 
   /**
    * INTERNAL API

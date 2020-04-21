@@ -17,10 +17,10 @@ import scala.reflect.ClassTag
 
 object SlickProjection {
   @ApiMayChange
-  def transactional[Offset, StreamElement, P <: JdbcProfile: ClassTag](
+  def transactional[Offset, Element, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
-      sourceProvider: Option[Offset] => Source[StreamElement, _],
-      offsetExtractor: StreamElement => Offset,
-      databaseConfig: DatabaseConfig[P])(eventHandler: StreamElement => DBIO[Done]): Projection[StreamElement] =
+      sourceProvider: Option[Offset] => Source[Element, _],
+      offsetExtractor: Element => Offset,
+      databaseConfig: DatabaseConfig[P])(eventHandler: Element => DBIO[Done]): Projection[Element] =
     new SlickProjectionImpl(projectionId, sourceProvider, offsetExtractor, databaseConfig, eventHandler)
 }
