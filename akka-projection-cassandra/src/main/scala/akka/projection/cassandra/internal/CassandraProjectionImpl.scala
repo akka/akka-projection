@@ -30,19 +30,19 @@ import akka.stream.scaladsl.Source
 @InternalApi private[akka] object CassandraProjectionImpl {
   sealed trait Strategy
   case object AtMostOnce extends Strategy
-  final case class AtLeastOnce(afterElements: Int, orAfterDuration: FiniteDuration) extends Strategy
+  final case class AtLeastOnce(afterEnvelopes: Int, orAfterDuration: FiniteDuration) extends Strategy
 }
 
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraProjectionImpl[Offset, StreamElement](
+@InternalApi private[akka] class CassandraProjectionImpl[Offset, Envelope](
     override val projectionId: ProjectionId,
-    sourceProvider: Option[Offset] => Source[StreamElement, _],
-    offsetExtractor: StreamElement => Offset,
+    sourceProvider: Option[Offset] => Source[Envelope, _],
+    offsetExtractor: Envelope => Offset,
     strategy: CassandraProjectionImpl.Strategy,
-    handler: StreamElement => Future[Done])
-    extends Projection[StreamElement] {
+    handler: Envelope => Future[Done])
+    extends Projection[Envelope] {
   import CassandraProjectionImpl._
 
   private val killSwitch = KillSwitches.shared(projectionId.id)
@@ -82,31 +82,31 @@ import akka.stream.scaladsl.Source
 
     val lastKnownOffset: Future[Option[Offset]] = offsetStore.readOffset(projectionId)
 
-    val source: Source[(Offset, StreamElement), NotUsed] =
+    val source: Source[(Offset, Envelope), NotUsed] =
       Source
         .futureSource(lastKnownOffset.map(sourceProvider))
         .via(killSwitch.flow)
-        .map(element => offsetExtractor(element) -> element)
+        .map(envelope => offsetExtractor(envelope) -> envelope)
         .mapMaterializedValue(_ => NotUsed)
 
-    val handlerFlow: Flow[(Offset, StreamElement), Offset, NotUsed] =
-      Flow[(Offset, StreamElement)].mapAsync(parallelism = 1) {
-        case (offset, element) => handler(element).map(_ => offset)
+    val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
+      Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
+        case (offset, envelope) => handler(envelope).map(_ => offset)
       }
 
     val composedSource: Source[Done, NotUsed] = strategy match {
       case AtLeastOnce(1, _) =>
         source.via(handlerFlow).mapAsync(1) { offset => offsetStore.saveOffset(projectionId, offset) }
-      case AtLeastOnce(afterElements, orAfterDuration) =>
+      case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
         source
           .via(handlerFlow)
-          .groupedWithin(afterElements, orAfterDuration)
+          .groupedWithin(afterEnvelopes, orAfterDuration)
           .collect { case grouped if grouped.nonEmpty => grouped.last }
           .mapAsync(parallelism = 1) { offset => offsetStore.saveOffset(projectionId, offset) }
       case AtMostOnce =>
         source
           .mapAsync(parallelism = 1) {
-            case (offset, element) => offsetStore.saveOffset(projectionId, offset).map(_ => offset -> element)
+            case (offset, envelope) => offsetStore.saveOffset(projectionId, offset).map(_ => offset -> envelope)
           }
           .via(handlerFlow)
           .map(_ => Done)
@@ -116,5 +116,5 @@ import akka.stream.scaladsl.Source
   }
 
   // FIXME
-  def processElement(elt: StreamElement)(implicit ec: ExecutionContext): Future[Done] = ???
+  def processEnvelope(envelope: Envelope)(implicit ec: ExecutionContext): Future[Done] = ???
 }
