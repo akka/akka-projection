@@ -5,7 +5,6 @@
 package akka.projection.testkit
 
 import akka.Done
-import akka.actor.ActorSystem
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.scaladsl.{ ActorTestKit, _ }
 import akka.actor.typed.scaladsl.adapter._
@@ -26,7 +25,9 @@ object ProjectionTestKit {
 @ApiMayChange
 final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
-  private implicit val settings: TestKitSettings = TestKitSettings(testKit.system)
+  private implicit val system = testKit.system
+  private implicit val dispatcher = testKit.system.classicSystem.dispatcher
+  private implicit val settings: TestKitSettings = TestKitSettings(system)
 
   def run(projection: Projection[_])(assertFunc: => Unit): Unit =
     runInternal(projection, assertFunc, settings.SingleExpectDefaultTimeout, 100.millis)
@@ -43,11 +44,9 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
       max: FiniteDuration,
       interval: FiniteDuration): Unit = {
 
-    import testKit.system
-
     val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
     try {
-      projection.run()
+      projection.run()(testKit.system.classicSystem)
       probe.awaitAssert(assertFunc, max.dilated, interval)
     } finally {
       Await.result(projection.stop(), max)
@@ -55,9 +54,8 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
   }
 
   def runWithTestSink[T](projection: Projection[_]): TestSubscriber.Probe[Done] = {
-    implicit val classicSys: ActorSystem = testKit.system.toClassic
-    val sinkProbe = TestSink.probe[Done]
-    projection.mappedSource.runWith(sinkProbe)
+    val sinkProbe = TestSink.probe[Done](testKit.system.toClassic)
+    projection.mappedSource().runWith(sinkProbe)
   }
 
 }

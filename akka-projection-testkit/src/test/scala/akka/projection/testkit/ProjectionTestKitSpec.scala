@@ -6,15 +6,15 @@ package akka.projection.testkit
 
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.projection.Projection
-import akka.stream.scaladsl.{ DelayStrategy, Keep, Sink, Source }
-import akka.stream.{ DelayOverflowStrategy, KillSwitch, KillSwitches }
+import akka.projection.{ Projection, ProjectionId }
+import akka.stream.scaladsl.{ DelayStrategy, Sink, Source }
+import akka.stream.{ DelayOverflowStrategy, KillSwitches }
 import akka.{ Done, NotUsed }
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.concurrent.duration._
-import scala.concurrent.{ Future, Promise }
+import scala.concurrent.{ ExecutionContext, Future, Promise }
 
 class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
@@ -133,17 +133,25 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
   case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, eltPredicate: Int => Boolean)
       extends Projection[Int] {
 
-    override def name: String = "test-projection"
-    override def key: String = "00"
+    override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
 
-    private var shutdown: Option[KillSwitch] = None
+    private val killSwitch = KillSwitches.shared(projectionId.id)
     private val promiseToStop = Promise[Done]
 
     override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
-      val (killSwitch, sinkMat) =
-        mappedSource.toMat(Sink.ignore)(Keep.both).run()
-      shutdown = Some(killSwitch)
-      promiseToStop.completeWith(sinkMat)
+      val done =
+        mappedSource.runWith(Sink.ignore)
+      promiseToStop.completeWith(done)
+    }
+
+    override def processElement(elt: Int)(implicit ec: ExecutionContext): Future[Done] = {
+      if (eltPredicate(elt)) concat(elt)
+      Future.successful(Done)
+    }
+
+    private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] = {
+      implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
+      src.via(killSwitch.flow).mapAsync(1)(elt => processElement(elt))
     }
 
     private def concat(elt: Int) = {
@@ -151,16 +159,8 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       else strBuffer.append("-" + elt)
     }
 
-    override def processElement(elt: Int): Future[Done] = {
-      if (eltPredicate(elt)) concat(elt)
-      Future.successful(Done)
-    }
-
-    override private[projection] def mappedSource =
-      src.viaMat(KillSwitches.single)(Keep.right).mapAsync(1) { elt => processElement(elt) }
-
-    override def stop(): Future[Done] = {
-      shutdown.foreach(_.shutdown())
+    override def stop()(implicit ec: ExecutionContext): Future[Done] = {
+      killSwitch.shutdown()
       promiseToStop.future
     }
   }

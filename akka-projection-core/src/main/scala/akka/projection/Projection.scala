@@ -9,7 +9,7 @@ import akka.actor.ClassicActorSystemProvider
 import akka.annotation.{ ApiMayChange, InternalApi }
 import akka.stream.scaladsl.Source
 
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
 
 /**
  * The core abstraction in Akka Projections.
@@ -24,20 +24,7 @@ import scala.concurrent.Future
 @ApiMayChange
 trait Projection[StreamElement] {
 
-  /**
-   * The projection name. The projection name is shared across multiple instances of [[Projection]] with different keys.
-   *
-   * For example, a "user-view" could be the name of a projection.
-   */
-  def name: String
-
-  /**
-   * The unique key for this Projection instance. The key must be unique for a projection name.
-   *
-   * For example, a "user-view" could have multiple projections with different keys representing different partitions,
-   * shards, etc.
-   */
-  def key: String
+  def projectionId: ProjectionId
 
   /**
    * The method wrapping the user EventHandler function.
@@ -45,7 +32,7 @@ trait Projection[StreamElement] {
    * @return A [[scala.concurrent.Future]] that represents the asynchronous completion of the user EventHandler
    *         function.
    */
-  def processElement(elt: StreamElement): Future[Done]
+  def processElement(elt: StreamElement)(implicit ec: ExecutionContext): Future[Done]
 
   /**
    * INTERNAL API
@@ -54,7 +41,7 @@ trait Projection[StreamElement] {
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi
-  private[projection] def mappedSource: Source[Done, _]
+  private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _]
 
   /**
    * Run the Projection.
@@ -66,6 +53,5 @@ trait Projection[StreamElement] {
    *
    * @return Future[Done] - the returned Future should return the stream materialized value.
    */
-  def stop(): Future[Done]
-
+  def stop()(implicit ec: ExecutionContext): Future[Done]
 }
