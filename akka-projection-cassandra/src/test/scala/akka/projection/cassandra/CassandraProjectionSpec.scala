@@ -18,7 +18,7 @@ import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.ProjectionId
-import akka.projection.cassandra.internal.CassandraOffsetStoreImpl
+import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.testkit.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
@@ -107,7 +107,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
 
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext
-  private val offsetStore = new CassandraOffsetStoreImpl(session)
+  private val offsetStore = new CassandraOffsetStore(session)
   private val repository = new TestRepository(session)
   private val projectionTestKit = new ProjectionTestKit(testKit)
 

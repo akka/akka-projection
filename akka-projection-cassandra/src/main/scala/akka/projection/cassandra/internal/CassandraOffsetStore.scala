@@ -13,14 +13,13 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.query
 import akka.projection.ProjectionId
-import akka.projection.cassandra.CassandraOffsetStore
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import com.datastax.oss.driver.api.core.cql.Row
 
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object CassandraOffsetStoreImpl {
+@InternalApi private[akka] object CassandraOffsetStore {
   private val StringManifest = "STR"
   private val LongManifest = "LNG"
   private val IntManifest = "INT"
@@ -31,15 +30,14 @@ import com.datastax.oss.driver.api.core.cql.Row
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraOffsetStoreImpl(session: CassandraSession)(implicit ec: ExecutionContext)
-    extends CassandraOffsetStore {
-  import CassandraOffsetStoreImpl._
+@InternalApi private[akka] class CassandraOffsetStore(session: CassandraSession)(implicit ec: ExecutionContext) {
+  import CassandraOffsetStore._
 
   // FIXME make keyspace and table names configurable
   val keyspace = "akka_projection"
   val table = "offset_store"
 
-  override def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
+  def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
     session
       .selectOne(s"SELECT offset, manifest FROM $keyspace.$table WHERE projection_id = ?", projectionId.id)
       .map(fromRowToOffset)
@@ -91,7 +89,7 @@ import com.datastax.oss.driver.api.core.cql.Row
     }
   }
 
-  override def createKeyspaceAndTable(): Future[Done] = {
+  def createKeyspaceAndTable(): Future[Done] = {
     session
       .executeDDL(
         s"CREATE KEYSPACE IF NOT EXISTS $keyspace WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 }")

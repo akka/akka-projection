@@ -10,14 +10,12 @@ import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.projection.slick.OffsetStore
 import akka.projection.{ Projection, ProjectionId }
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{ Sink, Source }
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
-
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 
 @InternalApi
@@ -29,7 +27,7 @@ private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcPr
     eventHandler: StreamElement => DBIO[Done])
     extends Projection[StreamElement] {
 
-  private val offsetStore = new OffsetStore(databaseConfig.db, databaseConfig.profile)
+  private val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
 
   private val killSwitch = KillSwitches.shared(projectionId.id)
   private val promiseToStop: Promise[Done] = Promise()

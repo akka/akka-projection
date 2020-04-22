@@ -14,7 +14,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
-import akka.projection.cassandra.internal.CassandraOffsetStoreImpl
+import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -22,7 +22,7 @@ class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpe
 
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext
-  private val offsetStore = new CassandraOffsetStoreImpl(session)
+  private val offsetStore = new CassandraOffsetStore(session)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
