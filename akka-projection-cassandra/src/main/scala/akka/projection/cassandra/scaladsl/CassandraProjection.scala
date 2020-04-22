@@ -27,7 +27,17 @@ object CassandraProjection {
       projectionId,
       sourceProvider,
       offsetExtractor,
-      saveOffsetAfterElements,
-      saveOffsetAfterDuration,
+      CassandraProjectionImpl.AtLeastOnce(saveOffsetAfterElements, saveOffsetAfterDuration),
+      handler)
+
+  def atMostOnce[Offset, StreamElement](
+      projectionId: ProjectionId,
+      sourceProvider: Option[Offset] => Source[StreamElement, _],
+      offsetExtractor: StreamElement => Offset)(handler: StreamElement => Future[Done]): Projection[StreamElement] =
+    new CassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      offsetExtractor,
+      CassandraProjectionImpl.AtMostOnce,
       handler)
 }
