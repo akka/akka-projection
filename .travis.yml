@@ -16,6 +16,7 @@ script:
   - jabba install ${JDK:=adopt@~1.8-0}
   - jabba use ${JDK:=adopt@~1.8-0}
   - java -version
+  - docker-compose up -d cassandra
   - sbt -jvm-opts .jvmopts-travis "$CMD"
 
 jobs:
@@ -63,6 +64,9 @@ stages:
   # runs on main repo master commits and version-tagged commits
   - name: publish
     if: repo = akka/akka-projection AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+
+after_failure:
+  - docker-compose logs
 
 before_cache:
   - find $HOME/.ivy2 -name "ivydata-*.properties" -delete
