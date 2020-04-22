@@ -4,6 +4,8 @@
 
 package akka.projection.slick.internal
 
+import java.time.Instant
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -16,7 +18,7 @@ import slick.jdbc.JdbcProfile
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class SlickOffsetStore[P <: JdbcProfile](db: P#Backend#Database, profile: P) {
+@InternalApi private[akka] class SlickOffsetStore[P <: JdbcProfile](val db: P#Backend#Database, val profile: P) {
   import OffsetSerialization.fromStorageRepresentation
   import OffsetSerialization.toStorageRepresentation
   import profile.api._
@@ -33,7 +35,8 @@ import slick.jdbc.JdbcProfile
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset)(
       implicit ec: ExecutionContext): slick.dbio.DBIO[Done] = {
     val (offsetStr, manifest) = toStorageRepresentation(offset)
-    offsetTable.insertOrUpdate(OffsetRow(projectionId.id, offsetStr, manifest)).map(_ => Done)
+    val now = Instant.now()
+    offsetTable.insertOrUpdate(OffsetRow(projectionId.id, offsetStr, manifest, now)).map(_ => Done)
   }
 
   private class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, "AKKA_PROJECTION_OFFSET_STORE") {
@@ -41,12 +44,14 @@ import slick.jdbc.JdbcProfile
     def projectionId = column[String]("PROJECTION_ID", O.Length(255, varying = false), O.PrimaryKey)
     def offset = column[String]("OFFSET", O.Length(255, varying = false))
     def manifest = column[String]("MANIFEST", O.Length(4))
+    def lastUpdated = column[Instant]("LAST_UPDATED")
 
-    def * = (projectionId, offset, manifest).mapTo[OffsetRow]
+    def * = (projectionId, offset, manifest, lastUpdated).mapTo[OffsetRow]
   }
 
-  case class OffsetRow(projectionId: String, offsetStr: String, manifest: String)
-  private val offsetTable = TableQuery[OffsetStoreTable]
+  case class OffsetRow(projectionId: String, offsetStr: String, manifest: String, lastUpdated: Instant)
+
+  val offsetTable = TableQuery[OffsetStoreTable]
 
   def createIfNotExists: Future[Unit] =
     db.run(offsetTable.schema.createIfNotExists)

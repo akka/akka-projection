@@ -4,6 +4,7 @@
 
 package akka.projection.slick
 
+import java.time.Instant
 import java.util.UUID
 
 import akka.persistence.query.{ Sequence, TimeBasedUUID }
@@ -49,6 +50,12 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
 
   override protected def afterAll(): Unit = {
     dbConfig.db.close()
+  }
+
+  private def selectLastUpdated(projectionId: ProjectionId): Instant = {
+    import dbConfig.profile.api._
+    val action = offsetStore.offsetTable.filter(_.projectionId === projectionId.id).result.headOption
+    dbConfig.db.run(action).futureValue.get.lastUpdated
   }
 
   "The OffsetStore" must {
@@ -180,6 +187,22 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
         val offset = offsetStore.readOffset[TimeBasedUUID](projectionId).futureValue.value
         offset shouldBe timeOffset
       }
+    }
+
+    "update timestamp" in {
+      val projectionId = ProjectionId("timestamp", "00")
+      dbConfig.db.run(offsetStore.saveOffset(projectionId, 15)).futureValue
+      val instant1 = selectLastUpdated(projectionId)
+      (System.currentTimeMillis() - instant1.toEpochMilli) should be >= 0L
+      (System.currentTimeMillis() - instant1.toEpochMilli) should be < 3000L
+
+      // probably no risk to hit same timestamp, but anyway
+      Thread.sleep(10)
+
+      dbConfig.db.run(offsetStore.saveOffset(projectionId, 16)).futureValue
+      val instant2 = selectLastUpdated(projectionId)
+      (instant2.toEpochMilli - instant1.toEpochMilli) should be >= 0L
+      (instant2.toEpochMilli - instant1.toEpochMilli) should be < 3000L
     }
   }
 }

@@ -4,6 +4,8 @@
 
 package akka.projection.cassandra.internal
 
+import java.time.Instant
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -35,10 +37,11 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
     val (offsetStr, manifest) = toStorageRepresentation(offset)
     session.executeWrite(
-      s"INSERT INTO $keyspace.$table (projection_id, offset, manifest) VALUES (?, ?, ?)",
+      s"INSERT INTO $keyspace.$table (projection_id, offset, manifest, last_updated) VALUES (?, ?, ?, ?)",
       projectionId.id,
       offsetStr,
-      manifest)
+      manifest,
+      Instant.now())
   }
 
   def createKeyspaceAndTable(): Future[Done] = {
@@ -50,6 +53,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
         |  projection_id text,
         |  offset text,
         |  manifest text,
+        |  last_updated timestamp,
         |  PRIMARY KEY (projection_id))
         """.stripMargin.trim))
   }

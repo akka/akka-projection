@@ -4,6 +4,7 @@
 
 package akka.projection.cassandra
 
+import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.ExecutionContext
@@ -35,6 +36,16 @@ class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpe
   override protected def afterAll(): Unit = {
     Try(session.executeDDL(s"DROP keyspace ${offsetStore.keyspace}").futureValue)
     super.afterAll()
+  }
+
+  private def selectLastUpdated(projectionId: ProjectionId): Instant = {
+    session
+      .selectOne(
+        s"select last_updated from ${offsetStore.keyspace}.${offsetStore.table} where projection_id = ?",
+        projectionId.id)
+      .futureValue
+      .get
+      .get("last_updated", classOf[Instant])
   }
 
   "The Cassandra OffsetStore" must {
@@ -159,6 +170,22 @@ class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpe
         val offset = offsetStore.readOffset[TimeBasedUUID](projectionId).futureValue.get
         offset shouldBe timeOffset
       }
+    }
+
+    "update timestamp" in {
+      val projectionId = ProjectionId("timestamp", "00")
+      offsetStore.saveOffset(projectionId, 15)
+      val instant1 = selectLastUpdated(projectionId)
+      (System.currentTimeMillis() - instant1.toEpochMilli) should be >= 0L
+      (System.currentTimeMillis() - instant1.toEpochMilli) should be < 3000L
+
+      // probably no risk to hit same timestamp, but anyway
+      Thread.sleep(10)
+
+      offsetStore.saveOffset(projectionId, 16)
+      val instant2 = selectLastUpdated(projectionId)
+      (instant2.toEpochMilli - instant1.toEpochMilli) should be >= 0L
+      (instant2.toEpochMilli - instant1.toEpochMilli) should be < 3000L
     }
   }
 }
