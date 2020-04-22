@@ -27,14 +27,23 @@ import akka.stream.scaladsl.Source
 /**
  * INTERNAL API
  */
+@InternalApi private[akka] object CassandraProjectionImpl {
+  sealed trait Strategy
+  case object AtMostOnce extends Strategy
+  final case class AtLeastOnce(afterElements: Int, orAfterDuration: FiniteDuration) extends Strategy
+}
+
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] class CassandraProjectionImpl[Offset, StreamElement](
     override val projectionId: ProjectionId,
     sourceProvider: Option[Offset] => Source[StreamElement, _],
     offsetExtractor: StreamElement => Offset,
-    saveOffsetAfterElements: Int,
-    saveOffsetAfterDuration: FiniteDuration,
+    strategy: CassandraProjectionImpl.Strategy,
     handler: StreamElement => Future[Done])
     extends Projection[StreamElement] {
+  import CassandraProjectionImpl._
 
   private val killSwitch = KillSwitches.shared(projectionId.id)
   private val promiseToStop: Promise[Done] = Promise()
@@ -85,16 +94,23 @@ import akka.stream.scaladsl.Source
         case (offset, element) => handler(element).map(_ => offset)
       }
 
-    val composedSource =
-      if (saveOffsetAfterElements == 1) {
+    val composedSource: Source[Done, NotUsed] = strategy match {
+      case AtLeastOnce(1, _) =>
         source.via(handlerFlow).mapAsync(1) { offset => offsetStore.saveOffset(projectionId, offset) }
-      } else {
+      case AtLeastOnce(afterElements, orAfterDuration) =>
         source
           .via(handlerFlow)
-          .groupedWithin(saveOffsetAfterElements, saveOffsetAfterDuration)
+          .groupedWithin(afterElements, orAfterDuration)
           .collect { case grouped if grouped.nonEmpty => grouped.last }
           .mapAsync(parallelism = 1) { offset => offsetStore.saveOffset(projectionId, offset) }
-      }
+      case AtMostOnce =>
+        source
+          .mapAsync(parallelism = 1) {
+            case (offset, element) => offsetStore.saveOffset(projectionId, offset).map(_ => offset -> element)
+          }
+          .via(handlerFlow)
+          .map(_ => Done)
+    }
 
     composedSource
   }
