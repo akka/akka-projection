@@ -72,6 +72,7 @@ object Common extends AutoPlugin {
     // -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
     // -q Suppress stdout for successful tests.
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
+    Test / logBuffered := false,
     bintrayOrganization := Some("akka"),
     bintrayPackage := "akka-projection",
     bintrayRepository := (if (isSnapshot.value) "snapshots" else "maven"))
