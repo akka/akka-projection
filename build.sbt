@@ -23,6 +23,13 @@ lazy val slick = Project(id = "akka-projection-slick", base = file("akka-project
   .dependsOn(core)
   .dependsOn(testkit % "test->test")
 
+// provides offset storage backed by a Cassandra table
+lazy val cassandra = Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
+  .settings(Dependencies.cassandra)
+  .settings(Test / parallelExecution := false)
+  .dependsOn(core)
+  .dependsOn(testkit % "test->test")
+
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
   .dependsOn(core, testkit)
@@ -64,7 +71,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, docs)
+  .aggregate(core, testkit, slick, cassandra, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 
