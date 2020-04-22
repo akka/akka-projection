@@ -20,13 +20,13 @@ object CassandraProjection {
       projectionId: ProjectionId,
       sourceProvider: Option[Offset] => Source[StreamElement, _],
       offsetExtractor: StreamElement => Offset,
-      saveOffsetAfterNumberOfEvents: Int,
+      saveOffsetAfterElements: Int,
       saveOffsetAfterDuration: FiniteDuration)(handler: StreamElement => Future[Done]): Projection[StreamElement] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
       offsetExtractor,
-      saveOffsetAfterNumberOfEvents,
+      saveOffsetAfterElements,
       saveOffsetAfterDuration,
       handler)
 }

@@ -4,7 +4,9 @@
 package akka.projection.cassandra
 
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
@@ -21,6 +23,8 @@ import akka.projection.testkit.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Source
+import akka.stream.testkit.TestPublisher
+import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object CassandraProjectionSpec {
@@ -38,8 +42,10 @@ object CassandraProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    val src = Source.fromIterator(() => elements.iterator)
+    dropTo(Source(elements), offset)
+  }
 
+  def dropTo(src: Source[Envelope, NotUsed], offset: Option[Long]): Source[Envelope, NotUsed] = {
     offset match {
       case Some(o) => src.dropWhile(_.offset <= o)
       case _       => src
@@ -136,7 +142,8 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 1, Duration.Zero) {
-            envelope => repository.concatToText(envelope.id, envelope.message)
+            envelope =>
+              repository.concatToText(envelope.id, envelope.message)
           }
 
       projectionTestKit.run(projection) {
@@ -192,7 +199,8 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 1, Duration.Zero) {
-            envelope => repository.concatToText(envelope.id, envelope.message)
+            envelope =>
+              repository.concatToText(envelope.id, envelope.message)
           }
 
       projectionTestKit.run(projection) {
@@ -206,6 +214,90 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
         offset shouldBe 6L
       }
+    }
+
+    "save offset after number of elements" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      import akka.actor.typed.scaladsl.adapter._
+      val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
+      val source = TestSource.probe[Envelope](system.toClassic).mapMaterializedValue { probe =>
+        sourceProbe.set(probe)
+        NotUsed
+      }
+
+      val projection =
+        CassandraProjection.atLeastOnce[Long, Envelope](projectionId, _ => source, offsetExtractor, 10, 1.minute) {
+          envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+        }
+
+      val sinkProbe = projectionTestKit.runWithTestSink(projection)
+      eventually {
+        sourceProbe.get should not be null
+      }
+      sinkProbe.request(1000)
+
+      (1 to 15).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
+      eventually {
+        repository.findById(entityId).futureValue.get.text should include("elem-15")
+      }
+      offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
+
+      (16 to 22).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
+      eventually {
+        repository.findById(entityId).futureValue.get.text should include("elem-22")
+      }
+      offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 20L
+
+      sinkProbe.cancel()
+    }
+
+    "save offset after idle duration" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      import akka.actor.typed.scaladsl.adapter._
+      val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
+      val source = TestSource.probe[Envelope](system.toClassic).mapMaterializedValue { probe =>
+        sourceProbe.set(probe)
+        NotUsed
+      }
+
+      val projection =
+        CassandraProjection.atLeastOnce[Long, Envelope](projectionId, _ => source, offsetExtractor, 10, 2.seconds) {
+          envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+        }
+
+      val sinkProbe = projectionTestKit.runWithTestSink(projection)
+      eventually {
+        sourceProbe.get should not be null
+      }
+      sinkProbe.request(1000)
+
+      (1 to 15).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
+      eventually {
+        repository.findById(entityId).futureValue.get.text should include("elem-15")
+      }
+      offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
+
+      (16 to 17).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 17L
+      }
+      repository.findById(entityId).futureValue.get.text should include("elem-17")
+
+      sinkProbe.cancel()
     }
   }
 }

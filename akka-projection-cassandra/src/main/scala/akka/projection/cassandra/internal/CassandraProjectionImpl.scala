@@ -30,12 +30,12 @@ import akka.stream.scaladsl.Source
     override val projectionId: ProjectionId,
     sourceProvider: Option[Offset] => Source[StreamElement, _],
     offsetExtractor: StreamElement => Offset,
-    saveOffsetAfterNumberOfEvents: Int,
+    saveOffsetAfterElements: Int,
     saveOffsetAfterDuration: FiniteDuration,
     handler: StreamElement => Future[Done])
     extends Projection[StreamElement] {
 
-  private val killSwitch = KillSwitches.shared(projectionId.toString)
+  private val killSwitch = KillSwitches.shared(projectionId.id)
   private val promiseToStop: Promise[Done] = Promise()
   private val started = new AtomicBoolean(false)
 
@@ -85,14 +85,18 @@ import akka.stream.scaladsl.Source
       }
 
     val composedSource =
-      if (saveOffsetAfterNumberOfEvents == 1) {
-        source.via(handlerFlow).mapAsync(1) { offset => offsetStore.saveOffset(projectionId, offset) }
+      if (saveOffsetAfterElements == 1) {
+        source.via(handlerFlow).mapAsync(1) { offset =>
+          offsetStore.saveOffset(projectionId, offset)
+        }
       } else {
         source
           .via(handlerFlow)
-          .groupedWithin(saveOffsetAfterNumberOfEvents, saveOffsetAfterDuration)
+          .groupedWithin(saveOffsetAfterElements, saveOffsetAfterDuration)
           .collect { case grouped if grouped.nonEmpty => grouped.last }
-          .mapAsync(parallelism = 1) { offset => offsetStore.saveOffset(projectionId, offset) }
+          .mapAsync(parallelism = 1) { offset =>
+            offsetStore.saveOffset(projectionId, offset)
+          }
       }
 
     composedSource
