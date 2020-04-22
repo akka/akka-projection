@@ -9,15 +9,16 @@ import akka.projection.testkit.ProjectionTestKit
 import com.typesafe.config.Config
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
+
+import akka.projection.slick.internal.SlickOffsetStore
 
 abstract class SlickSpec(config: Config) extends ScalaTestWithActorTestKit(config) {
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", config)
 
-  val offsetStore = new OffsetStore(dbConfig.db, dbConfig.profile)
+  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile)
 
   val projectionTestKit = new ProjectionTestKit(testKit)
 

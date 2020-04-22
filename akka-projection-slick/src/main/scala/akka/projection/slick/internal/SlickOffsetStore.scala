@@ -2,20 +2,23 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.slick
+package akka.projection.slick.internal
 
 import java.util.UUID
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.Done
-import akka.annotation.ApiMayChange
-import slick.jdbc.JdbcProfile
+import akka.annotation.InternalApi
 import akka.persistence.query
 import akka.projection.ProjectionId
+import slick.jdbc.JdbcProfile
 
-import scala.concurrent.{ ExecutionContext, Future }
-
-@ApiMayChange
-class OffsetStore[P <: JdbcProfile](db: P#Backend#Database, profile: P) {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class SlickOffsetStore[P <: JdbcProfile](db: P#Backend#Database, profile: P) {
 
   import profile.api._
 

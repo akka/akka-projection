@@ -15,9 +15,10 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.{ BeforeAndAfterAll, OptionValues }
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
-
 import scala.concurrent.{ Await, ExecutionContext }
 import scala.concurrent.duration._
+
+import akka.projection.slick.internal.SlickOffsetStore
 
 object OffsetStoreSpec {
   def config: Config = ConfigFactory.parseString("""
@@ -39,7 +40,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", OffsetStoreSpec.config)
 
-  val offsetStore = new OffsetStore(dbConfig.db, dbConfig.profile)
+  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile)
 
   override protected def beforeAll(): Unit = {
     // create offset table

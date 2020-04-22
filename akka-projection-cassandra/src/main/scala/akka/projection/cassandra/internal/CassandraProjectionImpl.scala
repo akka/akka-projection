@@ -66,10 +66,10 @@ import akka.stream.scaladsl.Source
 
     // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
     val sessionConfigPath = "akka.projection.cassandra"
-    // FIXME session look could be moved to CassandraOffsetStoreImpl if that's better
+    // FIXME session look could be moved to CassandraOffsetStore if that's better
     val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
 
-    val offsetStore = new CassandraOffsetStoreImpl(session)
+    val offsetStore = new CassandraOffsetStore(session)
 
     val lastKnownOffset: Future[Option[Offset]] = offsetStore.readOffset(projectionId)
 
