@@ -14,7 +14,7 @@ object Common extends AutoPlugin {
 
   override def globalSettings =
     Seq(
-      organization := "com.lightbend.akka.projection",
+      organization := "com.lightbend.akka",
       organizationName := "Lightbend Inc.",
       organizationHomepage := Some(url("https://www.lightbend.com/")),
       startYear := Some(2020),
