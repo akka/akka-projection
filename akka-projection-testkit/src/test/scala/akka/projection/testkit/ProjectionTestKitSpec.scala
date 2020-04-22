@@ -144,14 +144,13 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       promiseToStop.completeWith(done)
     }
 
-    override def processEnvelope(envelope: Int)(implicit ec: ExecutionContext): Future[Done] = {
-      if (predicate(envelope)) concat(envelope)
+    private def processElement(elt: Int): Future[Done] = {
+      if (predicate(elt)) concat(elt)
       Future.successful(Done)
     }
 
     private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] = {
-      implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
-      src.via(killSwitch.flow).mapAsync(1)(envelope => processEnvelope(envelope))
+      src.via(killSwitch.flow).mapAsync(1)(elt => processElement(elt))
     }
 
     private def concat(envelope: Int) = {

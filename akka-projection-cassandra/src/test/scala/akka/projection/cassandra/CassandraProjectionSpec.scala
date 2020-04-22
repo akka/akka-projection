@@ -158,7 +158,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       }
     }
 
-    "restart from previous offset - handler throwing an exception" in {
+    "restart from previous offset - handler throwing an exception, save after 1" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
@@ -215,7 +215,65 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       }
     }
 
-    "save offset after number of elements" in {
+    "restart from previous offset - handler throwing an exception, save after 2" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val streamFailureMsg = "fail on fourth envelope"
+      val failingProjection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 2, 1.minute) {
+            envelope =>
+              if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
+              repository.concatToText(envelope.id, envelope.message)
+          }
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val streamFailure =
+        intercept[RuntimeException] {
+          projectionTestKit.run(failingProjection) {
+            fail("fail assertFunc, we want to capture the stream failure")
+          }
+        }
+
+      withClue("check: projection failed with stream failure") {
+        streamFailure.getMessage shouldBe streamFailureMsg
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr = repository.findById(entityId).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+      withClue("check: last seen offset is 2L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
+        offset shouldBe 2L
+      }
+
+      // re-run projection without failing function
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 2, 1.minute) {
+            envelope => repository.concatToText(envelope.id, envelope.message)
+          }
+
+      projectionTestKit.run(projection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr = repository.findById(entityId).futureValue.get
+          // note that 3rd is duplicated
+          concatStr.text shouldBe "abc|def|ghi|ghi|jkl|mno|pqr"
+        }
+      }
+
+      withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
+        offset shouldBe 6L
+      }
+    }
+
+    "save offset after number of envelopes" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
