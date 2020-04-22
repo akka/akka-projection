@@ -87,17 +87,13 @@ import akka.stream.scaladsl.Source
 
     val composedSource =
       if (saveOffsetAfterElements == 1) {
-        source.via(handlerFlow).mapAsync(1) { offset =>
-          offsetStore.saveOffset(projectionId, offset)
-        }
+        source.via(handlerFlow).mapAsync(1) { offset => offsetStore.saveOffset(projectionId, offset) }
       } else {
         source
           .via(handlerFlow)
           .groupedWithin(saveOffsetAfterElements, saveOffsetAfterDuration)
           .collect { case grouped if grouped.nonEmpty => grouped.last }
-          .mapAsync(parallelism = 1) { offset =>
-            offsetStore.saveOffset(projectionId, offset)
-          }
+          .mapAsync(parallelism = 1) { offset => offsetStore.saveOffset(projectionId, offset) }
       }
 
     composedSource

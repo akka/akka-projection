@@ -143,8 +143,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 1, Duration.Zero) {
-            envelope =>
-              repository.concatToText(envelope.id, envelope.message)
+            envelope => repository.concatToText(envelope.id, envelope.message)
           }
 
       projectionTestKit.run(projection) {
@@ -200,8 +199,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 1, Duration.Zero) {
-            envelope =>
-              repository.concatToText(envelope.id, envelope.message)
+            envelope => repository.concatToText(envelope.id, envelope.message)
           }
 
       projectionTestKit.run(projection) {
@@ -230,8 +228,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
 
       val projection =
         CassandraProjection.atLeastOnce[Long, Envelope](projectionId, _ => source, offsetExtractor, 10, 1.minute) {
-          envelope =>
-            repository.concatToText(envelope.id, envelope.message)
+          envelope => repository.concatToText(envelope.id, envelope.message)
         }
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
@@ -240,17 +237,13 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       }
       sinkProbe.request(1000)
 
-      (1 to 15).foreach { n =>
-        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
-      }
+      (1 to 15).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-15")
       }
       offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
 
-      (16 to 22).foreach { n =>
-        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
-      }
+      (16 to 22).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-22")
       }
@@ -272,8 +265,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
 
       val projection =
         CassandraProjection.atLeastOnce[Long, Envelope](projectionId, _ => source, offsetExtractor, 10, 2.seconds) {
-          envelope =>
-            repository.concatToText(envelope.id, envelope.message)
+          envelope => repository.concatToText(envelope.id, envelope.message)
         }
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
@@ -282,17 +274,13 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       }
       sinkProbe.request(1000)
 
-      (1 to 15).foreach { n =>
-        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
-      }
+      (1 to 15).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-15")
       }
       offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
 
-      (16 to 17).foreach { n =>
-        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
-      }
+      (16 to 17).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
       eventually {
         offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 17L
       }

@@ -76,9 +76,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId,
           sourceProvider = sourceProvider(entityId),
           offsetExtractor = offsetExtractor,
-          databaseConfig = dbConfig) { envelope =>
-          repository.concatToText(envelope.id, envelope.message)
-        }
+          databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {
@@ -140,9 +138,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
           offsetExtractor = offsetExtractor,
-          databaseConfig = dbConfig) { envelope =>
-          repository.concatToText(envelope.id, envelope.message)
-        }
+          databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
@@ -205,9 +201,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
           offsetExtractor = offsetExtractor,
-          databaseConfig = dbConfig) { envelope =>
-          repository.concatToText(envelope.id, envelope.message)
-        }
+          databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
@@ -265,9 +259,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
           offsetExtractor = offsetExtractor,
-          databaseConfig = dbConfig) { envelope =>
-          repository.concatToText(envelope.id, envelope.message)
-        }
+          databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
