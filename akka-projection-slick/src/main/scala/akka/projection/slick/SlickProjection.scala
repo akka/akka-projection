@@ -8,9 +8,8 @@ import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.annotation.ApiMayChange
-import akka.projection.{ Projection, ProjectionId }
+import akka.projection.{ Projection, ProjectionId, SourceProvider }
 import akka.projection.slick.internal.SlickProjectionImpl
-import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
@@ -21,28 +20,19 @@ object SlickProjection {
 
   def exactlyOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
-      sourceProvider: Option[Offset] => Source[Envelope, _],
-      offsetExtractor: Envelope => Offset,
+      sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P])(eventHandler: Envelope => DBIO[Done]): Projection[Envelope] =
-    new SlickProjectionImpl(
-      projectionId,
-      sourceProvider,
-      offsetExtractor,
-      databaseConfig,
-      SlickProjectionImpl.ExactlyOnce,
-      eventHandler)
+    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, SlickProjectionImpl.ExactlyOnce, eventHandler)
 
   def atLeastOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
-      sourceProvider: Option[Offset] => Source[Envelope, _],
-      offsetExtractor: Envelope => Offset,
+      sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
       saveOffsetAfterEnvelopes: Int,
       saveOffsetAfterDuration: FiniteDuration)(eventHandler: Envelope => DBIO[Done]): Projection[Envelope] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
-      offsetExtractor,
       databaseConfig,
       SlickProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
       eventHandler)

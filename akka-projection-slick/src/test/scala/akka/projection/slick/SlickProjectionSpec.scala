@@ -7,9 +7,11 @@ package akka.projection.slick
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
-import akka.projection.ProjectionId
-import akka.stream.scaladsl.Source
 import akka.{ Done, NotUsed }
+import akka.projection.{ ProjectionId, SourceProvider }
+import akka.stream.scaladsl.Source
+import akka.stream.testkit.TestPublisher
+import akka.stream.testkit.scaladsl.TestSource
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException
 import org.scalatest.OptionValues
@@ -18,11 +20,9 @@ import org.slf4j.{ Logger, LoggerFactory }
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIOAction
 import slick.jdbc.H2Profile
+
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future }
-
-import akka.stream.testkit.TestPublisher
-import akka.stream.testkit.scaladsl.TestSource
 
 object SlickProjectionSpec {
   def config: Config = ConfigFactory.parseString("""
@@ -45,9 +45,8 @@ object SlickProjectionSpec {
 
   case class Envelope(id: String, offset: Long, message: String)
 
-  def offsetExtractor(env: Envelope): Long = env.offset
+  def sourceProvider(id: String): SourceProvider[Long, Envelope] = {
 
-  def sourceProvider(id: String)(offset: Option[Long]): Source[Envelope, NotUsed] = {
     val envelopes =
       List(
         Envelope(id, 1L, "abc"),
@@ -57,14 +56,20 @@ object SlickProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    val src = Source(envelopes)
-
-    offset match {
-      case Some(o) => src.dropWhile(_.offset <= o)
-      case _       => src
-    }
+    TestSourceProvider(Source(envelopes))
   }
 
+  case class TestSourceProvider(src: Source[Envelope, _]) extends SourceProvider[Long, Envelope] {
+
+    override def source(offset: Option[Long]): Source[Envelope, _] = {
+      offset match {
+        case Some(o) => src.dropWhile(_.offset <= o)
+        case _       => src
+      }
+    }
+
+    override def extractOffset(env: Envelope): Long = env.offset
+  }
   // test model is as simple as a text that gets other string concatenated to it
   case class ConcatStr(id: String, text: String) {
     def concat(newMsg: String) = copy(text = text + "|" + newMsg)
@@ -150,11 +155,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       val slickProjection =
-        SlickProjection.exactlyOnce(
-          projectionId,
-          sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
-          databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
+        SlickProjection.exactlyOnce(projectionId, sourceProvider = sourceProvider(entityId), databaseConfig = dbConfig) {
+          envelope => repository.concatToText(envelope.id, envelope.message)
+        }
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {
@@ -174,13 +177,10 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val streamFailureMsg = "fail on fourth envelope"
       val slickProjectionFailing =
-        SlickProjection.exactlyOnce(
-          projectionId,
-          sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
-          databaseConfig = dbConfig) { envelope =>
-          if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException(streamFailureMsg))
-          else repository.concatToText(envelope.id, envelope.message)
+        SlickProjection.exactlyOnce(projectionId, sourceProvider = sourceProvider(entityId), databaseConfig = dbConfig) {
+          envelope =>
+            if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException(streamFailureMsg))
+            else repository.concatToText(envelope.id, envelope.message)
         }
 
       withClue("check - offset is empty") {
@@ -212,7 +212,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       projectionTestKit.run(slickProjection) {
@@ -237,7 +236,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig) { envelope =>
           if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
           else repository.concatToText(envelope.id, envelope.message)
@@ -272,7 +270,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       projectionTestKit.run(slickProjection) {
@@ -296,7 +293,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig) { envelope =>
           if (envelope.offset == 4L) repository.updateWithNullValue(envelope.id)
           else repository.concatToText(envelope.id, envelope.message)
@@ -327,7 +323,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       projectionTestKit.run(slickProjection) {
@@ -359,7 +354,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.atLeastOnce(
           projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 1,
           saveOffsetAfterDuration = Duration.Zero) { envelope =>
@@ -387,7 +381,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.atLeastOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 1,
           saveOffsetAfterDuration = Duration.Zero) { envelope =>
@@ -424,7 +417,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.atLeastOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 1,
           saveOffsetAfterDuration = Duration.Zero) { envelope =>
@@ -453,7 +445,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.atLeastOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 2,
           saveOffsetAfterDuration = 1.minute) { envelope =>
@@ -490,7 +481,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.atLeastOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          offsetExtractor = offsetExtractor,
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 2,
           saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
@@ -523,8 +513,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       val slickProjection =
         SlickProjection.atLeastOnce[Long, Envelope, H2Profile](
           projectionId = projectionId,
-          sourceProvider = _ => source,
-          offsetExtractor = offsetExtractor,
+          sourceProvider = TestSourceProvider(source),
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 10,
           saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
@@ -564,8 +553,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       val slickProjection =
         SlickProjection.atLeastOnce[Long, Envelope, H2Profile](
           projectionId = projectionId,
-          sourceProvider = _ => source,
-          offsetExtractor = offsetExtractor,
+          sourceProvider = TestSourceProvider(source),
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 10,
           saveOffsetAfterDuration = 2.seconds) { envelope => repository.concatToText(envelope.id, envelope.message) }

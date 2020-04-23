@@ -7,33 +7,29 @@ package akka.projection.cassandra
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
-import scala.util.Try
-
-import akka.Done
-import akka.NotUsed
-import akka.actor.testkit.typed.scaladsl.LogCapturing
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.projection.ProjectionId
+import akka.{ Done, NotUsed }
+import akka.actor.testkit.typed.scaladsl.{ LogCapturing, ScalaTestWithActorTestKit }
+import akka.projection.{ ProjectionId, SourceProvider }
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.testkit.ProjectionTestKit
-import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.duration.{ Duration, _ }
+import scala.util.Try
 
 object CassandraProjectionSpec {
   case class Envelope(id: String, offset: Long, message: String)
 
   def offsetExtractor(env: Envelope): Long = env.offset
 
-  def sourceProvider(id: String)(offset: Option[Long]): Source[Envelope, NotUsed] = {
+  def sourceProvider(id: String): SourceProvider[Long, Envelope] = {
+
     val envelopes =
       List(
         Envelope(id, 1L, "abc"),
@@ -43,14 +39,19 @@ object CassandraProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    dropTo(Source(envelopes), offset)
+    TestSourceProvider(Source(envelopes))
   }
 
-  def dropTo(src: Source[Envelope, NotUsed], offset: Option[Long]): Source[Envelope, NotUsed] = {
-    offset match {
-      case Some(o) => src.dropWhile(_.offset <= o)
-      case _       => src
+  case class TestSourceProvider(src: Source[Envelope, _]) extends SourceProvider[Long, Envelope] {
+
+    override def source(offset: Option[Long]): Source[Envelope, _] = {
+      offset match {
+        case Some(o) => src.dropWhile(_.offset <= o)
+        case _       => src
+      }
     }
+
+    override def extractOffset(env: Envelope): Long = env.offset
   }
 
   // test model is as simple as a text that gets other string concatenated to it
@@ -142,8 +143,12 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 1, Duration.Zero) {
-            envelope => repository.concatToText(envelope.id, envelope.message)
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(entityId),
+            saveOffsetAfterEnvelopes = 1,
+            saveOffsetAfterDuration = Duration.Zero) { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
           }
 
       projectionTestKit.run(projection) {
@@ -165,10 +170,13 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 1, Duration.Zero) {
-            envelope =>
-              if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
-              repository.concatToText(envelope.id, envelope.message)
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(entityId),
+            saveOffsetAfterEnvelopes = 1,
+            saveOffsetAfterDuration = Duration.Zero) { envelope =>
+            if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
+            repository.concatToText(envelope.id, envelope.message)
           }
 
       withClue("check - offset is empty") {
@@ -198,8 +206,12 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       // re-run projection without failing function
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 1, Duration.Zero) {
-            envelope => repository.concatToText(envelope.id, envelope.message)
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(entityId),
+            saveOffsetAfterEnvelopes = 1,
+            saveOffsetAfterDuration = Duration.Zero) { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
           }
 
       projectionTestKit.run(projection) {
@@ -222,10 +234,13 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 2, 1.minute) {
-            envelope =>
-              if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
-              repository.concatToText(envelope.id, envelope.message)
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(entityId),
+            saveOffsetAfterEnvelopes = 2,
+            saveOffsetAfterDuration = 1.minute) { envelope =>
+            if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
+            repository.concatToText(envelope.id, envelope.message)
           }
 
       withClue("check - offset is empty") {
@@ -255,9 +270,11 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       // re-run projection without failing function
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 2, 1.minute) {
-            envelope => repository.concatToText(envelope.id, envelope.message)
-          }
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(entityId),
+            saveOffsetAfterEnvelopes = 2,
+            saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -285,9 +302,11 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       }
 
       val projection =
-        CassandraProjection.atLeastOnce[Long, Envelope](projectionId, _ => source, offsetExtractor, 10, 1.minute) {
-          envelope => repository.concatToText(envelope.id, envelope.message)
-        }
+        CassandraProjection.atLeastOnce[Long, Envelope](
+          projectionId,
+          TestSourceProvider(source),
+          saveOffsetAfterEnvelopes = 10,
+          saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
       eventually {
@@ -322,9 +341,11 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       }
 
       val projection =
-        CassandraProjection.atLeastOnce[Long, Envelope](projectionId, _ => source, offsetExtractor, 10, 2.seconds) {
-          envelope => repository.concatToText(envelope.id, envelope.message)
-        }
+        CassandraProjection.atLeastOnce[Long, Envelope](
+          projectionId,
+          TestSourceProvider(source),
+          saveOffsetAfterEnvelopes = 10,
+          saveOffsetAfterDuration = 2.seconds) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
       eventually {
@@ -360,8 +381,8 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       }
 
       val projection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor) {
-          envelope => repository.concatToText(envelope.id, envelope.message)
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
         }
 
       projectionTestKit.run(projection) {
@@ -382,10 +403,9 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
 
       val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor) {
-          envelope =>
-            if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
-            repository.concatToText(envelope.id, envelope.message)
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
+          if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
+          repository.concatToText(envelope.id, envelope.message)
         }
 
       withClue("check - offset is empty") {
@@ -414,8 +434,8 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
 
       // re-run projection without failing function
       val projection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor) {
-          envelope => repository.concatToText(envelope.id, envelope.message)
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
         }
 
       projectionTestKit.run(projection) {
