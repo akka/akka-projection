@@ -16,6 +16,7 @@ import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
+import akka.projection.testkit.internal.TestClock
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -23,7 +24,11 @@ class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpe
 
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext
-  private val offsetStore = new CassandraOffsetStore(session)
+
+  // test clock for testing of the `last_updated` Instant
+  private val clock = new TestClock
+
+  private val offsetStore = new CassandraOffsetStore(session, clock)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -174,18 +179,16 @@ class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpe
 
     "update timestamp" in {
       val projectionId = ProjectionId("timestamp", "00")
-      offsetStore.saveOffset(projectionId, 15)
+
+      val instant0 = clock.instant()
+      offsetStore.saveOffset(projectionId, 15).futureValue
       val instant1 = selectLastUpdated(projectionId)
-      (System.currentTimeMillis() - instant1.toEpochMilli) should be >= 0L
-      (System.currentTimeMillis() - instant1.toEpochMilli) should be < 3000L
+      instant1 shouldBe instant0
 
-      // probably no risk to hit same timestamp, but anyway
-      Thread.sleep(10)
-
-      offsetStore.saveOffset(projectionId, 16)
-      val instant2 = selectLastUpdated(projectionId)
-      (instant2.toEpochMilli - instant1.toEpochMilli) should be >= 0L
-      (instant2.toEpochMilli - instant1.toEpochMilli) should be < 3000L
+      val instant2 = clock.tick(java.time.Duration.ofMillis(5))
+      offsetStore.saveOffset(projectionId, 16).futureValue
+      val instant3 = selectLastUpdated(projectionId)
+      instant3 shouldBe instant2
     }
   }
 }

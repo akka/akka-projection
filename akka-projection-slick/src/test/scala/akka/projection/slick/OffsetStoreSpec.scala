@@ -20,6 +20,7 @@ import scala.concurrent.{ Await, ExecutionContext }
 import scala.concurrent.duration._
 
 import akka.projection.slick.internal.SlickOffsetStore
+import akka.projection.testkit.internal.TestClock
 
 object OffsetStoreSpec {
   def config: Config = ConfigFactory.parseString("""
@@ -41,7 +42,10 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", OffsetStoreSpec.config)
 
-  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile)
+  // test clock for testing of the `last_updated` Instant
+  private val clock = new TestClock
+
+  private val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, clock)
 
   override protected def beforeAll(): Unit = {
     // create offset table
@@ -191,18 +195,16 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
 
     "update timestamp" in {
       val projectionId = ProjectionId("timestamp", "00")
+
+      val instant0 = clock.instant()
       dbConfig.db.run(offsetStore.saveOffset(projectionId, 15)).futureValue
       val instant1 = selectLastUpdated(projectionId)
-      (System.currentTimeMillis() - instant1.toEpochMilli) should be >= 0L
-      (System.currentTimeMillis() - instant1.toEpochMilli) should be < 3000L
+      instant1 shouldBe instant0
 
-      // probably no risk to hit same timestamp, but anyway
-      Thread.sleep(10)
-
+      val instant2 = clock.tick(java.time.Duration.ofMillis(5))
       dbConfig.db.run(offsetStore.saveOffset(projectionId, 16)).futureValue
-      val instant2 = selectLastUpdated(projectionId)
-      (instant2.toEpochMilli - instant1.toEpochMilli) should be >= 0L
-      (instant2.toEpochMilli - instant1.toEpochMilli) should be < 3000L
+      val instant3 = selectLastUpdated(projectionId)
+      instant3 shouldBe instant2
     }
   }
 }
