@@ -280,7 +280,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
   def offsetExtractor(env: Envelope): Long = env.offset
 
   def sourceProvider(id: String)(offset: Option[Long]): Source[Envelope, NotUsed] = {
-    val elements =
+    val envelopes =
       List(
         Envelope(id, 1L, "abc"),
         Envelope(id, 2L, "def"),
@@ -289,7 +289,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    val src = Source(elements)
+    val src = Source(envelopes)
 
     offset match {
       case Some(o) => src.dropWhile(_.offset <= o)

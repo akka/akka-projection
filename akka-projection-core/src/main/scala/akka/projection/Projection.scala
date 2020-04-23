@@ -14,15 +14,16 @@ import scala.concurrent.{ ExecutionContext, Future }
 /**
  * The core abstraction in Akka Projections.
  *
- * A projection instance may share the same name and [[StreamElement]], but must have a unique key. The key is used
+ * A projection instance may share the same name and [[Envelope]], but must have a unique key. The key is used
  * to achieve processing parallelism for a projection.
  *
- * For example, many projections may share the same name "user-events-projection", but can process elements for
+ * For example, many projections may share the same name "user-events-projection", but can process events for
  * different sharded entities within Akka Cluster, where key could be the Akka Cluster shardId.
- * @tparam StreamElement The entity type of the projection.
+ *
+ * @tparam Envelope The envelope type of the projection.
  */
 @ApiMayChange
-trait Projection[StreamElement] {
+trait Projection[Envelope] {
 
   def projectionId: ProjectionId
 
@@ -32,12 +33,12 @@ trait Projection[StreamElement] {
    * @return A [[scala.concurrent.Future]] that represents the asynchronous completion of the user EventHandler
    *         function.
    */
-  def processElement(elt: StreamElement)(implicit ec: ExecutionContext): Future[Done]
+  def processEnvelope(envelope: Envelope)(implicit ec: ExecutionContext): Future[Done]
 
   /**
    * INTERNAL API
    *
-   * This method returns the projection Source mapped with `processElement`, but before any sink attached.
+   * This method returns the projection Source mapped with `processEnvelope`, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi

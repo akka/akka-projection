@@ -34,7 +34,7 @@ object CassandraProjectionSpec {
   def offsetExtractor(env: Envelope): Long = env.offset
 
   def sourceProvider(id: String)(offset: Option[Long]): Source[Envelope, NotUsed] = {
-    val elements =
+    val envelopes =
       List(
         Envelope(id, 1L, "abc"),
         Envelope(id, 2L, "def"),
@@ -43,7 +43,7 @@ object CassandraProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    dropTo(Source(elements), offset)
+    dropTo(Source(envelopes), offset)
   }
 
   def dropTo(src: Source[Envelope, NotUsed], offset: Option[Long]): Source[Envelope, NotUsed] = {
@@ -162,7 +162,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val streamFailureMsg = "fail on fourth element"
+      val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor, 1, Duration.Zero) {
@@ -322,7 +322,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val streamFailureMsg = "fail on fourth element"
+      val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
         CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), offsetExtractor) {
           envelope =>
@@ -363,7 +363,7 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
           val concatStr = repository.findById(entityId).futureValue.get
-          // failed element jkl not included
+          // failed: jkl not included
           concatStr.text shouldBe "abc|def|ghi|mno|pqr"
         }
       }

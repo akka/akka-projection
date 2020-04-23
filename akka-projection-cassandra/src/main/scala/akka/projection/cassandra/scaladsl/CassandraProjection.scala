@@ -17,23 +17,23 @@ import akka.stream.scaladsl.Source
 @ApiMayChange
 object CassandraProjection {
 
-  def atLeastOnce[Offset, StreamElement](
+  def atLeastOnce[Offset, Envelope](
       projectionId: ProjectionId,
-      sourceProvider: Option[Offset] => Source[StreamElement, _],
-      offsetExtractor: StreamElement => Offset,
-      saveOffsetAfterElements: Int,
-      saveOffsetAfterDuration: FiniteDuration)(handler: StreamElement => Future[Done]): Projection[StreamElement] =
+      sourceProvider: Option[Offset] => Source[Envelope, _],
+      offsetExtractor: Envelope => Offset,
+      saveOffsetAfterEnvelopes: Int,
+      saveOffsetAfterDuration: FiniteDuration)(handler: Envelope => Future[Done]): Projection[Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
       offsetExtractor,
-      CassandraProjectionImpl.AtLeastOnce(saveOffsetAfterElements, saveOffsetAfterDuration),
+      CassandraProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
       handler)
 
-  def atMostOnce[Offset, StreamElement](
+  def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
-      sourceProvider: Option[Offset] => Source[StreamElement, _],
-      offsetExtractor: StreamElement => Offset)(handler: StreamElement => Future[Done]): Projection[StreamElement] =
+      sourceProvider: Option[Offset] => Source[Envelope, _],
+      offsetExtractor: Envelope => Offset)(handler: Envelope => Future[Done]): Projection[Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,

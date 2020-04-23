@@ -80,8 +80,8 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       val src = Source(1 to 20)
 
       val prj = TestProjection(src, strBuffer, {
-        case elt if elt < 3 => true
-        case _              => throw new RuntimeException(streamFailureMsg)
+        case envelope if envelope < 3 => true
+        case _                        => throw new RuntimeException(streamFailureMsg)
       })
 
       val exp =
@@ -130,7 +130,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
     }
   }
 
-  case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, eltPredicate: Int => Boolean)
+  case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
       extends Projection[Int] {
 
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
@@ -144,19 +144,19 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       promiseToStop.completeWith(done)
     }
 
-    override def processElement(elt: Int)(implicit ec: ExecutionContext): Future[Done] = {
-      if (eltPredicate(elt)) concat(elt)
+    override def processEnvelope(envelope: Int)(implicit ec: ExecutionContext): Future[Done] = {
+      if (predicate(envelope)) concat(envelope)
       Future.successful(Done)
     }
 
     private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] = {
       implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
-      src.via(killSwitch.flow).mapAsync(1)(elt => processElement(elt))
+      src.via(killSwitch.flow).mapAsync(1)(envelope => processEnvelope(envelope))
     }
 
-    private def concat(elt: Int) = {
-      if (strBuffer.toString == "") strBuffer.append(elt)
-      else strBuffer.append("-" + elt)
+    private def concat(envelope: Int) = {
+      if (strBuffer.toString == "") strBuffer.append(envelope)
+      else strBuffer.append("-" + envelope)
     }
 
     override def stop()(implicit ec: ExecutionContext): Future[Done] = {

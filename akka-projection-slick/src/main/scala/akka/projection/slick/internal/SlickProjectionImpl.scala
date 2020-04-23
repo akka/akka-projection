@@ -19,13 +19,13 @@ import slick.jdbc.JdbcProfile
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 
 @InternalApi
-private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcProfile](
+private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile](
     val projectionId: ProjectionId,
-    sourceProvider: Option[Offset] => Source[StreamElement, _],
-    offsetExtractor: StreamElement => Offset,
+    sourceProvider: Option[Offset] => Source[Envelope, _],
+    offsetExtractor: Envelope => Offset,
     databaseConfig: DatabaseConfig[P],
-    eventHandler: StreamElement => DBIO[Done])
-    extends Projection[StreamElement] {
+    eventHandler: Envelope => DBIO[Done])
+    extends Projection[Envelope] {
 
   private val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
 
@@ -56,15 +56,15 @@ private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcPr
    * @return A [[scala.concurrent.Future]] that represents the asynchronous completion of the user EventHandler
    *         function.
    */
-  override def processElement(elt: StreamElement)(implicit ec: ExecutionContext): Future[Done] = {
+  override def processEnvelope(envelope: Envelope)(implicit ec: ExecutionContext): Future[Done] = {
     import databaseConfig.profile.api._
 
     // run user function and offset storage on the same transaction
     // any side-effect in user function is at-least-once
     val txDBIO =
       offsetStore
-        .saveOffset(projectionId, offsetExtractor(elt))
-        .flatMap(_ => eventHandler(elt))
+        .saveOffset(projectionId, offsetExtractor(envelope))
+        .flatMap(_ => eventHandler(envelope))
 
     databaseConfig.db.run(txDBIO.transactionally).map(_ => Done)
   }
@@ -72,7 +72,7 @@ private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcPr
   /**
    * INTERNAL API
    *
-   * This method returns the projection Source mapped with `processElement`, but before any sink attached.
+   * This method returns the projection Source mapped with `processEnvelope`, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   override private[projection] def mappedSource()(
@@ -92,6 +92,6 @@ private[projection] class SlickProjectionImpl[Offset, StreamElement, P <: JdbcPr
     Source
       .futureSource(futSource)
       .via(killSwitch.flow)
-      .mapAsync(1)(processElement)
+      .mapAsync(1)(processEnvelope)
   }
 }
