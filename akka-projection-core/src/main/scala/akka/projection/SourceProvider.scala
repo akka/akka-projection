@@ -6,9 +6,9 @@ package akka.projection
 
 import akka.stream.scaladsl.Source
 
-trait SourceProvider[Offset, Element] {
+trait SourceProvider[Offset, Envelope] {
 
-  def source(offset: Option[Offset]): Source[Element, _]
+  def source(offset: Option[Offset]): Source[Envelope, _]
 
-  def extractOffset(elt: Element): Offset
+  def extractOffset(envelope: Envelope): Offset
 }
