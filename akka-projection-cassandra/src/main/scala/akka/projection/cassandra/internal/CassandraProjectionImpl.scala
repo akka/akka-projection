@@ -115,6 +115,4 @@ import akka.stream.scaladsl.Source
     composedSource
   }
 
-  // FIXME
-  def processEnvelope(envelope: Envelope)(implicit ec: ExecutionContext): Future[Done] = ???
 }

@@ -28,14 +28,6 @@ trait Projection[Envelope] {
   def projectionId: ProjectionId
 
   /**
-   * The method wrapping the user EventHandler function.
-   *
-   * @return A [[scala.concurrent.Future]] that represents the asynchronous completion of the user EventHandler
-   *         function.
-   */
-  def processEnvelope(envelope: Envelope)(implicit ec: ExecutionContext): Future[Done]
-
-  /**
    * INTERNAL API
    *
    * This method returns the projection Source mapped with `processEnvelope`, but before any sink attached.
