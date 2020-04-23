@@ -114,14 +114,19 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       offsetStore
         .saveOffset(projectionId, sourceProvider.extractOffset(env))
         .flatMap(_ => eventHandler(env))
+        .transactionally
 
-    databaseConfig.db.run(txDBIO.transactionally).map(_ => Done)
+    databaseConfig.db.run(txDBIO).map(_ => Done)
   }
 
   private def processEnvelopeAndStoreOffsetInSeparateTransactions(env: Envelope)(
       implicit ec: ExecutionContext): Future[Done] = {
+    import databaseConfig.profile.api._
 
-    val dbio = eventHandler(env).flatMap(_ => offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
+    // user function in one transaction (may be composed of several DBIOAction), and offset save in separate
+    val dbio =
+      eventHandler(env).transactionally.flatMap(_ =>
+        offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
 
     databaseConfig.db.run(dbio).map(_ => Done)
   }
@@ -129,14 +134,14 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   private def processEnvelope(env: Envelope)(implicit ec: ExecutionContext): Future[Done] = {
     import databaseConfig.profile.api._
 
-    val dbio = eventHandler(env)
-    databaseConfig.db.run(dbio.transactionally).map(_ => Done)
+    // user function in one transaction (may be composed of several DBIOAction)
+    val dbio = eventHandler(env).transactionally
+    databaseConfig.db.run(dbio).map(_ => Done)
   }
 
   private def storeOffset(offset: Offset)(implicit ec: ExecutionContext): Future[Done] = {
-    import databaseConfig.profile.api._
-
+    // only one DBIOAction, no need for transactionally
     val dbio = offsetStore.saveOffset(projectionId, offset)
-    databaseConfig.db.run(dbio.transactionally).map(_ => Done)
+    databaseConfig.db.run(dbio).map(_ => Done)
   }
 }
