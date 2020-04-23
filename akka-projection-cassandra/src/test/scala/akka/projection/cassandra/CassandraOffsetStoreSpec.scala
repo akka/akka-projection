@@ -18,7 +18,10 @@ import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
+class CassandraOffsetStoreSpec
+    extends ScalaTestWithActorTestKit(ContainerSessionProvider.Config)
+    with AnyWordSpecLike
+    with LogCapturing {
 
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext

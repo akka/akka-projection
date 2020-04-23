@@ -17,6 +17,7 @@ object Dependencies {
     val alpakka = "2.0.0-RC2"
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
+    val testContainersScala = "0.36.1"
   }
 
   object Compile {
@@ -37,6 +38,9 @@ object Dependencies {
     val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
     val h2Driver = "com.h2database" % "h2" % "1.4.200" % sbt.Test
     val logback = "ch.qos.logback" % "logback-classic" % "1.2.3" % sbt.Test
+    val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
+    val cassandraContainer =
+      "com.dimafeng" %% "testcontainers-scala-cassandra" % Versions.testContainersScala % sbt.Test
   }
 
   private val deps = libraryDependencies
@@ -52,5 +56,10 @@ object Dependencies {
     deps ++= Seq(Compile.slick, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
 
   val cassandra =
-    deps ++= Seq(Compile.alpakkaCassandra, Test.akkaTypedTestkit, Test.logback)
+    deps ++= Seq(
+        Compile.alpakkaCassandra,
+        Test.akkaTypedTestkit,
+        Test.logback,
+        Test.testContainers,
+        Test.cassandraContainer)
 }

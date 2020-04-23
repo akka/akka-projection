@@ -108,7 +108,10 @@ object CassandraProjectionSpec {
 
 }
 
-class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
+class CassandraProjectionSpec
+    extends ScalaTestWithActorTestKit(ContainerSessionProvider.Config)
+    with AnyWordSpecLike
+    with LogCapturing {
 
   import CassandraProjectionSpec._
 
