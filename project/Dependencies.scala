@@ -45,9 +45,12 @@ object Dependencies {
 
   val testKit = deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalaTest)
 
+  val eventSourced =
+    deps ++= Seq(Compile.akkaPersistenceQuery)
+
   val slick =
-    deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+    deps ++= Seq(Compile.slick, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
 
   val cassandra =
-    deps ++= Seq(Compile.alpakkaCassandra, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.logback)
+    deps ++= Seq(Compile.alpakkaCassandra, Test.akkaTypedTestkit, Test.logback)
 }
