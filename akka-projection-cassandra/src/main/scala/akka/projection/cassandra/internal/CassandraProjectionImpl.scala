@@ -15,7 +15,8 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
-import akka.projection.{ Projection, ProjectionId, SourceProvider }
+import akka.projection.scaladsl.SourceProvider
+import akka.projection.{ Projection, ProjectionId }
 import akka.stream.KillSwitches
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Flow

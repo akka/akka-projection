@@ -8,7 +8,8 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 import akka.{ Done, NotUsed }
-import akka.projection.{ ProjectionId, SourceProvider }
+import akka.projection.ProjectionId
+import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSource

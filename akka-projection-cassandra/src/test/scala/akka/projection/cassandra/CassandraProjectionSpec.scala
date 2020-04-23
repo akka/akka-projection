@@ -9,9 +9,10 @@ import java.util.concurrent.atomic.AtomicReference
 
 import akka.{ Done, NotUsed }
 import akka.actor.testkit.typed.scaladsl.{ LogCapturing, ScalaTestWithActorTestKit }
-import akka.projection.{ ProjectionId, SourceProvider }
+import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
+import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Source

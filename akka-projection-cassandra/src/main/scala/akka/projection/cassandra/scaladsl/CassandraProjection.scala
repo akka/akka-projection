@@ -7,7 +7,9 @@ package akka.projection.cassandra.scaladsl
 import akka.Done
 import akka.annotation.ApiMayChange
 import akka.projection.cassandra.internal.CassandraProjectionImpl
-import akka.projection.{ Projection, ProjectionId, SourceProvider }
+import akka.projection.scaladsl.SourceProvider
+import akka.projection.{ Projection, ProjectionId }
+
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
