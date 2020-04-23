@@ -10,14 +10,13 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
-import akka.projection.Projection
-import akka.projection.ProjectionId
+import akka.projection.scaladsl.SourceProvider
+import akka.projection.{ Projection, ProjectionId }
 import akka.stream.KillSwitches
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Flow
@@ -38,8 +37,7 @@ import akka.stream.scaladsl.Source
  */
 @InternalApi private[akka] class CassandraProjectionImpl[Offset, Envelope](
     override val projectionId: ProjectionId,
-    sourceProvider: Option[Offset] => Source[Envelope, _],
-    offsetExtractor: Envelope => Offset,
+    sourceProvider: SourceProvider[Offset, Envelope],
     strategy: CassandraProjectionImpl.Strategy,
     handler: Envelope => Future[Done])
     extends Projection[Envelope] {
@@ -84,9 +82,9 @@ import akka.stream.scaladsl.Source
 
     val source: Source[(Offset, Envelope), NotUsed] =
       Source
-        .futureSource(lastKnownOffset.map(sourceProvider))
+        .futureSource(lastKnownOffset.map(sourceProvider.source))
         .via(killSwitch.flow)
-        .map(envelope => offsetExtractor(envelope) -> envelope)
+        .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
         .mapMaterializedValue(_ => NotUsed)
 
     val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
