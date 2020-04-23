@@ -84,18 +84,15 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       strategy match {
         case ExactlyOnce =>
           Flow[Envelope]
-            .mapAsync(1)(processEnvelopeAndStoreOffset)
+            .mapAsync(1)(processEnvelopeAndStoreOffsetInSameTransaction)
 
         case AtLeastOnce(1, _) =>
           Flow[Envelope]
-            .mapAsync(1) { env => processEnvelope(env).flatMap(_ => storeOffset(offsetExtractor(env))) }
+            .mapAsync(1)(processEnvelopeAndStoreOffsetInSeparateTransactions)
 
         case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
           Flow[Envelope]
-            .map(env => offsetExtractor(env) -> env)
-            .mapAsync(1) {
-              case (offset, env) => processEnvelope(env).map(_ => offset)
-            }
+            .mapAsync(1) { env => processEnvelope(env).map(_ => offsetExtractor(env)) }
             .groupedWithin(afterEnvelopes, orAfterDuration)
             .collect { case grouped if grouped.nonEmpty => grouped.last }
             .mapAsync(parallelism = 1)(storeOffset)
@@ -107,7 +104,8 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       .via(handlerFlow)
   }
 
-  private def processEnvelopeAndStoreOffset(env: Envelope)(implicit ec: ExecutionContext): Future[Done] = {
+  private def processEnvelopeAndStoreOffsetInSameTransaction(env: Envelope)(
+      implicit ec: ExecutionContext): Future[Done] = {
     import databaseConfig.profile.api._
 
     // run user function and offset storage on the same transaction
@@ -118,6 +116,14 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         .flatMap(_ => eventHandler(env))
 
     databaseConfig.db.run(txDBIO.transactionally).map(_ => Done)
+  }
+
+  private def processEnvelopeAndStoreOffsetInSeparateTransactions(env: Envelope)(
+      implicit ec: ExecutionContext): Future[Done] = {
+
+    val dbio = eventHandler(env).flatMap(_ => offsetStore.saveOffset(projectionId, offsetExtractor(env)))
+
+    databaseConfig.db.run(dbio).map(_ => Done)
   }
 
   private def processEnvelope(env: Envelope)(implicit ec: ExecutionContext): Future[Done] = {
