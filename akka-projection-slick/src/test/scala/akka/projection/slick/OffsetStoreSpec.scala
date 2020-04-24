@@ -6,6 +6,10 @@ package akka.projection.slick
 
 import java.util.UUID
 
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
+
 import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
@@ -19,10 +23,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
-
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 object OffsetStoreSpec {
   def config: Config = ConfigFactory.parseString("""

@@ -7,6 +7,12 @@ package akka.projection.cassandra
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
+import scala.util.Try
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -22,12 +28,6 @@ import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
-import scala.concurrent.duration._
-import scala.util.Try
 
 object CassandraProjectionSpec {
   case class Envelope(id: String, offset: Long, message: String)

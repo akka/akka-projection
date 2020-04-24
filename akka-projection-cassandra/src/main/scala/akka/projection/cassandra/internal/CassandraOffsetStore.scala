@@ -4,14 +4,14 @@
 
 package akka.projection.cassandra.internal
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 
 /**
  * INTERNAL API

@@ -7,6 +7,10 @@ package akka.projection.slick
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration._
+
 import akka.Done
 import akka.NotUsed
 import akka.projection.ProjectionId
@@ -24,10 +28,6 @@ import org.slf4j.LoggerFactory
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIOAction
 import slick.jdbc.H2Profile
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration._
 
 object SlickProjectionSpec {
   def config: Config = ConfigFactory.parseString("""

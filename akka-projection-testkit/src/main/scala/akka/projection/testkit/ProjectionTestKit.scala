@@ -4,6 +4,9 @@
 
 package akka.projection.testkit
 
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
@@ -13,9 +16,6 @@ import akka.annotation.ApiMayChange
 import akka.projection.Projection
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 @ApiMayChange
 object ProjectionTestKit {

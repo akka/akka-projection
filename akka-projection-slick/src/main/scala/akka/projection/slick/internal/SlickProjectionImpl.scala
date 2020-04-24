@@ -6,6 +6,11 @@ package akka.projection.slick.internal
 
 import java.util.concurrent.atomic.AtomicBoolean
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration.FiniteDuration
+
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
@@ -20,11 +25,6 @@ import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
-import scala.concurrent.duration.FiniteDuration
 @InternalApi
 private[projection] object SlickProjectionImpl {
   sealed trait Strategy

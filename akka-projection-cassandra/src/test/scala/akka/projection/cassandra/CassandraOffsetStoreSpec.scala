@@ -6,6 +6,9 @@ package akka.projection.cassandra
 
 import java.util.UUID
 
+import scala.concurrent.ExecutionContext
+import scala.util.Try
+
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Sequence
@@ -14,9 +17,6 @@ import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.scalatest.wordspec.AnyWordSpecLike
-
-import scala.concurrent.ExecutionContext
-import scala.util.Try
 
 class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
 

@@ -4,6 +4,11 @@
 
 package akka.projection.testkit
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration._
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -17,11 +22,6 @@ import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.wordspec.AnyWordSpecLike
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
-import scala.concurrent.duration._
 
 class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 

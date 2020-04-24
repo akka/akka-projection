@@ -4,15 +4,15 @@
 
 package akka.projection.cassandra.scaladsl
 
+import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
+
 import akka.Done
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.scaladsl.SourceProvider
-
-import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
 
 @ApiMayChange
 object CassandraProjection {

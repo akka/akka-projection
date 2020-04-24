@@ -4,6 +4,9 @@
 
 package akka.projection.slick
 
+import scala.concurrent.duration.FiniteDuration
+import scala.reflect.ClassTag
+
 import akka.Done
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
@@ -13,9 +16,6 @@ import akka.projection.slick.internal.SlickProjectionImpl
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
-
-import scala.concurrent.duration.FiniteDuration
-import scala.reflect.ClassTag
 
 @ApiMayChange
 object SlickProjection {
