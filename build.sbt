@@ -10,25 +10,32 @@ lazy val core = project
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
         "Automatic-Module-Name" -> "akka.projection.core"))
 
-lazy val testkit = project
-  .in(file("akka-projection-testkit"))
-  .settings(name := "akka-projection-testkit")
-  .settings(Dependencies.testKit)
-  .dependsOn(core)
+lazy val testkit =
+  Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
+    .settings(Dependencies.testKit)
+    .dependsOn(core)
 
 // provides offset storage backed by a JDBC (Slick) table
-// commits can be transctional or non-transactional (at-least-once with buffering)
-lazy val slick = Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
-  .settings(Dependencies.slick)
-  .dependsOn(core)
-  .dependsOn(testkit % "test->test")
+lazy val slick =
+  Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
+    .settings(Dependencies.slick)
+    .dependsOn(core)
+    .dependsOn(testkit % "test->test")
 
 // provides offset storage backed by a Cassandra table
-lazy val cassandra = Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
-  .settings(Dependencies.cassandra)
-  .settings(Test / parallelExecution := false)
-  .dependsOn(core)
-  .dependsOn(testkit % "test->test")
+lazy val cassandra =
+  Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
+    .settings(Dependencies.cassandra)
+    .settings(Test / parallelExecution := false)
+    .dependsOn(core)
+    .dependsOn(testkit % "test->test")
+
+// provides source providers for akka-persistence-query
+lazy val eventSourced =
+  Project(id = "akka-projection-eventsourced", base = file("akka-projection-eventsourced"))
+    .settings(Dependencies.eventSourced)
+    .dependsOn(core)
+    .dependsOn(testkit % "test->test")
 
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
@@ -71,7 +78,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, docs)
+  .aggregate(core, testkit, slick, cassandra, eventSourced, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 
