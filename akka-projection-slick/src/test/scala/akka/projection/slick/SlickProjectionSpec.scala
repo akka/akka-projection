@@ -7,23 +7,27 @@ package akka.projection.slick
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
-import akka.{ Done, NotUsed }
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration._
+
+import akka.Done
+import akka.NotUsed
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSource
-import com.typesafe.config.{ Config, ConfigFactory }
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
 import org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException
 import org.scalatest.OptionValues
 import org.scalatest.wordspec.AnyWordSpecLike
-import org.slf4j.{ Logger, LoggerFactory }
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIOAction
 import slick.jdbc.H2Profile
-
-import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, Future }
 
 object SlickProjectionSpec {
   def config: Config = ConfigFactory.parseString("""

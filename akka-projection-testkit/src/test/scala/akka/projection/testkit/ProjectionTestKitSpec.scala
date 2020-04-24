@@ -4,17 +4,24 @@
 
 package akka.projection.testkit
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration._
+
+import akka.Done
+import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.projection.{ Projection, ProjectionId }
-import akka.stream.scaladsl.{ DelayStrategy, Sink, Source }
-import akka.stream.{ DelayOverflowStrategy, KillSwitches }
-import akka.{ Done, NotUsed }
+import akka.projection.Projection
+import akka.projection.ProjectionId
+import akka.stream.DelayOverflowStrategy
+import akka.stream.KillSwitches
+import akka.stream.scaladsl.DelayStrategy
+import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.Source
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.wordspec.AnyWordSpecLike
-
-import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, Future, Promise }
 
 class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
