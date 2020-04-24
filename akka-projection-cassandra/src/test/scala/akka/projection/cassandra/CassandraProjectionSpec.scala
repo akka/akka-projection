@@ -17,6 +17,8 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import scala.annotation.tailrec
+
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
@@ -28,6 +30,9 @@ import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
+import scala.util.Try
+
+import akka.stream.testkit.TestSubscriber
 
 object CassandraProjectionSpec {
   case class Envelope(id: String, offset: Long, message: String)
@@ -136,6 +141,13 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
   private def genRandomProjectionId() =
     ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
 
+  @tailrec private def eventuallyExpectError(sinkProbe: TestSubscriber.Probe[_]): Throwable = {
+    sinkProbe.expectNextOrError() match {
+      case Right(_)  => eventuallyExpectError(sinkProbe)
+      case Left(exc) => exc
+    }
+  }
+
   "A Cassandra at-least-once projection" must {
 
     "persist projection and offset" in {
@@ -190,15 +202,10 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         offsetOpt shouldBe empty
       }
 
-      val streamFailure =
-        intercept[RuntimeException] {
-          projectionTestKit.run(failingProjection) {
-            fail("fail assertFunc, we want to capture the stream failure")
-          }
-        }
-
       withClue("check: projection failed with stream failure") {
-        streamFailure.getMessage shouldBe streamFailureMsg
+        val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
+        sinkProbe.request(1000)
+        eventuallyExpectError(sinkProbe).getMessage shouldBe streamFailureMsg
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -254,15 +261,10 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         offsetOpt shouldBe empty
       }
 
-      val streamFailure =
-        intercept[RuntimeException] {
-          projectionTestKit.run(failingProjection) {
-            fail("fail assertFunc, we want to capture the stream failure")
-          }
-        }
-
       withClue("check: projection failed with stream failure") {
-        streamFailure.getMessage shouldBe streamFailureMsg
+        val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
+        sinkProbe.request(1000)
+        eventuallyExpectError(sinkProbe).getMessage shouldBe streamFailureMsg
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -419,15 +421,10 @@ class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         offsetOpt shouldBe empty
       }
 
-      val streamFailure =
-        intercept[RuntimeException] {
-          projectionTestKit.run(failingProjection) {
-            fail("fail assertFunc, we want to capture the stream failure")
-          }
-        }
-
       withClue("check: projection failed with stream failure") {
-        streamFailure.getMessage shouldBe streamFailureMsg
+        val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
+        sinkProbe.request(1000)
+        eventuallyExpectError(sinkProbe).getMessage shouldBe streamFailureMsg
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
