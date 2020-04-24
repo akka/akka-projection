@@ -160,9 +160,10 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "persist projection and offset in same the same write operation (transactional)" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        val offsetOpt = store.readOffset(projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
@@ -178,7 +179,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         }
       }
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 6L
       }
     }
@@ -186,6 +187,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "restart from previous offset - fail with DBIOAction.failed" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       val streamFailureMsg = "fail on fourth envelope"
       val slickProjectionFailing =
@@ -196,7 +198,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         }
 
       withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        val offsetOpt = store.readOffset(projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
@@ -210,7 +212,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         concatStr.text shouldBe "abc|def|ghi"
       }
       withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 3L
       }
 
@@ -229,7 +231,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 6L
       }
     }
@@ -237,6 +239,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "restart from previous offset - fail with throwing an exception" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       val streamFailureMsg = "fail on fourth envelope"
       val slickProjectionFailing =
@@ -249,7 +252,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         }
 
       withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        val offsetOpt = store.readOffset(projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
@@ -263,7 +266,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         concatStr.text shouldBe "abc|def|ghi"
       }
       withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 3L
       }
 
@@ -282,7 +285,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 6L
       }
     }
@@ -290,6 +293,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "restart from previous offset - fail with bad insert on user code" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       val slickProjectionFailing =
         SlickProjection.exactlyOnce(
@@ -301,7 +305,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         }
 
       withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        val offsetOpt = store.readOffset(projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
@@ -314,7 +318,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         concatStr.text shouldBe "abc|def|ghi"
       }
       withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 3L
       }
 
@@ -333,7 +337,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 6L
       }
     }
@@ -344,9 +348,10 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     s"persist projection and offset" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        val offsetOpt = store.readOffset(projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
@@ -367,7 +372,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         }
       }
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 6L
       }
     }
@@ -375,6 +380,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "restart from previous offset - handler throwing an exception, save after 1" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       val streamFailureMsg = "fail on fourth envelope"
       val slickProjectionFailing =
@@ -389,7 +395,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         }
 
       withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        val offsetOpt = store.readOffset(projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
@@ -403,7 +409,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         concatStr.text shouldBe "abc|def|ghi"
       }
       withClue(s"check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 3L
       }
 
@@ -426,7 +432,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 6L
       }
     }
@@ -434,6 +440,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "restart from previous offset - handler throwing an exception, save after 2" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       val streamFailureMsg = "fail on fourth envelope"
       val slickProjectionFailing =
@@ -448,7 +455,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         }
 
       withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        val offsetOpt = store.readOffset(projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
@@ -462,7 +469,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         concatStr.text shouldBe "abc|def|ghi"
       }
       withClue(s"check: last seen offset is 2L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 2L
       }
 
@@ -484,7 +491,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        val offset = store.readOffset(projectionId).futureValue.value
         offset shouldBe 6L
       }
     }
@@ -492,6 +499,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "save offset after number of elements" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       import akka.actor.typed.scaladsl.adapter._
       val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
@@ -518,13 +526,13 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       eventually {
         dbConfig.db.run(repository.findById(entityId)).futureValue.value.text should include("elem-15")
       }
-      offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 10L
+      store.readOffset(projectionId).futureValue.value shouldBe 10L
 
       (16 to 22).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
       eventually {
         dbConfig.db.run(repository.findById(entityId)).futureValue.value.text should include("elem-22")
       }
-      offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 20L
+      store.readOffset(projectionId).futureValue.value shouldBe 20L
 
       sinkProbe.cancel()
     }
@@ -532,6 +540,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "save offset after idle duration" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
+      val store = offsetStore[Long]
 
       import akka.actor.typed.scaladsl.adapter._
       val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
@@ -558,11 +567,11 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       eventually {
         dbConfig.db.run(repository.findById(entityId)).futureValue.value.text should include("elem-15")
       }
-      offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 10L
+      store.readOffset(projectionId).futureValue.value shouldBe 10L
 
       (16 to 17).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
       eventually {
-        offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 17L
+        store.readOffset(projectionId).futureValue.value shouldBe 17L
       }
       dbConfig.db.run(repository.findById(entityId)).futureValue.value.text should include("elem-17")
 

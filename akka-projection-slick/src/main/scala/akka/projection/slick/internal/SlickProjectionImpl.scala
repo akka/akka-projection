@@ -42,7 +42,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     extends Projection[Envelope] {
   import SlickProjectionImpl._
 
-  private val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
+  private val offsetStore = new SlickOffsetStore[Offset, P](databaseConfig.db, databaseConfig.profile)
 
   private val killSwitch = KillSwitches.shared(projectionId.id)
   private val promiseToStop: Promise[Done] = Promise()

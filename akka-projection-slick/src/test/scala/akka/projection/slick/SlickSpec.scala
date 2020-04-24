@@ -18,7 +18,7 @@ abstract class SlickSpec(config: Config) extends ScalaTestWithActorTestKit(confi
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", config)
 
-  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile)
+  def offsetStore[Offset] = new SlickOffsetStore[Offset, H2Profile](dbConfig.db, dbConfig.profile)
 
   val projectionTestKit = new ProjectionTestKit(testKit)
 
