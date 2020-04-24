@@ -15,6 +15,7 @@ import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
 import akka.projection.slick.internal.SlickOffsetStore
+import akka.projection.testkit.internal.TestClock
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
@@ -24,12 +25,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-
-import akka.projection.slick.internal.SlickOffsetStore
-import akka.projection.testkit.internal.TestClock
 
 object OffsetStoreSpec {
   def config: Config = ConfigFactory.parseString("""
