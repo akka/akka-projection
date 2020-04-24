@@ -1,9 +1,9 @@
+import scala.sys.process.Process
+
 import sbt.Keys._
 import sbt._
 import sbtwhitesource.WhiteSourcePlugin.autoImport._
 import sbtwhitesource._
-
-import scala.sys.process.Process
 
 object Whitesource extends AutoPlugin {
   override def requires = WhiteSourcePlugin

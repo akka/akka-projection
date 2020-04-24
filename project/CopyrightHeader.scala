@@ -1,8 +1,9 @@
 /*
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
-import sbt._, Keys._
-import de.heikoseeberger.sbtheader.{ CommentCreator, HeaderPlugin }
+import de.heikoseeberger.sbtheader.CommentCreator
+import de.heikoseeberger.sbtheader.HeaderPlugin
+import sbt._
 
 object CopyrightHeader extends AutoPlugin {
   import HeaderPlugin.autoImport._

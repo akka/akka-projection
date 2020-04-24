@@ -4,15 +4,15 @@
 
 package akka.projection.slick
 
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.testkit.ProjectionTestKit
 import com.typesafe.config.Config
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
-import scala.concurrent.Await
-import scala.concurrent.duration._
-
-import akka.projection.slick.internal.SlickOffsetStore
 
 abstract class SlickSpec(config: Config) extends ScalaTestWithActorTestKit(config) {
 

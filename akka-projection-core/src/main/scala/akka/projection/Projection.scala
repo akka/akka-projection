@@ -4,12 +4,14 @@
 
 package akka.projection
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
-import akka.annotation.{ ApiMayChange, InternalApi }
+import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.stream.scaladsl.Source
-
-import scala.concurrent.{ ExecutionContext, Future }
 
 /**
  * The core abstraction in Akka Projections.

@@ -6,19 +6,25 @@ package akka.projection.slick.internal
 
 import java.util.concurrent.atomic.AtomicBoolean
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.projection.{ Projection, ProjectionId }
+import akka.projection.Projection
+import akka.projection.ProjectionId
+import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
-import akka.stream.scaladsl.{ Flow, Sink, Source }
+import akka.stream.scaladsl.Flow
+import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
-import scala.concurrent.{ ExecutionContext, Future, Promise }
 @InternalApi
 private[projection] object SlickProjectionImpl {
   sealed trait Strategy
@@ -29,8 +35,7 @@ private[projection] object SlickProjectionImpl {
 @InternalApi
 private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile](
     val projectionId: ProjectionId,
-    sourceProvider: Option[Offset] => Source[Envelope, _],
-    offsetExtractor: Envelope => Offset,
+    sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
     strategy: SlickProjectionImpl.Strategy,
     eventHandler: Envelope => DBIO[Done])
@@ -77,7 +82,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     val futSource = lastKnownOffset.map { offsetOpt =>
       akkaLogger.debug("Starting projection [{}] from offset [{}]", projectionId, offsetOpt)
-      sourceProvider(offsetOpt)
+      sourceProvider.source(offsetOpt)
     }
 
     val handlerFlow: Flow[Envelope, Done, _] =
@@ -92,7 +97,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
         case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
           Flow[Envelope]
-            .mapAsync(1) { env => processEnvelope(env).map(_ => offsetExtractor(env)) }
+            .mapAsync(1) { env => processEnvelope(env).map(_ => sourceProvider.extractOffset(env)) }
             .groupedWithin(afterEnvelopes, orAfterDuration)
             .collect { case grouped if grouped.nonEmpty => grouped.last }
             .mapAsync(parallelism = 1)(storeOffset)
@@ -112,16 +117,21 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     // any side-effect in user function is at-least-once
     val txDBIO =
       offsetStore
-        .saveOffset(projectionId, offsetExtractor(env))
+        .saveOffset(projectionId, sourceProvider.extractOffset(env))
         .flatMap(_ => eventHandler(env))
+        .transactionally
 
-    databaseConfig.db.run(txDBIO.transactionally).map(_ => Done)
+    databaseConfig.db.run(txDBIO).map(_ => Done)
   }
 
   private def processEnvelopeAndStoreOffsetInSeparateTransactions(env: Envelope)(
       implicit ec: ExecutionContext): Future[Done] = {
+    import databaseConfig.profile.api._
 
-    val dbio = eventHandler(env).flatMap(_ => offsetStore.saveOffset(projectionId, offsetExtractor(env)))
+    // user function in one transaction (may be composed of several DBIOAction), and offset save in separate
+    val dbio =
+      eventHandler(env).transactionally.flatMap(_ =>
+        offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
 
     databaseConfig.db.run(dbio).map(_ => Done)
   }
@@ -129,14 +139,14 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   private def processEnvelope(env: Envelope)(implicit ec: ExecutionContext): Future[Done] = {
     import databaseConfig.profile.api._
 
-    val dbio = eventHandler(env)
-    databaseConfig.db.run(dbio.transactionally).map(_ => Done)
+    // user function in one transaction (may be composed of several DBIOAction)
+    val dbio = eventHandler(env).transactionally
+    databaseConfig.db.run(dbio).map(_ => Done)
   }
 
   private def storeOffset(offset: Offset)(implicit ec: ExecutionContext): Future[Done] = {
-    import databaseConfig.profile.api._
-
+    // only one DBIOAction, no need for transactionally
     val dbio = offsetStore.saveOffset(projectionId, offset)
-    databaseConfig.db.run(dbio.transactionally).map(_ => Done)
+    databaseConfig.db.run(dbio).map(_ => Done)
   }
 }
