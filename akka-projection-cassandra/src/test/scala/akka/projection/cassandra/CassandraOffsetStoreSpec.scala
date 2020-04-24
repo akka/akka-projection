@@ -4,6 +4,7 @@
 
 package akka.projection.cassandra
 
+import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.ExecutionContext
@@ -15,6 +16,7 @@ import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
+import akka.projection.testkit.internal.TestClock
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -22,7 +24,11 @@ class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpe
 
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext
-  private val offsetStore = new CassandraOffsetStore(session)
+
+  // test clock for testing of the `last_updated` Instant
+  private val clock = new TestClock
+
+  private val offsetStore = new CassandraOffsetStore(session, clock)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -35,6 +41,16 @@ class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpe
   override protected def afterAll(): Unit = {
     Try(session.executeDDL(s"DROP keyspace ${offsetStore.keyspace}").futureValue)
     super.afterAll()
+  }
+
+  private def selectLastUpdated(projectionId: ProjectionId): Instant = {
+    session
+      .selectOne(
+        s"select last_updated from ${offsetStore.keyspace}.${offsetStore.table} where projection_id = ?",
+        projectionId.id)
+      .futureValue
+      .get
+      .get("last_updated", classOf[Instant])
   }
 
   "The Cassandra OffsetStore" must {
@@ -159,6 +175,20 @@ class CassandraOffsetStoreSpec extends ScalaTestWithActorTestKit with AnyWordSpe
         val offset = offsetStore.readOffset[TimeBasedUUID](projectionId).futureValue.get
         offset shouldBe timeOffset
       }
+    }
+
+    "update timestamp" in {
+      val projectionId = ProjectionId("timestamp", "00")
+
+      val instant0 = clock.instant()
+      offsetStore.saveOffset(projectionId, 15).futureValue
+      val instant1 = selectLastUpdated(projectionId)
+      instant1 shouldBe instant0
+
+      val instant2 = clock.tick(java.time.Duration.ofMillis(5))
+      offsetStore.saveOffset(projectionId, 16).futureValue
+      val instant3 = selectLastUpdated(projectionId)
+      instant3 shouldBe instant2
     }
   }
 }

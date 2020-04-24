@@ -4,6 +4,7 @@
 
 package akka.projection.slick
 
+import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.Await
@@ -14,6 +15,7 @@ import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
 import akka.projection.slick.internal.SlickOffsetStore
+import akka.projection.testkit.internal.TestClock
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
@@ -44,7 +46,10 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", OffsetStoreSpec.config)
 
-  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile)
+  // test clock for testing of the `last_updated` Instant
+  private val clock = new TestClock
+
+  private val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, clock)
 
   override protected def beforeAll(): Unit = {
     // create offset table
@@ -53,6 +58,12 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
 
   override protected def afterAll(): Unit = {
     dbConfig.db.close()
+  }
+
+  private def selectLastUpdated(projectionId: ProjectionId): Instant = {
+    import dbConfig.profile.api._
+    val action = offsetStore.offsetTable.filter(_.projectionId === projectionId.id).result.headOption
+    dbConfig.db.run(action).futureValue.get.lastUpdated
   }
 
   "The OffsetStore" must {
@@ -184,6 +195,20 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
         val offset = offsetStore.readOffset[TimeBasedUUID](projectionId).futureValue.value
         offset shouldBe timeOffset
       }
+    }
+
+    "update timestamp" in {
+      val projectionId = ProjectionId("timestamp", "00")
+
+      val instant0 = clock.instant()
+      dbConfig.db.run(offsetStore.saveOffset(projectionId, 15)).futureValue
+      val instant1 = selectLastUpdated(projectionId)
+      instant1 shouldBe instant0
+
+      val instant2 = clock.tick(java.time.Duration.ofMillis(5))
+      dbConfig.db.run(offsetStore.saveOffset(projectionId, 16)).futureValue
+      val instant3 = selectLastUpdated(projectionId)
+      instant3 shouldBe instant2
     }
   }
 }

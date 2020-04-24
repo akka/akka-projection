@@ -4,6 +4,9 @@
 
 package akka.projection.cassandra.internal
 
+import java.time.Clock
+import java.time.Instant
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -16,13 +19,17 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraOffsetStore(session: CassandraSession)(implicit ec: ExecutionContext) {
+@InternalApi private[akka] class CassandraOffsetStore(session: CassandraSession, clock: Clock)(
+    implicit ec: ExecutionContext) {
   import OffsetSerialization.fromStorageRepresentation
   import OffsetSerialization.toStorageRepresentation
 
   // FIXME make keyspace and table names configurable
   val keyspace = "akka_projection"
   val table = "offset_store"
+
+  def this(session: CassandraSession)(implicit ec: ExecutionContext) =
+    this(session, Clock.systemUTC())
 
   def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
     session
@@ -35,10 +42,11 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
     val (offsetStr, manifest) = toStorageRepresentation(offset)
     session.executeWrite(
-      s"INSERT INTO $keyspace.$table (projection_id, offset, manifest) VALUES (?, ?, ?)",
+      s"INSERT INTO $keyspace.$table (projection_id, offset, manifest, last_updated) VALUES (?, ?, ?, ?)",
       projectionId.id,
       offsetStr,
-      manifest)
+      manifest,
+      Instant.now(clock))
   }
 
   def createKeyspaceAndTable(): Future[Done] = {
@@ -50,6 +58,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
         |  projection_id text,
         |  offset text,
         |  manifest text,
+        |  last_updated timestamp,
         |  PRIMARY KEY (projection_id))
         """.stripMargin.trim))
   }
