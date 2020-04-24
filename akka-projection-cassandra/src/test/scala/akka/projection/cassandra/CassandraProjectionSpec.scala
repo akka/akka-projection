@@ -290,7 +290,9 @@ class CassandraProjectionSpec
             projectionId,
             sourceProvider(entityId),
             saveOffsetAfterEnvelopes = 2,
-            saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
+            saveOffsetAfterDuration = 1.minute) { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+          }
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -322,7 +324,9 @@ class CassandraProjectionSpec
           projectionId,
           TestSourceProvider(source),
           saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          saveOffsetAfterDuration = 1.minute) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
       eventually {
@@ -330,13 +334,17 @@ class CassandraProjectionSpec
       }
       sinkProbe.request(1000)
 
-      (1 to 15).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (1 to 15).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-15")
       }
       offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
 
-      (16 to 22).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (16 to 22).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-22")
       }
@@ -361,7 +369,9 @@ class CassandraProjectionSpec
           projectionId,
           TestSourceProvider(source),
           saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 2.seconds) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          saveOffsetAfterDuration = 2.seconds) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
       eventually {
@@ -369,13 +379,17 @@ class CassandraProjectionSpec
       }
       sinkProbe.request(1000)
 
-      (1 to 15).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (1 to 15).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-15")
       }
       offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
 
-      (16 to 17).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (16 to 17).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 17L
       }
