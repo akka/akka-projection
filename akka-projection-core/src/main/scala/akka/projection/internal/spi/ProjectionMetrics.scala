@@ -1,12 +1,17 @@
+/*
+ * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
+ */
+
 package akka.projection.internal.spi
 
 import akka.actor.ClassicActorSystemProvider
+import akka.annotation.InternalStableApi
 import akka.projection.ProjectionId
 
 /**
- *
+ * INTERNAL API
  */
-trait ProjectionMetrics {
+@InternalStableApi private[akka] trait ProjectionMetrics {
 
   /**
    * Must be invoked for each element received from the Source when the Source provides it. If possible,
@@ -15,7 +20,7 @@ trait ProjectionMetrics {
    *
    * @param projectionId      the projection id
    * @param creationTimestamp if the element traversing the stream contains the creation time, provide it. Set
-   *                          to null if the information is not available.
+   *                          to 0L (zero) if the information is not available.
    * @param systemProvider    a `ClassicActorSystemProvider` for telemetry to extract/set data on the ActorSystem
    * @return a contextual object. This context must propagate with the elt.
    */
@@ -44,18 +49,14 @@ trait ProjectionMetrics {
 
 }
 
-object NoopProjectionMetrics {
-  val instance = new NoopProjectionMetrics()
-}
-
-class NoopProjectionMetrics() extends ProjectionMetrics {
+object NoopProjectionMetrics extends ProjectionMetrics {
 
   override def onProcessStart(
       projectionId: ProjectionId,
       creationTimestamp: Long,
-      systemProvider: ClassicActorSystemProvider): AnyRef = Unit
+      systemProvider: ClassicActorSystemProvider): AnyRef = null
 
-  override def onProcessComplete(projectionId: ProjectionId, context: AnyRef): AnyRef = Unit
+  override def onProcessComplete(projectionId: ProjectionId, context: AnyRef): AnyRef = null
 
   override def onFailure(
       projectionId: ProjectionId,
