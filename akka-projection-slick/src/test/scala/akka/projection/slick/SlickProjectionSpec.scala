@@ -7,18 +7,18 @@ package akka.projection.slick
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
-import scala.annotation.tailrec
-
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
+import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSource
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -30,8 +30,6 @@ import org.slf4j.LoggerFactory
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIOAction
 import slick.jdbc.H2Profile
-
-import akka.stream.testkit.TestSubscriber
 
 object SlickProjectionSpec {
   def config: Config = ConfigFactory.parseString("""
