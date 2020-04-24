@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
+
 package akka.projection.testkit.internal
 
 import java.time.Clock
