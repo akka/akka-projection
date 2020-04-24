@@ -27,6 +27,10 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSource
+import org.scalatest.concurrent.PatienceConfiguration
+import org.scalatest.time.Millis
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object CassandraProjectionSpec {
@@ -111,9 +115,12 @@ object CassandraProjectionSpec {
 class CassandraProjectionSpec
     extends ScalaTestWithActorTestKit(ContainerSessionProvider.Config)
     with AnyWordSpecLike
-    with LogCapturing {
+    with LogCapturing
+    with PatienceConfiguration {
 
   import CassandraProjectionSpec._
+
+  override implicit def patienceConfig = PatienceConfig(timeout = Span(30, Seconds), interval = Span(100, Millis))
 
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext
