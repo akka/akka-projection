@@ -6,7 +6,8 @@ package akka.projection.testkit
 
 import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
-import akka.actor.testkit.typed.scaladsl.{ ActorTestKit, _ }
+import akka.actor.testkit.typed.scaladsl.ActorTestKit
+import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.ApiMayChange
 import akka.projection.Projection

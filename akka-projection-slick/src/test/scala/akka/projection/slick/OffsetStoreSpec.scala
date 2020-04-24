@@ -6,19 +6,23 @@ package akka.projection.slick
 
 import java.util.UUID
 
-import akka.persistence.query.{ Sequence, TimeBasedUUID }
+import akka.persistence.query.Sequence
+import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
-import com.typesafe.config.{ Config, ConfigFactory }
+import akka.projection.slick.internal.SlickOffsetStore
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.OptionValues
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
-import org.scalatest.{ BeforeAndAfterAll, OptionValues }
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
-import scala.concurrent.{ Await, ExecutionContext }
-import scala.concurrent.duration._
 
-import akka.projection.slick.internal.SlickOffsetStore
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 object OffsetStoreSpec {
   def config: Config = ConfigFactory.parseString("""

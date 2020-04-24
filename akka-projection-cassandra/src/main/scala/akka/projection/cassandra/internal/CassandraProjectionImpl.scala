@@ -6,22 +6,24 @@ package akka.projection.cassandra.internal
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
-import scala.concurrent.duration.FiniteDuration
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
+import akka.projection.Projection
+import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.{ Projection, ProjectionId }
 import akka.stream.KillSwitches
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration.FiniteDuration
 
 /**
  * INTERNAL API

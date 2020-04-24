@@ -6,10 +6,12 @@ package akka.projection
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
-import akka.annotation.{ ApiMayChange, InternalApi }
+import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.stream.scaladsl.Source
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 /**
  * The core abstraction in Akka Projections.
