@@ -23,8 +23,7 @@ import slick.jdbc.JdbcProfile
 @InternalApi private[akka] class SlickOffsetStore[Offset, P <: JdbcProfile](
     val db: P#Backend#Database,
     val profile: P,
-    clock: Clock)
-    extends OffsetStore[Offset, slick.dbio.DBIO] {
+    clock: Clock) {
   import OffsetSerialization.fromStorageRepresentation
   import OffsetSerialization.toStorageRepresentation
   import profile.api._
@@ -34,17 +33,32 @@ import slick.jdbc.JdbcProfile
 
   def readOffset(projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
     val action =
-      offsetTable.filter(_.projectionId === projectionId.id).result.headOption.map { maybeRow =>
-        maybeRow.map(row => fromStorageRepresentation[Offset](row.offsetStr, row.manifest))
+      offsetTable.filter(_.projectionId === projectionId.id).result.map { maybeRow =>
+        maybeRow.map(row => (row.offsetStr, row.manifest))
       }
 
-    db.run(action)
+    val results = db.run(action)
+
+    results.map { offsetRows =>
+      if (offsetRows.isEmpty) None
+      else Some(fromStorageRepresentation[Offset](offsetRows))
+    }
   }
 
-  def saveOffset(projectionId: ProjectionId, offset: Offset)(implicit ec: ExecutionContext): slick.dbio.DBIO[Done] = {
-    val (offsetStr, manifest) = toStorageRepresentation(offset)
-    val now = Instant.now(clock)
-    offsetTable.insertOrUpdate(OffsetRow(projectionId.id, offsetStr, manifest, now)).map(_ => Done)
+  private def newRow(projectionId: ProjectionId, offsetStr: String, manifest: String, now: Instant): DBIO[_] =
+    offsetTable.insertOrUpdate(OffsetRow(projectionId.id, offsetStr, manifest, now))
+
+  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset)(
+      implicit ec: ExecutionContext): slick.dbio.DBIO[Done] = {
+    val now: Instant = Instant.now(clock)
+    // TODO: maybe there's a more "slick" way to accumulate DBIOs like this?
+    toStorageRepresentation(offset)
+      .foldLeft(None.asInstanceOf[Option[DBIO[_]]]) {
+        case (None, (offset, manifest))      => Some(newRow(projectionId, offset, manifest, now))
+        case (Some(acc), (offset, manifest)) => Some(acc.andThen(newRow(projectionId, offset, manifest, now)))
+      }
+      .get
+      .map(_ => Done)
   }
 
   def saveOffsetAsync(projectionId: ProjectionId, offset: Offset)(implicit ec: ExecutionContext): Future[Done] =

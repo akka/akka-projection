@@ -40,7 +40,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   }
 
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
-    val (offsetStr, manifest) = toStorageRepresentation(offset)
+    val (offsetStr, manifest) = toStorageRepresentation(offset).head
     session.executeWrite(
       s"INSERT INTO $keyspace.$table (projection_id, offset, manifest, last_updated) VALUES (?, ?, ?, ?)",
       projectionId.id,
