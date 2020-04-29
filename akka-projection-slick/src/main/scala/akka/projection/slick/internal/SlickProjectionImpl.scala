@@ -18,13 +18,14 @@ import akka.event.Logging
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.slick.SlickEventHandler
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
-import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
+
 @InternalApi
 private[projection] object SlickProjectionImpl {
   sealed trait Strategy
@@ -38,7 +39,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
     strategy: SlickProjectionImpl.Strategy,
-    eventHandler: Envelope => DBIO[Done])
+    eventHandler: SlickEventHandler[Envelope])
     extends Projection[Envelope] {
   import SlickProjectionImpl._
 
@@ -120,7 +121,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     val txDBIO =
       offsetStore
         .saveOffset(projectionId, sourceProvider.extractOffset(env))
-        .flatMap(_ => eventHandler(env))
+        .flatMap(_ => eventHandler.handleEvent(env))
         .transactionally
 
     databaseConfig.db.run(txDBIO).map(_ => Done)
@@ -132,8 +133,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     // user function in one transaction (may be composed of several DBIOAction), and offset save in separate
     val dbio =
-      eventHandler(env).transactionally.flatMap(_ =>
-        offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
+      eventHandler
+        .handleEvent(env)
+        .transactionally
+        .flatMap(_ => offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
 
     databaseConfig.db.run(dbio).map(_ => Done)
   }
@@ -142,7 +145,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     import databaseConfig.profile.api._
 
     // user function in one transaction (may be composed of several DBIOAction)
-    val dbio = eventHandler(env).transactionally
+    val dbio = eventHandler.handleEvent(env).transactionally
     databaseConfig.db.run(dbio).map(_ => Done)
   }
 
