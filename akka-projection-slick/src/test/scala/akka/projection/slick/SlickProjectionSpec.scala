@@ -168,7 +168,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val slickProjection =
         SlickProjection.exactlyOnce(projectionId, sourceProvider = sourceProvider(entityId), databaseConfig = dbConfig) {
-          envelope => repository.concatToText(envelope.id, envelope.message)
+          envelope =>
+            repository.concatToText(envelope.id, envelope.message)
         }
 
       projectionTestKit.run(slickProjection) {
@@ -219,7 +220,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          databaseConfig = dbConfig) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
@@ -272,7 +275,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          databaseConfig = dbConfig) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
@@ -323,7 +328,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
           sourceProvider = sourceProvider(entityId),
-          databaseConfig = dbConfig) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          databaseConfig = dbConfig) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
@@ -473,7 +480,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 2,
-          saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          saveOffsetAfterDuration = 1.minute) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
@@ -506,7 +515,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           sourceProvider = TestSourceProvider(source),
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          saveOffsetAfterDuration = 1.minute) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       val sinkProbe = projectionTestKit.runWithTestSink(slickProjection)
       eventually {
@@ -514,13 +525,17 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
       sinkProbe.request(1000)
 
-      (1 to 15).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (1 to 15).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         dbConfig.db.run(repository.findById(entityId)).futureValue.value.text should include("elem-15")
       }
       offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 10L
 
-      (16 to 22).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (16 to 22).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         dbConfig.db.run(repository.findById(entityId)).futureValue.value.text should include("elem-22")
       }
@@ -546,7 +561,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           sourceProvider = TestSourceProvider(source),
           databaseConfig = dbConfig,
           saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 2.seconds) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          saveOffsetAfterDuration = 2.seconds) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       val sinkProbe = projectionTestKit.runWithTestSink(slickProjection)
       eventually {
@@ -554,13 +571,17 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
       sinkProbe.request(1000)
 
-      (1 to 15).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (1 to 15).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         dbConfig.db.run(repository.findById(entityId)).futureValue.value.text should include("elem-15")
       }
       offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 10L
 
-      (16 to 17).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (16 to 17).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 17L
       }

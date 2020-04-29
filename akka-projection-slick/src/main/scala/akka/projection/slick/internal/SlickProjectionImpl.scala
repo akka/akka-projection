@@ -97,7 +97,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
         case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
           Flow[Envelope]
-            .mapAsync(1) { env => processEnvelope(env).map(_ => sourceProvider.extractOffset(env)) }
+            .mapAsync(1) { env =>
+              processEnvelope(env).map(_ => sourceProvider.extractOffset(env))
+            }
             .groupedWithin(afterEnvelopes, orAfterDuration)
             .collect { case grouped if grouped.nonEmpty => grouped.last }
             .mapAsync(parallelism = 1)(storeOffset)
