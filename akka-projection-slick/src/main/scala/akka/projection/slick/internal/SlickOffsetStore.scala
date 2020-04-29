@@ -14,7 +14,6 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
-import akka.projection.internal.OffsetStore
 import slick.jdbc.JdbcProfile
 
 /**
