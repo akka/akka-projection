@@ -31,18 +31,32 @@ import slick.jdbc.JdbcProfile
 
   def readOffset[Offset](projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
     val action =
-      offsetTable.filter(_.projectionId === projectionId.id).result.headOption.map { maybeRow =>
-        maybeRow.map(row => fromStorageRepresentation[Offset](row.offsetStr, row.manifest))
+      offsetTable.filter(_.projectionId === projectionId.id).result.map { maybeRow =>
+        maybeRow.map(row => (row.offsetStr, row.manifest))
       }
 
-    db.run(action)
+    val results = db.run(action)
+
+    results.map { offsetRows =>
+      if (offsetRows.isEmpty) None
+      else Some(fromStorageRepresentation[Offset](offsetRows))
+    }
   }
+
+  private def newRow(projectionId: ProjectionId, offsetStr: String, manifest: String, now: Instant): DBIO[_] =
+    offsetTable.insertOrUpdate(OffsetRow(projectionId.id, offsetStr, manifest, now))
 
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset)(
       implicit ec: ExecutionContext): slick.dbio.DBIO[Done] = {
-    val (offsetStr, manifest) = toStorageRepresentation(offset)
-    val now = Instant.now(clock)
-    offsetTable.insertOrUpdate(OffsetRow(projectionId.id, offsetStr, manifest, now)).map(_ => Done)
+    val now: Instant = Instant.now(clock)
+    // TODO: maybe there's a more "slick" way to accumulate DBIOs like this?
+    toStorageRepresentation(offset)
+      .foldLeft(None.asInstanceOf[Option[DBIO[_]]]) {
+        case (None, (offset, manifest))      => Some(newRow(projectionId, offset, manifest, now))
+        case (Some(acc), (offset, manifest)) => Some(acc.andThen(newRow(projectionId, offset, manifest, now)))
+      }
+      .get
+      .map(_ => Done)
   }
 
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, "AKKA_PROJECTION_OFFSET_STORE") {
