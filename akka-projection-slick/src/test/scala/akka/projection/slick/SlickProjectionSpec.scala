@@ -189,6 +189,43 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
     }
 
+    "recovers according to user defined 'onFailure' definition" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val eventHandler = new SlickEventHandler[Envelope] {
+        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+          if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
+          else repository.concatToText(envelope.id, envelope.message)
+
+        override def onFailure(envelope: Envelope, throwable: Throwable): Future[Done] =
+          Future.successful(Done)
+      }
+
+      val slickProjection =
+        SlickProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = sourceProvider(entityId),
+          databaseConfig = dbConfig,
+          eventHandler = eventHandler)
+
+      projectionTestKit.run(slickProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
     "restart from previous offset - fail with DBIOAction.failed" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
@@ -400,6 +437,82 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         withClue("check - all values were concatenated") {
           val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
           concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "recovers according to user defined 'onFailure' definition, save after 1" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val eventHandler = new SlickEventHandler[Envelope] {
+        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+          if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
+          else repository.concatToText(envelope.id, envelope.message)
+
+        override def onFailure(envelope: Envelope, throwable: Throwable): Future[Done] =
+          Future.successful(Done)
+      }
+      val slickProjection =
+        SlickProjection.atLeastOnce(
+          projectionId,
+          sourceProvider = sourceProvider(entityId),
+          databaseConfig = dbConfig,
+          saveOffsetAfterEnvelopes = 1,
+          saveOffsetAfterDuration = Duration.Zero,
+          eventHandler)
+
+      projectionTestKit.run(slickProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "recovers according to user defined 'onFailure' definition, save after 2" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val eventHandler = new SlickEventHandler[Envelope] {
+        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+          if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
+          else repository.concatToText(envelope.id, envelope.message)
+
+        override def onFailure(envelope: Envelope, throwable: Throwable): Future[Done] =
+          Future.successful(Done)
+      }
+      val slickProjection =
+        SlickProjection.atLeastOnce(
+          projectionId,
+          sourceProvider = sourceProvider(entityId),
+          databaseConfig = dbConfig,
+          saveOffsetAfterEnvelopes = 2,
+          saveOffsetAfterDuration = 1.minute,
+          eventHandler)
+
+      projectionTestKit.run(slickProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
         }
       }
       withClue("check - all offsets were seen") {

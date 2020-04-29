@@ -10,6 +10,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
@@ -90,11 +91,15 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       strategy match {
         case ExactlyOnce =>
           Flow[Envelope]
-            .mapAsync(1)(processEnvelopeAndStoreOffsetInSameTransaction)
+            .mapAsync(1) { env =>
+              applyUserRecovery(processEnvelopeAndStoreOffsetInSameTransaction(env), env)
+            }
 
         case AtLeastOnce(1, _) =>
           Flow[Envelope]
-            .mapAsync(1)(processEnvelopeAndStoreOffsetInSeparateTransactions)
+            .mapAsync(1) { env =>
+              applyUserRecovery(processEnvelopeAndStoreOffsetInSeparateTransactions(env), env)
+            }
 
         case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
           Flow[Envelope]
@@ -146,9 +151,15 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     // user function in one transaction (may be composed of several DBIOAction)
     val dbio = eventHandler.handleEvent(env).transactionally
-    databaseConfig.db.run(dbio).map(_ => Done)
+    val slickResult = databaseConfig.db.run(dbio).map(_ => Done)
+    applyUserRecovery(slickResult, env)
   }
 
+  private def applyUserRecovery(fut: Future[Done], envelope: Envelope)(implicit ec: ExecutionContext) = {
+    fut.recoverWith {
+      case NonFatal(err) => eventHandler.onFailure(envelope, err)
+    }
+  }
   private def storeOffset(offset: Offset)(implicit ec: ExecutionContext): Future[Done] = {
     // only one DBIOAction, no need for transactionally
     val dbio = offsetStore.saveOffset(projectionId, offset)

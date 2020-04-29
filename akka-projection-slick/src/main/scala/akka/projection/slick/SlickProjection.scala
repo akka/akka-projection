@@ -4,6 +4,7 @@
 
 package akka.projection.slick
 
+import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
@@ -45,5 +46,8 @@ object SlickProjection {
 
 trait SlickEventHandler[Envelope] {
   def handleEvent(envelope: Envelope): DBIO[Done]
-
+  def onFailure(envelope: Envelope, throwable: Throwable): Future[Done] = {
+    val _ = envelope // need it otherwise compiler says no
+    throw throwable
+  }
 }
