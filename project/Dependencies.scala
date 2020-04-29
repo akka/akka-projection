@@ -15,6 +15,7 @@ object Dependencies {
   object Versions {
     val akka = "2.6.4"
     val alpakka = "2.0.0-RC2"
+    val alpakkaKafka = "2.0.2+21-0427b570"
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
     val testContainersScala = "0.36.1"
@@ -31,6 +32,8 @@ object Dependencies {
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
+
+    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
   }
 
   object Test {
@@ -41,6 +44,8 @@ object Dependencies {
     val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
     val cassandraContainer =
       "com.dimafeng" %% "testcontainers-scala-cassandra" % Versions.testContainersScala % sbt.Test
+    val akkaStreamTestkit = Compile.akkaStreamTestkit % sbt.Test
+    val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
   }
 
   private val deps = libraryDependencies
@@ -62,4 +67,7 @@ object Dependencies {
         Test.logback,
         Test.testContainers,
         Test.cassandraContainer)
+
+  val kafka =
+    deps ++= Seq(Compile.alpakkaKafka, Test.akkaStreamTestkit, Test.alpakkaKafkaTestkit)
 }
