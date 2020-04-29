@@ -45,6 +45,14 @@ lazy val kafka =
     .dependsOn(core)
     .dependsOn(testkit % "test->test")
 
+lazy val examples = project
+  .dependsOn(slick)
+  .dependsOn(cassandra)
+  .dependsOn(eventSourced)
+  .dependsOn(kafka)
+  .dependsOn(testkit % "test->test")
+  .settings(Test / parallelExecution := false, publish / skip := true)
+
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
   .dependsOn(core, testkit)
