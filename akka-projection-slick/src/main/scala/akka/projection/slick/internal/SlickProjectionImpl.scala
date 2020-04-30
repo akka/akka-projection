@@ -90,6 +90,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     val logger = Logging(systemProvider.classicSystem, this.getClass)
 
     val futDone = Future.successful(Done)
+
     def applyUserRecovery(envelope: Envelope)(futureCallback: () => Future[Done]) = {
 
       // this will count as one attempt
@@ -111,7 +112,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
             case Skip =>
               logger.warning(
                 template =
-                  "Failed to process envelope with offset [{}]. It will be skipped as defined by recovery strategy. Exception {}({})",
+                  "Failed to process envelope with offset [{}]. Envelope will be skipped as defined by recovery strategy. Exception {}({})",
                 failedOffset,
                 err.getClass.getSimpleName,
                 err.getMessage)
@@ -154,7 +155,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
                 case NonFatal(exception) =>
                   logger.warning(
                     template =
-                      "Failed to process envelope with offset [{}] after {} retries. It will be skipped as defined by recovery strategy. Last exception {}({})",
+                      "Failed to process envelope with offset [{}] after {} retries. Envelope will be skipped as defined by recovery strategy. Last exception {}({})",
                     failedOffset,
                     totalRetries,
                     exception.getClass.getSimpleName,
@@ -165,13 +166,59 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       }
     }
 
+    def aroundUserHandler(env: Envelope)(handlerFunc: Envelope => slick.dbio.DBIO[Done]) = {
+      try {
+        handlerFunc(env)
+      } catch {
+        case NonFatal(err) =>
+          eventHandler.onFailure(env, err) match {
+
+            case Fail =>
+              logger.warning(
+                template =
+                  "An exception was thrown from inside the handler function while processing envelope with offset [{}]. Projection will stop as defined by recovery strategy.",
+                sourceProvider.extractOffset(env),
+                err.getClass.getSimpleName,
+                err.getMessage)
+              throw err
+
+            case Skip =>
+              logger.warning(
+                template =
+                  "An exception was thrown from inside the handler function while processing envelope with offset [{}]. Envelope will be skipped as defined by recovery strategy. Exception {}({})",
+                sourceProvider.extractOffset(env),
+                err.getClass.getSimpleName,
+                err.getMessage)
+              slick.dbio.DBIO.successful(Done)
+
+            case _: RetryAndSkip =>
+              logger.warning(
+                template =
+                  "An exception was thrown from inside the handler function while processing envelope with offset [{}]. This won't be retried. Envelope will be skipped as defined by recovery strategy. Exception {}({})",
+                sourceProvider.extractOffset(env),
+                err.getClass.getSimpleName,
+                err.getMessage)
+              slick.dbio.DBIO.successful(Done)
+
+            case _: RetryAndFail =>
+              logger.warning(
+                template =
+                  "An exception was thrown from inside the handler function while processing envelope with offset [{}]. This won't be retried. Projection will stop as defined by recovery strategy.",
+                sourceProvider.extractOffset(env),
+                err.getClass.getSimpleName,
+                err.getMessage)
+              throw err
+          }
+      }
+    }
+
     def processEnvelopeAndStoreOffsetInSameTransaction(env: Envelope): Future[Done] = {
       // run user function and offset storage on the same transaction
       // any side-effect in user function is at-least-once
       val txDBIO =
         offsetStore
           .saveOffset(projectionId, sourceProvider.extractOffset(env))
-          .flatMap(_ => eventHandler.handle(env))
+          .flatMap(_ => aroundUserHandler(env)(eventHandler.handle))
           .transactionally
 
       applyUserRecovery(env) { () =>
@@ -182,9 +229,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     def processEnvelopeAndStoreOffsetInSeparateTransactions(env: Envelope): Future[Done] = {
       // user function in one transaction (may be composed of several DBIOAction), and offset save in separate
       val dbio =
-        eventHandler
-          .handle(env)
-          .transactionally
+        aroundUserHandler(env)(eventHandler.handle).transactionally
           .flatMap(_ => offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
 
       applyUserRecovery(env) { () =>
@@ -194,7 +239,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     def processEnvelope(env: Envelope): Future[Done] = {
       // user function in one transaction (may be composed of several DBIOAction)
-      val dbio = eventHandler.handle(env).transactionally
+      val dbio = aroundUserHandler(env)(eventHandler.handle).transactionally
       applyUserRecovery(env) { () =>
         databaseConfig.db.run(dbio).map(_ => Done)
       }

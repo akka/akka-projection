@@ -54,7 +54,9 @@ object SlickHandler {
 }
 
 trait SlickHandler[Envelope] {
+
   def handle(envelope: Envelope): DBIO[Done]
+
   def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy = {
     val _ = envelope // need it otherwise compiler says no
     val _ = throwable
