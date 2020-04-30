@@ -4,7 +4,6 @@
 
 package akka.projection.slick
 
-import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
@@ -46,8 +45,22 @@ object SlickProjection {
 
 trait SlickEventHandler[Envelope] {
   def handleEvent(envelope: Envelope): DBIO[Done]
-  def onFailure(envelope: Envelope, throwable: Throwable): Future[Done] = {
+  def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy = {
     val _ = envelope // need it otherwise compiler says no
-    throw throwable
+    val _ = throwable
+    RecoverStrategy.fail
   }
+}
+
+sealed trait RecoverStrategy
+case object Fail extends RecoverStrategy
+case object Skip extends RecoverStrategy
+final case class RetryAndFail(retries: Int, delay: FiniteDuration) extends RecoverStrategy
+final case class RetryAndSkip(retries: Int, delay: FiniteDuration) extends RecoverStrategy
+
+object RecoverStrategy {
+  def fail: RecoverStrategy = Fail
+  def skip: RecoverStrategy = Skip
+  def retryAndFail(retries: Int, delay: FiniteDuration): RecoverStrategy = RetryAndFail(retries, delay)
+  def retryAndSkip(retries: Int, delay: FiniteDuration): RecoverStrategy = RetryAndSkip(retries, delay)
 }

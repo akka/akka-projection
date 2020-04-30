@@ -189,7 +189,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
     }
 
-    "recovers according to user defined 'onFailure' definition" in {
+    "skip failing events when using RecoveryStrategy.skip" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
@@ -198,13 +198,13 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val eventHandler = new SlickEventHandler[Envelope] {
+      val bogusEventHandler = new SlickEventHandler[Envelope] {
         override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
           else repository.concatToText(envelope.id, envelope.message)
 
-        override def onFailure(envelope: Envelope, throwable: Throwable): Future[Done] =
-          Future.successful(Done)
+        override def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy =
+          RecoverStrategy.skip
       }
 
       val slickProjection =
@@ -212,10 +212,10 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId,
           sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
-          eventHandler = eventHandler)
+          eventHandler = bogusEventHandler)
 
       projectionTestKit.run(slickProjection) {
-        withClue("check - all values were concatenated") {
+        withClue("check - not all values were concatenated") {
           val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
           concatStr.text shouldBe "abc|def|ghi|mno|pqr"
         }
@@ -224,6 +224,109 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
         offset shouldBe 6L
       }
+    }
+
+    "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val bogusEventHandler = new SlickEventHandler[Envelope] {
+
+        private var _attempts = 0
+        def attempts = _attempts
+
+        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+          if (envelope.offset == 4L) {
+            _attempts += 1
+            DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
+          } else repository.concatToText(envelope.id, envelope.message)
+
+        override def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy =
+          RecoverStrategy.retryAndSkip(3, 100.millis)
+      }
+
+      val slickProjection =
+        SlickProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = sourceProvider(entityId),
+          databaseConfig = dbConfig,
+          eventHandler = bogusEventHandler)
+
+      projectionTestKit.run(slickProjection) {
+        withClue("check - not all values were concatenated") {
+          val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+
+      withClue("check - event handler did failed at least 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        bogusEventHandler.attempts shouldBe 1 + 3
+      }
+
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "fail after retrying when using RecoveryStrategy.retryAndFail" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val streamFailureMsg = "fail on fourth envelope"
+      val bogusEventHandler = new SlickEventHandler[Envelope] {
+
+        private var _attempts = 0
+        def attempts = _attempts
+
+        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+          if (envelope.offset == 4L) {
+            _attempts += 1
+            DBIOAction.failed(new RuntimeException(streamFailureMsg))
+          } else repository.concatToText(envelope.id, envelope.message)
+
+        override def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy =
+          RecoverStrategy.retryAndFail(3, 100.millis)
+      }
+
+      val slickProjectionFailing =
+        SlickProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = sourceProvider(entityId),
+          databaseConfig = dbConfig,
+          bogusEventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      withClue("check: projection failed with stream failure") {
+        val sinkProbe = projectionTestKit.runWithTestSink(slickProjectionFailing)
+        sinkProbe.request(1000)
+        eventuallyExpectError(sinkProbe).getMessage shouldBe streamFailureMsg
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+
+      withClue("check - event handler did failed at least 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        bogusEventHandler.attempts shouldBe 1 + 3
+      }
+
+      withClue("check: last seen offset is 3L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 3L
+      }
+
     }
 
     "restart from previous offset - fail with DBIOAction.failed" in {
@@ -445,7 +548,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
     }
 
-    "recovers according to user defined 'onFailure' definition, save after 1" in {
+    "skip failing events when using RecoveryStrategy.skip, save after 1" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
@@ -459,8 +562,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
           else repository.concatToText(envelope.id, envelope.message)
 
-        override def onFailure(envelope: Envelope, throwable: Throwable): Future[Done] =
-          Future.successful(Done)
+        override def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy =
+          RecoverStrategy.skip
       }
       val slickProjection =
         SlickProjection.atLeastOnce(
@@ -483,7 +586,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
     }
 
-    "recovers according to user defined 'onFailure' definition, save after 2" in {
+    "skip failing events when using RecoveryStrategy.skip, save after 2" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
@@ -497,8 +600,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
           else repository.concatToText(envelope.id, envelope.message)
 
-        override def onFailure(envelope: Envelope, throwable: Throwable): Future[Done] =
-          Future.successful(Done)
+        override def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy =
+          RecoverStrategy.skip
       }
       val slickProjection =
         SlickProjection.atLeastOnce(

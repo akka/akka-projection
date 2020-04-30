@@ -16,9 +16,14 @@ import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
+import akka.pattern._
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.slick.Fail
+import akka.projection.slick.RetryAndFail
+import akka.projection.slick.RetryAndSkip
+import akka.projection.slick.Skip
 import akka.projection.slick.SlickEventHandler
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.Flow
@@ -91,15 +96,11 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       strategy match {
         case ExactlyOnce =>
           Flow[Envelope]
-            .mapAsync(1) { env =>
-              applyUserRecovery(processEnvelopeAndStoreOffsetInSameTransaction(env), env)
-            }
+            .mapAsync(1)(processEnvelopeAndStoreOffsetInSameTransaction)
 
         case AtLeastOnce(1, _) =>
           Flow[Envelope]
-            .mapAsync(1) { env =>
-              applyUserRecovery(processEnvelopeAndStoreOffsetInSeparateTransactions(env), env)
-            }
+            .mapAsync(1)(processEnvelopeAndStoreOffsetInSeparateTransactions)
 
         case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
           Flow[Envelope]
@@ -117,9 +118,40 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       .via(handlerFlow)
   }
 
+  private val futDone = Future.successful(Done)
+
+  private def applyUserRecovery(envelope: Envelope)(futureCallback: () => Future[Done])(
+      implicit systemProvider: ClassicActorSystemProvider) = {
+
+    implicit val scheduler = systemProvider.classicSystem.scheduler
+    implicit val dispatcher = systemProvider.classicSystem.dispatcher
+
+    // this will count as one attempt
+    val firstAttempt = futureCallback()
+
+    firstAttempt.recoverWith {
+      case NonFatal(err) =>
+        eventHandler.onFailure(envelope, err) match {
+          case Fail                         => firstAttempt
+          case Skip                         => futDone
+          case RetryAndFail(retries, delay) =>
+            // less one attempt
+            retry(futureCallback, retries - 1, delay)
+          case RetryAndSkip(retries, delay) =>
+            // less one attempt
+            retry(futureCallback, retries - 1, delay).recoverWith {
+              case NonFatal(_) => futDone
+            }
+        }
+
+    }
+  }
+
   private def processEnvelopeAndStoreOffsetInSameTransaction(env: Envelope)(
-      implicit ec: ExecutionContext): Future[Done] = {
+      implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
+
     import databaseConfig.profile.api._
+    implicit val dispatcher = systemProvider.classicSystem.dispatcher
 
     // run user function and offset storage on the same transaction
     // any side-effect in user function is at-least-once
@@ -129,12 +161,16 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         .flatMap(_ => eventHandler.handleEvent(env))
         .transactionally
 
-    databaseConfig.db.run(txDBIO).map(_ => Done)
+    applyUserRecovery(env) { () =>
+      databaseConfig.db.run(txDBIO).map(_ => Done)
+    }
   }
 
   private def processEnvelopeAndStoreOffsetInSeparateTransactions(env: Envelope)(
-      implicit ec: ExecutionContext): Future[Done] = {
+      implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
+
     import databaseConfig.profile.api._
+    implicit val dispatcher = systemProvider.classicSystem.dispatcher
 
     // user function in one transaction (may be composed of several DBIOAction), and offset save in separate
     val dbio =
@@ -143,23 +179,23 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         .transactionally
         .flatMap(_ => offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
 
-    databaseConfig.db.run(dbio).map(_ => Done)
+    applyUserRecovery(env) { () =>
+      databaseConfig.db.run(dbio).map(_ => Done)
+    }
   }
 
-  private def processEnvelope(env: Envelope)(implicit ec: ExecutionContext): Future[Done] = {
+  private def processEnvelope(env: Envelope)(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
+
     import databaseConfig.profile.api._
+    implicit val dispatcher = systemProvider.classicSystem.dispatcher
 
     // user function in one transaction (may be composed of several DBIOAction)
     val dbio = eventHandler.handleEvent(env).transactionally
-    val slickResult = databaseConfig.db.run(dbio).map(_ => Done)
-    applyUserRecovery(slickResult, env)
-  }
-
-  private def applyUserRecovery(fut: Future[Done], envelope: Envelope)(implicit ec: ExecutionContext) = {
-    fut.recoverWith {
-      case NonFatal(err) => eventHandler.onFailure(envelope, err)
+    applyUserRecovery(env) { () =>
+      databaseConfig.db.run(dbio).map(_ => Done)
     }
   }
+
   private def storeOffset(offset: Offset)(implicit ec: ExecutionContext): Future[Done] = {
     // only one DBIOAction, no need for transactionally
     val dbio = offsetStore.saveOffset(projectionId, offset)
