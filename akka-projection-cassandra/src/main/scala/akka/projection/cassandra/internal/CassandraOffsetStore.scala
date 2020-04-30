@@ -49,6 +49,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
       Instant.now(clock))
   }
 
+  // FIXME maybe we need to make this public for user's tests
   def createKeyspaceAndTable(): Future[Done] = {
     session
       .executeDDL(

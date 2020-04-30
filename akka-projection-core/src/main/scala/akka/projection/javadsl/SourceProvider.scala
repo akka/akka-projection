@@ -13,4 +13,5 @@ trait SourceProvider[Offset, Envelope] {
   def source(offset: Optional[Offset]): Source[Envelope, _]
 
   def extractOffset(envelope: Envelope): Offset
+
 }
