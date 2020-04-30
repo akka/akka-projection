@@ -53,7 +53,7 @@ import slick.jdbc.JdbcProfile
     val now: Instant = Instant.now(clock)
     // TODO: maybe there's a more "slick" way to accumulate DBIOs like this?
     toStorageRepresentation(offset)
-      .foldLeft(None.asInstanceOf[Option[DBIO[_]]]) {
+      .foldLeft(None: Option[DBIO[_]]) {
         case (None, (offset, manifest))      => Some(newRow(projectionId, offset, manifest, now))
         case (Some(acc), (offset, manifest)) => Some(acc.andThen(newRow(projectionId, offset, manifest, now)))
       }
