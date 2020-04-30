@@ -27,6 +27,24 @@ object ProjectionId {
   def apply(name: String, key: String): ProjectionId = new ProjectionId(name, key)
 
   /**
+   * Constructs a ProjectionId.
+   *
+   * A ProjectionId is composed by a name and a key.
+   *
+   * The projection name is shared across multiple instances of [[Projection]] with different keys.
+   * For example, a "user-view" could be the name of a projection.
+   *
+   * The key must be unique for a projection name.
+   * For example, a "user-view" could have multiple projections with different keys representing different partitions,
+   * shards, etc.
+   *
+   * @param name - the projection name
+   * @param key  - the unique key. The key must be unique for a projection name.
+   * @return
+   */
+  def of(name: String, key: String): ProjectionId = apply(name, key)
+
+  /**
    *  Constructs a Set of ProjectionId.
    *
    * A ProjectionId is composed by a name and a key.
@@ -43,6 +61,24 @@ object ProjectionId {
    */
   def apply(name: String, keys: immutable.Set[String]): immutable.Set[ProjectionId] =
     keys.map(key => new ProjectionId(name, key))
+
+  /**
+   *  Constructs a Set of ProjectionId.
+   *
+   * A ProjectionId is composed by a name and a key.
+   *
+   * The projection name is shared across multiple instances of [[Projection]] with different keys.
+   * For example, a "user-view" could be the name of a projection.
+   *
+   * The key must be unique for a projection name.
+   * For example, a "user-view" could have multiple projections with different keys representing different partitions,
+   * shards, etc.
+   *
+   * @param name - the projection name
+   * @param keys  - the Set of keys to associated with the passed name.
+   */
+  def of(name: String, keys: immutable.Set[String]): immutable.Set[ProjectionId] =
+    apply(name, keys)
 }
 
 final class ProjectionId private (val name: String, val key: String) {
