@@ -166,16 +166,15 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
-          repository.concatToText(envelope.id, envelope.message)
-      }
       val slickProjection =
         SlickProjection.exactlyOnce(
           projectionId,
           sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
-          eventHandler = eventHandler)
+          // build event handler from simple lambda
+          eventHandler = SlickHandler[Envelope] { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+          })
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {
@@ -198,8 +197,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val bogusEventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val bogusEventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
           else repository.concatToText(envelope.id, envelope.message)
 
@@ -235,12 +234,12 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val bogusEventHandler = new SlickEventHandler[Envelope] {
+      val bogusEventHandler = new SlickHandler[Envelope] {
 
         private var _attempts = 0
         def attempts = _attempts
 
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) {
             _attempts += 1
             DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
@@ -280,12 +279,12 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       val projectionId = genRandomProjectionId()
 
       val streamFailureMsg = "fail on fourth envelope"
-      val bogusEventHandler = new SlickEventHandler[Envelope] {
+      val bogusEventHandler = new SlickHandler[Envelope] {
 
         private var _attempts = 0
         def attempts = _attempts
 
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) {
             _attempts += 1
             DBIOAction.failed(new RuntimeException(streamFailureMsg))
@@ -334,8 +333,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       val projectionId = genRandomProjectionId()
 
       val streamFailureMsg = "fail on fourth envelope"
-      val bogusEventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val bogusEventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException(streamFailureMsg))
           else repository.concatToText(envelope.id, envelope.message)
       }
@@ -366,8 +365,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       // re-run projection without failing function
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
@@ -396,8 +395,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val streamFailureMsg = "fail on fourth envelope"
 
-      val bogusEventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val bogusEventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException(streamFailureMsg))
           else repository.concatToText(envelope.id, envelope.message)
       }
@@ -428,8 +427,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       // re-run projection without failing function
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
@@ -456,8 +455,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val bogusEventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val bogusEventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) repository.updateWithNullValue(envelope.id)
           else repository.concatToText(envelope.id, envelope.message)
       }
@@ -487,8 +486,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       // re-run projection without failing function
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
@@ -523,8 +522,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
@@ -557,8 +556,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
           else repository.concatToText(envelope.id, envelope.message)
 
@@ -595,8 +594,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException("fail on fourth envelope"))
           else repository.concatToText(envelope.id, envelope.message)
 
@@ -630,8 +629,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val streamFailureMsg = "fail on fourth envelope"
 
-      val bogusEventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val bogusEventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException(streamFailureMsg))
           else repository.concatToText(envelope.id, envelope.message)
       }
@@ -665,8 +664,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       // re-run projection without failing function
 
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
@@ -697,8 +696,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val streamFailureMsg = "fail on fourth envelope"
 
-      val bogusEventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val bogusEventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           if (envelope.offset == 4L) DBIOAction.failed(new RuntimeException(streamFailureMsg))
           else repository.concatToText(envelope.id, envelope.message)
       }
@@ -732,8 +731,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       // re-run projection without failing function
 
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
@@ -770,8 +769,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         NotUsed
       }
 
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
@@ -819,8 +818,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         NotUsed
       }
 
-      val eventHandler = new SlickEventHandler[Envelope] {
-        override def handleEvent(envelope: Envelope): slick.dbio.DBIO[Done] =
+      val eventHandler = new SlickHandler[Envelope] {
+        override def handle(envelope: Envelope): slick.dbio.DBIO[Done] =
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =

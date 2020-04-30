@@ -25,7 +25,7 @@ import akka.projection.slick.Fail
 import akka.projection.slick.RetryAndFail
 import akka.projection.slick.RetryAndSkip
 import akka.projection.slick.Skip
-import akka.projection.slick.SlickEventHandler
+import akka.projection.slick.SlickHandler
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
@@ -46,7 +46,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
     strategy: SlickProjectionImpl.Strategy,
-    eventHandler: SlickEventHandler[Envelope])
+    eventHandler: SlickHandler[Envelope])
     extends Projection[Envelope] {
   import SlickProjectionImpl._
 
@@ -171,7 +171,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       val txDBIO =
         offsetStore
           .saveOffset(projectionId, sourceProvider.extractOffset(env))
-          .flatMap(_ => eventHandler.handleEvent(env))
+          .flatMap(_ => eventHandler.handle(env))
           .transactionally
 
       applyUserRecovery(env) { () =>
@@ -183,7 +183,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       // user function in one transaction (may be composed of several DBIOAction), and offset save in separate
       val dbio =
         eventHandler
-          .handleEvent(env)
+          .handle(env)
           .transactionally
           .flatMap(_ => offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
 
@@ -194,7 +194,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     def processEnvelope(env: Envelope): Future[Done] = {
       // user function in one transaction (may be composed of several DBIOAction)
-      val dbio = eventHandler.handleEvent(env).transactionally
+      val dbio = eventHandler.handle(env).transactionally
       applyUserRecovery(env) { () =>
         databaseConfig.db.run(dbio).map(_ => Done)
       }

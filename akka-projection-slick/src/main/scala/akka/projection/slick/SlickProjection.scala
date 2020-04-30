@@ -24,7 +24,7 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      eventHandler: SlickEventHandler[Envelope]): Projection[Envelope] =
+      eventHandler: SlickHandler[Envelope]): Projection[Envelope] =
     new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, SlickProjectionImpl.ExactlyOnce, eventHandler)
 
   def atLeastOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
@@ -33,7 +33,7 @@ object SlickProjection {
       databaseConfig: DatabaseConfig[P],
       saveOffsetAfterEnvelopes: Int,
       saveOffsetAfterDuration: FiniteDuration,
-      eventHandler: SlickEventHandler[Envelope]): Projection[Envelope] =
+      eventHandler: SlickHandler[Envelope]): Projection[Envelope] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -43,8 +43,18 @@ object SlickProjection {
 
 }
 
-trait SlickEventHandler[Envelope] {
-  def handleEvent(envelope: Envelope): DBIO[Done]
+object SlickHandler {
+
+  /** SlickEventHandler that can be define from a simple function */
+  private class SlickHandlerSAM[Envelope](handler: Envelope => DBIO[Done]) extends SlickHandler[Envelope] {
+    override def handle(envelope: Envelope): DBIO[Done] = handler(envelope)
+  }
+
+  def apply[Envelope](handler: Envelope => DBIO[Done]): SlickHandler[Envelope] = new SlickHandlerSAM(handler)
+}
+
+trait SlickHandler[Envelope] {
+  def handle(envelope: Envelope): DBIO[Done]
   def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy = {
     val _ = envelope // need it otherwise compiler says no
     val _ = throwable
