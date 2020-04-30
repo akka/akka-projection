@@ -49,7 +49,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
 
-  private def offsetStore[Offset] = new SlickOffsetStore[Offset, H2Profile](dbConfig.db, dbConfig.profile, clock)
+  private val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, clock)
 
   override protected def beforeAll(): Unit = {
     // create offset table
@@ -79,7 +79,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore[Long].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
         offset shouldBe 1L
       }
 
@@ -88,7 +88,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset after overwrite") {
-        val offset = offsetStore[Long].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
         offset shouldBe 2L // yep, saveOffset overwrites previous
       }
 
@@ -103,7 +103,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore[Long].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
         offset shouldBe 1L
       }
 
@@ -118,7 +118,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore[java.lang.Long].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[java.lang.Long](projectionId).futureValue.value
         offset shouldBe 1L
       }
     }
@@ -132,7 +132,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore[Int].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[Int](projectionId).futureValue.value
         offset shouldBe 1
       }
 
@@ -147,7 +147,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore[java.lang.Integer].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[java.lang.Integer](projectionId).futureValue.value
         offset shouldBe 1
       }
     }
@@ -162,7 +162,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore[String].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[String](projectionId).futureValue.value
         offset shouldBe randOffset
       }
     }
@@ -177,7 +177,7 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore[Sequence].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[Sequence](projectionId).futureValue.value
         offset shouldBe seqOffset
       }
     }
@@ -192,22 +192,21 @@ class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures wi
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore[TimeBasedUUID].readOffset(projectionId).futureValue.value
+        val offset = offsetStore.readOffset[TimeBasedUUID](projectionId).futureValue.value
         offset shouldBe timeOffset
       }
     }
 
     "update timestamp" in {
       val projectionId = ProjectionId("timestamp", "00")
-      val store = offsetStore[Int]
 
       val instant0 = clock.instant()
-      dbConfig.db.run(store.saveOffset(projectionId, 15)).futureValue
+      dbConfig.db.run(offsetStore.saveOffset(projectionId, 15)).futureValue
       val instant1 = selectLastUpdated(projectionId)
       instant1 shouldBe instant0
 
       val instant2 = clock.tick(java.time.Duration.ofMillis(5))
-      dbConfig.db.run(store.saveOffset(projectionId, 16)).futureValue
+      dbConfig.db.run(offsetStore.saveOffset(projectionId, 16)).futureValue
       val instant3 = selectLastUpdated(projectionId)
       instant3 shouldBe instant2
     }

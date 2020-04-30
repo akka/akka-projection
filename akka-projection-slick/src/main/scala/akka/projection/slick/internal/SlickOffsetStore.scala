@@ -19,7 +19,7 @@ import slick.jdbc.JdbcProfile
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class SlickOffsetStore[Offset, P <: JdbcProfile](
+@InternalApi private[akka] class SlickOffsetStore[P <: JdbcProfile](
     val db: P#Backend#Database,
     val profile: P,
     clock: Clock) {
@@ -30,7 +30,7 @@ import slick.jdbc.JdbcProfile
   def this(db: P#Backend#Database, profile: P) =
     this(db, profile, Clock.systemUTC())
 
-  def readOffset(projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
+  def readOffset[Offset](projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
     val action =
       offsetTable.filter(_.projectionId === projectionId.id).result.map { maybeRow =>
         maybeRow.map(row => (row.offsetStr, row.manifest))
@@ -59,10 +59,6 @@ import slick.jdbc.JdbcProfile
       .get
       .map(_ => Done)
   }
-
-  def saveOffsetAsync(projectionId: ProjectionId, offset: Offset)(implicit ec: ExecutionContext): Future[Done] =
-    db.run(saveOffset(projectionId, offset))
-      .mapTo[Done]
 
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, "AKKA_PROJECTION_OFFSET_STORE") {
 
