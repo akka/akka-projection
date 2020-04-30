@@ -41,7 +41,7 @@ import slick.jdbc.JdbcProfile
 
     results.map { offsetRows =>
       if (offsetRows.isEmpty) None
-      else fromStorageRepresentation[Offset](offsetRows, projectionId)
+      else fromStorageRepresentation[Offset](offsetRows).get(projectionId)
     }
   }
 

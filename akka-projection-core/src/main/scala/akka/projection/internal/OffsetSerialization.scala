@@ -27,26 +27,29 @@ import akka.projection.ProjectionId
    * Deserialize an offset from a stored string representation and manifest.
    * The offset is converted from its string representation to its real type.
    */
-  def fromStorageRepresentation[Offset](offsetRows: Seq[RawOffset], projectionId: ProjectionId): Option[Offset] = {
+  def fromStorageRepresentation[Offset](offsetRows: Seq[RawOffset]): Map[ProjectionId, Offset] = {
     val offsets: Map[ProjectionId, Offset] = (offsetRows.map {
       case RawOffset(id, manifest, offsetStr) =>
         id -> fromStorageRepresentation[Offset](offsetStr, manifest)
     }).toMap
 
-    offsets.values.headOption match {
-      case None => None
-      case Some(_: MergeableOffsets.Offset) =>
-        val mergeable = offsets.values
-          .map(_.asInstanceOf[MergeableOffsets.Offset])
-          .fold(MergeableOffsets.empty) {
-            case (m1, m2) => m1.merge(m2)
-          }
-          .asInstanceOf[Offset]
-        Some(mergeable)
-      case _ => offsets.get(projectionId)
-    }
+    if (offsets.isEmpty) Map.empty
+    else if (offsets.values.forall(_.isInstanceOf[MergeableOffsets.OffsetRow])) {
+      val mergeable = offsets.values
+        .map(r => r.asInstanceOf[MergeableOffsets.OffsetRow])
+        .map(MergeableOffsets.one)
+        .fold(MergeableOffsets.empty) {
+          case (m1, m2) => m1.merge(m2)
+        }
+        .asInstanceOf[Offset]
+      offsets.keys.map(k => k -> mergeable).toMap
+    } else offsets
   }
 
+  /**
+   * Deserialize an offset from a stored string representation and manifest.
+   * The offset is converted from its string representation to its real type.
+   */
   def fromStorageRepresentation[Offset](offsetStr: String, manifest: String): Offset =
     (manifest match {
       case StringManifest        => offsetStr
@@ -71,7 +74,6 @@ import akka.projection.ProjectionId
       case mrg: MergeableOffsets.Offset => mrg.entries.map(_.toString -> MergeableManifest).toSeq
       case _                            => throw new IllegalArgumentException(s"Unsupported offset type, found [${offset.getClass.getName}]")
     }
-    require(reps.nonEmpty, "The Offset must produce at least one storage representation entry")
     reps
   }
 }

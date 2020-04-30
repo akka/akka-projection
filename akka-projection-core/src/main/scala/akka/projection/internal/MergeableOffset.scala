@@ -7,8 +7,9 @@ object MergeableOffsets {
   object OffsetRow {
     // TODO: use proper serialization
     def fromString(str: String): OffsetRow = {
-      str.split(",").toSeq match {
+      str.split(",").toList match {
         case name :: offset :: Nil if offset.toLongOption.isDefined => OffsetRow(name, offset.toLong)
+        case _                                                      => throw new RuntimeException(s"An invalid OffsetRow string representation was provided [$str]")
       }
     }
   }

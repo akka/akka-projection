@@ -7,6 +7,7 @@ package akka.projection.internal
 import java.util.UUID
 
 import akka.persistence.query
+import akka.projection.ProjectionId
 import org.scalatest.TestSuite
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -59,5 +60,42 @@ class OffsetSerializationSpec extends TestSuite with Matchers with AnyWordSpecLi
       fromStorageRepresentation[query.TimeBasedUUID](uuidString, TimeBasedUUIDManifest) shouldBe timeOffset
     }
 
+    "convert offsets of type MergeableOffset" in {
+      val row1 = MergeableOffsets.OffsetRow("user-group-1", 1)
+      val mergeableOffset = MergeableOffsets.Offset(Set(row1))
+      toStorageRepresentation(mergeableOffset) shouldBe Seq("user-group-1,1" -> "MRG")
+      fromStorageRepresentation[MergeableOffsets.Offset]("user-group-1,1", "MRG") shouldBe row1
+    }
+  }
+
+  "OffsetSerialization of MergeableOffsets" must {
+    "merge rows into the same MergeableOffset for all projection keys" in {
+      val projectionId1 = ProjectionId("user-projection", "shard-1")
+      val projectionId2 = ProjectionId("user-projection", "shard-2")
+      val row1 = MergeableOffsets.OffsetRow("user-group-1", 1)
+      val row2 = MergeableOffsets.OffsetRow("user-group-2", 2)
+      val mergeableOffset = MergeableOffsets.Offset(Set(row1, row2))
+      fromStorageRepresentation[MergeableOffsets.Offset](Seq(
+        RawOffset(projectionId1, "MRG", "user-group-1,1"),
+        RawOffset(projectionId2, "MRG", "user-group-2,2"))) shouldBe Map(
+        projectionId1 -> mergeableOffset,
+        projectionId2 -> mergeableOffset)
+    }
+
+    "merge rows with duplicates into one MergeableOffset with max offsets" in {
+      val projectionId1 = ProjectionId("user-projection", "shard-1")
+      val projectionId2 = ProjectionId("user-projection", "shard-2")
+      val projectionId3 = ProjectionId("user-projection", "shard-3")
+      val projectionId4 = ProjectionId("user-projection", "shard-4")
+      val row2 = MergeableOffsets.OffsetRow("user-group-1", 2)
+      val row3 = MergeableOffsets.OffsetRow("user-group-2", 4)
+      val mergeableOffset = MergeableOffsets.Offset(Set(row2, row3))
+      fromStorageRepresentation[MergeableOffsets.Offset](
+        Seq(
+          RawOffset(projectionId1, "MRG", "user-group-1,1"),
+          RawOffset(projectionId2, "MRG", "user-group-1,2"),
+          RawOffset(projectionId3, "MRG", "user-group-2,4"),
+          RawOffset(projectionId4, "MRG", "user-group-2,3"))).values.foreach(o => o shouldBe mergeableOffset)
+    }
   }
 }
