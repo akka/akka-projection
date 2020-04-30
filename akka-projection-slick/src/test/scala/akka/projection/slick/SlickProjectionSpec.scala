@@ -172,7 +172,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           // build event handler from simple lambda
-          eventHandler = SlickHandler[Envelope] { envelope =>
+          handler = SlickHandler[Envelope] { envelope =>
             repository.concatToText(envelope.id, envelope.message)
           })
 
@@ -211,7 +211,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId,
           sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
-          eventHandler = bogusEventHandler)
+          handler = bogusEventHandler)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - not all values were concatenated") {
@@ -254,7 +254,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId,
           sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
-          eventHandler = bogusEventHandler)
+          handler = bogusEventHandler)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - not all values were concatenated") {

@@ -46,7 +46,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
     strategy: SlickProjectionImpl.Strategy,
-    eventHandler: SlickHandler[Envelope])
+    handler: SlickHandler[Envelope])
     extends Projection[Envelope] {
   import SlickProjectionImpl._
 
@@ -100,7 +100,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         case NonFatal(err) =>
           val failedOffset = sourceProvider.extractOffset(envelope)
 
-          eventHandler.onFailure(envelope, err) match {
+          handler.onFailure(envelope, err) match {
             case Fail =>
               logger.error(
                 cause = err,
@@ -171,7 +171,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         handlerFunc(env)
       } catch {
         case NonFatal(err) =>
-          eventHandler.onFailure(env, err) match {
+          handler.onFailure(env, err) match {
 
             case Fail =>
               logger.warning(
@@ -218,7 +218,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       val txDBIO =
         offsetStore
           .saveOffset(projectionId, sourceProvider.extractOffset(env))
-          .flatMap(_ => aroundUserHandler(env)(eventHandler.handle))
+          .flatMap(_ => aroundUserHandler(env)(handler.handle))
           .transactionally
 
       applyUserRecovery(env) { () =>
@@ -229,7 +229,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     def processEnvelopeAndStoreOffsetInSeparateTransactions(env: Envelope): Future[Done] = {
       // user function in one transaction (may be composed of several DBIOAction), and offset save in separate
       val dbio =
-        aroundUserHandler(env)(eventHandler.handle).transactionally
+        aroundUserHandler(env)(handler.handle).transactionally
           .flatMap(_ => offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
 
       applyUserRecovery(env) { () =>
@@ -239,7 +239,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     def processEnvelope(env: Envelope): Future[Done] = {
       // user function in one transaction (may be composed of several DBIOAction)
-      val dbio = aroundUserHandler(env)(eventHandler.handle).transactionally
+      val dbio = aroundUserHandler(env)(handler.handle).transactionally
       applyUserRecovery(env) { () =>
         databaseConfig.db.run(dbio).map(_ => Done)
       }

@@ -24,8 +24,8 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      eventHandler: SlickHandler[Envelope]): Projection[Envelope] =
-    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, SlickProjectionImpl.ExactlyOnce, eventHandler)
+      handler: SlickHandler[Envelope]): Projection[Envelope] =
+    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, SlickProjectionImpl.ExactlyOnce, handler)
 
   def atLeastOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
@@ -33,13 +33,13 @@ object SlickProjection {
       databaseConfig: DatabaseConfig[P],
       saveOffsetAfterEnvelopes: Int,
       saveOffsetAfterDuration: FiniteDuration,
-      eventHandler: SlickHandler[Envelope]): Projection[Envelope] =
+      handler: SlickHandler[Envelope]): Projection[Envelope] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
       databaseConfig,
       SlickProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
-      eventHandler)
+      handler)
 
 }
 
