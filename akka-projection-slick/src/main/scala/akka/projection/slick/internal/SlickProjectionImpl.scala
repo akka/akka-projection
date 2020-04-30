@@ -22,6 +22,7 @@ import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.Fail
+import akka.projection.slick.RecoverStrategy
 import akka.projection.slick.RetryAndFail
 import akka.projection.slick.RetryAndSkip
 import akka.projection.slick.Skip
@@ -46,7 +47,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
     strategy: SlickProjectionImpl.Strategy,
-    handler: SlickHandler[Envelope])
+    handler: SlickHandler.Handler[Envelope])
     extends Projection[Envelope] {
   import SlickProjectionImpl._
 
@@ -56,6 +57,13 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   private val promiseToStop: Promise[Done] = Promise()
 
   private val started = new AtomicBoolean(false)
+
+  private def onFailure(envelope: Envelope, throwable: Throwable) = {
+    handler match {
+      case handler: SlickHandler[Envelope] => handler.onFailure(envelope, throwable)
+      case _                               => RecoverStrategy.fail
+    }
+  }
 
   override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
     if (started.compareAndSet(false, true)) {
@@ -100,7 +108,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         case NonFatal(err) =>
           val failedOffset = sourceProvider.extractOffset(envelope)
 
-          handler.onFailure(envelope, err) match {
+          onFailure(envelope, err) match {
             case Fail =>
               logger.error(
                 cause = err,
@@ -171,7 +179,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         handlerFunc(env)
       } catch {
         case NonFatal(err) =>
-          handler.onFailure(env, err) match {
+          onFailure(env, err) match {
 
             case Fail =>
               logger.warning(
@@ -218,7 +226,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       val txDBIO =
         offsetStore
           .saveOffset(projectionId, sourceProvider.extractOffset(env))
-          .flatMap(_ => aroundUserHandler(env)(handler.handle))
+          .flatMap(_ => aroundUserHandler(env)(handler.apply))
           .transactionally
 
       applyUserRecovery(env) { () =>
@@ -229,7 +237,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     def processEnvelopeAndStoreOffsetInSeparateTransactions(env: Envelope): Future[Done] = {
       // user function in one transaction (may be composed of several DBIOAction), and offset save in separate
       val dbio =
-        aroundUserHandler(env)(handler.handle).transactionally
+        aroundUserHandler(env)(handler.apply).transactionally
           .flatMap(_ => offsetStore.saveOffset(projectionId, sourceProvider.extractOffset(env)))
 
       applyUserRecovery(env) { () =>
@@ -239,7 +247,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     def processEnvelope(env: Envelope): Future[Done] = {
       // user function in one transaction (may be composed of several DBIOAction)
-      val dbio = aroundUserHandler(env)(handler.handle).transactionally
+      val dbio = aroundUserHandler(env)(handler.apply).transactionally
       applyUserRecovery(env) { () =>
         databaseConfig.db.run(dbio).map(_ => Done)
       }
