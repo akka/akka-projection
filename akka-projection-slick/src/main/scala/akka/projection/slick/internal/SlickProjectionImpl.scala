@@ -78,12 +78,13 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     // TODO: add a LogSource for projection when we have a name and key
     val akkaLogger = Logging(systemProvider.classicSystem, this.getClass)
 
-    val lastKnownOffset: Future[Option[Offset]] = offsetStore.readOffset(projectionId)
-
-    val futSource = lastKnownOffset.map { offsetOpt =>
-      akkaLogger.debug("Starting projection [{}] from offset [{}]", projectionId, offsetOpt)
-      sourceProvider.source(offsetOpt)
+    val readOffsets = () => {
+      val offsetsF = offsetStore.readOffset(projectionId)
+      offsetsF.foreach { offset => akkaLogger.debug("Starting projection [{}] from offset [{}]", projectionId, offset) }
+      offsetsF
     }
+
+    val futSource = sourceProvider.source(readOffsets)
 
     val handlerFlow: Flow[Envelope, Done, _] =
       strategy match {

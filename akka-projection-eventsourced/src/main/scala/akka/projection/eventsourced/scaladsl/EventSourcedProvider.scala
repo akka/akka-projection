@@ -4,6 +4,9 @@
 
 package akka.projection.eventsourced.scaladsl
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
@@ -25,20 +28,27 @@ object EventSourcedProvider {
     val eventsByTagQuery =
       PersistenceQuery(systemProvider).readJournalFor[EventsByTagQuery](readJournalPluginId)
 
-    new EventsByTagSourceProvider(eventsByTagQuery, tag)
+    new EventsByTagSourceProvider(eventsByTagQuery, tag, systemProvider)
   }
 
   /**
    * INTERNAL API
    */
   @InternalApi
-  private class EventsByTagSourceProvider[Event](eventsByTagQuery: EventsByTagQuery, tag: String)
+  private class EventsByTagSourceProvider[Event](
+      eventsByTagQuery: EventsByTagQuery,
+      tag: String,
+      systemProvider: ClassicActorSystemProvider)
       extends SourceProvider[Offset, EventEnvelope[Event]] {
+    implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
 
-    override def source(offsetOpt: Option[Offset]): Source[EventEnvelope[Event], NotUsed] =
-      eventsByTagQuery
-        .eventsByTag(tag, offsetOpt.getOrElse(NoOffset))
-        .map(env => EventEnvelope(env))
+    override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[Event], NotUsed]] =
+      offset().map { offsetOpt =>
+        val offset = offsetOpt.getOrElse(NoOffset)
+        eventsByTagQuery
+          .eventsByTag(tag, offset)
+          .map(env => EventEnvelope(env))
+      }
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
   }

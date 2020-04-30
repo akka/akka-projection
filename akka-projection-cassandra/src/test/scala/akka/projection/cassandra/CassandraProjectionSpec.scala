@@ -16,6 +16,7 @@ import scala.util.Try
 
 import akka.Done
 import akka.NotUsed
+import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.ProjectionId
@@ -40,7 +41,7 @@ object CassandraProjectionSpec {
 
   def offsetExtractor(env: Envelope): Long = env.offset
 
-  def sourceProvider(id: String): SourceProvider[Long, Envelope] = {
+  def sourceProvider(systemProvider: ClassicActorSystemProvider, id: String): SourceProvider[Long, Envelope] = {
 
     val envelopes =
       List(
@@ -51,17 +52,17 @@ object CassandraProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    TestSourceProvider(Source(envelopes))
+    TestSourceProvider(systemProvider, Source(envelopes))
   }
 
-  case class TestSourceProvider(src: Source[Envelope, _]) extends SourceProvider[Long, Envelope] {
-
-    override def source(offset: Option[Long]): Source[Envelope, _] = {
-      offset match {
+  case class TestSourceProvider(systemProvider: ClassicActorSystemProvider, src: Source[Envelope, _])
+      extends SourceProvider[Long, Envelope] {
+    implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
+    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
+      offset().map {
         case Some(o) => src.dropWhile(_.offset <= o)
         case _       => src
       }
-    }
 
     override def extractOffset(env: Envelope): Long = env.offset
   }
@@ -170,7 +171,7 @@ class CassandraProjectionSpec
         CassandraProjection
           .atLeastOnce[Long, Envelope](
             projectionId,
-            sourceProvider(entityId),
+            sourceProvider(system, entityId),
             saveOffsetAfterEnvelopes = 1,
             saveOffsetAfterDuration = Duration.Zero) { envelope =>
             repository.concatToText(envelope.id, envelope.message)
@@ -197,7 +198,7 @@ class CassandraProjectionSpec
         CassandraProjection
           .atLeastOnce[Long, Envelope](
             projectionId,
-            sourceProvider(entityId),
+            sourceProvider(system, entityId),
             saveOffsetAfterEnvelopes = 1,
             saveOffsetAfterDuration = Duration.Zero) { envelope =>
             if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
@@ -228,7 +229,7 @@ class CassandraProjectionSpec
         CassandraProjection
           .atLeastOnce[Long, Envelope](
             projectionId,
-            sourceProvider(entityId),
+            sourceProvider(system, entityId),
             saveOffsetAfterEnvelopes = 1,
             saveOffsetAfterDuration = Duration.Zero) { envelope =>
             repository.concatToText(envelope.id, envelope.message)
@@ -256,7 +257,7 @@ class CassandraProjectionSpec
         CassandraProjection
           .atLeastOnce[Long, Envelope](
             projectionId,
-            sourceProvider(entityId),
+            sourceProvider(system, entityId),
             saveOffsetAfterEnvelopes = 2,
             saveOffsetAfterDuration = 1.minute) { envelope =>
             if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
@@ -287,7 +288,7 @@ class CassandraProjectionSpec
         CassandraProjection
           .atLeastOnce[Long, Envelope](
             projectionId,
-            sourceProvider(entityId),
+            sourceProvider(system, entityId),
             saveOffsetAfterEnvelopes = 2,
             saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
@@ -319,7 +320,7 @@ class CassandraProjectionSpec
       val projection =
         CassandraProjection.atLeastOnce[Long, Envelope](
           projectionId,
-          TestSourceProvider(source),
+          TestSourceProvider(system, source),
           saveOffsetAfterEnvelopes = 10,
           saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
@@ -358,7 +359,7 @@ class CassandraProjectionSpec
       val projection =
         CassandraProjection.atLeastOnce[Long, Envelope](
           projectionId,
-          TestSourceProvider(source),
+          TestSourceProvider(system, source),
           saveOffsetAfterEnvelopes = 10,
           saveOffsetAfterDuration = 2.seconds) { envelope => repository.concatToText(envelope.id, envelope.message) }
 
@@ -396,7 +397,7 @@ class CassandraProjectionSpec
       }
 
       val projection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(system, entityId)) { envelope =>
           repository.concatToText(envelope.id, envelope.message)
         }
 
@@ -418,7 +419,7 @@ class CassandraProjectionSpec
 
       val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(system, entityId)) { envelope =>
           if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
           repository.concatToText(envelope.id, envelope.message)
         }
@@ -444,7 +445,7 @@ class CassandraProjectionSpec
 
       // re-run projection without failing function
       val projection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(system, entityId)) { envelope =>
           repository.concatToText(envelope.id, envelope.message)
         }
 

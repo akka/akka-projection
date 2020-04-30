@@ -8,11 +8,14 @@ import java.util.UUID
 
 import akka.annotation.InternalApi
 import akka.persistence.query
+import akka.projection.ProjectionId
 
 /**
  * INTERNAL API
  */
 @InternalApi private[akka] object OffsetSerialization {
+  final case class RawOffset(id: ProjectionId, manifest: String, offsetStr: String)
+
   final val StringManifest = "STR"
   final val LongManifest = "LNG"
   final val IntManifest = "INT"
@@ -24,18 +27,24 @@ import akka.persistence.query
    * Deserialize an offset from a stored string representation and manifest.
    * The offset is converted from its string representation to its real type.
    */
-  def fromStorageRepresentation[Offset](offsetRows: Seq[(String, String)]): Offset = {
-    require(offsetRows.nonEmpty, "At least one storage representation is required")
-    val offsets = offsetRows.map {
-      case (offsetStr, manifest) => fromStorageRepresentation(offsetStr, manifest)
-    }
+  def fromStorageRepresentation[Offset](offsetRows: Seq[RawOffset], projectionId: ProjectionId): Option[Offset] = {
+    val offsets: Map[ProjectionId, Offset] = (offsetRows.map {
+      case RawOffset(id, manifest, offsetStr) =>
+        id -> fromStorageRepresentation[Offset](offsetStr, manifest)
+    }).toMap
 
-    if (offsets.forall(_.isInstanceOf[MergeableOffsets.Offset]))
-      offsets
-        .map(_.asInstanceOf[MergeableOffsets.Offset])
-        .fold(MergeableOffsets.empty)(_.merge(_))
-        .asInstanceOf[Offset]
-    else offsets.head
+    offsets.values.headOption match {
+      case None => None
+      case Some(_: MergeableOffsets.Offset) =>
+        val mergeable = offsets.values
+          .map(_.asInstanceOf[MergeableOffsets.Offset])
+          .fold(MergeableOffsets.empty) {
+            case (m1, m2) => m1.merge(m2)
+          }
+          .asInstanceOf[Offset]
+        Some(mergeable)
+      case _ => offsets.get(projectionId)
+    }
   }
 
   def fromStorageRepresentation[Offset](offsetStr: String, manifest: String): Offset =

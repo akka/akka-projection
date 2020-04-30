@@ -23,6 +23,7 @@ import slick.jdbc.JdbcProfile
     val db: P#Backend#Database,
     val profile: P,
     clock: Clock) {
+  import OffsetSerialization.RawOffset
   import OffsetSerialization.fromStorageRepresentation
   import OffsetSerialization.toStorageRepresentation
   import profile.api._
@@ -32,20 +33,20 @@ import slick.jdbc.JdbcProfile
 
   def readOffset[Offset](projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
     val action =
-      offsetTable.filter(_.projectionId === projectionId.id).result.map { maybeRow =>
-        maybeRow.map(row => (row.offsetStr, row.manifest))
+      offsetTable.filter(_.projectionName === projectionId.name).result.map { maybeRow =>
+        maybeRow.map(row => RawOffset(projectionId, row.manifest, row.offsetStr))
       }
 
     val results = db.run(action)
 
     results.map { offsetRows =>
       if (offsetRows.isEmpty) None
-      else Some(fromStorageRepresentation[Offset](offsetRows))
+      else fromStorageRepresentation[Offset](offsetRows, projectionId)
     }
   }
 
   private def newRow(projectionId: ProjectionId, offsetStr: String, manifest: String, now: Instant): DBIO[_] =
-    offsetTable.insertOrUpdate(OffsetRow(projectionId.id, offsetStr, manifest, now))
+    offsetTable.insertOrUpdate(OffsetRow(projectionId.name, projectionId.key, offsetStr, manifest, now))
 
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset)(
       implicit ec: ExecutionContext): slick.dbio.DBIO[Done] = {
@@ -62,15 +63,22 @@ import slick.jdbc.JdbcProfile
 
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, "AKKA_PROJECTION_OFFSET_STORE") {
 
-    def projectionId = column[String]("PROJECTION_ID", O.Length(255, varying = false), O.PrimaryKey)
+    def projectionName = column[String]("PROJECTION_NAME", O.Length(255, varying = false))
+    def projectionKey = column[String]("PROJECTION_KEY", O.Length(255, varying = false))
     def offset = column[String]("OFFSET", O.Length(255, varying = false))
     def manifest = column[String]("MANIFEST", O.Length(4))
     def lastUpdated = column[Instant]("LAST_UPDATED")
+    def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
 
-    def * = (projectionId, offset, manifest, lastUpdated).mapTo[OffsetRow]
+    def * = (projectionName, projectionKey, offset, manifest, lastUpdated).mapTo[OffsetRow]
   }
 
-  case class OffsetRow(projectionId: String, offsetStr: String, manifest: String, lastUpdated: Instant)
+  case class OffsetRow(
+      projectionName: String,
+      projectionKey: String,
+      offsetStr: String,
+      manifest: String,
+      lastUpdated: Instant)
 
   val offsetTable = TableQuery[OffsetStoreTable]
 
