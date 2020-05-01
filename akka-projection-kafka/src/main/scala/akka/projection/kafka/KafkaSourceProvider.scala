@@ -16,7 +16,6 @@ import akka.kafka.Subscriptions
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.MetadataClient
 import akka.projection.internal.MergeableOffsets
-import akka.projection.internal.MergeableOffsets.OffsetRow
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -31,7 +30,7 @@ object KafkaSourceProvider {
   def apply[K, V](
       systemProvider: ClassicActorSystemProvider,
       settings: ConsumerSettings[K, V],
-      topics: Set[String]): SourceProvider[MergeableOffsets.Offset, ConsumerRecord[K, V]] =
+      topics: Set[String]): SourceProvider[MergeableOffsets.Offset[Long], ConsumerRecord[K, V]] =
     new KafkaOffsetSourceProvider[K, V](systemProvider, settings, topics)
 
   @InternalApi
@@ -39,7 +38,7 @@ object KafkaSourceProvider {
       systemProvider: ClassicActorSystemProvider,
       settings: ConsumerSettings[K, V],
       topics: Set[String])
-      extends SourceProvider[MergeableOffsets.Offset, ConsumerRecord[K, V]] {
+      extends SourceProvider[MergeableOffsets.Offset[Long], ConsumerRecord[K, V]] {
     implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
 
     private val subscription = Subscriptions.topics(topics)
@@ -47,7 +46,7 @@ object KafkaSourceProvider {
     private val metadataClient = MetadataClient.create(settings, 10.seconds)(systemProvider.classicSystem, dispatcher)
 
     override def source(
-        readOffsets: () => Future[Option[MergeableOffsets.Offset]]): Future[Source[ConsumerRecord[K, V], _]] = {
+        readOffsets: () => Future[Option[MergeableOffsets.Offset[Long]]]): Future[Source[ConsumerRecord[K, V], _]] = {
       val getOffsetsOnAssign: Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
         (assignedTps: Set[TopicPartition]) => {
           readOffsets()
@@ -55,19 +54,19 @@ object KafkaSourceProvider {
               case Some(mergeableOffsets) =>
                 Future.successful {
                   mergeableOffsets.entries
-                    .map { entry =>
-                      val tp = entry.name match {
-                        case regexTp(topic, partition) => new TopicPartition(topic, partition.toInt)
-                        case _ =>
-                          throw new IllegalArgumentException(
-                            s"Row entry name (${entry.name}) must match pattern: ${regexTp.pattern.toString}")
-                      }
-                      tp -> entry.offset
+                    .map {
+                      case (surrogateProjectionKey, offset) =>
+                        val tp = surrogateProjectionKey match {
+                          case regexTp(topic, partition) => new TopicPartition(topic, partition.toInt)
+                          case _ =>
+                            throw new IllegalArgumentException(
+                              s"Row entry name (${surrogateProjectionKey}) must match pattern: ${regexTp.pattern.toString}")
+                        }
+                        tp -> offset
                     }
                     .filter {
                       case (tp, _) => assignedTps.contains(tp)
                     }
-                    .toMap
                 }
               // TODO: should we let the user decide if they want to start from beginning or end offsets?
               case None => metadataClient.getBeginningOffsets(assignedTps)
@@ -89,9 +88,9 @@ object KafkaSourceProvider {
       }
     }
 
-    override def extractOffset(envelope: ConsumerRecord[K, V]): MergeableOffsets.Offset = {
-      val name = envelope.topic() + "-" + envelope.partition()
-      MergeableOffsets.one(OffsetRow(name, envelope.offset()))
+    override def extractOffset(envelope: ConsumerRecord[K, V]): MergeableOffsets.Offset[Long] = {
+      val key = envelope.topic() + "-" + envelope.partition()
+      MergeableOffsets.Offset(Map(key -> envelope.offset()))
     }
   }
 }

@@ -13,6 +13,7 @@ import scala.concurrent.Future
 import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
+import akka.projection.internal.MergeableOffsets
 import akka.projection.internal.OffsetSerialization
 import slick.jdbc.JdbcProfile
 
@@ -23,7 +24,8 @@ import slick.jdbc.JdbcProfile
     val db: P#Backend#Database,
     val profile: P,
     clock: Clock) {
-  import OffsetSerialization.RawOffset
+  import OffsetSerialization.MultipleOffsets
+  import OffsetSerialization.SingleOffset
   import OffsetSerialization.fromStorageRepresentation
   import OffsetSerialization.toStorageRepresentation
   import profile.api._
@@ -34,31 +36,39 @@ import slick.jdbc.JdbcProfile
   def readOffset[Offset](projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
     val action =
       offsetTable.filter(_.projectionName === projectionId.name).result.map { maybeRow =>
-        maybeRow.map(row => RawOffset(projectionId, row.manifest, row.offsetStr))
+        maybeRow.map(row => SingleOffset(projectionId, row.manifest, row.offsetStr, row.mergeable))
       }
 
     val results = db.run(action)
 
-    results.map { offsetRows =>
-      if (offsetRows.isEmpty) None
-      else fromStorageRepresentation[Offset](offsetRows).get(projectionId)
+    results.map {
+      case Nil => None
+      case reps if reps.forall(_.mergeable) =>
+        Some(fromStorageRepresentation[MergeableOffsets.Offset[_], Offset](MultipleOffsets(reps)).asInstanceOf[Offset])
+      case reps =>
+        reps.find(_.id == projectionId) match {
+          case Some(rep) => Some(fromStorageRepresentation[Offset, Offset](rep))
+          case _         => None
+        }
     }
   }
 
-  private def newRow(projectionId: ProjectionId, offsetStr: String, manifest: String, now: Instant): DBIO[_] =
-    offsetTable.insertOrUpdate(OffsetRow(projectionId.name, projectionId.key, offsetStr, manifest, now))
+  private def newRow[Offset](rep: SingleOffset, now: Instant): DBIO[_] =
+    offsetTable.insertOrUpdate(OffsetRow(rep.id.name, rep.id.key, rep.offsetStr, rep.manifest, rep.mergeable, now))
 
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset)(
-      implicit ec: ExecutionContext): slick.dbio.DBIO[Done] = {
+      implicit ec: ExecutionContext): slick.dbio.DBIO[_] = {
     val now: Instant = Instant.now(clock)
-    // TODO: maybe there's a more "slick" way to accumulate DBIOs like this?
-    toStorageRepresentation(offset)
-      .foldLeft(None: Option[DBIO[_]]) {
-        case (None, (offset, manifest))      => Some(newRow(projectionId, offset, manifest, now))
-        case (Some(acc), (offset, manifest)) => Some(acc.andThen(newRow(projectionId, offset, manifest, now)))
-      }
-      .get
-      .map(_ => Done)
+    toStorageRepresentation(projectionId, offset) match {
+      case offset: SingleOffset  => newRow(offset, now)
+      case MultipleOffsets(reps) =>
+        // TODO: maybe there's a more "slick" way to accumulate DBIOs like this?
+        val rows = reps.foldLeft(None: Option[DBIO[_]]) {
+          case (None, offset: SingleOffset)      => Some(newRow(offset, now))
+          case (Some(acc), offset: SingleOffset) => Some(acc.andThen(newRow(offset, now)))
+        }
+        rows.get.map(_ => Done)
+    }
   }
 
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, "AKKA_PROJECTION_OFFSET_STORE") {
@@ -67,10 +77,11 @@ import slick.jdbc.JdbcProfile
     def projectionKey = column[String]("PROJECTION_KEY", O.Length(255, varying = false))
     def offset = column[String]("OFFSET", O.Length(255, varying = false))
     def manifest = column[String]("MANIFEST", O.Length(4))
+    def mergeable = column[Boolean]("MERGEABLE")
     def lastUpdated = column[Instant]("LAST_UPDATED")
     def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
 
-    def * = (projectionName, projectionKey, offset, manifest, lastUpdated).mapTo[OffsetRow]
+    def * = (projectionName, projectionKey, offset, manifest, mergeable, lastUpdated).mapTo[OffsetRow]
   }
 
   case class OffsetRow(
@@ -78,6 +89,7 @@ import slick.jdbc.JdbcProfile
       projectionKey: String,
       offsetStr: String,
       manifest: String,
+      mergeable: Boolean,
       lastUpdated: Instant)
 
   val offsetTable = TableQuery[OffsetStoreTable]

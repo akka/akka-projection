@@ -14,36 +14,32 @@ import akka.projection.ProjectionId
  * INTERNAL API
  */
 @InternalApi private[akka] object OffsetSerialization {
-  final case class RawOffset(id: ProjectionId, manifest: String, offsetStr: String)
+  sealed trait StorageRepresentation
+  final case class SingleOffset(id: ProjectionId, manifest: String, offsetStr: String, mergeable: Boolean = false)
+      extends StorageRepresentation
+  final case class MultipleOffsets(reps: Seq[SingleOffset]) extends StorageRepresentation
 
   final val StringManifest = "STR"
   final val LongManifest = "LNG"
   final val IntManifest = "INT"
   final val SequenceManifest = "SEQ"
   final val TimeBasedUUIDManifest = "TBU"
-  final val MergeableManifest = "MRG"
 
   /**
-   * Deserialize an offset from a stored string representation and manifest.
+   * Deserialize an offset from a storage representation of one or more offsets.
    * The offset is converted from its string representation to its real type.
    */
-  def fromStorageRepresentation[Offset](offsetRows: Seq[RawOffset]): Map[ProjectionId, Offset] = {
-    val offsets: Map[ProjectionId, Offset] = (offsetRows.map {
-      case RawOffset(id, manifest, offsetStr) =>
-        id -> fromStorageRepresentation[Offset](offsetStr, manifest)
-    }).toMap
-
-    if (offsets.isEmpty) Map.empty
-    else if (offsets.values.forall(_.isInstanceOf[MergeableOffsets.OffsetRow])) {
-      val mergeable = offsets.values
-        .map(r => r.asInstanceOf[MergeableOffsets.OffsetRow])
-        .map(MergeableOffsets.one)
-        .fold(MergeableOffsets.empty) {
-          case (m1, m2) => m1.merge(m2)
-        }
-        .asInstanceOf[Offset]
-      offsets.keys.map(k => k -> mergeable).toMap
-    } else offsets
+  def fromStorageRepresentation[Offset, Inner](rep: StorageRepresentation): Offset = {
+    val offset: Offset = rep match {
+      case SingleOffset(_, manifest, offsetStr, _) => fromStorageRepresentation[Offset](offsetStr, manifest)
+      case MultipleOffsets(reps) =>
+        val offsets: Map[String, Inner] = reps.map {
+          case SingleOffset(id, manifest, offsetStr, _) =>
+            id.key -> fromStorageRepresentation[Inner](offsetStr, manifest)
+        }.toMap
+        MergeableOffsets.Offset[Inner](offsets).asInstanceOf[Offset]
+    }
+    offset
   }
 
   /**
@@ -57,22 +53,29 @@ import akka.projection.ProjectionId
       case IntManifest           => offsetStr.toInt
       case SequenceManifest      => query.Offset.sequence(offsetStr.toLong)
       case TimeBasedUUIDManifest => query.Offset.timeBasedUUID(UUID.fromString(offsetStr))
-      case MergeableManifest     => MergeableOffsets.OffsetRow.fromString(offsetStr)
     }).asInstanceOf[Offset]
 
   /**
    * Convert the offset to a tuple (String, String) where the first element is
    * the String representation of the offset and the second its manifest
    */
-  def toStorageRepresentation[Offset](offset: Offset): Seq[(String, String)] = {
+  def toStorageRepresentation[Offset](
+      id: ProjectionId,
+      offset: Offset,
+      mergeable: Boolean = false): StorageRepresentation = {
     val reps = offset match {
-      case s: String                    => List(s -> StringManifest)
-      case l: Long                      => List(l.toString -> LongManifest)
-      case i: Int                       => List(i.toString -> IntManifest)
-      case seq: query.Sequence          => List(seq.value.toString -> SequenceManifest)
-      case tbu: query.TimeBasedUUID     => List(tbu.value.toString -> TimeBasedUUIDManifest)
-      case mrg: MergeableOffsets.Offset => mrg.entries.map(_.toString -> MergeableManifest).toSeq
-      case _                            => throw new IllegalArgumentException(s"Unsupported offset type, found [${offset.getClass.getName}]")
+      case s: String                => SingleOffset(id, StringManifest, s, mergeable)
+      case l: Long                  => SingleOffset(id, LongManifest, l.toString, mergeable)
+      case i: Int                   => SingleOffset(id, IntManifest, i.toString, mergeable)
+      case seq: query.Sequence      => SingleOffset(id, SequenceManifest, seq.value.toString, mergeable)
+      case tbu: query.TimeBasedUUID => SingleOffset(id, TimeBasedUUIDManifest, tbu.value.toString, mergeable)
+      case mrg: MergeableOffsets.Offset[_] =>
+        MultipleOffsets(mrg.entries.map {
+          case (surrogateKey, innerOffset) =>
+            toStorageRepresentation(ProjectionId(id.name, surrogateKey), innerOffset, mergeable = true)
+              .asInstanceOf[SingleOffset]
+        }.toSeq)
+      case _ => throw new IllegalArgumentException(s"Unsupported offset type, found [${offset.getClass.getName}]")
     }
     reps
   }

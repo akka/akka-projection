@@ -14,6 +14,7 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
+import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 /**
@@ -40,7 +41,9 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   }
 
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
-    val (offsetStr, manifest) = toStorageRepresentation(offset).head
+    // TODO: support MultipleOffsets
+    val SingleOffset(_, manifest, offsetStr, _) =
+      toStorageRepresentation(projectionId, offset).asInstanceOf[SingleOffset]
     session.executeWrite(
       s"INSERT INTO $keyspace.$table (projection_id, offset, manifest, last_updated) VALUES (?, ?, ?, ?)",
       projectionId.id,
