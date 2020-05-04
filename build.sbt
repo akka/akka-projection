@@ -46,10 +46,10 @@ lazy val kafka =
     .dependsOn(testkit % "test->test")
 
 lazy val examples = project
-  .dependsOn(slick)
+  .dependsOn(slick % "test->test")
   .dependsOn(cassandra)
   .dependsOn(eventSourced)
-  .dependsOn(kafka)
+  .dependsOn(kafka % "test->test")
   .dependsOn(testkit % "test->test")
   .settings(Test / parallelExecution := false, publish / skip := true)
 
@@ -94,7 +94,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, eventSourced, kafka, docs)
+  .aggregate(core, testkit, slick, cassandra, eventSourced, kafka, examples, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 

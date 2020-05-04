@@ -2,6 +2,10 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
+///*
+// * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
+// */
+//
 //package akka.projection.kafka.internal
 //
 //import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -23,7 +27,7 @@
 //  protected def this() = this(kafkaPort = -1)
 //}
 //
-//class KafkaProjectionImplSpec
+//class KafkaSlackProjectionImplSpec
 //    extends SpecBase
 //    with TestcontainersKafkaPerClassLike
 //    with AnyWordSpecLike

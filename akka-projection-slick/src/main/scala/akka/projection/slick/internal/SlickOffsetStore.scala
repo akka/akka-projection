@@ -34,10 +34,10 @@ import slick.jdbc.JdbcProfile
     this(db, profile, Clock.systemUTC())
 
   def readOffset[Offset](projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
-    val action =
-      offsetTable.filter(_.projectionName === projectionId.name).result.map { maybeRow =>
-        maybeRow.map(row => SingleOffset(projectionId, row.manifest, row.offsetStr, row.mergeable))
-      }
+    val action = offsetTable.filter(_.projectionName === projectionId.name).result.map { maybeRow =>
+      maybeRow.map(row =>
+        SingleOffset(ProjectionId(projectionId.name, row.projectionKey), row.manifest, row.offsetStr, row.mergeable))
+    }
 
     val results = db.run(action)
 
