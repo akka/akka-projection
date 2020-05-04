@@ -6,6 +6,8 @@ package akka.projection.internal
 
 import java.util.UUID
 
+import scala.collection.immutable
+
 import akka.annotation.InternalApi
 import akka.persistence.query
 import akka.projection.ProjectionId
@@ -17,7 +19,7 @@ import akka.projection.ProjectionId
   sealed trait StorageRepresentation
   final case class SingleOffset(id: ProjectionId, manifest: String, offsetStr: String, mergeable: Boolean = false)
       extends StorageRepresentation
-  final case class MultipleOffsets(reps: Seq[SingleOffset]) extends StorageRepresentation
+  final case class MultipleOffsets(reps: immutable.Seq[SingleOffset]) extends StorageRepresentation
 
   final val StringManifest = "STR"
   final val LongManifest = "LNG"
