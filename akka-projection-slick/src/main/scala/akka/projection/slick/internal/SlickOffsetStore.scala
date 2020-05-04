@@ -10,7 +10,6 @@ import java.time.Instant
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
-import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
 import akka.projection.internal.MergeableOffsets
@@ -56,18 +55,11 @@ import slick.jdbc.JdbcProfile
   private def newRow[Offset](rep: SingleOffset, now: Instant): DBIO[_] =
     offsetTable.insertOrUpdate(OffsetRow(rep.id.name, rep.id.key, rep.offsetStr, rep.manifest, rep.mergeable, now))
 
-  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset)(
-      implicit ec: ExecutionContext): slick.dbio.DBIO[_] = {
+  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): slick.dbio.DBIO[_] = {
     val now: Instant = Instant.now(clock)
     toStorageRepresentation(projectionId, offset) match {
       case offset: SingleOffset  => newRow(offset, now)
-      case MultipleOffsets(reps) =>
-        // TODO: maybe there's a more "slick" way to accumulate DBIOs like this?
-        val rows = reps.foldLeft(None: Option[DBIO[_]]) {
-          case (None, offset: SingleOffset)      => Some(newRow(offset, now))
-          case (Some(acc), offset: SingleOffset) => Some(acc.andThen(newRow(offset, now)))
-        }
-        rows.get.map(_ => Done)
+      case MultipleOffsets(reps) => DBIO.sequence(reps.map(rep => newRow(rep, now)))
     }
   }
 
