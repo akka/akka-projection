@@ -12,7 +12,6 @@ import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 
 import akka.Done
@@ -144,12 +143,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
         KafkaSourceProvider(system, consumerSettings, Set(topicName))
 
       val slickProjection =
-        SlickProjection.atLeastOnce(
-          projectionId,
-          sourceProvider = kafkaSourceProvider,
-          dbConfig,
-          saveOffsetAfterEnvelopes = 1,
-          saveOffsetAfterDuration = 1.millis) { envelope =>
+        SlickProjection.exactlyOnce(projectionId, sourceProvider = kafkaSourceProvider, dbConfig) { envelope =>
           val userId = envelope.key()
           val eventType = envelope.value()
           val userEvent = UserEvent(userId, eventType)
