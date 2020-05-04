@@ -4,20 +4,14 @@
 
 package akka.projection.examples
 
-import java.util.Arrays
-import java.util.UUID
-import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.jdk.CollectionConverters._
 
 import akka.Done
 import akka.kafka.ConsumerSettings
 import akka.kafka.scaladsl.Producer
-import akka.kafka.testkit.internal.KafkaTestKitClass
 import akka.projection.ProjectionId
 import akka.projection.internal.MergeableOffsets
 import akka.projection.kafka.KafkaSourceProvider
@@ -26,7 +20,6 @@ import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.stream.scaladsl.Source
-import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -77,7 +70,7 @@ object KafkaToSlickIntegrationSpec {
 
     def incrementCount(eventType: String)(implicit ec: ExecutionContext) = {
       for {
-        count <- findById(eventType).map {
+        count <- findByEventType(eventType).map {
           case Some(userEventCount) => userEventCount.copy(count = userEventCount.count + 1)
           case _                    => UserEventCount(eventType, 1)
         }
@@ -85,15 +78,15 @@ object KafkaToSlickIntegrationSpec {
       } yield Done
     }
 
-    def findById(userId: String): DBIO[Option[UserEventCount]] =
-      userEventCountTable.filter(_.eventType === userId).result.headOption
+    def findByEventType(eventType: String): DBIO[Option[UserEventCount]] =
+      userEventCountTable.filter(_.eventType === eventType).result.headOption
 
     private val userEventCountTable = TableQuery[UserEventCountTable]
 
     def readValue(eventType: String): Future[Long] = {
       // map using Slick's own EC
       implicit val ec = dbConfig.db.executor.executionContext
-      val action = findById(eventType).map {
+      val action = findByEventType(eventType).map {
         case Some(eventTypeCount) => eventTypeCount.count
         case _                    => 0
       }
@@ -119,10 +112,10 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
   }
 
   "KafkaToSlickIntegrationSpec" must {
-    "persist a Kafka offset map to a relational database" in {
+    "project a model and Kafka offset map to a slick db exactly once" in {
       val projectionId = ProjectionId("UserEventCountProjection", "UserEventCountProjection-1")
 
-      val topicName = newTopic("user-events", partitions = 3, replication = 1)
+      val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()
 
       for {
@@ -152,7 +145,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
         }
 
       def assertEventTypeCount(eventType: String) =
-        dbConfig.db.run(repository.findById(eventType)).futureValue.value.count shouldBe userEvents.count(
+        dbConfig.db.run(repository.findByEventType(eventType)).futureValue.value.count shouldBe userEvents.count(
           _.eventType == eventType)
 
       def offsetForUser(userId: String) = userEvents.count(_.userId == userId) - 1
@@ -178,22 +171,8 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
     }
   }
 
-  def newUserId: String = UUID.randomUUID().toString
-
   def produceEvents(topic: String, range: immutable.Seq[UserEvent], partition: Int = 0): Future[Done] =
     Source(range)
       .map(e => new ProducerRecord(topic, partition, e.userId, e.eventType))
       .runWith(Producer.plainSink(producerDefaults.withProducer(testProducer)))
-
-  def newTopic(
-      topic: String,
-      partitions: Int,
-      replication: Int,
-      config: java.util.Map[String, String] = Map.empty[String, String].asJava): String = {
-    val topicName = s"$topic-${KafkaTestKitClass.topicCounter.getAndIncrement()}"
-    val createResult =
-      adminClient.createTopics(Arrays.asList(new NewTopic(topicName, partitions, replication.toShort).configs(config)))
-    createResult.all().get(10, TimeUnit.SECONDS)
-    topicName
-  }
 }
