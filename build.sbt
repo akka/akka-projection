@@ -49,9 +49,9 @@ lazy val docs = project
     Preprocess / siteSubdirName := s"api/akka-projection/${projectInfoVersion.value}",
     Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
     Paradox / siteSubdirName := s"docs/akka-projection/${projectInfoVersion.value}",
-    paradoxProperties ++= Map(
+    Compile / paradoxProperties ++= Map(
         "project.url" -> "https://doc.akka.io/docs/akka-projection/current/",
-        "canonical.base_url" -> "https://doc.akka.io/docs/akka-projection/current/",
+        "canonical.base_url" -> "https://doc.akka.io/docs/akka-projection/current",
         "akka.version" -> Dependencies.Versions.akka,
         // Akka
         "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.AkkaVersionInDocs}/%s",
