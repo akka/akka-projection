@@ -15,6 +15,7 @@ import akka.kafka.scaladsl.Producer
 import akka.projection.ProjectionId
 import akka.projection.internal.MergeableOffsets
 import akka.projection.kafka.KafkaSourceProvider
+import akka.projection.kafka.KafkaSpecBase
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
