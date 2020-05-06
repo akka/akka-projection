@@ -17,9 +17,20 @@ import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
 
+/**
+ * Factories of [[Projection]] where the offset is stored in a relational database table using Slick.
+ * The envelope handler can integrate with anything, such as publishing to a message broker, or updating a relational read model.
+ */
 @ApiMayChange
 object SlickProjection {
 
+  /**
+   * Create a [[Projection]] with exactly-once processing semantics.
+   *
+   * It stores the offset in a relational database table using Slick in the same transaction
+   * as the DBIO returned from the `handler`.
+   *
+   */
   def exactlyOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
@@ -27,6 +38,12 @@ object SlickProjection {
       handler: SlickHandler[Envelope]): Projection[Envelope] =
     new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, SlickProjectionImpl.ExactlyOnce, handler)
 
+  /**
+   * Create a [[Projection]] with at-least-once processing semantics.
+   *
+   * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
+   * This means that if the projection is restarted from previously stored offset some elements may be processed more than once.
+   */
   def atLeastOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
@@ -45,17 +62,26 @@ object SlickProjection {
 
 object SlickHandler {
 
-  /** SlickEventHandler that can be define from a simple function */
-  private class SlickHandlerSAM[Envelope](handler: Envelope => DBIO[Done]) extends SlickHandler[Envelope] {
-    override def handle(envelope: Envelope): DBIO[Done] = handler(envelope)
+  /** SlickHandler that can be define from a simple function */
+  private class SlickHandlerFunction[Envelope](handler: Envelope => DBIO[Done]) extends SlickHandler[Envelope] {
+    override def process(envelope: Envelope): DBIO[Done] = handler(envelope)
   }
 
-  def apply[Envelope](handler: Envelope => DBIO[Done]): SlickHandler[Envelope] = new SlickHandlerSAM(handler)
+  def apply[Envelope](handler: Envelope => DBIO[Done]): SlickHandler[Envelope] = new SlickHandlerFunction(handler)
 }
 
+/**
+ * Implement this interface for the Envelope handler in [[SlickProjection]].
+ *
+ * It can be stateful, with variables and mutable data structures.
+ * It is invoked by the `Projection` machinery one envelope at a time and visibility
+ * guarantees between the invocations are handled automatically, i.e. no volatile or
+ * other concurrency primitives are needed for managing the state.
+ */
+@ApiMayChange
 trait SlickHandler[Envelope] {
 
-  def handle(envelope: Envelope): DBIO[Done]
+  def process(envelope: Envelope): DBIO[Done]
 
   def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy = {
     val _ = envelope // need it otherwise compiler says no
