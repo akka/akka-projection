@@ -18,6 +18,7 @@ import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
@@ -41,7 +42,7 @@ import akka.stream.scaladsl.Source
     override val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     strategy: CassandraProjectionImpl.Strategy,
-    handler: Envelope => Future[Done])
+    handler: Handler[Envelope])
     extends Projection[Envelope] {
   import CassandraProjectionImpl._
 
@@ -91,7 +92,7 @@ import akka.stream.scaladsl.Source
 
     val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
       Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
-        case (offset, envelope) => handler(envelope).map(_ => offset)
+        case (offset, envelope) => handler.process(envelope).map(_ => offset)
       }
 
     val composedSource: Source[Done, NotUsed] = strategy match {

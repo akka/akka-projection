@@ -4,14 +4,13 @@
 
 package akka.projection.cassandra.scaladsl
 
-import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
-import akka.Done
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraProjectionImpl
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 
 /**
@@ -35,7 +34,8 @@ object CassandraProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       saveOffsetAfterEnvelopes: Int,
-      saveOffsetAfterDuration: FiniteDuration)(handler: Envelope => Future[Done]): Projection[Envelope] =
+      saveOffsetAfterDuration: FiniteDuration,
+      handler: Handler[Envelope]): Projection[Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
@@ -47,7 +47,9 @@ object CassandraProjection {
    * before the `handler` has processed the envelope. This means that if the projection is restarted
    * from previously stored offset one envelope may not have been processed.
    */
-  def atMostOnce[Offset, Envelope](projectionId: ProjectionId, sourceProvider: SourceProvider[Offset, Envelope])(
-      handler: Envelope => Future[Done]): Projection[Envelope] =
+  def atMostOnce[Offset, Envelope](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      handler: Handler[Envelope]): Projection[Envelope] =
     new CassandraProjectionImpl(projectionId, sourceProvider, CassandraProjectionImpl.AtMostOnce, handler)
 }

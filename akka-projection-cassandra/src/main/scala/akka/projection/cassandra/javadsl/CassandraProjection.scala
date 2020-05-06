@@ -6,13 +6,13 @@ package akka.projection.cassandra.javadsl
 
 import java.time.Duration
 
-import scala.compat.java8.FutureConverters._
-
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.cassandra.internal.HandlerAdapter
 import akka.projection.cassandra.scaladsl
 import akka.projection.internal.SourceProviderAdapter
+import akka.projection.javadsl.Handler
 import akka.projection.javadsl.SourceProvider
 import akka.util.JavaDurationConverters._
 
@@ -38,7 +38,8 @@ object CassandraProjection {
       projectionId,
       new SourceProviderAdapter(sourceProvider),
       saveOffsetAfterEnvelopes,
-      saveOffsetAfterDuration.asScala)(env => handler.process(env).toScala)
+      saveOffsetAfterDuration.asScala,
+      new HandlerAdapter(handler))
 
   /**
    * Create a [[Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
@@ -47,6 +48,8 @@ object CassandraProjection {
    */
   def atMostOnce[Offset, Envelope](projectionId: ProjectionId, sourceProvider: SourceProvider[Offset, Envelope])(
       handler: Handler[Envelope]): Projection[Envelope] =
-    scaladsl.CassandraProjection.atMostOnce(projectionId, new SourceProviderAdapter(sourceProvider))(env =>
-      handler.process(env).toScala)
+    scaladsl.CassandraProjection.atMostOnce(
+      projectionId,
+      new SourceProviderAdapter(sourceProvider),
+      new HandlerAdapter(handler))
 }
