@@ -127,7 +127,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
           case `user2` => 1
           case `user3` => 2
         }
-      } produceEvents(topicName, events, partition).futureValue
+      } awaitProduce(produceEvents(topicName, events, partition))
 
       val consumerSettings =
         ConsumerSettings(system, new StringDeserializer, new StringDeserializer)
