@@ -9,7 +9,7 @@ import akka.actor.testkit.typed.scaladsl.ActorTestKitBase
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.kafka.testkit.scaladsl.ScalatestKafkaSpec
 import akka.kafka.testkit.scaladsl.TestcontainersKafkaLike
-import akka.projection.testkit.ProjectionTestKit
+import akka.projection.testkit.scaladsl.ProjectionTestKit
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues

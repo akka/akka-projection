@@ -8,6 +8,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
@@ -23,17 +24,13 @@ import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.testkit.ProjectionTestKit
+import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSource
-import org.scalatest.concurrent.PatienceConfiguration
-import org.scalatest.time.Millis
-import org.scalatest.time.Seconds
-import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object CassandraProjectionSpec {
@@ -118,12 +115,9 @@ object CassandraProjectionSpec {
 class CassandraProjectionSpec
     extends ScalaTestWithActorTestKit(ContainerSessionProvider.Config)
     with AnyWordSpecLike
-    with LogCapturing
-    with PatienceConfiguration {
+    with LogCapturing {
 
   import CassandraProjectionSpec._
-
-  override implicit def patienceConfig = PatienceConfig(timeout = Span(30, Seconds), interval = Span(100, Millis))
 
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext
@@ -133,8 +127,14 @@ class CassandraProjectionSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    offsetStore.createKeyspaceAndTable().futureValue
-    repository.createKeyspaceAndTable().futureValue
+
+    // don't use futureValue (patience) here because it can take a while to start the test container
+    Await.result(ContainerSessionProvider.started, 30.seconds)
+    // reason for setSchemaMetadataEnabled is that it speed up tests
+    session.underlying().map(_.setSchemaMetadataEnabled(false)).futureValue
+    Await.result(offsetStore.createKeyspaceAndTable(), 15.seconds)
+    Await.result(repository.createKeyspaceAndTable(), 15.seconds)
+    session.underlying().map(_.setSchemaMetadataEnabled(null)).futureValue
   }
 
   override protected def afterAll(): Unit = {
@@ -290,7 +290,9 @@ class CassandraProjectionSpec
             projectionId,
             sourceProvider(system, entityId),
             saveOffsetAfterEnvelopes = 2,
-            saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
+            saveOffsetAfterDuration = 1.minute) { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+          }
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -322,7 +324,9 @@ class CassandraProjectionSpec
           projectionId,
           TestSourceProvider(system, source),
           saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 1.minute) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          saveOffsetAfterDuration = 1.minute) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
       eventually {
@@ -330,13 +334,17 @@ class CassandraProjectionSpec
       }
       sinkProbe.request(1000)
 
-      (1 to 15).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (1 to 15).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-15")
       }
       offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
 
-      (16 to 22).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (16 to 22).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-22")
       }
@@ -361,7 +369,9 @@ class CassandraProjectionSpec
           projectionId,
           TestSourceProvider(system, source),
           saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 2.seconds) { envelope => repository.concatToText(envelope.id, envelope.message) }
+          saveOffsetAfterDuration = 2.seconds) { envelope =>
+          repository.concatToText(envelope.id, envelope.message)
+        }
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
       eventually {
@@ -369,13 +379,17 @@ class CassandraProjectionSpec
       }
       sinkProbe.request(1000)
 
-      (1 to 15).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (1 to 15).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         repository.findById(entityId).futureValue.get.text should include("elem-15")
       }
       offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
 
-      (16 to 17).foreach { n => sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n")) }
+      (16 to 17).foreach { n =>
+        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+      }
       eventually {
         offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 17L
       }

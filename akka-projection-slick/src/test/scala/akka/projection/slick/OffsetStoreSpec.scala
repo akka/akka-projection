@@ -20,8 +20,12 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.OptionValues
+import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.Millis
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
@@ -42,7 +46,16 @@ object OffsetStoreSpec {
     }
     """)
 }
-class OffsetStoreSpec extends AnyWordSpecLike with Matchers with ScalaFutures with BeforeAndAfterAll with OptionValues {
+class OffsetStoreSpec
+    extends AnyWordSpecLike
+    with Matchers
+    with ScalaFutures
+    with BeforeAndAfterAll
+    with OptionValues
+    with PatienceConfiguration {
+
+  override implicit val patienceConfig: PatienceConfig =
+    PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", OffsetStoreSpec.config)
 

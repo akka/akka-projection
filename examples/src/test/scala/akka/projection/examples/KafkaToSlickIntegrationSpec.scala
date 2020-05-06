@@ -17,6 +17,7 @@ import akka.projection.internal.MergeableOffsets
 import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
@@ -137,13 +138,17 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
         KafkaSourceProvider(system, consumerSettings, Set(topicName))
 
       val slickProjection =
-        SlickProjection.exactlyOnce(projectionId, sourceProvider = kafkaSourceProvider, dbConfig) { envelope =>
-          val userId = envelope.key()
-          val eventType = envelope.value()
-          val userEvent = UserEvent(userId, eventType)
-          // do something with the record, payload in record.value
-          repository.incrementCount(userEvent.eventType)
-        }
+        SlickProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = kafkaSourceProvider,
+          dbConfig,
+          SlickHandler[ConsumerRecord[String, String]] { envelope =>
+            val userId = envelope.key()
+            val eventType = envelope.value()
+            val userEvent = UserEvent(userId, eventType)
+            // do something with the record, payload in record.value
+            repository.incrementCount(userEvent.eventType)
+          })
 
       def assertEventTypeCount(eventType: String) =
         dbConfig.db.run(repository.findByEventType(eventType)).futureValue.value.count shouldBe userEvents.count(

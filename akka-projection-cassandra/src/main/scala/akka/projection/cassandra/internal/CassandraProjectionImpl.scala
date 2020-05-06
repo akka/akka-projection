@@ -96,13 +96,17 @@ import akka.stream.scaladsl.Source
 
     val composedSource: Source[Done, NotUsed] = strategy match {
       case AtLeastOnce(1, _) =>
-        source.via(handlerFlow).mapAsync(1) { offset => offsetStore.saveOffset(projectionId, offset) }
+        source.via(handlerFlow).mapAsync(1) { offset =>
+          offsetStore.saveOffset(projectionId, offset)
+        }
       case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
         source
           .via(handlerFlow)
           .groupedWithin(afterEnvelopes, orAfterDuration)
           .collect { case grouped if grouped.nonEmpty => grouped.last }
-          .mapAsync(parallelism = 1) { offset => offsetStore.saveOffset(projectionId, offset) }
+          .mapAsync(parallelism = 1) { offset =>
+            offsetStore.saveOffset(projectionId, offset)
+          }
       case AtMostOnce =>
         source
           .mapAsync(parallelism = 1) {

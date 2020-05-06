@@ -7,7 +7,9 @@ package akka.projection.cassandra
 import java.time.Instant
 import java.util.UUID
 
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import scala.util.Try
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -35,9 +37,13 @@ class CassandraOffsetStoreSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
+
+    // don't use futureValue (patience) here because it can take a while to start the test container
+    Await.result(ContainerSessionProvider.started, 30.seconds)
+
     // reason for setSchemaMetadataEnabled is that it speed up tests
     session.underlying().map(_.setSchemaMetadataEnabled(false)).futureValue
-    offsetStore.createKeyspaceAndTable().futureValue
+    Await.result(offsetStore.createKeyspaceAndTable(), 15.seconds)
     session.underlying().map(_.setSchemaMetadataEnabled(null)).futureValue
   }
 

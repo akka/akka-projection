@@ -19,6 +19,7 @@ object Dependencies {
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
     val testContainersScala = "0.36.1"
+    val junit = "4.12"
   }
 
   object Compile {
@@ -38,7 +39,9 @@ object Dependencies {
 
   object Test {
     val akkaTypedTestkit = Compile.akkaTypedTestkit % sbt.Test
-    val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
+    val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
+    val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % sbt.Test
+    val junit = "junit" % "junit" % Versions.junit % sbt.Test
     val h2Driver = "com.h2database" % "h2" % "1.4.200" % sbt.Test
     val logback = "ch.qos.logback" % "logback-classic" % "1.2.3" % sbt.Test
     val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
@@ -50,9 +53,10 @@ object Dependencies {
 
   private val deps = libraryDependencies
 
-  val core = deps ++= Seq(Compile.akkaStream, Compile.akkaPersistenceQuery, Test.scalaTest)
+  val core = deps ++= Seq(Compile.akkaStream, Compile.akkaPersistenceQuery, Test.scalatest)
 
-  val testKit = deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalaTest)
+  val testKit =
+    deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalatest, Test.scalatestJUnit, Test.junit)
 
   val eventSourced =
     deps ++= Seq(Compile.akkaPersistenceQuery)
@@ -71,7 +75,7 @@ object Dependencies {
   val kafka =
     deps ++= Seq(
         Compile.alpakkaKafka,
-        Test.scalaTest,
+        Test.scalatest,
         Test.akkaTypedTestkit,
         Test.akkaStreamTestkit,
         Test.alpakkaKafkaTestkit,
