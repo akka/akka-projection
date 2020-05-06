@@ -23,19 +23,56 @@ object SlickProjection {
   def exactlyOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      databaseConfig: DatabaseConfig[P])(eventHandler: Envelope => DBIO[Done]): Projection[Envelope] =
-    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, SlickProjectionImpl.ExactlyOnce, eventHandler)
+      databaseConfig: DatabaseConfig[P],
+      handler: SlickHandler[Envelope]): Projection[Envelope] =
+    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, SlickProjectionImpl.ExactlyOnce, handler)
 
   def atLeastOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
       saveOffsetAfterEnvelopes: Int,
-      saveOffsetAfterDuration: FiniteDuration)(eventHandler: Envelope => DBIO[Done]): Projection[Envelope] =
+      saveOffsetAfterDuration: FiniteDuration,
+      handler: SlickHandler[Envelope]): Projection[Envelope] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
       databaseConfig,
       SlickProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
-      eventHandler)
+      handler)
+
+}
+
+object SlickHandler {
+
+  /** SlickEventHandler that can be define from a simple function */
+  private class SlickHandlerSAM[Envelope](handler: Envelope => DBIO[Done]) extends SlickHandler[Envelope] {
+    override def handle(envelope: Envelope): DBIO[Done] = handler(envelope)
+  }
+
+  def apply[Envelope](handler: Envelope => DBIO[Done]): SlickHandler[Envelope] = new SlickHandlerSAM(handler)
+}
+
+trait SlickHandler[Envelope] {
+
+  def handle(envelope: Envelope): DBIO[Done]
+
+  def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy = {
+    val _ = envelope // need it otherwise compiler says no
+    val _ = throwable
+    RecoverStrategy.fail
+  }
+}
+
+sealed trait RecoverStrategy
+case object Fail extends RecoverStrategy
+case object Skip extends RecoverStrategy
+final case class RetryAndFail(retries: Int, delay: FiniteDuration) extends RecoverStrategy
+final case class RetryAndSkip(retries: Int, delay: FiniteDuration) extends RecoverStrategy
+
+object RecoverStrategy {
+  def fail: RecoverStrategy = Fail
+  def skip: RecoverStrategy = Skip
+  def retryAndFail(retries: Int, delay: FiniteDuration): RecoverStrategy = RetryAndFail(retries, delay)
+  def retryAndSkip(retries: Int, delay: FiniteDuration): RecoverStrategy = RetryAndSkip(retries, delay)
 }

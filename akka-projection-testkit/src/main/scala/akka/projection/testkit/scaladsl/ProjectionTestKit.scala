@@ -2,7 +2,7 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.testkit
+package akka.projection.testkit.scaladsl
 
 import scala.concurrent.Await
 import scala.concurrent.duration._

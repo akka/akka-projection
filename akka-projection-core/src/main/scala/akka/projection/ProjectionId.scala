@@ -4,6 +4,8 @@
 
 package akka.projection
 
+import java.util.stream.Collectors
+
 import scala.collection.immutable
 
 object ProjectionId {
@@ -22,12 +24,30 @@ object ProjectionId {
    *
    * @param name - the projection name
    * @param key  - the unique key. The key must be unique for a projection name.
-   * @return
+   * @return ProjectionId
    */
   def apply(name: String, key: String): ProjectionId = new ProjectionId(name, key)
 
   /**
-   *  Constructs a Set of ProjectionId.
+   * Java API: Constructs a ProjectionId.
+   *
+   * A ProjectionId is composed by a name and a key.
+   *
+   * The projection name is shared across multiple instances of [[Projection]] with different keys.
+   * For example, a "user-view" could be the name of a projection.
+   *
+   * The key must be unique for a projection name.
+   * For example, a "user-view" could have multiple projections with different keys representing different partitions,
+   * shards, etc.
+   *
+   * @param name - the projection name
+   * @param key  - the unique key. The key must be unique for a projection name.
+   * @return a ProjectionId
+   */
+  def of(name: String, key: String): ProjectionId = apply(name, key)
+
+  /**
+   * Constructs a Set of ProjectionId.
    *
    * A ProjectionId is composed by a name and a key.
    *
@@ -40,9 +60,32 @@ object ProjectionId {
    *
    * @param name - the projection name
    * @param keys  - the Set of keys to associated with the passed name.
+   * @return an [[immutable.Set]] of [[ProjectionId]]s
    */
   def apply(name: String, keys: immutable.Set[String]): immutable.Set[ProjectionId] =
     keys.map(key => new ProjectionId(name, key))
+
+  /**
+   * Java API: Constructs a Set of ProjectionId.
+   *
+   * A ProjectionId is composed by a name and a key.
+   *
+   * The projection name is shared across multiple instances of [[Projection]] with different keys.
+   * For example, a "user-view" could be the name of a projection.
+   *
+   * The key must be unique for a projection name.
+   * For example, a "user-view" could have multiple projections with different keys representing different partitions,
+   * shards, etc.
+   *
+   * @param name - the projection name
+   * @param keys  - the Set of keys to associated with the passed name.
+   * @return an [[java.util.Set]] of [[ProjectionId]]s
+   */
+  def of(name: String, keys: java.util.Set[String]): java.util.Set[ProjectionId] =
+    keys
+      .stream()
+      .map(key => new ProjectionId(name, key))
+      .collect(Collectors.toSet())
 }
 
 final class ProjectionId private (val name: String, val key: String) {
