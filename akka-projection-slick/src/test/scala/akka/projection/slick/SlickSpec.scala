@@ -9,7 +9,7 @@ import scala.concurrent.duration._
 
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.slick.internal.SlickOffsetStore
-import akka.projection.testkit.ProjectionTestKit
+import akka.projection.testkit.scaladsl.ProjectionTestKit
 import com.typesafe.config.Config
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
