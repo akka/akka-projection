@@ -129,9 +129,11 @@ class CassandraProjectionSpec
 
     // don't use futureValue (patience) here because it can take a while to start the test container
     Await.result(ContainerSessionProvider.started, 30.seconds)
-
-    offsetStore.createKeyspaceAndTable().futureValue
-    repository.createKeyspaceAndTable().futureValue
+    // reason for setSchemaMetadataEnabled is that it speed up tests
+    session.underlying().map(_.setSchemaMetadataEnabled(false)).futureValue
+    Await.result(offsetStore.createKeyspaceAndTable(), 15.seconds)
+    Await.result(repository.createKeyspaceAndTable(), 15.seconds)
+    session.underlying().map(_.setSchemaMetadataEnabled(null)).futureValue
   }
 
   override protected def afterAll(): Unit = {

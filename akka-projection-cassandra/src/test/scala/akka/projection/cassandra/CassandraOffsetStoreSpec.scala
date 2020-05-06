@@ -43,7 +43,7 @@ class CassandraOffsetStoreSpec
 
     // reason for setSchemaMetadataEnabled is that it speed up tests
     session.underlying().map(_.setSchemaMetadataEnabled(false)).futureValue
-    offsetStore.createKeyspaceAndTable().futureValue
+    Await.result(offsetStore.createKeyspaceAndTable(), 15.seconds)
     session.underlying().map(_.setSchemaMetadataEnabled(null)).futureValue
   }
 
