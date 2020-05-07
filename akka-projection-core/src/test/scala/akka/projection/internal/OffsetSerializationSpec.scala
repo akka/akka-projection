@@ -67,7 +67,7 @@ class OffsetSerializationSpec extends TestSuite with Matchers with AnyWordSpecLi
     "convert offsets of type MergeableOffset" in {
       val surrogateProjectionKey = "user-group-topic-1"
       val mergeableOffset = MergeableOffset(Map(surrogateProjectionKey -> 1L))
-      val actualRep = toStorageRepresentation[MergeableOffset[Long]](id, mergeableOffset)
+      val actualRep = toStorageRepresentation(id, mergeableOffset)
 
       withClue("return a storage representation of MultipleOffsets") {
         actualRep.getClass shouldBe classOf[MultipleOffsets]

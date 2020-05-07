@@ -5,8 +5,12 @@
 package akka.projection.eventsourced.javadsl
 
 import java.util.Optional
+import java.util.concurrent.CompletionStage
 
-import akka.NotUsed
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.jdk.FutureConverters._
+
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
@@ -27,20 +31,29 @@ object EventSourcedProvider {
     val eventsByTagQuery =
       PersistenceQuery(systemProvider).getReadJournalFor(classOf[EventsByTagQuery], readJournalPluginId)
 
-    new EventsByTagSourceProvider(eventsByTagQuery, tag)
+    new EventsByTagSourceProvider(systemProvider, eventsByTagQuery, tag)
   }
 
   /**
    * INTERNAL API
    */
   @InternalApi
-  private class EventsByTagSourceProvider[Event](eventsByTagQuery: EventsByTagQuery, tag: String)
+  private class EventsByTagSourceProvider[Event](
+      systemProvider: ClassicActorSystemProvider,
+      eventsByTagQuery: EventsByTagQuery,
+      tag: String)
       extends SourceProvider[Offset, EventEnvelope[Event]] {
+    implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
 
-    override def source(offsetOpt: Optional[Offset]): Source[EventEnvelope[Event], NotUsed] =
-      eventsByTagQuery
-        .eventsByTag(tag, offsetOpt.orElse(NoOffset))
-        .map(env => EventEnvelope(env))
+    override def source(
+        offsetAsync: () => CompletionStage[Optional[Offset]]): CompletionStage[Source[EventEnvelope[Event], _]] = {
+      val source: Future[Source[EventEnvelope[Event], _]] = offsetAsync().asScala.map { offsetOpt =>
+        eventsByTagQuery
+          .eventsByTag(tag, offsetOpt.orElse(NoOffset))
+          .map(env => EventEnvelope(env))
+      }
+      source.asJava
+    }
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
   }
