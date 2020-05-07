@@ -14,10 +14,6 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="org.apache.cassandra" level="ERROR" />
-    <logger name="com.datastax" level="INFO" />
-    <logger name="io.netty" level="ERROR" />
-
     <root level="DEBUG">
         <appender-ref ref="CapturingAppender" />
     </root>
