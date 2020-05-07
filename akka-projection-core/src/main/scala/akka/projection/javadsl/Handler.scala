@@ -7,8 +7,10 @@ package akka.projection.javadsl
 import java.util.concurrent.CompletionStage
 
 import akka.Done
+import akka.annotation.ApiMayChange
 import akka.projection.HandlerRecovery
 
+@ApiMayChange
 object Handler {
 
   /** Handler that can be define from a simple function */
@@ -29,6 +31,7 @@ object Handler {
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
  */
+@ApiMayChange
 abstract class Handler[Envelope] extends HandlerRecovery[Envelope] {
   def process(envelope: Envelope): CompletionStage[Done]
 }

@@ -15,7 +15,6 @@ import akka.pattern.after
 import akka.pattern.retry
 import akka.projection.HandlerRecovery
 import akka.projection.HandlerRecoveryStrategy
-import akka.projection.scaladsl.SourceProvider
 
 /**
  * INTERNAL API
@@ -27,7 +26,7 @@ import akka.projection.scaladsl.SourceProvider
   def applyUserRecovery[Offset, Envelope](
       handler: HandlerRecovery[Envelope],
       envelope: Envelope,
-      sourceProvider: SourceProvider[Offset, Envelope],
+      offset: Offset,
       logger: LoggingAdapter,
       futureCallback: () => Future[Done])(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
     import HandlerRecoveryStrategy.Internal._
@@ -50,61 +49,60 @@ import akka.projection.scaladsl.SourceProvider
 
     firstAttempt.recoverWith {
       case err =>
-        val failedOffset = sourceProvider.extractOffset(envelope)
-
         handler.onFailure(envelope, err) match {
           case Fail =>
             logger.error(
               cause = err,
               template =
                 "Failed to process envelope with offset [{}]. Projection will stop as defined by recovery strategy.",
-              failedOffset)
+              offset)
             firstAttempt
 
           case Skip =>
             logger.warning(
               "Failed to process envelope with offset [{}]. " +
               "Envelope will be skipped as defined by recovery strategy. Exception: {}",
-              failedOffset,
+              offset,
               err)
             futDone
 
           case RetryAndFail(retries, delay) =>
-            logger.error(
-              cause = err,
-              template = "First attempt to process envelope with offset [{}] failed. Will retry [{}] time(s).",
-              failedOffset,
-              retries)
+            logger.warning(
+              "First attempt to process envelope with offset [{}] failed. Will retry [{}] time(s). " +
+              "Exception: {}",
+              offset,
+              retries,
+              err)
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val retied = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delay))
-            retied.failed.foreach { exception =>
+            val retried = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delay))
+            retried.failed.foreach { exception =>
               logger.error(
                 cause = exception,
                 template =
                   "Failed to process envelope with offset [{}] after [{}] attempts. " +
                   "Projection will stop as defined by recovery strategy.",
-                failedOffset,
+                offset,
                 retries + 1)
             }
-            retied
+            retried
 
           case RetryAndSkip(retries, delay) =>
-            logger.error(
-              cause = err,
-              template = "First attempt to process envelope with offset [{}] failed. Will retry [{}] time(s).",
-              failedOffset,
-              retries)
+            logger.warning(
+              "First attempt to process envelope with offset [{}] failed. Will retry [{}] time(s). Exception: {}",
+              offset,
+              retries,
+              err)
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val retied = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delay))
-            retied.failed.foreach { exception =>
+            val retried = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delay))
+            retried.failed.foreach { exception =>
               logger.warning(
                 "Failed to process envelope with offset [{}] after [{}] attempts. " +
                 "Envelope will be skipped as defined by recovery strategy. Last exception: {}",
-                failedOffset,
+                offset,
                 retries + 1,
                 exception)
             }

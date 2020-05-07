@@ -83,27 +83,28 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     implicit val dispatcher = systemProvider.classicSystem.dispatcher
 
-    def applyUserRecovery(envelope: Envelope)(futureCallback: () => Future[Done]): Future[Done] =
-      HandlerRecoveryImpl.applyUserRecovery[Offset, Envelope](handler, envelope, sourceProvider, logger, futureCallback)
+    def applyUserRecovery(envelope: Envelope, offset: Offset)(futureCallback: () => Future[Done]): Future[Done] =
+      HandlerRecoveryImpl.applyUserRecovery[Offset, Envelope](handler, envelope, offset, logger, futureCallback)
 
     def processEnvelopeAndStoreOffsetInSameTransaction(env: Envelope): Future[Done] = {
+      val offset = sourceProvider.extractOffset(env)
       // run user function and offset storage on the same transaction
       // any side-effect in user function is at-least-once
       val txDBIO =
         offsetStore
-          .saveOffset(projectionId, sourceProvider.extractOffset(env))
+          .saveOffset(projectionId, offset)
           .flatMap(_ => handler.process(env))
           .transactionally
 
-      applyUserRecovery(env) { () =>
+      applyUserRecovery(env, offset) { () =>
         databaseConfig.db.run(txDBIO).map(_ => Done)
       }
     }
 
-    def processEnvelope(env: Envelope): Future[Done] = {
+    def processEnvelope(env: Envelope, offset: Offset): Future[Done] = {
       // user function in one transaction (may be composed of several DBIOAction)
       val dbio = handler.process(env).transactionally
-      applyUserRecovery(env) { () =>
+      applyUserRecovery(env, offset) { () =>
         databaseConfig.db.run(dbio).map(_ => Done)
       }
     }
@@ -133,13 +134,15 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           // optimization of general AtLeastOnce case, still separate transactions for processEnvelope
           // and storeOffset
           Flow[Envelope].mapAsync(1) { env =>
-            processEnvelope(env).flatMap(_ => storeOffset(sourceProvider.extractOffset(env)))
+            val offset = sourceProvider.extractOffset(env)
+            processEnvelope(env, offset).flatMap(_ => storeOffset(offset))
           }
 
         case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
           Flow[Envelope]
             .mapAsync(1) { env =>
-              processEnvelope(env).map(_ => sourceProvider.extractOffset(env))
+              val offset = sourceProvider.extractOffset(env)
+              processEnvelope(env, offset).map(_ => offset)
             }
             .groupedWithin(afterEnvelopes, orAfterDuration)
             .collect { case grouped if grouped.nonEmpty => grouped.last }

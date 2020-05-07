@@ -75,6 +75,7 @@ import akka.stream.scaladsl.Source
     handler: Handler[Envelope])
     extends Projection[Envelope] {
   import CassandraProjectionImpl._
+  import HandlerRecoveryImpl.applyUserRecovery
 
   private val killSwitch = KillSwitches.shared(projectionId.id)
   private val promiseToStop: Promise[Done] = Promise()
@@ -115,9 +116,6 @@ import akka.stream.scaladsl.Source
 
     val lastKnownOffset: Future[Option[Offset]] = offsetStore.readOffset(projectionId)
 
-    def applyUserRecovery(h: Handler[Envelope], envelope: Envelope, futureCallback: () => Future[Done]): Future[Done] =
-      HandlerRecoveryImpl.applyUserRecovery[Offset, Envelope](h, envelope, sourceProvider, logger, futureCallback)
-
     val source: Source[(Offset, Envelope), NotUsed] =
       Source
         .futureSource(lastKnownOffset.map(sourceProvider.source))
@@ -128,7 +126,7 @@ import akka.stream.scaladsl.Source
     val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
       Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
         case (offset, envelope) =>
-          applyUserRecovery(handler, envelope, () => handler.process(envelope))
+          applyUserRecovery(handler, envelope, offset, logger, () => handler.process(envelope))
             .map(_ => offset)
       }
 
@@ -154,7 +152,14 @@ import akka.stream.scaladsl.Source
             case (offset, envelope) =>
               offsetStore
                 .saveOffset(projectionId, offset)
-                .flatMap(_ => applyUserRecovery(atMostOnceHandler, envelope, () => atMostOnceHandler.process(envelope)))
+                .flatMap(
+                  _ =>
+                    applyUserRecovery(
+                      atMostOnceHandler,
+                      envelope,
+                      offset,
+                      logger,
+                      () => atMostOnceHandler.process(envelope)))
           }
           .map(_ => Done)
     }
