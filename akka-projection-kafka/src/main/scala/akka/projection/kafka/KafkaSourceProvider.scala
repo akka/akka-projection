@@ -15,15 +15,14 @@ import akka.kafka.ConsumerSettings
 import akka.kafka.Subscriptions
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.MetadataClient
-import akka.projection.internal.MergeableOffsets
-import akka.projection.internal.MergeableOffsets.SurrogateProjectionKey
+import akka.projection.internal.MergeableOffset
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 
 object KafkaSourceProvider {
-  private type ReadOffsetsHandler = () => Future[Option[MergeableOffsets.Offset[Long]]]
+  private type ReadOffsetsHandler = () => Future[Option[MergeableOffset[Long]]]
   private val RegexTp = """(.+)-(\d+)""".r
   private val KafkaMetadataTimeout = 10.seconds // TODO: get from config
 
@@ -33,7 +32,7 @@ object KafkaSourceProvider {
   def apply[K, V](
       systemProvider: ClassicActorSystemProvider,
       settings: ConsumerSettings[K, V],
-      topics: Set[String]): SourceProvider[MergeableOffsets.Offset[Long], ConsumerRecord[K, V]] =
+      topics: Set[String]): SourceProvider[MergeableOffset[Long], ConsumerRecord[K, V]] =
     new KafkaSourceProvider[K, V](systemProvider, settings, topics)
 }
 
@@ -42,7 +41,7 @@ class KafkaSourceProvider[K, V] private[kafka] (
     systemProvider: ClassicActorSystemProvider,
     settings: ConsumerSettings[K, V],
     topics: Set[String])
-    extends SourceProvider[MergeableOffsets.Offset[Long], ConsumerRecord[K, V]] {
+    extends SourceProvider[MergeableOffset[Long], ConsumerRecord[K, V]] {
   import KafkaSourceProvider._
 
   implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
@@ -63,9 +62,9 @@ class KafkaSourceProvider[K, V] private[kafka] (
     }
   }
 
-  override def extractOffset(envelope: ConsumerRecord[K, V]): MergeableOffsets.Offset[Long] = {
+  override def extractOffset(envelope: ConsumerRecord[K, V]): MergeableOffset[Long] = {
     val key = envelope.topic() + "-" + envelope.partition()
-    MergeableOffsets.Offset(Map(key -> envelope.offset()))
+    MergeableOffset(Map(key -> envelope.offset()))
   }
 
   private def getOffsetsOnAssign(
@@ -86,7 +85,7 @@ class KafkaSourceProvider[K, V] private[kafka] (
           case NonFatal(ex) => throw new RuntimeException("External offsets could not be retrieved", ex)
         }
 
-  private def parseProjectionKey(surrogateProjectionKey: SurrogateProjectionKey): TopicPartition = {
+  private def parseProjectionKey(surrogateProjectionKey: String): TopicPartition = {
     surrogateProjectionKey match {
       case RegexTp(topic, partition) => new TopicPartition(topic, partition.toInt)
       case _ =>

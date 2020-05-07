@@ -39,7 +39,7 @@ import akka.projection.ProjectionId
           case SingleOffset(id, manifest, offsetStr, _) =>
             id.key -> fromStorageRepresentation[Inner](offsetStr, manifest)
         }.toMap
-        MergeableOffsets.Offset[Inner](offsets).asInstanceOf[Offset]
+        MergeableOffset[Inner](offsets).asInstanceOf[Offset]
     }
     offset
   }
@@ -71,7 +71,7 @@ import akka.projection.ProjectionId
       case i: Int                   => SingleOffset(id, IntManifest, i.toString, mergeable)
       case seq: query.Sequence      => SingleOffset(id, SequenceManifest, seq.value.toString, mergeable)
       case tbu: query.TimeBasedUUID => SingleOffset(id, TimeBasedUUIDManifest, tbu.value.toString, mergeable)
-      case mrg: MergeableOffsets.Offset[_] =>
+      case mrg: MergeableOffset[_] =>
         MultipleOffsets(mrg.entries.map {
           case (surrogateKey, innerOffset) =>
             toStorageRepresentation(ProjectionId(id.name, surrogateKey), innerOffset, mergeable = true)

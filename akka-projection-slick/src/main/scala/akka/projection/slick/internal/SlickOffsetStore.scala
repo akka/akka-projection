@@ -12,7 +12,7 @@ import scala.concurrent.Future
 
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
-import akka.projection.internal.MergeableOffsets
+import akka.projection.internal.MergeableOffset
 import akka.projection.internal.OffsetSerialization
 import slick.jdbc.JdbcProfile
 
@@ -43,7 +43,7 @@ import slick.jdbc.JdbcProfile
     results.map {
       case Nil => None
       case reps if reps.forall(_.mergeable) =>
-        Some(fromStorageRepresentation[MergeableOffsets.Offset[_], Offset](MultipleOffsets(reps)).asInstanceOf[Offset])
+        Some(fromStorageRepresentation[MergeableOffset[_], Offset](MultipleOffsets(reps)).asInstanceOf[Offset])
       case reps =>
         reps.find(_.id == projectionId) match {
           case Some(rep) => Some(fromStorageRepresentation[Offset, Offset](rep))

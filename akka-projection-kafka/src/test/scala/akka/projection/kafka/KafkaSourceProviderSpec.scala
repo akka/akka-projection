@@ -6,7 +6,7 @@ package akka.projection.kafka
 
 import scala.concurrent.Future
 
-import akka.projection.internal.MergeableOffsets
+import akka.projection.internal.MergeableOffset
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink
@@ -21,7 +21,7 @@ class KafkaSourceProviderSpec extends KafkaSpecBase() {
       awaitProduce(produce(topic, 1 to 100))
 
       val provider = KafkaSourceProvider(system, settings, Set(topic))
-      val readOffsetsHandler = () => Future.successful(Option(MergeableOffsets.Offset(Map(s"$topic-0" -> 5L))))
+      val readOffsetsHandler = () => Future.successful(Option(MergeableOffset(Map(s"$topic-0" -> 5L))))
       val probe = Source
         .futureSource(provider.source(readOffsetsHandler))
         .runWith(TestSink.probe)

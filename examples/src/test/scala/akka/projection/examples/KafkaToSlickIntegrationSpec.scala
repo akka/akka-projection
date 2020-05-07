@@ -13,7 +13,7 @@ import akka.Done
 import akka.kafka.ConsumerSettings
 import akka.kafka.scaladsl.Producer
 import akka.projection.ProjectionId
-import akka.projection.internal.MergeableOffsets
+import akka.projection.internal.MergeableOffset
 import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
 import akka.projection.scaladsl.SourceProvider
@@ -134,7 +134,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
           .withBootstrapServers(bootstrapServers)
           .withGroupId(groupId)
 
-      val kafkaSourceProvider: SourceProvider[MergeableOffsets.Offset[Long], ConsumerRecord[String, String]] =
+      val kafkaSourceProvider: SourceProvider[MergeableOffset[Long], ConsumerRecord[String, String]] =
         KafkaSourceProvider(system, consumerSettings, Set(topicName))
 
       val slickProjection =
@@ -166,8 +166,8 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
         }
 
         withClue("check - all offsets were seen") {
-          val offset = offsetStore.readOffset[MergeableOffsets.Offset[Long]](projectionId).futureValue.value
-          offset shouldBe MergeableOffsets.Offset(
+          val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId).futureValue.value
+          offset shouldBe MergeableOffset(
             Map(
               s"$topicName-0" -> offsetForUser(user1),
               s"$topicName-1" -> offsetForUser(user2),
