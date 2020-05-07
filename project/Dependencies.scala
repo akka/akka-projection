@@ -65,5 +65,6 @@ object Dependencies {
         Test.akkaTypedTestkit,
         Test.logback,
         Test.testContainers,
-        Test.cassandraContainer)
+        Test.cassandraContainer,
+        Test.scalatestJUnit)
 }
