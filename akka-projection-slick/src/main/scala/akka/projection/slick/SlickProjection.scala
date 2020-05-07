@@ -9,6 +9,7 @@ import scala.reflect.ClassTag
 
 import akka.Done
 import akka.annotation.ApiMayChange
+import akka.projection.HandlerRecovery
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider
@@ -77,28 +78,13 @@ object SlickHandler {
  * It is invoked by the `Projection` machinery one envelope at a time and visibility
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
+ *
+ * Error handling strategy for when processing an `Envelope` fails can be defined in the `Handler` by
+ * overriding [[HandlerRecovery.onFailure]].
  */
 @ApiMayChange
-trait SlickHandler[Envelope] {
+trait SlickHandler[Envelope] extends HandlerRecovery[Envelope] {
 
   def process(envelope: Envelope): DBIO[Done]
 
-  def onFailure(envelope: Envelope, throwable: Throwable): RecoverStrategy = {
-    val _ = envelope // need it otherwise compiler says no
-    val _ = throwable
-    RecoverStrategy.fail
-  }
-}
-
-sealed trait RecoverStrategy
-case object Fail extends RecoverStrategy
-case object Skip extends RecoverStrategy
-final case class RetryAndFail(retries: Int, delay: FiniteDuration) extends RecoverStrategy
-final case class RetryAndSkip(retries: Int, delay: FiniteDuration) extends RecoverStrategy
-
-object RecoverStrategy {
-  def fail: RecoverStrategy = Fail
-  def skip: RecoverStrategy = Skip
-  def retryAndFail(retries: Int, delay: FiniteDuration): RecoverStrategy = RetryAndFail(retries, delay)
-  def retryAndSkip(retries: Int, delay: FiniteDuration): RecoverStrategy = RetryAndSkip(retries, delay)
 }

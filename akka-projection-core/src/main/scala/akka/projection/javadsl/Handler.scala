@@ -7,6 +7,18 @@ package akka.projection.javadsl
 import java.util.concurrent.CompletionStage
 
 import akka.Done
+import akka.projection.HandlerRecovery
+
+object Handler {
+
+  /** Handler that can be define from a simple function */
+  private class HandlerFunction[Envelope](handler: Envelope => CompletionStage[Done]) extends Handler[Envelope] {
+    override def process(envelope: Envelope): CompletionStage[Done] = handler(envelope)
+  }
+
+  def fromFunction[Envelope](handler: Envelope => CompletionStage[Done]): Handler[Envelope] =
+    new HandlerFunction(handler)
+}
 
 /**
  * Implement this interface for the Envelope handler in the `Projection`. Some projections
@@ -17,6 +29,6 @@ import akka.Done
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
  */
-trait Handler[Envelope] {
+abstract class Handler[Envelope] extends HandlerRecovery[Envelope] {
   def process(envelope: Envelope): CompletionStage[Done]
 }

@@ -48,7 +48,8 @@ object Dependencies {
 
   private val deps = libraryDependencies
 
-  val core = deps ++= Seq(Compile.akkaStream, Compile.akkaPersistenceQuery, Test.scalatest)
+  val core =
+    deps ++= Seq(Compile.akkaStream, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.logback, Test.scalatest)
 
   val testKit =
     deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalatest, Test.scalatestJUnit, Test.junit)

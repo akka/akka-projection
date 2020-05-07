@@ -5,6 +5,7 @@
 package akka.projection.cassandra
 
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
@@ -18,8 +19,10 @@ import scala.util.Try
 
 import akka.Done
 import akka.NotUsed
+import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
@@ -167,12 +170,24 @@ class CassandraProjectionSpec
 
   private val concatHandlerFail4Msg = "fail on fourth envelope"
 
-  private def concatHandlerFail4(): Handler[Envelope] = {
-    Handler[Envelope] { envelope =>
-      if (envelope.offset == 4L) throw new RuntimeException(concatHandlerFail4Msg)
+  class ConcatHandlerFail4(recoveryStrategy: HandlerRecoveryStrategy) extends Handler[Envelope] {
+    private val _attempts = new AtomicInteger()
+    def attempts: Int = _attempts.get
+
+    override def process(envelope: Envelope): Future[Done] = {
+      if (envelope.offset == 4L) {
+        _attempts.incrementAndGet()
+        throw TestException(concatHandlerFail4Msg + s" after $attempts attempts")
+      }
       repository.concatToText(envelope.id, envelope.message)
     }
+
+    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = recoveryStrategy
   }
+
+  private def concatHandlerFail4(
+      recoveryStrategy: HandlerRecoveryStrategy = HandlerRecoveryStrategy.fail): ConcatHandlerFail4 =
+    new ConcatHandlerFail4(recoveryStrategy)
 
   "A Cassandra at-least-once projection" must {
 
@@ -227,7 +242,7 @@ class CassandraProjectionSpec
       withClue("check: projection failed with stream failure") {
         val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
         sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage shouldBe concatHandlerFail4Msg
+        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -246,7 +261,7 @@ class CassandraProjectionSpec
             sourceProvider(entityId),
             saveOffsetAfterEnvelopes = 1,
             saveOffsetAfterDuration = Duration.Zero,
-            concatHandler)
+            concatHandler())
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -265,7 +280,6 @@ class CassandraProjectionSpec
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](
@@ -283,7 +297,7 @@ class CassandraProjectionSpec
       withClue("check: projection failed with stream failure") {
         val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
         sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage shouldBe streamFailureMsg
+        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -405,6 +419,97 @@ class CassandraProjectionSpec
 
       sinkProbe.cancel()
     }
+
+    "skip failing events when using RecoveryStrategy.skip" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(entityId),
+            saveOffsetAfterEnvelopes = 2,
+            saveOffsetAfterDuration = 1.minute,
+            concatHandlerFail4(HandlerRecoveryStrategy.skip))
+
+      projectionTestKit.run(projection) {
+        withClue("checking: all expected values were concatenated") {
+          val concatStr = repository.findById(entityId).futureValue.get
+          // note that 4th is skipped
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+
+      withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
+        offset shouldBe 6L
+      }
+    }
+
+    "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handler = concatHandlerFail4(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(entityId),
+            saveOffsetAfterEnvelopes = 2,
+            saveOffsetAfterDuration = 1.minute,
+            handler)
+
+      projectionTestKit.run(projection) {
+        withClue("checking: all expected values were concatenated") {
+          val concatStr = repository.findById(entityId).futureValue.get
+          // note that 4th is skipped
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+
+      withClue("check - event handler did failed 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        handler.attempts shouldBe 1 + 3
+      }
+
+      withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
+        offset shouldBe 6L
+      }
+    }
+
+    "fail after retrying when using RecoveryStrategy.retryAndFail" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handler = concatHandlerFail4(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(entityId),
+            saveOffsetAfterEnvelopes = 2,
+            saveOffsetAfterDuration = 1.minute,
+            handler)
+
+      intercept[TestException] {
+        projectionTestKit.run(projection) {
+          withClue("checking: all expected values were concatenated") {
+            val concatStr = repository.findById(entityId).futureValue.get
+            concatStr.text shouldBe "abc|def|ghi"
+          }
+        }
+      }
+
+      withClue("check - event handler did failed 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        handler.attempts shouldBe 1 + 3
+      }
+    }
   }
 
   "A Cassandra at-most-once projection" must {
@@ -448,7 +553,7 @@ class CassandraProjectionSpec
       withClue("check: projection failed with stream failure") {
         val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
         sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage shouldBe concatHandlerFail4Msg
+        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get

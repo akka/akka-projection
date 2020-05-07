@@ -7,8 +7,10 @@ package akka.projection.scaladsl
 import scala.concurrent.Future
 
 import akka.Done
+import akka.annotation.ApiMayChange
+import akka.projection.HandlerRecovery
 
-object Handler {
+@ApiMayChange object Handler {
 
   /** Handler that can be define from a simple function */
   private class HandlerFunction[Envelope](handler: Envelope => Future[Done]) extends Handler[Envelope] {
@@ -26,7 +28,10 @@ object Handler {
  * It is invoked by the `Projection` machinery one envelope at a time and visibility
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
+ *
+ * Error handling strategy for when processing an `Envelope` fails can be defined in the `Handler` by
+ * overriding [[HandlerRecovery.onFailure]].
  */
-trait Handler[Envelope] {
+@ApiMayChange trait Handler[Envelope] extends HandlerRecovery[Envelope] {
   def process(envelope: Envelope): Future[Done]
 }

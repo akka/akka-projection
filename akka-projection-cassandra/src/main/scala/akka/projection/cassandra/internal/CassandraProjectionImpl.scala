@@ -16,8 +16,10 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
+import akka.event.Logging
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
@@ -74,6 +76,8 @@ import akka.stream.scaladsl.Source
     // FIXME maybe use the session-dispatcher config
     implicit val ec: ExecutionContext = system.dispatcher
 
+    val logger = Logging(systemProvider.classicSystem, this.getClass)
+
     // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
     val sessionConfigPath = "akka.projection.cassandra"
     // FIXME session look could be moved to CassandraOffsetStore if that's better
@@ -82,6 +86,9 @@ import akka.stream.scaladsl.Source
     val offsetStore = new CassandraOffsetStore(session)
 
     val lastKnownOffset: Future[Option[Offset]] = offsetStore.readOffset(projectionId)
+
+    def applyUserRecovery(envelope: Envelope, futureCallback: () => Future[Done]): Future[Done] =
+      HandlerRecoveryImpl.applyUserRecovery[Offset, Envelope](handler, envelope, sourceProvider, logger, futureCallback)
 
     val source: Source[(Offset, Envelope), NotUsed] =
       Source
@@ -92,11 +99,14 @@ import akka.stream.scaladsl.Source
 
     val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
       Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
-        case (offset, envelope) => handler.process(envelope).map(_ => offset)
+        case (offset, envelope) =>
+          applyUserRecovery(envelope, () => handler.process(envelope))
+            .map(_ => offset)
       }
 
     val composedSource: Source[Done, NotUsed] = strategy match {
       case AtLeastOnce(1, _) =>
+        // optimization of general AtLeastOnce case
         source.via(handlerFlow).mapAsync(1) { offset =>
           offsetStore.saveOffset(projectionId, offset)
         }
@@ -111,9 +121,11 @@ import akka.stream.scaladsl.Source
       case AtMostOnce =>
         source
           .mapAsync(parallelism = 1) {
-            case (offset, envelope) => offsetStore.saveOffset(projectionId, offset).map(_ => offset -> envelope)
+            case (offset, envelope) =>
+              offsetStore
+                .saveOffset(projectionId, offset)
+                .flatMap(_ => applyUserRecovery(envelope, () => handler.process(envelope)))
           }
-          .via(handlerFlow)
           .map(_ => Done)
     }
 
