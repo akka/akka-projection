@@ -8,6 +8,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
+import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -129,11 +130,15 @@ class CassandraProjectionSpec
 
     // don't use futureValue (patience) here because it can take a while to start the test container
     Await.result(ContainerSessionProvider.started, 30.seconds)
-    // reason for setSchemaMetadataEnabled is that it speed up tests
-    session.underlying().map(_.setSchemaMetadataEnabled(false)).futureValue
-    Await.result(offsetStore.createKeyspaceAndTable(), 15.seconds)
-    Await.result(repository.createKeyspaceAndTable(), 15.seconds)
-    session.underlying().map(_.setSchemaMetadataEnabled(null)).futureValue
+
+    Await.result(for {
+      session <- session.underlying()
+      // reason for setSchemaMetadataEnabled is that it speed up tests
+      _ <- session.setSchemaMetadataEnabled(false).toScala
+      _ <- offsetStore.createKeyspaceAndTable()
+      _ <- repository.createKeyspaceAndTable()
+      _ <- session.setSchemaMetadataEnabled(null).toScala
+    } yield Done, 30.seconds)
   }
 
   override protected def afterAll(): Unit = {

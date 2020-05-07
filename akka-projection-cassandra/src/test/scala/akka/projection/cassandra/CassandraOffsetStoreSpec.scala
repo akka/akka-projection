@@ -7,11 +7,13 @@ package akka.projection.cassandra
 import java.time.Instant
 import java.util.UUID
 
+import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Try
 
+import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Sequence
@@ -40,6 +42,14 @@ class CassandraOffsetStoreSpec
 
     // don't use futureValue (patience) here because it can take a while to start the test container
     Await.result(ContainerSessionProvider.started, 30.seconds)
+
+    Await.result(for {
+      session <- session.underlying()
+      // reason for setSchemaMetadataEnabled is that it speed up tests
+      _ <- session.setSchemaMetadataEnabled(false).toScala
+      _ <- offsetStore.createKeyspaceAndTable()
+      _ <- session.setSchemaMetadataEnabled(null).toScala
+    } yield Done, 30.seconds)
 
     // reason for setSchemaMetadataEnabled is that it speed up tests
     session.underlying().map(_.setSchemaMetadataEnabled(false)).futureValue
