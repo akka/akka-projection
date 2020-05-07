@@ -17,6 +17,8 @@ import akka.actor.ActorSystem
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
+import akka.event.LoggingAdapter
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.internal.HandlerRecoveryImpl
@@ -35,6 +37,32 @@ import akka.stream.scaladsl.Source
   sealed trait Strategy
   case object AtMostOnce extends Strategy
   final case class AtLeastOnce(afterEnvelopes: Int, orAfterDuration: FiniteDuration) extends Strategy
+  import HandlerRecoveryStrategy.Internal._
+
+  /**
+   * Prevent usage of retries for at-most-once.
+   */
+  private class AtMostOnceHandler[Envelope](delegate: Handler[Envelope], logger: LoggingAdapter)
+      extends Handler[Envelope] {
+    override def process(envelope: Envelope): Future[Done] =
+      delegate.process(envelope)
+
+    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = {
+      super.onFailure(envelope, throwable) match {
+        case _: RetryAndFail =>
+          logger.warning(
+            "RetryAndFail not supported for atMostOnce projection because it would call the handler more than once. " +
+            "You should change to `HandlerRecoveryStrategy.fail`.")
+          HandlerRecoveryStrategy.fail
+        case _: RetryAndSkip =>
+          logger.warning(
+            "RetryAndSkip not supported for atMostOnce projection because it would call the handler more than once. " +
+            "You should change to `HandlerRecoveryStrategy.skip`.")
+          HandlerRecoveryStrategy.skip
+        case other => other
+      }
+    }
+  }
 }
 
 /**
@@ -87,8 +115,8 @@ import akka.stream.scaladsl.Source
 
     val lastKnownOffset: Future[Option[Offset]] = offsetStore.readOffset(projectionId)
 
-    def applyUserRecovery(envelope: Envelope, futureCallback: () => Future[Done]): Future[Done] =
-      HandlerRecoveryImpl.applyUserRecovery[Offset, Envelope](handler, envelope, sourceProvider, logger, futureCallback)
+    def applyUserRecovery(h: Handler[Envelope], envelope: Envelope, futureCallback: () => Future[Done]): Future[Done] =
+      HandlerRecoveryImpl.applyUserRecovery[Offset, Envelope](h, envelope, sourceProvider, logger, futureCallback)
 
     val source: Source[(Offset, Envelope), NotUsed] =
       Source
@@ -100,7 +128,7 @@ import akka.stream.scaladsl.Source
     val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
       Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
         case (offset, envelope) =>
-          applyUserRecovery(envelope, () => handler.process(envelope))
+          applyUserRecovery(handler, envelope, () => handler.process(envelope))
             .map(_ => offset)
       }
 
@@ -119,12 +147,14 @@ import akka.stream.scaladsl.Source
             offsetStore.saveOffset(projectionId, offset)
           }
       case AtMostOnce =>
+        // prevent usage of retries for at-most-once
+        val atMostOnceHandler = new AtMostOnceHandler(handler, logger)
         source
           .mapAsync(parallelism = 1) {
             case (offset, envelope) =>
               offsetStore
                 .saveOffset(projectionId, offset)
-                .flatMap(_ => applyUserRecovery(envelope, () => handler.process(envelope)))
+                .flatMap(_ => applyUserRecovery(atMostOnceHandler, envelope, () => atMostOnceHandler.process(envelope)))
           }
           .map(_ => Done)
     }

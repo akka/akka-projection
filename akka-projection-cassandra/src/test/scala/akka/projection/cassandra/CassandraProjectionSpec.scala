@@ -21,6 +21,7 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
@@ -579,6 +580,33 @@ class CassandraProjectionSpec
       withClue("check: all offsets were seen") {
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
         offset shouldBe 6L
+      }
+    }
+
+    "not retry when using RecoveryStrategy.retryAndFail, because would not be at-most-once" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handler = concatHandlerFail4(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+
+      val projection =
+        CassandraProjection
+          .atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), handler)
+
+      intercept[TestException] {
+        LoggingTestKit.warn("RetryAndFail not supported").expect {
+          projectionTestKit.run(projection) {
+            withClue("checking: all expected values were concatenated") {
+              val concatStr = repository.findById(entityId).futureValue.get
+              concatStr.text shouldBe "abc|def|ghi"
+            }
+          }
+        }
+      }
+
+      withClue("check - event handler failed 1 time") {
+        // not 4, no retries
+        handler.attempts shouldBe 1
       }
     }
   }
