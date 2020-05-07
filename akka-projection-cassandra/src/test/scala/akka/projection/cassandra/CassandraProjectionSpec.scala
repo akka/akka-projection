@@ -23,6 +23,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
@@ -160,6 +161,19 @@ class CassandraProjectionSpec
     }
   }
 
+  private def concatHandler(): Handler[Envelope] = {
+    Handler[Envelope](envelope => repository.concatToText(envelope.id, envelope.message))
+  }
+
+  private val concatHandlerFail4Msg = "fail on fourth envelope"
+
+  private def concatHandlerFail4(): Handler[Envelope] = {
+    Handler[Envelope] { envelope =>
+      if (envelope.offset == 4L) throw new RuntimeException(concatHandlerFail4Msg)
+      repository.concatToText(envelope.id, envelope.message)
+    }
+  }
+
   "A Cassandra at-least-once projection" must {
 
     "persist projection and offset" in {
@@ -177,9 +191,8 @@ class CassandraProjectionSpec
             projectionId,
             sourceProvider(entityId),
             saveOffsetAfterEnvelopes = 1,
-            saveOffsetAfterDuration = Duration.Zero) { envelope =>
-            repository.concatToText(envelope.id, envelope.message)
-          }
+            saveOffsetAfterDuration = Duration.Zero,
+            concatHandler())
 
       projectionTestKit.run(projection) {
         withClue("check - all values were concatenated") {
@@ -197,17 +210,14 @@ class CassandraProjectionSpec
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](
             projectionId,
             sourceProvider(entityId),
             saveOffsetAfterEnvelopes = 1,
-            saveOffsetAfterDuration = Duration.Zero) { envelope =>
-            if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
-            repository.concatToText(envelope.id, envelope.message)
-          }
+            saveOffsetAfterDuration = Duration.Zero,
+            concatHandlerFail4())
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -217,7 +227,7 @@ class CassandraProjectionSpec
       withClue("check: projection failed with stream failure") {
         val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
         sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage shouldBe streamFailureMsg
+        eventuallyExpectError(sinkProbe).getMessage shouldBe concatHandlerFail4Msg
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -235,9 +245,8 @@ class CassandraProjectionSpec
             projectionId,
             sourceProvider(entityId),
             saveOffsetAfterEnvelopes = 1,
-            saveOffsetAfterDuration = Duration.Zero) { envelope =>
-            repository.concatToText(envelope.id, envelope.message)
-          }
+            saveOffsetAfterDuration = Duration.Zero,
+            concatHandler)
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -263,10 +272,8 @@ class CassandraProjectionSpec
             projectionId,
             sourceProvider(entityId),
             saveOffsetAfterEnvelopes = 2,
-            saveOffsetAfterDuration = 1.minute) { envelope =>
-            if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
-            repository.concatToText(envelope.id, envelope.message)
-          }
+            saveOffsetAfterDuration = 1.minute,
+            concatHandlerFail4())
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -294,9 +301,8 @@ class CassandraProjectionSpec
             projectionId,
             sourceProvider(entityId),
             saveOffsetAfterEnvelopes = 2,
-            saveOffsetAfterDuration = 1.minute) { envelope =>
-            repository.concatToText(envelope.id, envelope.message)
-          }
+            saveOffsetAfterDuration = 1.minute,
+            concatHandler())
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -328,9 +334,8 @@ class CassandraProjectionSpec
           projectionId,
           TestSourceProvider(source),
           saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 1.minute) { envelope =>
-          repository.concatToText(envelope.id, envelope.message)
-        }
+          saveOffsetAfterDuration = 1.minute,
+          concatHandler())
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
       eventually {
@@ -373,9 +378,8 @@ class CassandraProjectionSpec
           projectionId,
           TestSourceProvider(source),
           saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 2.seconds) { envelope =>
-          repository.concatToText(envelope.id, envelope.message)
-        }
+          saveOffsetAfterDuration = 2.seconds,
+          concatHandler())
 
       val sinkProbe = projectionTestKit.runWithTestSink(projection)
       eventually {
@@ -415,9 +419,7 @@ class CassandraProjectionSpec
       }
 
       val projection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
-          repository.concatToText(envelope.id, envelope.message)
-        }
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), concatHandler())
 
       projectionTestKit.run(projection) {
         withClue("check - all values were concatenated") {
@@ -435,12 +437,8 @@ class CassandraProjectionSpec
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val streamFailureMsg = "fail on fourth envelope"
       val failingProjection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
-          if (envelope.offset == 4L) throw new RuntimeException(streamFailureMsg)
-          repository.concatToText(envelope.id, envelope.message)
-        }
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), concatHandlerFail4())
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -450,7 +448,7 @@ class CassandraProjectionSpec
       withClue("check: projection failed with stream failure") {
         val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
         sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage shouldBe streamFailureMsg
+        eventuallyExpectError(sinkProbe).getMessage shouldBe concatHandlerFail4Msg
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -463,9 +461,7 @@ class CassandraProjectionSpec
 
       // re-run projection without failing function
       val projection =
-        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId)) { envelope =>
-          repository.concatToText(envelope.id, envelope.message)
-        }
+        CassandraProjection.atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), concatHandler())
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {

@@ -2,14 +2,15 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.cassandra.javadsl
+package akka.projection.javadsl
 
 import java.util.concurrent.CompletionStage
 
 import akka.Done
 
 /**
- * Implement this interface for the Envelope handler in [[CassandraProjection]].
+ * Implement this interface for the Envelope handler in the `Projection`. Some projections
+ * may have more specific handler types.
  *
  * It can be stateful, with variables and mutable data structures.
  * It is invoked by the `Projection` machinery one envelope at a time and visibility
