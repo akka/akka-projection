@@ -39,12 +39,13 @@ import org.apache.kafka.common.TopicPartition
   implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
 
   private val subscription = Subscriptions.topics(topics)
-  private val client = MetadataClient.create(settings, KafkaMetadataTimeout)(systemProvider.classicSystem, dispatcher)
+  private val metadataClient =
+    MetadataClient.create(settings, KafkaMetadataTimeout)(systemProvider.classicSystem, dispatcher)
 
   override def source(readOffsets: ReadOffsets): Future[Source[ConsumerRecord[K, V], _]] = {
     // get the total number of partitions to configure the `breadth` parameter, or we could just use a really large
     // number.  i don't think using a large number would present a problem.
-    val numPartitionsF = Future.sequence(topics.map(client.getPartitionsFor)).map(_.map(_.length).sum)
+    val numPartitionsF = Future.sequence(topics.map(metadataClient.getPartitionsFor)).map(_.map(_.length).sum)
     numPartitionsF.map { numPartitions =>
       Consumer
         .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets))
@@ -70,7 +71,7 @@ import org.apache.kafka.common.TopicPartition
                 if (assignedTps.contains(tp)) Map(tp -> offset)
                 else Map.empty
             })
-          case None => client.getBeginningOffsets(assignedTps)
+          case None => metadataClient.getBeginningOffsets(assignedTps)
         }
         .recover {
           case NonFatal(ex) => throw new RuntimeException("External offsets could not be retrieved", ex)

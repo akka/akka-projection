@@ -70,7 +70,8 @@ object Dependencies {
         Test.akkaTypedTestkit,
         Test.logback,
         Test.testContainers,
-        Test.cassandraContainer)
+        Test.cassandraContainer,
+        Test.scalatestJUnit)
 
   val kafka =
     deps ++= Seq(
@@ -80,5 +81,6 @@ object Dependencies {
         Test.akkaStreamTestkit,
         Test.alpakkaKafkaTestkit,
         Test.logback,
-        Test.testContainers)
+        Test.testContainers,
+        Test.scalatestJUnit)
 }

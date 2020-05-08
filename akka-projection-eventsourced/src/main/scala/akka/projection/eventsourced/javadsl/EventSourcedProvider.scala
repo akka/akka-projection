@@ -6,6 +6,7 @@ package akka.projection.eventsourced.javadsl
 
 import java.util.Optional
 import java.util.concurrent.CompletionStage
+import java.util.function.Supplier
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -46,8 +47,8 @@ object EventSourcedProvider {
     implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
 
     override def source(
-        offsetAsync: () => CompletionStage[Optional[Offset]]): CompletionStage[Source[EventEnvelope[Event], _]] = {
-      val source: Future[Source[EventEnvelope[Event], _]] = offsetAsync().asScala.map { offsetOpt =>
+        offsetAsync: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[Source[EventEnvelope[Event], _]] = {
+      val source: Future[Source[EventEnvelope[Event], _]] = offsetAsync.get().asScala.map { offsetOpt =>
         eventsByTagQuery
           .eventsByTag(tag, offsetOpt.orElse(NoOffset))
           .map(env => EventEnvelope(env))
