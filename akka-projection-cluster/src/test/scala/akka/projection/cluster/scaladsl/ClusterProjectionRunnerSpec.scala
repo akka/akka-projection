@@ -98,8 +98,8 @@ class ClusterProjectionRunnerSpec
     private val promiseToStop = Promise[Done]
 
     override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
-      val done = mappedSource.runWith(Sink.ignore)
       testProbe.ref ! StartObserved(projectionId)
+      val done = mappedSource.runWith(Sink.ignore)
       promiseToStop.completeWith(done)
     }
 
