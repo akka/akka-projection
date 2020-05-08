@@ -9,11 +9,10 @@ import java.time.Instant
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
-import akka.projection.internal.OffsetSerialization
+import akka.projection.internal.{MergeableOffset, OffsetSerialization}
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
@@ -40,17 +39,19 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
       }
   }
 
-  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
-    // TODO: support MultipleOffsets
-    val SingleOffset(_, manifest, offsetStr, _) =
-      toStorageRepresentation(projectionId, offset).asInstanceOf[SingleOffset]
-    session.executeWrite(
-      s"INSERT INTO $keyspace.$table (projection_id, offset, manifest, last_updated) VALUES (?, ?, ?, ?)",
-      projectionId.id,
-      offsetStr,
-      manifest,
-      Instant.now(clock))
-  }
+  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] =
+    offset match {
+      case _: MergeableOffset[_] => throw new IllegalArgumentException("The CassandraOffsetStore does not currently support MergeableOffset")
+      case _ =>
+        val SingleOffset(_, manifest, offsetStr, _) =
+          toStorageRepresentation(projectionId, offset).asInstanceOf[SingleOffset]
+        session.executeWrite(
+          s"INSERT INTO $keyspace.$table (projection_id, offset, manifest, last_updated) VALUES (?, ?, ?, ?)",
+          projectionId.id,
+          offsetStr,
+          manifest,
+          Instant.now(clock))
+    }
 
   // FIXME maybe we need to make this public for user's tests
   def createKeyspaceAndTable(): Future[Done] = {
