@@ -28,7 +28,7 @@ The table below shows `akka-projection-eventsourced`'s direct dependencies and t
 ## SourcedProvider for eventsByTag
 
 A @apidoc[SourceProvider] defines the source of the envelopes that the `Projection` will process. A `SourceProvider`
-for the the `eventsByTag` query can be defined with the @apidoc[EventSourcedProvider] like this:
+for the `eventsByTag` query can be defined with the @apidoc[EventSourcedProvider] like this:
 
 Scala
 :  @@snip [EventSourcedDocExample.scala](/examples/src/test/scala/docs/eventsourced/EventSourcedDocExample.scala) { #imports #sourceProvider }
@@ -47,4 +47,3 @@ The @scala[`EventEnvelope[ShoppingCart.Event]`]@java[`EventEnvelope<ShoppingCart
 handler will process. It contains the `Event` and additional meta data, such as the offset that will be stored
 by the `Projection`. See @apidoc[akka.projection.eventsourced.EventEnvelope] for full details of what the
 envelope contains. 
-
