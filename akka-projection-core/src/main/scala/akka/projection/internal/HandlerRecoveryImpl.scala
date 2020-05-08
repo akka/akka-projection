@@ -106,8 +106,7 @@ import akka.projection.HandlerRecoveryStrategy
                 retries + 1,
                 exception)
             }
-            futDone
-
+            retried.recoverWith(_ => futDone)
         }
     }
   }
