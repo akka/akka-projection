@@ -11,8 +11,8 @@ import scala.jdk.CollectionConverters._
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
-import akka.cluster.sharding.typed
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
+import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.projection.Projection
 import akka.projection.internal.ProjectionBehavior
 
@@ -31,8 +31,7 @@ private[akka] object ClusterProjectionRunnerImpl {
       projections: immutable.IndexedSeq[() => Projection[Envelope]],
       shardedDaemonSettings: ShardedDaemonProcessSettings): Unit = {
 
-    typed.scaladsl
-      .ShardedDaemonProcess(system)
+    ShardedDaemonProcess(system)
       .init[ProjectionBehavior.Command](
         s"projection-$projectionName",
         projections.size - 1,
