@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
+ */
+
 package jdocs.eventsourced;
 
 import akka.actor.typed.ActorSystem;
