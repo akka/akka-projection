@@ -37,6 +37,14 @@ lazy val eventsourced =
     .dependsOn(core)
     .dependsOn(testkit % "test->test")
 
+lazy val examples = project
+  .settings(Dependencies.examples)
+  .dependsOn(slick % "test->test")
+  .dependsOn(cassandra)
+  .dependsOn(eventsourced)
+  .dependsOn(testkit % "test->test")
+  .settings(Test / parallelExecution := false, publish / skip := true)
+
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
   .dependsOn(core, testkit)
@@ -81,7 +89,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, eventsourced, docs)
+  .aggregate(core, testkit, slick, cassandra, eventsourced, examples, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 
