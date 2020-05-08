@@ -4,10 +4,9 @@
 
 package akka.projection.cluster.javadsl
 
-import java.util.function.Supplier
-
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
+import akka.japi.function
 import akka.projection.Projection
 import akka.projection.cluster.internal.ClusterProjectionRunnerImpl
 
@@ -15,13 +14,20 @@ object ClusterProjectionRunner {
   def init[Envelope](
       system: ActorSystem[_],
       projectionName: String,
-      projections: java.util.List[Supplier[Projection[Envelope]]]): Unit =
-    init(system, projectionName, projections, ShardedDaemonProcessSettings(system))
+      numberOfInstances: Int,
+      projectionFactory: function.Function[Int, Projection[Envelope]]): Unit =
+    init(system, projectionName, numberOfInstances, projectionFactory, ShardedDaemonProcessSettings(system))
 
   def init[Envelope](
       system: ActorSystem[_],
       projectionName: String,
-      projections: java.util.List[Supplier[Projection[Envelope]]],
+      numberOfInstances: Int,
+      projectionFactory: function.Function[Int, Projection[Envelope]],
       shardedDaemonSettings: ShardedDaemonProcessSettings): Unit =
-    ClusterProjectionRunnerImpl.init(system, projectionName, projections, shardedDaemonSettings)
+    ClusterProjectionRunnerImpl.init(
+      system,
+      projectionName,
+      numberOfInstances,
+      projectionFactory,
+      shardedDaemonSettings)
 }

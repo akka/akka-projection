@@ -55,25 +55,25 @@ class ClusterProjectionRunnerSpec
       cluster.manager ! Join(cluster.selfMember.address)
 
       val name = "distributed-projection"
-      val probesAndIds = (1 to 2).map { i =>
-        (testKit.createTestProbe[ProbeMessage](s"test-probe-$i"), ProjectionId(name, i.toString))
+      val probes = (1 to 2).map { i =>
+        testKit.createTestProbe[ProbeMessage](s"test-probe-$i")
       }
 
-      val projections =
-        probesAndIds.map {
-          case (probe, projectionId) => () => TestProjection(Source(1 to 5), projectionId, probe)
-        }
+      ClusterProjectionRunner.init(
+        system,
+        projectionName = name,
+        // FIXME: bug in ShardedDaemonProcess - will create 2 instances (0 to 1)
+        numberOfInstances = 1,
+        index => TestProjection(Source(1 to 5), ProjectionId(name, index.toString), probes(index)))
 
-      ClusterProjectionRunner.init(system, name, projections)
+      val probe1 = probes(0)
+      val probe2 = probes(1)
 
-      val (probe1, projectionId1) = probesAndIds(0)
-      val (probe2, projectionId2) = probesAndIds(1)
-
-      probe1.expectMessage(StartObserved(projectionId1))
+      probe1.expectMessage(StartObserved(ProjectionId(name, "0")))
       probe1.expectMessage(Consumed(1, "1"))
       probe1.expectMessage(Consumed(2, "1-2"))
 
-      probe2.expectMessage(StartObserved(projectionId2))
+      probe2.expectMessage(StartObserved(ProjectionId(name, "1")))
       probe2.expectMessage(Consumed(1, "1"))
       probe2.expectMessage(Consumed(2, "1-2"))
 

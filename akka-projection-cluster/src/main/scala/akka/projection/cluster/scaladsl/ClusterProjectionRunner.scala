@@ -4,8 +4,6 @@
 
 package akka.projection.cluster.scaladsl
 
-import scala.collection.immutable
-
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.projection.Projection
@@ -16,13 +14,20 @@ object ClusterProjectionRunner {
   def init[Envelope](
       system: ActorSystem[_],
       projectionName: String,
-      projections: immutable.IndexedSeq[() => Projection[Envelope]]): Unit =
-    init(system, projectionName, projections, ShardedDaemonProcessSettings(system))
+      numberOfInstances: Int,
+      projectionFactory: Int => Projection[Envelope]): Unit =
+    init(system, projectionName, numberOfInstances, projectionFactory, ShardedDaemonProcessSettings(system))
 
   def init[Envelope](
       system: ActorSystem[_],
       projectionName: String,
-      projections: immutable.IndexedSeq[() => Projection[Envelope]],
+      numberOfInstances: Int,
+      projectionFactory: Int => Projection[Envelope],
       shardedDaemonSettings: ShardedDaemonProcessSettings): Unit =
-    ClusterProjectionRunnerImpl.init(system, projectionName, projections, shardedDaemonSettings)
+    ClusterProjectionRunnerImpl.init(
+      system,
+      projectionName,
+      numberOfInstances,
+      projectionFactory,
+      shardedDaemonSettings)
 }

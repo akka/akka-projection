@@ -4,15 +4,11 @@
 
 package akka.projection.cluster.internal
 
-import java.util.function.Supplier
-
-import scala.collection.immutable
-import scala.jdk.CollectionConverters._
-
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
+import akka.japi.function
 import akka.projection.Projection
 import akka.projection.internal.ProjectionBehavior
 
@@ -28,17 +24,16 @@ private[akka] object ClusterProjectionRunnerImpl {
   def init[Envelope](
       system: ActorSystem[_],
       projectionName: String,
-      projections: immutable.IndexedSeq[() => Projection[Envelope]],
-      shardedDaemonSettings: ShardedDaemonProcessSettings): Unit = {
-
+      numberOfInstances: Int,
+      projectionFactory: Int => Projection[Envelope],
+      shardedDaemonSettings: ShardedDaemonProcessSettings): Unit =
     ShardedDaemonProcess(system)
       .init[ProjectionBehavior.Command](
         s"projection-$projectionName",
-        projections.size - 1,
-        i => ProjectionBehavior(projections(i)),
+        numberOfInstances,
+        i => ProjectionBehavior(() => projectionFactory(i)),
         shardedDaemonSettings,
         Some(ProjectionBehavior.Stop))
-  }
 
   /**
    * Java API
@@ -46,10 +41,8 @@ private[akka] object ClusterProjectionRunnerImpl {
   def init[Envelope](
       system: ActorSystem[_],
       projectionName: String,
-      projections: java.util.List[Supplier[Projection[Envelope]]],
-      shardedDaemonSettings: ShardedDaemonProcessSettings): Unit = {
-
-    val scalaSeq = projections.asScala.toIndexedSeq.map { sup => () => sup.get() }
-    init(system, projectionName, scalaSeq, shardedDaemonSettings)
-  }
+      numberOfInstances: Int,
+      projectionFactory: function.Function[Int, Projection[Envelope]],
+      shardedDaemonSettings: ShardedDaemonProcessSettings): Unit =
+    init(system, projectionName, numberOfInstances, projectionFactory, shardedDaemonSettings)
 }
