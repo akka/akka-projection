@@ -23,6 +23,7 @@ object Dependencies {
   }
 
   object Compile {
+    val akkaActorTyped = "com.typesafe.akka" %% "akka-actor-typed" % Versions.akka
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
     val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
 
@@ -38,7 +39,10 @@ object Dependencies {
   }
 
   object Test {
+
     val akkaTypedTestkit = Compile.akkaTypedTestkit % sbt.Test
+    val akkaStreamTestkit = Compile.akkaStreamTestkit % sbt.Test
+
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % sbt.Test
     val junit = "junit" % "junit" % Versions.junit % sbt.Test
@@ -47,7 +51,7 @@ object Dependencies {
     val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
     val cassandraContainer =
       "com.dimafeng" %% "testcontainers-scala-cassandra" % Versions.testContainersScala % sbt.Test
-    val akkaStreamTestkit = Compile.akkaStreamTestkit % sbt.Test
+
     val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
   }
 
@@ -63,6 +67,7 @@ object Dependencies {
   val core =
     deps ++= Seq(
         Compile.akkaStream,
+        Compile.akkaActorTyped,
         // akka-persistence-query is only needed for OffsetSerialization, but that is always used together
         // with more specific modules, such as akka-projection-cassandra, which defines the required
         // dependency on akka-persistence-query
