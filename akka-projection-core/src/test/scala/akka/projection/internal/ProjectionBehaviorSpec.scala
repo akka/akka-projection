@@ -56,7 +56,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
     }
 
-    "crash the actor if can't properly stop projection" in {
+    "failures stopping stream don't block stopping the actor" in {
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
@@ -116,6 +116,8 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
     override def stop()(implicit ec: ExecutionContext): Future[Done] = {
       if (failToStop) {
+        // this simulates a failure when stopping the stream
+        // for the ProjectionBehavior the effect is the same
         Future.failed(new RuntimeException("failed to stop properly"))
       } else {
         killSwitch.shutdown()
