@@ -34,7 +34,7 @@ private[akka] object ClusterProjectionRunnerImpl {
     typed.scaladsl
       .ShardedDaemonProcess(system)
       .init[ProjectionBehavior.Command](
-        s"cluster-projection-runner-$projectionName",
+        s"projection-$projectionName",
         projections.size - 1,
         i => ProjectionBehavior(projections(i)),
         shardedDaemonSettings,
