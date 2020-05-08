@@ -55,9 +55,9 @@ import org.apache.kafka.common.TopicPartition
     }
   }
 
-  override def extractOffset(envelope: ConsumerRecord[K, V]): MergeableOffset[Long] = {
-    val key = envelope.topic() + "-" + envelope.partition()
-    MergeableOffset(Map(key -> envelope.offset()))
+  override def extractOffset(record: ConsumerRecord[K, V]): MergeableOffset[Long] = {
+    val key = record.topic() + "-" + record.partition()
+    MergeableOffset(Map(key -> record.offset()))
   }
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
