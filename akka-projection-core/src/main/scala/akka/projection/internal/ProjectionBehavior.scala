@@ -30,8 +30,8 @@ private[akka] object ProjectionBehavior {
 
         Behaviors.receiveMessagePartial {
           case Stop =>
-            val stoppedFut = projection.stop()(ctx.executionContext)
             ctx.log.debug("Projection [{}] is being stopped", projection.projectionId)
+            val stoppedFut = projection.stop()(ctx.executionContext)
             // we send a Stopped for whatever completes the Future
             // Success or Failure, doesn't matter, since the internal stream is by then stopped
             ctx.pipeToSelf(stoppedFut)(_ => Stopped)
