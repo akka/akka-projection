@@ -21,6 +21,7 @@ import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.internal.CassandraOffsetStore;
 import akka.projection.cassandra.javadsl.CassandraProjection;
+import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
@@ -127,6 +128,22 @@ public class CassandraProjectionTest extends JUnitSuite {
     });
   }
 
+  private Handler<Envelope> concatHandler(StringBuffer str) {
+    return Handler.fromFunction(envelope -> {
+      str.append(envelope.message).append("|");
+      return CompletableFuture.completedFuture(Done.getInstance());
+    });
+  }
+
+  private Handler<Envelope> concatHandlerFail4(StringBuffer str) {
+    return Handler.fromFunction(envelope -> {
+      if (envelope.offset == 4)
+        throw new RuntimeException("fail on 4");
+      str.append(envelope.message).append("|");
+      return CompletableFuture.completedFuture(Done.getInstance());
+    });
+  }
+
   @Test
   public void atLeastOnceShouldStoreOffset() {
     String entityId = UUID.randomUUID().toString();
@@ -140,10 +157,7 @@ public class CassandraProjectionTest extends JUnitSuite {
         new TestSourceProvider(entityId),
         1,
         Duration.ZERO,
-        envelope -> {
-          str.append(envelope.message).append("|");
-          return CompletableFuture.completedFuture(Done.getInstance());
-        });
+        concatHandler(str));
 
     projectionTestKit.run(projection, () ->
       assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
@@ -164,12 +178,7 @@ public class CassandraProjectionTest extends JUnitSuite {
         new TestSourceProvider(entityId),
         1,
         Duration.ZERO,
-        envelope -> {
-          if (envelope.offset == 4)
-            throw new RuntimeException("fail on 4");
-          str.append(envelope.message).append("|");
-          return CompletableFuture.completedFuture(Done.getInstance());
-        });
+        concatHandlerFail4(str));
 
     try {
       projectionTestKit.run(projection, () ->
@@ -188,10 +197,7 @@ public class CassandraProjectionTest extends JUnitSuite {
         new TestSourceProvider(entityId),
         1,
         Duration.ZERO,
-        envelope -> {
-          str.append(envelope.message).append("|");
-          return CompletableFuture.completedFuture(Done.getInstance());
-        });
+        concatHandler(str));
 
     projectionTestKit.run(projection2, () ->
       assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
@@ -208,10 +214,7 @@ public class CassandraProjectionTest extends JUnitSuite {
       .atMostOnce(
         projectionId,
         new TestSourceProvider(entityId),
-        envelope -> {
-          str.append(envelope.message).append("|");
-          return CompletableFuture.completedFuture(Done.getInstance());
-        });
+        concatHandler(str));
 
     projectionTestKit.run(projection, () ->
       assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
@@ -230,12 +233,7 @@ public class CassandraProjectionTest extends JUnitSuite {
       .atMostOnce(
         projectionId,
         new TestSourceProvider(entityId),
-        envelope -> {
-          if (envelope.offset == 4)
-            throw new RuntimeException("fail on 4");
-          str.append(envelope.message).append("|");
-          return CompletableFuture.completedFuture(Done.getInstance());
-        });
+        concatHandlerFail4(str));
 
     try {
       projectionTestKit.run(projection, () ->
@@ -252,10 +250,7 @@ public class CassandraProjectionTest extends JUnitSuite {
       .atMostOnce(
         projectionId,
         new TestSourceProvider(entityId),
-        envelope -> {
-          str.append(envelope.message).append("|");
-          return CompletableFuture.completedFuture(Done.getInstance());
-        });
+        concatHandler(str));
 
     projectionTestKit.run(projection2, () ->
       // failed: jkl not included

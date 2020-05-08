@@ -40,7 +40,7 @@ object Common extends AutoPlugin {
         "-unchecked",
         "-deprecation",
         "-language:_",
-        "-Xfatal-warnings",
+        //"-Xfatal-warnings", //FIXME need silencer first
         "-Ywarn-unused",
         "-encoding",
         "UTF-8",

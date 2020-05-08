@@ -5,7 +5,7 @@ import sbt._
 
 object Dependencies {
 
-  val Scala213 = "2.13.1"
+  val Scala213 = "2.13.2"
   val ScalaVersions = Seq(Scala213)
 
   val AkkaVersionInDocs = "2.6"
@@ -13,7 +13,7 @@ object Dependencies {
   val AlpakkaKafkaVersionInDocs = "2.0"
 
   object Versions {
-    val akka = "2.6.4"
+    val akka = "2.6.5"
     val alpakka = "2.0.0-RC2"
     val alpakkaKafka = "2.0.2+21-0427b570"
     val slick = "3.3.2"
@@ -53,20 +53,30 @@ object Dependencies {
 
   private val deps = libraryDependencies
 
-  val core = deps ++= Seq(Compile.akkaStream, Compile.akkaPersistenceQuery, Test.scalatest)
+  val core =
+    deps ++= Seq(
+        Compile.akkaStream,
+        // akka-persistence-query is only needed for OffsetSerialization, but that is always used together
+        // with more specific modules, such as akka-projection-cassandra, which defines the required
+        // dependency on akka-persistence-query
+        Compile.akkaPersistenceQuery % "optional;provided",
+        Test.akkaTypedTestkit,
+        Test.logback,
+        Test.scalatest)
 
   val testKit =
     deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalatest, Test.scalatestJUnit, Test.junit)
 
-  val eventSourced =
+  val eventsourced =
     deps ++= Seq(Compile.akkaPersistenceQuery)
 
   val slick =
-    deps ++= Seq(Compile.slick, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+    deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
 
   val cassandra =
     deps ++= Seq(
         Compile.alpakkaCassandra,
+        Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.logback,
         Test.testContainers,
