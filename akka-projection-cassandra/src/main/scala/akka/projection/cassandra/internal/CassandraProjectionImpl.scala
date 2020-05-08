@@ -16,8 +16,12 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
+import akka.event.Logging
+import akka.event.LoggingAdapter
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
@@ -33,6 +37,32 @@ import akka.stream.scaladsl.Source
   sealed trait Strategy
   case object AtMostOnce extends Strategy
   final case class AtLeastOnce(afterEnvelopes: Int, orAfterDuration: FiniteDuration) extends Strategy
+  import HandlerRecoveryStrategy.Internal._
+
+  /**
+   * Prevent usage of retries for at-most-once.
+   */
+  private class AtMostOnceHandler[Envelope](delegate: Handler[Envelope], logger: LoggingAdapter)
+      extends Handler[Envelope] {
+    override def process(envelope: Envelope): Future[Done] =
+      delegate.process(envelope)
+
+    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = {
+      super.onFailure(envelope, throwable) match {
+        case _: RetryAndFail =>
+          logger.warning(
+            "RetryAndFail not supported for atMostOnce projection because it would call the handler more than once. " +
+            "You should change to `HandlerRecoveryStrategy.fail`.")
+          HandlerRecoveryStrategy.fail
+        case _: RetryAndSkip =>
+          logger.warning(
+            "RetryAndSkip not supported for atMostOnce projection because it would call the handler more than once. " +
+            "You should change to `HandlerRecoveryStrategy.skip`.")
+          HandlerRecoveryStrategy.skip
+        case other => other
+      }
+    }
+  }
 }
 
 /**
@@ -45,6 +75,7 @@ import akka.stream.scaladsl.Source
     handler: Handler[Envelope])
     extends Projection[Envelope] {
   import CassandraProjectionImpl._
+  import HandlerRecoveryImpl.applyUserRecovery
 
   private val killSwitch = KillSwitches.shared(projectionId.id)
   private val promiseToStop: Promise[Done] = Promise()
@@ -74,6 +105,8 @@ import akka.stream.scaladsl.Source
     // FIXME maybe use the session-dispatcher config
     implicit val ec: ExecutionContext = system.dispatcher
 
+    val logger = Logging(systemProvider.classicSystem, this.getClass)
+
     // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
     val sessionConfigPath = "akka.projection.cassandra"
     // FIXME session look could be moved to CassandraOffsetStore if that's better
@@ -92,11 +125,14 @@ import akka.stream.scaladsl.Source
 
     val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
       Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
-        case (offset, envelope) => handler.process(envelope).map(_ => offset)
+        case (offset, envelope) =>
+          applyUserRecovery(handler, envelope, offset, logger, () => handler.process(envelope))
+            .map(_ => offset)
       }
 
     val composedSource: Source[Done, NotUsed] = strategy match {
       case AtLeastOnce(1, _) =>
+        // optimization of general AtLeastOnce case
         source.via(handlerFlow).mapAsync(1) { offset =>
           offsetStore.saveOffset(projectionId, offset)
         }
@@ -109,11 +145,22 @@ import akka.stream.scaladsl.Source
             offsetStore.saveOffset(projectionId, offset)
           }
       case AtMostOnce =>
+        // prevent usage of retries for at-most-once
+        val atMostOnceHandler = new AtMostOnceHandler(handler, logger)
         source
           .mapAsync(parallelism = 1) {
-            case (offset, envelope) => offsetStore.saveOffset(projectionId, offset).map(_ => offset -> envelope)
+            case (offset, envelope) =>
+              offsetStore
+                .saveOffset(projectionId, offset)
+                .flatMap(
+                  _ =>
+                    applyUserRecovery(
+                      atMostOnceHandler,
+                      envelope,
+                      offset,
+                      logger,
+                      () => atMostOnceHandler.process(envelope)))
           }
-          .via(handlerFlow)
           .map(_ => Done)
     }
 
