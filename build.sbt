@@ -2,13 +2,13 @@ import akka.projections.Dependencies
 
 scalaVersion := Dependencies.Scala213
 
-lazy val core = project
-  .in(file("akka-projection-core"))
-  .settings(Dependencies.core)
-  .settings(
-    name := "akka-projection-core",
-    Compile / packageBin / packageOptions += Package.ManifestAttributes(
-        "Automatic-Module-Name" -> "akka.projection.core"))
+lazy val core =
+  Project(id = "akka-projection-core", base = file("akka-projection-core"))
+    .settings(Dependencies.core)
+    .settings(
+      name := "akka-projection-core",
+      Compile / packageBin / packageOptions += Package.ManifestAttributes(
+          "Automatic-Module-Name" -> "akka.projection.core"))
 
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
@@ -31,9 +31,9 @@ lazy val cassandra =
     .dependsOn(testkit % "test->test")
 
 // provides source providers for akka-persistence-query
-lazy val eventSourced =
+lazy val eventsourced =
   Project(id = "akka-projection-eventsourced", base = file("akka-projection-eventsourced"))
-    .settings(Dependencies.eventSourced)
+    .settings(Dependencies.eventsourced)
     .dependsOn(core)
     .dependsOn(testkit % "test->test")
 
@@ -81,7 +81,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, eventSourced, docs)
+  .aggregate(core, testkit, slick, cassandra, eventsourced, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 

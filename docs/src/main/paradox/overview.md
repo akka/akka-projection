@@ -1,31 +1,56 @@
 # Overview
 
-.
-
-## Project Info
-
-@@project-info{ projectId="core" }
+The purpose of Akka Projections is described in @ref:[Use Cases](use-cases.md).  
 
 ## Dependencies
 
-This plugin requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
+Akka Projections consist of several modules for specific technologies. The dependency section for
+each module describes which dependency you should define in your project.
+
+* @ref:[Offset in Cassandra](cassandra.md)
+* @ref:[Offset in relational DB with Slick](slick.md)
+* @ref:[Events from Akka Persistence](eventsourced.md)
+* @ref:[Messages from Kafka](kafka.md)
+
+All of them share a dependency to `akka-projection-core`: 
 
 @@dependency [sbt,Maven,Gradle] {
   group=com.typesafe.akka
-  artifact=akka-projection_$scala.binary.version$
+  artifact=akka-projection-core_$scala.binary.version$
   version=$project.version$
-  symbol=AkkaVersion
-  value=$akka.version$
-  group1=com.typesafe.akka
-  artifact1=akka-stream_$scala.binary.version$
-  version1=AkkaVersion
 }
 
-Note that it is important that all `akka-*` dependencies are in the same version, so it is recommended to depend on them explicitly to avoid problems with transient dependencies causing an unlucky mix of versions.
+@@project-info{ projectId="akka-projection-core" }
 
-The table below shows Akka Projection's direct dependencies and the second tab shows all libraries it depends on transitively.
+### Akka version
 
-@@dependencies{ projectId="core" }
+Akka Projections require **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
+
+Latest patch version of Akka is recommended and a later version than $akka.version$ can be used.
+Note that it is important that all Akka dependencies are in the same version, so it is recommended to depend on
+them explicitly to avoid problems with transient dependencies causing an unlucky mix of versions. For example:
+
+@@dependency[sbt,Gradle,Maven] {
+  symbol=AkkaVersion
+  value=$akka.version$
+  group=com.typesafe.akka
+  artifact=akka-cluster-sharding-typed_$scala.binary.version$
+  version=AkkaVersion
+  group2=com.typesafe.akka
+  artifact2=akka-persistence-query_$scala.binary.version$
+  version2=AkkaVersion
+  group3=com.typesafe.akka
+  artifact3=akka-discovery_$scala.binary.version$
+  version3=AkkaVersion
+}
+
+### Transitive dependencies
+
+The table below shows `akka-projection-core`'s direct dependencies and the second tab shows all libraries it depends on transitively.
+
+@@dependencies{ projectId="akka-projection-core" }
+
+See the individual modules for their transitive dependencies.
 
 ## Contributing
 

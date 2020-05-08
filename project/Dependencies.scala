@@ -49,20 +49,29 @@ object Dependencies {
   private val deps = libraryDependencies
 
   val core =
-    deps ++= Seq(Compile.akkaStream, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.logback, Test.scalatest)
+    deps ++= Seq(
+        Compile.akkaStream,
+        // akka-persistence-query is only needed for OffsetSerialization, but that is always used together
+        // with more specific modules, such as akka-projection-cassandra, which defines the required
+        // dependency on akka-persistence-query
+        Compile.akkaPersistenceQuery % "optional;provided",
+        Test.akkaTypedTestkit,
+        Test.logback,
+        Test.scalatest)
 
   val testKit =
     deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalatest, Test.scalatestJUnit, Test.junit)
 
-  val eventSourced =
+  val eventsourced =
     deps ++= Seq(Compile.akkaPersistenceQuery)
 
   val slick =
-    deps ++= Seq(Compile.slick, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+    deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
 
   val cassandra =
     deps ++= Seq(
         Compile.alpakkaCassandra,
+        Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.logback,
         Test.testContainers,
