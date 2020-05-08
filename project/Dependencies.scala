@@ -53,7 +53,7 @@ object Dependencies {
 
   private val deps = libraryDependencies
 
-  val core = 
+  val core =
     deps ++= Seq(
         Compile.akkaStream,
         Compile.akkaTyped,
