@@ -62,8 +62,7 @@ class ClusterProjectionRunnerSpec
       ClusterProjectionRunner.init(
         system,
         projectionName = name,
-        // FIXME: bug in ShardedDaemonProcess - will create 2 instances (0 to 1)
-        numberOfInstances = 1,
+        numberOfInstances = 2,
         index => TestProjection(Source(1 to 5), ProjectionId(name, index.toString), probes(index)))
 
       val probe1 = probes(0)
