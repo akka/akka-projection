@@ -5,7 +5,7 @@ The purpose of Akka Projections is described in @ref:[Use Cases](use-cases.md).
 ## Dependencies
 
 Akka Projections consist of several modules for specific technologies. The dependency section for
-each module describes what dependency you should define in your project.
+each module describes which dependency you should define in your project.
 
 * @ref:[Offset in Cassandra](cassandra.md)
 * @ref:[Offset in relational DB with Slick](slick.md)
