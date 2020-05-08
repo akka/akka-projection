@@ -18,7 +18,7 @@ private[akka] object ProjectionBehavior {
 
   sealed trait Command
   object Stop extends Command
-  object Stopped extends Command
+  private object Stopped extends Command
 
   private[akka] def apply[Envelope](projectionFactory: () => Projection[Envelope]) = {
 
