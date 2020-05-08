@@ -10,6 +10,11 @@ lazy val core =
       Compile / packageBin / packageOptions += Package.ManifestAttributes(
           "Automatic-Module-Name" -> "akka.projection.core"))
 
+lazy val cluster =
+  Project(id = "akka-projection-cluster", base = file("akka-projection-cluster"))
+    .settings(Dependencies.cluster)
+    .dependsOn(core)
+
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
     .settings(Dependencies.testKit)
@@ -81,7 +86,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, eventsourced, docs)
+  .aggregate(core, cluster, testkit, slick, cassandra, eventsourced, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 

@@ -22,8 +22,10 @@ object Dependencies {
   }
 
   object Compile {
+    val akkaTyped = "com.typesafe.akka" %% "akka-actor-typed" % Versions.akka
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
     val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
+    val akkaCluster = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
 
     // TestKit in compile scope for ProjectionTestKit
     val akkaTypedTestkit = "com.typesafe.akka" %% "akka-actor-testkit-typed" % Versions.akka
@@ -35,7 +37,10 @@ object Dependencies {
   }
 
   object Test {
+
     val akkaTypedTestkit = Compile.akkaTypedTestkit % sbt.Test
+    val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Versions.akka
+
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % sbt.Test
     val junit = "junit" % "junit" % Versions.junit % sbt.Test
@@ -48,9 +53,10 @@ object Dependencies {
 
   private val deps = libraryDependencies
 
-  val core =
+  val core = 
     deps ++= Seq(
         Compile.akkaStream,
+        Compile.akkaTyped,
         // akka-persistence-query is only needed for OffsetSerialization, but that is always used together
         // with more specific modules, such as akka-projection-cassandra, which defines the required
         // dependency on akka-persistence-query
@@ -58,6 +64,8 @@ object Dependencies {
         Test.akkaTypedTestkit,
         Test.logback,
         Test.scalatest)
+
+  val cluster = deps ++= Seq(Compile.akkaCluster, Test.akkaTypedTestkit, Test.scalatest, Test.logback)
 
   val testKit =
     deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalatest, Test.scalatestJUnit, Test.junit)
