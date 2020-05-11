@@ -34,7 +34,7 @@ The table below shows `akka-projection-cassandra`'s direct dependencies and the 
 ## at-least-once
 
 The offset is stored after the envelope has been processed and giving at-least-once processing semantics.
-This means that if the projection is restarted from previously stored offset some elements may be processed more
+This means that if the projection is restarted from a previously stored offset some elements may be processed more
 than once.
 
 Scala
@@ -45,7 +45,7 @@ Java
 
 The `saveOffsetAfterEnvelopes` and `saveOffsetAfterDuration` parameters control how often the offset is stored.
 There is a performance benefit of not storing the offset too often but the drawback is that there can be more
-duplicates when the projection is restarted.
+duplicates when the projection that will be processed again when the projection is restarted.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
