@@ -37,11 +37,20 @@ lazy val eventsourced =
     .dependsOn(core)
     .dependsOn(testkit % "test->test")
 
+// provides offset storage backed by Kafka managed offset commits
+lazy val kafka =
+  Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
+    .settings(Dependencies.kafka)
+    .settings(Test / parallelExecution := false)
+    .dependsOn(core)
+    .dependsOn(testkit % "test->test")
+
 lazy val examples = project
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
   .dependsOn(cassandra)
   .dependsOn(eventsourced)
+  .dependsOn(kafka % "test->test")
   .dependsOn(testkit % "test->test")
   .settings(Test / parallelExecution := false, publish / skip := true)
 
@@ -89,7 +98,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, eventsourced, examples, docs)
+  .aggregate(core, testkit, slick, cassandra, eventsourced, kafka, examples, docs)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 

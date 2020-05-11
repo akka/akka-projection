@@ -75,7 +75,10 @@ class OffsetStoreSpec
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     import dbConfig.profile.api._
-    val action = offsetStore.offsetTable.filter(_.projectionId === projectionId.id).result.headOption
+    val action = offsetStore.offsetTable
+      .filter(r => r.projectionName === projectionId.name && r.projectionKey === projectionId.key)
+      .result
+      .headOption
     dbConfig.db.run(action).futureValue.get.lastUpdated
   }
 

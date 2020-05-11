@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import akka.Done;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
@@ -88,11 +90,13 @@ public class CassandraProjectionTest extends JUnitSuite {
     }
 
     @Override
-    public Source<Envelope, ?> source(Optional<Long> offset) {
-      if (offset.isPresent())
-        return Source.from(envelopes).drop(offset.get().intValue());
-      else
-        return Source.from(envelopes);
+    public CompletionStage<Source<Envelope, ?>> source(Supplier<CompletionStage<Optional<Long>>> offsetF) {
+      return offsetF.get().toCompletableFuture().thenApplyAsync(offset -> {
+        if (offset.isPresent())
+          return Source.from(envelopes).drop(offset.get().intValue());
+        else
+          return Source.from(envelopes);
+      });
     }
 
     @Override

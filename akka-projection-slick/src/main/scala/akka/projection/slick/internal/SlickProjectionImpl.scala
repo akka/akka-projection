@@ -117,12 +117,13 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     // -------------------------------------------------------
     // finally build the source with all parts wired
-    val lastKnownOffset: Future[Option[Offset]] = offsetStore.readOffset(projectionId)
-
-    val futSource = lastKnownOffset.map { offsetOpt =>
-      logger.debug("Starting projection [{}] from offset [{}]", projectionId, offsetOpt)
-      sourceProvider.source(offsetOpt)
+    val readOffsets = () => {
+      val offsetsF = offsetStore.readOffset(projectionId)
+      offsetsF.foreach { offset => logger.debug("Starting projection [{}] from offset [{}]", projectionId, offset) }
+      offsetsF
     }
+
+    val futSource = sourceProvider.source(readOffsets)
 
     val handlerFlow: Flow[Envelope, Done, _] =
       strategy match {

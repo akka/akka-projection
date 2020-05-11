@@ -28,7 +28,8 @@ object Common extends AutoPlugin {
           "https://gitter.im/akka/dev",
           url("https://github.com/akka/akka-projection/graphs/contributors")),
       licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
-      description := "Akka Projection.")
+      description := "Akka Projection.",
+      resolvers += Resolver.bintrayRepo("akka", "snapshots"))
 
   override lazy val projectSettings = Seq(
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
@@ -62,6 +63,8 @@ object Common extends AutoPlugin {
         "-skip-packages",
         "akka.pattern" // for some reason Scaladoc creates this
       ),
+    // FIXME enable "-Xfatal-warnings", but then we need the silencer
+    Compile / scalacOptions --= Seq("-Xfatal-warnings"),
     Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     scalafmtOnCompile := true,
     autoAPIMappings := true,

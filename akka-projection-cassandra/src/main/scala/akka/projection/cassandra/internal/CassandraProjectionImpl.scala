@@ -114,11 +114,11 @@ import akka.stream.scaladsl.Source
 
     val offsetStore = new CassandraOffsetStore(session)
 
-    val lastKnownOffset: Future[Option[Offset]] = offsetStore.readOffset(projectionId)
+    val readOffsets = () => offsetStore.readOffset(projectionId)
 
     val source: Source[(Offset, Envelope), NotUsed] =
       Source
-        .futureSource(lastKnownOffset.map(sourceProvider.source))
+        .futureSource(sourceProvider.source(readOffsets))
         .via(killSwitch.flow)
         .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
         .mapMaterializedValue(_ => NotUsed)
