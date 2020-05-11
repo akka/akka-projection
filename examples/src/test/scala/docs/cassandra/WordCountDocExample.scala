@@ -4,8 +4,12 @@
 
 package docs.cassandra
 
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 import akka.Done
 import akka.projection.ProjectionId
@@ -160,6 +164,184 @@ object WordCountDocExample {
 
     }
     //#loadingOnDemand
+  }
+
+  object IllstrateActorLoadingInitialState {
+    //#behaviorLoadingInitialState
+    import akka.actor.typed.ActorRef
+    import akka.actor.typed.Behavior
+    import akka.actor.typed.SupervisorStrategy
+    import akka.actor.typed.scaladsl.ActorContext
+    import akka.actor.typed.scaladsl.Behaviors
+
+    object WordCountProcessor {
+      trait Command
+      final case class Handle(envelope: WordEnvelope, replyTo: ActorRef[Try[Done]]) extends Command
+      case object Stop extends Command
+      private final case class InitialState(state: Map[Word, Count]) extends Command
+      private final case class SaveCompleted(word: Word, saveResult: Try[Done]) extends Command
+
+      def apply(projectionId: ProjectionId, repository: WordCountRepository): Behavior[Command] =
+        Behaviors
+          .supervise[Command] {
+            Behaviors.setup { context =>
+              new WordCountProcessor(context, projectionId, repository).init()
+            }
+          }
+          .onFailure(SupervisorStrategy.restartWithBackoff(1.second, 10.seconds, 0.1))
+    }
+
+    class WordCountProcessor(
+        context: ActorContext[WordCountProcessor.Command],
+        projectionId: ProjectionId,
+        repository: WordCountRepository) {
+      import WordCountProcessor._
+
+      // loading initial state from db
+      def init(): Behavior[Command] = {
+        Behaviors.withStash(10) { buffer =>
+          context.pipeToSelf(repository.loadAll(projectionId.id)) {
+            case Success(value) => InitialState(value)
+            case Failure(exc)   => throw exc
+          }
+
+          Behaviors.receiveMessage {
+            case InitialState(state) =>
+              context.log.debug("Initial state [{}]", state)
+              buffer.unstashAll(idle(state))
+            case other =>
+              context.log.debug("Stashed [{}]", other)
+              buffer.stash(other)
+              Behaviors.same
+          }
+        }
+      }
+
+      // waiting for next envelope
+      private def idle(state: Map[Word, Count]): Behavior[Command] =
+        Behaviors.receiveMessagePartial {
+          case Handle(envelope, replyTo) =>
+            val word = envelope.word
+            context.pipeToSelf(repository.save(projectionId.id, word, state.getOrElse(word, 0) + 1)) { saveResult =>
+              SaveCompleted(word, saveResult)
+            }
+            saving(state, replyTo) // will reply from SaveCompleted
+          case Stop =>
+            Behaviors.stopped
+          case _: InitialState =>
+            Behaviors.unhandled
+        }
+
+      // saving the new count for a word in db
+      private def saving(state: Map[Word, Count], replyTo: ActorRef[Try[Done]]): Behavior[Command] =
+        Behaviors.receiveMessagePartial {
+          case SaveCompleted(word, saveResult) =>
+            replyTo ! saveResult
+            saveResult match {
+              case Success(_)   => idle(state.updated(word, state.getOrElse(word, 0) + 1))
+              case Failure(exc) => throw exc // restart, reload state from db
+            }
+          case Stop =>
+            Behaviors.stopped
+        }
+    }
+    //#behaviorLoadingInitialState
+  }
+
+  object IllstrateActorLoadingStateOnDemand {
+    import akka.actor.typed.ActorRef
+    import akka.actor.typed.Behavior
+    import akka.actor.typed.SupervisorStrategy
+    import akka.actor.typed.scaladsl.ActorContext
+    import akka.actor.typed.scaladsl.Behaviors
+
+    //#behaviorLoadingOnDemand
+    object WordCountProcessor {
+      trait Command
+      final case class Handle(envelope: WordEnvelope, replyTo: ActorRef[Try[Done]]) extends Command
+      case object Stop extends Command
+      private final case class LoadCompleted(word: Word, loadResult: Try[Count]) extends Command
+      private final case class SaveCompleted(word: Word, saveResult: Try[Done]) extends Command
+
+      def apply(projectionId: ProjectionId, repository: WordCountRepository): Behavior[Command] =
+        Behaviors
+          .supervise[Command] {
+            Behaviors.setup[Command] { context =>
+              new WordCountProcessor(context, projectionId, repository).idle(Map.empty)
+            }
+          }
+          .onFailure(SupervisorStrategy.restartWithBackoff(1.second, 10.seconds, 0.1))
+    }
+
+    class WordCountProcessor(
+        context: ActorContext[WordCountProcessor.Command],
+        projectionId: ProjectionId,
+        repository: WordCountRepository) {
+      import WordCountProcessor._
+
+      // waiting for next envelope
+      private def idle(state: Map[Word, Count]): Behavior[Command] =
+        Behaviors.receiveMessagePartial {
+          case Handle(envelope, replyTo) =>
+            val word = envelope.word
+            state.get(word) match {
+              case None =>
+                load(word)
+                loading(state, replyTo) // will continue from LoadCompleted
+              case Some(count) =>
+                save(word, count + 1)
+                saving(state, replyTo) // will reply from SaveCompleted
+            }
+          case Stop =>
+            Behaviors.stopped
+        }
+
+      private def load(word: String): Unit = {
+        context.pipeToSelf(repository.load(projectionId.id, word)) { loadResult =>
+          LoadCompleted(word, loadResult)
+        }
+      }
+
+      // loading the count for a word from db
+      private def loading(state: Map[Word, Count], replyTo: ActorRef[Try[Done]]): Behavior[Command] =
+        Behaviors.receiveMessagePartial {
+          case LoadCompleted(word, loadResult) =>
+            loadResult match {
+              case Success(count) =>
+                save(word, count + 1)
+                saving(state, replyTo) // will reply from SaveCompleted
+              case Failure(exc) =>
+                replyTo ! Failure(exc)
+                idle(state)
+            }
+          case Stop =>
+            Behaviors.stopped
+        }
+
+      private def save(word: String, count: Count): Unit = {
+        context.pipeToSelf(repository.save(projectionId.id, word, count)) { saveResult =>
+          SaveCompleted(word, saveResult)
+        }
+      }
+
+      // saving the new count for a word in db
+      private def saving(state: Map[Word, Count], replyTo: ActorRef[Try[Done]]): Behavior[Command] =
+        Behaviors.receiveMessagePartial {
+          case SaveCompleted(word, saveResult) =>
+            replyTo ! saveResult
+            saveResult match {
+              case Success(_) =>
+                idle(state.updated(word, state.getOrElse(word, 0) + 1))
+              case Failure(_) =>
+                // remove the word from the state if the save failed, because it could have been a timeout
+                // so that it was actually saved, best to reload
+                idle(state - word)
+            }
+          case Stop =>
+            Behaviors.stopped
+        }
+    }
+    //#behaviorLoadingOnDemand
   }
 
 }
