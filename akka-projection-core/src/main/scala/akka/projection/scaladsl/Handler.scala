@@ -33,5 +33,13 @@ import akka.projection.HandlerRecovery
  * overriding [[HandlerRecovery.onFailure]].
  */
 @ApiMayChange trait Handler[Envelope] extends HandlerRecovery[Envelope] {
+
+  /**
+   * The `process` method is invoked for each `Envelope`.
+   * One envelope is processed at a time. The returned `Future` is to be completed when the processing
+   * of the `envelope` has finished. It will not be invoked with the next envelope until after the returned
+   * `Future` has been completed.
+   */
   def process(envelope: Envelope): Future[Done]
+
 }

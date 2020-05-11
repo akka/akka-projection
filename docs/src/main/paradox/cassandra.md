@@ -83,7 +83,64 @@ Java
 Such simple handlers can also be defined as plain @scala[functions]@java[lambdas] via the helper
 @scala[`Handler.apply`]@java[`Handler.fromFunction`] factory method.
 
-TODO stateful handlers...
+### Stateful handler
+
+The `Handler` can be stateful, with variables and mutable data structures. It is invoked by the `Projection` machinery
+one envelope at a time and visibility guarantees between the invocations are handled automatically, i.e. no volatile
+or other concurrency primitives are needed for managing the state.
+
+The returned @scala[`Future[Done]`]@java[`CompletionStage<Done>`] is to be completed when the processing of the
+`envelope` has finished. The handler will not be invoked with the next envelope until after the returned 
+@scala[`Future[Done]`]@java[`CompletionStage<Done>`] has been completed.
+
+Let us look at how a `Handler` can be implemented in the context of a "word count" domain. The purpose is
+to process a stream of words and for each word keep track of how many times it has occurred. 
+
+Given an envelope and `SourceProvider` for this example:
+
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #envelope #sourceProvider }
+
+FIXME Java examples
+
+and a repository for the interaction with the database:
+
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #repository }
+
+The `Projection` can be definined as:
+
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/akka/projection/cassandra/scaladsl/WordCountDocExampleSpec.scala) { #projection }
+
+The `handler` can be implemented as follows.
+
+A naive approach would be to have one row per word for storing the current count in the database. 
+The handler could be implemented as a completely stateless handler that for each processed envelope loads the current
+count from the database, increment the count by 1 and saved it again. Typically there will be several instances of the
+`Projection` with different `ProjectionId.id`. Each `Projection` instance would be responsible for processing a subset
+of all words. This stateless approach wouldn't be very efficient and you would have to use optimistic database locking to make
+sure that one `Projection` instance is not overwriting the stored value from another instance without reading the right
+value first.
+
+Better would be that each `Projection` instance is a single-writer so that it can keep the current word count in
+memory and only load it on startup or on demand.
+
+A handler that is loading the state from the database when it's starting up:
+
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingInitialState }
+
+Note that the `state` must be wrapped in a @scala[`Future`]@java[`CompletionStage`] if the handler is performing
+asynchronous operations such as the `repository.loadAll` and `repository.save` in this example. Otherwise it would
+be a high risk that the implementation will have concurrency issues.
+
+Another implementation would be a handler that is loading the current count for a word on demand, and thereafter
+caches it in the in-memory state:
+
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingOnDemand }
+
 
 ## Schema
 
