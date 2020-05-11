@@ -46,6 +46,7 @@ lazy val kafka =
     .dependsOn(testkit % "test->test")
 
 lazy val examples = project
+  .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
   .dependsOn(cassandra)
   .dependsOn(eventsourced)

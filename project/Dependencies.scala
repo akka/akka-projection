@@ -51,6 +51,13 @@ object Dependencies {
     val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
   }
 
+  object Examples {
+    val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
+    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
+    val akkaPersistenceCassandra = "com.typesafe.akka" %% "akka-persistence-cassandra" % "1.0.0"
+    val akkaPersistenceJdbc = "com.lightbend.akka" %% "akka-persistence-jdbc" % "4.0.0-RC2"
+  }
+
   private val deps = libraryDependencies
 
   val core =
@@ -93,4 +100,13 @@ object Dependencies {
         Test.logback,
         Test.testContainers,
         Test.scalatestJUnit)
+
+  val examples =
+    deps ++= Seq(
+        Examples.akkaPersistenceTyped,
+        Examples.akkaClusterShardingTyped,
+        Examples.akkaPersistenceCassandra,
+        Examples.akkaPersistenceJdbc,
+        Test.akkaTypedTestkit,
+        Test.logback)
 }
