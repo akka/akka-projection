@@ -32,7 +32,7 @@ trait Projection[Envelope] {
   /**
    * INTERNAL API
    *
-   * This method returns the projection Source mapped with `processEnvelope`, but before any sink attached.
+   * This method returns the projection Source mapped with user 'handler' function, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi
@@ -43,10 +43,14 @@ trait Projection[Envelope] {
    */
   def run()(implicit systemProvider: ClassicActorSystemProvider): Unit
 
+  def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit
+
   /**
    * Stop the projection if it's running.
    *
    * @return Future[Done] - the returned Future should return the stream materialized value.
    */
   def stop()(implicit ec: ExecutionContext): Future[Done]
+
+  def withSettings(projectionSettings: ProjectionSettings): Projection[Envelope]
 }

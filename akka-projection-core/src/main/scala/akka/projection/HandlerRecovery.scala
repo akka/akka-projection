@@ -4,10 +4,10 @@
 
 package akka.projection
 
-import akka.util.JavaDurationConverters._
 import scala.concurrent.duration.FiniteDuration
 
 import akka.annotation.InternalApi
+import akka.util.JavaDurationConverters._
 
 trait HandlerRecovery[Envelope] {
 

@@ -73,6 +73,12 @@ object ProjectionBehaviorSpec {
       stopFut.onComplete(_ => testProbe.ref ! StopObserved)
       stopFut
     }
+
+    override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit = run()
+
+    override def withSettings(projectionSettings: ProjectionSettings): Projection[Int] =
+      this // no need for ProjectionSettings in tests
+
   }
 }
 class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {

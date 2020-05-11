@@ -13,6 +13,7 @@ import akka.Done
 import akka.kafka.ConsumerSettings
 import akka.kafka.scaladsl.Producer
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.internal.MergeableOffset
 import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase

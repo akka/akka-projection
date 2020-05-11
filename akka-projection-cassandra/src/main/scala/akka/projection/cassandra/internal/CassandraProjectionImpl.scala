@@ -21,13 +21,14 @@ import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Flow
-import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
 /**
@@ -72,6 +73,7 @@ import akka.stream.scaladsl.Source
     override val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     strategy: CassandraProjectionImpl.Strategy,
+    projectionSettingsOpt: Option[ProjectionSettings],
     handler: Handler[Envelope])
     extends Projection[Envelope] {
   import CassandraProjectionImpl._
@@ -81,11 +83,33 @@ import akka.stream.scaladsl.Source
   private val promiseToStop: Promise[Done] = Promise()
   private val started = new AtomicBoolean(false)
 
+  override def withSettings(projectionSettings: ProjectionSettings): Projection[Envelope] = {
+    new CassandraProjectionImpl(projectionId, sourceProvider, strategy, Option(projectionSettings), handler)
+  }
+
   override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
     if (started.compareAndSet(false, true)) {
       implicit val system: ActorSystem = systemProvider.classicSystem
+      val done = mappedSource().run()
+      promiseToStop.completeWith(done)
+    }
+  }
 
-      val done = mappedSource().runWith(Sink.ignore)
+  override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
+
+    val projectionSettings = projectionSettingsOpt.getOrElse(ProjectionSettings(systemProvider))
+
+    if (started.compareAndSet(false, true)) {
+      implicit val system: ActorSystem = systemProvider.classicSystem
+      val done =
+        RestartSource
+          .onFailuresWithBackoff(
+            projectionSettings.minBackoff,
+            projectionSettings.maxBackoff,
+            projectionSettings.randomFactor) { () =>
+            mappedSource()
+          }
+          .run()
       promiseToStop.completeWith(done)
     }
   }

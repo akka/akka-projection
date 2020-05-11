@@ -17,12 +17,13 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.Flow
-import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
@@ -40,6 +41,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
     strategy: SlickProjectionImpl.Strategy,
+    projectionSettingsOpt: Option[ProjectionSettings],
     handler: SlickHandler[Envelope])
     extends Projection[Envelope] {
   import SlickProjectionImpl._
@@ -48,14 +50,36 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
   private val killSwitch = KillSwitches.shared(projectionId.id)
   private val promiseToStop: Promise[Done] = Promise()
-
   private val started = new AtomicBoolean(false)
+
+  override def withSettings(projectionSettings: ProjectionSettings): Projection[Envelope] = {
+    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, strategy, Option(projectionSettings), handler)
+  }
 
   override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
     if (started.compareAndSet(false, true)) {
-      val done = mappedSource().runWith(Sink.ignore)
+      val done = mappedSource().run()
       promiseToStop.completeWith(done)
     }
+  }
+
+  override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
+
+    val projectionSettings = projectionSettingsOpt.getOrElse(ProjectionSettings(systemProvider))
+
+    if (started.compareAndSet(false, true)) {
+      val done =
+        RestartSource
+          .onFailuresWithBackoff(
+            projectionSettings.minBackoff,
+            projectionSettings.maxBackoff,
+            projectionSettings.randomFactor) { () =>
+            mappedSource()
+          }
+          .run()
+      promiseToStop.completeWith(done)
+    }
+
   }
 
   override def stop()(implicit ec: ExecutionContext): Future[Done] = {
@@ -154,6 +178,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       .futureSource(futSource)
       .via(killSwitch.flow)
       .via(handlerFlow)
-  }
 
+  }
 }

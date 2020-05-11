@@ -37,7 +37,13 @@ object SlickProjection {
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
       handler: SlickHandler[Envelope]): Projection[Envelope] =
-    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, SlickProjectionImpl.ExactlyOnce, handler)
+    new SlickProjectionImpl(
+      projectionId,
+      sourceProvider,
+      databaseConfig,
+      SlickProjectionImpl.ExactlyOnce,
+      projectionSettingsOpt = None,
+      handler)
 
   /**
    * Create a [[Projection]] with at-least-once processing semantics.
@@ -57,6 +63,7 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       SlickProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
+      projectionSettingsOpt = None,
       handler)
 
 }
