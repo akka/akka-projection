@@ -12,7 +12,7 @@ import scala.concurrent.Future
 import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
-import akka.projection.internal.{MergeableOffset, OffsetSerialization}
+import akka.projection.internal.{ MergeableOffset, OffsetSerialization }
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
@@ -41,7 +41,8 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] =
     offset match {
-      case _: MergeableOffset[_] => throw new IllegalArgumentException("The CassandraOffsetStore does not currently support MergeableOffset")
+      case _: MergeableOffset[_] =>
+        throw new IllegalArgumentException("The CassandraOffsetStore does not currently support MergeableOffset")
       case _ =>
         val SingleOffset(_, manifest, offsetStr, _) =
           toStorageRepresentation(projectionId, offset).asInstanceOf[SingleOffset]
