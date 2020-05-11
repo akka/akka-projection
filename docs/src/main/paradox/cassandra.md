@@ -212,8 +212,30 @@ Java
 ### Handler as an actor
 
 A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html).
- 
-TODO: Documentation pending, see [PR #116](https://github.com/akka/akka-projection/pull/116)
+
+An actor `Behavior` for the word count example that was introduced in the section about @ref:[Stateful handler](#stateful-handler):
+
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #behaviorLoadingInitialState }
+
+FIXME Java examples
+
+The handler and the `Projection` can be definined as:
+
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/akka/projection/cassandra/scaladsl/WordCountDocExampleSpec.scala) { #projection }
+
+The `Behavior` given to the `ActorHandler` is spawned automatically and each envelope is sent to the actor
+with the `envelopeMessage` factory defined for the `ActorHandler`. In addition to the envelope there is also
+an @scala[`replyTo: ActorRef[Try[Done]]`]@java[`replyTo: ActorRef<FIXME>`] parameter in the `envelopeMessage` factory.
+The actor is supposed to send a response message to that `ActorRef` when it has completed the processing of the
+envelope. The @scala[`Try`]@java[FIXME] indicates if the processing was successful or failed.
+
+Another implementation that is loading the current count for a word on demand, and thereafter caches it in the
+in-memory state: 
+
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #behaviorLoadingOnDemand }   
 
 ### Handler lifecycle
 

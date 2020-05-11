@@ -17,6 +17,7 @@ import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.cassandra.ContainerSessionProvider
 import akka.projection.cassandra.scaladsl.CassandraProjection
+import akka.projection.scaladsl.ActorHandler
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import docs.cassandra.WordCountDocExample._
@@ -96,6 +97,23 @@ class WordCountDocExampleSpec
       val projection =
         CassandraProjection
           .atLeastOnce[Long, WordEnvelope](projectionId, new WordSource, handler)
+
+      runAndAssert(projection)
+    }
+
+    "have support for actor Behavior as handler" in {
+      import IllstrateActorLoadingStateOnDemand._
+
+      val projectionId = genRandomProjectionId()
+
+      //#actorHandler
+      val handler = new WordCountActorHandler(WordCountProcessor(projectionId, repository))
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, WordEnvelope](projectionId, new WordSource, handler)
+          .withSaveOffset(afterEnvelopes = 1, afterDuration = Duration.Zero)
+      //#actorHandler
 
       runAndAssert(projection)
     }

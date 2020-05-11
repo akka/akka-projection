@@ -27,6 +27,7 @@ import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.OffsetStrategy
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
@@ -137,6 +138,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): SlickProjectionImpl[Offset, Envelope, P] =
     copy(statusObserver = observer)
+
+  private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
+    None // ActorHandler not supported by SlickProjection (doesn't make sense for DBIO handler)
 
   /**
    * INTERNAL API

@@ -20,6 +20,7 @@ import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
@@ -145,6 +146,8 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
     override private[projection] def mappedSource()(implicit system: ActorSystem[_]) =
       internalState.mappedSource()
+
+    private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
     override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       internalState.newRunningInstance()
