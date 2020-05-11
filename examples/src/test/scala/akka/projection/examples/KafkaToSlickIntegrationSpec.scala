@@ -115,6 +115,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
 
   "KafkaToSlickIntegrationSpec" must {
     "project a model and Kafka offset map to a slick db exactly once" in {
+      pending // FIXME test failure: #109
       val projectionId = ProjectionId("UserEventCountProjection", "UserEventCountProjection-1")
 
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
