@@ -210,6 +210,7 @@ public class ShoppingCart
   }
 
   public interface Event extends CborSerializable {
+    public String getCartId();
   }
 
   public static final class ItemAdded implements Event {
@@ -221,6 +222,10 @@ public class ShoppingCart
       this.cartId = cartId;
       this.itemId = itemId;
       this.quantity = quantity;
+    }
+
+    public String getCartId() {
+      return cartId;
     }
 
     @Override
@@ -236,6 +241,10 @@ public class ShoppingCart
     public ItemRemoved(String cartId, String itemId) {
       this.cartId = cartId;
       this.itemId = itemId;
+    }
+
+    public String getCartId() {
+      return cartId;
     }
 
     @Override
@@ -255,6 +264,10 @@ public class ShoppingCart
       this.quantity = quantity;
     }
 
+    public String getCartId() {
+      return cartId;
+    }
+
     @Override
     public String toString() {
       return "ItemQuantityAdjusted(" + cartId + "," + itemId + "," + quantity + ")";
@@ -269,6 +282,10 @@ public class ShoppingCart
     public CheckedOut(String cartId, Instant eventTime) {
       this.cartId = cartId;
       this.eventTime = eventTime;
+    }
+
+    public String getCartId() {
+      return cartId;
     }
 
     @Override
