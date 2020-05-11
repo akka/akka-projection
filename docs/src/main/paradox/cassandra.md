@@ -33,7 +33,7 @@ The table below shows `akka-projection-cassandra`'s direct dependencies and the 
 
 ## at-least-once
 
-The offset can be stored after the envelope has been processed and that gives at-least-once processing semantics.
+The offset is stored after the envelope has been processed and giving at-least-once processing semantics.
 This means that if the projection is restarted from previously stored offset some elements may be processed more
 than once.
 
@@ -51,7 +51,7 @@ The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
 ## at-most-once
 
-The offset for each envelope can be stored before the envelope has been processed and that gives at-most-once
+The offset for each envelope is stored before the envelope has been processed and giving at-most-once
 processing semantics. This means that if the projection is restarted from previously stored offset one envelope
 may not have been processed.
 
@@ -61,7 +61,7 @@ Scala
 Java
 :  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #projection-imports #atLeastOnce }
 
-Since the offset must stored for each envelope this is slower than @ref:[at-least-once](#at-least-once), which
+Since the offset must be stored for each envelope this is slower than @ref:[at-least-once](#at-least-once), which
 can batch offsets before storing.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
