@@ -44,17 +44,12 @@ class CassandraOffsetStoreSpec
     Await.result(ContainerSessionProvider.started, 30.seconds)
 
     Await.result(for {
-      session <- session.underlying()
+      s <- session.underlying()
       // reason for setSchemaMetadataEnabled is that it speed up tests
-      _ <- session.setSchemaMetadataEnabled(false).toScala
+      _ <- s.setSchemaMetadataEnabled(false).toScala
       _ <- offsetStore.createKeyspaceAndTable()
-      _ <- session.setSchemaMetadataEnabled(null).toScala
+      _ <- s.setSchemaMetadataEnabled(null).toScala
     } yield Done, 30.seconds)
-
-    // reason for setSchemaMetadataEnabled is that it speed up tests
-    session.underlying().map(_.setSchemaMetadataEnabled(false)).futureValue
-    Await.result(offsetStore.createKeyspaceAndTable(), 15.seconds)
-    session.underlying().map(_.setSchemaMetadataEnabled(null)).futureValue
   }
 
   override protected def afterAll(): Unit = {
