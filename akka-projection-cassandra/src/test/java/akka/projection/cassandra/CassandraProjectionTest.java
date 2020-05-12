@@ -18,6 +18,7 @@ import akka.Done;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.Projection;
+import akka.projection.ProjectionSettings;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.internal.CassandraOffsetStore;
 import akka.projection.cassandra.javadsl.CassandraProjection;

@@ -15,6 +15,7 @@ import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.stream.DelayOverflowStrategy
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.DelayStrategy
@@ -134,6 +135,9 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
   case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
       extends Projection[Int] {
 
+    override def withSettings(projectionSettings: ProjectionSettings): Projection[Int] =
+      this // no need for ProjectionSettings in tests
+
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
 
     private val killSwitch = KillSwitches.shared(projectionId.id)
@@ -144,6 +148,9 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
         mappedSource.runWith(Sink.ignore)
       promiseToStop.completeWith(done)
     }
+
+    override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit =
+      run()
 
     private def process(elt: Int): Future[Done] = {
       if (predicate(elt)) concat(elt)

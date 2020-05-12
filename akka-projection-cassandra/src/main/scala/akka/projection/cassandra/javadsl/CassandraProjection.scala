@@ -46,7 +46,9 @@ object CassandraProjection {
    * before the `handler` has processed the envelope. This means that if the projection is restarted
    * from previously stored offset one envelope may not have been processed.
    */
-  def atMostOnce[Offset, Envelope](projectionId: ProjectionId, sourceProvider: SourceProvider[Offset, Envelope])(
+  def atMostOnce[Offset, Envelope](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
       handler: Handler[Envelope]): Projection[Envelope] =
     scaladsl.CassandraProjection.atMostOnce(
       projectionId,

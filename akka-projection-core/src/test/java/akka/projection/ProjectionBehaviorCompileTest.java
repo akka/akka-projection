@@ -45,8 +45,19 @@ public class ProjectionBehaviorCompileTest {
         }
 
         @Override
+        public void runWithBackoff(ClassicActorSystemProvider systemProvider) {
+
+        }
+
+        @Override
         public Future<Done> stop(ExecutionContext ec) {
             return null;
+        }
+
+        @Override
+        public Projection<String> withSettings(ProjectionSettings projectionSettings) {
+            // no need for ProjectionSettings in tests
+            return this;
         }
     }
 }

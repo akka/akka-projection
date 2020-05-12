@@ -12,6 +12,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import akka.projection.ProjectionSettings;
 import scala.compat.java8.FutureConverters;
 import scala.concurrent.ExecutionContext;
 import scala.concurrent.Future;
@@ -203,9 +204,20 @@ public class ProjectionTestKitTest extends JUnitSuite {
         }
 
         @Override
+        public void runWithBackoff(ClassicActorSystemProvider systemProvider) {
+            run(systemProvider);
+        }
+
+        @Override
         public Future<Done> stop(ExecutionContext ec) {
             killSwitch.shutdown();
             return promiseToStop.future();
+        }
+
+        @Override
+        public Projection<Integer> withSettings(ProjectionSettings projectionSettings) {
+            // no need for ProjectionSettings in tests
+            return this;
         }
     }
 }

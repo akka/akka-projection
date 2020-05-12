@@ -19,6 +19,7 @@ import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.TestException
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
