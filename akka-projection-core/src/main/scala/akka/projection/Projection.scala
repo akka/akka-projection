@@ -11,6 +11,7 @@ import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
+import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
 /**
@@ -39,16 +40,45 @@ trait Projection[Envelope] {
   private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _]
 
   /**
-   * Run the Projection.
+   * INTERNAL API
+   * Return a RunningProjection
    */
-  def run()(implicit systemProvider: ClassicActorSystemProvider): Unit
-
-  /**
-   * Stop the projection if it's running.
-   *
-   * @return Future[Done] - the returned Future should return the stream materialized value.
-   */
-  def stop()(implicit ec: ExecutionContext): Future[Done]
+  @InternalApi
+  private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection
 
   def withSettings(projectionSettings: ProjectionSettings): Projection[Envelope]
+
+}
+
+/**
+ * Helper to wrap the projection source with a RestartSource using the provided settings.
+ */
+object RunningProjection {
+  def withBackoff(source: Source[Done, _], settings: ProjectionSettings): Source[Done, _] =
+    RestartSource
+      .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
+        () => source
+      }
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] trait RunningProjection {
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[projection] def systemProvider: ClassicActorSystemProvider
+
+  /**
+   * INTERNAL API
+   *
+   * Stop the projection if it's running.
+   * @return Future[Done] - the returned Future should return the stream materialized value.
+   */
+  @InternalApi
+  private[projection] def stop()(implicit ec: ExecutionContext): Future[Done]
 }

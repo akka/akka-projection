@@ -40,7 +40,7 @@ object CassandraProjection {
       projectionId,
       sourceProvider,
       CassandraProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
-      projectionSettingsOpt = None,
+      settingsOpt = None,
       handler)
 
   /**
@@ -56,6 +56,6 @@ object CassandraProjection {
       projectionId,
       sourceProvider,
       CassandraProjectionImpl.AtMostOnce,
-      projectionSettingsOpt = None,
+      settingsOpt = None,
       handler)
 }

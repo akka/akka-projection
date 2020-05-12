@@ -12,7 +12,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import akka.projection.ProjectionSettings;
+import akka.projection.*;
+import org.junit.*;
 import scala.compat.java8.FutureConverters;
 import scala.concurrent.ExecutionContext;
 import scala.concurrent.Future;
@@ -23,8 +24,6 @@ import akka.NotUsed;
 import akka.actor.ClassicActorSystemProvider;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.japi.function.Function;
-import akka.projection.Projection;
-import akka.projection.ProjectionId;
 import akka.stream.DelayOverflowStrategy;
 import akka.stream.KillSwitches;
 import akka.stream.SharedKillSwitch;
@@ -32,10 +31,6 @@ import akka.stream.javadsl.DelayStrategy;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.stream.testkit.TestSubscriber;
-import org.junit.Assert;
-import org.junit.ClassRule;
-import org.junit.ComparisonFailure;
-import org.junit.Test;
 import org.scalatestplus.junit.JUnitSuite;
 
 import static org.junit.Assert.assertEquals;
@@ -160,16 +155,11 @@ public class ProjectionTestKitTest extends JUnitSuite {
         final private Source<Integer, NotUsed> src;
         final private StringBuffer strBuffer;
         final private Predicate<Integer> predicate;
-        final private SharedKillSwitch killSwitch;
-
-        final private Promise<Done> promiseToStop;
 
         private TestProjection(Source<Integer, NotUsed> src, StringBuffer strBuffer, Predicate<Integer> predicate) {
             this.src = src;
             this.strBuffer = strBuffer;
             this.predicate = predicate;
-            this.killSwitch = KillSwitches.shared(projectionId().id());
-            this.promiseToStop = Promise.apply();
         }
 
 
@@ -180,9 +170,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
 
         @Override
         public akka.stream.scaladsl.Source<Done, NotUsed> mappedSource(ClassicActorSystemProvider systemProvider) {
-            Source<Integer, NotUsed> via = src.via(killSwitch.flow());
-            return src.via(killSwitch.flow())
-                    .mapAsync(1, (Function<Integer, CompletionStage<Done>>) this::process).asScala();
+            return new TestProjectionState(systemProvider).mappedSource();
         }
 
         private CompletionStage<Done> process(Integer i) {
@@ -198,21 +186,62 @@ public class ProjectionTestKitTest extends JUnitSuite {
         }
 
         @Override
-        public void run(ClassicActorSystemProvider systemProvider) {
-            CompletionStage<Done> done = mappedSource(systemProvider).asJava().runWith(Sink.ignore(), systemProvider);
-            promiseToStop.completeWith(FutureConverters.toScala(done));
-        }
-
-        @Override
-        public Future<Done> stop(ExecutionContext ec) {
-            killSwitch.shutdown();
-            return promiseToStop.future();
+        public RunningProjection run(ClassicActorSystemProvider systemProvider) {
+            return new TestProjectionState(systemProvider).newRunningInstance();
         }
 
         @Override
         public Projection<Integer> withSettings(ProjectionSettings projectionSettings) {
             // no need for ProjectionSettings in tests
             return this;
+        }
+
+        private class TestProjectionState {
+
+            final private ClassicActorSystemProvider systemProvider;
+            final private SharedKillSwitch killSwitch;
+
+            private TestProjectionState(ClassicActorSystemProvider systemProvider) {
+                this.systemProvider = systemProvider;
+                this.killSwitch = KillSwitches.shared(TestProjection.this.projectionId().id());
+            }
+
+            private akka.stream.scaladsl.Source<Done, NotUsed> mappedSource() {
+                return src.via(killSwitch.flow())
+                        .mapAsync(1, (Function<Integer, CompletionStage<Done>>) TestProjection.this::process).asScala();
+            }
+
+            private RunningProjection newRunningInstance() {
+                return new TestRunningProjection(mappedSource(), killSwitch, systemProvider);
+            }
+        }
+
+        private class TestRunningProjection implements RunningProjection {
+
+            final private ClassicActorSystemProvider systemProvider;
+            final private Promise<Done> promiseToStop;
+            final private SharedKillSwitch killSwitch;
+
+            private TestRunningProjection(akka.stream.scaladsl.Source<Done, NotUsed> source, SharedKillSwitch killSwitch, ClassicActorSystemProvider systemProvider) {
+
+                this.systemProvider = systemProvider;
+                this.killSwitch = killSwitch;
+                this.promiseToStop = Promise.apply();;
+
+                CompletionStage<Done> done = source.asJava().runWith(Sink.ignore(), systemProvider);
+                promiseToStop.completeWith(FutureConverters.toScala(done));
+            }
+
+            @Override
+            public ClassicActorSystemProvider systemProvider() {
+                return this.systemProvider;
+            }
+
+            @Override
+            public Future<Done> stop(ExecutionContext ec) {
+                killSwitch.shutdown();
+                return promiseToStop.future();
+            }
         }
     }
 }

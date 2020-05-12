@@ -4,8 +4,6 @@
 
 package akka.projection.cassandra.internal
 
-import java.util.concurrent.atomic.AtomicBoolean
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
@@ -22,13 +20,14 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.RunningProjection
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
+import akka.stream.SharedKillSwitch
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Flow
-import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
 /**
@@ -73,115 +72,141 @@ import akka.stream.scaladsl.Source
     override val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     strategy: CassandraProjectionImpl.Strategy,
-    projectionSettingsOpt: Option[ProjectionSettings],
+    settingsOpt: Option[ProjectionSettings],
     handler: Handler[Envelope])
     extends Projection[Envelope] {
   import CassandraProjectionImpl._
   import HandlerRecoveryImpl.applyUserRecovery
 
-  private val killSwitch = KillSwitches.shared(projectionId.id)
-  private val promiseToStop: Promise[Done] = Promise()
-  private val started = new AtomicBoolean(false)
-
-  override def withSettings(projectionSettings: ProjectionSettings): Projection[Envelope] = {
-    new CassandraProjectionImpl(projectionId, sourceProvider, strategy, Option(projectionSettings), handler)
+  override def withSettings(settings: ProjectionSettings): Projection[Envelope] = {
+    new CassandraProjectionImpl(projectionId, sourceProvider, strategy, Option(settings), handler)
   }
 
-  override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
+  /**
+   * INTERNAL API
+   * Return a RunningProjection
+   */
+  @InternalApi
+  override private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection =
+    new InternalProjectionState(settingsOrDefaults).newRunningInstance()
 
-    val projectionSettings = projectionSettingsOpt.getOrElse(ProjectionSettings(systemProvider))
-
-    if (started.compareAndSet(false, true)) {
-      implicit val system: ActorSystem = systemProvider.classicSystem
-      val done =
-        RestartSource
-          .onFailuresWithBackoff(
-            projectionSettings.minBackoff,
-            projectionSettings.maxBackoff,
-            projectionSettings.randomFactor,
-            projectionSettings.maxRestarts) { () =>
-            mappedSource()
-          }
-          .run()
-      promiseToStop.completeWith(done)
-    }
-  }
-
-  override def stop()(implicit ec: ExecutionContext): Future[Done] = {
-    if (started.get()) {
-      killSwitch.shutdown()
-      promiseToStop.future
-    } else {
-      Future.failed(new IllegalStateException(s"Projection [$projectionId] not started yet!"))
-    }
-  }
-
+  /**
+   * INTERNAL API
+   *
+   * This method returns the projection Source mapped with user 'handler' function, but before any sink attached.
+   * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
+   */
+  @InternalApi
   override private[projection] def mappedSource()(
-      implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] = {
-    val system: ActorSystem = systemProvider.classicSystem
-    // FIXME maybe use the session-dispatcher config
-    implicit val ec: ExecutionContext = system.dispatcher
+      implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
+    new InternalProjectionState(settingsOrDefaults).mappedSource()
 
-    val logger = Logging(systemProvider.classicSystem, this.getClass)
+  /*
+   * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
+   */
+  private def settingsOrDefaults(implicit systemProvider: ClassicActorSystemProvider): ProjectionSettings =
+    settingsOpt.getOrElse(ProjectionSettings(systemProvider))
 
-    // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
-    val sessionConfigPath = "akka.projection.cassandra"
-    // FIXME session look could be moved to CassandraOffsetStore if that's better
-    val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
+  /*
+   * INTERNAL API
+   * This internal class will hold the KillSwitch that is needed
+   * when building the mappedSource and when running the projection (to stop)
+   */
+  private class InternalProjectionState(settings: ProjectionSettings)(
+      implicit systemProvider: ClassicActorSystemProvider) {
 
-    val offsetStore = new CassandraOffsetStore(session)
+    private val killSwitch = KillSwitches.shared(projectionId.id)
 
-    val readOffsets = () => offsetStore.readOffset(projectionId)
+    private[projection] def mappedSource(): Source[Done, _] = {
+      val system: ActorSystem = systemProvider.classicSystem
+      // FIXME maybe use the session-dispatcher config
+      implicit val ec: ExecutionContext = system.dispatcher
 
-    val source: Source[(Offset, Envelope), NotUsed] =
-      Source
-        .futureSource(sourceProvider.source(readOffsets))
-        .via(killSwitch.flow)
-        .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
-        .mapMaterializedValue(_ => NotUsed)
+      val logger = Logging(systemProvider.classicSystem, this.getClass)
 
-    val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
-      Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
-        case (offset, envelope) =>
-          applyUserRecovery(handler, envelope, offset, logger, () => handler.process(envelope))
-            .map(_ => offset)
-      }
+      // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
+      val sessionConfigPath = "akka.projection.cassandra"
+      // FIXME session look could be moved to CassandraOffsetStore if that's better
+      val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
 
-    val composedSource: Source[Done, NotUsed] = strategy match {
-      case AtLeastOnce(1, _) =>
-        // optimization of general AtLeastOnce case
-        source.via(handlerFlow).mapAsync(1) { offset =>
-          offsetStore.saveOffset(projectionId, offset)
+      val offsetStore = new CassandraOffsetStore(session)
+
+      val readOffsets = () => offsetStore.readOffset(projectionId)
+
+      val source: Source[(Offset, Envelope), NotUsed] =
+        Source
+          .futureSource(sourceProvider.source(readOffsets))
+          .via(killSwitch.flow)
+          .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
+          .mapMaterializedValue(_ => NotUsed)
+
+      val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
+        Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
+          case (offset, envelope) =>
+            applyUserRecovery(handler, envelope, offset, logger, () => handler.process(envelope))
+              .map(_ => offset)
         }
-      case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
-        source
-          .via(handlerFlow)
-          .groupedWithin(afterEnvelopes, orAfterDuration)
-          .collect { case grouped if grouped.nonEmpty => grouped.last }
-          .mapAsync(parallelism = 1) { offset =>
+
+      val composedSource: Source[Done, NotUsed] = strategy match {
+        case AtLeastOnce(1, _) =>
+          // optimization of general AtLeastOnce case
+          source.via(handlerFlow).mapAsync(1) { offset =>
             offsetStore.saveOffset(projectionId, offset)
           }
-      case AtMostOnce =>
-        // prevent usage of retries for at-most-once
-        val atMostOnceHandler = new AtMostOnceHandler(handler, logger)
-        source
-          .mapAsync(parallelism = 1) {
-            case (offset, envelope) =>
-              offsetStore
-                .saveOffset(projectionId, offset)
-                .flatMap(
-                  _ =>
-                    applyUserRecovery(
-                      atMostOnceHandler,
-                      envelope,
-                      offset,
-                      logger,
-                      () => atMostOnceHandler.process(envelope)))
-          }
-          .map(_ => Done)
+        case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
+          source
+            .via(handlerFlow)
+            .groupedWithin(afterEnvelopes, orAfterDuration)
+            .collect { case grouped if grouped.nonEmpty => grouped.last }
+            .mapAsync(parallelism = 1) { offset =>
+              offsetStore.saveOffset(projectionId, offset)
+            }
+        case AtMostOnce =>
+          // prevent usage of retries for at-most-once
+          val atMostOnceHandler = new AtMostOnceHandler(handler, logger)
+          source
+            .mapAsync(parallelism = 1) {
+              case (offset, envelope) =>
+                offsetStore
+                  .saveOffset(projectionId, offset)
+                  .flatMap(
+                    _ =>
+                      applyUserRecovery(
+                        atMostOnceHandler,
+                        envelope,
+                        offset,
+                        logger,
+                        () => atMostOnceHandler.process(envelope)))
+            }
+            .map(_ => Done)
+      }
+
+      composedSource
     }
 
-    composedSource
+    private[projection] def newRunningInstance(): RunningProjection = {
+      new CassandraRunningProjection(RunningProjection.withBackoff(mappedSource(), settings), killSwitch)
+    }
+  }
+
+  private class CassandraRunningProjection(source: Source[Done, _], killSwitch: SharedKillSwitch)(
+      implicit val systemProvider: ClassicActorSystemProvider)
+      extends RunningProjection {
+
+    private val futureDone = source.run()
+
+    /**
+     * INTERNAL API
+     *
+     * Stop the projection if it's running.
+     *
+     * @return Future[Done] - the returned Future should return the stream materialized value.
+     */
+    @InternalApi
+    override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
+      killSwitch.shutdown()
+      futureDone
+    }
   }
 
 }
