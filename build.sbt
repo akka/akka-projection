@@ -44,6 +44,7 @@ lazy val kafka =
     .settings(Test / parallelExecution := false)
     .dependsOn(core)
     .dependsOn(testkit % "test->test")
+    .dependsOn(slick % "test->test;test->compile")
 
 lazy val examples = project
   .settings(Dependencies.examples)
