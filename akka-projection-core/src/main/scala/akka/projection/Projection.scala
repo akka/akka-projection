@@ -43,8 +43,6 @@ trait Projection[Envelope] {
    */
   def run()(implicit systemProvider: ClassicActorSystemProvider): Unit
 
-  def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit
-
   /**
    * Stop the projection if it's running.
    *

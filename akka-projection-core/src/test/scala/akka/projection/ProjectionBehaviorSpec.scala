@@ -74,8 +74,6 @@ object ProjectionBehaviorSpec {
       stopFut
     }
 
-    override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit = run()
-
     override def withSettings(projectionSettings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
 

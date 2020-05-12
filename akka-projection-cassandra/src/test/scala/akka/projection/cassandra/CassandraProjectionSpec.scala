@@ -26,7 +26,6 @@ import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.scaladsl.Handler

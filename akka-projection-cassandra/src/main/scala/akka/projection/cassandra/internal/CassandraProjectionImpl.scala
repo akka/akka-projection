@@ -88,14 +88,6 @@ import akka.stream.scaladsl.Source
   }
 
   override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
-    if (started.compareAndSet(false, true)) {
-      implicit val system: ActorSystem = systemProvider.classicSystem
-      val done = mappedSource().run()
-      promiseToStop.completeWith(done)
-    }
-  }
-
-  override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
 
     val projectionSettings = projectionSettingsOpt.getOrElse(ProjectionSettings(systemProvider))
 
@@ -106,7 +98,8 @@ import akka.stream.scaladsl.Source
           .onFailuresWithBackoff(
             projectionSettings.minBackoff,
             projectionSettings.maxBackoff,
-            projectionSettings.randomFactor) { () =>
+            projectionSettings.randomFactor,
+            projectionSettings.maxRestarts) { () =>
             mappedSource()
           }
           .run()

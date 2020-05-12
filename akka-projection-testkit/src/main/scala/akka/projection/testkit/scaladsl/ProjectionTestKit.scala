@@ -14,6 +14,7 @@ import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
+import akka.projection.ProjectionSettings
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 
@@ -46,11 +47,15 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
       interval: FiniteDuration): Unit = {
 
     val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
+
+    val settingsForTest = ProjectionSettings(system).withBackoff(0.millis, 0.millis, 0.0, 0)
+    val projectionWithTestSettings = projection.withSettings(settingsForTest)
+
     try {
-      projection.run()(testKit.system.classicSystem)
+      projectionWithTestSettings.run()(testKit.system.classicSystem)
       probe.awaitAssert(assertFunc, max.dilated, interval)
     } finally {
-      Await.result(projection.stop(), max)
+      Await.result(projectionWithTestSettings.stop(), max)
     }
   }
 

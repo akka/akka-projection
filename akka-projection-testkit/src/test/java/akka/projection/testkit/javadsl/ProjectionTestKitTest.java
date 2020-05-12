@@ -204,11 +204,6 @@ public class ProjectionTestKitTest extends JUnitSuite {
         }
 
         @Override
-        public void runWithBackoff(ClassicActorSystemProvider systemProvider) {
-            run(systemProvider);
-        }
-
-        @Override
         public Future<Done> stop(ExecutionContext ec) {
             killSwitch.shutdown();
             return promiseToStop.future();

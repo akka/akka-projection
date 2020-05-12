@@ -46,44 +46,37 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     extends Projection[Envelope] {
   import SlickProjectionImpl._
 
-  private val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
+  private lazy val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
 
-  private val killSwitch = KillSwitches.shared(projectionId.id)
-  private val promiseToStop: Promise[Done] = Promise()
-  private val started = new AtomicBoolean(false)
+  private lazy val killSwitch = KillSwitches.shared(projectionId.id)
+  private lazy val promiseToStop: Promise[Done] = Promise()
+  private lazy val started = new AtomicBoolean(false)
 
   override def withSettings(projectionSettings: ProjectionSettings): Projection[Envelope] = {
     new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, strategy, Option(projectionSettings), handler)
   }
 
   override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
-    if (started.compareAndSet(false, true)) {
-      val done = mappedSource().run()
-      promiseToStop.completeWith(done)
-    }
-  }
-
-  override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
 
     val projectionSettings = projectionSettingsOpt.getOrElse(ProjectionSettings(systemProvider))
 
-    if (started.compareAndSet(false, true)) {
+    if (this.started.compareAndSet(false, true)) {
       val done =
         RestartSource
           .onFailuresWithBackoff(
             projectionSettings.minBackoff,
             projectionSettings.maxBackoff,
-            projectionSettings.randomFactor) { () =>
+            projectionSettings.randomFactor,
+            projectionSettings.maxRestarts) { () =>
             mappedSource()
           }
           .run()
       promiseToStop.completeWith(done)
     }
-
   }
 
   override def stop()(implicit ec: ExecutionContext): Future[Done] = {
-    if (started.get()) {
+    if (this.started.get()) {
       killSwitch.shutdown()
       promiseToStop.future
     } else {

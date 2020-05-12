@@ -41,7 +41,7 @@ object ProjectionBehavior {
       Behaviors.setup[Command] { ctx =>
 
         ctx.log.info("Starting projection [{}]", projection.projectionId)
-        projection.runWithBackoff()(ctx.system)
+        projection.run()(ctx.system)
 
         Behaviors.receiveMessagePartial {
           case Stop =>

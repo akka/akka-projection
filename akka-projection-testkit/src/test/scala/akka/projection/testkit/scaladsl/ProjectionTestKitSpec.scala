@@ -149,9 +149,6 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       promiseToStop.completeWith(done)
     }
 
-    override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit =
-      run()
-
     private def process(elt: Int): Future[Done] = {
       if (predicate(elt)) concat(elt)
       Future.successful(Done)
