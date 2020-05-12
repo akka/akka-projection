@@ -4,10 +4,10 @@
 
 package akka.projection.slick.internal
 
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-import scala.jdk.DurationConverters._
 
 import akka.Done
 import akka.NotUsed
@@ -19,9 +19,11 @@ import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.internal.HandlerRecoveryImpl
+import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.AtLeastOnceSlickProjection
 import akka.projection.slick.ExactlyOnceSlickProjection
+import akka.projection.slick.GroupedSlickProjection
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.stream.KillSwitches
@@ -33,8 +35,8 @@ import slick.jdbc.JdbcProfile
 
 @InternalApi
 private[projection] object SlickProjectionImpl {
-  sealed trait Strategy
-  sealed trait WithRecoveryStrategy extends Strategy {
+  sealed trait OffsetStrategy
+  sealed trait WithRecoveryStrategy extends OffsetStrategy {
     def recoveryStrategy: Option[HandlerRecoveryStrategy]
   }
   final case class ExactlyOnce(recoveryStrategy: Option[HandlerRecoveryStrategy] = None) extends WithRecoveryStrategy
@@ -43,6 +45,20 @@ private[projection] object SlickProjectionImpl {
       orAfterDuration: Option[FiniteDuration] = None,
       recoveryStrategy: Option[HandlerRecoveryStrategy] = None)
       extends WithRecoveryStrategy
+
+  sealed trait HandlerStrategy[Envelope] {
+    def lifecycle: HandlerLifecycle
+  }
+  final case class SingleHandlerStrategy[Envelope](handler: SlickHandler[Envelope]) extends HandlerStrategy[Envelope] {
+    override def lifecycle: HandlerLifecycle = handler
+  }
+  final case class GroupedHandlerStrategy[Envelope](
+      handler: SlickHandler[immutable.Seq[Envelope]],
+      afterEnvelopes: Option[Int] = None,
+      orAfterDuration: Option[FiniteDuration] = None)
+      extends HandlerStrategy[Envelope] {
+    override def lifecycle: HandlerLifecycle = handler
+  }
 }
 
 @InternalApi
@@ -50,17 +66,24 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
-    val strategy: SlickProjectionImpl.Strategy,
     settingsOpt: Option[ProjectionSettings],
-    handler: SlickHandler[Envelope])
+    val offsetStrategy: SlickProjectionImpl.OffsetStrategy,
+    handlerStrategy: SlickProjectionImpl.HandlerStrategy[Envelope])
     extends SlickProjection[Envelope]
     with ExactlyOnceSlickProjection[Envelope]
-    with AtLeastOnceSlickProjection[Envelope] {
+    with AtLeastOnceSlickProjection[Envelope]
+    with GroupedSlickProjection[Envelope] {
 
   import SlickProjectionImpl._
 
   override def withSettings(settings: ProjectionSettings): SlickProjectionImpl[Offset, Envelope, P] =
-    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, strategy, Option(settings), handler)
+    new SlickProjectionImpl(
+      projectionId,
+      sourceProvider,
+      databaseConfig,
+      Option(settings),
+      offsetStrategy,
+      handlerStrategy)
 
   /**
    * Settings for AtLeastOnceSlickProjection
@@ -72,37 +95,38 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       projectionId,
       sourceProvider,
       databaseConfig,
-      strategy
+      settingsOpt,
+      offsetStrategy
         .asInstanceOf[AtLeastOnce]
         .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)),
-      settingsOpt,
-      handler)
+      handlerStrategy)
 
   /**
-   * Java API
+   * Settings for GroupedSlickProjection
    */
-  override def withSaveOffset(
-      afterEnvelopes: Int,
-      afterDuration: java.time.Duration): SlickProjectionImpl[Offset, Envelope, P] =
+  override def withGroup(
+      groupAfterEnvelopes: Int,
+      groupAfterDuration: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
       databaseConfig,
-      atLeastOnceStrategy
-        .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration.toScala)),
       settingsOpt,
-      handler)
+      offsetStrategy,
+      handlerStrategy
+        .asInstanceOf[GroupedHandlerStrategy[Envelope]]
+        .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
 
   /**
    * Settings for AtLeastOnceSlickProjection and ExactlyOnceSlickProjection
    */
   override def withRecoveryStrategy(
       recoveryStrategy: HandlerRecoveryStrategy): SlickProjectionImpl[Offset, Envelope, P] = {
-    val newStrategy = strategy match {
+    val newStrategy = offsetStrategy match {
       case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
       case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
     }
-    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, newStrategy, settingsOpt, handler)
+    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, settingsOpt, newStrategy, handlerStrategy)
   }
 
   /**
@@ -151,11 +175,12 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
       implicit val executionContext: ExecutionContext = system.executionContext
 
-      def applyUserRecovery(recoveryStrategy: HandlerRecoveryStrategy, offset: Offset)(
+      def applyUserRecovery(recoveryStrategy: HandlerRecoveryStrategy, firstOffset: Offset, lastOffset: Offset)(
           futureCallback: () => Future[Done]): Future[Done] =
-        HandlerRecoveryImpl.applyUserRecovery[Offset](recoveryStrategy, offset, logger, futureCallback)
+        HandlerRecoveryImpl.applyUserRecovery[Offset](recoveryStrategy, firstOffset, lastOffset, logger, futureCallback)
 
       def processEnvelopeAndStoreOffsetInSameTransaction(
+          handler: SlickHandler[Envelope],
           recoveryStrategy: HandlerRecoveryStrategy,
           env: Envelope): Future[Done] = {
         val offset = sourceProvider.extractOffset(env)
@@ -167,15 +192,38 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
             .flatMap(_ => handler.process(env))
             .transactionally
 
-        applyUserRecovery(recoveryStrategy, offset) { () =>
+        applyUserRecovery(recoveryStrategy, offset, offset) { () =>
           databaseConfig.db.run(txDBIO).map(_ => Done)
         }
       }
 
-      def processEnvelope(recoveryStrategy: HandlerRecoveryStrategy, env: Envelope, offset: Offset): Future[Done] = {
+      def processEnvelopesAndStoreOffsetInSameTransaction(
+          handler: SlickHandler[immutable.Seq[Envelope]],
+          recoveryStrategy: HandlerRecoveryStrategy,
+          envelopes: immutable.Seq[Envelope]): Future[Done] = {
+        val firstOffset = sourceProvider.extractOffset(envelopes.head)
+        val lastOffset = sourceProvider.extractOffset(envelopes.last)
+        // run user function and offset storage on the same transaction
+        // any side-effect in user function is at-least-once
+        val txDBIO =
+          offsetStore
+            .saveOffset(projectionId, lastOffset)
+            .flatMap(_ => handler.process(envelopes))
+            .transactionally
+
+        applyUserRecovery(recoveryStrategy, firstOffset, lastOffset) { () =>
+          databaseConfig.db.run(txDBIO).map(_ => Done)
+        }
+      }
+
+      def processEnvelope(
+          handler: SlickHandler[Envelope],
+          recoveryStrategy: HandlerRecoveryStrategy,
+          env: Envelope,
+          offset: Offset): Future[Done] = {
         // user function in one transaction (may be composed of several DBIOAction)
         val dbio = handler.process(env).transactionally
-        applyUserRecovery(recoveryStrategy, offset) { () =>
+        applyUserRecovery(recoveryStrategy, offset, offset) { () =>
           databaseConfig.db.run(dbio).map(_ => Done)
         }
       }
@@ -195,29 +243,49 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       }
 
       val handlerFlow: Flow[Envelope, Done, _] =
-        strategy match {
+        offsetStrategy match {
           case ExactlyOnce(recoveryStrategyOpt) =>
             val recoveryStrategy = recoveryStrategyOpt.getOrElse(settings.recoveryStrategy)
-            Flow[Envelope]
-              .mapAsync(1)(env => processEnvelopeAndStoreOffsetInSameTransaction(recoveryStrategy, env))
+            handlerStrategy match {
+              case SingleHandlerStrategy(handler) =>
+                Flow[Envelope]
+                  .mapAsync(1)(env => processEnvelopeAndStoreOffsetInSameTransaction(handler, recoveryStrategy, env))
+
+              case grouped: GroupedHandlerStrategy[Envelope] =>
+                val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
+                val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
+                Flow[Envelope]
+                  .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
+                  .filterNot(_.isEmpty)
+                  .mapAsync(parallelism = 1) { group =>
+                    processEnvelopesAndStoreOffsetInSameTransaction(grouped.handler, recoveryStrategy, group)
+                  }
+            }
 
           case AtLeastOnce(afterEnvelopesOpt, orAfterDurationOpt, recoveryStrategyOpt) =>
             val afterEnvelopes = afterEnvelopesOpt.getOrElse(settings.saveOffsetAfterEnvelopes)
             val orAfterDuration = orAfterDurationOpt.getOrElse(settings.saveOffsetAfterDuration)
             val recoveryStrategy = recoveryStrategyOpt.getOrElse(settings.recoveryStrategy)
 
+            val handler = handlerStrategy match {
+              case SingleHandlerStrategy(handler) => handler
+              case _                              =>
+                // not possible
+                throw new IllegalStateException("Unsupported combination of atLeastOnce and grouped")
+            }
+
             if (afterEnvelopes == 1)
               // optimization of general AtLeastOnce case, still separate transactions for processEnvelope
               // and storeOffset
               Flow[Envelope].mapAsync(1) { env =>
                 val offset = sourceProvider.extractOffset(env)
-                processEnvelope(recoveryStrategy, env, offset).flatMap(_ => storeOffset(offset))
+                processEnvelope(handler, recoveryStrategy, env, offset).flatMap(_ => storeOffset(offset))
               }
             else
               Flow[Envelope]
                 .mapAsync(1) { env =>
                   val offset = sourceProvider.extractOffset(env)
-                  processEnvelope(recoveryStrategy, env, offset).map(_ => offset)
+                  processEnvelope(handler, recoveryStrategy, env, offset).map(_ => offset)
                 }
                 .groupedWithin(afterEnvelopes, orAfterDuration)
                 .collect { case grouped if grouped.nonEmpty => grouped.last }
@@ -226,12 +294,12 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
       val composedSource: Source[Done, NotUsed] =
         Source
-          .futureSource(handler.tryStart().flatMap(_ => sourceProvider.source(readOffsets)))
+          .futureSource(handlerStrategy.lifecycle.tryStart().flatMap(_ => sourceProvider.source(readOffsets)))
           .via(killSwitch.flow)
           .via(handlerFlow)
           .mapMaterializedValue(_ => NotUsed)
 
-      RunningProjection.stopHandlerOnTermination(composedSource, () => handler.tryStop())
+      RunningProjection.stopHandlerOnTermination(composedSource, () => handlerStrategy.lifecycle.tryStop())
     }
 
     private[projection] def newRunningInstance(): RunningProjection =

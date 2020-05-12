@@ -22,6 +22,8 @@ trait ProjectionSettings {
   def maxRestarts: Int
   def saveOffsetAfterEnvelopes: Int
   def saveOffsetAfterDuration: FiniteDuration
+  def groupAfterEnvelopes: Int
+  def groupAfterDuration: FiniteDuration
   def recoveryStrategy: HandlerRecoveryStrategy
 
   def withBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double): ProjectionSettings
@@ -61,9 +63,10 @@ object ProjectionSettings {
     fromConfig(system.classicSystem.settings.config.getConfig("akka.projection"))
   }
 
-  def fromConfig(config: Config) = {
+  def fromConfig(config: Config): ProjectionSettings = {
     val restartBackoffConfig = config.getConfig("restart-backoff")
     val atLeastOnceConfig = config.getConfig("at-least-once")
+    val groupedConfig = config.getConfig("grouped")
     val recoveryStrategyConfig = config.getConfig("recovery-strategy")
     new ProjectionSettingsImpl(
       restartBackoffConfig.getDuration("min-backoff", MILLISECONDS).millis,
@@ -72,6 +75,8 @@ object ProjectionSettings {
       restartBackoffConfig.getInt("max-restarts"),
       atLeastOnceConfig.getInt("save-offset-after-envelopes"),
       atLeastOnceConfig.getDuration("save-offset-after-duration", MILLISECONDS).millis,
+      groupedConfig.getInt("group-after-envelopes"),
+      groupedConfig.getDuration("group-after-duration", MILLISECONDS).millis,
       RecoveryStrategyConfig.fromConfig(recoveryStrategyConfig))
   }
 }
@@ -87,6 +92,8 @@ private[akka] class ProjectionSettingsImpl(
     val maxRestarts: Int,
     val saveOffsetAfterEnvelopes: Int,
     val saveOffsetAfterDuration: FiniteDuration,
+    val groupAfterEnvelopes: Int,
+    val groupAfterDuration: FiniteDuration,
     val recoveryStrategy: HandlerRecoveryStrategy)
     extends ProjectionSettings {
 
@@ -144,6 +151,8 @@ private[akka] class ProjectionSettingsImpl(
       maxRestarts,
       saveOffsetAfterEnvelopes,
       saveOffsetAfterDuration,
+      groupAfterEnvelopes,
+      groupAfterDuration,
       recoveryStrategy)
 }
 
