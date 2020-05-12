@@ -72,12 +72,6 @@ private[projection] trait RunningProjection {
 
   /**
    * INTERNAL API
-   */
-  @InternalApi
-  private[projection] def systemProvider: ClassicActorSystemProvider
-
-  /**
-   * INTERNAL API
    *
    * Stop the projection if it's running.
    * @return Future[Done] - the returned Future should return the stream materialized value.

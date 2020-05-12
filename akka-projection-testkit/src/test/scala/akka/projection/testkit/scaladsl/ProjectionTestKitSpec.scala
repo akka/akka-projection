@@ -142,44 +142,47 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
 
     override def run()(implicit systemProvider: ClassicActorSystemProvider) =
-      new TestProjectionState().newRunningInstance()
+      new InternalProjectionState(strBuffer, predicate).newRunningInstance()
 
     private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
-      new TestProjectionState().mappedSource()
+      new InternalProjectionState(strBuffer, predicate).mappedSource()
 
-    private def process(elt: Int): Future[Done] = {
-      if (predicate(elt)) concat(elt)
-      Future.successful(Done)
-    }
-
-    private def concat(i: Int) = {
-      if (strBuffer.toString.isEmpty) strBuffer.append(i)
-      else strBuffer.append("-").append(i)
-    }
-
-    private class TestProjectionState(implicit val systemProvider: ClassicActorSystemProvider) {
+    /*
+     * INTERNAL API
+     * This internal class will hold the KillSwitch that is needed
+     * when building the mappedSource and when running the projection (to stop)
+     */
+    private class InternalProjectionState(strBuffer: StringBuffer, predicate: Int => Boolean)(
+        implicit val systemProvider: ClassicActorSystemProvider) {
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
       def mappedSource(): Source[Done, _] =
         src.via(killSwitch.flow).mapAsync(1)(i => process(i))
 
+      private def process(elt: Int): Future[Done] = {
+        if (predicate(elt)) concat(elt)
+        Future.successful(Done)
+      }
+
+      private def concat(i: Int) = {
+        if (strBuffer.toString.isEmpty) strBuffer.append(i)
+        else strBuffer.append("-").append(i)
+      }
+
       def newRunningInstance(): RunningProjection =
         new TestRunningProjection(mappedSource(), killSwitch)
     }
 
     private class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch)(
-        implicit val systemProvider: ClassicActorSystemProvider)
+        implicit systemProvider: ClassicActorSystemProvider)
         extends RunningProjection {
 
-      private val promiseToStop: Promise[Done] = Promise()
-
-      val done = source.run()
-      promiseToStop.completeWith(done)
+      val futureDone = source.run()
 
       override def stop()(implicit ec: ExecutionContext): Future[Done] = {
         killSwitch.shutdown()
-        promiseToStop.future
+        futureDone
       }
     }
   }

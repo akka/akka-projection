@@ -33,49 +33,55 @@ object ProjectionBehaviorSpec {
   case class TestProjection(src: Source[Int, NotUsed], testProbe: TestProbe[ProbeMessage], failToStop: Boolean = false)
       extends Projection[Int] {
 
-    private val strBuffer = new StringBuffer("")
     override def projectionId: ProjectionId = ProjectionId("test-projection-with-internal-state", "00")
 
-    override def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection =
-      new TestProjectionState().newRunningInstance()
+    override private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection =
+      new InternalProjectionState(testProbe, failToStop).newRunningInstance()
 
-    private def process(i: Int): Future[Done] = {
-      concat(i)
-      testProbe.ref ! Consumed(i, strBuffer.toString)
-      Future.successful(Done)
-    }
-
-    private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
-      new TestProjectionState().mappedSource()
-
-    private def concat(i: Int) = {
-      if (strBuffer.toString.isEmpty) strBuffer.append(i)
-      else strBuffer.append("-").append(i)
-    }
+    override private[projection] def mappedSource()(
+        implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
+      new InternalProjectionState(testProbe, failToStop).mappedSource()
 
     override def withSettings(settings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
 
-    private class TestProjectionState(implicit val systemProvider: ClassicActorSystemProvider) {
+    /*
+     * INTERNAL API
+     * This internal class will hold the KillSwitch that is needed
+     * when building the mappedSource and when running the projection (to stop)
+     */
+    private class InternalProjectionState(testProbe: TestProbe[ProbeMessage], failToStop: Boolean = false)(
+        implicit val systemProvider: ClassicActorSystemProvider) {
+
+      private val strBuffer = new StringBuffer("")
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
       def mappedSource(): Source[Done, _] =
         src.via(killSwitch.flow).mapAsync(1)(i => process(i))
 
+      private def process(i: Int): Future[Done] = {
+
+        if (strBuffer.toString.isEmpty) strBuffer.append(i)
+        else strBuffer.append("-").append(i)
+
+        testProbe.ref ! Consumed(i, strBuffer.toString)
+        Future.successful(Done)
+      }
+
       def newRunningInstance(): RunningProjection =
-        new TestRunningProjection(mappedSource(), killSwitch)
+        new TestRunningProjection(mappedSource(), testProbe, failToStop, killSwitch)
     }
 
-    private class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch)(
-        implicit val systemProvider: ClassicActorSystemProvider)
+    private class TestRunningProjection(
+        source: Source[Done, _],
+        testProbe: TestProbe[ProbeMessage],
+        failToStop: Boolean = false,
+        killSwitch: SharedKillSwitch)(implicit systemProvider: ClassicActorSystemProvider)
         extends RunningProjection {
 
-      private val promiseToStop: Promise[Done] = Promise()
-
       testProbe.ref ! StartObserved
-      val done = source.run()
-      promiseToStop.completeWith(done)
+      val futureDone = source.run()
 
       override def stop()(implicit ec: ExecutionContext): Future[Done] = {
         val stopFut =
@@ -85,7 +91,7 @@ object ProjectionBehaviorSpec {
             Future.failed(new RuntimeException("failed to stop properly"))
           } else {
             killSwitch.shutdown()
-            promiseToStop.future
+            futureDone
           }
         stopFut.onComplete(_ => testProbe.ref ! StopObserved)
         stopFut

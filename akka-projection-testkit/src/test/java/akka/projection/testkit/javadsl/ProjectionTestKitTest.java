@@ -17,7 +17,6 @@ import org.junit.*;
 import scala.compat.java8.FutureConverters;
 import scala.concurrent.ExecutionContext;
 import scala.concurrent.Future;
-import scala.concurrent.Promise;
 
 import akka.Done;
 import akka.NotUsed;
@@ -170,24 +169,13 @@ public class ProjectionTestKitTest extends JUnitSuite {
 
         @Override
         public akka.stream.scaladsl.Source<Done, NotUsed> mappedSource(ClassicActorSystemProvider systemProvider) {
-            return new TestProjectionState(systemProvider).mappedSource();
+            return new InternalProjectionState(strBuffer, predicate, systemProvider).mappedSource();
         }
 
-        private CompletionStage<Done> process(Integer i) {
-            if (predicate.test(i)) concat(i);
-            return CompletableFuture.completedFuture(Done.getInstance());
-        }
-
-        StringBuffer concat(Integer i) {
-            if (strBuffer.toString().isEmpty())
-                return strBuffer.append(i);
-            else
-                return strBuffer.append("-").append(i);
-        }
 
         @Override
         public RunningProjection run(ClassicActorSystemProvider systemProvider) {
-            return new TestProjectionState(systemProvider).newRunningInstance();
+            return new InternalProjectionState(strBuffer, predicate, systemProvider).newRunningInstance();
         }
 
         @Override
@@ -196,19 +184,39 @@ public class ProjectionTestKitTest extends JUnitSuite {
             return this;
         }
 
-        private class TestProjectionState {
+        /*
+         * INTERNAL API
+         * This internal class will hold the KillSwitch that is needed
+         * when building the mappedSource and when running the projection (to stop)
+         */
+        private class InternalProjectionState {
 
             final private ClassicActorSystemProvider systemProvider;
             final private SharedKillSwitch killSwitch;
+            final private StringBuffer strBuffer;
+            final private Predicate<Integer> predicate;
 
-            private TestProjectionState(ClassicActorSystemProvider systemProvider) {
+            private InternalProjectionState(StringBuffer strBuffer, Predicate<Integer> predicate, ClassicActorSystemProvider systemProvider) {
+                this.strBuffer = strBuffer;
+                this.predicate = predicate;
                 this.systemProvider = systemProvider;
                 this.killSwitch = KillSwitches.shared(TestProjection.this.projectionId().id());
             }
 
+            private CompletionStage<Done> process(Integer i) {
+                if (predicate.test(i)) {
+                    if (strBuffer.toString().isEmpty())
+                        strBuffer.append(i);
+                    else
+                        strBuffer.append("-").append(i);
+                }
+                return CompletableFuture.completedFuture(Done.getInstance());
+            }
+
+
             private akka.stream.scaladsl.Source<Done, NotUsed> mappedSource() {
                 return src.via(killSwitch.flow())
-                        .mapAsync(1, (Function<Integer, CompletionStage<Done>>) TestProjection.this::process).asScala();
+                        .mapAsync(1, (Function<Integer, CompletionStage<Done>>) this::process).asScala();
             }
 
             private RunningProjection newRunningInstance() {
@@ -218,29 +226,19 @@ public class ProjectionTestKitTest extends JUnitSuite {
 
         private class TestRunningProjection implements RunningProjection {
 
-            final private ClassicActorSystemProvider systemProvider;
-            final private Promise<Done> promiseToStop;
             final private SharedKillSwitch killSwitch;
+            final private Future<Done> futureDone;
 
             private TestRunningProjection(akka.stream.scaladsl.Source<Done, NotUsed> source, SharedKillSwitch killSwitch, ClassicActorSystemProvider systemProvider) {
-
-                this.systemProvider = systemProvider;
                 this.killSwitch = killSwitch;
-                this.promiseToStop = Promise.apply();;
-
                 CompletionStage<Done> done = source.asJava().runWith(Sink.ignore(), systemProvider);
-                promiseToStop.completeWith(FutureConverters.toScala(done));
-            }
-
-            @Override
-            public ClassicActorSystemProvider systemProvider() {
-                return this.systemProvider;
+                this.futureDone = FutureConverters.toScala(done);
             }
 
             @Override
             public Future<Done> stop(ExecutionContext ec) {
                 killSwitch.shutdown();
-                return promiseToStop.future();
+                return this.futureDone;
             }
         }
     }

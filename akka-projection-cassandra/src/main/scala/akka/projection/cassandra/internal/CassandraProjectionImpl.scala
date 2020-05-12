@@ -190,7 +190,7 @@ import akka.stream.scaladsl.Source
   }
 
   private class CassandraRunningProjection(source: Source[Done, _], killSwitch: SharedKillSwitch)(
-      implicit val systemProvider: ClassicActorSystemProvider)
+      implicit systemProvider: ClassicActorSystemProvider)
       extends RunningProjection {
 
     private val futureDone = source.run()
