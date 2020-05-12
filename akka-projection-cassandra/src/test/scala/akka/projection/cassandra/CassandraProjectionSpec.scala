@@ -139,21 +139,24 @@ class CassandraProjectionSpec
     Await.result(ContainerSessionProvider.started, 30.seconds)
 
     Await.result(for {
-      session <- session.underlying()
+      s <- session.underlying()
       // reason for setSchemaMetadataEnabled is that it speed up tests
-      _ <- session.setSchemaMetadataEnabled(false).toScala
+      _ <- s.setSchemaMetadataEnabled(false).toScala
       _ <- offsetStore.createKeyspaceAndTable()
       _ <- repository.createKeyspaceAndTable()
-      _ <- session.setSchemaMetadataEnabled(null).toScala
+      _ <- s.setSchemaMetadataEnabled(null).toScala
     } yield Done, 30.seconds)
   }
 
   override protected def afterAll(): Unit = {
-    // reason for setSchemaMetadataEnabled is that it speed up tests
-    Try(session.underlying().map(_.setSchemaMetadataEnabled(false)).futureValue)
-    Try(session.executeDDL(s"DROP keyspace ${offsetStore.keyspace}").futureValue)
-    Try(session.executeDDL(s"DROP keyspace ${repository.keyspace}").futureValue)
-    Try(session.underlying().map(_.setSchemaMetadataEnabled(null)).futureValue)
+    Await.ready(for {
+      s <- session.underlying()
+      // reason for setSchemaMetadataEnabled is that it speed up tests
+      _ <- s.setSchemaMetadataEnabled(false).toScala
+      _ <- session.executeDDL(s"DROP keyspace ${offsetStore.keyspace}")
+      _ <- session.executeDDL(s"DROP keyspace ${repository.keyspace}")
+      _ <- s.setSchemaMetadataEnabled(null).toScala
+    } yield Done, 30.seconds)
     super.afterAll()
   }
 
