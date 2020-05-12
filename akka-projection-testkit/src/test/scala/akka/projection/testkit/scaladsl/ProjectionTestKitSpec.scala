@@ -136,7 +136,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
   case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
       extends Projection[Int] {
 
-    override def withSettings(projectionSettings: ProjectionSettings): Projection[Int] =
+    override def withSettings(settings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
 
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")

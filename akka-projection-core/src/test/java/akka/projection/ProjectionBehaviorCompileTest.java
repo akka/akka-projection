@@ -45,7 +45,7 @@ public class ProjectionBehaviorCompileTest {
 
 
         @Override
-        public Projection<String> withSettings(ProjectionSettings projectionSettings) {
+        public Projection<String> withSettings(ProjectionSettings settings) {
             // no need for ProjectionSettings in tests
             return this;
         }

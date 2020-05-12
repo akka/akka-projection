@@ -30,6 +30,8 @@ trait Projection[Envelope] {
 
   def projectionId: ProjectionId
 
+  def withSettings(settings: ProjectionSettings): Projection[Envelope]
+
   /**
    * INTERNAL API
    *
@@ -46,14 +48,15 @@ trait Projection[Envelope] {
   @InternalApi
   private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection
 
-  def withSettings(projectionSettings: ProjectionSettings): Projection[Envelope]
-
 }
 
 /**
+ * INTERNAL API
+ *
  * Helper to wrap the projection source with a RestartSource using the provided settings.
  */
-object RunningProjection {
+@InternalApi
+private[projection] object RunningProjection {
   def withBackoff(source: Source[Done, _], settings: ProjectionSettings): Source[Done, _] =
     RestartSource
       .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
