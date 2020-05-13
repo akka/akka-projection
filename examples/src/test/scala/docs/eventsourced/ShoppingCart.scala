@@ -201,13 +201,16 @@ object ShoppingCart {
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
       case cmd: AddItem =>
-        Effect.reply(cmd.replyTo)(Rejected("Can't add an item to an already checked out shopping cart"))
+        Effect.reply(cmd.replyTo)(
+          Rejected(s"Can't add an item to an already checked out shopping cart with id [$cartId]"))
       case cmd: RemoveItem =>
-        Effect.reply(cmd.replyTo)(Rejected("Can't remove an item from an already checked out shopping cart"))
+        Effect.reply(cmd.replyTo)(
+          Rejected(s"Can't remove an item from an already checked out shopping cart with id [$cartId]"))
       case cmd: AdjustItemQuantity =>
-        Effect.reply(cmd.replyTo)(Rejected("Can't adjust item on an already checked out shopping cart"))
+        Effect.reply(cmd.replyTo)(
+          Rejected(s"Can't adjust item on an already checked out shopping cart with id [$cartId]"))
       case cmd: Checkout =>
-        Effect.reply(cmd.replyTo)(Rejected("Can't checkout already checked out shopping cart"))
+        Effect.reply(cmd.replyTo)(Rejected(s"Can't checkout already checked out shopping cart with id [$cartId]"))
     }
 
   private def handleEvent(state: State, event: Event) = {

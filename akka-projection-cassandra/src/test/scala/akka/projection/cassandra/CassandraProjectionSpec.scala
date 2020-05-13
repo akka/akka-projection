@@ -15,7 +15,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
-import scala.util.Try
 
 import akka.Done
 import akka.NotUsed

@@ -6,7 +6,6 @@ package akka.projection.cassandra.internal
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 
 import akka.Done

@@ -4,8 +4,6 @@
 
 package akka.projection
 
-import java.util.function.Supplier
-
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 
