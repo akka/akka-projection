@@ -96,7 +96,8 @@ The returned @scala[`Future[Done]`]@java[`CompletionStage<Done>`] is to be compl
 Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #mutableState }
 
-FIXME Java examples
+Java
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
 
 However, the state must typically be loaded and updated by asynchronous operations and then it can be
 error prone to manage the state in variables of the `Handler`. For that purpose a `StatefulHandler` (FIXME apidoc when javadsl)
@@ -110,15 +111,24 @@ Given an envelope and `SourceProvider` for this example:
 Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #envelope #sourceProvider }
 
+Java
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+
 and a repository for the interaction with the database:
 
 Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #repository }
 
+Java
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+
 The `Projection` can be definined as:
 
 Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/akka/projection/cassandra/scaladsl/WordCountDocExampleSpec.scala) { #projection }
+
+Java
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
 
 The `handler` can be implemented as follows.
 
@@ -138,6 +148,9 @@ A handler that is loading the state from the database when it's starting up:
 Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingInitialState }
 
+Java
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+
 The `StatefulHandler` has two methods that needs to be implemented. 
 
 * `initialState` - Invoked to load the initial state when the projection is started or if previous `process` failed.
@@ -151,6 +164,9 @@ caches it in the in-memory state:
 
 Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingOnDemand }
+
+Java
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
 
 
 ## Schema
