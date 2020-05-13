@@ -6,7 +6,6 @@ package akka.projection
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.Promise
 
 import akka.Done
 import akka.NotUsed
@@ -15,7 +14,7 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.stream.KillSwitches
-import akka.stream.scaladsl.Sink
+import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -33,52 +32,70 @@ object ProjectionBehaviorSpec {
   case class TestProjection(src: Source[Int, NotUsed], testProbe: TestProbe[ProbeMessage], failToStop: Boolean = false)
       extends Projection[Int] {
 
-    private val strBuffer = new StringBuffer("")
     override def projectionId: ProjectionId = ProjectionId("test-projection-with-internal-state", "00")
 
-    private val killSwitch = KillSwitches.shared(projectionId.id)
-    private val promiseToStop = Promise[Done]
+    override private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection =
+      new InternalProjectionState(testProbe, failToStop).newRunningInstance()
 
-    override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
-      testProbe.ref ! StartObserved
-      val done = mappedSource.runWith(Sink.ignore)
-      promiseToStop.completeWith(done)
-    }
+    override private[projection] def mappedSource()(
+        implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
+      new InternalProjectionState(testProbe, failToStop).mappedSource()
 
-    private def process(i: Int): Future[Done] = {
-      concat(i)
-      testProbe.ref ! Consumed(i, strBuffer.toString)
-      Future.successful(Done)
-    }
-
-    private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] = {
-      src.via(killSwitch.flow).mapAsync(1)(i => process(i))
-    }
-
-    private def concat(i: Int) = {
-      if (strBuffer.toString.isEmpty) strBuffer.append(i)
-      else strBuffer.append("-").append(i)
-    }
-
-    override def stop()(implicit ec: ExecutionContext): Future[Done] = {
-      val stopFut =
-        if (failToStop) {
-          // this simulates a failure when stopping the stream
-          // for the ProjectionBehavior the effect is the same
-          Future.failed(new RuntimeException("failed to stop properly"))
-        } else {
-          killSwitch.shutdown()
-          promiseToStop.future
-        }
-      stopFut.onComplete(_ => testProbe.ref ! StopObserved)
-      stopFut
-    }
-
-    override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit = run()
-
-    override def withSettings(projectionSettings: ProjectionSettings): Projection[Int] =
+    override def withSettings(settings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
 
+    /*
+     * INTERNAL API
+     * This internal class will hold the KillSwitch that is needed
+     * when building the mappedSource and when running the projection (to stop)
+     */
+    private class InternalProjectionState(testProbe: TestProbe[ProbeMessage], failToStop: Boolean = false)(
+        implicit val systemProvider: ClassicActorSystemProvider) {
+
+      private val strBuffer = new StringBuffer("")
+
+      private val killSwitch = KillSwitches.shared(projectionId.id)
+
+      def mappedSource(): Source[Done, _] =
+        src.via(killSwitch.flow).mapAsync(1)(i => process(i))
+
+      private def process(i: Int): Future[Done] = {
+
+        if (strBuffer.toString.isEmpty) strBuffer.append(i)
+        else strBuffer.append("-").append(i)
+
+        testProbe.ref ! Consumed(i, strBuffer.toString)
+        Future.successful(Done)
+      }
+
+      def newRunningInstance(): RunningProjection =
+        new TestRunningProjection(mappedSource(), testProbe, failToStop, killSwitch)
+    }
+
+    private class TestRunningProjection(
+        source: Source[Done, _],
+        testProbe: TestProbe[ProbeMessage],
+        failToStop: Boolean = false,
+        killSwitch: SharedKillSwitch)(implicit systemProvider: ClassicActorSystemProvider)
+        extends RunningProjection {
+
+      testProbe.ref ! StartObserved
+      val futureDone = source.run()
+
+      override def stop()(implicit ec: ExecutionContext): Future[Done] = {
+        val stopFut =
+          if (failToStop) {
+            // this simulates a failure when stopping the stream
+            // for the ProjectionBehavior the effect is the same
+            Future.failed(new RuntimeException("failed to stop properly"))
+          } else {
+            killSwitch.shutdown()
+            futureDone
+          }
+        stopFut.onComplete(_ => testProbe.ref ! StopObserved)
+        stopFut
+      }
+    }
   }
 }
 class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
@@ -91,7 +108,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
-      testKit.spawn(ProjectionBehavior(() => TestProjection(src, testProbe)))
+      testKit.spawn(ProjectionBehavior(TestProjection(src, testProbe)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))
@@ -104,7 +121,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
-      val projectionRef = testKit.spawn(ProjectionBehavior(() => TestProjection(src, testProbe)))
+      val projectionRef = testKit.spawn(ProjectionBehavior(TestProjection(src, testProbe)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))
@@ -122,7 +139,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
-      val projectionRef = testKit.spawn(ProjectionBehavior(() => TestProjection(src, testProbe, failToStop = true)))
+      val projectionRef = testKit.spawn(ProjectionBehavior(TestProjection(src, testProbe, failToStop = true)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))

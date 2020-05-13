@@ -33,5 +33,12 @@ object Handler {
  */
 @ApiMayChange
 abstract class Handler[Envelope] extends HandlerRecovery[Envelope] {
+
+  /**
+   * The `process` method is invoked for each `Envelope`.
+   * One envelope is processed at a time. The returned `CompletionStage` is to be completed when the processing
+   * of the `envelope` has finished. It will not be invoked with the next envelope until after the returned
+   * `CompletionStage` has been completed.
+   */
   def process(envelope: Envelope): CompletionStage[Done]
 }

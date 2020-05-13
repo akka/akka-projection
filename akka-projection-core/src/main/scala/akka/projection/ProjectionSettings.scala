@@ -19,11 +19,15 @@ trait ProjectionSettings {
   def minBackoff: FiniteDuration
   def maxBackoff: FiniteDuration
   def randomFactor: Double
+  def maxRestarts: Int
+
+  def withBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double): ProjectionSettings
 
   def withBackoff(
       minBackoff: FiniteDuration,
       maxBackoff: FiniteDuration,
-      randomBackoffFactor: Double): ProjectionSettings
+      randomFactor: Double,
+      maxRestarts: Int): ProjectionSettings
 
   /**
    * Java API
@@ -31,7 +35,16 @@ trait ProjectionSettings {
   def withBackoff(
       minBackoff: java.time.Duration,
       maxBackoff: java.time.Duration,
-      randomBackoffFactor: Double): ProjectionSettings
+      randomFactor: Double): ProjectionSettings
+
+  /**
+   * Java API
+   */
+  def withBackoff(
+      minBackoff: java.time.Duration,
+      maxBackoff: java.time.Duration,
+      randomFactor: Double,
+      maxRestarts: Int): ProjectionSettings
 }
 
 object ProjectionSettings {
@@ -49,7 +62,8 @@ object ProjectionSettings {
     new ProjectionSettingsImpl(
       config.getDuration("min-backoff", MILLISECONDS).millis,
       config.getDuration("max-backoff", MILLISECONDS).millis,
-      config.getDouble("random-factor"))
+      config.getDouble("random-factor"),
+      config.getInt("max-restarts"))
 
 }
 
@@ -60,7 +74,8 @@ object ProjectionSettings {
 private[akka] class ProjectionSettingsImpl(
     val minBackoff: FiniteDuration,
     val maxBackoff: FiniteDuration,
-    val randomFactor: Double)
+    val randomFactor: Double,
+    val maxRestarts: Int)
     extends ProjectionSettings {
 
   /**
@@ -69,8 +84,15 @@ private[akka] class ProjectionSettingsImpl(
   override def withBackoff(
       minBackoff: FiniteDuration,
       maxBackoff: FiniteDuration,
-      randomBackoffFactor: Double): ProjectionSettings =
-    new ProjectionSettingsImpl(minBackoff, maxBackoff, randomBackoffFactor)
+      randomFactor: Double): ProjectionSettings =
+    withBackoff(minBackoff, maxBackoff, randomFactor, maxRestarts)
+
+  override def withBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): ProjectionSettings =
+    new ProjectionSettingsImpl(minBackoff, maxBackoff, randomFactor, maxRestarts)
 
   /**
    * Java API
@@ -78,6 +100,16 @@ private[akka] class ProjectionSettingsImpl(
   override def withBackoff(
       minBackoff: time.Duration,
       maxBackoff: time.Duration,
-      randomBackoffFactor: Double): ProjectionSettings =
-    new ProjectionSettingsImpl(minBackoff.asScala, maxBackoff.asScala, randomBackoffFactor)
+      randomFactor: Double): ProjectionSettings =
+    withBackoff(minBackoff, maxBackoff, randomFactor, maxRestarts = -1)
+
+  /**
+   * Java API
+   */
+  override def withBackoff(
+      minBackoff: time.Duration,
+      maxBackoff: time.Duration,
+      randomFactor: Double,
+      maxRestarts: Int): ProjectionSettings =
+    new ProjectionSettingsImpl(minBackoff.asScala, maxBackoff.asScala, randomFactor, maxRestarts)
 }
