@@ -9,17 +9,21 @@ import java.time.Instant
 import scala.concurrent.duration._
 
 import akka.actor.typed.ActorRef
-import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.SupervisorStrategy
-import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import akka.cluster.sharding.typed.scaladsl.Entity
-import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.RetentionCriteria
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplyEffect
+
+//#imports
+import akka.actor.typed.ActorSystem
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.cluster.sharding.typed.scaladsl.Entity
+import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
+
+//#imports
 
 /**
  * This is an event sourced actor. It has a state, [[ShoppingCart.State]], which
@@ -130,17 +134,22 @@ object ShoppingCart {
 
   final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
 
-  val EntityKey: EntityTypeKey[Command] = EntityTypeKey[Command]("ShoppingCart")
+  //#slicingTags
+  val tags = Vector("carts-0", "carts-1", "carts-2", "carts-3", "carts-4")
+  //#slicingTags
 
-  def init(system: ActorSystem[_], numberOfEventProcessors: Int): Unit = {
+  //#tagging
+  val EntityKey: EntityTypeKey[Command] = EntityTypeKey[Command]("ShoppingCart")
+  def init(system: ActorSystem[_]): Unit = {
     ClusterSharding(system).init(Entity(EntityKey) { entityContext =>
-      val n = math.abs(entityContext.entityId.hashCode % numberOfEventProcessors)
-      val eventProcessorTag = "carts" + "-" + n
-      ShoppingCart(entityContext.entityId, Set(eventProcessorTag))
+      val n = math.abs(entityContext.entityId.hashCode % tags.size)
+      val selectedTag = tags(n)
+      ShoppingCart(entityContext.entityId, selectedTag)
     }.withRole("write-model"))
   }
+  //#tagging
 
-  def apply(cartId: String, eventProcessorTags: Set[String]): Behavior[Command] = {
+  def apply(cartId: String, eventProcessorTag: String): Behavior[Command] = {
     EventSourcedBehavior
       .withEnforcedReplies[Command, Event, State](
         PersistenceId(EntityKey.name, cartId),
@@ -151,7 +160,7 @@ object ShoppingCart {
           if (state.isCheckedOut) checkedOutShoppingCart(cartId, state, command)
           else openShoppingCart(cartId, state, command),
         (state, event) => handleEvent(state, event))
-      .withTagger(_ => eventProcessorTags)
+      .withTagger(_ => Set(eventProcessorTag))
       .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
       .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }

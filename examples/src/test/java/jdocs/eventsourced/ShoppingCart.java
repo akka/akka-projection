@@ -22,11 +22,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 /**
  * This is an event sourced actor. It has a state, {@link ShoppingCart.State}, which
@@ -299,26 +295,36 @@ public class ShoppingCart
 
   public static void init(ActorSystem<?> system, int numberOfEventProcessors) {
     ClusterSharding.get(system).init(Entity.of(ENTITY_TYPE_KEY, entityContext -> {
-      int n = Math.abs(entityContext.getEntityId().hashCode() % numberOfEventProcessors);
-      String eventProcessorTag = "carts-" + n;
-      return ShoppingCart.create(entityContext.getEntityId(), Collections.singleton(eventProcessorTag));
+      return ShoppingCart.create(entityContext.getEntityId());
     })
       .withRole("write-model"));
   }
 
-  public static Behavior<Command> create(String cartId, Set<String> eventProcessorTags) {
-    return new ShoppingCart(cartId, eventProcessorTags);
+  public static Behavior<Command> create(String cartId) {
+    return new ShoppingCart(cartId);
   }
 
   private final String cartId;
-  private final Set<String> eventProcessorTags;
 
-  private ShoppingCart(String cartId, Set<String> eventProcessorTags) {
+  private ShoppingCart(String cartId) {
     super(PersistenceId.of(ENTITY_TYPE_KEY.name(), cartId),
       SupervisorStrategy.restartWithBackoff(Duration.ofMillis(200), Duration.ofSeconds(5), 0.1));
     this.cartId = cartId;
-    this.eventProcessorTags = eventProcessorTags;
   }
+
+  //#slicingTags
+  public final static List<String> tags =
+    Collections.unmodifiableList(Arrays.asList("carts-0", "carts-1", "carts-2", "carts-3", "carts-4"));
+  //#slicingTags
+
+  //#tagging
+  @Override
+  public Set<String> tagsFor(Event event) {
+    int n = Math.abs(event.getCartId().hashCode() % tags.size());
+    String selectedTag = tags.get(n);
+    return Collections.singleton(selectedTag);
+  }
+  //#tagging
 
   @Override
   public State emptyState() {
@@ -428,10 +434,6 @@ public class ShoppingCart
       .build();
   }
 
-  @Override
-  public Set<String> tagsFor(Event event) {
-    return eventProcessorTags;
-  }
 
   @Override
   public RetentionCriteria retentionCriteria() {
