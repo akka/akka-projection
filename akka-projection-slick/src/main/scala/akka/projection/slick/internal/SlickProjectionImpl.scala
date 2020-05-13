@@ -187,10 +187,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       implicit systemProvider: ClassicActorSystemProvider)
       extends RunningProjection {
 
-    private val allStopped = Promise[Done]()
     private val streamDone = source.run()
-    RunningProjection.stopHandlerWhenStreamCompleted(allStopped, streamDone, () => handler.stop())(
-      systemProvider.classicSystem.dispatcher)
+    private val allStopped: Future[Done] =
+      RunningProjection.stopHandlerWhenStreamCompleted(streamDone, () => handler.stop())(
+        systemProvider.classicSystem.dispatcher)
 
     /**
      * INTERNAL API
@@ -201,7 +201,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     @InternalApi
     override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
       killSwitch.shutdown()
-      allStopped.future
+      allStopped
     }
   }
 

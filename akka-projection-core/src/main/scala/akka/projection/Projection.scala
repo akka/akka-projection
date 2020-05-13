@@ -6,9 +6,6 @@ package akka.projection
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.Promise
-import scala.util.Failure
-import scala.util.Success
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -67,10 +64,8 @@ private[projection] object RunningProjection {
         () => source
       }
 
-  def stopHandlerWhenStreamCompleted(
-      allStopped: Promise[Done],
-      whenStreamCompleted: Future[Done],
-      stopHandler: () => Future[Done])(implicit ec: ExecutionContext): Unit = {
+  def stopHandlerWhenStreamCompleted(whenStreamCompleted: Future[Done], stopHandler: () => Future[Done])(
+      implicit ec: ExecutionContext): Future[Done] = {
 
     def tryStopHandler(): Future[Done] = {
       try {
@@ -80,12 +75,11 @@ private[projection] object RunningProjection {
       }
     }
 
-    whenStreamCompleted.onComplete {
-      case Success(_) =>
-        allStopped.completeWith(tryStopHandler())
-      case Failure(exc) =>
-        tryStopHandler().onComplete(_ => allStopped.failure(exc))
-    }
+    whenStreamCompleted
+      .flatMap(_ => tryStopHandler())
+      .recoverWith {
+        case exc => tryStopHandler().recoverWith(_ => Future.failed(exc)).flatMap(_ => Future.failed(exc))
+      }
   }
 
 }
