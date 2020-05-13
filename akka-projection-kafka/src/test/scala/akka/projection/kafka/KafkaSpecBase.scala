@@ -10,7 +10,7 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.typed.scaladsl.adapter._
 import akka.kafka.testkit.internal.TestFrameworkInterface
 import akka.kafka.testkit.scaladsl.KafkaSpec
-import akka.kafka.testkit.scaladsl.TestcontainersKafkaLike
+import akka.kafka.testkit.scaladsl.TestcontainersKafkaPerClassLike
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -35,7 +35,7 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
     with PatienceConfiguration
     with Eventually
     with BeforeAndAfterEach
-    with TestcontainersKafkaLike {
+    with TestcontainersKafkaPerClassLike {
 
   protected def this() = this(config = ConfigFactory.load, kafkaPort = -1)
   protected def this(config: Config) = this(config = config, kafkaPort = -1)

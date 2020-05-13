@@ -4,6 +4,8 @@
 
 package akka.projection.kafka.integration
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent.Await
@@ -24,9 +26,13 @@ import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.stream.scaladsl.Source
+import com.typesafe.config.ConfigFactory
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.scalatest.Assertion
+import org.scalatest.time.Milliseconds
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
 
@@ -40,7 +46,7 @@ object KafkaToSlickIntegrationSpec {
   }
 
   final case class UserEvent(userId: String, eventType: String)
-  final case class UserEventCount(eventType: String, count: Long)
+  final case class UserEventCount(projectionName: String, eventType: String, count: Long)
 
   val user1 = "user-id-1"
   val user2 = "user-id-2"
@@ -68,24 +74,26 @@ object KafkaToSlickIntegrationSpec {
 
     import dbConfig.profile.api._
 
-    var fail = 0
-
     private class UserEventCountTable(tag: Tag) extends Table[UserEventCount](tag, "EVENTS_TYPE_COUNT") {
-      def eventType = column[String]("EVENT_TYPE", O.PrimaryKey)
+      def projectionName = column[String]("PROJECTION_NAME")
+      def eventType = column[String]("EVENT_TYPE")
       def count = column[Long]("COUNT")
-      def * = (eventType, count).mapTo[UserEventCount]
+      def pk = primaryKey("PK_PROJECTION_EVENT_TYPE", (projectionName, eventType))
+
+      def * = (projectionName, eventType, count).mapTo[UserEventCount]
     }
 
     private val userEventCountTable = TableQuery[UserEventCountTable]
 
-    def incrementCount(eventType: String)(implicit ec: ExecutionContext): DBIO[Done] = {
-      val updateCount = sqlu"UPDATE EVENTS_TYPE_COUNT SET COUNT = COUNT + 1 WHERE EVENT_TYPE = $eventType"
+    def incrementCount(id: ProjectionId, eventType: String)(implicit ec: ExecutionContext): DBIO[Done] = {
+      val updateCount =
+        sqlu"UPDATE EVENTS_TYPE_COUNT SET COUNT = COUNT + 1 WHERE PROJECTION_NAME = ${id.name} AND EVENT_TYPE = $eventType"
       updateCount.flatMap {
         case 0 =>
           // The update statement updated no records so insert a seed record instead. If this insert fails because
           // another projection inserted it in the meantime then the envelope will be processed again based on the
           // retry policy of the `SlickHandler`
-          val insert = userEventCountTable += UserEventCount(eventType, 1)
+          val insert = userEventCountTable += UserEventCount(id.name, eventType, 1)
           if (doTransientFailure(eventType))
             DBIO.failed(new RuntimeException(s"Failed to insert event type: $eventType"))
           else
@@ -94,16 +102,19 @@ object KafkaToSlickIntegrationSpec {
       }
     }
 
-    def findByEventType(eventType: String): DBIO[Option[UserEventCount]] =
-      userEventCountTable.filter(_.eventType === eventType).result.headOption
+    def findByEventType(id: ProjectionId, eventType: String): DBIO[Option[UserEventCount]] =
+      userEventCountTable.filter(t => t.projectionName === id.name && t.eventType === eventType).result.headOption
 
     def createIfNotExists: Future[Unit] =
       dbConfig.db.run(userEventCountTable.schema.createIfNotExists)
   }
 }
 
-class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.config) {
+class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config)) {
   import KafkaToSlickIntegrationSpec._
+
+  override implicit def patienceConfig: PatienceConfig =
+    PatienceConfig(timeout = Span(30, Seconds), interval = Span(500, Milliseconds))
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", config)
   val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile)
@@ -118,17 +129,10 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
     Await.result(done, 5.seconds)
   }
 
-  override protected def beforeEach(): Unit = {
-    super.beforeEach()
-    val recs = Await.result(offsetStore.truncate(), 5.seconds)
-
-    println(s"deleted $recs")
-  }
-
   "KafkaSourceProvider with Slick" must {
     "project a model and Kafka offset map to a slick db exactly once" in {
       val projectionId = ProjectionId("HappyPath", "UserEventCountProjection-1")
-      pending // FIXME test failure, issue #109
+      //pending // FIXME test failure, issue #109
 
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()
@@ -148,31 +152,36 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
             val eventType = envelope.value()
             val userEvent = UserEvent(userId, eventType)
             // do something with the record, payload in record.value
-            repository.incrementCount(userEvent.eventType)
+            repository.incrementCount(projectionId, userEvent.eventType)
           })
 
       projectionTestKit.run(slickProjection, remainingOrDefault) {
-        assertEventTypeCount()
+        assertEventTypeCount(projectionId)
         assertAllOffsetsObserved(projectionId, topicName)
       }
     }
 
     "project a model and Kafka offset map to a slick db exactly once with a retriable DBIO.failed" in {
+      log.debug(s"Test started, remainingOrDefault: $remainingOrDefault")
       val projectionId = ProjectionId("OneFailure", "UserEventCountProjection-1")
 
       val topicName = createTopic(suffix = 1, partitions = 3, replication = 1)
       val groupId = createGroupId()
 
+      log.debug("Topic and group created")
+
       produceEvents(topicName)
+
+      log.debug("Events produced")
 
       val kafkaSourceProvider: SourceProvider[MergeableOffset[Long], ConsumerRecord[String, String]] =
         KafkaSourceProvider(system, consumerDefaults.withGroupId(groupId), Set(topicName))
 
       // repository will fail to insert the "AddToCart" event type once only
-      var failedOnce = false
+      val failedOnce = new AtomicBoolean
       val failingRepository = new EventTypeCountRepository(dbConfig, doTransientFailure = eventType => {
-        if (!failedOnce && eventType == EventType.AddToCart) {
-          failedOnce = true
+        if (!failedOnce.get && eventType == EventType.AddToCart) {
+          failedOnce.set(true)
           true
         } else false
       })
@@ -188,7 +197,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
               val eventType = envelope.value()
               val userEvent = UserEvent(userId, eventType)
               // do something with the record, payload in record.value
-              failingRepository.incrementCount(userEvent.eventType)
+              failingRepository.incrementCount(projectionId, userEvent.eventType)
             }
 
             override def onFailure(
@@ -197,16 +206,18 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
               HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis)
           })
 
+      log.debug("Projection created")
+
       projectionTestKit.run(slickProjection, remainingOrDefault) {
-        assertEventTypeCount()
+        assertEventTypeCount(projectionId)
         assertAllOffsetsObserved(projectionId, topicName)
       }
     }
   }
 
-  private def offsetForUser(userId: String) = userEvents.count(_.userId == userId) - 1
-
   private def assertAllOffsetsObserved(projectionId: ProjectionId, topicName: String) = {
+    def offsetForUser(userId: String) = userEvents.count(_.userId == userId) - 1
+
     withClue("check - all offsets were seen") {
       val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId).futureValue.value
       offset shouldBe MergeableOffset(
@@ -217,11 +228,11 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
     }
   }
 
-  private def assertEventTypeCount(eventType: String): Assertion =
-    dbConfig.db.run(repository.findByEventType(eventType)).futureValue.value.count shouldBe userEvents.count(
-      _.eventType == eventType)
+  private def assertEventTypeCount(id: ProjectionId): Assertion = {
+    def assertEventTypeCount(eventType: String): Assertion =
+      dbConfig.db.run(repository.findByEventType(id, eventType)).futureValue.value.count shouldBe userEvents.count(
+        _.eventType == eventType)
 
-  private def assertEventTypeCount(): Assertion = {
     withClue("check - all event type counts are correct") {
       assertEventTypeCount(EventType.Login)
       assertEventTypeCount(EventType.Search)
@@ -232,14 +243,15 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
   }
 
   def produceEvents(topicName: String): Unit = {
-    for {
+    val produceFs = for {
       (userId, events) <- userEvents.groupBy(_.userId)
       partition = userId match { // deterministically produce events across available partitions
         case `user1` => 0
         case `user2` => 1
         case `user3` => 2
       }
-    } awaitProduce(produceEvents(topicName, events, partition))
+    } yield produceEvents(topicName, events, partition)
+    Await.result(Future.sequence(produceFs), remainingOrDefault)
   }
 
   def produceEvents(topic: String, range: immutable.Seq[UserEvent], partition: Int = 0): Future[Done] =

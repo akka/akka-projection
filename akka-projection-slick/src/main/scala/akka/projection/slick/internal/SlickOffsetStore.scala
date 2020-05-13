@@ -14,6 +14,7 @@ import akka.annotation.InternalApi
 import akka.projection.ProjectionId
 import akka.projection.internal.MergeableOffset
 import akka.projection.internal.OffsetSerialization
+import org.slf4j.LoggerFactory
 import slick.jdbc.JdbcProfile
 
 /**
@@ -28,6 +29,7 @@ import slick.jdbc.JdbcProfile
   import OffsetSerialization.fromStorageRepresentation
   import OffsetSerialization.toStorageRepresentation
   import profile.api._
+  private val log = LoggerFactory.getLogger(this.getClass)
 
   def this(db: P#Backend#Database, profile: P) =
     this(db, profile, Clock.systemUTC())
