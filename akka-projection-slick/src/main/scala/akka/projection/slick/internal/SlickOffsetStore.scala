@@ -90,6 +90,4 @@ import slick.jdbc.JdbcProfile
 
   def createIfNotExists: Future[Unit] =
     db.run(offsetTable.schema.createIfNotExists)
-
-  private[akka] def truncate(): Future[Int] = db.run(offsetTable.delete)
 }
