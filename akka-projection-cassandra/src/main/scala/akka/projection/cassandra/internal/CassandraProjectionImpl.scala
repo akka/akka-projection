@@ -8,6 +8,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.NotUsed
@@ -130,12 +131,11 @@ import akka.stream.scaladsl.Source
       val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
 
       val offsetStore = new CassandraOffsetStore(session)
-
       val readOffsets = () => offsetStore.readOffset(projectionId)
 
       val source: Source[(Offset, Envelope), NotUsed] =
         Source
-          .futureSource(sourceProvider.source(readOffsets))
+          .futureSource(tryStartHandler().flatMap(_ => sourceProvider.source(readOffsets)))
           .via(killSwitch.flow)
           .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
           .mapMaterializedValue(_ => NotUsed)
@@ -184,6 +184,14 @@ import akka.stream.scaladsl.Source
       composedSource
     }
 
+    private def tryStartHandler(): Future[Done] = {
+      try {
+        handler.start()
+      } catch {
+        case NonFatal(exc) => Future.failed(exc) // in case the call throws
+      }
+    }
+
     private[projection] def newRunningInstance(): RunningProjection = {
       new CassandraRunningProjection(RunningProjection.withBackoff(mappedSource(), settings), killSwitch)
     }
@@ -193,7 +201,10 @@ import akka.stream.scaladsl.Source
       implicit systemProvider: ClassicActorSystemProvider)
       extends RunningProjection {
 
-    private val futureDone = source.run()
+    private val allStopped = Promise[Done]()
+    private val streamDone = source.run()
+    RunningProjection.stopHandlerWhenStreamCompleted(allStopped, streamDone, () => handler.stop())(
+      systemProvider.classicSystem.dispatcher)
 
     /**
      * INTERNAL API
@@ -205,7 +216,7 @@ import akka.stream.scaladsl.Source
     @InternalApi
     override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
       killSwitch.shutdown()
-      futureDone
+      allStopped.future
     }
   }
 

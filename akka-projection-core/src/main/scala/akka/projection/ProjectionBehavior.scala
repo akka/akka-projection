@@ -4,8 +4,6 @@
 
 package akka.projection
 
-import java.util.function.Supplier
-
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 
@@ -17,8 +15,6 @@ object ProjectionBehavior {
 
   /**
    * Java API: creates a ProjectionBehavior for the passed projections.
-   *
-   * Projections can only be started once, therefore a [[Supplier]] is required. On restart, a new projection instance will be created.
    */
   def create[Envelope](projectionFactory: Projection[Envelope]): Behavior[ProjectionBehavior.Command] =
     apply(projectionFactory)
@@ -30,9 +26,6 @@ object ProjectionBehavior {
 
   /**
    * Scala API: creates a ProjectionBehavior for the passed projections.
-   *
-   * Projections can only be started once, therefore a factory function [[() => Projection]] is required.
-   * On restart, a new projection instance will be created.
    */
   def apply[Envelope](projection: Projection[Envelope]): Behavior[ProjectionBehavior.Command] = {
 

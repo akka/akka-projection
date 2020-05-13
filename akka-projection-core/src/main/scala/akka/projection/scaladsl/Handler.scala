@@ -32,7 +32,7 @@ import akka.projection.HandlerRecovery
  * Error handling strategy for when processing an `Envelope` fails can be defined in the `Handler` by
  * overriding [[HandlerRecovery.onFailure]].
  */
-@ApiMayChange trait Handler[Envelope] extends HandlerRecovery[Envelope] {
+@ApiMayChange trait Handler[Envelope] extends HandlerRecovery[Envelope] with HandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`.
@@ -41,5 +41,23 @@ import akka.projection.HandlerRecovery
    * `Future` has been completed.
    */
   def process(envelope: Envelope): Future[Done]
+
+}
+
+@ApiMayChange trait HandlerLifecycle {
+
+  /**
+   * Invoked when the projection is starting, before first envelope is processed.
+   * Can be overridden to implement initialization.
+   */
+  def start(): Future[Done] =
+    Future.successful(Done)
+
+  /**
+   * Invoked when the projection has been stopped. Can be overridden to implement resource
+   * cleanup.
+   */
+  def stop(): Future[Done] =
+    Future.successful(Done)
 
 }

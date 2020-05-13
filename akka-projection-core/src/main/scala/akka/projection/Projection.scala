@@ -6,6 +6,10 @@ package akka.projection
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.util.Failure
+import scala.util.Success
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
@@ -62,6 +66,28 @@ private[projection] object RunningProjection {
       .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
         () => source
       }
+
+  def stopHandlerWhenStreamCompleted(
+      allStopped: Promise[Done],
+      whenStreamCompleted: Future[Done],
+      stopHandler: () => Future[Done])(implicit ec: ExecutionContext): Unit = {
+
+    def tryStopHandler(): Future[Done] = {
+      try {
+        stopHandler()
+      } catch {
+        case NonFatal(exc) => Future.failed(exc) // in case the call throws
+      }
+    }
+
+    whenStreamCompleted.onComplete {
+      case Success(_) =>
+        allStopped.completeWith(tryStopHandler())
+      case Failure(exc) =>
+        tryStopHandler().onComplete(_ => allStopped.failure(exc))
+    }
+  }
+
 }
 
 /**

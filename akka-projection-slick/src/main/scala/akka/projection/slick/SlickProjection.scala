@@ -12,6 +12,7 @@ import akka.annotation.ApiMayChange
 import akka.projection.HandlerRecovery
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.internal.SlickProjectionImpl
 import slick.basic.DatabaseConfig
@@ -90,7 +91,7 @@ object SlickHandler {
  * overriding [[HandlerRecovery.onFailure]].
  */
 @ApiMayChange
-trait SlickHandler[Envelope] extends HandlerRecovery[Envelope] {
+trait SlickHandler[Envelope] extends HandlerRecovery[Envelope] with HandlerLifecycle {
 
   def process(envelope: Envelope): DBIO[Done]
 

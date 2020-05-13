@@ -22,4 +22,10 @@ import akka.projection.scaladsl
     delegate.process(envelope).toScala
   }
 
+  override def start(): Future[Done] =
+    delegate.start().toScala
+
+  override def stop(): Future[Done] =
+    delegate.stop().toScala
+
 }

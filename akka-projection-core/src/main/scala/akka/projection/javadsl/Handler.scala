@@ -4,6 +4,7 @@
 
 package akka.projection.javadsl
 
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 
 import akka.Done
@@ -32,7 +33,7 @@ object Handler {
  * other concurrency primitives are needed for managing the state.
  */
 @ApiMayChange
-abstract class Handler[Envelope] extends HandlerRecovery[Envelope] {
+abstract class Handler[Envelope] extends HandlerRecovery[Envelope] with HandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`.
@@ -41,4 +42,33 @@ abstract class Handler[Envelope] extends HandlerRecovery[Envelope] {
    * `CompletionStage` has been completed.
    */
   def process(envelope: Envelope): CompletionStage[Done]
+
+  /**
+   * Invoked when the projection is starting, before first envelope is processed.
+   * Can be overridden to implement initialization.
+   */
+  def start(): CompletionStage[Done] =
+    CompletableFuture.completedFuture(Done)
+
+  /**
+   * Invoked when the projection has been stopped. Can be overridden to implement resource
+   * cleanup.
+   */
+  def stop(): CompletionStage[Done] =
+    CompletableFuture.completedFuture(Done)
+}
+
+@ApiMayChange trait HandlerLifecycle {
+
+  /**
+   * Invoked when the projection is starting, before first envelope is processed.
+   * Can be overridden to implement initialization.
+   */
+  def start(): CompletionStage[Done]
+
+  /**
+   * Invoked when the projection has been stopped. Can be overridden to implement resource
+   * cleanup.
+   */
+  def stop(): CompletionStage[Done]
 }

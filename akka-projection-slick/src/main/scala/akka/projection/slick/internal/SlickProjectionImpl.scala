@@ -8,6 +8,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
@@ -164,10 +165,18 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         }
 
       Source
-        .futureSource(futSource)
+        .futureSource(tryStartHandler().flatMap(_ => futSource))
         .via(killSwitch.flow)
         .via(handlerFlow)
 
+    }
+
+    private def tryStartHandler(): Future[Done] = {
+      try {
+        handler.start()
+      } catch {
+        case NonFatal(exc) => Future.failed(exc) // in case the call throws
+      }
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
@@ -178,7 +187,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       implicit systemProvider: ClassicActorSystemProvider)
       extends RunningProjection {
 
-    private val futureDone = source.run()
+    private val allStopped = Promise[Done]()
+    private val streamDone = source.run()
+    RunningProjection.stopHandlerWhenStreamCompleted(allStopped, streamDone, () => handler.stop())(
+      systemProvider.classicSystem.dispatcher)
 
     /**
      * INTERNAL API
@@ -189,7 +201,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     @InternalApi
     override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
       killSwitch.shutdown()
-      futureDone
+      allStopped.future
     }
   }
 

@@ -5,6 +5,7 @@
 package akka.projection.cassandra
 
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -15,7 +16,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
-import scala.util.Try
 
 import akka.Done
 import akka.NotUsed
@@ -614,6 +614,62 @@ class CassandraProjectionSpec
         // not 4, no retries
         handler.attempts shouldBe 1
       }
+    }
+  }
+
+  "CassandraProjection lifecycle" must {
+
+    "call start and stop of the handler" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val stopped = new AtomicBoolean
+      val handlerProbe = createTestProbe[String]()
+      val handler = new Handler[Envelope] {
+
+        override def start(): Future[Done] = {
+          handlerProbe.ref ! "start"
+          Future.successful(Done)
+        }
+
+        override def stop(): Future[Done] = {
+          handlerProbe.ref ! "stop"
+          stopped.set(true)
+          Future.successful(Done)
+        }
+
+        override def process(envelope: Envelope): Future[Done] = {
+          handlerProbe.ref ! envelope.message
+          Future.successful(Done)
+        }
+      }
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(system, entityId),
+            saveOffsetAfterEnvelopes = 2,
+            saveOffsetAfterDuration = 20.millis,
+            handler)
+
+      // FIXME would be easier to run this with TestSink, but the handler.stop is not called by TestKit for that
+      // We should make another iteration of how to run from testkit
+//      val sinkProbe = projectionTestKit.runWithTestSink(projection)
+//      sinkProbe.request(1000)
+
+      projectionTestKit.run(projection) {
+        stopped.get shouldBe true
+      }
+
+      handlerProbe.expectMessage("start")
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      handlerProbe.expectMessage("jkl")
+      handlerProbe.expectMessage("mno")
+      handlerProbe.expectMessage("pqr")
+      handlerProbe.expectMessage("stop")
     }
   }
 }
