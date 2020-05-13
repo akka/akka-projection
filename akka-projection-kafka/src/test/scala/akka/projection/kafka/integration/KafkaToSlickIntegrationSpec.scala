@@ -2,7 +2,7 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.examples
+package akka.projection.kafka.integration
 
 import scala.collection.immutable
 import scala.collection.immutable.Seq
@@ -13,7 +13,6 @@ import akka.Done
 import akka.kafka.ConsumerSettings
 import akka.kafka.scaladsl.Producer
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
 import akka.projection.internal.MergeableOffset
 import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
@@ -71,14 +70,14 @@ object KafkaToSlickIntegrationSpec {
       def * = (eventType, count).mapTo[UserEventCount]
     }
 
-    def incrementCount(eventType: String)(implicit ec: ExecutionContext) = {
-      for {
-        count <- findByEventType(eventType).map {
-          case Some(userEventCount) => userEventCount.copy(count = userEventCount.count + 1)
-          case _                    => UserEventCount(eventType, 1)
-        }
-        _ <- userEventCountTable.insertOrUpdate(count)
-      } yield Done
+    def incrementCount(eventType: String)(implicit ec: ExecutionContext): DBIO[Done] = {
+      val updateCount = sqlu"UPDATE EVENTS_TYPE_COUNT SET COUNT = COUNT + 1 WHERE EVENT_TYPE = $eventType"
+      updateCount.flatMap {
+        case 0 =>
+          val insert: DBIO[_] = userEventCountTable += UserEventCount(eventType, 1)
+          insert.map(_ => Done)
+        case _ => DBIO.successful(Done)
+      }
     }
 
     def findByEventType(eventType: String): DBIO[Option[UserEventCount]] =
@@ -116,7 +115,6 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(SlickProjectionSpec.conf
 
   "KafkaToSlickIntegrationSpec" must {
     "project a model and Kafka offset map to a slick db exactly once" in {
-      pending // FIXME test failure: #109
       val projectionId = ProjectionId("UserEventCountProjection", "UserEventCountProjection-1")
 
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
