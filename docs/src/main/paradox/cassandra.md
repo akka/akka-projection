@@ -93,15 +93,22 @@ The returned @scala[`Future[Done]`]@java[`CompletionStage<Done>`] is to be compl
 `envelope` has finished. The handler will not be invoked with the next envelope until after the returned 
 @scala[`Future[Done]`]@java[`CompletionStage<Done>`] has been completed.
 
-Let us look at how a `Handler` can be implemented in the context of a "word count" domain. The purpose is
+Scala
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #mutableState }
+
+FIXME Java examples
+
+However, the state must typically be loaded and updated by asynchronous operations and then it can be
+error prone to manage the state in variables of the `Handler`. For that purpose a `StatefulHandler` (FIXME apidoc when javadsl)
+is provided.
+
+Let us look at how a `StatefulHandler` can be implemented in the context of a "word count" domain. The purpose is
 to process a stream of words and for each word keep track of how many times it has occurred. 
 
 Given an envelope and `SourceProvider` for this example:
 
 Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #envelope #sourceProvider }
-
-FIXME Java examples
 
 and a repository for the interaction with the database:
 
@@ -131,9 +138,13 @@ A handler that is loading the state from the database when it's starting up:
 Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingInitialState }
 
-Note that the `state` must be wrapped in a @scala[`Future`]@java[`CompletionStage`] if the handler is performing
-asynchronous operations such as the `repository.loadAll` and `repository.save` in this example. Otherwise it would
-be a high risk that the implementation will have concurrency issues.
+The `StatefulHandler` has two methods that needs to be implemented. 
+
+* `initialState` - Invoked to load the initial state when the projection is started or if previous `process` failed.
+* `process(state, envelope)` - Invoked for each `Envelope`, one at a time. The `state` parameter is the completed
+  value of the previously returned `Future[State]` or the `initialState`.
+
+If the previously returned `Future[State]` failed it will call `initialState` again and use that value.
 
 Another implementation would be a handler that is loading the current count for a word on demand, and thereafter
 caches it in the in-memory state:
