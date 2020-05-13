@@ -4,6 +4,7 @@
 
 package akka.projection.kafka
 
+import scala.concurrent.Await
 import scala.concurrent.Future
 
 import akka.projection.internal.MergeableOffset
@@ -18,7 +19,7 @@ class KafkaSourceProviderSpec extends KafkaSpecBase() {
       val groupId = createGroupId()
       val settings = consumerDefaults.withGroupId(groupId)
 
-      awaitProduce(produce(topic, 1 to 100))
+      Await.result(produce(topic, 1 to 100), remainingOrDefault)
 
       val provider = KafkaSourceProvider(system, settings, Set(topic))
       val readOffsetsHandler = () => Future.successful(Option(MergeableOffset(Map(s"$topic-0" -> 5L))))
@@ -38,7 +39,7 @@ class KafkaSourceProviderSpec extends KafkaSpecBase() {
       val groupId = createGroupId()
       val settings = consumerDefaults.withGroupId(groupId)
 
-      awaitProduce(produce(topic, 1 to 100))
+      Await.result(produce(topic, 1 to 100), remainingOrDefault)
 
       val provider = KafkaSourceProvider(system, settings, Set(topic))
       val readOffsetsHandler = () => Future.successful(None)
