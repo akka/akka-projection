@@ -8,7 +8,6 @@ import java.util.function.Supplier
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import scala.jdk.FunctionConverters._
 
 object ProjectionBehavior {
 
@@ -21,8 +20,8 @@ object ProjectionBehavior {
    *
    * Projections can only be started once, therefore a [[Supplier]] is required. On restart, a new projection instance will be created.
    */
-  def create[Envelope](projectionFactory: Supplier[Projection[Envelope]]): Behavior[ProjectionBehavior.Command] =
-    apply(projectionFactory.asScala)
+  def create[Envelope](projectionFactory: Projection[Envelope]): Behavior[ProjectionBehavior.Command] =
+    apply(projectionFactory)
 
   /**
    * Java API: The top message used to stop the projection.
@@ -35,18 +34,18 @@ object ProjectionBehavior {
    * Projections can only be started once, therefore a factory function [[() => Projection]] is required.
    * On restart, a new projection instance will be created.
    */
-  def apply[Envelope](projectionFactory: () => Projection[Envelope]): Behavior[ProjectionBehavior.Command] = {
+  def apply[Envelope](projection: Projection[Envelope]): Behavior[ProjectionBehavior.Command] = {
 
     def started(projection: Projection[Envelope]): Behavior[Command] =
       Behaviors.setup[Command] { ctx =>
 
         ctx.log.info("Starting projection [{}]", projection.projectionId)
-        projection.run()(ctx.system)
+        val running = projection.run()(ctx.system)
 
         Behaviors.receiveMessagePartial {
           case Stop =>
             ctx.log.debug("Projection [{}] is being stopped", projection.projectionId)
-            val stoppedFut = projection.stop()(ctx.executionContext)
+            val stoppedFut = running.stop()(ctx.executionContext)
             // we send a Stopped for whatever completes the Future
             // Success or Failure, doesn't matter, since the internal stream is by then stopped
             ctx.pipeToSelf(stoppedFut)(_ => Stopped)
@@ -66,7 +65,7 @@ object ProjectionBehavior {
       }
 
     // starting by default
-    started(projectionFactory())
+    started(projection)
 
   }
 

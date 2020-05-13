@@ -9,8 +9,6 @@ import akka.actor.ClassicActorSystemProvider;
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.typed.ActorRef;
 import akka.stream.scaladsl.Source;
-import scala.concurrent.ExecutionContext;
-import scala.concurrent.Future;
 
 /**
  * Compile test: this class serves only for exercising the Java API.
@@ -20,7 +18,7 @@ public class ProjectionBehaviorCompileTest {
     public void compileTest() {
         ActorTestKit testKit = ActorTestKit.create();
         ActorRef<ProjectionBehavior.Command> ref =
-                testKit.spawn(ProjectionBehavior.create(TestProjection::new));
+                testKit.spawn(ProjectionBehavior.create(new TestProjection()));
         ref.tell(ProjectionBehavior.stopMessage());
         // nobody is calling this method, so not really starting the system,
         // but we never know
@@ -40,17 +38,14 @@ public class ProjectionBehaviorCompileTest {
         }
 
         @Override
-        public void run(ClassicActorSystemProvider systemProvider) {
-
-        }
-
-        @Override
-        public Future<Done> stop(ExecutionContext ec) {
+        public RunningProjection run(ClassicActorSystemProvider systemProvider) {
             return null;
         }
 
+
+
         @Override
-        public Projection<String> withSettings(ProjectionSettings projectionSettings) {
+        public Projection<String> withSettings(ProjectionSettings settings) {
             // no need for ProjectionSettings in tests
             return this;
         }

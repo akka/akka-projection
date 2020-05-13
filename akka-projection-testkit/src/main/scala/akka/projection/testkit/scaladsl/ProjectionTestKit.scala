@@ -49,13 +49,15 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
     val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
 
     val settingsForTest = ProjectionSettings(system).withBackoff(0.millis, 0.millis, 0.0, 0)
-    val projectionWithTestSettings = projection.withSettings(settingsForTest)
+    val running =
+      projection
+        .withSettings(settingsForTest)
+        .run()(testKit.system.classicSystem)
 
     try {
-      projectionWithTestSettings.run()(testKit.system.classicSystem)
       probe.awaitAssert(assertFunc, max.dilated, interval)
     } finally {
-      Await.result(projectionWithTestSettings.stop(), max)
+      Await.result(running.stop(), max)
     }
   }
 

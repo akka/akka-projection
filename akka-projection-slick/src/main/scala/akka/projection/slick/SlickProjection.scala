@@ -42,7 +42,7 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       SlickProjectionImpl.ExactlyOnce,
-      projectionSettingsOpt = None,
+      settingsOpt = None,
       handler)
 
   /**
@@ -63,7 +63,7 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       SlickProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
-      projectionSettingsOpt = None,
+      settingsOpt = None,
       handler)
 
 }
