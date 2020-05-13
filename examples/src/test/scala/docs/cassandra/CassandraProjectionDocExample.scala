@@ -8,10 +8,20 @@ import scala.concurrent.duration._
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
+//#daemon-imports
+import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
+import akka.projection.ProjectionBehavior
+
+//#daemon-imports
+
 import akka.projection.eventsourced.EventEnvelope
+//#source-provider-imports
+import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import docs.eventsourced.ShoppingCart
+
+//#source-provider-imports
 
 //#projection-imports
 import akka.projection.cassandra.scaladsl.CassandraProjection
@@ -59,7 +69,7 @@ class CassandraProjectionDocExample {
     //#atLeastOnce
     val projection =
       CassandraProjection.atLeastOnce(
-        projectionId = ProjectionId("ShoppingCarts", "carts-1"),
+        projectionId = ProjectionId("shopping-carts", "carts-1"),
         sourceProvider,
         saveOffsetAfterEnvelopes = 100,
         saveOffsetAfterDuration = 500.millis,
@@ -71,9 +81,41 @@ class CassandraProjectionDocExample {
     //#atMostOnce
     val projection =
       CassandraProjection.atMostOnce(
-        projectionId = ProjectionId("ShoppingCarts", "carts-1"),
+        projectionId = ProjectionId("shopping-carts", "carts-1"),
         sourceProvider,
         handler = new ShoppingCartHandler)
     //#atMostOnce
   }
+
+  object IllustrateRunningWithShardedDaemon {
+
+    //#running-source-provider
+    def sourceProvider(tag: String) =
+      EventSourcedProvider
+        .eventsByTag[ShoppingCart.Event](
+          systemProvider = system,
+          readJournalPluginId = CassandraReadJournal.Identifier,
+          tag = tag)
+    //#running-source-provider
+
+    //#running-projection
+    def projection(tag: String) =
+      CassandraProjection.atLeastOnce(
+        projectionId = ProjectionId("shopping-carts", tag),
+        sourceProvider(tag),
+        saveOffsetAfterEnvelopes = 100,
+        saveOffsetAfterDuration = 500.millis,
+        handler = new ShoppingCartHandler)
+    //#running-projection
+
+    //#running-with-daemon-process
+    ShardedDaemonProcess(system).init[ProjectionBehavior.Command](
+      name = "shopping-carts",
+      numberOfInstances = ShoppingCart.tags.size,
+      behaviorFactory = n => ProjectionBehavior(projection(ShoppingCart.tags(n))),
+      settings = ShardedDaemonProcessSettings(system),
+      stopMessage = Some(ProjectionBehavior.Stop))
+    //#running-with-daemon-process
+  }
+
 }

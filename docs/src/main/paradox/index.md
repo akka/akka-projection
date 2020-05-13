@@ -13,5 +13,7 @@
 * [JPA](jpa.md)
 * [Event Sourced](eventsourced.md)
 * [Kafka](kafka.md)
+* [Running](running.md)
+* [Projection Settings](projection-settings.md)
 
 @@@

@@ -4,6 +4,7 @@
 
 To use the Kafka module of Akka Projections add the following dependency in your project:
 
+@@dependencies{ projectId="akka-projection-kafka" }
 @@dependency [sbt,Maven,Gradle] {
   group=com.typesafe.akka
   artifact=akka-projection-kafka_$scala.binary.version$
@@ -19,7 +20,3 @@ FIXME project-info{ projectId="akka-projection-kafka" }
 The table below shows `akka-projection-kafka`'s direct dependencies and the second tab shows all libraries it depends on transitively.
 
 FIXME dependencies{ projectId="akka-projection-kafka" }
-
-
-
-
