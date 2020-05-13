@@ -51,7 +51,9 @@ import akka.annotation.ApiMayChange
       case Some(Success(_)) => state
       case Some(Failure(_)) => initialState()
       case None =>
-        throw new IllegalStateException("Process called before previous Future completed. Please report bug.")
+        throw new IllegalStateException(
+          "Process called before previous Future completed. Please report issue at " +
+          "https://github.com/akka/akka-projection/issues")
     }
     state = newState.flatMap(s => process(s, envelope))
     state.map(_ => Done)
