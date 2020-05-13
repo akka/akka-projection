@@ -5,7 +5,6 @@
 package akka.projection.cassandra
 
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -24,8 +23,11 @@ import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.typed.ActorRef
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.scaladsl.Handler
@@ -619,48 +621,49 @@ class CassandraProjectionSpec
 
   "CassandraProjection lifecycle" must {
 
+    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int) extends Handler[Envelope] {
+
+      private var failedOnce = false
+
+      override def start(): Future[Done] = {
+        probe ! "start"
+        Future.successful(Done)
+      }
+
+      override def stop(): Future[Done] = {
+        probe ! "stop"
+        Future.successful(Done)
+      }
+
+      override def process(envelope: Envelope): Future[Done] = {
+        if (envelope.offset == failOnceOnOffset && !failedOnce) {
+          failedOnce = true
+          throw TestException(s"Fail $failOnceOnOffset")
+        } else {
+          probe ! envelope.message
+          Future.successful(Done)
+        }
+      }
+    }
+
     "call start and stop of the handler" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val stopped = new AtomicBoolean
       val handlerProbe = createTestProbe[String]()
-      val handler = new Handler[Envelope] {
-
-        override def start(): Future[Done] = {
-          handlerProbe.ref ! "start"
-          Future.successful(Done)
-        }
-
-        override def stop(): Future[Done] = {
-          handlerProbe.ref ! "stop"
-          stopped.set(true)
-          Future.successful(Done)
-        }
-
-        override def process(envelope: Envelope): Future[Done] = {
-          handlerProbe.ref ! envelope.message
-          Future.successful(Done)
-        }
-      }
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
 
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](
             projectionId,
             sourceProvider(system, entityId),
-            saveOffsetAfterEnvelopes = 2,
-            saveOffsetAfterDuration = 20.millis,
+            saveOffsetAfterEnvelopes = 1,
+            saveOffsetAfterDuration = Duration.Zero,
             handler)
 
-      // FIXME would be easier to run this with TestSink, but the handler.stop is not called by TestKit for that
-      // We should make another iteration of how to run from testkit
-//      val sinkProbe = projectionTestKit.runWithTestSink(projection)
-//      sinkProbe.request(1000)
-
-      projectionTestKit.run(projection) {
-        stopped.get shouldBe true
-      }
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
 
       handlerProbe.expectMessage("start")
       handlerProbe.expectMessage("abc")
@@ -669,7 +672,76 @@ class CassandraProjectionSpec
       handlerProbe.expectMessage("jkl")
       handlerProbe.expectMessage("mno")
       handlerProbe.expectMessage("pqr")
+      // completed without failure
       handlerProbe.expectMessage("stop")
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "call start and stop of handler when restarted" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(system, entityId),
+            saveOffsetAfterEnvelopes = 1,
+            saveOffsetAfterDuration = Duration.Zero,
+            handler)
+          .withSettings(ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0))
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage("start")
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4, restart
+      handlerProbe.expectMessage("stop")
+      handlerProbe.expectMessage("start")
+      handlerProbe.expectMessage("jkl")
+      handlerProbe.expectMessage("mno")
+      handlerProbe.expectMessage("pqr")
+      // now completed without failure
+      handlerProbe.expectMessage("stop")
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "call start and stop of handler when failed but no restart" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            sourceProvider(system, entityId),
+            saveOffsetAfterEnvelopes = 1,
+            saveOffsetAfterDuration = Duration.Zero,
+            handler)
+          .withSettings(
+            ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
+          ) // no restarts
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage("start")
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4, not restarted
+      // completed with failure
+      handlerProbe.expectMessage("stop")
+      handlerProbe.expectNoMessage() // no duplicate stop
     }
   }
 }

@@ -164,11 +164,13 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
               .mapAsync(parallelism = 1)(storeOffset)
         }
 
-      Source
-        .futureSource(tryStartHandler().flatMap(_ => futSource))
-        .via(killSwitch.flow)
-        .via(handlerFlow)
+      val composedSource =
+        Source
+          .futureSource(tryStartHandler().flatMap(_ => futSource))
+          .via(killSwitch.flow)
+          .via(handlerFlow)
 
+      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.stop()))
     }
 
     private def tryStartHandler(): Future[Done] = {
@@ -180,7 +182,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new SlickRunningProjection(RunningProjection.withBackoff(mappedSource(), settings), killSwitch)
+      new SlickRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
   }
 
   private class SlickRunningProjection(source: Source[Done, _], killSwitch: SharedKillSwitch)(
@@ -189,7 +191,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     private val streamDone = source.run()
     private val allStopped: Future[Done] =
-      RunningProjection.stopHandlerWhenStreamCompleted(streamDone, () => handler.stop())(
+      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.stop())(
         systemProvider.classicSystem.dispatcher)
 
     /**

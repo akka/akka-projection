@@ -181,7 +181,7 @@ import akka.stream.scaladsl.Source
             .map(_ => Done)
       }
 
-      composedSource
+      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.stop()))
     }
 
     private def tryStartHandler(): Future[Done] = {
@@ -193,7 +193,7 @@ import akka.stream.scaladsl.Source
     }
 
     private[projection] def newRunningInstance(): RunningProjection = {
-      new CassandraRunningProjection(RunningProjection.withBackoff(mappedSource(), settings), killSwitch)
+      new CassandraRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
     }
   }
 
@@ -203,7 +203,7 @@ import akka.stream.scaladsl.Source
 
     private val streamDone = source.run()
     private val allStopped: Future[Done] =
-      RunningProjection.stopHandlerWhenStreamCompleted(streamDone, () => handler.stop())(
+      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.stop())(
         systemProvider.classicSystem.dispatcher)
 
     /**
