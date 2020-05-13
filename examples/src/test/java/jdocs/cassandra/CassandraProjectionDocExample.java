@@ -27,10 +27,18 @@ import akka.projection.ProjectionId;
 import akka.projection.javadsl.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 //#handler-imports
+
+//#projection-settings-imports
+import akka.projection.ProjectionSettings;
+import static java.time.temporal.ChronoUnit.SECONDS;
+//#projection-settings-imports
 
 public interface CassandraProjectionDocExample {
 
@@ -67,7 +75,7 @@ public interface CassandraProjectionDocExample {
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
       CassandraProjection.atLeastOnce(
-        ProjectionId.of("ShoppingCarts", "carts-1"),
+        ProjectionId.of("shopping-carts", "carts-1"),
         sourceProvider,
         saveOffsetAfterEnvelopes,
         saveOffsetAfterDuration,
@@ -85,10 +93,40 @@ public interface CassandraProjectionDocExample {
     //#atMostOnce
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
       CassandraProjection.atMostOnce(
-        ProjectionId.of("ShoppingCarts", "carts-1"),
+        ProjectionId.of("shopping-carts", "carts-1"),
         sourceProvider,
         new ShoppingCartHandler());
     //#atMostOnce
+
+  }
+
+  public static void illustrateProjectionSettings() {
+
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+
+    SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
+            EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), "carts-1");
+
+    //#projection-settings
+    int saveOffsetAfterEnvelopes = 100;
+    Duration saveOffsetAfterDuration = Duration.ofMillis(500);
+
+    Projection<EventEnvelope<ShoppingCart.Event>> projection =
+      CassandraProjection.atLeastOnce(
+        ProjectionId.of("shopping-carts", "carts-1"),
+        sourceProvider,
+        saveOffsetAfterEnvelopes,
+        saveOffsetAfterDuration,
+        new ShoppingCartHandler()
+      ).withSettings(
+        ProjectionSettings.create(system)
+          .withBackoff(
+            Duration.of(10, SECONDS), /*minBackoff*/
+            Duration.of(60, SECONDS), /*maxBackoff*/
+            0.5 /*randomFactor*/
+          )
+      );
+    //#projection-settings
 
   }
 }

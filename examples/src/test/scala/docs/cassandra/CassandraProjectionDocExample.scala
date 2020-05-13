@@ -4,8 +4,6 @@
 
 package docs.cassandra
 
-import scala.concurrent.duration._
-
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 //#daemon-imports
@@ -28,6 +26,11 @@ import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.ProjectionId
 
 //#projection-imports
+
+//#projection-settings-imports
+import akka.projection.ProjectionSettings
+import scala.concurrent.duration._
+//#projection-settings-imports
 
 //#handler-imports
 import akka.projection.scaladsl.Handler
@@ -116,6 +119,23 @@ class CassandraProjectionDocExample {
       settings = ShardedDaemonProcessSettings(system),
       stopMessage = Some(ProjectionBehavior.Stop))
     //#running-with-daemon-process
+  }
+
+  object IllustrateProjectionSettings {
+
+    //#projection-settings
+    val projection =
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider(tag),
+          saveOffsetAfterEnvelopes = 100,
+          saveOffsetAfterDuration = 500.millis,
+          handler = new ShoppingCartHandler)
+        .withSettings(ProjectionSettings(system)
+          .withBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5))
+    //#projection-settings
+
   }
 
 }
