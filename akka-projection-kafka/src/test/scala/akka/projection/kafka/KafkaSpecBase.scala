@@ -14,13 +14,14 @@ import akka.kafka.testkit.scaladsl.TestcontainersKafkaLike
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.OptionValues
+import org.scalatest.Suite
 import org.scalatest.concurrent.Eventually
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
-import org.scalatest.OptionValues
-import org.scalatest.Suite
 
 abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
     extends KafkaSpec(kafkaPort, kafkaPort + 1, ActorSystem("Spec", config))
@@ -33,6 +34,7 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
     with Matchers
     with PatienceConfiguration
     with Eventually
+    with BeforeAndAfterEach
     with TestcontainersKafkaLike {
 
   protected def this() = this(config = ConfigFactory.load, kafkaPort = -1)

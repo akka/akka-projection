@@ -14,7 +14,9 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <root level="DEBUG">
+    <logger name="slick" level="INFO" />
+
+    <root level="INFO">
         <appender-ref ref="CapturingAppender" />
     </root>
 </configuration>
