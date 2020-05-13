@@ -113,5 +113,7 @@ object Dependencies {
         Examples.akkaPersistenceCassandra,
         Examples.akkaPersistenceJdbc,
         Test.akkaTypedTestkit,
-        Test.logback)
+        Test.logback,
+        Test.testContainers,
+        Test.cassandraContainer)
 }
