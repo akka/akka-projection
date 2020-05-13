@@ -6,7 +6,6 @@ package akka.projection.testkit.scaladsl
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.Promise
 import scala.concurrent.duration._
 
 import akka.Done
@@ -174,8 +173,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
         new TestRunningProjection(mappedSource(), killSwitch)
     }
 
-    private class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch)(
-        implicit systemProvider: ClassicActorSystemProvider)
+    private class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch)
         extends RunningProjection {
 
       val futureDone = source.run()

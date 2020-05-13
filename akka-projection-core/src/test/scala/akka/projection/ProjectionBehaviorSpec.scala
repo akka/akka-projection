@@ -6,7 +6,6 @@ package akka.projection
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.Promise
 
 import akka.Done
 import akka.NotUsed
