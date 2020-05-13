@@ -128,7 +128,7 @@ class CassandraProjectionDocExample {
       CassandraProjection
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
-          sourceProvider(tag),
+          sourceProvider,
           saveOffsetAfterEnvelopes = 100,
           saveOffsetAfterDuration = 500.millis,
           handler = new ShoppingCartHandler)

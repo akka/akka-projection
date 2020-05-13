@@ -134,9 +134,9 @@ object ShoppingCart {
 
   final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
 
-  //#shardingTags
+  //#slicingTags
   val EntityKey: EntityTypeKey[Command] = EntityTypeKey[Command]("ShoppingCart")
-  val tags = Set("carts-0", "carts-1", "carts-2", "carts-3", "carts-4").toIndexedSeq
+  val tags = Vector("carts-0", "carts-1", "carts-2", "carts-3", "carts-4")
 
   def init(system: ActorSystem[_]): Unit = {
     ClusterSharding(system).init(Entity(EntityKey) { entityContext =>
@@ -145,7 +145,7 @@ object ShoppingCart {
       ShoppingCart(entityContext.entityId, selectedTag)
     }.withRole("write-model"))
   }
-  //#shardingTags
+  //#slicingTags
 
   def apply(cartId: String, eventProcessorTag: String): Behavior[Command] = {
     EventSourcedBehavior
