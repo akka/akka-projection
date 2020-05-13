@@ -16,10 +16,11 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.RunningProjection
 import akka.stream.DelayOverflowStrategy
 import akka.stream.KillSwitches
+import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.DelayStrategy
-import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -135,40 +136,54 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
   case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
       extends Projection[Int] {
 
-    override def withSettings(projectionSettings: ProjectionSettings): Projection[Int] =
+    override def withSettings(settings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
 
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
 
-    private val killSwitch = KillSwitches.shared(projectionId.id)
-    private val promiseToStop = Promise[Done]
+    override def run()(implicit systemProvider: ClassicActorSystemProvider) =
+      new InternalProjectionState(strBuffer, predicate).newRunningInstance()
 
-    override def run()(implicit systemProvider: ClassicActorSystemProvider): Unit = {
-      val done =
-        mappedSource.runWith(Sink.ignore)
-      promiseToStop.completeWith(done)
+    private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
+      new InternalProjectionState(strBuffer, predicate).mappedSource()
+
+    /*
+     * INTERNAL API
+     * This internal class will hold the KillSwitch that is needed
+     * when building the mappedSource and when running the projection (to stop)
+     */
+    private class InternalProjectionState(strBuffer: StringBuffer, predicate: Int => Boolean)(
+        implicit val systemProvider: ClassicActorSystemProvider) {
+
+      private val killSwitch = KillSwitches.shared(projectionId.id)
+
+      def mappedSource(): Source[Done, _] =
+        src.via(killSwitch.flow).mapAsync(1)(i => process(i))
+
+      private def process(elt: Int): Future[Done] = {
+        if (predicate(elt)) concat(elt)
+        Future.successful(Done)
+      }
+
+      private def concat(i: Int) = {
+        if (strBuffer.toString.isEmpty) strBuffer.append(i)
+        else strBuffer.append("-").append(i)
+      }
+
+      def newRunningInstance(): RunningProjection =
+        new TestRunningProjection(mappedSource(), killSwitch)
     }
 
-    override def runWithBackoff()(implicit systemProvider: ClassicActorSystemProvider): Unit =
-      run()
+    private class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch)(
+        implicit systemProvider: ClassicActorSystemProvider)
+        extends RunningProjection {
 
-    private def process(elt: Int): Future[Done] = {
-      if (predicate(elt)) concat(elt)
-      Future.successful(Done)
-    }
+      val futureDone = source.run()
 
-    private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] = {
-      src.via(killSwitch.flow).mapAsync(1)(i => process(i))
-    }
-
-    private def concat(i: Int) = {
-      if (strBuffer.toString.isEmpty) strBuffer.append(i)
-      else strBuffer.append("-").append(i)
-    }
-
-    override def stop()(implicit ec: ExecutionContext): Future[Done] = {
-      killSwitch.shutdown()
-      promiseToStop.future
+      override def stop()(implicit ec: ExecutionContext): Future[Done] = {
+        killSwitch.shutdown()
+        futureDone
+      }
     }
   }
 }
