@@ -18,7 +18,7 @@ For more information on using Akka Cluster consult Akka's reference on [Akka Clu
 
 ## Sharded Daemon Process Example
 
-The Sharded Daemon Process can be used to distribute the `n` instances of a given Projection across the cluster. Therefore, it's important that each Projection instance consumes a subset of the stream of envelopes.
+The Sharded Daemon Process can be used to distribute `n` instances of a given Projection across the cluster. Therefore, it's important that each Projection instance consumes a subset of the stream of envelopes.
 
 How the subset is created depends on the kind of source we consume. If it's a Alpakka Kafka source, this is typically done using Kafka partitions. When consuming from Akka Persistence Journal, the events must be tagged with a shard number as demonstrate in the example bellow.
 
