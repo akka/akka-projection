@@ -162,22 +162,27 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
               .mapAsync(parallelism = 1)(storeOffset)
         }
 
-      Source
-        .futureSource(futSource)
-        .via(killSwitch.flow)
-        .via(handlerFlow)
+      val composedSource =
+        Source
+          .futureSource(handler.tryStart().flatMap(_ => futSource))
+          .via(killSwitch.flow)
+          .via(handlerFlow)
 
+      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.tryStop()))
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new SlickRunningProjection(RunningProjection.withBackoff(mappedSource(), settings), killSwitch)
+      new SlickRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
   }
 
   private class SlickRunningProjection(source: Source[Done, _], killSwitch: SharedKillSwitch)(
       implicit systemProvider: ClassicActorSystemProvider)
       extends RunningProjection {
 
-    private val futureDone = source.run()
+    private val streamDone = source.run()
+    private val allStopped: Future[Done] =
+      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.tryStop())(
+        systemProvider.classicSystem.dispatcher)
 
     /**
      * INTERNAL API
@@ -188,7 +193,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     @InternalApi
     override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
       killSwitch.shutdown()
-      futureDone
+      allStopped
     }
   }
 

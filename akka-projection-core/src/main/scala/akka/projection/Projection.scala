@@ -6,11 +6,14 @@ package akka.projection
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.util.control.NonFatal
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
+import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
@@ -57,11 +60,27 @@ trait Projection[Envelope] {
  */
 @InternalApi
 private[projection] object RunningProjection {
-  def withBackoff(source: Source[Done, _], settings: ProjectionSettings): Source[Done, _] =
+
+  def withBackoff(source: () => Source[Done, _], settings: ProjectionSettings): Source[Done, _] =
     RestartSource
       .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
-        () => source
+        () => source()
       }
+
+  def stopHandlerWhenStreamCompletedNormally(whenStreamCompleted: Future[Done], stopHandler: () => Future[Done])(
+      implicit ec: ExecutionContext): Future[Done] = {
+    whenStreamCompleted.flatMap(_ => stopHandler())
+  }
+
+  def stopHandlerWhenFailed[T](stopHandler: () => Future[Done])(implicit ec: ExecutionContext): Flow[T, T, _] = {
+    Flow[T].recoverWithRetries(attempts = 1, {
+      case exc =>
+        Source
+          .futureSource(stopHandler().recover(_ => Done).map(_ => Source.failed(exc)))
+          .mapMaterializedValue(_ => NotUsed)
+    })
+  }
+
 }
 
 /**

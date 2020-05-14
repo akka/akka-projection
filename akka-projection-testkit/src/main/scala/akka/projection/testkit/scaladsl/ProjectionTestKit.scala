@@ -63,6 +63,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
   def runWithTestSink[T](projection: Projection[_]): TestSubscriber.Probe[Done] = {
     val sinkProbe = TestSink.probe[Done](testKit.system.toClassic)
+    // FIXME handler.stop is not called when running like this
     projection.mappedSource().runWith(sinkProbe)
   }
 

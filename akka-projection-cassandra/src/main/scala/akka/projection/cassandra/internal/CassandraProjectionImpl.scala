@@ -129,12 +129,11 @@ import akka.stream.scaladsl.Source
       val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
 
       val offsetStore = new CassandraOffsetStore(session)
-
       val readOffsets = () => offsetStore.readOffset(projectionId)
 
       val source: Source[(Offset, Envelope), NotUsed] =
         Source
-          .futureSource(sourceProvider.source(readOffsets))
+          .futureSource(handler.tryStart().flatMap(_ => sourceProvider.source(readOffsets)))
           .via(killSwitch.flow)
           .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
           .mapMaterializedValue(_ => NotUsed)
@@ -180,11 +179,11 @@ import akka.stream.scaladsl.Source
             .map(_ => Done)
       }
 
-      composedSource
+      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.tryStop()))
     }
 
     private[projection] def newRunningInstance(): RunningProjection = {
-      new CassandraRunningProjection(RunningProjection.withBackoff(mappedSource(), settings), killSwitch)
+      new CassandraRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
     }
   }
 
@@ -192,7 +191,10 @@ import akka.stream.scaladsl.Source
       implicit systemProvider: ClassicActorSystemProvider)
       extends RunningProjection {
 
-    private val futureDone = source.run()
+    private val streamDone = source.run()
+    private val allStopped: Future[Done] =
+      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.tryStop())(
+        systemProvider.classicSystem.dispatcher)
 
     /**
      * INTERNAL API
@@ -204,7 +206,7 @@ import akka.stream.scaladsl.Source
     @InternalApi
     override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
       killSwitch.shutdown()
-      futureDone
+      allStopped
     }
   }
 
