@@ -6,9 +6,7 @@ package akka.projection.cassandra.internal
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
-import scala.util.control.NonFatal
 
 import akka.Done
 import akka.NotUsed
@@ -135,7 +133,7 @@ import akka.stream.scaladsl.Source
 
       val source: Source[(Offset, Envelope), NotUsed] =
         Source
-          .futureSource(tryStartHandler().flatMap(_ => sourceProvider.source(readOffsets)))
+          .futureSource(handler.tryStart().flatMap(_ => sourceProvider.source(readOffsets)))
           .via(killSwitch.flow)
           .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
           .mapMaterializedValue(_ => NotUsed)
@@ -181,15 +179,7 @@ import akka.stream.scaladsl.Source
             .map(_ => Done)
       }
 
-      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.stop()))
-    }
-
-    private def tryStartHandler(): Future[Done] = {
-      try {
-        handler.start()
-      } catch {
-        case NonFatal(exc) => Future.failed(exc) // in case the call throws
-      }
+      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.tryStop()))
     }
 
     private[projection] def newRunningInstance(): RunningProjection = {
@@ -203,7 +193,7 @@ import akka.stream.scaladsl.Source
 
     private val streamDone = source.run()
     private val allStopped: Future[Done] =
-      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.stop())(
+      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.tryStop())(
         systemProvider.classicSystem.dispatcher)
 
     /**

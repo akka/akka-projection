@@ -6,9 +6,7 @@ package akka.projection.slick.internal
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
-import scala.util.control.NonFatal
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
@@ -166,19 +164,11 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
       val composedSource =
         Source
-          .futureSource(tryStartHandler().flatMap(_ => futSource))
+          .futureSource(handler.tryStart().flatMap(_ => futSource))
           .via(killSwitch.flow)
           .via(handlerFlow)
 
-      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.stop()))
-    }
-
-    private def tryStartHandler(): Future[Done] = {
-      try {
-        handler.start()
-      } catch {
-        case NonFatal(exc) => Future.failed(exc) // in case the call throws
-      }
+      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.tryStop()))
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
@@ -191,7 +181,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     private val streamDone = source.run()
     private val allStopped: Future[Done] =
-      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.stop())(
+      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.tryStop())(
         systemProvider.classicSystem.dispatcher)
 
     /**

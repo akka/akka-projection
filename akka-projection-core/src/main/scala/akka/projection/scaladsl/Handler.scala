@@ -5,9 +5,11 @@
 package akka.projection.scaladsl
 
 import scala.concurrent.Future
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.projection.HandlerRecovery
 
 @ApiMayChange object Handler {
@@ -59,5 +61,23 @@ import akka.projection.HandlerRecovery
    */
   def stop(): Future[Done] =
     Future.successful(Done)
+
+  /** INTERNAL API */
+  @InternalApi private[akka] def tryStart(): Future[Done] = {
+    try {
+      start()
+    } catch {
+      case NonFatal(exc) => Future.failed(exc) // in case the call throws
+    }
+  }
+
+  /** INTERNAL API */
+  @InternalApi private[akka] def tryStop(): Future[Done] = {
+    try {
+      stop()
+    } catch {
+      case NonFatal(exc) => Future.failed(exc) // in case the call throws
+    }
+  }
 
 }

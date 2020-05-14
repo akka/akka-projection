@@ -69,24 +69,16 @@ private[projection] object RunningProjection {
 
   def stopHandlerWhenStreamCompletedNormally(whenStreamCompleted: Future[Done], stopHandler: () => Future[Done])(
       implicit ec: ExecutionContext): Future[Done] = {
-    whenStreamCompleted.flatMap(_ => tryStopHandler(stopHandler))
+    whenStreamCompleted.flatMap(_ => stopHandler())
   }
 
   def stopHandlerWhenFailed[T](stopHandler: () => Future[Done])(implicit ec: ExecutionContext): Flow[T, T, _] = {
     Flow[T].recoverWithRetries(attempts = 1, {
       case exc =>
         Source
-          .futureSource(tryStopHandler(stopHandler).recover(_ => Done).map(_ => Source.failed(exc)))
+          .futureSource(stopHandler().recover(_ => Done).map(_ => Source.failed(exc)))
           .mapMaterializedValue(_ => NotUsed)
     })
-  }
-
-  private def tryStopHandler(stopHandler: () => Future[Done]): Future[Done] = {
-    try {
-      stopHandler()
-    } catch {
-      case NonFatal(exc) => Future.failed(exc) // in case the call throws
-    }
   }
 
 }
