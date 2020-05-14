@@ -22,7 +22,7 @@ import akka.util.JavaDurationConverters._
 
 @ApiMayChange
 object ProjectionTestKit {
-  def apply(testKit: ActorTestKit): ProjectionTestKit =
+  def create(testKit: ActorTestKit): ProjectionTestKit =
     new ProjectionTestKit(testKit)
 }
 

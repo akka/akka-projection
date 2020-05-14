@@ -15,5 +15,6 @@
 * [Kafka](kafka.md)
 * [Running](running.md)
 * [Projection Settings](projection-settings.md)
+* [Testing](testing.md)
 
 @@@

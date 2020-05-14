@@ -40,7 +40,7 @@ import scala.concurrent.Future
 
 //#handler-imports
 
-class CassandraProjectionDocExample {
+object CassandraProjectionDocExample {
 
   private val system = ActorSystem[Nothing](Behaviors.empty, "Example")
 
