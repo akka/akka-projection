@@ -9,12 +9,23 @@ import java.time.Duration;
 import akka.Done;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
+import jdocs.eventsourced.ShoppingCart;
+
+//#daemon-imports
+import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings;
+import akka.projection.ProjectionBehavior;
+
+//#daemon-imports
+
+//#source-provider-imports
 import akka.persistence.cassandra.query.javadsl.CassandraReadJournal;
 import akka.persistence.query.Offset;
-import akka.projection.eventsourced.EventEnvelope;
-import akka.projection.eventsourced.javadsl.EventSourcedProvider;
 import akka.projection.javadsl.SourceProvider;
-import jdocs.eventsourced.ShoppingCart;
+import akka.projection.eventsourced.javadsl.EventSourcedProvider;
+import akka.projection.eventsourced.EventEnvelope;
+
+//#source-provider-imports
 
 //#projection-imports
 import akka.projection.cassandra.javadsl.CassandraProjection;
@@ -27,10 +38,17 @@ import akka.projection.ProjectionId;
 import akka.projection.javadsl.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 //#handler-imports
+
+//#projection-settings-imports
+import akka.projection.ProjectionSettings;
+import static java.time.temporal.ChronoUnit.SECONDS;
+//#projection-settings-imports
 
 public interface CassandraProjectionDocExample {
 
@@ -67,7 +85,7 @@ public interface CassandraProjectionDocExample {
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
       CassandraProjection.atLeastOnce(
-        ProjectionId.of("ShoppingCarts", "carts-1"),
+        ProjectionId.of("shopping-carts", "carts-1"),
         sourceProvider,
         saveOffsetAfterEnvelopes,
         saveOffsetAfterDuration,
@@ -85,10 +103,84 @@ public interface CassandraProjectionDocExample {
     //#atMostOnce
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
       CassandraProjection.atMostOnce(
-        ProjectionId.of("ShoppingCarts", "carts-1"),
+        ProjectionId.of("shopping-carts", "carts-1"),
         sourceProvider,
         new ShoppingCartHandler());
     //#atMostOnce
+
+  }
+
+
+   static class IllustrateRunningWithShardedDaemon {
+
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+
+
+    
+    //#running-source-provider
+    SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider(String tag) {
+      return EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), tag);
+    }
+    //#running-source-provider
+
+    //#running-projection
+    int saveOffsetAfterEnvelopes = 100;
+    Duration saveOffsetAfterDuration = Duration.ofMillis(500);
+
+    Projection<EventEnvelope<ShoppingCart.Event>> projection(String tag) {
+      return CassandraProjection.atLeastOnce(
+        ProjectionId.of("shopping-carts", tag),
+        sourceProvider(tag),
+        saveOffsetAfterEnvelopes,
+        saveOffsetAfterDuration,
+        new ShoppingCartHandler());
+    }
+    //#running-projection
+
+
+     public IllustrateRunningWithShardedDaemon() {
+
+    //#running-with-daemon-process
+     ShardedDaemonProcess.get(system).init(
+       ProjectionBehavior.Command.class,
+       "shopping-carts",
+       ShoppingCart.tags.size(),
+       id -> ProjectionBehavior.create(projection(ShoppingCart.tags.get(id))),
+       ShardedDaemonProcessSettings.create(system),
+       Optional.of(ProjectionBehavior.stopMessage())
+     );
+    //#running-with-daemon-process
+     }
+  }
+
+
+  public static void illustrateProjectionSettings() {
+
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+
+    SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
+            EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), "carts-1");
+
+    //#projection-settings
+    int saveOffsetAfterEnvelopes = 100;
+    Duration saveOffsetAfterDuration = Duration.ofMillis(500);
+
+    Projection<EventEnvelope<ShoppingCart.Event>> projection =
+            CassandraProjection.atLeastOnce(
+                    ProjectionId.of("shopping-carts", "carts-1"),
+                    sourceProvider,
+                    saveOffsetAfterEnvelopes,
+                    saveOffsetAfterDuration,
+                    new ShoppingCartHandler()
+            ).withSettings(
+                    ProjectionSettings.create(system)
+                            .withBackoff(
+                                    Duration.ofSeconds(10), /*minBackoff*/
+                                    Duration.ofSeconds(60), /*maxBackoff*/
+                                    0.5 /*randomFactor*/
+                            )
+            );
+    //#projection-settings
 
   }
 }

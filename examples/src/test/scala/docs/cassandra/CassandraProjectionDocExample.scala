@@ -4,20 +4,33 @@
 
 package docs.cassandra
 
-import scala.concurrent.duration._
-
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
+//#daemon-imports
+import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
+import akka.projection.ProjectionBehavior
+
+//#daemon-imports
+
+//#source-provider-imports
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.eventsourced.EventEnvelope
 import docs.eventsourced.ShoppingCart
+
+//#source-provider-imports
 
 //#projection-imports
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.ProjectionId
 
 //#projection-imports
+
+//#projection-settings-imports
+import akka.projection.ProjectionSettings
+import scala.concurrent.duration._
+//#projection-settings-imports
 
 //#handler-imports
 import akka.projection.scaladsl.Handler
@@ -59,7 +72,7 @@ class CassandraProjectionDocExample {
     //#atLeastOnce
     val projection =
       CassandraProjection.atLeastOnce(
-        projectionId = ProjectionId("ShoppingCarts", "carts-1"),
+        projectionId = ProjectionId("shopping-carts", "carts-1"),
         sourceProvider,
         saveOffsetAfterEnvelopes = 100,
         saveOffsetAfterDuration = 500.millis,
@@ -71,9 +84,58 @@ class CassandraProjectionDocExample {
     //#atMostOnce
     val projection =
       CassandraProjection.atMostOnce(
-        projectionId = ProjectionId("ShoppingCarts", "carts-1"),
+        projectionId = ProjectionId("shopping-carts", "carts-1"),
         sourceProvider,
         handler = new ShoppingCartHandler)
     //#atMostOnce
   }
+
+  object IllustrateRunningWithShardedDaemon {
+
+    //#running-source-provider
+    def sourceProvider(tag: String) =
+      EventSourcedProvider
+        .eventsByTag[ShoppingCart.Event](
+          systemProvider = system,
+          readJournalPluginId = CassandraReadJournal.Identifier,
+          tag = tag)
+    //#running-source-provider
+
+    //#running-projection
+    def projection(tag: String) =
+      CassandraProjection.atLeastOnce(
+        projectionId = ProjectionId("shopping-carts", tag),
+        sourceProvider(tag),
+        saveOffsetAfterEnvelopes = 100,
+        saveOffsetAfterDuration = 500.millis,
+        handler = new ShoppingCartHandler)
+    //#running-projection
+
+    //#running-with-daemon-process
+    ShardedDaemonProcess(system).init[ProjectionBehavior.Command](
+      name = "shopping-carts",
+      numberOfInstances = ShoppingCart.tags.size,
+      behaviorFactory = n => ProjectionBehavior(projection(ShoppingCart.tags(n))),
+      settings = ShardedDaemonProcessSettings(system),
+      stopMessage = Some(ProjectionBehavior.Stop))
+    //#running-with-daemon-process
+  }
+
+  object IllustrateProjectionSettings {
+
+    //#projection-settings
+    val projection =
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider,
+          saveOffsetAfterEnvelopes = 100,
+          saveOffsetAfterDuration = 500.millis,
+          handler = new ShoppingCartHandler)
+        .withSettings(ProjectionSettings(system)
+          .withBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5))
+    //#projection-settings
+
+  }
+
 }

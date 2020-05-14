@@ -19,7 +19,3 @@ FIXME project-info{ projectId="akka-projection-kafka" }
 The table below shows `akka-projection-kafka`'s direct dependencies and the second tab shows all libraries it depends on transitively.
 
 FIXME dependencies{ projectId="akka-projection-kafka" }
-
-
-
-
