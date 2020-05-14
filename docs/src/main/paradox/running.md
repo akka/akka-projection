@@ -16,7 +16,7 @@ Akka Projections require Akka $akka.version$ or later, see @ref:[Akka version](o
 
 For more information on using Akka Cluster consult Akka's reference on [Akka Cluster](https://doc.akka.io/docs/akka/current/typed/index-cluster.html) and [Akka Cluster Sharding](https://doc.akka.io/docs/akka/current/typed/cluster-sharding.html).
 
-## Sharded Daemon Process Example
+## Running with Sharded Daemon Process
 
 The Sharded Daemon Process can be used to distribute `n` instances of a given Projection across the cluster. Therefore, it's important that each Projection instance consumes a subset of the stream of envelopes.
 
@@ -69,3 +69,11 @@ For this example, we configure as many `ShardedDaemonProcess` as tags and we def
 ### Projection Behavior
 
 The `ProjectionBehavior` is an Actor `Behavior` that knows how to manage the Projection lifecyle. The Projection starts to consume the events as soon as the actor is spawn and will restart the source in case of failures (see @ref:[Projection Settings](projection-settings.md)).
+
+### Running with local Actor
+
+TODO: Explain how to directly use `ProjectionBehavior` and when it would make sense or not.
+
+### Running in Cluster Singleton
+
+TODO: Explain how run `ProjectionBehavior` as a cluster singleton and when it would make sense or not.
