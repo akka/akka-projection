@@ -54,6 +54,12 @@ duplicates when the projection that will be processed again when the projection 
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
+## Grouping
+
+The envelopes can be grouped before processing, which can be useful for batch updates.
+
+TODO: Implementation in progress, see [PR #118](https://github.com/akka/akka-projection/pull/118)
+
 ## Handler
 
 It's in the @apidoc[SlickHandler] that you implement the processing of each envelope. It's essentially a function

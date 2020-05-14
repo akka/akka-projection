@@ -66,6 +66,12 @@ can batch offsets before storing.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
+## Grouping
+
+The envelopes can be grouped before processing, which can be useful for batch updates.
+
+TODO: Implementation in progress, see [PR #118](https://github.com/akka/akka-projection/pull/118)
+
 ## Handler
 
 It's in the @apidoc[Handler] that you implement the processing of each envelope. It's essentially a function
@@ -173,6 +179,13 @@ Java
 A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html).
  
 TODO: Documentation pending, see [PR #116](https://github.com/akka/akka-projection/pull/116)
+
+
+## Processing with Akka Streams
+
+An Akka Streams `Flow` can be used instead of a handler for processing the envelopes with at-least-once semantics.
+
+TODO: Implementation in progress, see [PR #119](https://github.com/akka/akka-projection/pull/119)
 
 ## Schema
 

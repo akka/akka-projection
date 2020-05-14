@@ -1,16 +1,35 @@
 # Overview
 
-The purpose of Akka Projections is described in @ref:[Use Cases](use-cases.md).  
+The purpose of Akka Projections is described in @ref:[Use Cases](use-cases.md).
+
+In Akka Projections you process a stream of events or records from a source to a projected model or external system.
+Each event is associated with an offset representing the position in the stream. This offset is used for
+resuming the stream from that position when the projection is restarted.
+
+As the source you can select from:
+
+* @ref:[Events from Akka Persistence](eventsourced.md)
+* @ref:[Messages from Kafka](kafka.md)
+* Building your own @apidoc[SourceProvider]
+
+For the offset storage you can select from:
+
+* @ref:[Offset in Cassandra](cassandra.md)
+* @ref:[Offset in relational DB with Slick](slick.md)
+* @ref:[Offset in relational DB with JPA](jpa.md)
+
+Those building blocks are assembled into a `Projection`. You can have many instances of it
+@ref:[automatically distributed and run](running.md) in an Akka Cluster. 
 
 ## Dependencies
 
 Akka Projections consist of several modules for specific technologies. The dependency section for
 each module describes which dependency you should define in your project.
 
-* @ref:[Offset in Cassandra](cassandra.md)
-* @ref:[Offset in relational DB with Slick](slick.md)
 * @ref:[Events from Akka Persistence](eventsourced.md)
 * @ref:[Messages from Kafka](kafka.md)
+* @ref:[Offset in Cassandra](cassandra.md)
+* @ref:[Offset in relational DB with Slick](slick.md)
 
 All of them share a dependency to `akka-projection-core`: 
 
