@@ -11,8 +11,10 @@ import akka.Done
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.StatefulHandler
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.scaladsl.Source
+import org.slf4j.LoggerFactory
 
 object WordCountDocExample {
 
@@ -89,31 +91,39 @@ object WordCountDocExample {
   }
   //#sourceProvider
 
+  object IllstrateVariables {
+    //#mutableState
+    class WordCountHandler extends Handler[WordEnvelope] {
+      private val logger = LoggerFactory.getLogger(getClass)
+      private var state: Map[Word, Count] = Map.empty
+
+      override def process(envelope: WordEnvelope): Future[Done] = {
+        val word = envelope.word
+        val newCount = state.getOrElse(word, 0) + 1
+        logger.info("Word count for {} is {}", word, newCount)
+        state = state.updated(word, newCount)
+        Future.successful(Done)
+      }
+    }
+    //#mutableState
+  }
+
   object IllstrateStatefulHandlerLoadingInitialState {
 
     //#loadingInitialState
     class WordCountHandler(projectionId: ProjectionId, repository: WordCountRepository)(implicit ec: ExecutionContext)
-        extends Handler[WordEnvelope] {
+        extends StatefulHandler[Map[Word, Count], WordEnvelope] {
 
-      private var state: Future[Map[Word, Count]] = repository.loadAll(projectionId.id)
+      override def initialState(): Future[Map[Word, Count]] = repository.loadAll(projectionId.id)
 
-      override def process(envelope: WordEnvelope): Future[Done] = {
-        if (state.failed.isCompleted) {
-          // reload initial state if initial loadAll failed or previous save failed
-          state = repository.loadAll(projectionId.id)
-        }
-
+      override def process(state: Map[Word, Count], envelope: WordEnvelope): Future[Map[Word, Count]] = {
         val word = envelope.word
-        val oldState = state
+        val newCount = state.getOrElse(word, 0) + 1
         val newState = for {
-          s <- oldState
-          newCount = s.getOrElse(word, 0) + 1
           _ <- repository.save(projectionId.id, word, newCount)
-        } yield s.updated(word, newCount)
+        } yield state.updated(word, newCount)
 
-        state = newState
-
-        newState.map(_ => Done)
+        newState
       }
     }
     //#loadingInitialState
@@ -123,37 +133,31 @@ object WordCountDocExample {
 
     //#loadingOnDemand
     class WordCountHandler(projectionId: ProjectionId, repository: WordCountRepository)(implicit ec: ExecutionContext)
-        extends Handler[WordEnvelope] {
+        extends StatefulHandler[Map[Word, Count], WordEnvelope] {
 
-      private var state: Future[Map[Word, Count]] = Future.successful(Map.empty)
+      override def initialState(): Future[Map[Word, Count]] =
+        Future.successful(Map.empty)
 
-      override def process(envelope: WordEnvelope): Future[Done] = {
+      override def process(state: Map[Word, Count], envelope: WordEnvelope): Future[Map[Word, Count]] = {
         val word = envelope.word
-        val oldState = state
 
         val currentCount =
-          oldState.flatMap { s =>
-            s.get(word) match {
-              case None =>
-                repository.load(projectionId.id, word)
-              case Some(count) =>
-                Future.successful(count)
-            }
+          state.get(word) match {
+            case None =>
+              repository.load(projectionId.id, word)
+            case Some(count) =>
+              Future.successful(count)
           }
 
         val newState = for {
-          s <- oldState
           c <- currentCount
           newCount = c + 1
           _ <- repository.save(projectionId.id, word, newCount)
-        } yield s.updated(word, newCount)
+        } yield state.updated(word, newCount)
 
-        // remove the word from the state if the save failed, because it could have been a timeout
-        // so that it was actually saved, best to reload
-        state = newState.recoverWith(_ => newState.map(_ - word))
-
-        newState.map(_ => Done)
+        newState
       }
+
     }
     //#loadingOnDemand
   }
