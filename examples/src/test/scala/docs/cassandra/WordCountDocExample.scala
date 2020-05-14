@@ -155,9 +155,7 @@ object WordCountDocExample {
           _ <- repository.save(projectionId.id, word, newCount)
         } yield state.updated(word, newCount)
 
-        // remove the word from the state if the save failed, because it could have been a timeout
-        // so that it was actually saved, best to reload
-        newState.recoverWith(_ => newState.map(_ - word))
+        newState
       }
 
     }

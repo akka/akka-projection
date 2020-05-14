@@ -168,6 +168,11 @@ Scala
 Java
 :  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
 
+### Handler as an actor
+
+A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html).
+ 
+TODO: Documentation pending, see [PR #116](https://github.com/akka/akka-projection/pull/116)
 
 ## Schema
 
