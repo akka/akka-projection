@@ -4,11 +4,15 @@
 
 package akka.projection.cassandra.scaladsl
 
+import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
+import akka.Done
+import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
@@ -35,7 +39,7 @@ object CassandraProjection {
       sourceProvider: SourceProvider[Offset, Envelope],
       saveOffsetAfterEnvelopes: Int,
       saveOffsetAfterDuration: FiniteDuration,
-      handler: Handler[Envelope]): Projection[Envelope] =
+      handler: Handler[Envelope]): CassandraProjection[Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
@@ -51,11 +55,23 @@ object CassandraProjection {
   def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): Projection[Envelope] =
+      handler: Handler[Envelope]): CassandraProjection[Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
       CassandraProjectionImpl.AtMostOnce,
       settingsOpt = None,
       handler)
+}
+
+trait CassandraProjection[Envelope] extends Projection[Envelope] {
+
+  override def withSettings(settings: ProjectionSettings): CassandraProjection[Envelope]
+
+  /**
+   * For testing purposes the offset table can be created programmatically.
+   * For production it's recommended to create the table with DDL statements
+   * before the system is started.
+   */
+  def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done]
 }

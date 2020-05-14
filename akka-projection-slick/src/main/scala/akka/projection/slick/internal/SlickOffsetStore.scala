@@ -10,7 +10,9 @@ import java.time.Instant
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
+import akka.Done
 import akka.annotation.InternalApi
+import akka.dispatch.ExecutionContexts
 import akka.projection.ProjectionId
 import akka.projection.internal.MergeableOffset
 import akka.projection.internal.OffsetSerialization
@@ -86,6 +88,6 @@ import slick.jdbc.JdbcProfile
 
   val offsetTable = TableQuery[OffsetStoreTable]
 
-  def createIfNotExists: Future[Unit] =
-    db.run(offsetTable.schema.createIfNotExists)
+  def createIfNotExists: Future[Done] =
+    db.run(offsetTable.schema.createIfNotExists).map(_ => Done)(ExecutionContexts.parasitic)
 }

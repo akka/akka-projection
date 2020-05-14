@@ -12,13 +12,13 @@ import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
+import akka.projection.slick.SlickProjection
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
@@ -41,10 +41,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     strategy: SlickProjectionImpl.Strategy,
     settingsOpt: Option[ProjectionSettings],
     handler: SlickHandler[Envelope])
-    extends Projection[Envelope] {
+    extends SlickProjection[Envelope] {
   import SlickProjectionImpl._
 
-  override def withSettings(settings: ProjectionSettings): Projection[Envelope] = {
+  override def withSettings(settings: ProjectionSettings): SlickProjection[Envelope] = {
     new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, strategy, Option(settings), handler)
   }
 
@@ -192,4 +192,8 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     }
   }
 
+  override def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
+    val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
+    offsetStore.createIfNotExists
+  }
 }
