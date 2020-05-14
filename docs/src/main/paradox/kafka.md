@@ -4,7 +4,6 @@
 
 To use the Kafka module of Akka Projections add the following dependency in your project:
 
-@@dependencies{ projectId="akka-projection-kafka" }
 @@dependency [sbt,Maven,Gradle] {
   group=com.typesafe.akka
   artifact=akka-projection-kafka_$scala.binary.version$
