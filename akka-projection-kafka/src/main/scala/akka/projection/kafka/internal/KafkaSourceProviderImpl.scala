@@ -4,19 +4,24 @@
 
 package akka.projection.kafka.internal
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 import akka.actor.ClassicActorSystemProvider
+import akka.actor.ExtendedActorSystem
 import akka.annotation.InternalApi
 import akka.kafka.ConsumerSettings
+import akka.kafka.KafkaConsumerActor
 import akka.kafka.Subscriptions
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.MetadataClient
 import akka.projection.internal.MergeableOffset
 import akka.projection.scaladsl.SourceProvider
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
@@ -28,6 +33,10 @@ import org.apache.kafka.common.TopicPartition
   private type ReadOffsets = () => Future[Option[MergeableOffset[Long]]]
   private val RegexTp = """(.+)-(\d+)""".r
   private val KafkaMetadataTimeout = 10.seconds // TODO: get from config
+
+  private val consumerActorNameCounter = new AtomicInteger
+  private def nextConsumerActorName(): String =
+    s"kafkaSourceProviderConsumer-${consumerActorNameCounter.incrementAndGet()}"
 }
 
 /**
@@ -40,22 +49,33 @@ import org.apache.kafka.common.TopicPartition
     extends SourceProvider[MergeableOffset[Long], ConsumerRecord[K, V]] {
   import KafkaSourceProviderImpl._
 
-  implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
+  private val system = systemProvider.classicSystem.asInstanceOf[ExtendedActorSystem]
+  private implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
 
   private val subscription = Subscriptions.topics(topics)
-  private val metadataClient =
-    MetadataClient.create(settings, KafkaMetadataTimeout)(systemProvider.classicSystem, dispatcher)
+  private lazy val consumerActor = system.systemActorOf(KafkaConsumerActor.props(settings), nextConsumerActorName())
+  private lazy val metadataClient = MetadataClient.create(consumerActor, KafkaMetadataTimeout)(dispatcher)
+
+  private def stopMetadataClient(): Unit = {
+    metadataClient.close()
+    system.stop(consumerActor)
+  }
 
   override def source(readOffsets: ReadOffsets): Future[Source[ConsumerRecord[K, V], _]] = {
     // get the total number of partitions to configure the `breadth` parameter, or we could just use a really large
     // number.  i don't think using a large number would present a problem.
     val numPartitionsF = Future.sequence(topics.map(metadataClient.getPartitionsFor)).map(_.map(_.length).sum)
+    numPartitionsF.failed.foreach(_ => stopMetadataClient())
     numPartitionsF.map { numPartitions =>
       Consumer
         .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets))
         .flatMapMerge(numPartitions, {
           case (_, partitionedSource) => partitionedSource
         })
+        .watchTermination()(Keep.right)
+        .mapMaterializedValue { terminated =>
+          terminated.onComplete(_ => stopMetadataClient())
+        }
     }
   }
 
