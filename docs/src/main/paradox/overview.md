@@ -4,7 +4,7 @@ The purpose of Akka Projections is described in @ref:[Use Cases](use-cases.md).
 
 ## Dependencies
 
-Akka Projections consist of several modules for specific technologies. The dependency section for
+Akka Projections consists of several modules for specific technologies. The dependency section for
 each module describes which dependency you should define in your project.
 
 * @ref:[Offset in Cassandra](cassandra.md)
@@ -24,10 +24,10 @@ All of them share a dependency to `akka-projection-core`:
 
 ### Akka version
 
-Akka Projections require **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
+Akka Projections requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
 
-Latest patch version of Akka is recommended and a later version than $akka.version$ can be used.
-Note that it is important that all Akka dependencies are in the same version, so it is recommended to depend on
+It is recommended to use the latest patch version of Akka. 
+It is important all Akka dependencies are in the same version, so it is recommended to depend on
 them explicitly to avoid problems with transient dependencies causing an unlucky mix of versions. For example:
 
 @@dependency[sbt,Gradle,Maven] {

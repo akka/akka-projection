@@ -4,7 +4,7 @@ Once you have decided how you want to build your projection, the next step is to
 
 ## Dependencies
 
-To distribute the projection over the cluster we recommend the use of [SharderDaemonProcess](https://doc.akka.io/docs/akka/current/typed/cluster-sharded-daemon-process.html). Add the following dependency in your project if not yet using Akka Cluster Sharding:
+To distribute the projection over the cluster we recommend the use of [ShardedDaemonProcess](https://doc.akka.io/docs/akka/current/typed/cluster-sharded-daemon-process.html). Add the following dependency in your project if not yet using Akka Cluster Sharding:
 
 @@dependency [sbt,Maven,Gradle] {
   group=com.typesafe.akka
@@ -14,7 +14,7 @@ To distribute the projection over the cluster we recommend the use of [SharderDa
 
 Akka Projections require Akka $akka.version$ or later, see @ref:[Akka version](overview.md#akka-version).
 
-For more information on using Akka Cluster consult Akka's reference on [Akka Cluster](https://doc.akka.io/docs/akka/current/typed/index-cluster.html) and [Akka Cluster Sharding](https://doc.akka.io/docs/akka/current/typed/cluster-sharding.html).
+For more information on using Akka Cluster consult Akka's reference documentation on [Akka Cluster](https://doc.akka.io/docs/akka/current/typed/index-cluster.html) and [Akka Cluster Sharding](https://doc.akka.io/docs/akka/current/typed/cluster-sharding.html).
 
 ## Running with Sharded Daemon Process
 
@@ -68,11 +68,11 @@ Scala
 Java
 :  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #daemon-imports #running-with-daemon-process }
 
-For this example, we configure as many `ShardedDaemonProcess` as tags and we define the behavior factory to return `ProjectionBehavior` wrapping each time a different `Projection` instance. Finally, the Sharded Daemon to use the `ProjectionBehavior.Stop` as its control stop message.
+For this example, we configure as many `ShardedDaemonProcess` as tags and we define the behavior factory to return `ProjectionBehavior` wrapping each time a different `Projection` instance. Finally, the `ShardedDaemon` is configured to use the `ProjectionBehavior.Stop` as its control stop message.
 
 ### Projection Behavior
 
-The `ProjectionBehavior` is an Actor `Behavior` that knows how to manage the Projection lifecyle. The Projection starts to consume the events as soon as the actor is spawn and will restart the source in case of failures (see @ref:[Projection Settings](projection-settings.md)).
+The `ProjectionBehavior` is an Actor `Behavior` that knows how to manage the Projection lifecyle. The Projection starts to consume the events as soon as the actor is spawned and will restart the source in case of failures (see @ref:[Projection Settings](projection-settings.md)).
 
 ### Running with local Actor
 
