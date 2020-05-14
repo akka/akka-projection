@@ -106,12 +106,15 @@ object KafkaDocExample {
 
     override def process(envelope: WordEnvelope): DBIO[Done] = {
       val word = envelope.word
-      val partition = math.abs(word.hashCode % 3)
-      val key = if (word.isEmpty) "" else word.take(1)
-      val producerRecord = new ProducerRecord(topic, partition, key, word)
-      logger.info("Publish word [{}] to topic/partition {}/{}", word, topic, partition)
-      val result = sendProducer.send(producerRecord)
-      DBIO.from(result.map(_ => Done))
+      // using the word as the key and `DefaultPartitioner` will select partition based on the key
+      // so that same word always ends up in same partition
+      val key = word
+      val producerRecord = new ProducerRecord(topic, key, word)
+      val result = sendProducer.send(producerRecord).map { recordMetadata =>
+        logger.info("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition)
+        Done
+      }
+      DBIO.from(result)
     }
   }
   //#wordPublisher
