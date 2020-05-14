@@ -4,19 +4,28 @@
 
 package docs.kafka
 
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.util.Random
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-
+import akka.kafka.ProducerSettings
+import akka.kafka.scaladsl.SendProducer
 import akka.projection.Projection
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
+import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.StringSerializer
 import org.slf4j.LoggerFactory
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
@@ -46,7 +55,7 @@ object KafkaDocExample {
       val word = envelope.value
       val newCount = state.getOrElse(word, 0) + 1
       logger.info(
-        "{} consumed from topic/partition {}/{}. Word count for {} is {}",
+        "{} consumed from topic/partition {}/{}. Word count for [{}] is {}",
         projectionId,
         envelope.topic,
         envelope.partition,
@@ -57,6 +66,55 @@ object KafkaDocExample {
     }
   }
   //#handler
+
+  //#wordSource
+  final case class WordEnvelope(offset: Long, word: Word)
+
+  class WordSource(implicit ec: ExecutionContext) extends SourceProvider[Long, WordEnvelope] {
+
+    private val words = Vector("aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg")
+    private val rnd = new Random(17) // same sequence each time
+    private val src = Source
+      .fromIterator(() =>
+        new Iterator[WordEnvelope] {
+          private var offset = 0L
+          override def hasNext: Boolean = true
+
+          override def next(): WordEnvelope = {
+            val i = rnd.nextInt(words.size)
+            offset += 1
+            WordEnvelope(offset, words(i))
+          }
+        })
+      .throttle(1, 1.second)
+
+    override def source(offset: () => Future[Option[Long]]): Future[Source[WordEnvelope, _]] = {
+      offset().map {
+        case Some(o) => src.dropWhile(_.offset <= o)
+        case _       => src
+      }
+    }
+
+    override def extractOffset(env: WordEnvelope): Long = env.offset
+  }
+  //#wordSource
+
+  //#wordPublisher
+  class WordPublisher(topic: String, sendProducer: SendProducer[String, String])(implicit ec: ExecutionContext)
+      extends SlickHandler[WordEnvelope] {
+    private val logger = LoggerFactory.getLogger(getClass)
+
+    override def process(envelope: WordEnvelope): DBIO[Done] = {
+      val word = envelope.word
+      val partition = math.abs(word.hashCode % 3)
+      val key = if (word.isEmpty) "" else word.take(1)
+      val producerRecord = new ProducerRecord(topic, partition, key, word)
+      logger.info("Publish word [{}] to topic/partition {}/{}", word, topic, partition)
+      val result = sendProducer.send(producerRecord)
+      DBIO.from(result.map(_ => Done))
+    }
+  }
+  //#wordPublisher
 
   val config: Config = ConfigFactory.parseString("""
     akka.projection.slick = {
@@ -104,7 +162,38 @@ object KafkaDocExample {
     projection.createOffsetTableIfNotExists()
   }
 
-  def projection(n: Int): Projection[ConsumerRecord[String, String]] = {
+  object IllustrateSendingToKafka {
+
+    implicit val ec = system.executionContext
+
+    //#sendProducer
+    val bootstrapServers = "localhost:9092"
+    val topicName = "words"
+    private val producerSettings =
+      ProducerSettings(system, new StringSerializer, new StringSerializer)
+        .withBootstrapServers(bootstrapServers)
+    private val sendProducer = SendProducer(producerSettings)(system.toClassic)
+    //#sendProducer
+
+    //#sendToKafkaProjection
+    val sourceProvider = new WordSource
+
+    val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
+    val projectionId = ProjectionId("PublishWords", "words")
+    val projection =
+      SlickProjection.atLeastOnce(
+        projectionId,
+        sourceProvider,
+        dbConfig,
+        handler = new WordPublisher(topicName, sendProducer),
+        saveOffsetAfterEnvelopes = 100,
+        saveOffsetAfterDuration = 500.millis)
+    //#sendToKafkaProjection
+
+    projection.createOffsetTableIfNotExists()
+  }
+
+  def consumerProjection(n: Int): Projection[ConsumerRecord[String, String]] = {
     import IllustrateSourceProvider.sourceProvider
     import IllustrateExactlyOnce.dbConfig
 
@@ -112,13 +201,19 @@ object KafkaDocExample {
     SlickProjection.exactlyOnce(projectionId, sourceProvider, dbConfig, handler = new WordCountHandler(projectionId))
   }
 
+  def producerProjection(): Projection[WordEnvelope] = {
+    IllustrateSendingToKafka.projection
+  }
+
   object Guardian {
     sealed trait Command
     def apply(): Behavior[Command] = {
       Behaviors.setup { context =>
-        context.spawn(ProjectionBehavior(projection(1)), "wordcount-1")
-        context.spawn(ProjectionBehavior(projection(2)), "wordcount-2")
-        context.spawn(ProjectionBehavior(projection(3)), "wordcount-3")
+        context.spawn(ProjectionBehavior(consumerProjection(1)), "wordcount-1")
+        context.spawn(ProjectionBehavior(consumerProjection(2)), "wordcount-2")
+        context.spawn(ProjectionBehavior(consumerProjection(3)), "wordcount-3")
+
+        context.spawn(ProjectionBehavior(producerProjection()), "wordPublisher")
 
         Behaviors.empty
       }
@@ -130,11 +225,10 @@ object KafkaDocExample {
    * {{{
    * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 3 --topic words
    * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic words
-   * bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic words --from-beginning
    *
    * sbt "examples/test:runMain docs.kafka.KafkaDocExample"
    *
-   * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic words
+   * bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic words --from-beginning
    *
    * }}}
    */
