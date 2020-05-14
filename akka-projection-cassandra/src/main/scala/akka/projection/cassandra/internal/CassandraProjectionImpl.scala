@@ -4,6 +4,8 @@
 
 package akka.projection.cassandra.internal
 
+import java.util.concurrent.CompletionStage
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
@@ -16,10 +18,11 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
-import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
+import akka.projection.cassandra.scaladsl
+import akka.projection.cassandra.javadsl
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
@@ -73,11 +76,12 @@ import akka.stream.scaladsl.Source
     strategy: CassandraProjectionImpl.Strategy,
     settingsOpt: Option[ProjectionSettings],
     handler: Handler[Envelope])
-    extends Projection[Envelope] {
+    extends javadsl.CassandraProjection[Envelope]
+    with scaladsl.CassandraProjection[Envelope] {
   import CassandraProjectionImpl._
   import HandlerRecoveryImpl.applyUserRecovery
 
-  override def withSettings(settings: ProjectionSettings): Projection[Envelope] = {
+  override def withSettings(settings: ProjectionSettings): CassandraProjectionImpl[Offset, Envelope] = {
     new CassandraProjectionImpl(projectionId, sourceProvider, strategy, Option(settings), handler)
   }
 
@@ -106,6 +110,9 @@ import akka.stream.scaladsl.Source
   private def settingsOrDefaults(implicit systemProvider: ClassicActorSystemProvider): ProjectionSettings =
     settingsOpt.getOrElse(ProjectionSettings(systemProvider))
 
+  // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
+  private val sessionConfigPath = "akka.projection.cassandra"
+
   /*
    * INTERNAL API
    * This internal class will hold the KillSwitch that is needed
@@ -123,11 +130,8 @@ import akka.stream.scaladsl.Source
 
       val logger = Logging(systemProvider.classicSystem, this.getClass)
 
-      // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
-      val sessionConfigPath = "akka.projection.cassandra"
-      // FIXME session look could be moved to CassandraOffsetStore if that's better
+      // FIXME session lookup could be moved to CassandraOffsetStore if that's better
       val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
-
       val offsetStore = new CassandraOffsetStore(session)
       val readOffsets = () => offsetStore.readOffset(projectionId)
 
@@ -210,4 +214,15 @@ import akka.stream.scaladsl.Source
     }
   }
 
+  override def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
+    val system = systemProvider.classicSystem
+    val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
+    val offsetStore = new CassandraOffsetStore(session)(system.dispatcher)
+    offsetStore.createKeyspaceAndTable()
+  }
+
+  override def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done] = {
+    import scala.compat.java8.FutureConverters._
+    createOffsetTableIfNotExists()(systemProvider).toJava
+  }
 }

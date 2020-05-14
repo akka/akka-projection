@@ -5,10 +5,15 @@
 package akka.projection.cassandra.javadsl
 
 import java.time.Duration
+import java.util.concurrent.CompletionStage
 
+import akka.Done
+import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
+import akka.annotation.DoNotInherit
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.cassandra.internal.HandlerAdapter
 import akka.projection.cassandra.scaladsl
 import akka.projection.internal.SourceProviderAdapter
@@ -54,4 +59,17 @@ object CassandraProjection {
       projectionId,
       new SourceProviderAdapter(sourceProvider),
       new HandlerAdapter(handler))
+}
+
+@DoNotInherit trait CassandraProjection[Envelope] extends Projection[Envelope] {
+
+  override def withSettings(settings: ProjectionSettings): CassandraProjection[Envelope]
+
+  /**
+   * For testing purposes the offset table can be created programmatically.
+   * For production it's recommended to create the table with DDL statements
+   * before the system is started.
+   */
+  def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done]
+
 }

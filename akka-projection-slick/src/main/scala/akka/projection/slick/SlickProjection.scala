@@ -4,10 +4,12 @@
 
 package akka.projection.slick
 
+import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
 import akka.Done
+import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.projection.HandlerRecovery
 import akka.projection.Projection
@@ -37,7 +39,7 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[Envelope]): Projection[Envelope] =
+      handler: SlickHandler[Envelope]): SlickProjection[Envelope] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -58,7 +60,7 @@ object SlickProjection {
       databaseConfig: DatabaseConfig[P],
       saveOffsetAfterEnvelopes: Int,
       saveOffsetAfterDuration: FiniteDuration,
-      handler: SlickHandler[Envelope]): Projection[Envelope] =
+      handler: SlickHandler[Envelope]): SlickProjection[Envelope] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -67,6 +69,16 @@ object SlickProjection {
       settingsOpt = None,
       handler)
 
+}
+
+trait SlickProjection[Envelope] extends Projection[Envelope] {
+
+  /**
+   * For testing purposes the offset table can be created programmatically.
+   * For production it's recommended to create the table with DDL statements
+   * before the system is started.
+   */
+  def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done]
 }
 
 object SlickHandler {
