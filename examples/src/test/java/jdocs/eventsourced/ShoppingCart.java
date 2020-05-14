@@ -320,7 +320,7 @@ public class ShoppingCart
   //#tagging
   @Override
   public Set<String> tagsFor(Event event) {
-    int n = Math.abs(event.getCartId().hashCode() % tags.size());
+    int n = Math.abs(cartId.hashCode() % tags.size());
     String selectedTag = tags.get(n);
     return Collections.singleton(selectedTag);
   }
