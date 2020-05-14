@@ -219,7 +219,7 @@ import akka.stream.scaladsl.Source
     offsetStore.createKeyspaceAndTable()
   }
 
-  override def createOffsetTableIfNotExists(systemProvider: ClassicActorSystemProvider): CompletionStage[Done] = {
+  override def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done] = {
     import scala.compat.java8.FutureConverters._
     createOffsetTableIfNotExists()(systemProvider).toJava
   }

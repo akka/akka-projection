@@ -70,6 +70,6 @@ object CassandraProjection {
    * For production it's recommended to create the table with DDL statements
    * before the system is started.
    */
-  def createOffsetTableIfNotExists(systemProvider: ClassicActorSystemProvider): CompletionStage[Done]
+  def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done]
 
 }
