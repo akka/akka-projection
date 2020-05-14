@@ -6,7 +6,7 @@ package akka.projection.kafka
 
 import akka.actor.ClassicActorSystemProvider
 import akka.kafka.ConsumerSettings
-import akka.projection.internal.MergeableOffset
+import akka.projection.MergeableOffset
 import akka.projection.kafka.internal.KafkaSourceProviderImpl
 import akka.projection.scaladsl.SourceProvider
 import org.apache.kafka.clients.consumer.ConsumerRecord

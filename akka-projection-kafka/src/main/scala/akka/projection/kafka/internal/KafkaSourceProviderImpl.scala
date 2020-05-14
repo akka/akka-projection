@@ -19,7 +19,7 @@ import akka.kafka.KafkaConsumerActor
 import akka.kafka.Subscriptions
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.MetadataClient
-import akka.projection.internal.MergeableOffset
+import akka.projection.MergeableOffset
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source

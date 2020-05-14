@@ -7,6 +7,7 @@ package akka.projection.internal
 import java.util.UUID
 
 import akka.persistence.query
+import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import org.scalatest.TestSuite
 import org.scalatest.matchers.should.Matchers
