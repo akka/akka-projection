@@ -9,10 +9,12 @@ import java.time.Instant
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
 import akka.Done
 import akka.annotation.InternalApi
+import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.internal.{ MergeableOffset, OffsetSerialization }
+import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 

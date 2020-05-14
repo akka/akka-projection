@@ -16,8 +16,8 @@ import scala.concurrent.duration._
 import akka.Done
 import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.internal.MergeableOffset
 import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
 import akka.projection.scaladsl.SourceProvider
