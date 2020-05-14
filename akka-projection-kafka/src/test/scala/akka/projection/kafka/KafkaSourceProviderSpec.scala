@@ -7,7 +7,7 @@ package akka.projection.kafka
 import scala.concurrent.Await
 import scala.concurrent.Future
 
-import akka.projection.internal.MergeableOffset
+import akka.projection.MergeableOffset
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink

@@ -3,7 +3,7 @@
 A typical source for Projections is events stored with @apidoc[EventSourcedBehavior] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/persistence.html). Event can be [tagged](https://doc.akka.io/docs/akka/current/typed/persistence.html#tagging) and then
 consumed with the [eventsByTag query](https://doc.akka.io/docs/akka/current/persistence-query.html#eventsbytag-and-currenteventsbytag).
 
-Akka Projections has integration with `eventsByTag`, which is described in here. 
+Akka Projections has integration with `eventsByTag`, which is described here. 
 
 ## Dependencies
 

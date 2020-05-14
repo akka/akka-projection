@@ -10,6 +10,7 @@ import scala.collection.immutable
 
 import akka.annotation.InternalApi
 import akka.persistence.query
+import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 
 /**

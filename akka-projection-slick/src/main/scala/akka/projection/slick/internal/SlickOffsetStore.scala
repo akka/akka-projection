@@ -13,8 +13,8 @@ import scala.concurrent.Future
 import akka.Done
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
+import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.internal.MergeableOffset
 import akka.projection.internal.OffsetSerialization
 import slick.jdbc.JdbcProfile
 
