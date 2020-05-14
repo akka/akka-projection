@@ -20,7 +20,7 @@ For more information on using Akka Cluster consult Akka's reference on [Akka Clu
 
 The Sharded Daemon Process can be used to distribute `n` instances of a given Projection across the cluster. Therefore, it's important that each Projection instance consumes a subset of the stream of envelopes.
 
-How the subset is created depends on the kind of source we consume. If it's a Alpakka Kafka source, this is typically done using Kafka partitions. When consuming from Akka Persistence Journal, the events must be tagged with a slice number as demonstrated in the example bellow.
+How the subset is created depends on the kind of source we consume. If it's a Alpakka Kafka source, this is typically done using Kafka partitions. When consuming from Akka Persistence Journal, the events must be sliced by tagging them as demonstrated in the example bellow.
 
 ### Tagging Events in EventSourcedBehavior
 
@@ -37,7 +37,7 @@ We will use those tags to query the journal and create as many Projections insta
 
 ### Event Sourced Provider per tag
 
-We can use @ref:[EventSourcedProvider.eventsByTag](eventsourced.md) to consume the `ShoppingCart` events.
+We can use the @ref:[EventSourcedProvider](eventsourced.md) to consume the `ShoppingCart` events.
 
 Scala
 :  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #source-provider-imports #running-source-provider }
