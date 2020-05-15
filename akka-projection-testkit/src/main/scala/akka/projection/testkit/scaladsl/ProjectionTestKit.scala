@@ -31,18 +31,55 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
   private implicit val dispatcher = testKit.system.classicSystem.dispatcher
   private implicit val settings: TestKitSettings = TestKitSettings(system)
 
-  def run(projection: Projection[_])(assertFunc: => Unit): Unit =
-    runInternal(projection, assertFunc, settings.SingleExpectDefaultTimeout, 100.millis)
+  /**
+   * Run a Projection and assert its projected data using the passed assert function.
+   *
+   * Projection is started and stopped by the TestKit. While the projection is running, the assert function
+   * will be called every 100 milliseconds until it completes without errors (no exceptions or assertion errors are thrown).
+   *
+   * If the assert function doesn't complete without error within 3 seconds the test will fail.
+   *
+   * @param projection - the Projection to run
+   * @param assertFunction - a by-name code block that exercise the test assertions
+   */
+  def run(projection: Projection[_])(assertFunction: => Unit): Unit =
+    runInternal(projection, assertFunction, settings.SingleExpectDefaultTimeout, 100.millis)
 
-  def run(projection: Projection[_], max: FiniteDuration)(assertFunc: => Unit): Unit =
-    runInternal(projection, assertFunc, max, 100.millis)
+  /**
+   * Run a Projection and assert its projected data using the passed assert function and the max duration of the test.
+   *
+   * Projection is started and stopped by the TestKit. While the projection is running, the assert function
+   * will be called every 100 milliseconds until it completes without errors (no exceptions or assertion errors are thrown).
+   *
+   * If the assert function doesn't complete without error within the passed `max` duration the test will fail.
+   *
+   * @param projection - the Projection to run
+   * @param max - FiniteDuration delimiting the max duration of the test
+   * @param assertFunction - a by-name code block that exercise the test assertions
+   */
+  def run(projection: Projection[_], max: FiniteDuration)(assertFunction: => Unit): Unit =
+    runInternal(projection, assertFunction, max, 100.millis)
 
-  def run(projection: Projection[_], max: FiniteDuration, interval: FiniteDuration)(assertFunc: => Unit): Unit =
-    runInternal(projection, assertFunc, max, interval)
+  /**
+   * Run a Projection and assert its projected data using the passed assert function,
+   * the max duration of the test and the interval between each assertion.
+   *
+   * Projection is started and stopped by the TestKit. While the projection is running, the assert function
+   * will be called every `interval` until it completes without errors (no exceptions or assertion errors are thrown).
+   *
+   * If the assert function doesn't complete without error within the passed `max` duration the test will fail.
+   *
+   * @param projection - the Projection to run
+   * @param max - FiniteDuration delimiting the max duration of the test
+   * @param interval - FiniteDuration defining the internval in each the assert function will be called
+   * @param assertFunction - a by-name code block that exercise the test assertions
+   */
+  def run(projection: Projection[_], max: FiniteDuration, interval: FiniteDuration)(assertFunction: => Unit): Unit =
+    runInternal(projection, assertFunction, max, interval)
 
   private def runInternal(
       projection: Projection[_],
-      assertFunc: => Unit,
+      assertFunction: => Unit,
       max: FiniteDuration,
       interval: FiniteDuration): Unit = {
 
@@ -55,12 +92,22 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
         .run()(testKit.system.classicSystem)
 
     try {
-      probe.awaitAssert(assertFunc, max.dilated, interval)
+      probe.awaitAssert(assertFunction, max.dilated, interval)
     } finally {
       Await.result(running.stop(), max)
     }
   }
 
+  /**
+   * Run a Projection with an attached `TestSink` allowing
+   * control over the pace the elements flow through the Projection.
+   *
+   * The Projection starts as soon as the first element is requested by the `TestSink`, new elements will be emitted
+   * as requested by the `TestSink`. The Projection won't stop by itself, therefore it's recommended to cancel the
+   * `TestSink` probe to gracefully stop the Projection.
+   *
+   * @param projection - the Projection to run
+   */
   def runWithTestSink[T](projection: Projection[_]): TestSubscriber.Probe[Done] = {
     val sinkProbe = TestSink.probe[Done](testKit.system.toClassic)
     // FIXME handler.stop is not called when running like this
