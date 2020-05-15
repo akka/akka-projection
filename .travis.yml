@@ -16,7 +16,7 @@ script:
   - jabba install ${JDK:=adopt@~1.8-0}
   - jabba use ${JDK:=adopt@~1.8-0}
   - java -version
-  - sbt -jvm-opts .jvmopts-travis "$CMD"
+  - sbt -jvm-opts .jvmopts-travis "$AKKA_SNAPSHOT" "$CMD"
 
 jobs:
   include:
@@ -30,6 +30,7 @@ jobs:
 
     - stage: test
       env:
+        - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+52-5dc56a6d"
         - CMD="test"
       name: "Run tests with Scala 2.13 and AdoptOpenJDK 8"
     - env:
