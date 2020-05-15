@@ -35,7 +35,10 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
   def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
     session
-      .selectOne(s"SELECT offset, manifest FROM $keyspace.$table WHERE projection_id = ?", projectionId.id)
+      .selectOne(
+        s"SELECT offset, manifest FROM $keyspace.$table WHERE projection_name = ? AND projection_key = ?",
+        projectionId.name,
+        projectionId.key)
       .map { maybeRow =>
         maybeRow.map(row => fromStorageRepresentation[Offset](row.getString("offset"), row.getString("manifest")))
       }
@@ -49,8 +52,9 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
         val SingleOffset(_, manifest, offsetStr, _) =
           toStorageRepresentation(projectionId, offset).asInstanceOf[SingleOffset]
         session.executeWrite(
-          s"INSERT INTO $keyspace.$table (projection_id, offset, manifest, last_updated) VALUES (?, ?, ?, ?)",
-          projectionId.id,
+          s"INSERT INTO $keyspace.$table (projection_name, projection_key, offset, manifest, last_updated) VALUES (?, ?, ?, ?, ?)",
+          projectionId.name,
+          projectionId.key,
           offsetStr,
           manifest,
           Instant.now(clock))
@@ -63,11 +67,12 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
         s"CREATE KEYSPACE IF NOT EXISTS $keyspace WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 }")
       .flatMap(_ => session.executeDDL(s"""
         |CREATE TABLE IF NOT EXISTS $keyspace.$table (
-        |  projection_id text,
+        |  projection_name text,
+        |  projection_key text,
         |  offset text,
         |  manifest text,
         |  last_updated timestamp,
-        |  PRIMARY KEY (projection_id))
+        |  PRIMARY KEY (projection_name, projection_key))
         """.stripMargin.trim))
   }
 

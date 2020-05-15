@@ -206,11 +206,12 @@ The database schema for the offset storage table:
 
 ```
 CREATE TABLE IF NOT EXISTS akka_projection.offset_store (
-  projection_id text,
+  projection_name text,
+  projection_key text,
   offset text,
   manifest text,
   last_updated timestamp,
-  PRIMARY KEY (projection_id))
+  PRIMARY KEY (projection_name, projection_key))
 ```
 
 ## Offset types
