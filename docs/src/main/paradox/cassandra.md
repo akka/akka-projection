@@ -106,7 +106,7 @@ Java
 :  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
 
 However, the state must typically be loaded and updated by asynchronous operations and then it can be
-error prone to manage the state in variables of the `Handler`. For that purpose a `StatefulHandler` (FIXME apidoc when javadsl)
+error prone to manage the state in variables of the `Handler`. For that purpose a @apidoc[StatefulHandler]
 is provided.
 
 Let us look at how a `StatefulHandler` can be implemented in the context of a "word count" domain. The purpose is
