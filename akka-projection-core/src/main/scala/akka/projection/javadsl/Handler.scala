@@ -46,14 +46,14 @@ abstract class Handler[Envelope] extends HandlerRecovery[Envelope] with HandlerL
   /**
    * Invoked when the projection is starting, before first envelope is processed.
    * Can be overridden to implement initialization. It is also called when the `Projection`
-   * is restarted after failure.
+   * is restarted after a failure.
    */
   def start(): CompletionStage[Done] =
     CompletableFuture.completedFuture(Done)
 
   /**
    * Invoked when the projection has been stopped. Can be overridden to implement resource
-   * cleanup. It is also called when the `Projection` is restarted after failure.
+   * cleanup. It is also called when the `Projection` is restarted after a failure.
    */
   def stop(): CompletionStage[Done] =
     CompletableFuture.completedFuture(Done)
