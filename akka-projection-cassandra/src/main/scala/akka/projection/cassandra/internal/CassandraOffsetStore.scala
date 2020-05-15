@@ -31,7 +31,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   val table = "offset_store"
   val cassandraPartitions = 5
 
-  private[cassandra] val partitionClause = (0 until 5).mkString(",")
+  private[cassandra] val partitionClause = (0 until cassandraPartitions).mkString(",")
 
   def this(session: CassandraSession)(implicit ec: ExecutionContext) =
     this(session, Clock.systemUTC())
