@@ -86,7 +86,7 @@ class WordCountDocExampleSpec
   "A handler" must {
 
     "be able to load initial state and manage updated state" in {
-      import IllstrateStatefulHandlerLoadingInitialState._
+      import IllustrateStatefulHandlerLoadingInitialState._
 
       val projectionId = genRandomProjectionId()
 
@@ -105,7 +105,7 @@ class WordCountDocExampleSpec
     }
 
     "be able to load state on demand and manage updated state" in {
-      import IllstrateStatefulHandlerLoadingStateOnDemand._
+      import IllustrateStatefulHandlerLoadingStateOnDemand._
 
       val projectionId = genRandomProjectionId()
 
