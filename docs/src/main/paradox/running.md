@@ -20,7 +20,7 @@ For more information on using Akka Cluster consult Akka's reference documentatio
 
 The Sharded Daemon Process can be used to distribute `n` instances of a given Projection across the cluster. Therefore, it's important that each Projection instance consumes a subset of the stream of envelopes.
 
-How the subset is created depends on the kind of source we consume. If it's a Alpakka Kafka source, this is typically done using Kafka partitions. When consuming from Akka Persistence Journal, the events must be sliced by tagging them as demonstrated in the example bellow.
+How the subset is created depends on the kind of source we consume. If it's an Alpakka Kafka source, this is done by Kafka consumer groups. When consuming from Akka Persistence Journal, the events must be sliced by tagging them as demonstrated in the example below.
 
 ### Tagging Events in EventSourcedBehavior
 
