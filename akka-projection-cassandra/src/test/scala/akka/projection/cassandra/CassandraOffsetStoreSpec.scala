@@ -59,11 +59,11 @@ class CassandraOffsetStoreSpec
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     session
-      .selectOne(
-        s"select last_updated from ${offsetStore.keyspace}.${offsetStore.table} where projection_name = ? AND projection_key = ?",
-        projectionId.name,
-        projectionId.key)
+      .selectAll(
+        s"select projection_key, last_updated from ${offsetStore.keyspace}.${offsetStore.table} where projection_name = ? AND partition IN (${offsetStore.partitionClause})",
+        projectionId.name)
       .futureValue
+      .find(_.getString("projection_key") == projectionId.key)
       .get
       .get("last_updated", classOf[Instant])
   }

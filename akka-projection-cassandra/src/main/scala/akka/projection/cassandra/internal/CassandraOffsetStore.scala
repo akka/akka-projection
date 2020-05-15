@@ -29,22 +29,29 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   // FIXME make keyspace and table names configurable
   val keyspace = "akka_projection"
   val table = "offset_store"
+  val cassandraPartitions = 5
+
+  private[cassandra] val partitionClause = (0 until 5).mkString(",")
 
   def this(session: CassandraSession)(implicit ec: ExecutionContext) =
     this(session, Clock.systemUTC())
 
   def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
     session
-      .selectOne(
-        s"SELECT offset, manifest FROM $keyspace.$table WHERE projection_name = ? AND projection_key = ?",
-        projectionId.name,
-        projectionId.key)
-      .map { maybeRow =>
-        maybeRow.map(row => fromStorageRepresentation[Offset](row.getString("offset"), row.getString("manifest")))
+      .selectAll(
+        s"SELECT projection_key, offset, manifest FROM $keyspace.$table WHERE projection_name = ? AND partition IN ($partitionClause)",
+        projectionId.name)
+      .map { maybeRows =>
+        maybeRows
+          .find(_.getString("projection_key") == projectionId.key)
+          .map(row => fromStorageRepresentation[Offset](row.getString("offset"), row.getString("manifest")))
       }
   }
 
-  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] =
+  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
+    // a partition is calculated to ensure some distribution of projection rows across cassandra nodes, but at the
+    // same time let us query all rows for a single projection_name easily
+    val partition = Integer.valueOf(Math.abs(projectionId.key.hashCode()) % cassandraPartitions)
     offset match {
       case _: MergeableOffset[_] =>
         throw new IllegalArgumentException("The CassandraOffsetStore does not currently support MergeableOffset")
@@ -52,13 +59,15 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
         val SingleOffset(_, manifest, offsetStr, _) =
           toStorageRepresentation(projectionId, offset).asInstanceOf[SingleOffset]
         session.executeWrite(
-          s"INSERT INTO $keyspace.$table (projection_name, projection_key, offset, manifest, last_updated) VALUES (?, ?, ?, ?, ?)",
+          s"INSERT INTO $keyspace.$table (projection_name, partition, projection_key, offset, manifest, last_updated) VALUES (?, ?, ?, ?, ?, ?)",
           projectionId.name,
+          partition,
           projectionId.key,
           offsetStr,
           manifest,
           Instant.now(clock))
     }
+  }
 
   // FIXME maybe we need to make this public for user's tests
   def createKeyspaceAndTable(): Future[Done] = {
@@ -68,11 +77,12 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
       .flatMap(_ => session.executeDDL(s"""
         |CREATE TABLE IF NOT EXISTS $keyspace.$table (
         |  projection_name text,
+        |  partition int,
         |  projection_key text,
         |  offset text,
         |  manifest text,
         |  last_updated timestamp,
-        |  PRIMARY KEY (projection_name, projection_key))
+        |  PRIMARY KEY (projection_name, partition))
         """.stripMargin.trim))
   }
 
