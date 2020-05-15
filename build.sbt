@@ -100,6 +100,7 @@ lazy val docs = project
 
 lazy val root = Project(id = "akka-projection", base = file("."))
   .aggregate(core, testkit, slick, cassandra, eventsourced, kafka, examples, docs)
+  .settings(publish / skip := true, whitesourceIgnore := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
 
