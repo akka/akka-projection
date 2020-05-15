@@ -158,8 +158,9 @@ public class CassandraProjectionTest extends JUnitSuite {
         concatHandler(str))
       .withSaveOffset(1, Duration.ZERO);
 
-    projectionTestKit.run(projection, () ->
-      assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
+    projectionTestKit.run(projection, () -> {
+      assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString());
+    });
 
     assertStoredOffset(projectionId, 6L);
   }
@@ -179,8 +180,9 @@ public class CassandraProjectionTest extends JUnitSuite {
       .withSaveOffset(1, Duration.ZERO);
 
     try {
-      projectionTestKit.run(projection, () ->
-        assertEquals("abc|def|ghi|", str.toString()));
+      projectionTestKit.run(projection, () -> {
+        assertEquals("abc|def|ghi|", str.toString());
+      });
       Assert.fail("Expected exception");
     } catch (RuntimeException e) {
       assertEquals("fail on 4", e.getMessage());
@@ -196,8 +198,9 @@ public class CassandraProjectionTest extends JUnitSuite {
         concatHandler(str))
       .withSaveOffset(1, Duration.ZERO);
 
-    projectionTestKit.run(projection2, () ->
-      assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
+    projectionTestKit.run(projection2, () -> {
+      assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString());
+    });
   }
 
   @Test
@@ -213,8 +216,9 @@ public class CassandraProjectionTest extends JUnitSuite {
         new TestSourceProvider(entityId),
         concatHandler(str));
 
-    projectionTestKit.run(projection, () ->
-      assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
+    projectionTestKit.run(projection, () -> {
+      assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString());
+    });
 
     assertStoredOffset(projectionId, 6L);
   }
@@ -233,8 +237,9 @@ public class CassandraProjectionTest extends JUnitSuite {
         concatHandlerFail4(str));
 
     try {
-      projectionTestKit.run(projection, () ->
-        assertEquals("abc|def|ghi|", str.toString()));
+      projectionTestKit.run(projection, () -> {
+        assertEquals("abc|def|ghi|", str.toString());
+      });
       Assert.fail("Expected exception");
     } catch (RuntimeException e) {
       assertEquals("fail on 4", e.getMessage());
@@ -249,9 +254,10 @@ public class CassandraProjectionTest extends JUnitSuite {
         new TestSourceProvider(entityId),
         concatHandler(str));
 
-    projectionTestKit.run(projection2, () ->
+    projectionTestKit.run(projection2, () -> {
       // failed: jkl not included
-      assertEquals("abc|def|ghi|mno|pqr|", str.toString()));
+      assertEquals("abc|def|ghi|mno|pqr|", str.toString());
+    });
   }
 
 

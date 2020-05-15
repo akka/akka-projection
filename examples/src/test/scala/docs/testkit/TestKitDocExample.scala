@@ -27,12 +27,15 @@ abstract
 //#testkit
 class TestKitDocExample extends ScalaTestWithActorTestKit {
   val projectionTestKit = ProjectionTestKit(testKit)
+
   //#testkit
 
   case class CartView(id: String)
+
   class CartViewRepository {
     def findById(id: String): Future[CartView] = Future.successful(CartView(id))
   }
+
   val cartViewRepository = new CartViewRepository
 
   // it only needs to compile
@@ -42,30 +45,32 @@ class TestKitDocExample extends ScalaTestWithActorTestKit {
     databaseConfig = null,
     handler = null)
 
-  //#testkit-run
-  projectionTestKit.run(projection) {
-    // confirm that cart checkout was inserted in db
-    val cartView = cartViewRepository.findById("abc-def").futureValue
-    cartView.id shouldBe "abc-def"
+  {
+    //#testkit-run
+    projectionTestKit.run(projection) {
+      // confirm that cart checkout was inserted in db
+      cartViewRepository.findById("abc-def").futureValue
+    }
+    //#testkit-run
   }
-  //#testkit-run
 
-  //#testkit-run-max-interval
-  projectionTestKit.run(projection, max = 5.seconds, interval = 300.millis) {
-    // confirm that cart checkout was inserted in db
-    val cartView = cartViewRepository.findById("abc-def").futureValue
-    cartView.id shouldBe "abc-def"
+  {
+    //#testkit-run-max-interval
+    projectionTestKit.run(projection, max = 5.seconds, interval = 300.millis) {
+      // confirm that cart checkout was inserted in db
+      cartViewRepository.findById("abc-def").futureValue
+    }
+    //#testkit-run-max-interval
   }
-  //#testkit-run-max-interval
 
   //#testkit-sink-probe
-  val sinkProbe = projectionTestKit.runWithTestSink(projection)
-  sinkProbe.request(1)
-  sinkProbe.expectNext(Done)
-  sinkProbe.cancel()
+  projectionTestKit.runWithTestSink(projection) { sinkProbe =>
+    sinkProbe.request(1)
+    sinkProbe.expectNext(Done)
+  }
 
   // confirm that cart checkout was inserted in db
-  val cartView = cartViewRepository.findById("abc-def").futureValue
+  cartViewRepository.findById("abc-def").futureValue
 
   //#testkit-sink-probe
 //#testkit

@@ -6,13 +6,13 @@ package akka.projection
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.util.control.NoStackTrace
 
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
-import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
@@ -66,18 +66,34 @@ private[projection] object RunningProjection {
         () => source()
       }
 
-  def stopHandlerWhenStreamCompletedNormally(whenStreamCompleted: Future[Done], stopHandler: () => Future[Done])(
-      implicit ec: ExecutionContext): Future[Done] = {
-    whenStreamCompleted.flatMap(_ => stopHandler())
-  }
+  /* internal exception to wrap exceptions coming from stopHandler */
+  private case class StopHandlerException(cause: Throwable) extends RuntimeException(cause) with NoStackTrace
 
-  def stopHandlerWhenFailed[T](stopHandler: () => Future[Done])(implicit ec: ExecutionContext): Flow[T, T, _] = {
-    Flow[T].recoverWithRetries(attempts = 1, {
-      case exc =>
-        Source
-          .futureSource(stopHandler().recover(_ => Done).map(_ => Source.failed(exc)))
-          .mapMaterializedValue(_ => NotUsed)
-    })
+  /**
+   * Adds a `watchTermination` on that passed Source that will call the `stopHandler` on completion.
+   *
+   * The stopHandler function is called on success or failure. In case of failure, the original failure is preserved.
+   */
+  def stopHandlerOnTermination(src: Source[Done, NotUsed], stopHandler: () => Future[Done])(
+      implicit ec: ExecutionContext): Source[Done, Future[Done]] = {
+    src.watchTermination() { (_, futDone) =>
+      futDone
+        .flatMap { _ =>
+          stopHandler().recoverWith {
+            // if stop fails we need to wrap it so
+            // on the next recoverWith we don't call it twice
+            case exc => Future.failed(StopHandlerException(exc))
+          }
+        }
+        .recoverWith {
+          case StopHandlerException(exc) => Future.failed(exc)
+          case streamFailure             =>
+            // ignore error in stop failure and preserve original stream failure
+            stopHandler().recoverWith(_ => Future.failed(streamFailure))
+        }
+        .map(_ => Done)
+    }
+
   }
 
 }

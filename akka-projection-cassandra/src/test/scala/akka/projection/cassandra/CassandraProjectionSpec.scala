@@ -234,9 +234,10 @@ class CassandraProjectionSpec
       }
 
       withClue("check: projection failed with stream failure") {
-        val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
-        sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        projectionTestKit.runWithTestSink(failingProjection) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -281,9 +282,10 @@ class CassandraProjectionSpec
       }
 
       withClue("check: projection failed with stream failure") {
-        val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
-        sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        projectionTestKit.runWithTestSink(failingProjection) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -330,29 +332,28 @@ class CassandraProjectionSpec
           .atLeastOnce[Long, Envelope](projectionId, TestSourceProvider(system, source), concatHandler())
           .withSaveOffset(10, 1.minute)
 
-      val sinkProbe = projectionTestKit.runWithTestSink(projection)
-      eventually {
-        sourceProbe.get should not be null
-      }
-      sinkProbe.request(1000)
+      projectionTestKit.runWithTestSink(projection) { sinkProbe =>
+        eventually {
+          sourceProbe.get should not be null
+        }
+        sinkProbe.request(1000)
 
-      (1 to 15).foreach { n =>
-        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
-      }
-      eventually {
-        repository.findById(entityId).futureValue.get.text should include("elem-15")
-      }
-      offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
+        (1 to 15).foreach { n =>
+          sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        }
+        eventually {
+          repository.findById(entityId).futureValue.get.text should include("elem-15")
+        }
+        offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
 
-      (16 to 22).foreach { n =>
-        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        (16 to 22).foreach { n =>
+          sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        }
+        eventually {
+          repository.findById(entityId).futureValue.get.text should include("elem-22")
+        }
+        offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 20L
       }
-      eventually {
-        repository.findById(entityId).futureValue.get.text should include("elem-22")
-      }
-      offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 20L
-
-      sinkProbe.cancel()
     }
 
     "save offset after idle duration" in {
@@ -371,29 +372,30 @@ class CassandraProjectionSpec
           .atLeastOnce[Long, Envelope](projectionId, TestSourceProvider(system, source), concatHandler())
           .withSaveOffset(10, 2.seconds)
 
-      val sinkProbe = projectionTestKit.runWithTestSink(projection)
-      eventually {
-        sourceProbe.get should not be null
-      }
-      sinkProbe.request(1000)
+      projectionTestKit.runWithTestSink(projection) { sinkProbe =>
 
-      (1 to 15).foreach { n =>
-        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
-      }
-      eventually {
-        repository.findById(entityId).futureValue.get.text should include("elem-15")
-      }
-      offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
+        eventually {
+          sourceProbe.get should not be null
+        }
+        sinkProbe.request(1000)
 
-      (16 to 17).foreach { n =>
-        sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
-      }
-      eventually {
-        offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 17L
-      }
-      repository.findById(entityId).futureValue.get.text should include("elem-17")
+        (1 to 15).foreach { n =>
+          sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        }
+        eventually {
+          repository.findById(entityId).futureValue.get.text should include("elem-15")
+        }
+        offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
 
-      sinkProbe.cancel()
+        (16 to 17).foreach { n =>
+          sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        }
+        eventually {
+          offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 17L
+        }
+        repository.findById(entityId).futureValue.get.text should include("elem-17")
+
+      }
     }
 
     "skip failing events when using RecoveryStrategy.skip" in {
@@ -520,9 +522,10 @@ class CassandraProjectionSpec
       }
 
       withClue("check: projection failed with stream failure") {
-        val sinkProbe = projectionTestKit.runWithTestSink(failingProjection)
-        sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        projectionTestKit.runWithTestSink(failingProjection) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = repository.findById(entityId).futureValue.get
@@ -557,20 +560,30 @@ class CassandraProjectionSpec
     class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int) extends Handler[Envelope] {
 
       private var failedOnce = false
+      val startMessage = "start"
+      val completedMessage = "completed"
+      val failedMessage = "failed"
+
+      // stop message can be 'completed' or 'failed'
+      // that allows us to assert that the stopHandler is different execution paths were called in test
+      private var stopMessage = completedMessage
 
       override def start(): Future[Done] = {
-        probe ! "start"
+        // reset stop message to 'completed' on each new start
+        stopMessage = completedMessage
+        probe ! startMessage
         Future.successful(Done)
       }
 
       override def stop(): Future[Done] = {
-        probe ! "stop"
+        probe ! stopMessage
         Future.successful(Done)
       }
 
       override def process(envelope: Envelope): Future[Done] = {
         if (envelope.offset == failOnceOnOffset && !failedOnce) {
           failedOnce = true
+          stopMessage = failedMessage
           throw TestException(s"Fail $failOnceOnOffset")
         } else {
           probe ! envelope.message
@@ -594,7 +607,7 @@ class CassandraProjectionSpec
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
 
-      handlerProbe.expectMessage("start")
+      handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
       handlerProbe.expectMessage("def")
       handlerProbe.expectMessage("ghi")
@@ -602,7 +615,44 @@ class CassandraProjectionSpec
       handlerProbe.expectMessage("mno")
       handlerProbe.expectMessage("pqr")
       // completed without failure
-      handlerProbe.expectMessage("stop")
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "call start and stop of the handler when using TestKit.runWithTestSink" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
+          .withSaveOffset(1, Duration.Zero)
+
+      // not using ProjectionTestKit because want to test restarts
+      projectionTestKit.runWithTestSink(projection) { sinkProbe =>
+        // request all 'strings' (abc to pqr)
+
+        // the start happens inside runWithTestSink
+        handlerProbe.expectMessage(handler.startMessage)
+
+        // request the elements
+        sinkProbe.request(6)
+        handlerProbe.expectMessage("abc")
+        handlerProbe.expectMessage("def")
+        handlerProbe.expectMessage("ghi")
+        handlerProbe.expectMessage("jkl")
+        handlerProbe.expectMessage("mno")
+        handlerProbe.expectMessage("pqr")
+
+        // all elements should have reached the sink
+        sinkProbe.expectNextN(6)
+      }
+
+      // completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
     }
 
@@ -622,18 +672,20 @@ class CassandraProjectionSpec
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
 
-      handlerProbe.expectMessage("start")
+      handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
       handlerProbe.expectMessage("def")
       handlerProbe.expectMessage("ghi")
-      // fail 4, restart
-      handlerProbe.expectMessage("stop")
-      handlerProbe.expectMessage("start")
+      // fail 4
+      handlerProbe.expectMessage(handler.failedMessage)
+
+      // backoff will restart
+      handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("jkl")
       handlerProbe.expectMessage("mno")
       handlerProbe.expectMessage("pqr")
       // now completed without failure
-      handlerProbe.expectMessage("stop")
+      handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
     }
 
@@ -655,13 +707,13 @@ class CassandraProjectionSpec
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
 
-      handlerProbe.expectMessage("start")
+      handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
       handlerProbe.expectMessage("def")
       handlerProbe.expectMessage("ghi")
       // fail 4, not restarted
       // completed with failure
-      handlerProbe.expectMessage("stop")
+      handlerProbe.expectMessage(handler.failedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
     }
   }
