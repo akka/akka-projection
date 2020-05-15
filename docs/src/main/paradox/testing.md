@@ -33,10 +33,9 @@ Scala
 Java
 :  @@snip [TestKitDocExample.java](/examples/src/test/java/jdocs/testkit/TestKitDocExample.java) { #testkit-import #testkit }
 
-
 ## Testing with an assert function
 
-When testing with an assert function the Projection is started and stopped by the TestKit. While the projection is running, the assert function will be called until it completes without errors (no exceptions or assertion errors are thrown). 
+When testing with an assert function the Projection is started and stopped by the TestKit. While the projection is running, the assert function will be called until it completes without errors (no exceptions or assertion errors are thrown).
 
 In the example below the Projection will update a `CartView`. The test will run until it observes that the `CartView` for id `abc-def` is available in the repository.  
 
@@ -56,7 +55,9 @@ Java
 
 ## Testing with a TestSink
 
-The [Akka Stream TestKit](https://doc.akka.io/docs/akka/current/stream/stream-testkit.html#using-the-testkit) can be used to drive the pace of envelopes flowing through the Projection.   
+The [Akka Stream TestKit](https://doc.akka.io/docs/akka/current/stream/stream-testkit.html#using-the-testkit) can be used to drive the pace of envelopes flowing through the Projection.
+
+ The Projection starts as soon as the first element is requested by the `TestSink`, new elements will be emitted as requested by the `TestSink`. The Projection won't stop by itself, therefore it's recommended to cancel the `TestSink` probe to gracefully stop the Projection.
 
 Scala
 :  @@snip [TestKitDocExample.scala](/examples/src/test/scala/docs/testkit/TestKitDocExample.scala) { #testkit-sink-probe }

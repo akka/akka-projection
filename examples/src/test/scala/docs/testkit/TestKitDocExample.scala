@@ -62,6 +62,7 @@ class TestKitDocExample extends ScalaTestWithActorTestKit {
   val sinkProbe = projectionTestKit.runWithTestSink(projection)
   sinkProbe.request(1)
   sinkProbe.expectNext(Done)
+  sinkProbe.cancel()
 
   // confirm that cart checkout was inserted in db
   val cartView = cartViewRepository.findById("abc-def").futureValue

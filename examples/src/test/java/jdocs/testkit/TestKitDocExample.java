@@ -124,6 +124,7 @@ public class TestKitDocExample {
     TestSubscriber.Probe<Done> sinkProbe = projectionTestKit.runWithTestSink(projection);
     sinkProbe.request(1);
     sinkProbe.expectNext(Done.getInstance());
+    sinkProbe.cancel();
 
     TestProbe<CartView> testProbe = testKit.testKit().createTestProbe("cart-view-probe");
     cartCheckoutRepository
