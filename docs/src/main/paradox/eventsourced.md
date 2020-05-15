@@ -1,6 +1,6 @@
 # Events from Akka Persistence
 
-A typical source for Projections is events stored with @apidoc[EventSourcedBehavior] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/persistence.html). Event can be [tagged](https://doc.akka.io/docs/akka/current/typed/persistence.html#tagging) and then
+A typical source for Projections is events stored with @apidoc[EventSourcedBehavior] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/persistence.html). Events can be [tagged](https://doc.akka.io/docs/akka/current/typed/persistence.html#tagging) and then
 consumed with the [eventsByTag query](https://doc.akka.io/docs/akka/current/persistence-query.html#eventsbytag-and-currenteventsbytag).
 
 Akka Projections has integration with `eventsByTag`, which is described here. 
@@ -27,7 +27,7 @@ The table below shows `akka-projection-eventsourced`'s direct dependencies and t
 
 ## SourcedProvider for eventsByTag
 
-A @apidoc[SourceProvider] defines the source of the envelopes that the `Projection` will process. A `SourceProvider`
+A @apidoc[SourceProvider] defines the source of the event envelopes that the `Projection` will process. A `SourceProvider`
 for the `eventsByTag` query can be defined with the @apidoc[EventSourcedProvider] like this:
 
 Scala

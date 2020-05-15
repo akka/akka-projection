@@ -21,7 +21,7 @@ To use the Cassandra module of Akka Projections add the following dependency in 
   version=$project.version$
 }
 
-Akka Projections require Akka $akka.version$ or later, see @ref:[Akka version](overview.md#akka-version).
+Akka Projections requires Akka $akka.version$ or later, see @ref:[Akka version](overview.md#akka-version).
 
 @@project-info{ projectId="akka-projection-cassandra" }
 
