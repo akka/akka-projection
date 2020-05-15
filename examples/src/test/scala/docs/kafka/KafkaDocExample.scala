@@ -106,12 +106,15 @@ object KafkaDocExample {
 
     override def process(envelope: WordEnvelope): DBIO[Done] = {
       val word = envelope.word
-      val partition = math.abs(word.hashCode % 3)
-      val key = if (word.isEmpty) "" else word.take(1)
-      val producerRecord = new ProducerRecord(topic, partition, key, word)
-      logger.info("Publish word [{}] to topic/partition {}/{}", word, topic, partition)
-      val result = sendProducer.send(producerRecord)
-      DBIO.from(result.map(_ => Done))
+      // using the word as the key and `DefaultPartitioner` will select partition based on the key
+      // so that same word always ends up in same partition
+      val key = word
+      val producerRecord = new ProducerRecord(topic, key, word)
+      val result = sendProducer.send(producerRecord).map { recordMetadata =>
+        logger.info("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition)
+        Done
+      }
+      DBIO.from(result)
     }
   }
   //#wordPublisher
@@ -153,10 +156,15 @@ object KafkaDocExample {
     import IllustrateSourceProvider._
 
     //#exactlyOnce
-    val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
+    val databaseConfig: DatabaseConfig[H2Profile] =
+      DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
     val projectionId = ProjectionId("WordCount", "wordcount-1")
     val projection =
-      SlickProjection.exactlyOnce(projectionId, sourceProvider, dbConfig, handler = new WordCountHandler(projectionId))
+      SlickProjection.exactlyOnce(
+        projectionId,
+        sourceProvider,
+        databaseConfig,
+        handler = new WordCountHandler(projectionId))
     //#exactlyOnce
 
     projection.createOffsetTableIfNotExists()
@@ -172,6 +180,7 @@ object KafkaDocExample {
     private val producerSettings =
       ProducerSettings(system, new StringSerializer, new StringSerializer)
         .withBootstrapServers(bootstrapServers)
+    import akka.actor.typed.scaladsl.adapter._ // FIXME might not be needed in later Alpakka Kafka version?
     private val sendProducer = SendProducer(producerSettings)(system.toClassic)
     //#sendProducer
 
@@ -195,10 +204,14 @@ object KafkaDocExample {
 
   def consumerProjection(n: Int): Projection[ConsumerRecord[String, String]] = {
     import IllustrateSourceProvider.sourceProvider
-    import IllustrateExactlyOnce.dbConfig
+    import IllustrateExactlyOnce.databaseConfig
 
     val projectionId = ProjectionId("WordCount", s"wordcount-$n")
-    SlickProjection.exactlyOnce(projectionId, sourceProvider, dbConfig, handler = new WordCountHandler(projectionId))
+    SlickProjection.exactlyOnce(
+      projectionId,
+      sourceProvider,
+      databaseConfig,
+      handler = new WordCountHandler(projectionId))
   }
 
   def producerProjection(): Projection[WordEnvelope] = {

@@ -14,8 +14,8 @@ object Dependencies {
 
   object Versions {
     val akka = "2.6.5"
-    val alpakka = "2.0.0-RC2"
-    val alpakkaKafka = "2.0.2+21-0427b570"
+    val alpakka = "2.0.0"
+    val alpakkaKafka = "2.0.3"
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
     val testContainersScala = "0.36.1"
