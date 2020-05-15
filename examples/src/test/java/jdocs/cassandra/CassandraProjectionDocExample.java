@@ -47,7 +47,6 @@ import java.util.concurrent.CompletionStage;
 
 //#projection-settings-imports
 import akka.projection.ProjectionSettings;
-import static java.time.temporal.ChronoUnit.SECONDS;
 //#projection-settings-imports
 
 public interface CassandraProjectionDocExample {
@@ -116,7 +115,7 @@ public interface CassandraProjectionDocExample {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 
 
-    
+
     //#running-source-provider
     SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider(String tag) {
       return EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), tag);
