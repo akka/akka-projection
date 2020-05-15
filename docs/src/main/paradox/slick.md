@@ -89,7 +89,23 @@ one envelope at a time and visibility guarantees between the invocations are han
 or other concurrency primitives are needed for managing the state as long as it's not accessed by other threads
 than the one that called `process`.
 
+@@@ note
+
+It is important that the `Handler` instance is not shared between several `Projection` instances,
+because then it would be invoked concurrently, which is not how it is intended to be used. Each `Projection`
+instance should use a new `Handler` instance.  
+
+@@@
+
+### Handler lifecycle
+
+You can override the `start` and `stop` methods of the @apidoc[SlickHandler] to implement initialization
+before first envelope is processed and resource cleanup when the projection is stopped.
+Those methods are also called when the `Projection` is restarted after failure.
+
 ## Schema
+
+The database schema for the offset storage table:
 
 ```
 create table if not exists "AKKA_PROJECTION_OFFSET_STORE" (

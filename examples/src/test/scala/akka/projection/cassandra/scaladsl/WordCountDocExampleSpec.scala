@@ -90,8 +90,6 @@ class WordCountDocExampleSpec
 
       val projectionId = genRandomProjectionId()
 
-      val handler = new WordCountHandler(projectionId, repository)
-
       //#projection
       val projection =
         CassandraProjection
@@ -100,7 +98,7 @@ class WordCountDocExampleSpec
             new WordSource,
             saveOffsetAfterEnvelopes = 1,
             saveOffsetAfterDuration = Duration.Zero,
-            handler)
+            new WordCountHandler(projectionId, repository))
       //#projection
 
       runAndAssert(projection)
