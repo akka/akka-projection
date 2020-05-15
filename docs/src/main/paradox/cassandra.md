@@ -66,6 +66,12 @@ can batch offsets before storing.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
+## Grouping
+
+The envelopes can be grouped before processing, which can be useful for batch updates.
+
+TODO: Implementation in progress, see [PR #118](https://github.com/akka/akka-projection/pull/118)
+
 ## Handler
 
 It's in the @apidoc[Handler] that you implement the processing of each envelope. It's essentially a function
@@ -100,7 +106,7 @@ Java
 :  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
 
 However, the state must typically be loaded and updated by asynchronous operations and then it can be
-error prone to manage the state in variables of the `Handler`. For that purpose a `StatefulHandler` (FIXME apidoc when javadsl)
+error prone to manage the state in variables of the `Handler`. For that purpose a @apidoc[StatefulHandler]
 is provided.
 
 Let us look at how a `StatefulHandler` can be implemented in the context of a "word count" domain. The purpose is
@@ -173,6 +179,13 @@ Java
 A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html).
  
 TODO: Documentation pending, see [PR #116](https://github.com/akka/akka-projection/pull/116)
+
+
+## Processing with Akka Streams
+
+An Akka Streams `Flow` can be used instead of a handler for processing the envelopes with at-least-once semantics.
+
+TODO: Implementation in progress, see [PR #119](https://github.com/akka/akka-projection/pull/119)
 
 ## Schema
 
