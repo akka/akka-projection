@@ -105,6 +105,14 @@ Scala
 Java
 :  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
 
+@@@ note
+
+It is important that the `Handler` instance is not shared between several `Projection` instances,
+because then it would be invoked concurrently, which is not how it is intended to be used. Each `Projection`
+instance should use a new `Handler` instance.  
+
+@@@
+
 However, the state must typically be loaded and updated by asynchronous operations and then it can be
 error prone to manage the state in variables of the `Handler`. For that purpose a @apidoc[StatefulHandler]
 is provided.
@@ -180,6 +188,11 @@ A good alternative for advanced state management is to implement the handler as 
  
 TODO: Documentation pending, see [PR #116](https://github.com/akka/akka-projection/pull/116)
 
+### Handler lifecycle
+
+You can override the `start` and `stop` methods of the @apidoc[Handler] to implement initialization
+before first envelope is processed and resource cleanup when the projection is stopped.
+Those methods are also called when the `Projection` is restarted after failure.
 
 ## Processing with Akka Streams
 
@@ -188,6 +201,8 @@ An Akka Streams `Flow` can be used instead of a handler for processing the envel
 TODO: Implementation in progress, see [PR #119](https://github.com/akka/akka-projection/pull/119)
 
 ## Schema
+
+The database schema for the offset storage table:
 
 ```
 CREATE TABLE IF NOT EXISTS akka_projection.offset_store (
