@@ -18,7 +18,6 @@ import akka.Done;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.Projection;
-import akka.projection.ProjectionSettings;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.internal.CassandraOffsetStore;
 import akka.projection.cassandra.javadsl.CassandraProjection;
@@ -156,9 +155,9 @@ public class CassandraProjectionTest extends JUnitSuite {
       .atLeastOnce(
         projectionId,
         new TestSourceProvider(entityId),
-        1,
-        Duration.ZERO,
-        concatHandler(str));
+        concatHandler(str))
+            .withSaveOffsetAfterEnvelopes(1)
+            .withSaveOffsetAfterDuration(Duration.ZERO);
 
     projectionTestKit.run(projection, () ->
       assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
@@ -177,9 +176,9 @@ public class CassandraProjectionTest extends JUnitSuite {
       .atLeastOnce(
         projectionId,
         new TestSourceProvider(entityId),
-        1,
-        Duration.ZERO,
-        concatHandlerFail4(str));
+        concatHandlerFail4(str))
+            .withSaveOffsetAfterEnvelopes(1)
+            .withSaveOffsetAfterDuration(Duration.ZERO);
 
     try {
       projectionTestKit.run(projection, () ->
@@ -196,9 +195,9 @@ public class CassandraProjectionTest extends JUnitSuite {
       .atLeastOnce(
         projectionId,
         new TestSourceProvider(entityId),
-        1,
-        Duration.ZERO,
-        concatHandler(str));
+        concatHandler(str))
+            .withSaveOffsetAfterEnvelopes(1)
+            .withSaveOffsetAfterDuration(Duration.ZERO);
 
     projectionTestKit.run(projection2, () ->
       assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));

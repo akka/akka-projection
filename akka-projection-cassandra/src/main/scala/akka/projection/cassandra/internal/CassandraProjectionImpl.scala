@@ -17,12 +17,13 @@ import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
+import akka.projection.AtLeastOnceSettings
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
-import akka.projection.cassandra.scaladsl
 import akka.projection.cassandra.javadsl
+import akka.projection.cassandra.scaladsl
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
@@ -35,55 +36,20 @@ import akka.stream.scaladsl.Source
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object CassandraProjectionImpl {
-  sealed trait Strategy
-  case object AtMostOnce extends Strategy
-  final case class AtLeastOnce(afterEnvelopes: Int, orAfterDuration: FiniteDuration) extends Strategy
-  import HandlerRecoveryStrategy.Internal._
-
-  /**
-   * Prevent usage of retries for at-most-once.
-   */
-  private class AtMostOnceHandler[Envelope](delegate: Handler[Envelope], logger: LoggingAdapter)
-      extends Handler[Envelope] {
-    override def process(envelope: Envelope): Future[Done] =
-      delegate.process(envelope)
-
-    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = {
-      super.onFailure(envelope, throwable) match {
-        case _: RetryAndFail =>
-          logger.warning(
-            "RetryAndFail not supported for atMostOnce projection because it would call the handler more than once. " +
-            "You should change to `HandlerRecoveryStrategy.fail`.")
-          HandlerRecoveryStrategy.fail
-        case _: RetryAndSkip =>
-          logger.warning(
-            "RetryAndSkip not supported for atMostOnce projection because it would call the handler more than once. " +
-            "You should change to `HandlerRecoveryStrategy.skip`.")
-          HandlerRecoveryStrategy.skip
-        case other => other
-      }
-    }
-  }
-}
-
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] class CassandraProjectionImpl[Offset, Envelope](
+@InternalApi private[akka] abstract class BaseCassandraProjectionImpl[Offset, Envelope](
     override val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
-    strategy: CassandraProjectionImpl.Strategy,
     settingsOpt: Option[ProjectionSettings],
     handler: Handler[Envelope])
     extends javadsl.CassandraProjection[Envelope]
     with scaladsl.CassandraProjection[Envelope] {
-  import CassandraProjectionImpl._
   import HandlerRecoveryImpl.applyUserRecovery
 
-  override def withSettings(settings: ProjectionSettings): CassandraProjectionImpl[Offset, Envelope] = {
-    new CassandraProjectionImpl(projectionId, sourceProvider, strategy, Option(settings), handler)
-  }
+  protected[projection] def composedSource(
+      offsetStore: CassandraOffsetStore,
+      source: Source[(Offset, Envelope), NotUsed],
+      handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed])(
+      implicit systemProvider: ClassicActorSystemProvider): Source[Done, NotUsed]
 
   /**
    * INTERNAL API
@@ -107,7 +73,7 @@ import akka.stream.scaladsl.Source
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
    */
-  private def settingsOrDefaults(implicit systemProvider: ClassicActorSystemProvider): ProjectionSettings =
+  private[akka] def settingsOrDefaults(implicit systemProvider: ClassicActorSystemProvider): ProjectionSettings =
     settingsOpt.getOrElse(ProjectionSettings(systemProvider))
 
   // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
@@ -149,41 +115,8 @@ import akka.stream.scaladsl.Source
               .map(_ => offset)
         }
 
-      val composedSource: Source[Done, NotUsed] = strategy match {
-        case AtLeastOnce(1, _) =>
-          // optimization of general AtLeastOnce case
-          source.via(handlerFlow).mapAsync(1) { offset =>
-            offsetStore.saveOffset(projectionId, offset)
-          }
-        case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
-          source
-            .via(handlerFlow)
-            .groupedWithin(afterEnvelopes, orAfterDuration)
-            .collect { case grouped if grouped.nonEmpty => grouped.last }
-            .mapAsync(parallelism = 1) { offset =>
-              offsetStore.saveOffset(projectionId, offset)
-            }
-        case AtMostOnce =>
-          // prevent usage of retries for at-most-once
-          val atMostOnceHandler = new AtMostOnceHandler(handler, logger)
-          source
-            .mapAsync(parallelism = 1) {
-              case (offset, envelope) =>
-                offsetStore
-                  .saveOffset(projectionId, offset)
-                  .flatMap(
-                    _ =>
-                      applyUserRecovery(
-                        atMostOnceHandler,
-                        envelope,
-                        offset,
-                        logger,
-                        () => atMostOnceHandler.process(envelope)))
-            }
-            .map(_ => Done)
-      }
-
-      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.tryStop()))
+      composedSource(offsetStore, source, handlerFlow).via(RunningProjection.stopHandlerWhenFailed(() =>
+        handler.tryStop()))
     }
 
     private[projection] def newRunningInstance(): RunningProjection = {
@@ -225,4 +158,152 @@ import akka.stream.scaladsl.Source
     import scala.compat.java8.FutureConverters._
     createOffsetTableIfNotExists()(systemProvider).toJava
   }
+}
+
+private[akka] class AtLeastOnceCassandraProjectionImpl[Offset, Envelope](
+    override val projectionId: ProjectionId,
+    sourceProvider: SourceProvider[Offset, Envelope],
+    projectionSettings: Option[ProjectionSettings],
+    atLeastOnceSettings: Option[AtLeastOnceSettings],
+    handler: Handler[Envelope])
+    extends BaseCassandraProjectionImpl[Offset, Envelope](projectionId, sourceProvider, projectionSettings, handler)
+    with scaladsl.AtLeastOnceCassandraProjection[Envelope]
+    with javadsl.AtLeastOnceCassandraProjection[Envelope] {
+
+  /*
+   * Build the final AtLeastOnceSettings to use, if currently set to None fallback to values in config file
+   */
+  private[akka] def atLeastOnceSettingsOrDefaults(
+      implicit systemProvider: ClassicActorSystemProvider): AtLeastOnceSettings =
+    atLeastOnceSettings.getOrElse(AtLeastOnceSettings(systemProvider))
+
+  protected[projection] def composedSource(
+      offsetStore: CassandraOffsetStore,
+      source: Source[(Offset, Envelope), NotUsed],
+      handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed])(
+      implicit systemProvider: ClassicActorSystemProvider): Source[Done, NotUsed] = {
+    val atLeastOnceSettings = atLeastOnceSettingsOrDefaults
+
+    import atLeastOnceSettings._
+
+    (saveOffsetAfterEnvelopes, saveOffsetAfterDuration) match {
+      case (1, _) =>
+        // optimization of general AtLeastOnce case
+        source.via(handlerFlow).mapAsync(1) { offset =>
+          offsetStore.saveOffset(projectionId, offset)
+        }
+      case (afterEnvelopes, orAfterDuration) =>
+        source
+          .via(handlerFlow)
+          .groupedWithin(afterEnvelopes, orAfterDuration)
+          .collect { case grouped if grouped.nonEmpty => grouped.last }
+          .mapAsync(parallelism = 1) { offset =>
+            offsetStore.saveOffset(projectionId, offset)
+          }
+    }
+  }
+
+  override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjectionImpl[Offset, Envelope] =
+    new AtLeastOnceCassandraProjectionImpl(projectionId, sourceProvider, Option(settings), atLeastOnceSettings, handler)
+
+  override def withAtLeastOnceSettings(
+      settings: AtLeastOnceSettings): AtLeastOnceCassandraProjectionImpl[Offset, Envelope] =
+    new AtLeastOnceCassandraProjectionImpl(projectionId, sourceProvider, projectionSettings, Some(settings), handler)
+
+  override def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): AtLeastOnceCassandraProjectionImpl[Offset, Envelope] =
+    new AtLeastOnceCassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      projectionSettings,
+      atLeastOnceSettings.map(_.withSaveOffsetAfterEnvelopes(afterEnvelopes)),
+      handler)
+
+  override def withSaveOffsetAfterDuration(
+      afterDuration: FiniteDuration): AtLeastOnceCassandraProjectionImpl[Offset, Envelope] =
+    new AtLeastOnceCassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      projectionSettings,
+      atLeastOnceSettings.map(_.withSaveOffsetAfterDuration(afterDuration)).getOrElse(AtLeastOnceSettings.),
+      handler)
+
+  /**
+   * Java API
+   */
+  override def withSaveOffsetAfterDuration(
+      afterDuration: java.time.Duration): AtLeastOnceCassandraProjectionImpl[Offset, Envelope] =
+    new AtLeastOnceCassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      projectionSettings,
+      atLeastOnceSettings.map(_.withSaveOffsetAfterDuration(afterDuration)),
+      handler)
+}
+
+@InternalApi private[akka] object AtMostOnceCassandraProjectionImpl {
+  import HandlerRecoveryStrategy.Internal._
+
+  /**
+   * Prevent usage of retries for at-most-once.
+   */
+  private class AtMostOnceHandler[Envelope](delegate: Handler[Envelope], logger: LoggingAdapter)
+      extends Handler[Envelope] {
+    override def process(envelope: Envelope): Future[Done] =
+      delegate.process(envelope)
+
+    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = {
+      super.onFailure(envelope, throwable) match {
+        case _: RetryAndFail =>
+          logger.warning(
+            "RetryAndFail not supported for atMostOnce projection because it would call the handler more than once. " +
+            "You should change to `HandlerRecoveryStrategy.fail`.")
+          HandlerRecoveryStrategy.fail
+        case _: RetryAndSkip =>
+          logger.warning(
+            "RetryAndSkip not supported for atMostOnce projection because it would call the handler more than once. " +
+            "You should change to `HandlerRecoveryStrategy.skip`.")
+          HandlerRecoveryStrategy.skip
+        case other => other
+      }
+    }
+  }
+}
+
+private[akka] class AtMostOnceCassandraProjectionImpl[Offset, Envelope](
+    override val projectionId: ProjectionId,
+    sourceProvider: SourceProvider[Offset, Envelope],
+    projectionSettings: Option[ProjectionSettings],
+    handler: Handler[Envelope])
+    extends BaseCassandraProjectionImpl[Offset, Envelope](projectionId, sourceProvider, projectionSettings, handler)
+    with scaladsl.AtMostOnceCassandraProjection[Envelope]
+    with javadsl.AtMostOnceCassandraProjection[Envelope] {
+
+  import AtMostOnceCassandraProjectionImpl._
+  import HandlerRecoveryImpl.applyUserRecovery
+
+  protected[projection] def composedSource(
+      offsetStore: CassandraOffsetStore,
+      source: Source[(Offset, Envelope), NotUsed],
+      handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed])(
+      implicit systemProvider: ClassicActorSystemProvider): Source[Done, NotUsed] = {
+    val system = systemProvider.classicSystem
+    // FIXME maybe use the session-dispatcher config
+    implicit val ec: ExecutionContext = system.dispatcher
+    val logger = Logging(system, this.getClass)
+
+    // prevent usage of retries for at-most-once
+    val atMostOnceHandler = new AtMostOnceHandler(handler, logger)
+    source
+      .mapAsync(parallelism = 1) {
+        case (offset, envelope) =>
+          offsetStore
+            .saveOffset(projectionId, offset)
+            .flatMap(_ =>
+              applyUserRecovery(atMostOnceHandler, envelope, offset, logger, () => atMostOnceHandler.process(envelope)))
+      }
+      .map(_ => Done)
+  }
+
+  override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjectionImpl[Offset, Envelope] =
+    new AtMostOnceCassandraProjectionImpl(projectionId, sourceProvider, Option(settings), handler)
 }

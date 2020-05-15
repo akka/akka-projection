@@ -10,10 +10,12 @@ import scala.concurrent.duration.FiniteDuration
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
+import akka.projection.AtLeastOnceSettings
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
-import akka.projection.cassandra.internal.CassandraProjectionImpl
+import akka.projection.cassandra.internal.AtLeastOnceCassandraProjectionImpl
+import akka.projection.cassandra.internal.AtMostOnceCassandraProjectionImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 
@@ -37,14 +39,12 @@ object CassandraProjection {
   def atLeastOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      saveOffsetAfterEnvelopes: Int,
-      saveOffsetAfterDuration: FiniteDuration,
-      handler: Handler[Envelope]): CassandraProjection[Envelope] =
-    new CassandraProjectionImpl(
+      handler: Handler[Envelope]): AtLeastOnceCassandraProjection[Envelope] =
+    new AtLeastOnceCassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      CassandraProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
-      settingsOpt = None,
+      projectionSettings = None,
+      atLeastOnceSettings = None,
       handler)
 
   /**
@@ -55,18 +55,11 @@ object CassandraProjection {
   def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): CassandraProjection[Envelope] =
-    new CassandraProjectionImpl(
-      projectionId,
-      sourceProvider,
-      CassandraProjectionImpl.AtMostOnce,
-      settingsOpt = None,
-      handler)
+      handler: Handler[Envelope]): AtMostOnceCassandraProjection[Envelope] =
+    new AtMostOnceCassandraProjectionImpl(projectionId, sourceProvider, projectionSettings = None, handler)
 }
 
 trait CassandraProjection[Envelope] extends Projection[Envelope] {
-
-  override def withSettings(settings: ProjectionSettings): CassandraProjection[Envelope]
 
   /**
    * For testing purposes the offset table can be created programmatically.
@@ -74,4 +67,16 @@ trait CassandraProjection[Envelope] extends Projection[Envelope] {
    * before the system is started.
    */
   def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done]
+}
+
+trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
+
+  def withAtLeastOnceSettings(settings: AtLeastOnceSettings): AtLeastOnceCassandraProjection[Envelope]
+  def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): AtLeastOnceCassandraProjection[Envelope]
+  def withSaveOffsetAfterDuration(afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Envelope]
+}
+
+trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
 }
