@@ -13,7 +13,7 @@ object Dependencies {
   val AlpakkaKafkaVersionInDocs = "2.0"
 
   object Versions {
-    val akka = "2.6.5"
+    val akka = sys.props.getOrElse("build.akka.version", "2.6.5")
     val alpakka = "2.0.0"
     val alpakkaKafka = "2.0.3"
     val slick = "3.3.2"
