@@ -91,7 +91,7 @@ object WordCountDocExample {
   }
   //#sourceProvider
 
-  object IllstrateVariables {
+  object IllustrateVariables {
     //#mutableState
     class WordCountHandler extends Handler[WordEnvelope] {
       private val logger = LoggerFactory.getLogger(getClass)
@@ -108,7 +108,7 @@ object WordCountDocExample {
     //#mutableState
   }
 
-  object IllstrateStatefulHandlerLoadingInitialState {
+  object IllustrateStatefulHandlerLoadingInitialState {
 
     //#loadingInitialState
     class WordCountHandler(projectionId: ProjectionId, repository: WordCountRepository)(implicit ec: ExecutionContext)
@@ -129,7 +129,7 @@ object WordCountDocExample {
     //#loadingInitialState
   }
 
-  object IllstrateStatefulHandlerLoadingStateOnDemand {
+  object IllustrateStatefulHandlerLoadingStateOnDemand {
 
     //#loadingOnDemand
     class WordCountHandler(projectionId: ProjectionId, repository: WordCountRepository)(implicit ec: ExecutionContext)
