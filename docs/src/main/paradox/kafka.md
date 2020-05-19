@@ -25,7 +25,7 @@ A `Projection` can also @ref:[send messages to Kafka](#sending-to-kafka).
 To use the Kafka module of Akka Projections add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
-  group=com.typesafe.akka
+  group=com.lightbend.akka
   artifact=akka-projection-kafka_$scala.binary.version$
   version=$project.version$
 }

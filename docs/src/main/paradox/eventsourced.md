@@ -10,7 +10,7 @@ Akka Projections has integration with `eventsByTag`, which is described here.
 To use the Event Sourced module of Akka Projections add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
-  group=com.typesafe.akka
+  group=com.lightbend.akka
   artifact=akka-projection-eventsourced_$scala.binary.version$
   version=$project.version$
 }
