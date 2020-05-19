@@ -16,7 +16,7 @@ processing semantics, but not exactly-once.
 To use the Cassandra module of Akka Projections add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
-  group=com.typesafe.akka
+  group=com.lightbend.akka
   artifact=akka-projection-cassandra_$scala.binary.version$
   version=$project.version$
 }

@@ -7,7 +7,7 @@ Akka Projection provides a TestKit to ease testing. There are two supported styl
 To use the Akka Projection TestKit add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
-  group=com.typesafe.akka
+  group=com.lightbend.akka
   artifact=akka-projection-testkit_$scala.binary.version$
   version=$project.version$
   scope="test"
