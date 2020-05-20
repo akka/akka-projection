@@ -511,8 +511,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 1,
-          saveOffsetAfterDuration = Duration.Zero,
           eventHandler)
 
       projectionTestKit.run(slickProjection) {
@@ -542,8 +540,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 1,
-          saveOffsetAfterDuration = Duration.Zero,
           eventHandler)
 
       projectionTestKit.run(slickProjection) {
@@ -569,13 +565,14 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val eventHandler = new ConcatHandlerFail4(HandlerRecoveryStrategy.skip)
       val slickProjection =
-        SlickProjection.atLeastOnce(
-          projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 2,
-          saveOffsetAfterDuration = 1.minute,
-          eventHandler)
+        SlickProjection
+          .atLeastOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            eventHandler)
+          .withSaveOffsetAfterEnvelopes(2)
+          .withSaveOffsetAfterDuration(1.minute)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {
@@ -599,8 +596,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId = projectionId,
           sourceProvider = sourceProvider(system, entityId),
           databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 1,
-          saveOffsetAfterDuration = Duration.Zero,
           bogusEventHandler)
 
       withClue("check - offset is empty") {
@@ -633,8 +628,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           projectionId = projectionId,
           sourceProvider = sourceProvider(system, entityId),
           databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 1,
-          saveOffsetAfterDuration = Duration.Zero,
           eventHandler)
 
       projectionTestKit.run(slickProjection) {
@@ -656,13 +649,14 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val bogusEventHandler = new ConcatHandlerFail4()
       val slickProjectionFailing =
-        SlickProjection.atLeastOnce(
-          projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 2,
-          saveOffsetAfterDuration = 1.minute,
-          bogusEventHandler)
+        SlickProjection
+          .atLeastOnce(
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            bogusEventHandler)
+          .withSaveOffsetAfterEnvelopes(2)
+          .withSaveOffsetAfterDuration(1.minute)
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -690,13 +684,14 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
-        SlickProjection.atLeastOnce(
-          projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 2,
-          saveOffsetAfterDuration = 1.minute,
-          eventHandler)
+        SlickProjection
+          .atLeastOnce(
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            eventHandler)
+          .withSaveOffsetAfterEnvelopes(2)
+          .withSaveOffsetAfterDuration(1.minute)
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
@@ -728,13 +723,14 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
-        SlickProjection.atLeastOnce[Long, Envelope, H2Profile](
-          projectionId = projectionId,
-          sourceProvider = TestSourceProvider(system, source),
-          databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 1.minute,
-          eventHandler)
+        SlickProjection
+          .atLeastOnce[Long, Envelope, H2Profile](
+            projectionId = projectionId,
+            sourceProvider = TestSourceProvider(system, source),
+            databaseConfig = dbConfig,
+            eventHandler)
+          .withSaveOffsetAfterEnvelopes(10)
+          .withSaveOffsetAfterDuration(1.minute)
 
       val sinkProbe = projectionTestKit.runWithTestSink(slickProjection)
       eventually {
@@ -777,13 +773,14 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           repository.concatToText(envelope.id, envelope.message)
       }
       val slickProjection =
-        SlickProjection.atLeastOnce[Long, Envelope, H2Profile](
-          projectionId = projectionId,
-          sourceProvider = TestSourceProvider(system, source),
-          databaseConfig = dbConfig,
-          saveOffsetAfterEnvelopes = 10,
-          saveOffsetAfterDuration = 2.seconds,
-          eventHandler)
+        SlickProjection
+          .atLeastOnce[Long, Envelope, H2Profile](
+            projectionId = projectionId,
+            sourceProvider = TestSourceProvider(system, source),
+            databaseConfig = dbConfig,
+            eventHandler)
+          .withSaveOffsetAfterEnvelopes(10)
+          .withSaveOffsetAfterDuration(2.seconds)
 
       val sinkProbe = projectionTestKit.runWithTestSink(slickProjection)
       eventually {

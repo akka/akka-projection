@@ -88,7 +88,9 @@ import akka.stream.scaladsl.Source
   override def withSettings(settings: ProjectionSettings): CassandraProjectionImpl[Offset, Envelope] =
     new CassandraProjectionImpl(projectionId, sourceProvider, strategy, Option(settings), handler)
 
-  // Settings for AtLeastOnceCassandraProjection
+  /**
+   * Settings for AtLeastOnceCassandraProjection
+   */
   override def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): CassandraProjectionImpl[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,

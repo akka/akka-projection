@@ -7,6 +7,7 @@ package akka.projection.slick.internal
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.DurationConverters._
 
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
@@ -17,6 +18,7 @@ import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.slick.AtLeastOnceSlickProjection
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.stream.KillSwitches
@@ -30,7 +32,8 @@ import slick.jdbc.JdbcProfile
 private[projection] object SlickProjectionImpl {
   sealed trait Strategy
   case object ExactlyOnce extends Strategy
-  final case class AtLeastOnce(afterEnvelopes: Int, orAfterDuration: FiniteDuration) extends Strategy
+  final case class AtLeastOnce(afterEnvelopes: Option[Int] = None, orAfterDuration: Option[FiniteDuration] = None)
+      extends Strategy
 }
 
 @InternalApi
@@ -41,12 +44,46 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     strategy: SlickProjectionImpl.Strategy,
     settingsOpt: Option[ProjectionSettings],
     handler: SlickHandler[Envelope])
-    extends SlickProjection[Envelope] {
+    extends SlickProjection[Envelope]
+    with AtLeastOnceSlickProjection[Envelope] {
   import SlickProjectionImpl._
 
-  override def withSettings(settings: ProjectionSettings): SlickProjection[Envelope] = {
+  override def withSettings(settings: ProjectionSettings): SlickProjectionImpl[Offset, Envelope, P] =
     new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, strategy, Option(settings), handler)
-  }
+
+  /**
+   * Settings for AtLeastOnceSlickProjection
+   */
+  override def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): SlickProjectionImpl[Offset, Envelope, P] =
+    new SlickProjectionImpl(
+      projectionId,
+      sourceProvider,
+      databaseConfig,
+      strategy.asInstanceOf[AtLeastOnce].copy(afterEnvelopes = Some(afterEnvelopes)),
+      settingsOpt,
+      handler)
+
+  override def withSaveOffsetAfterDuration(afterDuration: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] =
+    new SlickProjectionImpl(
+      projectionId,
+      sourceProvider,
+      databaseConfig,
+      strategy.asInstanceOf[AtLeastOnce].copy(orAfterDuration = Some(afterDuration)),
+      settingsOpt,
+      handler)
+
+  /**
+   * Java API
+   */
+  override def withSaveOffsetAfterDuration(
+      afterDuration: java.time.Duration): SlickProjectionImpl[Offset, Envelope, P] =
+    new SlickProjectionImpl(
+      projectionId,
+      sourceProvider,
+      databaseConfig,
+      strategy.asInstanceOf[AtLeastOnce].copy(orAfterDuration = Some(afterDuration.toScala)),
+      settingsOpt,
+      handler)
 
   /**
    * INTERNAL API
@@ -143,23 +180,26 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
             Flow[Envelope]
               .mapAsync(1)(processEnvelopeAndStoreOffsetInSameTransaction)
 
-          case AtLeastOnce(1, _) =>
-            // optimization of general AtLeastOnce case, still separate transactions for processEnvelope
-            // and storeOffset
-            Flow[Envelope].mapAsync(1) { env =>
-              val offset = sourceProvider.extractOffset(env)
-              processEnvelope(env, offset).flatMap(_ => storeOffset(offset))
-            }
+          case AtLeastOnce(afterEnvelopesOpt, orAfterDurationOpt) =>
+            val afterEnvelopes = afterEnvelopesOpt.getOrElse(settings.saveOffsetAfterEnvelopes)
+            val orAfterDuration = orAfterDurationOpt.getOrElse(settings.saveOffsetAfterDuration)
 
-          case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
-            Flow[Envelope]
-              .mapAsync(1) { env =>
+            if (afterEnvelopes == 1)
+              // optimization of general AtLeastOnce case, still separate transactions for processEnvelope
+              // and storeOffset
+              Flow[Envelope].mapAsync(1) { env =>
                 val offset = sourceProvider.extractOffset(env)
-                processEnvelope(env, offset).map(_ => offset)
+                processEnvelope(env, offset).flatMap(_ => storeOffset(offset))
               }
-              .groupedWithin(afterEnvelopes, orAfterDuration)
-              .collect { case grouped if grouped.nonEmpty => grouped.last }
-              .mapAsync(parallelism = 1)(storeOffset)
+            else
+              Flow[Envelope]
+                .mapAsync(1) { env =>
+                  val offset = sourceProvider.extractOffset(env)
+                  processEnvelope(env, offset).map(_ => offset)
+                }
+                .groupedWithin(afterEnvelopes, orAfterDuration)
+                .collect { case grouped if grouped.nonEmpty => grouped.last }
+                .mapAsync(parallelism = 1)(storeOffset)
         }
 
       val composedSource =

@@ -111,13 +111,14 @@ class SlickProjectionDocExample {
     implicit val ec = system.executionContext
 
     val projection =
-      SlickProjection.atLeastOnce(
-        projectionId = ProjectionId("ShoppingCarts", "carts-1"),
-        sourceProvider,
-        dbConfig,
-        saveOffsetAfterEnvelopes = 100,
-        saveOffsetAfterDuration = 500.millis,
-        handler = new ShoppingCartHandler(repository))
+      SlickProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("ShoppingCarts", "carts-1"),
+          sourceProvider,
+          dbConfig,
+          handler = new ShoppingCartHandler(repository))
+        .withSaveOffsetAfterEnvelopes(100)
+        .withSaveOffsetAfterDuration(500.millis)
     //#atLeastOnce
   }
 

@@ -190,13 +190,11 @@ object KafkaDocExample {
     val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
     val projectionId = ProjectionId("PublishWords", "words")
     val projection =
-      SlickProjection.atLeastOnce(
-        projectionId,
-        sourceProvider,
-        dbConfig,
-        handler = new WordPublisher(topicName, sendProducer),
-        saveOffsetAfterEnvelopes = 100,
-        saveOffsetAfterDuration = 500.millis)
+      SlickProjection
+        .atLeastOnce(projectionId, sourceProvider, dbConfig, handler = new WordPublisher(topicName, sendProducer))
+        .withSaveOffsetAfterEnvelopes(100)
+        .withSaveOffsetAfterDuration(500.millis)
+
     //#sendToKafkaProjection
 
     projection.createOffsetTableIfNotExists()
