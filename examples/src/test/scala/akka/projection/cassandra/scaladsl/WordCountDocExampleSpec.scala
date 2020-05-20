@@ -9,7 +9,6 @@ import java.util.UUID
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
 
 import akka.Done
@@ -93,12 +92,7 @@ class WordCountDocExampleSpec
       //#projection
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, WordEnvelope](
-            projectionId,
-            new WordSource,
-            saveOffsetAfterEnvelopes = 1,
-            saveOffsetAfterDuration = Duration.Zero,
-            new WordCountHandler(projectionId, repository))
+          .atLeastOnce[Long, WordEnvelope](projectionId, new WordSource, new WordCountHandler(projectionId, repository))
       //#projection
 
       runAndAssert(projection)
@@ -113,12 +107,7 @@ class WordCountDocExampleSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, WordEnvelope](
-            projectionId,
-            new WordSource,
-            saveOffsetAfterEnvelopes = 1,
-            saveOffsetAfterDuration = Duration.Zero,
-            handler)
+          .atLeastOnce[Long, WordEnvelope](projectionId, new WordSource, handler)
 
       runAndAssert(projection)
     }

@@ -86,9 +86,10 @@ public interface CassandraProjectionDocExample {
       CassandraProjection.atLeastOnce(
         ProjectionId.of("shopping-carts", "carts-1"),
         sourceProvider,
-        saveOffsetAfterEnvelopes,
-        saveOffsetAfterDuration,
-        new ShoppingCartHandler());
+        new ShoppingCartHandler()
+      )
+      .withSaveOffsetAfterEnvelopes(saveOffsetAfterEnvelopes)
+      .withSaveOffsetAfterDuration(saveOffsetAfterDuration);
     //#atLeastOnce
 
   }
@@ -130,9 +131,10 @@ public interface CassandraProjectionDocExample {
       return CassandraProjection.atLeastOnce(
         ProjectionId.of("shopping-carts", tag),
         sourceProvider(tag),
-        saveOffsetAfterEnvelopes,
-        saveOffsetAfterDuration,
-        new ShoppingCartHandler());
+        new ShoppingCartHandler()
+      )
+      .withSaveOffsetAfterEnvelopes(saveOffsetAfterEnvelopes)
+      .withSaveOffsetAfterDuration(saveOffsetAfterDuration);
     }
     //#running-projection
 
@@ -168,8 +170,6 @@ public interface CassandraProjectionDocExample {
             CassandraProjection.atLeastOnce(
                     ProjectionId.of("shopping-carts", "carts-1"),
                     sourceProvider,
-                    saveOffsetAfterEnvelopes,
-                    saveOffsetAfterDuration,
                     new ShoppingCartHandler()
             ).withSettings(
                     ProjectionSettings.create(system)
@@ -178,7 +178,9 @@ public interface CassandraProjectionDocExample {
                                     Duration.ofSeconds(60), /*maxBackoff*/
                                     0.5 /*randomFactor*/
                             )
-            );
+            )
+            .withSaveOffsetAfterEnvelopes(saveOffsetAfterEnvelopes)
+            .withSaveOffsetAfterDuration(saveOffsetAfterDuration);
     //#projection-settings
 
   }

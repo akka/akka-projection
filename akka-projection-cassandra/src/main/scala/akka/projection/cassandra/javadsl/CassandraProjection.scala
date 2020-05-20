@@ -4,7 +4,6 @@
 
 package akka.projection.cassandra.javadsl
 
-import java.time.Duration
 import java.util.concurrent.CompletionStage
 
 import akka.Done
@@ -19,7 +18,6 @@ import akka.projection.cassandra.scaladsl
 import akka.projection.internal.SourceProviderAdapter
 import akka.projection.javadsl.Handler
 import akka.projection.javadsl.SourceProvider
-import akka.util.JavaDurationConverters._
 
 /**
  * Factories of [[Projection]] where the offset is stored in Cassandra. The envelope handler can
@@ -36,15 +34,11 @@ object CassandraProjection {
   def atLeastOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      saveOffsetAfterEnvelopes: Int,
-      saveOffsetAfterDuration: Duration,
-      handler: Handler[Envelope]): Projection[Envelope] =
-    scaladsl.CassandraProjection.atLeastOnce(
-      projectionId,
-      new SourceProviderAdapter(sourceProvider),
-      saveOffsetAfterEnvelopes,
-      saveOffsetAfterDuration.asScala,
-      new HandlerAdapter(handler))
+      handler: Handler[Envelope]): AtLeastOnceCassandraProjection[Envelope] =
+    // FIXME refactor SourceProviderAdapter into CassandraProjectionProviderAdapter?
+    scaladsl.CassandraProjection
+      .atLeastOnce(projectionId, new SourceProviderAdapter(sourceProvider), new HandlerAdapter(handler))
+      .asInstanceOf[AtLeastOnceCassandraProjection[Envelope]]
 
   /**
    * Create a [[Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
@@ -55,10 +49,8 @@ object CassandraProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       handler: Handler[Envelope]): Projection[Envelope] =
-    scaladsl.CassandraProjection.atMostOnce(
-      projectionId,
-      new SourceProviderAdapter(sourceProvider),
-      new HandlerAdapter(handler))
+    akka.projection.cassandra.scaladsl.CassandraProjection
+      .atMostOnce(projectionId, new SourceProviderAdapter(sourceProvider), new HandlerAdapter(handler))
 }
 
 @DoNotInherit trait CassandraProjection[Envelope] extends Projection[Envelope] {
@@ -72,4 +64,11 @@ object CassandraProjection {
    */
   def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done]
 
+}
+
+@DoNotInherit trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
+
+  def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): AtLeastOnceCassandraProjection[Envelope]
+  def withSaveOffsetAfterDuration(afterDuration: java.time.Duration): AtLeastOnceCassandraProjection[Envelope]
 }
