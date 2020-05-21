@@ -9,7 +9,6 @@ import java.util.concurrent.CompletionStage
 
 import akka.Done
 import akka.annotation.ApiMayChange
-import akka.projection.HandlerRecovery
 
 @ApiMayChange
 object Handler {
@@ -33,7 +32,7 @@ object Handler {
  * other concurrency primitives are needed for managing the state.
  */
 @ApiMayChange
-abstract class Handler[Envelope] extends HandlerRecovery[Envelope] with HandlerLifecycle {
+abstract class Handler[Envelope] extends HandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`.

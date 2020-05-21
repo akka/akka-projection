@@ -10,6 +10,7 @@ import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
+import akka.projection.HandlerRecoveryStrategy.Internal.AtMostOnceRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
@@ -50,9 +51,10 @@ object CassandraProjection {
   def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): Projection[Envelope] =
+      handler: Handler[Envelope]): AtMostOnceCassandraProjection[Envelope] =
     akka.projection.cassandra.scaladsl.CassandraProjection
       .atMostOnce(projectionId, new SourceProviderAdapter(sourceProvider), new HandlerAdapter(handler))
+      .asInstanceOf[AtMostOnceCassandraProjection[Envelope]]
 }
 
 @DoNotInherit trait CassandraProjection[Envelope] extends Projection[Envelope] {
@@ -72,4 +74,11 @@ object CassandraProjection {
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceCassandraProjection[Envelope]
+}
+
+@DoNotInherit trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
+
+  def withAtMostOnceRecoveryStrategy(
+      recoveryStrategy: AtMostOnceRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
 }

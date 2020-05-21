@@ -199,10 +199,10 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
               failingRepository.incrementCount(projectionId, userEvent.eventType)
             }
 
-            override def onFailure(
-                envelope: ConsumerRecord[String, String],
-                throwable: Throwable): HandlerRecoveryStrategy =
-              HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis)
+//            override def onFailure(
+//                envelope: ConsumerRecord[String, String],
+//                throwable: Throwable): HandlerRecoveryStrategy =
+//              HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis)
           })
 
       log.debug("Projection created")

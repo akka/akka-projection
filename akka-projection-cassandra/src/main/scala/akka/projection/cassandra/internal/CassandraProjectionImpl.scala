@@ -17,8 +17,9 @@ import akka.actor.ActorSystem
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.HandlerRecoveryStrategy.Internal.AtLeastOnceRecoveryStrategy
+import akka.projection.HandlerRecoveryStrategy.Internal.AtMostOnceRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
@@ -38,35 +39,12 @@ import akka.stream.scaladsl.Source
  */
 @InternalApi private[akka] object CassandraProjectionImpl {
   sealed trait Strategy
-  case object AtMostOnce extends Strategy
-  final case class AtLeastOnce(afterEnvelopes: Option[Int] = None, orAfterDuration: Option[FiniteDuration] = None)
+  final case class AtMostOnce(recoveryStrategy: Option[HandlerRecoveryStrategy] = None) extends Strategy
+  final case class AtLeastOnce(
+      afterEnvelopes: Option[Int] = None,
+      orAfterDuration: Option[FiniteDuration] = None,
+      recoveryStrategy: Option[HandlerRecoveryStrategy] = None)
       extends Strategy
-  import HandlerRecoveryStrategy.Internal._
-
-  /**
-   * Prevent usage of retries for at-most-once.
-   */
-  private class AtMostOnceHandler[Envelope](delegate: Handler[Envelope], logger: LoggingAdapter)
-      extends Handler[Envelope] {
-    override def process(envelope: Envelope): Future[Done] =
-      delegate.process(envelope)
-
-    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = {
-      super.onFailure(envelope, throwable) match {
-        case _: RetryAndFail =>
-          logger.warning(
-            "RetryAndFail not supported for atMostOnce projection because it would call the handler more than once. " +
-            "You should change to `HandlerRecoveryStrategy.fail`.")
-          HandlerRecoveryStrategy.fail
-        case _: RetryAndSkip =>
-          logger.warning(
-            "RetryAndSkip not supported for atMostOnce projection because it would call the handler more than once. " +
-            "You should change to `HandlerRecoveryStrategy.skip`.")
-          HandlerRecoveryStrategy.skip
-        case other => other
-      }
-    }
-  }
 }
 
 /**
@@ -75,13 +53,15 @@ import akka.stream.scaladsl.Source
 @InternalApi private[akka] class CassandraProjectionImpl[Offset, Envelope](
     override val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
-    strategy: CassandraProjectionImpl.Strategy,
+    val strategy: CassandraProjectionImpl.Strategy,
     settingsOpt: Option[ProjectionSettings],
     handler: Handler[Envelope])
     extends javadsl.CassandraProjection[Envelope]
     with scaladsl.CassandraProjection[Envelope]
     with javadsl.AtLeastOnceCassandraProjection[Envelope]
-    with scaladsl.AtLeastOnceCassandraProjection[Envelope] {
+    with scaladsl.AtLeastOnceCassandraProjection[Envelope]
+    with javadsl.AtMostOnceCassandraProjection[Envelope]
+    with scaladsl.AtMostOnceCassandraProjection[Envelope] {
   import CassandraProjectionImpl._
   import HandlerRecoveryImpl.applyUserRecovery
 
@@ -115,6 +95,27 @@ import akka.stream.scaladsl.Source
       strategy
         .asInstanceOf[AtLeastOnce]
         .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration.toScala)),
+      settingsOpt,
+      handler)
+
+  override def withAtLeastOnceRecoveryStrategy(
+      recoveryStrategy: AtLeastOnceRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
+    new CassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      atLeastOnceStrategy.copy(recoveryStrategy = Some(recoveryStrategy)),
+      settingsOpt,
+      handler)
+
+  /**
+   * Settings for AtMostOnceCassandraProjection
+   */
+  override def withAtMostOnceRecoveryStrategy(
+      recoveryStrategy: AtMostOnceRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
+    new CassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      atMostOnceStrategy.copy(recoveryStrategy = Some(recoveryStrategy)),
       settingsOpt,
       handler)
 
@@ -175,47 +176,40 @@ import akka.stream.scaladsl.Source
           .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
           .mapMaterializedValue(_ => NotUsed)
 
-      val handlerFlow: Flow[(Offset, Envelope), Offset, NotUsed] =
+      def handlerFlow(recoveryStrategy: HandlerRecoveryStrategy): Flow[(Offset, Envelope), Offset, NotUsed] =
         Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
           case (offset, envelope) =>
-            applyUserRecovery(handler, envelope, offset, logger, () => handler.process(envelope))
+            applyUserRecovery(recoveryStrategy, offset, logger, () => handler.process(envelope))
               .map(_ => offset)
         }
 
       val composedSource: Source[Done, NotUsed] = strategy match {
-        case AtLeastOnce(afterEnvelopesOpt, orAfterDurationOpt) =>
+        case AtLeastOnce(afterEnvelopesOpt, orAfterDurationOpt, recoveryStrategyOpt) =>
           val afterEnvelopes = afterEnvelopesOpt.getOrElse(settings.saveOffsetAfterEnvelopes)
           val orAfterDuration = orAfterDurationOpt.getOrElse(settings.saveOffsetAfterDuration)
+          val recoveryStrategy = recoveryStrategyOpt.getOrElse(settings.recoveryStrategy)
 
           if (afterEnvelopes == 1)
             // optimization of general AtLeastOnce case
-            source.via(handlerFlow).mapAsync(1) { offset =>
+            source.via(handlerFlow(recoveryStrategy)).mapAsync(1) { offset =>
               offsetStore.saveOffset(projectionId, offset)
             }
           else
             source
-              .via(handlerFlow)
+              .via(handlerFlow(recoveryStrategy))
               .groupedWithin(afterEnvelopes, orAfterDuration)
               .collect { case grouped if grouped.nonEmpty => grouped.last }
               .mapAsync(parallelism = 1) { offset =>
                 offsetStore.saveOffset(projectionId, offset)
               }
-        case AtMostOnce =>
-          // prevent usage of retries for at-most-once
-          val atMostOnceHandler = new AtMostOnceHandler(handler, logger)
+        case AtMostOnce(recoveryStrategyOpt) =>
+          val recoveryStrategy = recoveryStrategyOpt.getOrElse(settings.recoveryStrategy)
           source
             .mapAsync(parallelism = 1) {
               case (offset, envelope) =>
                 offsetStore
                   .saveOffset(projectionId, offset)
-                  .flatMap(
-                    _ =>
-                      applyUserRecovery(
-                        atMostOnceHandler,
-                        envelope,
-                        offset,
-                        logger,
-                        () => atMostOnceHandler.process(envelope)))
+                  .flatMap(_ => applyUserRecovery(recoveryStrategy, offset, logger, () => handler.process(envelope)))
             }
             .map(_ => Done)
       }

@@ -22,6 +22,7 @@ trait ProjectionSettings {
   def maxRestarts: Int
   def saveOffsetAfterEnvelopes: Int
   def saveOffsetAfterDuration: FiniteDuration
+  def recoveryStrategy: HandlerRecoveryStrategy
 
   def withBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double): ProjectionSettings
 
@@ -63,13 +64,15 @@ object ProjectionSettings {
   def fromConfig(config: Config) = {
     val restartBackoffConfig = config.getConfig("restart-backoff")
     val atLeastOnceConfig = config.getConfig("at-least-once")
+    val recoveryStrategyConfig = config.getConfig("recovery-strategy")
     new ProjectionSettingsImpl(
       restartBackoffConfig.getDuration("min-backoff", MILLISECONDS).millis,
       restartBackoffConfig.getDuration("max-backoff", MILLISECONDS).millis,
       restartBackoffConfig.getDouble("random-factor"),
       restartBackoffConfig.getInt("max-restarts"),
       atLeastOnceConfig.getInt("save-offset-after-envelopes"),
-      atLeastOnceConfig.getDuration("save-offset-after-duration", MILLISECONDS).millis)
+      atLeastOnceConfig.getDuration("save-offset-after-duration", MILLISECONDS).millis,
+      RecoveryStrategyConfig.fromConfig(recoveryStrategyConfig))
   }
 }
 
@@ -83,7 +86,8 @@ private[akka] class ProjectionSettingsImpl(
     val randomFactor: Double,
     val maxRestarts: Int,
     val saveOffsetAfterEnvelopes: Int,
-    val saveOffsetAfterDuration: FiniteDuration)
+    val saveOffsetAfterDuration: FiniteDuration,
+    val recoveryStrategy: HandlerRecoveryStrategy)
     extends ProjectionSettings {
 
   /**
@@ -131,12 +135,29 @@ private[akka] class ProjectionSettingsImpl(
       randomFactor: Double = randomFactor,
       maxRestarts: Int = maxRestarts,
       saveOffsetAfterEnvelopes: Int = saveOffsetAfterEnvelopes,
-      saveOffsetAfterDuration: FiniteDuration = saveOffsetAfterDuration): ProjectionSettings =
+      saveOffsetAfterDuration: FiniteDuration = saveOffsetAfterDuration,
+      recoveryStrategy: HandlerRecoveryStrategy = recoveryStrategy): ProjectionSettings =
     new ProjectionSettingsImpl(
       minBackoff,
       maxBackoff,
       randomFactor,
       maxRestarts,
       saveOffsetAfterEnvelopes,
-      saveOffsetAfterDuration)
+      saveOffsetAfterDuration,
+      recoveryStrategy)
+}
+
+private object RecoveryStrategyConfig {
+  def fromConfig(config: Config): HandlerRecoveryStrategy = {
+    val strategy = config.getString("strategy")
+    val retries = config.getInt("retries")
+    val retryDelay = config.getDuration("retry-delay", MILLISECONDS).millis
+
+    strategy match {
+      case "fail"           => HandlerRecoveryStrategy.fail
+      case "skip"           => HandlerRecoveryStrategy.skip
+      case "retry-and-fail" => HandlerRecoveryStrategy.retryAndFail(retries, retryDelay)
+      case "retry-and-skip" => HandlerRecoveryStrategy.retryAndSkip(retries, retryDelay)
+    }
+  }
 }

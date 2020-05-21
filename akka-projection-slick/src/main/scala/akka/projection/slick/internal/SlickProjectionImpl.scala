@@ -130,8 +130,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
       implicit val dispatcher = systemProvider.classicSystem.dispatcher
 
+      // TODO: Implement HandlerRecoveryStrategy for Slick
       def applyUserRecovery(envelope: Envelope, offset: Offset)(futureCallback: () => Future[Done]): Future[Done] =
-        HandlerRecoveryImpl.applyUserRecovery[Offset, Envelope](handler, envelope, offset, logger, futureCallback)
+        HandlerRecoveryImpl.applyUserRecovery[Offset](null, offset, logger, futureCallback)
 
       def processEnvelopeAndStoreOffsetInSameTransaction(env: Envelope): Future[Done] = {
         val offset = sourceProvider.extractOffset(env)

@@ -177,7 +177,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
     }
 
-    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = recoveryStrategy
+    // TODO: Implement HandlerRecoveryStrategy for Slick
+    //override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = recoveryStrategy
   }
 
   "A Slick exactly-once projection" must {

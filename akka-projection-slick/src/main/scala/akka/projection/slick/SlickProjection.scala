@@ -11,7 +11,6 @@ import scala.reflect.ClassTag
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
-import akka.projection.HandlerRecovery
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
@@ -110,11 +109,11 @@ object SlickHandler {
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
  *
- * Error handling strategy for when processing an `Envelope` fails can be defined in the `Handler` by
- * overriding [[HandlerRecovery.onFailure]].
+ * Error handling strategy for when processing an `Envelope` fails can be defined in the supported
+ * [[HandlerRecoveryStrategyHandler]] in settings or passed to the [[akka.projection.Projection]].
  */
 @ApiMayChange
-trait SlickHandler[Envelope] extends HandlerRecovery[Envelope] with HandlerLifecycle {
+trait SlickHandler[Envelope] extends HandlerLifecycle {
 
   def process(envelope: Envelope): DBIO[Done]
 
