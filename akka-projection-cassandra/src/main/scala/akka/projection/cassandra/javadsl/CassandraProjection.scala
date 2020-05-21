@@ -10,6 +10,7 @@ import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
+import akka.projection.HandlerRecoveryStrategy.Internal.AtLeastOnceRecoveryStrategy
 import akka.projection.HandlerRecoveryStrategy.Internal.AtMostOnceRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
@@ -68,6 +69,8 @@ object CassandraProjection {
    */
   def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done]
 
+  def withAtLeastOnceRecoveryStrategy(
+      recoveryStrategy: AtLeastOnceRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
 }
 
 @DoNotInherit trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
