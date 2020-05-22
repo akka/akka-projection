@@ -77,6 +77,5 @@ trait CassandraProjection[Envelope] extends Projection[Envelope] {
 trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
-  def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): AtLeastOnceCassandraProjection[Envelope]
-  def withSaveOffsetAfterDuration(afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Envelope]
+  def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Envelope]
 }

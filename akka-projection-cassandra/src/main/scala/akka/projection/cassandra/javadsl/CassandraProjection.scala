@@ -69,6 +69,5 @@ object CassandraProjection {
 @DoNotInherit trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
-  def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): AtLeastOnceCassandraProjection[Envelope]
-  def withSaveOffsetAfterDuration(afterDuration: java.time.Duration): AtLeastOnceCassandraProjection[Envelope]
+  def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceCassandraProjection[Envelope]
 }

@@ -91,31 +91,30 @@ import akka.stream.scaladsl.Source
   /**
    * Settings for AtLeastOnceCassandraProjection
    */
-  override def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): CassandraProjectionImpl[Offset, Envelope] =
+  override def withSaveOffset(
+      afterEnvelopes: Int,
+      afterDuration: FiniteDuration): CassandraProjectionImpl[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      strategy.asInstanceOf[AtLeastOnce].copy(afterEnvelopes = Some(afterEnvelopes)),
-      settingsOpt,
-      handler)
-
-  override def withSaveOffsetAfterDuration(afterDuration: FiniteDuration): CassandraProjectionImpl[Offset, Envelope] =
-    new CassandraProjectionImpl(
-      projectionId,
-      sourceProvider,
-      strategy.asInstanceOf[AtLeastOnce].copy(orAfterDuration = Some(afterDuration)),
+      strategy
+        .asInstanceOf[AtLeastOnce]
+        .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)),
       settingsOpt,
       handler)
 
   /**
    * Java API
    */
-  override def withSaveOffsetAfterDuration(
+  override def withSaveOffset(
+      afterEnvelopes: Int,
       afterDuration: java.time.Duration): CassandraProjectionImpl[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      strategy.asInstanceOf[AtLeastOnce].copy(orAfterDuration = Some(afterDuration.toScala)),
+      strategy
+        .asInstanceOf[AtLeastOnce]
+        .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration.toScala)),
       settingsOpt,
       handler)
 

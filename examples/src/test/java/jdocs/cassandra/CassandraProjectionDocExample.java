@@ -88,8 +88,7 @@ public interface CassandraProjectionDocExample {
         sourceProvider,
         new ShoppingCartHandler()
       )
-      .withSaveOffsetAfterEnvelopes(saveOffsetAfterEnvelopes)
-      .withSaveOffsetAfterDuration(saveOffsetAfterDuration);
+      .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     //#atLeastOnce
 
   }
@@ -133,8 +132,7 @@ public interface CassandraProjectionDocExample {
         sourceProvider(tag),
         new ShoppingCartHandler()
       )
-      .withSaveOffsetAfterEnvelopes(saveOffsetAfterEnvelopes)
-      .withSaveOffsetAfterDuration(saveOffsetAfterDuration);
+      .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     }
     //#running-projection
 
@@ -179,8 +177,7 @@ public interface CassandraProjectionDocExample {
                                     0.5 /*randomFactor*/
                             )
             )
-            .withSaveOffsetAfterEnvelopes(saveOffsetAfterEnvelopes)
-            .withSaveOffsetAfterDuration(saveOffsetAfterDuration);
+            .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     //#projection-settings
 
   }
