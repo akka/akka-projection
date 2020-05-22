@@ -20,6 +20,8 @@ trait ProjectionSettings {
   def maxBackoff: FiniteDuration
   def randomFactor: Double
   def maxRestarts: Int
+  def saveOffsetAfterEnvelopes: Int
+  def saveOffsetAfterDuration: FiniteDuration
 
   def withBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double): ProjectionSettings
 
@@ -55,16 +57,20 @@ object ProjectionSettings {
   def create(system: ClassicActorSystemProvider): ProjectionSettings = apply(system)
 
   def apply(system: ClassicActorSystemProvider): ProjectionSettings = {
-    fromConfig(system.classicSystem.settings.config.getConfig("akka.projection.restart-backoff"))
+    fromConfig(system.classicSystem.settings.config.getConfig("akka.projection"))
   }
 
-  def fromConfig(config: Config) =
+  def fromConfig(config: Config) = {
+    val restartBackoffConfig = config.getConfig("restart-backoff")
+    val atLeastOnceConfig = config.getConfig("at-least-once")
     new ProjectionSettingsImpl(
-      config.getDuration("min-backoff", MILLISECONDS).millis,
-      config.getDuration("max-backoff", MILLISECONDS).millis,
-      config.getDouble("random-factor"),
-      config.getInt("max-restarts"))
-
+      restartBackoffConfig.getDuration("min-backoff", MILLISECONDS).millis,
+      restartBackoffConfig.getDuration("max-backoff", MILLISECONDS).millis,
+      restartBackoffConfig.getDouble("random-factor"),
+      restartBackoffConfig.getInt("max-restarts"),
+      atLeastOnceConfig.getInt("save-offset-after-envelopes"),
+      atLeastOnceConfig.getDuration("save-offset-after-duration", MILLISECONDS).millis)
+  }
 }
 
 /**
@@ -75,7 +81,9 @@ private[akka] class ProjectionSettingsImpl(
     val minBackoff: FiniteDuration,
     val maxBackoff: FiniteDuration,
     val randomFactor: Double,
-    val maxRestarts: Int)
+    val maxRestarts: Int,
+    val saveOffsetAfterEnvelopes: Int,
+    val saveOffsetAfterDuration: FiniteDuration)
     extends ProjectionSettings {
 
   /**
@@ -92,7 +100,7 @@ private[akka] class ProjectionSettingsImpl(
       maxBackoff: FiniteDuration,
       randomFactor: Double,
       maxRestarts: Int): ProjectionSettings =
-    new ProjectionSettingsImpl(minBackoff, maxBackoff, randomFactor, maxRestarts)
+    copy(minBackoff = minBackoff, maxBackoff = maxBackoff, randomFactor = randomFactor, maxRestarts = maxRestarts)
 
   /**
    * Java API
@@ -111,5 +119,24 @@ private[akka] class ProjectionSettingsImpl(
       maxBackoff: time.Duration,
       randomFactor: Double,
       maxRestarts: Int): ProjectionSettings =
-    new ProjectionSettingsImpl(minBackoff.asScala, maxBackoff.asScala, randomFactor, maxRestarts)
+    copy(
+      minBackoff = minBackoff.asScala,
+      maxBackoff = maxBackoff.asScala,
+      randomFactor = randomFactor,
+      maxRestarts = maxRestarts)
+
+  private[akka] def copy(
+      minBackoff: FiniteDuration = minBackoff,
+      maxBackoff: FiniteDuration = maxBackoff,
+      randomFactor: Double = randomFactor,
+      maxRestarts: Int = maxRestarts,
+      saveOffsetAfterEnvelopes: Int = saveOffsetAfterEnvelopes,
+      saveOffsetAfterDuration: FiniteDuration = saveOffsetAfterDuration): ProjectionSettings =
+    new ProjectionSettingsImpl(
+      minBackoff,
+      maxBackoff,
+      randomFactor,
+      maxRestarts,
+      saveOffsetAfterEnvelopes,
+      saveOffsetAfterDuration)
 }

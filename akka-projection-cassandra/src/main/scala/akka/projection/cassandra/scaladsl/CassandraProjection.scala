@@ -37,13 +37,11 @@ object CassandraProjection {
   def atLeastOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      saveOffsetAfterEnvelopes: Int,
-      saveOffsetAfterDuration: FiniteDuration,
-      handler: Handler[Envelope]): CassandraProjection[Envelope] =
+      handler: Handler[Envelope]): AtLeastOnceCassandraProjection[Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      CassandraProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
+      CassandraProjectionImpl.AtLeastOnce(),
       settingsOpt = None,
       handler)
 
@@ -74,4 +72,10 @@ trait CassandraProjection[Envelope] extends Projection[Envelope] {
    * before the system is started.
    */
   def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done]
+}
+
+trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
+
+  def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Envelope]
 }

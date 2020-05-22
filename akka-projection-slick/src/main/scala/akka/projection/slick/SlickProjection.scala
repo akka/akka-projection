@@ -14,6 +14,7 @@ import akka.annotation.ApiMayChange
 import akka.projection.HandlerRecovery
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.internal.SlickProjectionImpl
@@ -58,20 +59,19 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      saveOffsetAfterEnvelopes: Int,
-      saveOffsetAfterDuration: FiniteDuration,
-      handler: SlickHandler[Envelope]): SlickProjection[Envelope] =
+      handler: SlickHandler[Envelope]): AtLeastOnceSlickProjection[Envelope] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
       databaseConfig,
-      SlickProjectionImpl.AtLeastOnce(saveOffsetAfterEnvelopes, saveOffsetAfterDuration),
+      SlickProjectionImpl.AtLeastOnce(),
       settingsOpt = None,
       handler)
 
 }
 
 trait SlickProjection[Envelope] extends Projection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): SlickProjection[Envelope]
 
   /**
    * For testing purposes the offset table can be created programmatically.
@@ -79,6 +79,17 @@ trait SlickProjection[Envelope] extends Projection[Envelope] {
    * before the system is started.
    */
   def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done]
+}
+
+trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): AtLeastOnceSlickProjection[Envelope]
+
+  def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Envelope]
+
+  /**
+   * Java API
+   */
+  def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceSlickProjection[Envelope]
 }
 
 object SlickHandler {

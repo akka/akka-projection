@@ -9,6 +9,7 @@ import java.util.concurrent.CompletionStage
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.DurationConverters._
 
 import akka.Done
 import akka.NotUsed
@@ -21,8 +22,8 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
-import akka.projection.cassandra.scaladsl
 import akka.projection.cassandra.javadsl
+import akka.projection.cassandra.scaladsl
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
@@ -38,7 +39,8 @@ import akka.stream.scaladsl.Source
 @InternalApi private[akka] object CassandraProjectionImpl {
   sealed trait Strategy
   case object AtMostOnce extends Strategy
-  final case class AtLeastOnce(afterEnvelopes: Int, orAfterDuration: FiniteDuration) extends Strategy
+  final case class AtLeastOnce(afterEnvelopes: Option[Int] = None, orAfterDuration: Option[FiniteDuration] = None)
+      extends Strategy
   import HandlerRecoveryStrategy.Internal._
 
   /**
@@ -77,13 +79,44 @@ import akka.stream.scaladsl.Source
     settingsOpt: Option[ProjectionSettings],
     handler: Handler[Envelope])
     extends javadsl.CassandraProjection[Envelope]
-    with scaladsl.CassandraProjection[Envelope] {
+    with scaladsl.CassandraProjection[Envelope]
+    with javadsl.AtLeastOnceCassandraProjection[Envelope]
+    with scaladsl.AtLeastOnceCassandraProjection[Envelope] {
   import CassandraProjectionImpl._
   import HandlerRecoveryImpl.applyUserRecovery
 
-  override def withSettings(settings: ProjectionSettings): CassandraProjectionImpl[Offset, Envelope] = {
+  override def withSettings(settings: ProjectionSettings): CassandraProjectionImpl[Offset, Envelope] =
     new CassandraProjectionImpl(projectionId, sourceProvider, strategy, Option(settings), handler)
-  }
+
+  /**
+   * Settings for AtLeastOnceCassandraProjection
+   */
+  override def withSaveOffset(
+      afterEnvelopes: Int,
+      afterDuration: FiniteDuration): CassandraProjectionImpl[Offset, Envelope] =
+    new CassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      strategy
+        .asInstanceOf[AtLeastOnce]
+        .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)),
+      settingsOpt,
+      handler)
+
+  /**
+   * Java API
+   */
+  override def withSaveOffset(
+      afterEnvelopes: Int,
+      afterDuration: java.time.Duration): CassandraProjectionImpl[Offset, Envelope] =
+    new CassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      strategy
+        .asInstanceOf[AtLeastOnce]
+        .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration.toScala)),
+      settingsOpt,
+      handler)
 
   /**
    * INTERNAL API
@@ -150,19 +183,23 @@ import akka.stream.scaladsl.Source
         }
 
       val composedSource: Source[Done, NotUsed] = strategy match {
-        case AtLeastOnce(1, _) =>
-          // optimization of general AtLeastOnce case
-          source.via(handlerFlow).mapAsync(1) { offset =>
-            offsetStore.saveOffset(projectionId, offset)
-          }
-        case AtLeastOnce(afterEnvelopes, orAfterDuration) =>
-          source
-            .via(handlerFlow)
-            .groupedWithin(afterEnvelopes, orAfterDuration)
-            .collect { case grouped if grouped.nonEmpty => grouped.last }
-            .mapAsync(parallelism = 1) { offset =>
+        case AtLeastOnce(afterEnvelopesOpt, orAfterDurationOpt) =>
+          val afterEnvelopes = afterEnvelopesOpt.getOrElse(settings.saveOffsetAfterEnvelopes)
+          val orAfterDuration = orAfterDurationOpt.getOrElse(settings.saveOffsetAfterDuration)
+
+          if (afterEnvelopes == 1)
+            // optimization of general AtLeastOnce case
+            source.via(handlerFlow).mapAsync(1) { offset =>
               offsetStore.saveOffset(projectionId, offset)
             }
+          else
+            source
+              .via(handlerFlow)
+              .groupedWithin(afterEnvelopes, orAfterDuration)
+              .collect { case grouped if grouped.nonEmpty => grouped.last }
+              .mapAsync(parallelism = 1) { offset =>
+                offsetStore.saveOffset(projectionId, offset)
+              }
         case AtMostOnce =>
           // prevent usage of retries for at-most-once
           val atMostOnceHandler = new AtMostOnceHandler(handler, logger)

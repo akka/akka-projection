@@ -7,7 +7,6 @@ package docs.slick
 import java.time.Instant
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
@@ -26,9 +25,10 @@ import slick.jdbc.H2Profile
 //#projection-imports
 
 //#handler-imports
-import akka.projection.slick.SlickHandler
 import scala.concurrent.Future
+
 import akka.Done
+import akka.projection.slick.SlickHandler
 import org.slf4j.LoggerFactory
 
 //#handler-imports
@@ -111,13 +111,12 @@ class SlickProjectionDocExample {
     implicit val ec = system.executionContext
 
     val projection =
-      SlickProjection.atLeastOnce(
-        projectionId = ProjectionId("ShoppingCarts", "carts-1"),
-        sourceProvider,
-        dbConfig,
-        saveOffsetAfterEnvelopes = 100,
-        saveOffsetAfterDuration = 500.millis,
-        handler = new ShoppingCartHandler(repository))
+      SlickProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("ShoppingCarts", "carts-1"),
+          sourceProvider,
+          dbConfig,
+          handler = new ShoppingCartHandler(repository))
     //#atLeastOnce
   }
 

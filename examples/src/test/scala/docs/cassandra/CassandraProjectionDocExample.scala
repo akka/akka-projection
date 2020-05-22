@@ -7,36 +7,38 @@ package docs.cassandra
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 //#daemon-imports
-import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
+import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.projection.ProjectionBehavior
 
 //#daemon-imports
 
 //#source-provider-imports
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.eventsourced.EventEnvelope
+import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import docs.eventsourced.ShoppingCart
 
 //#source-provider-imports
 
 //#projection-imports
-import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.ProjectionId
+import akka.projection.cassandra.scaladsl.CassandraProjection
 
 //#projection-imports
 
 //#projection-settings-imports
-import akka.projection.ProjectionSettings
 import scala.concurrent.duration._
+
+import akka.projection.ProjectionSettings
 //#projection-settings-imports
 
 //#handler-imports
-import akka.projection.scaladsl.Handler
-import akka.Done
-import org.slf4j.LoggerFactory
 import scala.concurrent.Future
+
+import akka.Done
+import akka.projection.scaladsl.Handler
+import org.slf4j.LoggerFactory
 
 //#handler-imports
 
@@ -71,12 +73,12 @@ object CassandraProjectionDocExample {
   object IllustrateAtLeastOnce {
     //#atLeastOnce
     val projection =
-      CassandraProjection.atLeastOnce(
-        projectionId = ProjectionId("shopping-carts", "carts-1"),
-        sourceProvider,
-        saveOffsetAfterEnvelopes = 100,
-        saveOffsetAfterDuration = 500.millis,
-        handler = new ShoppingCartHandler)
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider,
+          handler = new ShoppingCartHandler)
+        .withSaveOffset(100, 500.millis)
     //#atLeastOnce
   }
 
@@ -103,12 +105,12 @@ object CassandraProjectionDocExample {
 
     //#running-projection
     def projection(tag: String) =
-      CassandraProjection.atLeastOnce(
-        projectionId = ProjectionId("shopping-carts", tag),
-        sourceProvider(tag),
-        saveOffsetAfterEnvelopes = 100,
-        saveOffsetAfterDuration = 500.millis,
-        handler = new ShoppingCartHandler)
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", tag),
+          sourceProvider(tag),
+          handler = new ShoppingCartHandler)
+        .withSaveOffset(100, 500.millis)
     //#running-projection
 
     //#running-with-daemon-process
@@ -129,11 +131,10 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          saveOffsetAfterEnvelopes = 100,
-          saveOffsetAfterDuration = 500.millis,
           handler = new ShoppingCartHandler)
         .withSettings(ProjectionSettings(system)
           .withBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5))
+        .withSaveOffset(100, 500.millis)
     //#projection-settings
 
   }
