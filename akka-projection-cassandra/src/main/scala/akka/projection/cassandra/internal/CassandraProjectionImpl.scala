@@ -62,6 +62,7 @@ import akka.stream.scaladsl.Source
     with scaladsl.AtLeastOnceCassandraProjection[Envelope]
     with javadsl.AtMostOnceCassandraProjection[Envelope]
     with scaladsl.AtMostOnceCassandraProjection[Envelope] {
+
   import CassandraProjectionImpl._
   import HandlerRecoveryImpl.applyUserRecovery
 
@@ -202,8 +203,10 @@ import akka.stream.scaladsl.Source
               .mapAsync(parallelism = 1) { offset =>
                 offsetStore.saveOffset(projectionId, offset)
               }
+
         case AtMostOnce(recoveryStrategyOpt) =>
           val recoveryStrategy = recoveryStrategyOpt.getOrElse(settings.recoveryStrategy)
+
           source
             .mapAsync(parallelism = 1) {
               case (offset, envelope) =>

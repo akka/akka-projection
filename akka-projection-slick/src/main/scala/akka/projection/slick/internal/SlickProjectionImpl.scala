@@ -52,8 +52,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     settingsOpt: Option[ProjectionSettings],
     handler: SlickHandler[Envelope])
     extends SlickProjection[Envelope]
-    with AtLeastOnceSlickProjection[Envelope]
-    with ExactlyOnceSlickProjection[Envelope] {
+    with ExactlyOnceSlickProjection[Envelope]
+    with AtLeastOnceSlickProjection[Envelope] {
+
   import SlickProjectionImpl._
 
   override def withSettings(settings: ProjectionSettings): SlickProjectionImpl[Offset, Envelope, P] =
