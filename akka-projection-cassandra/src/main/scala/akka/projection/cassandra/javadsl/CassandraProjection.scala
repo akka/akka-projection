@@ -13,8 +13,8 @@ import akka.annotation.DoNotInherit
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.cassandra.internal.HandlerAdapter
-import akka.projection.cassandra.scaladsl
 import akka.projection.internal.SourceProviderAdapter
 import akka.projection.javadsl.Handler
 import akka.projection.javadsl.SourceProvider
@@ -35,10 +35,12 @@ object CassandraProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       handler: Handler[Envelope]): AtLeastOnceCassandraProjection[Envelope] =
-    // FIXME refactor SourceProviderAdapter into CassandraProjectionProviderAdapter?
-    scaladsl.CassandraProjection
-      .atLeastOnce(projectionId, new SourceProviderAdapter(sourceProvider), new HandlerAdapter(handler))
-      .asInstanceOf[AtLeastOnceCassandraProjection[Envelope]]
+    new CassandraProjectionImpl(
+      projectionId,
+      new SourceProviderAdapter(sourceProvider),
+      CassandraProjectionImpl.AtLeastOnce(),
+      settingsOpt = None,
+      new HandlerAdapter(handler))
 
   /**
    * Create a [[Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
