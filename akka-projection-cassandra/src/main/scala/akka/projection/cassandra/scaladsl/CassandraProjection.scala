@@ -10,11 +10,11 @@ import scala.concurrent.duration.FiniteDuration
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
-import akka.projection.HandlerRecoveryStrategy.Internal.AtLeastOnceRecoveryStrategy
-import akka.projection.HandlerRecoveryStrategy.Internal.AtMostOnceRecoveryStrategy
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.cassandra.internal.CassandraProjectionImpl.AtLeastOnce
 import akka.projection.cassandra.internal.CassandraProjectionImpl.AtMostOnce
@@ -86,8 +86,7 @@ trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envel
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Envelope]
-  def withAtLeastOnceRecoveryStrategy(
-      recoveryStrategy: AtLeastOnceRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
 }
 
 trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
@@ -95,6 +94,5 @@ trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelo
 
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
-  def withAtMostOnceRecoveryStrategy(
-      recoveryStrategy: AtMostOnceRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
+  def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
 }

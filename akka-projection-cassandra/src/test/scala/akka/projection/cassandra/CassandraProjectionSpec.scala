@@ -404,7 +404,7 @@ class CassandraProjectionSpec
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), concatHandlerFail4())
           .withSaveOffset(2, 1.minute)
-          .withAtLeastOnceRecoveryStrategy(HandlerRecoveryStrategy.skip)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(projection) {
         withClue("checking: all expected values were concatenated") {
@@ -430,7 +430,7 @@ class CassandraProjectionSpec
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
           .withSaveOffset(2, 1.minute)
-          .withAtLeastOnceRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
 
       projectionTestKit.run(projection) {
         withClue("checking: all expected values were concatenated") {
@@ -461,7 +461,7 @@ class CassandraProjectionSpec
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
           .withSaveOffset(2, 1.minute)
-          .withAtLeastOnceRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
       intercept[TestException] {
         projectionTestKit.run(projection) {

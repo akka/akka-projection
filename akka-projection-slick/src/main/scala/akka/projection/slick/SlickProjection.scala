@@ -11,8 +11,7 @@ import scala.reflect.ClassTag
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
-import akka.projection.HandlerRecoveryStrategy.Internal.AtLeastOnceRecoveryStrategy
-import akka.projection.HandlerRecoveryStrategy.Internal.ExactlyOnceRecoveryStrategy
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
@@ -99,8 +98,7 @@ trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
    */
   def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceSlickProjection[Envelope]
 
-  def withAtLeastOnceRecoveryStrategy(
-      recoveryStrategy: AtLeastOnceRecoveryStrategy): AtLeastOnceSlickProjection[Envelope]
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceSlickProjection[Envelope]
 }
 
 trait ExactlyOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
@@ -108,8 +106,7 @@ trait ExactlyOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
 
   override def withSettings(settings: ProjectionSettings): ExactlyOnceSlickProjection[Envelope]
 
-  def withExactlyOnceRecoveryStrategy(
-      recoveryStrategy: ExactlyOnceRecoveryStrategy): ExactlyOnceSlickProjection[Envelope]
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceSlickProjection[Envelope]
 }
 
 object SlickHandler {

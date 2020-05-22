@@ -228,7 +228,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             handler = bogusEventHandler)
-          .withExactlyOnceRecoveryStrategy(HandlerRecoveryStrategy.skip)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - not all values were concatenated") {
@@ -260,7 +260,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             handler = bogusEventHandler)
-          .withExactlyOnceRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
 
       projectionTestKit.run(slickProjection) {
         withClue("check - not all values were concatenated") {
@@ -293,7 +293,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             bogusEventHandler)
-          .withExactlyOnceRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -545,7 +545,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             eventHandler)
-          .withAtLeastOnceRecoveryStrategy(HandlerRecoveryStrategy.skip)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {
@@ -577,7 +577,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             databaseConfig = dbConfig,
             eventHandler)
           .withSaveOffset(2, 1.minute)
-          .withAtLeastOnceRecoveryStrategy(HandlerRecoveryStrategy.skip)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {

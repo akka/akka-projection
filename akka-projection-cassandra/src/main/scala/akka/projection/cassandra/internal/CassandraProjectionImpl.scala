@@ -18,11 +18,10 @@ import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
-import akka.projection.HandlerRecoveryStrategy.Internal.AtLeastOnceRecoveryStrategy
-import akka.projection.HandlerRecoveryStrategy.Internal.AtMostOnceRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
+import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.javadsl
 import akka.projection.cassandra.scaladsl
 import akka.projection.internal.HandlerRecoveryImpl
@@ -78,8 +77,7 @@ import akka.stream.scaladsl.Source
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      strategy
-        .asInstanceOf[AtLeastOnce]
+      atLeastOnceStrategy
         .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)),
       settingsOpt,
       handler)
@@ -93,14 +91,13 @@ import akka.stream.scaladsl.Source
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      strategy
-        .asInstanceOf[AtLeastOnce]
+      atLeastOnceStrategy
         .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration.toScala)),
       settingsOpt,
       handler)
 
-  override def withAtLeastOnceRecoveryStrategy(
-      recoveryStrategy: AtLeastOnceRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
+  override def withRecoveryStrategy(
+      recoveryStrategy: HandlerRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
@@ -111,8 +108,8 @@ import akka.stream.scaladsl.Source
   /**
    * Settings for AtMostOnceCassandraProjection
    */
-  override def withAtMostOnceRecoveryStrategy(
-      recoveryStrategy: AtMostOnceRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
+  override def withRecoveryStrategy(
+      recoveryStrategy: StrictRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,

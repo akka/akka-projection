@@ -193,7 +193,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
               // do something with the record, payload in record.value
               failingRepository.incrementCount(projectionId, userEvent.eventType)
             })
-          .withExactlyOnceRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis))
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis))
 
       projectionTestKit.run(slickProjection, remainingOrDefault) {
         assertEventTypeCount(projectionId)

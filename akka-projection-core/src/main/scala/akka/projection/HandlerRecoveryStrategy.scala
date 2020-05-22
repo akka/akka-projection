@@ -14,6 +14,8 @@ import akka.util.JavaDurationConverters._
  * or may be mixed into a [[Projection]] when supported.
  */
 sealed trait HandlerRecoveryStrategy
+sealed trait StrictRecoveryStrategy extends HandlerRecoveryStrategy
+sealed trait RetryRecoveryStrategy extends HandlerRecoveryStrategy
 
 object HandlerRecoveryStrategy {
   import Internal._
@@ -22,20 +24,20 @@ object HandlerRecoveryStrategy {
    * If the first attempt to invoke the handler fails it will immediately give up
    * and fail the stream.
    */
-  def fail: AllRecoveryStrategies = Fail
+  def fail: HandlerRecoveryStrategy = Fail
 
   /**
    * If the first attempt to invoke the handler fails it will immediately give up,
    * discard the element and continue with next.
    */
-  def skip: AllRecoveryStrategies = Skip
+  def skip: HandlerRecoveryStrategy = Skip
 
   /**
    * Scala API: If the first attempt to invoke the handler fails it will retry invoking the handler with the
    * same envelope this number of `retries` with the `delay` between each attempt. It will give up
    * and fail the stream if all attempts fail.
    */
-  def retryAndFail(retries: Int, delay: FiniteDuration): AtLeastOrExactlyOnceStrategies =
+  def retryAndFail(retries: Int, delay: FiniteDuration): HandlerRecoveryStrategy =
     if (retries < 1) fail else RetryAndFail(retries, delay)
 
   /**
@@ -43,7 +45,7 @@ object HandlerRecoveryStrategy {
    * same envelope this number of `retries` with the `delay` between each attempt. It will give up
    * and fail the stream if all attempts fail.
    */
-  def retryAndFail(retries: Int, delay: java.time.Duration): AtLeastOrExactlyOnceStrategies =
+  def retryAndFail(retries: Int, delay: java.time.Duration): HandlerRecoveryStrategy =
     retryAndFail(retries, delay.asScala)
 
   /**
@@ -51,7 +53,7 @@ object HandlerRecoveryStrategy {
    * same envelope this number of `retries` with the `delay` between each attempt. It will give up,
    * discard the element and continue with next if all attempts fail.
    */
-  def retryAndSkip(retries: Int, delay: FiniteDuration): AtLeastOrExactlyOnceStrategies =
+  def retryAndSkip(retries: Int, delay: FiniteDuration): HandlerRecoveryStrategy =
     if (retries < 1) fail else RetryAndSkip(retries, delay)
 
   /**
@@ -59,39 +61,20 @@ object HandlerRecoveryStrategy {
    * same envelope this number of `retries` with the `delay` between each attempt. It will give up,
    * discard the element and continue with next if all attempts fail.
    */
-  def retryAndSkip(retries: Int, delay: java.time.Duration): AtLeastOrExactlyOnceStrategies =
+  def retryAndSkip(retries: Int, delay: java.time.Duration): HandlerRecoveryStrategy =
     retryAndSkip(retries, delay.asScala)
 
   /**
    * INTERNAL API: placed here instead of the `internal` package because of sealed trait
    */
   @InternalApi private[akka] object Internal {
-    sealed trait AtMostOnceRecoveryStrategy extends HandlerRecoveryStrategy
-    sealed trait AtLeastOnceRecoveryStrategy extends HandlerRecoveryStrategy
-    sealed trait ExactlyOnceRecoveryStrategy extends HandlerRecoveryStrategy
+    case object Fail extends StrictRecoveryStrategy with RetryRecoveryStrategy
+    case object Skip extends StrictRecoveryStrategy with RetryRecoveryStrategy
 
-    final type AllRecoveryStrategies = AtMostOnceRecoveryStrategy
-      with AtLeastOnceRecoveryStrategy
-      with ExactlyOnceRecoveryStrategy
-
-    final type AtLeastOrExactlyOnceStrategies = AtLeastOnceRecoveryStrategy with ExactlyOnceRecoveryStrategy
-
-    case object Fail
-        extends AtMostOnceRecoveryStrategy
-        with AtLeastOnceRecoveryStrategy
-        with ExactlyOnceRecoveryStrategy
-    case object Skip
-        extends AtMostOnceRecoveryStrategy
-        with AtLeastOnceRecoveryStrategy
-        with ExactlyOnceRecoveryStrategy
-    final case class RetryAndFail(retries: Int, delay: FiniteDuration)
-        extends AtLeastOnceRecoveryStrategy
-        with ExactlyOnceRecoveryStrategy {
+    final case class RetryAndFail(retries: Int, delay: FiniteDuration) extends RetryRecoveryStrategy {
       require(retries > 0, "retries must be > 0")
     }
-    final case class RetryAndSkip(retries: Int, delay: FiniteDuration)
-        extends AtLeastOnceRecoveryStrategy
-        with ExactlyOnceRecoveryStrategy {
+    final case class RetryAndSkip(retries: Int, delay: FiniteDuration) extends RetryRecoveryStrategy {
       require(retries > 0, "retries must be > 0")
     }
   }

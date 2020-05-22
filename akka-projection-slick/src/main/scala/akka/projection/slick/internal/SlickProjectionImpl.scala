@@ -14,8 +14,6 @@ import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
-import akka.projection.HandlerRecoveryStrategy.Internal.AtLeastOnceRecoveryStrategy
-import akka.projection.HandlerRecoveryStrategy.Internal.ExactlyOnceRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
@@ -35,12 +33,15 @@ import slick.jdbc.JdbcProfile
 @InternalApi
 private[projection] object SlickProjectionImpl {
   sealed trait Strategy
-  final case class ExactlyOnce(recoveryStrategy: Option[HandlerRecoveryStrategy] = None) extends Strategy
+  sealed trait WithRecoveryStrategy extends Strategy {
+    def recoveryStrategy: Option[HandlerRecoveryStrategy]
+  }
+  final case class ExactlyOnce(recoveryStrategy: Option[HandlerRecoveryStrategy] = None) extends WithRecoveryStrategy
   final case class AtLeastOnce(
       afterEnvelopes: Option[Int] = None,
       orAfterDuration: Option[FiniteDuration] = None,
       recoveryStrategy: Option[HandlerRecoveryStrategy] = None)
-      extends Strategy
+      extends WithRecoveryStrategy
 }
 
 @InternalApi
@@ -86,34 +87,21 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       projectionId,
       sourceProvider,
       databaseConfig,
-      strategy
-        .asInstanceOf[AtLeastOnce]
+      atLeastOnceStrategy
         .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration.toScala)),
       settingsOpt,
       handler)
 
-  override def withAtLeastOnceRecoveryStrategy(
-      recoveryStrategy: AtLeastOnceRecoveryStrategy): SlickProjectionImpl[Offset, Envelope, P] =
-    new SlickProjectionImpl(
-      projectionId,
-      sourceProvider,
-      databaseConfig,
-      atLeastOnceStrategy.copy(recoveryStrategy = Some(recoveryStrategy)),
-      settingsOpt,
-      handler)
-
   /**
-   * Settings for ExactlyOnceSlickProjection
+   * Settings for AtLeastOnceSlickProjection and ExactlyOnceSlickProjection
    */
-  override def withExactlyOnceRecoveryStrategy(
-      recoveryStrategy: ExactlyOnceRecoveryStrategy): SlickProjectionImpl[Offset, Envelope, P] =
-    new SlickProjectionImpl(
-      projectionId,
-      sourceProvider,
-      databaseConfig,
-      exactlyOnceStrategy.copy(recoveryStrategy = Some(recoveryStrategy)),
-      settingsOpt,
-      handler)
+  override def withRecoveryStrategy(
+      recoveryStrategy: HandlerRecoveryStrategy): SlickProjectionImpl[Offset, Envelope, P] =
+    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, strategy match {
+      case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s              => s
+    }, settingsOpt, handler)
 
   /**
    * INTERNAL API
