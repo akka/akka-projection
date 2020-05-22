@@ -82,7 +82,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
         |  offset text,
         |  manifest text,
         |  last_updated timestamp,
-        |  PRIMARY KEY (projection_name, partition))
+        |  PRIMARY KEY ((projection_name, partition), projection_key))
         """.stripMargin.trim))
   }
 
