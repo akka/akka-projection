@@ -54,34 +54,32 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   /**
    * Settings for AtLeastOnceSlickProjection
    */
-  override def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): SlickProjectionImpl[Offset, Envelope, P] =
+  override def withSaveOffset(
+      afterEnvelopes: Int,
+      afterDuration: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
       databaseConfig,
-      strategy.asInstanceOf[AtLeastOnce].copy(afterEnvelopes = Some(afterEnvelopes)),
-      settingsOpt,
-      handler)
-
-  override def withSaveOffsetAfterDuration(afterDuration: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] =
-    new SlickProjectionImpl(
-      projectionId,
-      sourceProvider,
-      databaseConfig,
-      strategy.asInstanceOf[AtLeastOnce].copy(orAfterDuration = Some(afterDuration)),
+      strategy
+        .asInstanceOf[AtLeastOnce]
+        .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)),
       settingsOpt,
       handler)
 
   /**
    * Java API
    */
-  override def withSaveOffsetAfterDuration(
+  override def withSaveOffset(
+      afterEnvelopes: Int,
       afterDuration: java.time.Duration): SlickProjectionImpl[Offset, Envelope, P] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
       databaseConfig,
-      strategy.asInstanceOf[AtLeastOnce].copy(orAfterDuration = Some(afterDuration.toScala)),
+      strategy
+        .asInstanceOf[AtLeastOnce]
+        .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration.toScala)),
       settingsOpt,
       handler)
 

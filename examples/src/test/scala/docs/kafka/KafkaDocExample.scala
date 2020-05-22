@@ -192,8 +192,6 @@ object KafkaDocExample {
     val projection =
       SlickProjection
         .atLeastOnce(projectionId, sourceProvider, dbConfig, handler = new WordPublisher(topicName, sendProducer))
-        .withSaveOffsetAfterEnvelopes(100)
-        .withSaveOffsetAfterDuration(500.millis)
 
     //#sendToKafkaProjection
 

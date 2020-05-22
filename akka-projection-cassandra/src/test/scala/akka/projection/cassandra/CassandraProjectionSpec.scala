@@ -110,10 +110,10 @@ object CassandraProjectionSpec {
         .executeDDL(
           s"CREATE KEYSPACE IF NOT EXISTS $keyspace WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 }")
         .flatMap(_ => session.executeDDL(s"""
-                                            |CREATE TABLE IF NOT EXISTS $keyspace.$table (
-                                            |  id text,
-                                            |  concatenated text,
-                                            |  PRIMARY KEY (id))
+        |CREATE TABLE IF NOT EXISTS $keyspace.$table (
+        |  id text,
+        |  concatenated text,
+        |  PRIMARY KEY (id))
         """.stripMargin.trim))
     }
   }

@@ -84,13 +84,12 @@ trait SlickProjection[Envelope] extends Projection[Envelope] {
 trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): AtLeastOnceSlickProjection[Envelope]
 
-  def withSaveOffsetAfterEnvelopes(afterEnvelopes: Int): AtLeastOnceSlickProjection[Envelope]
-  def withSaveOffsetAfterDuration(afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Envelope]
+  def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Envelope]
 
   /**
    * Java API
    */
-  def withSaveOffsetAfterDuration(afterDuration: java.time.Duration): AtLeastOnceSlickProjection[Envelope]
+  def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceSlickProjection[Envelope]
 }
 
 object SlickHandler {

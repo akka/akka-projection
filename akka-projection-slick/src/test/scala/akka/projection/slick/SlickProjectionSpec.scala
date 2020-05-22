@@ -571,8 +571,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             eventHandler)
-          .withSaveOffsetAfterEnvelopes(2)
-          .withSaveOffsetAfterDuration(1.minute)
+          .withSaveOffset(2, 1.minute)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {
@@ -592,11 +591,13 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val bogusEventHandler = new ConcatHandlerFail4()
       val slickProjectionFailing =
-        SlickProjection.atLeastOnce(
-          projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          bogusEventHandler)
+        SlickProjection
+          .atLeastOnce(
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            bogusEventHandler)
+          .withSaveOffset(1, Duration.Zero)
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -655,8 +656,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             bogusEventHandler)
-          .withSaveOffsetAfterEnvelopes(2)
-          .withSaveOffsetAfterDuration(1.minute)
+          .withSaveOffset(2, 1.minute)
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -690,8 +690,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             eventHandler)
-          .withSaveOffsetAfterEnvelopes(2)
-          .withSaveOffsetAfterDuration(1.minute)
+          .withSaveOffset(2, 1.minute)
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
@@ -729,8 +728,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = TestSourceProvider(system, source),
             databaseConfig = dbConfig,
             eventHandler)
-          .withSaveOffsetAfterEnvelopes(10)
-          .withSaveOffsetAfterDuration(1.minute)
+          .withSaveOffset(10, 1.minute)
 
       val sinkProbe = projectionTestKit.runWithTestSink(slickProjection)
       eventually {
@@ -779,9 +777,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = TestSourceProvider(system, source),
             databaseConfig = dbConfig,
             eventHandler)
-          .withSaveOffsetAfterEnvelopes(10)
-          .withSaveOffsetAfterDuration(2.seconds)
-
+          .withSaveOffset(10, 2.seconds)
       val sinkProbe = projectionTestKit.runWithTestSink(slickProjection)
       eventually {
         sourceProbe.get should not be null
