@@ -202,15 +202,25 @@ TODO: Implementation in progress, see [PR #119](https://github.com/akka/akka-pro
 
 ## Schema
 
-The database schema for the offset storage table:
+The database schema for the offset storage table.
+
+@@@ note
+
+The `partition` field is used to distribute projection rows across cassandra nodes while also allowing us to query all
+rows for a projection name.  For most offset types we return only one row that matches the provided projection key, but
+the @apidoc[MergeableOffset] requires all rows.
+
+@@@
 
 ```
 CREATE TABLE IF NOT EXISTS akka_projection.offset_store (
-  projection_id text,
+  projection_name text,
+  partition int,
+  projection_key text,
   offset text,
   manifest text,
   last_updated timestamp,
-  PRIMARY KEY (projection_id))
+  PRIMARY KEY ((projection_name, partition), projection_key))
 ```
 
 ## Offset types
