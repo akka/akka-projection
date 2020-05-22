@@ -41,8 +41,8 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
       .selectAll(
         s"SELECT projection_key, offset, manifest FROM $keyspace.$table WHERE projection_name = ? AND partition IN ($partitionClause)",
         projectionId.name)
-      .map { maybeRows =>
-        maybeRows
+      .map { rows =>
+        rows
           .find(_.getString("projection_key") == projectionId.key)
           .map(row => fromStorageRepresentation[Offset](row.getString("offset"), row.getString("manifest")))
       }
@@ -51,7 +51,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
     // a partition is calculated to ensure some distribution of projection rows across cassandra nodes, but at the
     // same time let us query all rows for a single projection_name easily
-    val partition = Integer.valueOf(Math.abs(projectionId.key.hashCode()) % cassandraPartitions)
+    val partition = Integer.valueOf(Math.abs(projectionId.key.hashCode() % cassandraPartitions))
     offset match {
       case _: MergeableOffset[_] =>
         throw new IllegalArgumentException("The CassandraOffsetStore does not currently support MergeableOffset")
