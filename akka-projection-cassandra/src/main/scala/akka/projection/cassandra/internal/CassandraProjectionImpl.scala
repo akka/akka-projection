@@ -38,7 +38,7 @@ import akka.stream.scaladsl.Source
  */
 @InternalApi private[akka] object CassandraProjectionImpl {
   sealed trait Strategy
-  final case class AtMostOnce(recoveryStrategy: Option[HandlerRecoveryStrategy] = None) extends Strategy
+  final case class AtMostOnce(recoveryStrategy: Option[StrictRecoveryStrategy] = None) extends Strategy
   final case class AtLeastOnce(
       afterEnvelopes: Option[Int] = None,
       orAfterDuration: Option[FiniteDuration] = None,
