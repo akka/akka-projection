@@ -158,6 +158,9 @@ private object RecoveryStrategyConfig {
       case "skip"           => HandlerRecoveryStrategy.skip
       case "retry-and-fail" => HandlerRecoveryStrategy.retryAndFail(retries, retryDelay)
       case "retry-and-skip" => HandlerRecoveryStrategy.retryAndSkip(retries, retryDelay)
+      case s =>
+        throw new IllegalArgumentException(
+          s"Strategy type [$s] is not supported. Supported options are [fail, skip, retry-and-fail, retry-and-skip]")
     }
   }
 }
