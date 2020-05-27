@@ -96,11 +96,13 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    * Settings for AtLeastOnceSlickProjection and ExactlyOnceSlickProjection
    */
   override def withRecoveryStrategy(
-      recoveryStrategy: HandlerRecoveryStrategy): SlickProjectionImpl[Offset, Envelope, P] =
-    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, strategy match {
+      recoveryStrategy: HandlerRecoveryStrategy): SlickProjectionImpl[Offset, Envelope, P] = {
+    val newStrategy = strategy match {
       case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
       case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
-    }, settingsOpt, handler)
+    }
+    new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, newStrategy, settingsOpt, handler)
+  }
 
   /**
    * INTERNAL API
