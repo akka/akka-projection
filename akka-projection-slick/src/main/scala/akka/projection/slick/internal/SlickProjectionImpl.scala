@@ -100,7 +100,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     new SlickProjectionImpl(projectionId, sourceProvider, databaseConfig, strategy match {
       case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
       case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
-      case s              => s
     }, settingsOpt, handler)
 
   /**

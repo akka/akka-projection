@@ -92,7 +92,7 @@ trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envel
 trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   private[cassandra] def atMostOnceStrategy: AtMostOnce = strategy.asInstanceOf[AtMostOnce]
 
-  override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
+  override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
 }

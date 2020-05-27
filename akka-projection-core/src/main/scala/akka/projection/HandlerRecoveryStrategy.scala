@@ -24,13 +24,13 @@ object HandlerRecoveryStrategy {
    * If the first attempt to invoke the handler fails it will immediately give up
    * and fail the stream.
    */
-  def fail: HandlerRecoveryStrategy = Fail
+  def fail: StrictRecoveryStrategy = Fail
 
   /**
    * If the first attempt to invoke the handler fails it will immediately give up,
    * discard the element and continue with next.
    */
-  def skip: HandlerRecoveryStrategy = Skip
+  def skip: StrictRecoveryStrategy = Skip
 
   /**
    * Scala API: If the first attempt to invoke the handler fails it will retry invoking the handler with the

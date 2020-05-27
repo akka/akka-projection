@@ -53,9 +53,12 @@ object CassandraProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       handler: Handler[Envelope]): AtMostOnceCassandraProjection[Envelope] =
-    akka.projection.cassandra.scaladsl.CassandraProjection
-      .atMostOnce(projectionId, new SourceProviderAdapter(sourceProvider), new HandlerAdapter(handler))
-      .asInstanceOf[AtMostOnceCassandraProjection[Envelope]]
+    new CassandraProjectionImpl(
+      projectionId,
+      new SourceProviderAdapter(sourceProvider),
+      CassandraProjectionImpl.AtMostOnce(),
+      settingsOpt = None,
+      new HandlerAdapter(handler))
 }
 
 @DoNotInherit trait CassandraProjection[Envelope] extends Projection[Envelope] {
