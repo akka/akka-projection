@@ -23,6 +23,8 @@ import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
+import akka.projection.OffsetVerification
+import akka.projection.Success
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId

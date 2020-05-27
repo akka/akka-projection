@@ -17,10 +17,12 @@ import akka.actor.ActorSystem
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
+import akka.projection.Success
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
+import akka.projection.SkipOffset
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.javadsl
 import akka.projection.cassandra.scaladsl
@@ -171,7 +173,15 @@ import akka.stream.scaladsl.Source
         Source
           .futureSource(handler.tryStart().flatMap(_ => sourceProvider.source(readOffsets)))
           .via(killSwitch.flow)
-          .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
+          .mapConcat { env =>
+            val offset = sourceProvider.extractOffset(env)
+            sourceProvider.verifyOffset(offset) match {
+              case Success => List(offset -> env)
+              case SkipOffset(reason) =>
+                logger.warning("Source provider instructed projection to skip record with reason: {}", reason)
+                Nil
+            }
+          }
           .mapMaterializedValue(_ => NotUsed)
 
       def handlerFlow(recoveryStrategy: HandlerRecoveryStrategy): Flow[(Offset, Envelope), Offset, NotUsed] =

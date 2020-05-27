@@ -5,21 +5,26 @@
 package akka.projection.kafka.internal
 
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.control.NonFatal
 
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
 import akka.annotation.InternalApi
 import akka.kafka.ConsumerSettings
 import akka.kafka.KafkaConsumerActor
+import akka.kafka.RestrictedConsumer
 import akka.kafka.Subscriptions
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.MetadataClient
-import akka.projection.MergeableOffset
+import akka.kafka.scaladsl.PartitionAssignmentHandler
+import akka.projection.OffsetVerification
+import akka.projection.Success
+import akka.projection.SkipOffset
+import akka.projection.kafka.GroupOffsets
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
@@ -30,8 +35,9 @@ import org.apache.kafka.common.TopicPartition
  * INTERNAL API
  */
 @InternalApi private[akka] object KafkaSourceProviderImpl {
-  private type ReadOffsets = () => Future[Option[MergeableOffset[Long]]]
-  private val RegexTp = """(.+)-(\d+)""".r
+  private type ReadOffsets = () => Future[Option[GroupOffsets]]
+
+  private val EmptyTps: Set[TopicPartition] = Set.empty
   private val KafkaMetadataTimeout = 10.seconds // TODO: get from config
 
   private val consumerActorNameCounter = new AtomicInteger
@@ -46,15 +52,16 @@ import org.apache.kafka.common.TopicPartition
     systemProvider: ClassicActorSystemProvider,
     settings: ConsumerSettings[K, V],
     topics: Set[String])
-    extends SourceProvider[MergeableOffset[Long], ConsumerRecord[K, V]] {
+    extends SourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
   import KafkaSourceProviderImpl._
 
   private val system = systemProvider.classicSystem.asInstanceOf[ExtendedActorSystem]
   private implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
 
-  private val subscription = Subscriptions.topics(topics)
+  private val subscription = Subscriptions.topics(topics).withPartitionAssignmentHandler(new ProjectionPartitionHandler)
   private lazy val consumerActor = system.systemActorOf(KafkaConsumerActor.props(settings), nextConsumerActorName())
   private lazy val metadataClient = MetadataClient.create(consumerActor, KafkaMetadataTimeout)(dispatcher)
+  private lazy val assignedPartitions = new AtomicReference[Set[TopicPartition]](EmptyTps)
 
   private def stopMetadataClient(): Unit = {
     metadataClient.close()
@@ -79,34 +86,46 @@ import org.apache.kafka.common.TopicPartition
     }
   }
 
-  override def extractOffset(record: ConsumerRecord[K, V]): MergeableOffset[Long] = {
-    val key = record.topic() + "-" + record.partition()
-    MergeableOffset(Map(key -> record.offset()))
+  override def extractOffset(record: ConsumerRecord[K, V]): GroupOffsets = GroupOffsets(record)
+
+  override def verifyOffset(offsets: GroupOffsets): OffsetVerification = {
+    if ((assignedPartitions.get() -- offsets.partitions) == EmptyTps)
+      SkipOffset("The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
+    else
+      Success
   }
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) =>
       readOffsets()
         .flatMap {
-          case Some(mergeableOffsets) =>
-            Future.successful(mergeableOffsets.entries.flatMap {
-              case (surrogateProjectionKey, offset) =>
-                val tp = parseProjectionKey(surrogateProjectionKey)
+          case Some(groupOffsets) =>
+            Future.successful(groupOffsets.entries.flatMap {
+              case (topicPartitionKey, offset) =>
+                val tp = topicPartitionKey.tp
                 if (assignedTps.contains(tp)) Map(tp -> offset)
                 else Map.empty
             })
           case None => metadataClient.getBeginningOffsets(assignedTps)
         }
         .recover {
-          case NonFatal(ex) => throw new RuntimeException("External offsets could not be retrieved", ex)
+          case ex => throw new RuntimeException("External offsets could not be retrieved", ex)
         }
 
-  private def parseProjectionKey(surrogateProjectionKey: String): TopicPartition = {
-    surrogateProjectionKey match {
-      case RegexTp(topic, partition) => new TopicPartition(topic, partition.toInt)
-      case _ =>
-        throw new IllegalArgumentException(
-          s"Row entry name (${surrogateProjectionKey}) must match pattern: ${RegexTp.pattern.toString}")
-    }
+  private class ProjectionPartitionHandler extends PartitionAssignmentHandler {
+    override def onRevoke(revokedTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
+      removeFromAssigned(revokedTps)
+
+    override def onAssign(assignedTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
+      assignedPartitions.set(assignedTps)
+
+    override def onLost(lostTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
+      removeFromAssigned(lostTps)
+
+    override def onStop(currentTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
+      assignedPartitions.set(EmptyTps)
+
+    private def removeFromAssigned(revokedTps: Set[TopicPartition]): Set[TopicPartition] =
+      assignedPartitions.accumulateAndGet(revokedTps, (assigned, revoked) => assigned.diff(revoked))
   }
 }

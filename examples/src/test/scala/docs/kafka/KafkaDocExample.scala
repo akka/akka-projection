@@ -18,6 +18,7 @@ import akka.kafka.scaladsl.SendProducer
 import akka.projection.Projection
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
+import akka.projection.kafka.GroupOffsets
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
@@ -33,7 +34,6 @@ import slick.jdbc.H2Profile
 
 //#imports
 import akka.projection.kafka.KafkaSourceProvider
-import akka.projection.MergeableOffset
 import akka.kafka.ConsumerSettings
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -147,7 +147,7 @@ object KafkaDocExample {
         .withGroupId(groupId)
         .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
-    val sourceProvider: SourceProvider[MergeableOffset[Long], ConsumerRecord[String, String]] =
+    val sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
       KafkaSourceProvider(system, consumerSettings, Set(topicName))
     //#sourceProvider
   }

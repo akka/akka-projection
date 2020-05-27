@@ -10,13 +10,16 @@ import scala.concurrent.duration.FiniteDuration
 import scala.jdk.DurationConverters._
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
+import akka.projection.Success
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
+import akka.projection.SkipOffset
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.AtLeastOnceSlickProjection
@@ -157,18 +160,30 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
       def processEnvelopeAndStoreOffsetInSameTransaction(
           recoveryStrategy: HandlerRecoveryStrategy,
+          offset: Offset,
           env: Envelope): Future[Done] = {
-        val offset = sourceProvider.extractOffset(env)
         // run user function and offset storage on the same transaction
         // any side-effect in user function is at-least-once
         val txDBIO =
           offsetStore
             .saveOffset(projectionId, offset)
-            .flatMap(_ => handler.process(env))
+            .flatMap { _ =>
+              val dbio = handler.process(env)
+              dbio
+            }
             .transactionally
 
-        applyUserRecovery(recoveryStrategy, offset) { () =>
-          databaseConfig.db.run(txDBIO).map(_ => Done)
+        sourceProvider.verifyOffset(offset) match {
+          case Success =>
+            applyUserRecovery(recoveryStrategy, offset) { () =>
+              databaseConfig.db.run(txDBIO).map(_ => Done)
+            }
+          case SkipOffset(reason) =>
+            logger.warning(
+              "The offset failed source provider verification after the envelope was processed. " +
+              "The transaction will not be executed. Skipping envelope with reason: {}",
+              reason)
+            Future.successful(Done)
         }
       }
 
@@ -179,6 +194,17 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           databaseConfig.db.run(dbio).map(_ => Done)
         }
       }
+
+      val offsetFlow: Flow[Envelope, (Offset, Envelope), NotUsed] = Flow[Envelope]
+        .mapConcat { env =>
+          val offset = sourceProvider.extractOffset(env)
+          sourceProvider.verifyOffset(offset) match {
+            case Success => List(offset -> env)
+            case SkipOffset(reason) =>
+              logger.warning("Source provider instructed projection to skip envelope with reason: {}", reason)
+              Nil
+          }
+        }
 
       def storeOffset(offset: Offset): Future[Done] = {
         // only one DBIOAction, no need for transactionally
@@ -200,8 +226,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         strategy match {
           case ExactlyOnce(recoveryStrategyOpt) =>
             val recoveryStrategy = recoveryStrategyOpt.getOrElse(settings.recoveryStrategy)
-            Flow[Envelope]
-              .mapAsync(1)(env => processEnvelopeAndStoreOffsetInSameTransaction(recoveryStrategy, env))
+            offsetFlow
+              .mapAsync(1) {
+                case (offset, env) => processEnvelopeAndStoreOffsetInSameTransaction(recoveryStrategy, offset, env)
+              }
 
           case AtLeastOnce(afterEnvelopesOpt, orAfterDurationOpt, recoveryStrategyOpt) =>
             val afterEnvelopes = afterEnvelopesOpt.getOrElse(settings.saveOffsetAfterEnvelopes)
@@ -211,15 +239,15 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
             if (afterEnvelopes == 1)
               // optimization of general AtLeastOnce case, still separate transactions for processEnvelope
               // and storeOffset
-              Flow[Envelope].mapAsync(1) { env =>
-                val offset = sourceProvider.extractOffset(env)
-                processEnvelope(recoveryStrategy, env, offset).flatMap(_ => storeOffset(offset))
+              offsetFlow.mapAsync(1) {
+                case (offset, env) =>
+                  processEnvelope(recoveryStrategy, env, offset).flatMap(_ => storeOffset(offset))
               }
             else
-              Flow[Envelope]
-                .mapAsync(1) { env =>
-                  val offset = sourceProvider.extractOffset(env)
-                  processEnvelope(recoveryStrategy, env, offset).map(_ => offset)
+              offsetFlow
+                .mapAsync(1) {
+                  case (offset, env) =>
+                    processEnvelope(recoveryStrategy, env, offset).map[Offset](_ => offset)
                 }
                 .groupedWithin(afterEnvelopes, orAfterDuration)
                 .collect { case grouped if grouped.nonEmpty => grouped.last }

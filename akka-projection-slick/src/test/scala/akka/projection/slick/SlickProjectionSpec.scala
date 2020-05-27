@@ -17,6 +17,8 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.TestException
+import akka.projection.OffsetVerification
+import akka.projection.Success
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.SourceProvider

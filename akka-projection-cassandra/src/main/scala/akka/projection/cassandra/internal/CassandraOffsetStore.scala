@@ -52,7 +52,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
     // same time let us query all rows for a single projection_name easily
     val partition = idToPartition(projectionId)
     offset match {
-      case _: MergeableOffset[_] =>
+      case _: MergeableOffset[_, _] =>
         throw new IllegalArgumentException("The CassandraOffsetStore does not currently support MergeableOffset")
       case _ =>
         val SingleOffset(_, manifest, offsetStr, _) =

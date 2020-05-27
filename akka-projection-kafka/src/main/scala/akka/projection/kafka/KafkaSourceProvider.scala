@@ -19,6 +19,6 @@ object KafkaSourceProvider {
   def apply[K, V](
       systemProvider: ClassicActorSystemProvider,
       settings: ConsumerSettings[K, V],
-      topics: Set[String]): SourceProvider[MergeableOffset[Long], ConsumerRecord[K, V]] =
+      topics: Set[String]): SourceProvider[GroupOffsets, ConsumerRecord[K, V]] =
     new KafkaSourceProviderImpl[K, V](systemProvider, settings, topics)
 }
