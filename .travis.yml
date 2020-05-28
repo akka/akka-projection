@@ -85,7 +85,7 @@ cache:
 
 env:
   global:
-  # Disable Ryuk resource reaper in travis jobs always spin up fresh VMs
+  # Disable Ryuk resource reaper in travis jobs since we always spin up fresh VMs
   - TESTCONTAINERS_RYUK_DISABLED=true
   # encrypt with: travis encrypt --pro WHITESOURCE_PASSWORD=...
   - secure: "iQhrcq668osc4MbkP0Zxey1hs0r0GmO9c2gxK4GIzU9socEiEi4sgG+y/zhshJcgxaXtaM90vDxEv6fBFqDbSJJnJjsUvJLc2OmNYE7jciVJltjAfBQxNYLr05ayimd9aAWTbT04Kbze3UFg9Y3pSAMww8LKJpyiGroKAE/DKVb8yZezOMFzfj0MAvAe3ZBUvTIirwj3wKrjXhjtnoEvCmPNws0TSXnFkAmbpSza255wlTO7SozOExaUX9p698dVFa0PKSOZkCVGvC5wQDX81kigD20s3Bi2452rZst/wJEF7sm9OMfMWCCXJCb5/VJmBu4D8rSGyLNkM0CCbSwADPdflhFnkRTkLxXH54qVdmGbIJN/hfQaSu4K7sDDlLQWbQtzr6aDtMTb+4gXEZLX4tYo7y6Ui8SYTbzkFKbyWpPU3s2vXl4nbnnPsvvivoQByaAPNGupuOLIGHEJmqsMsfgl9CHoatNvDkBp2qITnEJ24p/rTW8sUni0WQsg9VyCBefPepKZRhmx8CM8pjLeLhKqbdAXx5eMRa3Ppzi2IpiungDBfB4rgBEzll3V98wtU7jHzgedLR3mDAw65ipuBJyXY6byeDiyUuWqoWhDIRqPxl6au5SeNakalyS50YqI00+UVJlnpGDQeKEsUndzzFTx2PWADwavV+HprG23a90="
