@@ -159,7 +159,7 @@ import akka.stream.scaladsl.Source
       val logger = Logging(system.classicSystem, this.getClass)
 
       // FIXME session lookup could be moved to CassandraOffsetStore if that's better
-      val session = CassandraSessionRegistry(system.classicSystem).sessionFor(sessionConfigPath)
+      val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
       val offsetStore = new CassandraOffsetStore(session)
       val readOffsets = () => offsetStore.readOffset(projectionId)
 
