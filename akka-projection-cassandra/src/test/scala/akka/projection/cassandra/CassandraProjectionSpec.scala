@@ -61,7 +61,7 @@ object CassandraProjectionSpec {
 
   case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, _])
       extends SourceProvider[Long, Envelope] {
-    implicit val dispatcher: ExecutionContext = system.classicSystem.dispatcher
+    implicit val executionContext: ExecutionContext = system.executionContext
     override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
       offset().map {
         case Some(o) => src.dropWhile(_.offset <= o)

@@ -14,6 +14,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
+import akka.actor.typed.scaladsl.adapter._
 import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
@@ -35,7 +36,6 @@ import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
-import akka.actor.typed.scaladsl.adapter._
 
 object KafkaToSlickIntegrationSpec {
   object EventType {

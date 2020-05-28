@@ -7,11 +7,11 @@ package akka.projection.kafka
 import scala.concurrent.Await
 import scala.concurrent.Future
 
+import akka.actor.typed.scaladsl.adapter._
 import akka.projection.MergeableOffset
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink
-import akka.actor.typed.scaladsl.adapter._
 
 class KafkaSourceProviderSpec extends KafkaSpecBase() {
   "KafkaSourceProviderSpec" must {

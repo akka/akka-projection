@@ -75,7 +75,7 @@ object SlickProjectionSpec {
 
   case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, _])
       extends SourceProvider[Long, Envelope] {
-    implicit val dispatcher: ExecutionContext = system.classicSystem.dispatcher
+    implicit val executionContext: ExecutionContext = system.executionContext
     override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
       offset().map {
         case Some(o) => src.dropWhile(_.offset <= o)
@@ -146,8 +146,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
   val repository = new TestRepository(dbConfig)
 
-  implicit val actorSystem = testKit.system
-  implicit val dispatcher = testKit.system.executionContext
+  implicit val actorSystem: ActorSystem[Nothing] = testKit.system
+  implicit val executionContext: ExecutionContext = testKit.system.executionContext
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

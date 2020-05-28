@@ -50,12 +50,12 @@ import org.apache.kafka.common.TopicPartition
   import KafkaSourceProviderImpl._
 
   private val classicSystem = system.classicSystem.asInstanceOf[ExtendedActorSystem]
-  private implicit val dispatcher: ExecutionContext = system.classicSystem.dispatcher
+  private implicit val executionContext: ExecutionContext = system.executionContext
 
   private val subscription = Subscriptions.topics(topics)
   private lazy val consumerActor =
     classicSystem.systemActorOf(KafkaConsumerActor.props(settings), nextConsumerActorName())
-  private lazy val metadataClient = MetadataClient.create(consumerActor, KafkaMetadataTimeout)(dispatcher)
+  private lazy val metadataClient = MetadataClient.create(consumerActor, KafkaMetadataTimeout)(executionContext)
 
   private def stopMetadataClient(): Unit = {
     metadataClient.close()

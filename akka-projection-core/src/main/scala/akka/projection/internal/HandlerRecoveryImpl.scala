@@ -4,10 +4,12 @@
 
 package akka.projection.internal
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 import akka.Done
+import akka.actor.Scheduler
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
@@ -29,8 +31,8 @@ import akka.projection.HandlerRecoveryStrategy
       futureCallback: () => Future[Done])(implicit system: ActorSystem[_]): Future[Done] = {
     import HandlerRecoveryStrategy.Internal._
 
-    implicit val scheduler = system.classicSystem.scheduler
-    implicit val dispatcher = system.classicSystem.dispatcher
+    implicit val scheduler: Scheduler = system.classicSystem.scheduler
+    implicit val executionContext: ExecutionContext = system.executionContext
 
     val tryFutureCallback: () => Future[Done] = { () =>
       try {

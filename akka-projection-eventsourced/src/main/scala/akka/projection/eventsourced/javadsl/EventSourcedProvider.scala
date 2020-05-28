@@ -44,7 +44,7 @@ object EventSourcedProvider {
       eventsByTagQuery: EventsByTagQuery,
       tag: String)
       extends SourceProvider[Offset, EventEnvelope[Event]] {
-    implicit val dispatcher: ExecutionContext = system.classicSystem.dispatcher
+    implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(
         offsetAsync: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[Source[EventEnvelope[Event], _]] = {

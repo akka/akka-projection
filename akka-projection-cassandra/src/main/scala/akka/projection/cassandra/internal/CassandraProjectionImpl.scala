@@ -154,7 +154,7 @@ import akka.stream.scaladsl.Source
 
     private[projection] def mappedSource(): Source[Done, _] = {
       // FIXME maybe use the session-dispatcher config
-      implicit val ec: ExecutionContext = system.classicSystem.dispatcher
+      implicit val ec: ExecutionContext = system.executionContext
 
       val logger = Logging(system.classicSystem, this.getClass)
 
@@ -240,7 +240,7 @@ import akka.stream.scaladsl.Source
 
   override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
     val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
-    val offsetStore = new CassandraOffsetStore(session)(system.classicSystem.dispatcher)
+    val offsetStore = new CassandraOffsetStore(session)(system.executionContext)
     offsetStore.createKeyspaceAndTable()
   }
 

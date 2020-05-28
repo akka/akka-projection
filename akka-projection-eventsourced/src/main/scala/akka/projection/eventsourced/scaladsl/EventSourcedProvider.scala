@@ -40,7 +40,7 @@ object EventSourcedProvider {
       tag: String,
       system: ActorSystem[_])
       extends SourceProvider[Offset, EventEnvelope[Event]] {
-    implicit val dispatcher: ExecutionContext = system.classicSystem.dispatcher
+    implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[Event], NotUsed]] =
       offset().map { offsetOpt =>

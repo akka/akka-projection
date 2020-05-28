@@ -29,7 +29,7 @@ object ProjectionTestKit {
 final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
   private implicit val system: ActorSystem[Nothing] = testKit.system
-  private implicit val dispatcher: ExecutionContext = testKit.system.classicSystem.dispatcher
+  private implicit val executionContext: ExecutionContext = testKit.system.executionContext
   private implicit val settings: TestKitSettings = TestKitSettings(system)
 
   /**

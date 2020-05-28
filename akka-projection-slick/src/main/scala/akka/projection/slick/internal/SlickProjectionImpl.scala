@@ -149,7 +149,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       // TODO: add a LogSource for projection when we have a name and key
       val logger = Logging(system.classicSystem, this.getClass)
 
-      implicit val dispatcher = system.classicSystem.dispatcher
+      implicit val executionContext: ExecutionContext = system.executionContext
 
       def applyUserRecovery(recoveryStrategy: HandlerRecoveryStrategy, offset: Offset)(
           futureCallback: () => Future[Done]): Future[Done] =
