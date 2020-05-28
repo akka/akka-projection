@@ -17,8 +17,11 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.TestException
+import akka.actor.typed.ActorRef
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
+import akka.projection.ProjectionSettings
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
@@ -821,4 +824,182 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
   }
 
+  "SlickProjection lifecycle" must {
+
+    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int) extends SlickHandler[Envelope] {
+
+      private var failedOnce = false
+      val startMessage = "start"
+      val completedMessage = "completed"
+      val failedMessage = "failed"
+
+      // stop message can be 'completed' or 'failed'
+      // that allows us to assert that the stopHandler is different execution paths were called in test
+      private var stopMessage = completedMessage
+
+      override def start(): Future[Done] = {
+        // reset stop message to 'completed' on each new start
+        stopMessage = completedMessage
+        probe ! startMessage
+        Future.successful(Done)
+      }
+
+      override def stop(): Future[Done] = {
+        probe ! stopMessage
+        Future.successful(Done)
+      }
+
+      override def process(envelope: Envelope): slick.dbio.DBIO[Done] = {
+        if (envelope.offset == failOnceOnOffset && !failedOnce) {
+          failedOnce = true
+          stopMessage = failedMessage
+          slick.dbio.DBIO.failed(TestException(s"Fail $failOnceOnOffset"))
+        } else {
+          probe ! envelope.message
+          slick.dbio.DBIO.successful(Done)
+        }
+      }
+    }
+
+    "call start and stop of the handler" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+
+      val projection =
+        SlickProjection
+          .atLeastOnce[Long, Envelope, H2Profile](
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            handler)
+          .withSaveOffset(1, Duration.Zero)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      handlerProbe.expectMessage("jkl")
+      handlerProbe.expectMessage("mno")
+      handlerProbe.expectMessage("pqr")
+      // completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "call start and stop of the handler when using TestKit.runWithTestSink" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+
+      val projection =
+        SlickProjection
+          .atLeastOnce[Long, Envelope, H2Profile](
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            handler)
+          .withSaveOffset(1, Duration.Zero)
+
+      // not using ProjectionTestKit because want to test restarts
+      projectionTestKit.runWithTestSink(projection) { sinkProbe =>
+        // request all 'strings' (abc to pqr)
+
+        // the start happens inside runWithTestSink
+        handlerProbe.expectMessage(handler.startMessage)
+
+        // request the elements
+        sinkProbe.request(6)
+        handlerProbe.expectMessage("abc")
+        handlerProbe.expectMessage("def")
+        handlerProbe.expectMessage("ghi")
+        handlerProbe.expectMessage("jkl")
+        handlerProbe.expectMessage("mno")
+        handlerProbe.expectMessage("pqr")
+
+        // all elements should have reached the sink
+        sinkProbe.expectNextN(6)
+      }
+
+      // completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "call start and stop of handler when restarted" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+
+      val projection =
+        SlickProjection
+          .atLeastOnce[Long, Envelope, H2Profile](
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            handler)
+          .withSettings(ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0))
+          .withSaveOffset(1, Duration.Zero)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4
+      handlerProbe.expectMessage(handler.failedMessage)
+
+      // backoff will restart
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("jkl")
+      handlerProbe.expectMessage("mno")
+      handlerProbe.expectMessage("pqr")
+      // now completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "call start and stop of handler when failed but no restart" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+
+      val projection =
+        SlickProjection
+          .atLeastOnce[Long, Envelope, H2Profile](
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            handler)
+          .withSettings(
+            ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
+          ) // no restarts
+          .withSaveOffset(1, Duration.Zero)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4, not restarted
+      // completed with failure
+      handlerProbe.expectMessage(handler.failedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+  }
 }
