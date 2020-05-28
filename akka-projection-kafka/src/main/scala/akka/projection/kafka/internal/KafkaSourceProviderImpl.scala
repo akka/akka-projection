@@ -4,30 +4,27 @@
 
 package akka.projection.kafka.internal
 
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration._
 
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
 import akka.annotation.InternalApi
 import akka.kafka.ConsumerSettings
-import akka.kafka.KafkaConsumerActor
 import akka.kafka.RestrictedConsumer
 import akka.kafka.Subscriptions
 import akka.kafka.scaladsl.Consumer
-import akka.kafka.scaladsl.MetadataClient
 import akka.kafka.scaladsl.PartitionAssignmentHandler
 import akka.projection.OffsetVerification
-import akka.projection.Success
 import akka.projection.SkipOffset
+import akka.projection.Success
 import akka.projection.kafka.GroupOffsets
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
+import akka.NotUsed
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 
@@ -36,13 +33,7 @@ import org.apache.kafka.common.TopicPartition
  */
 @InternalApi private[akka] object KafkaSourceProviderImpl {
   private type ReadOffsets = () => Future[Option[GroupOffsets]]
-
   private val EmptyTps: Set[TopicPartition] = Set.empty
-  private val KafkaMetadataTimeout = 10.seconds // TODO: get from config
-
-  private val consumerActorNameCounter = new AtomicInteger
-  private def nextConsumerActorName(): String =
-    s"kafkaSourceProviderConsumer-${consumerActorNameCounter.incrementAndGet()}"
 }
 
 /**
@@ -51,7 +42,8 @@ import org.apache.kafka.common.TopicPartition
 @InternalApi private[akka] class KafkaSourceProviderImpl[K, V](
     systemProvider: ClassicActorSystemProvider,
     settings: ConsumerSettings[K, V],
-    topics: Set[String])
+    topics: Set[String],
+    metadataClient: MetadataClientAdapter)
     extends SourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
   import KafkaSourceProviderImpl._
 
@@ -59,29 +51,26 @@ import org.apache.kafka.common.TopicPartition
   private implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
 
   private val subscription = Subscriptions.topics(topics).withPartitionAssignmentHandler(new ProjectionPartitionHandler)
-  private lazy val consumerActor = system.systemActorOf(KafkaConsumerActor.props(settings), nextConsumerActorName())
-  private lazy val metadataClient = MetadataClient.create(consumerActor, KafkaMetadataTimeout)(dispatcher)
-  private lazy val assignedPartitions = new AtomicReference[Set[TopicPartition]](EmptyTps)
+  private val assignedPartitions = new AtomicReference[Set[TopicPartition]](EmptyTps)
 
-  private def stopMetadataClient(): Unit = {
-    metadataClient.close()
-    system.stop(consumerActor)
-  }
+  protected[internal] def _source(
+      readOffsets: ReadOffsets): Source[(TopicPartition, Source[ConsumerRecord[K, V], NotUsed]), Consumer.Control] =
+    Consumer
+      .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets))
 
   override def source(readOffsets: ReadOffsets): Future[Source[ConsumerRecord[K, V], _]] = {
     // get the total number of partitions to configure the `breadth` parameter, or we could just use a really large
     // number.  i don't think using a large number would present a problem.
-    val numPartitionsF = Future.sequence(topics.map(metadataClient.getPartitionsFor)).map(_.map(_.length).sum)
-    numPartitionsF.failed.foreach(_ => stopMetadataClient())
+    val numPartitionsF = metadataClient.numPartitions(topics)
+    numPartitionsF.failed.foreach(_ => metadataClient.stop())
     numPartitionsF.map { numPartitions =>
-      Consumer
-        .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets))
+      _source(readOffsets)
         .flatMapMerge(numPartitions, {
           case (_, partitionedSource) => partitionedSource
         })
         .watchTermination()(Keep.right)
         .mapMaterializedValue { terminated =>
-          terminated.onComplete(_ => stopMetadataClient())
+          terminated.onComplete(_ => metadataClient.stop())
         }
     }
   }
