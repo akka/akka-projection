@@ -3,28 +3,35 @@
  */
 
 package jdocs.testkit;
-
 import akka.Done;
-import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.ProjectionSettings;
 import akka.projection.RunningProjection;
-import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.scaladsl.Source;
-import org.junit.ClassRule;
 
-import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.TimeUnit;
+
 
 //#testkit-import
+import org.junit.ClassRule;
+import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
+import akka.projection.testkit.javadsl.ProjectionTestKit;
+
 //#testkit-import
+
 //#testkit-duration
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
 //#testkit-duration
+
 //#testkit-assertion-import
+import akka.stream.testkit.TestSubscriber;
+import akka.actor.testkit.typed.javadsl.TestProbe;
+import static org.junit.Assert.assertEquals;
 
 //#testkit-assertion-import
 
@@ -80,7 +87,7 @@ public class TestKitDocExample {
     projectionTestKit.run(projection, () ->
       cartCheckoutRepository
         .findById("abc-def")
-        .toCompletableFuture().get(1,TimeUnit.SECONDS));
+        .toCompletableFuture().get(1, TimeUnit.SECONDS));
     //#testkit-run
   }
 
