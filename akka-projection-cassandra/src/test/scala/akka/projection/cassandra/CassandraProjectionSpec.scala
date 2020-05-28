@@ -18,11 +18,11 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
+import akka.actor.typed.ActorSystem
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
@@ -45,7 +45,7 @@ object CassandraProjectionSpec {
 
   def offsetExtractor(env: Envelope): Long = env.offset
 
-  def sourceProvider(systemProvider: ClassicActorSystemProvider, id: String): SourceProvider[Long, Envelope] = {
+  def sourceProvider(system: ActorSystem[_], id: String): SourceProvider[Long, Envelope] = {
 
     val envelopes =
       List(
@@ -56,12 +56,12 @@ object CassandraProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    TestSourceProvider(systemProvider, Source(envelopes))
+    TestSourceProvider(system, Source(envelopes))
   }
 
-  case class TestSourceProvider(systemProvider: ClassicActorSystemProvider, src: Source[Envelope, _])
+  case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, _])
       extends SourceProvider[Long, Envelope] {
-    implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
+    implicit val dispatcher: ExecutionContext = system.classicSystem.dispatcher
     override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
       offset().map {
         case Some(o) => src.dropWhile(_.offset <= o)

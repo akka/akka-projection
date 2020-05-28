@@ -9,7 +9,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
 import akka.Done
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
@@ -83,7 +83,7 @@ trait SlickProjection[Envelope] extends Projection[Envelope] {
    * For production it's recommended to create the table with DDL statements
    * before the system is started.
    */
-  def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done]
+  def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done]
 }
 
 trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {

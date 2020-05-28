@@ -98,7 +98,7 @@ object CassandraProjectionDocExample {
     def sourceProvider(tag: String) =
       EventSourcedProvider
         .eventsByTag[ShoppingCart.Event](
-          systemProvider = system,
+          system = system,
           readJournalPluginId = CassandraReadJournal.Identifier,
           tag = tag)
     //#running-source-provider

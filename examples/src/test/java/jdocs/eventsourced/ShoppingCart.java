@@ -12,12 +12,7 @@ import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 import akka.cluster.sharding.typed.javadsl.Entity;
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
 import akka.persistence.typed.PersistenceId;
-import akka.persistence.typed.javadsl.CommandHandlerWithReply;
-import akka.persistence.typed.javadsl.CommandHandlerWithReplyBuilder;
-import akka.persistence.typed.javadsl.EventHandler;
-import akka.persistence.typed.javadsl.EventSourcedBehaviorWithEnforcedReplies;
-import akka.persistence.typed.javadsl.ReplyEffect;
-import akka.persistence.typed.javadsl.RetentionCriteria;
+import akka.persistence.typed.javadsl.*;
 import com.fasterxml.jackson.annotation.JsonCreator;
 
 import java.time.Duration;

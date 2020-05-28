@@ -9,10 +9,10 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
+import akka.actor.typed.ActorSystem
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
@@ -34,11 +34,10 @@ object ProjectionBehaviorSpec {
 
     override def projectionId: ProjectionId = ProjectionId("test-projection-with-internal-state", "00")
 
-    override private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection =
+    override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(testProbe, failToStop).newRunningInstance()
 
-    override private[projection] def mappedSource()(
-        implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
+    override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
       new InternalProjectionState(testProbe, failToStop).mappedSource()
 
     override def withSettings(settings: ProjectionSettings): Projection[Int] =
@@ -50,7 +49,7 @@ object ProjectionBehaviorSpec {
      * when building the mappedSource and when running the projection (to stop)
      */
     private class InternalProjectionState(testProbe: TestProbe[ProbeMessage], failToStop: Boolean = false)(
-        implicit val systemProvider: ClassicActorSystemProvider) {
+        implicit val system: ActorSystem[_]) {
 
       private val strBuffer = new StringBuffer("")
 
@@ -76,11 +75,11 @@ object ProjectionBehaviorSpec {
         source: Source[Done, _],
         testProbe: TestProbe[ProbeMessage],
         failToStop: Boolean = false,
-        killSwitch: SharedKillSwitch)(implicit systemProvider: ClassicActorSystemProvider)
+        killSwitch: SharedKillSwitch)(implicit system: ActorSystem[_])
         extends RunningProjection {
 
       testProbe.ref ! StartObserved
-      val futureDone = source.run()
+      private val futureDone = source.run()
 
       override def stop()(implicit ec: ExecutionContext): Future[Done] = {
         val stopFut =

@@ -11,8 +11,8 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
-import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.kafka.ConsumerSettings
 import akka.kafka.KafkaConsumerActor
@@ -43,22 +43,23 @@ import org.apache.kafka.common.TopicPartition
  * INTERNAL API
  */
 @InternalApi private[akka] class KafkaSourceProviderImpl[K, V](
-    systemProvider: ClassicActorSystemProvider,
+    system: ActorSystem[_],
     settings: ConsumerSettings[K, V],
     topics: Set[String])
     extends SourceProvider[MergeableOffset[Long], ConsumerRecord[K, V]] {
   import KafkaSourceProviderImpl._
 
-  private val system = systemProvider.classicSystem.asInstanceOf[ExtendedActorSystem]
-  private implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
+  private val classicSystem = system.classicSystem.asInstanceOf[ExtendedActorSystem]
+  private implicit val dispatcher: ExecutionContext = system.classicSystem.dispatcher
 
   private val subscription = Subscriptions.topics(topics)
-  private lazy val consumerActor = system.systemActorOf(KafkaConsumerActor.props(settings), nextConsumerActorName())
+  private lazy val consumerActor =
+    classicSystem.systemActorOf(KafkaConsumerActor.props(settings), nextConsumerActorName())
   private lazy val metadataClient = MetadataClient.create(consumerActor, KafkaMetadataTimeout)(dispatcher)
 
   private def stopMetadataClient(): Unit = {
     metadataClient.close()
-    system.stop(consumerActor)
+    classicSystem.stop(consumerActor)
   }
 
   override def source(readOffsets: ReadOffsets): Future[Source[ConsumerRecord[K, V], _]] = {

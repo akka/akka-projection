@@ -4,49 +4,40 @@
 
 package jdocs.cassandra;
 
-import java.time.Duration;
-
 import akka.Done;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
-import jdocs.eventsourced.ShoppingCart;
-
-//#daemon-imports
-import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings;
-import akka.projection.ProjectionBehavior;
-
-//#daemon-imports
-
-//#source-provider-imports
+import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
 import akka.persistence.cassandra.query.javadsl.CassandraReadJournal;
 import akka.persistence.query.Offset;
-import akka.projection.javadsl.SourceProvider;
-import akka.projection.eventsourced.javadsl.EventSourcedProvider;
-import akka.projection.eventsourced.EventEnvelope;
-
-//#source-provider-imports
-
-//#projection-imports
-import akka.projection.cassandra.javadsl.CassandraProjection;
 import akka.projection.Projection;
+import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
-
-//#projection-imports
-
-//#handler-imports
+import akka.projection.ProjectionSettings;
+import akka.projection.cassandra.javadsl.CassandraProjection;
+import akka.projection.eventsourced.EventEnvelope;
+import akka.projection.eventsourced.javadsl.EventSourcedProvider;
 import akka.projection.javadsl.Handler;
+import akka.projection.javadsl.SourceProvider;
+import jdocs.eventsourced.ShoppingCart;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+//#daemon-imports
+//#daemon-imports
+//#source-provider-imports
+//#source-provider-imports
+//#projection-imports
+//#projection-imports
 //#handler-imports
-
+//#handler-imports
 //#projection-settings-imports
-import akka.projection.ProjectionSettings;
 //#projection-settings-imports
 
 public interface CassandraProjectionDocExample {

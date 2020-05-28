@@ -4,16 +4,6 @@
 
 package akka.projection.cassandra;
 
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
-
 import akka.Done;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
@@ -27,14 +17,19 @@ import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.javadsl.Source;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.*;
 import org.scalatestplus.junit.JUnitSuite;
 import scala.concurrent.Await;
+
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
 

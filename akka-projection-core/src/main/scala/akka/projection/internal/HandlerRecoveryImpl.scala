@@ -8,7 +8,7 @@ import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 import akka.Done
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
 import akka.pattern.after
@@ -26,11 +26,11 @@ import akka.projection.HandlerRecoveryStrategy
       recoveryStrategy: HandlerRecoveryStrategy,
       offset: Offset,
       logger: LoggingAdapter,
-      futureCallback: () => Future[Done])(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
+      futureCallback: () => Future[Done])(implicit system: ActorSystem[_]): Future[Done] = {
     import HandlerRecoveryStrategy.Internal._
 
-    implicit val scheduler = systemProvider.classicSystem.scheduler
-    implicit val dispatcher = systemProvider.classicSystem.dispatcher
+    implicit val scheduler = system.classicSystem.scheduler
+    implicit val dispatcher = system.classicSystem.dispatcher
 
     val tryFutureCallback: () => Future[Done] = { () =>
       try {

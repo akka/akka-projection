@@ -9,7 +9,7 @@ import java.time
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.util.JavaDurationConverters._
 import com.typesafe.config.Config
@@ -55,9 +55,9 @@ object ProjectionSettings {
   /**
    * Java API
    */
-  def create(system: ClassicActorSystemProvider): ProjectionSettings = apply(system)
+  def create(system: ActorSystem[_]): ProjectionSettings = apply(system)
 
-  def apply(system: ClassicActorSystemProvider): ProjectionSettings = {
+  def apply(system: ActorSystem[_]): ProjectionSettings = {
     fromConfig(system.classicSystem.settings.config.getConfig("akka.projection"))
   }
 

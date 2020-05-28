@@ -35,6 +35,7 @@ import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
+import akka.actor.typed.scaladsl.adapter._
 
 object KafkaToSlickIntegrationSpec {
   object EventType {
@@ -139,7 +140,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       produceEvents(topicName)
 
       val kafkaSourceProvider: SourceProvider[MergeableOffset[Long], ConsumerRecord[String, String]] =
-        KafkaSourceProvider(system, consumerDefaults.withGroupId(groupId), Set(topicName))
+        KafkaSourceProvider(system.toTyped, consumerDefaults.withGroupId(groupId), Set(topicName))
 
       val slickProjection =
         SlickProjection.exactlyOnce(
@@ -169,7 +170,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       produceEvents(topicName)
 
       val kafkaSourceProvider: SourceProvider[MergeableOffset[Long], ConsumerRecord[String, String]] =
-        KafkaSourceProvider(system, consumerDefaults.withGroupId(groupId), Set(topicName))
+        KafkaSourceProvider(system.toTyped, consumerDefaults.withGroupId(groupId), Set(topicName))
 
       // repository will fail to insert the "AddToCart" event type once only
       val failedOnce = new AtomicBoolean

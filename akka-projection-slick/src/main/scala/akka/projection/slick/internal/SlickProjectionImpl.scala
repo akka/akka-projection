@@ -11,7 +11,7 @@ import scala.jdk.DurationConverters._
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
@@ -110,7 +110,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    * Return a RunningProjection
    */
   @InternalApi
-  override private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection =
+  override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
     new InternalProjectionState(
       offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile),
       settings = settingsOrDefaults).newRunningInstance()
@@ -121,8 +121,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
-  override private[projection] def mappedSource()(
-      implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
     new InternalProjectionState(
       offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile),
       settings = settingsOrDefaults).mappedSource()
@@ -130,8 +129,8 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
    */
-  private def settingsOrDefaults(implicit systemProvider: ClassicActorSystemProvider): ProjectionSettings =
-    settingsOpt.getOrElse(ProjectionSettings(systemProvider))
+  private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings =
+    settingsOpt.getOrElse(ProjectionSettings(system))
 
   /*
    * INTERNAL API
@@ -139,7 +138,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    * when building the mappedSource and when running the projection (to stop)
    */
   private class InternalProjectionState(offsetStore: SlickOffsetStore[P], settings: ProjectionSettings)(
-      implicit systemProvider: ClassicActorSystemProvider) {
+      implicit system: ActorSystem[_]) {
 
     private val killSwitch = KillSwitches.shared(projectionId.id)
 
@@ -148,9 +147,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       import databaseConfig.profile.api._
 
       // TODO: add a LogSource for projection when we have a name and key
-      val logger = Logging(systemProvider.classicSystem, this.getClass)
+      val logger = Logging(system.classicSystem, this.getClass)
 
-      implicit val dispatcher = systemProvider.classicSystem.dispatcher
+      implicit val dispatcher = system.classicSystem.dispatcher
 
       def applyUserRecovery(recoveryStrategy: HandlerRecoveryStrategy, offset: Offset)(
           futureCallback: () => Future[Done]): Future[Done] =
@@ -240,7 +239,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   }
 
   private class SlickRunningProjection(source: Source[Done, _], killSwitch: SharedKillSwitch)(
-      implicit systemProvider: ClassicActorSystemProvider)
+      implicit system: ActorSystem[_])
       extends RunningProjection {
 
     private val streamDone = source.run()
@@ -258,7 +257,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     }
   }
 
-  override def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
+  override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
     val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
     offsetStore.createIfNotExists
   }

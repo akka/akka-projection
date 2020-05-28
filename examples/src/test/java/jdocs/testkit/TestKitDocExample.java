@@ -3,35 +3,28 @@
  */
 
 package jdocs.testkit;
+
 import akka.Done;
-import akka.actor.ClassicActorSystemProvider;
+import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
+import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.ProjectionSettings;
 import akka.projection.RunningProjection;
+import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.scaladsl.Source;
+import org.junit.ClassRule;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-
-
-//#testkit-import
-import org.junit.ClassRule;
-import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
-import akka.projection.testkit.javadsl.ProjectionTestKit;
-
-//#testkit-import
-
-//#testkit-duration
-import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
+//#testkit-import
+//#testkit-import
 //#testkit-duration
-
+//#testkit-duration
 //#testkit-assertion-import
-import akka.stream.testkit.TestSubscriber;
-import akka.actor.testkit.typed.javadsl.TestProbe;
-import static org.junit.Assert.assertEquals;
 
 //#testkit-assertion-import
 
@@ -70,12 +63,12 @@ public class TestKitDocExample {
     }
 
     @Override
-    public Source<Done, ?> mappedSource(ClassicActorSystemProvider systemProvider) {
+    public Source<Done, ?> mappedSource(ActorSystem<?> system) {
       return null;
     }
 
     @Override
-    public RunningProjection run(ClassicActorSystemProvider systemProvider) {
+    public RunningProjection run(ActorSystem<?> system) {
       return null;
     }
   };
@@ -84,21 +77,19 @@ public class TestKitDocExample {
 
   void illustrateTestKitRun() {
     //#testkit-run
-    projectionTestKit.run(projection, () -> {
+    projectionTestKit.run(projection, () ->
       cartCheckoutRepository
         .findById("abc-def")
-        .toCompletableFuture().get(1,TimeUnit.SECONDS);
-    });
+        .toCompletableFuture().get(1,TimeUnit.SECONDS));
     //#testkit-run
   }
 
   void illustrateTestKitRunWithMaxAndInterval() {
     //#testkit-run-max-interval
-    projectionTestKit.run(projection, Duration.ofSeconds(5), Duration.ofMillis(300), () -> {
+    projectionTestKit.run(projection, Duration.ofSeconds(5), Duration.ofMillis(300), () ->
       cartCheckoutRepository
         .findById("abc-def")
-        .toCompletableFuture().get(1, TimeUnit.SECONDS);
-    });
+        .toCompletableFuture().get(1, TimeUnit.SECONDS));
     //#testkit-run-max-interval
   }
 

@@ -13,8 +13,7 @@ import scala.jdk.DurationConverters._
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.ActorSystem
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
@@ -122,7 +121,7 @@ import akka.stream.scaladsl.Source
    * Return a RunningProjection
    */
   @InternalApi
-  override private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection =
+  override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
     new InternalProjectionState(settingsOrDefaults).newRunningInstance()
 
   /**
@@ -132,15 +131,14 @@ import akka.stream.scaladsl.Source
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi
-  override private[projection] def mappedSource()(
-      implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
     new InternalProjectionState(settingsOrDefaults).mappedSource()
 
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
    */
-  private def settingsOrDefaults(implicit systemProvider: ClassicActorSystemProvider): ProjectionSettings =
-    settingsOpt.getOrElse(ProjectionSettings(systemProvider))
+  private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings =
+    settingsOpt.getOrElse(ProjectionSettings(system))
 
   // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
   private val sessionConfigPath = "akka.projection.cassandra"
@@ -150,20 +148,18 @@ import akka.stream.scaladsl.Source
    * This internal class will hold the KillSwitch that is needed
    * when building the mappedSource and when running the projection (to stop)
    */
-  private class InternalProjectionState(settings: ProjectionSettings)(
-      implicit systemProvider: ClassicActorSystemProvider) {
+  private class InternalProjectionState(settings: ProjectionSettings)(implicit system: ActorSystem[_]) {
 
     private val killSwitch = KillSwitches.shared(projectionId.id)
 
     private[projection] def mappedSource(): Source[Done, _] = {
-      val system: ActorSystem = systemProvider.classicSystem
       // FIXME maybe use the session-dispatcher config
-      implicit val ec: ExecutionContext = system.dispatcher
+      implicit val ec: ExecutionContext = system.classicSystem.dispatcher
 
-      val logger = Logging(systemProvider.classicSystem, this.getClass)
+      val logger = Logging(system.classicSystem, this.getClass)
 
       // FIXME session lookup could be moved to CassandraOffsetStore if that's better
-      val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
+      val session = CassandraSessionRegistry(system.classicSystem).sessionFor(sessionConfigPath)
       val offsetStore = new CassandraOffsetStore(session)
       val readOffsets = () => offsetStore.readOffset(projectionId)
 
@@ -223,7 +219,7 @@ import akka.stream.scaladsl.Source
   }
 
   private class CassandraRunningProjection(source: Source[Done, _], killSwitch: SharedKillSwitch)(
-      implicit systemProvider: ClassicActorSystemProvider)
+      implicit system: ActorSystem[_])
       extends RunningProjection {
 
     private val streamDone = source.run()
@@ -242,15 +238,14 @@ import akka.stream.scaladsl.Source
     }
   }
 
-  override def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
-    val system = systemProvider.classicSystem
+  override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
     val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
-    val offsetStore = new CassandraOffsetStore(session)(system.dispatcher)
+    val offsetStore = new CassandraOffsetStore(session)(system.classicSystem.dispatcher)
     offsetStore.createKeyspaceAndTable()
   }
 
-  override def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done] = {
+  override def initializeOffsetTable(system: ActorSystem[_]): CompletionStage[Done] = {
     import scala.compat.java8.FutureConverters._
-    createOffsetTableIfNotExists()(systemProvider).toJava
+    createOffsetTableIfNotExists()(system).toJava
   }
 }

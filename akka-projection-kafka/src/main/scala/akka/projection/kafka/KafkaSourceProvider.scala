@@ -4,7 +4,7 @@
 
 package akka.projection.kafka
 
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.kafka.ConsumerSettings
 import akka.projection.MergeableOffset
 import akka.projection.kafka.internal.KafkaSourceProviderImpl
@@ -17,8 +17,8 @@ object KafkaSourceProvider {
    * Create a [[SourceProvider]] that resumes from externally managed offsets
    */
   def apply[K, V](
-      systemProvider: ClassicActorSystemProvider,
+      system: ActorSystem[_],
       settings: ConsumerSettings[K, V],
       topics: Set[String]): SourceProvider[MergeableOffset[Long], ConsumerRecord[K, V]] =
-    new KafkaSourceProviderImpl[K, V](systemProvider, settings, topics)
+    new KafkaSourceProviderImpl[K, V](system, settings, topics)
 }
