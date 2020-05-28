@@ -30,8 +30,9 @@ import akka.annotation.InternalApi
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
  *
- * Error handling strategy for when processing an `Envelope` fails can be defined in the supported
- * [[HandlerRecoveryStrategyHandler]] in settings or passed to the [[akka.projection.Projection]].
+ * Supported error handling strategies for when processing an `Envelope` fails can be
+ * defined in settings or using the `withRecoveryStrategy` method of a `Projection`
+ * implementation.
  */
 @ApiMayChange trait Handler[Envelope] extends HandlerLifecycle {
 

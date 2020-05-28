@@ -30,6 +30,10 @@ object Handler {
  * It is invoked by the `Projection` machinery one envelope at a time and visibility
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
+ *
+ * Supported error handling strategies for when processing an `Envelope` fails can be
+ * defined in settings or using the `withRecoveryStrategy` method of a `Projection`
+ * implementation.
  */
 @ApiMayChange
 abstract class Handler[Envelope] extends HandlerLifecycle {
