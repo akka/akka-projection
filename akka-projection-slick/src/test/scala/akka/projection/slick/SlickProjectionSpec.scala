@@ -163,8 +163,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
   private val concatHandlerFail4Msg = "fail on fourth envelope"
 
-  class ConcatHandlerFail4(recoveryStrategy: HandlerRecoveryStrategy = HandlerRecoveryStrategy.fail)
-      extends SlickHandler[Envelope] {
+  class ConcatHandlerFail4() extends SlickHandler[Envelope] {
     private val _attempts = new AtomicInteger()
     def attempts: Int = _attempts.get
 
@@ -176,8 +175,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         repository.concatToText(envelope.id, envelope.message)
       }
     }
-
-    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = recoveryStrategy
   }
 
   "A Slick exactly-once projection" must {
@@ -222,14 +219,16 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val bogusEventHandler = new ConcatHandlerFail4(HandlerRecoveryStrategy.skip)
+      val bogusEventHandler = new ConcatHandlerFail4()
 
       val slickProjection =
-        SlickProjection.exactlyOnce(
-          projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          handler = bogusEventHandler)
+        SlickProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - not all values were concatenated") {
@@ -252,14 +251,16 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val bogusEventHandler = new ConcatHandlerFail4(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+      val bogusEventHandler = new ConcatHandlerFail4()
 
       val slickProjection =
-        SlickProjection.exactlyOnce(
-          projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          handler = bogusEventHandler)
+        SlickProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
 
       projectionTestKit.run(slickProjection) {
         withClue("check - not all values were concatenated") {
@@ -283,14 +284,16 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val bogusEventHandler = new ConcatHandlerFail4(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+      val bogusEventHandler = new ConcatHandlerFail4()
 
       val slickProjectionFailing =
-        SlickProjection.exactlyOnce(
-          projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          bogusEventHandler)
+        SlickProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -534,13 +537,15 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val eventHandler = new ConcatHandlerFail4(HandlerRecoveryStrategy.skip)
+      val eventHandler = new ConcatHandlerFail4()
       val slickProjection =
-        SlickProjection.atLeastOnce(
-          projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          eventHandler)
+        SlickProjection
+          .atLeastOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            eventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {
@@ -563,7 +568,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         offsetOpt shouldBe empty
       }
 
-      val eventHandler = new ConcatHandlerFail4(HandlerRecoveryStrategy.skip)
+      val eventHandler = new ConcatHandlerFail4()
       val slickProjection =
         SlickProjection
           .atLeastOnce(
@@ -572,6 +577,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             databaseConfig = dbConfig,
             eventHandler)
           .withSaveOffset(2, 1.minute)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {

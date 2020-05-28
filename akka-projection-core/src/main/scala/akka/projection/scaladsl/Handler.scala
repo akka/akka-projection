@@ -10,7 +10,6 @@ import scala.util.control.NonFatal
 import akka.Done
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
-import akka.projection.HandlerRecovery
 
 @ApiMayChange object Handler {
 
@@ -31,10 +30,10 @@ import akka.projection.HandlerRecovery
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
  *
- * Error handling strategy for when processing an `Envelope` fails can be defined in the `Handler` by
- * overriding [[HandlerRecovery.onFailure]].
+ * Error handling strategy for when processing an `Envelope` fails can be defined in the supported
+ * [[HandlerRecoveryStrategyHandler]] in settings or passed to the [[akka.projection.Projection]].
  */
-@ApiMayChange trait Handler[Envelope] extends HandlerRecovery[Envelope] with HandlerLifecycle {
+@ApiMayChange trait Handler[Envelope] extends HandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`.

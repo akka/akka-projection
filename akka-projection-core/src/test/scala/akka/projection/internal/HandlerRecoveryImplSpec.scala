@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 object HandlerRecoveryImplSpec {
   final case class Envelope(offset: Long, message: String)
 
-  class FailHandler(recoveryStrategy: HandlerRecoveryStrategy, failOnOffset: Long) extends Handler[Envelope] {
+  class FailHandler(failOnOffset: Long) extends Handler[Envelope] {
     private val _attempts = new AtomicInteger()
     def attempts: Int = _attempts.get
 
@@ -34,10 +34,7 @@ object HandlerRecoveryImplSpec {
         Future.successful(Done)
       }
     }
-
-    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = recoveryStrategy
   }
-
 }
 
 class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
@@ -49,41 +46,46 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
 
   "HandlerRecovery" must {
     "fail" in {
-      val handler = new FailHandler(HandlerRecoveryStrategy.fail, failOnOffset)
+      val strategy = HandlerRecoveryStrategy.fail
+      val handler = new FailHandler(failOnOffset)
       val result =
-        HandlerRecoveryImpl.applyUserRecovery(handler, env3, failOnOffset, logger, () => handler.process(env3))
+        HandlerRecoveryImpl.applyUserRecovery(strategy, failOnOffset, logger, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 1
     }
 
     "skip" in {
-      val handler = new FailHandler(HandlerRecoveryStrategy.skip, failOnOffset)
+      val strategy = HandlerRecoveryStrategy.skip
+      val handler = new FailHandler(failOnOffset)
       val result =
-        HandlerRecoveryImpl.applyUserRecovery(handler, env3, failOnOffset, logger, () => handler.process(env3))
+        HandlerRecoveryImpl.applyUserRecovery(strategy, failOnOffset, logger, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 1
     }
 
     "retryAndFail 1" in {
-      val handler = new FailHandler(HandlerRecoveryStrategy.retryAndFail(1, 20.millis), failOnOffset)
+      val strategy = HandlerRecoveryStrategy.retryAndFail(1, 20.millis)
+      val handler = new FailHandler(failOnOffset)
       val result =
-        HandlerRecoveryImpl.applyUserRecovery(handler, env3, failOnOffset, logger, () => handler.process(env3))
+        HandlerRecoveryImpl.applyUserRecovery(strategy, failOnOffset, logger, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 2
     }
 
     "retryAndFail 3" in {
-      val handler = new FailHandler(HandlerRecoveryStrategy.retryAndFail(3, 20.millis), failOnOffset)
+      val strategy = HandlerRecoveryStrategy.retryAndFail(3, 20.millis)
+      val handler = new FailHandler(failOnOffset)
       val result =
-        HandlerRecoveryImpl.applyUserRecovery(handler, env3, failOnOffset, logger, () => handler.process(env3))
+        HandlerRecoveryImpl.applyUserRecovery(strategy, failOnOffset, logger, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 4
     }
 
     "retryAndFail after delay" in {
-      val handler = new FailHandler(HandlerRecoveryStrategy.retryAndFail(1, 1.second), failOnOffset)
+      val strategy = HandlerRecoveryStrategy.retryAndFail(1, 1.second)
+      val handler = new FailHandler(failOnOffset)
       val result =
-        HandlerRecoveryImpl.applyUserRecovery(handler, env3, failOnOffset, logger, () => handler.process(env3))
+        HandlerRecoveryImpl.applyUserRecovery(strategy, failOnOffset, logger, () => handler.process(env3))
       // first attempt is immediately
       handler.attempts shouldBe 1
       // retries after delay
@@ -94,17 +96,19 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
     }
 
     "retryAndSkip 1" in {
-      val handler = new FailHandler(HandlerRecoveryStrategy.retryAndSkip(1, 20.millis), failOnOffset)
+      val strategy = HandlerRecoveryStrategy.retryAndSkip(1, 20.millis)
+      val handler = new FailHandler(failOnOffset)
       val result =
-        HandlerRecoveryImpl.applyUserRecovery(handler, env3, failOnOffset, logger, () => handler.process(env3))
+        HandlerRecoveryImpl.applyUserRecovery(strategy, failOnOffset, logger, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 2
     }
 
     "retryAndSkip 3" in {
-      val handler = new FailHandler(HandlerRecoveryStrategy.retryAndSkip(3, 20.millis), failOnOffset)
+      val strategy = HandlerRecoveryStrategy.retryAndSkip(3, 20.millis)
+      val handler = new FailHandler(failOnOffset)
       val result =
-        HandlerRecoveryImpl.applyUserRecovery(handler, env3, failOnOffset, logger, () => handler.process(env3))
+        HandlerRecoveryImpl.applyUserRecovery(strategy, failOnOffset, logger, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 4
     }

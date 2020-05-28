@@ -11,13 +11,16 @@ import scala.reflect.ClassTag
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
-import akka.projection.HandlerRecovery
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.internal.SlickProjectionImpl
+import akka.projection.slick.internal.SlickProjectionImpl.AtLeastOnce
+import akka.projection.slick.internal.SlickProjectionImpl.ExactlyOnce
+import akka.projection.slick.internal.SlickProjectionImpl.Strategy
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
@@ -40,12 +43,12 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[Envelope]): SlickProjection[Envelope] =
+      handler: SlickHandler[Envelope]): ExactlyOnceSlickProjection[Envelope] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
       databaseConfig,
-      SlickProjectionImpl.ExactlyOnce,
+      SlickProjectionImpl.ExactlyOnce(),
       settingsOpt = None,
       handler)
 
@@ -71,6 +74,8 @@ object SlickProjection {
 }
 
 trait SlickProjection[Envelope] extends Projection[Envelope] {
+  private[slick] def strategy: Strategy
+
   override def withSettings(settings: ProjectionSettings): SlickProjection[Envelope]
 
   /**
@@ -82,6 +87,8 @@ trait SlickProjection[Envelope] extends Projection[Envelope] {
 }
 
 trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
+  private[slick] def atLeastOnceStrategy: AtLeastOnce = strategy.asInstanceOf[AtLeastOnce]
+
   override def withSettings(settings: ProjectionSettings): AtLeastOnceSlickProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Envelope]
@@ -90,6 +97,16 @@ trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
    * Java API
    */
   def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceSlickProjection[Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceSlickProjection[Envelope]
+}
+
+trait ExactlyOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
+  private[slick] def exactlyOnceStrategy: ExactlyOnce = strategy.asInstanceOf[ExactlyOnce]
+
+  override def withSettings(settings: ProjectionSettings): ExactlyOnceSlickProjection[Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceSlickProjection[Envelope]
 }
 
 object SlickHandler {
@@ -110,11 +127,11 @@ object SlickHandler {
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
  *
- * Error handling strategy for when processing an `Envelope` fails can be defined in the `Handler` by
- * overriding [[HandlerRecovery.onFailure]].
+ * Error handling strategy for when processing an `Envelope` fails can be defined in the supported
+ * [[HandlerRecoveryStrategyHandler]] in settings or passed to the [[akka.projection.Projection]].
  */
 @ApiMayChange
-trait SlickHandler[Envelope] extends HandlerRecovery[Envelope] with HandlerLifecycle {
+trait SlickHandler[Envelope] extends HandlerLifecycle {
 
   def process(envelope: Envelope): DBIO[Done]
 

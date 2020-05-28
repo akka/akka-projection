@@ -13,7 +13,6 @@ import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
 import akka.pattern.after
 import akka.pattern.retry
-import akka.projection.HandlerRecovery
 import akka.projection.HandlerRecoveryStrategy
 
 /**
@@ -23,9 +22,8 @@ import akka.projection.HandlerRecoveryStrategy
 
   private val futDone = Future.successful(Done)
 
-  def applyUserRecovery[Offset, Envelope](
-      handler: HandlerRecovery[Envelope],
-      envelope: Envelope,
+  def applyUserRecovery[Offset](
+      recoveryStrategy: HandlerRecoveryStrategy,
       offset: Offset,
       logger: LoggingAdapter,
       futureCallback: () => Future[Done])(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
@@ -49,7 +47,7 @@ import akka.projection.HandlerRecoveryStrategy
 
     firstAttempt.recoverWith {
       case err =>
-        handler.onFailure(envelope, err) match {
+        recoveryStrategy match {
           case Fail =>
             logger.error(
               cause = err,

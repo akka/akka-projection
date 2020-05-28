@@ -10,9 +10,11 @@ import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.cassandra.internal.HandlerAdapter
 import akka.projection.internal.SourceProviderAdapter
@@ -50,9 +52,13 @@ object CassandraProjection {
   def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): Projection[Envelope] =
-    akka.projection.cassandra.scaladsl.CassandraProjection
-      .atMostOnce(projectionId, new SourceProviderAdapter(sourceProvider), new HandlerAdapter(handler))
+      handler: Handler[Envelope]): AtMostOnceCassandraProjection[Envelope] =
+    new CassandraProjectionImpl(
+      projectionId,
+      new SourceProviderAdapter(sourceProvider),
+      CassandraProjectionImpl.AtMostOnce(),
+      settingsOpt = None,
+      new HandlerAdapter(handler))
 }
 
 @DoNotInherit trait CassandraProjection[Envelope] extends Projection[Envelope] {
@@ -65,11 +71,18 @@ object CassandraProjection {
    * before the system is started.
    */
   def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done]
-
 }
 
 @DoNotInherit trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceCassandraProjection[Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
+}
+
+@DoNotInherit trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
 }

@@ -9,22 +9,13 @@ import scala.concurrent.duration.FiniteDuration
 import akka.annotation.InternalApi
 import akka.util.JavaDurationConverters._
 
-trait HandlerRecovery[Envelope] {
-
-  /**
-   * Override this to define the error handler strategy when processing an `Envelope` fails.
-   * By default it will immediately give up and fail the stream.
-   */
-  def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = {
-    HandlerRecoveryStrategy.fail
-  }
-}
-
 /**
- * Error handling strategy for when processing an `Envelope` fails. Defined in the `Handler` by
- * overriding [[HandlerRecovery.onFailure]].
+ * Error handling strategy for when processing an `Envelope` fails. The default is defined in [[ProjectionSettings]]
+ * or may be mixed into a [[Projection]] when supported.
  */
 sealed trait HandlerRecoveryStrategy
+sealed trait StrictRecoveryStrategy extends HandlerRecoveryStrategy
+sealed trait RetryRecoveryStrategy extends HandlerRecoveryStrategy
 
 object HandlerRecoveryStrategy {
   import Internal._
@@ -33,13 +24,13 @@ object HandlerRecoveryStrategy {
    * If the first attempt to invoke the handler fails it will immediately give up
    * and fail the stream.
    */
-  def fail: HandlerRecoveryStrategy = Fail
+  def fail: StrictRecoveryStrategy = Fail
 
   /**
    * If the first attempt to invoke the handler fails it will immediately give up,
    * discard the element and continue with next.
    */
-  def skip: HandlerRecoveryStrategy = Skip
+  def skip: StrictRecoveryStrategy = Skip
 
   /**
    * Scala API: If the first attempt to invoke the handler fails it will retry invoking the handler with the
@@ -77,12 +68,13 @@ object HandlerRecoveryStrategy {
    * INTERNAL API: placed here instead of the `internal` package because of sealed trait
    */
   @InternalApi private[akka] object Internal {
-    case object Fail extends HandlerRecoveryStrategy
-    case object Skip extends HandlerRecoveryStrategy
-    final case class RetryAndFail(retries: Int, delay: FiniteDuration) extends HandlerRecoveryStrategy {
+    case object Fail extends StrictRecoveryStrategy with RetryRecoveryStrategy
+    case object Skip extends StrictRecoveryStrategy with RetryRecoveryStrategy
+
+    final case class RetryAndFail(retries: Int, delay: FiniteDuration) extends RetryRecoveryStrategy {
       require(retries > 0, "retries must be > 0")
     }
-    final case class RetryAndSkip(retries: Int, delay: FiniteDuration) extends HandlerRecoveryStrategy {
+    final case class RetryAndSkip(retries: Int, delay: FiniteDuration) extends RetryRecoveryStrategy {
       require(retries > 0, "retries must be > 0")
     }
   }

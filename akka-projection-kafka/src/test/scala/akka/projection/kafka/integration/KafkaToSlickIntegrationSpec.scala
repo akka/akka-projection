@@ -161,17 +161,12 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     }
 
     "project a model and Kafka offset map to a slick db exactly once with a retriable DBIO.failed" in {
-      log.debug(s"Test started, remainingOrDefault: $remainingOrDefault")
       val projectionId = ProjectionId("OneFailure", "UserEventCountProjection-1")
 
       val topicName = createTopic(suffix = 1, partitions = 3, replication = 1)
       val groupId = createGroupId()
 
-      log.debug("Topic and group created")
-
       produceEvents(topicName)
-
-      log.debug("Events produced")
 
       val kafkaSourceProvider: SourceProvider[MergeableOffset[Long], ConsumerRecord[String, String]] =
         KafkaSourceProvider(system, consumerDefaults.withGroupId(groupId), Set(topicName))
@@ -186,26 +181,19 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       })
 
       val slickProjection =
-        SlickProjection.exactlyOnce(
-          projectionId,
-          sourceProvider = kafkaSourceProvider,
-          dbConfig,
-          new SlickHandler[ConsumerRecord[String, String]] {
-            override def process(envelope: ConsumerRecord[String, String]): slick.dbio.DBIO[Done] = {
+        SlickProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = kafkaSourceProvider,
+            dbConfig,
+            (envelope: ConsumerRecord[String, String]) => {
               val userId = envelope.key()
               val eventType = envelope.value()
               val userEvent = UserEvent(userId, eventType)
               // do something with the record, payload in record.value
               failingRepository.incrementCount(projectionId, userEvent.eventType)
-            }
-
-            override def onFailure(
-                envelope: ConsumerRecord[String, String],
-                throwable: Throwable): HandlerRecoveryStrategy =
-              HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis)
-          })
-
-      log.debug("Projection created")
+            })
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis))
 
       projectionTestKit.run(slickProjection, remainingOrDefault) {
         assertEventTypeCount(projectionId)

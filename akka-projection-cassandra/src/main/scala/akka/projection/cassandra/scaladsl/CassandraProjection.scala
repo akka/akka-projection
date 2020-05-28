@@ -10,10 +10,15 @@ import scala.concurrent.duration.FiniteDuration
 import akka.Done
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
+import akka.projection.cassandra.internal.CassandraProjectionImpl.AtLeastOnce
+import akka.projection.cassandra.internal.CassandraProjectionImpl.AtMostOnce
+import akka.projection.cassandra.internal.CassandraProjectionImpl.Strategy
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 
@@ -53,16 +58,17 @@ object CassandraProjection {
   def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): CassandraProjection[Envelope] =
+      handler: Handler[Envelope]): AtMostOnceCassandraProjection[Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      CassandraProjectionImpl.AtMostOnce,
+      CassandraProjectionImpl.AtMostOnce(),
       settingsOpt = None,
       handler)
 }
 
 trait CassandraProjection[Envelope] extends Projection[Envelope] {
+  private[cassandra] def strategy: Strategy
 
   override def withSettings(settings: ProjectionSettings): CassandraProjection[Envelope]
 
@@ -75,7 +81,18 @@ trait CassandraProjection[Envelope] extends Projection[Envelope] {
 }
 
 trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  private[cassandra] def atLeastOnceStrategy: AtLeastOnce = strategy.asInstanceOf[AtLeastOnce]
+
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Envelope]
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
+}
+
+trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  private[cassandra] def atMostOnceStrategy: AtMostOnce = strategy.asInstanceOf[AtMostOnce]
+
+  override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
 }

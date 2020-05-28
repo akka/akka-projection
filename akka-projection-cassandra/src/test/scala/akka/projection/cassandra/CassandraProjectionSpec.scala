@@ -21,7 +21,6 @@ import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
-import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.projection.HandlerRecoveryStrategy
@@ -177,7 +176,7 @@ class CassandraProjectionSpec
 
   private val concatHandlerFail4Msg = "fail on fourth envelope"
 
-  class ConcatHandlerFail4(recoveryStrategy: HandlerRecoveryStrategy) extends Handler[Envelope] {
+  class ConcatHandlerFail4 extends Handler[Envelope] {
     private val _attempts = new AtomicInteger()
     def attempts: Int = _attempts.get
 
@@ -188,13 +187,9 @@ class CassandraProjectionSpec
       }
       repository.concatToText(envelope.id, envelope.message)
     }
-
-    override def onFailure(envelope: Envelope, throwable: Throwable): HandlerRecoveryStrategy = recoveryStrategy
   }
 
-  private def concatHandlerFail4(
-      recoveryStrategy: HandlerRecoveryStrategy = HandlerRecoveryStrategy.fail): ConcatHandlerFail4 =
-    new ConcatHandlerFail4(recoveryStrategy)
+  private def concatHandlerFail4(): ConcatHandlerFail4 = new ConcatHandlerFail4
 
   "A Cassandra at-least-once projection" must {
 
@@ -407,11 +402,9 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](
-            projectionId,
-            sourceProvider(system, entityId),
-            concatHandlerFail4(HandlerRecoveryStrategy.skip))
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), concatHandlerFail4())
           .withSaveOffset(2, 1.minute)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(projection) {
         withClue("checking: all expected values were concatenated") {
@@ -431,12 +424,13 @@ class CassandraProjectionSpec
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val handler = concatHandlerFail4(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+      val handler = concatHandlerFail4()
 
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
           .withSaveOffset(2, 1.minute)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
 
       projectionTestKit.run(projection) {
         withClue("checking: all expected values were concatenated") {
@@ -461,12 +455,13 @@ class CassandraProjectionSpec
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val handler = concatHandlerFail4(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+      val handler = concatHandlerFail4()
 
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
           .withSaveOffset(2, 1.minute)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
       intercept[TestException] {
         projectionTestKit.run(projection) {
@@ -553,33 +548,6 @@ class CassandraProjectionSpec
       withClue("check: all offsets were seen") {
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
         offset shouldBe 6L
-      }
-    }
-
-    "not retry when using RecoveryStrategy.retryAndFail, because would not be at-most-once" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
-
-      val handler = concatHandlerFail4(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
-
-      val projection =
-        CassandraProjection
-          .atMostOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
-
-      intercept[TestException] {
-        LoggingTestKit.warn("RetryAndFail not supported").expect {
-          projectionTestKit.run(projection) {
-            withClue("checking: all expected values were concatenated") {
-              val concatStr = repository.findById(entityId).futureValue.get
-              concatStr.text shouldBe "abc|def|ghi"
-            }
-          }
-        }
-      }
-
-      withClue("check - event handler failed 1 time") {
-        // not 4, no retries
-        handler.attempts shouldBe 1
       }
     }
   }
