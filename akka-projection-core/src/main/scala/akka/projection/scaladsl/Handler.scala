@@ -31,7 +31,7 @@ import akka.annotation.InternalApi
  * other concurrency primitives are needed for managing the state.
  *
  * Supported error handling strategies for when processing an `Envelope` fails can be
- * defined in settings or using the `withRecoveryStrategy` method of a `Projection`
+ * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
 @ApiMayChange trait Handler[Envelope] extends HandlerLifecycle {
