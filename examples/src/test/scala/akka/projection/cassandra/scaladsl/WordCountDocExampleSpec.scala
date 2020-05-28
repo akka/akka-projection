@@ -19,7 +19,6 @@ import akka.projection.ProjectionId
 import akka.projection.cassandra.ContainerSessionProvider
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.testkit.scaladsl.ProjectionTestKit
-import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import docs.cassandra.WordCountDocExample._
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -28,9 +27,9 @@ class WordCountDocExampleSpec
     with AnyWordSpecLike
     with LogCapturing {
 
-  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext
-  private val offsetStore = new CassandraOffsetStore(session)
+  private val offsetStore = new CassandraOffsetStore(system)
+  private val session = offsetStore.session
   private val repository = new CassandraWordCountRepository(session)
   private val projectionTestKit = new ProjectionTestKit(testKit)
 

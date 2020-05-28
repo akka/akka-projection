@@ -21,7 +21,6 @@ import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.testkit.internal.TestClock
-import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.scalatest.wordspec.AnyWordSpecLike
 
 class CassandraOffsetStoreSpec
@@ -29,13 +28,11 @@ class CassandraOffsetStoreSpec
     with AnyWordSpecLike
     with LogCapturing {
 
-  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
-  private implicit val ec: ExecutionContext = system.executionContext
-
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
-
-  private val offsetStore = new CassandraOffsetStore(session, clock)
+  private val offsetStore = new CassandraOffsetStore(system, clock)
+  private val session = offsetStore.session
+  private implicit val ec: ExecutionContext = system.executionContext
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

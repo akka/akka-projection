@@ -28,7 +28,6 @@ import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
-import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 
@@ -140,9 +139,6 @@ import akka.stream.scaladsl.Source
   private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings =
     settingsOpt.getOrElse(ProjectionSettings(system))
 
-  // FIXME make the sessionConfigPath configurable so that it can use same session as akka.persistence.cassandra or alpakka.cassandra
-  private val sessionConfigPath = "akka.projection.cassandra"
-
   /*
    * INTERNAL API
    * This internal class will hold the KillSwitch that is needed
@@ -158,9 +154,7 @@ import akka.stream.scaladsl.Source
 
       val logger = Logging(system.classicSystem, this.getClass)
 
-      // FIXME session lookup could be moved to CassandraOffsetStore if that's better
-      val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
-      val offsetStore = new CassandraOffsetStore(session)
+      val offsetStore = new CassandraOffsetStore(system)
       val readOffsets = () => offsetStore.readOffset(projectionId)
 
       val source: Source[(Offset, Envelope), NotUsed] =
@@ -239,8 +233,7 @@ import akka.stream.scaladsl.Source
   }
 
   override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
-    val session = CassandraSessionRegistry(system).sessionFor(sessionConfigPath)
-    val offsetStore = new CassandraOffsetStore(session)(system.executionContext)
+    val offsetStore = new CassandraOffsetStore(system)
     offsetStore.createKeyspaceAndTable()
   }
 
