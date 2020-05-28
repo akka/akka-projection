@@ -70,7 +70,7 @@ private[projection] object RunningProjection {
   private case class StopHandlerException(cause: Throwable) extends RuntimeException(cause) with NoStackTrace
 
   /**
-   * Adds a `watchTermination` on that passed Source that will call the `stopHandler` on completion.
+   * Adds a `watchTermination` on the passed Source that will call the `stopHandler` on completion.
    *
    * The stopHandler function is called on success or failure. In case of failure, the original failure is preserved.
    */
