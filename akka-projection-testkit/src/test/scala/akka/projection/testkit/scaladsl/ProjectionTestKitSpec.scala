@@ -132,20 +132,6 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       strBuffer.toString shouldBe "1-2-3-4-5"
     }
 
-    "run cray" in {
-
-      val probe =
-        Source
-          .repeat(1)
-          .runWith(TestSink.probe[Int](testKit.system.classicSystem))
-
-      probe.request(3)
-      probe.expectNextN(3)
-      probe.cancel()
-      probe.request(1)
-      probe.expectNoMessage()
-
-    }
   }
 
   case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
