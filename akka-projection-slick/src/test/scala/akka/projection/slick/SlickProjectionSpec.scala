@@ -505,7 +505,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
   "A Slick grouped projection" must {
 
-    "persist projection and offset in same the same write operation (transactional)" in {
+    "persist projection and offset in the same write operation (transactional)" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
