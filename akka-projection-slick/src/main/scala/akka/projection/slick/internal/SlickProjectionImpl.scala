@@ -112,7 +112,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   @InternalApi
   override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
     new InternalProjectionState(
-      offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile),
+      offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system)),
       settings = settingsOrDefaults).newRunningInstance()
 
   /**
@@ -123,7 +123,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    */
   override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
     new InternalProjectionState(
-      offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile),
+      offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system)),
       settings = settingsOrDefaults).mappedSource()
 
   /*
@@ -258,7 +258,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   }
 
   override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
-    val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
+    val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
     offsetStore.createIfNotExists
   }
 }

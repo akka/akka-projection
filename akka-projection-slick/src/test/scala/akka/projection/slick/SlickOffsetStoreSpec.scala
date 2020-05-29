@@ -15,6 +15,7 @@ import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
 import akka.projection.slick.internal.SlickOffsetStore
+import akka.projection.slick.internal.SlickSettings
 import akka.projection.testkit.internal.TestClock
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -30,7 +31,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import slick.basic.DatabaseConfig
 import slick.jdbc.H2Profile
 
-object OffsetStoreSpec {
+object SlickOffsetStoreSpec {
   def config: Config = ConfigFactory.parseString("""
     akka.projection.slick = {
 
@@ -43,10 +44,15 @@ object OffsetStoreSpec {
        connectionPool = disabled
        keepAliveConnection = true
       }
+      
+      offset-store {
+        schema = ""
+        table = "AKKA_PROJECTION_OFFSET_STORE"
+      }
     }
     """)
 }
-class OffsetStoreSpec
+class SlickOffsetStoreSpec
     extends AnyWordSpecLike
     with Matchers
     with ScalaFutures
@@ -57,12 +63,16 @@ class OffsetStoreSpec
   override implicit val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
 
-  val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", OffsetStoreSpec.config)
+  private val slickConfig = SlickOffsetStoreSpec.config.getConfig(SlickSettings.configPath)
+
+  val dbConfig: DatabaseConfig[H2Profile] =
+    DatabaseConfig.forConfig(SlickSettings.configPath, SlickOffsetStoreSpec.config)
 
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
 
-  private val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, clock)
+  private val offsetStore =
+    new SlickOffsetStore(dbConfig.db, dbConfig.profile, SlickSettings(slickConfig), clock)
 
   override protected def beforeAll(): Unit = {
     // create offset table

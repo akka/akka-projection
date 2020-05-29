@@ -46,13 +46,18 @@ object SlickProjectionSpec {
 
          profile = "slick.jdbc.H2Profile$"
 
-         # TODO: configure connection pool and slick async executor
-         db = {
-          url = "jdbc:h2:mem:test1"
-          driver = org.h2.Driver
-          connectionPool = disabled
-          keepAliveConnection = true
-         }
+          # TODO: configure connection pool and slick async executor
+          db = {
+            url = "jdbc:h2:mem:test1"
+            driver = org.h2.Driver
+            connectionPool = disabled
+            keepAliveConnection = true
+          }
+         
+          offset-store {
+            schema = ""
+            table = "AKKA_PROJECTION_OFFSET_STORE"
+          }
        }
       }
       """)
