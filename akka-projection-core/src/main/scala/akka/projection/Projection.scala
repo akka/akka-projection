@@ -4,6 +4,8 @@
 
 package akka.projection
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.NoStackTrace
@@ -13,6 +15,7 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
@@ -33,6 +36,10 @@ trait Projection[Envelope] {
   def projectionId: ProjectionId
 
   def withSettings(settings: ProjectionSettings): Projection[Envelope]
+
+  def statusObserver: StatusObserver[Envelope]
+
+  def withStatusObserver(observer: StatusObserver[Envelope]): Projection[Envelope]
 
   /**
    * INTERNAL API
@@ -60,11 +67,31 @@ trait Projection[Envelope] {
 @InternalApi
 private[projection] object RunningProjection {
 
-  def withBackoff(source: () => Source[Done, _], settings: ProjectionSettings): Source[Done, _] =
+  def withBackoff(
+      source: () => Source[Done, _],
+      settings: ProjectionSettings,
+      projectionId: ProjectionId,
+      statusObserver: StatusObserver[_])(implicit ec: ExecutionContext): Source[Done, _] = {
+    val count = new AtomicInteger(0)
     RestartSource
       .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
-        () => source()
+        () =>
+          source()
+            .map { elem =>
+              // TODO can we do this in a more elegant/efficient way?
+              // reset on first element
+              count.set(0)
+              elem
+            }
+            .watchTermination()(Keep.right)
+            .mapMaterializedValue { f =>
+              f.failed.foreach { _ =>
+                statusObserver.restarted(projectionId, count.incrementAndGet())
+              }
+              NotUsed
+            }
       }
+  }
 
   /* internal exception to wrap exceptions coming from stopHandler */
   private case class StopHandlerException(cause: Throwable) extends RuntimeException(cause) with NoStackTrace

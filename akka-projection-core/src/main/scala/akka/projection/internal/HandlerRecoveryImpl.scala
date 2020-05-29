@@ -4,6 +4,8 @@
 
 package akka.projection.internal
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.NonFatal
@@ -16,6 +18,8 @@ import akka.event.LoggingAdapter
 import akka.pattern.after
 import akka.pattern.retry
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionId
+import akka.projection.StatusObserver
 
 /**
  * INTERNAL API
@@ -24,12 +28,29 @@ import akka.projection.HandlerRecoveryStrategy
 
   private val futDone = Future.successful(Done)
 
-  def applyUserRecovery[Offset](
+  def apply[Offset, Envelope](
+      projectionId: ProjectionId,
       recoveryStrategy: HandlerRecoveryStrategy,
+      logger: LoggingAdapter,
+      statusObserver: StatusObserver[Envelope]): HandlerRecoveryImpl[Offset, Envelope] =
+    new HandlerRecoveryImpl(projectionId, recoveryStrategy, logger, statusObserver)
+
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class HandlerRecoveryImpl[Offset, Envelope](
+    projectionId: ProjectionId,
+    recoveryStrategy: HandlerRecoveryStrategy,
+    logger: LoggingAdapter,
+    statusObserver: StatusObserver[Envelope]) {
+  def applyRecovery(
+      env: Envelope,
       firstOffset: Offset, // used for logging
       lastOffset: Offset, // used for logging
-      logger: LoggingAdapter,
       futureCallback: () => Future[Done])(implicit system: ActorSystem[_]): Future[Done] = {
+    import HandlerRecoveryImpl.futDone
     import HandlerRecoveryStrategy.Internal._
 
     implicit val scheduler: Scheduler = system.classicSystem.scheduler
@@ -45,6 +66,16 @@ import akka.projection.HandlerRecoveryStrategy
       }
     }
 
+    def retryFutureCallback(attemptCount: AtomicInteger): () => Future[Done] = { () =>
+      tryFutureCallback().recoverWith {
+        // using recoverWith instead of `.failed.foreach` to make sure that calls to statusObserver
+        // are invoked in sequential order
+        case err =>
+          statusObserver.error(projectionId, env, err, attemptCount.incrementAndGet(), recoveryStrategy)
+          Future.failed(err)
+      }
+    }
+
     // this will count as one attempt
     val firstAttempt = tryFutureCallback()
 
@@ -54,11 +85,14 @@ import akka.projection.HandlerRecoveryStrategy
 
     firstAttempt.recoverWith {
       case err =>
+        statusObserver.error(projectionId, env, err, errorCount = 1, recoveryStrategy)
+
         recoveryStrategy match {
           case Fail =>
             logger.error(
               cause = err,
-              template = "Failed to process {}. Projection will stop as defined by recovery strategy.",
+              template = "[{}] Failed to process {}. Projection will stop as defined by recovery strategy.",
+              projectionId.id,
               offsetLogParameter)
             firstAttempt
 
@@ -72,21 +106,24 @@ import akka.projection.HandlerRecoveryStrategy
 
           case RetryAndFail(retries, delay) =>
             logger.warning(
-              "First attempt to process {} failed. Will retry [{}] time(s). " +
+              "[{}] First attempt to process {} failed. Will retry [{}] time(s). " +
               "Exception: {}",
+              projectionId.id,
               offsetLogParameter,
               retries,
               err)
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val retried = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delay))
+            val attemptCount = new AtomicInteger(1)
+            val retried = after(delay, scheduler)(retry(retryFutureCallback(attemptCount), retries - 1, delay))
             retried.failed.foreach { exception =>
               logger.error(
                 cause = exception,
                 template =
-                  "Failed to process {} after [{}] attempts. " +
+                  "[{}] Failed to process {} after [{}] attempts. " +
                   "Projection will stop as defined by recovery strategy.",
+                projectionId,
                 offsetLogParameter,
                 retries + 1)
             }
@@ -94,18 +131,21 @@ import akka.projection.HandlerRecoveryStrategy
 
           case RetryAndSkip(retries, delay) =>
             logger.warning(
-              "First attempt to process {} failed. Will retry [{}] time(s). Exception: {}",
+              "[{}] First attempt to process {} failed. Will retry [{}] time(s). Exception: {}",
+              projectionId.id,
               offsetLogParameter,
               retries,
               err)
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val retried = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delay))
+            val attemptCount = new AtomicInteger(1)
+            val retried = after(delay, scheduler)(retry(retryFutureCallback(attemptCount), retries - 1, delay))
             retried.failed.foreach { exception =>
               logger.warning(
-                "Failed to process {} after [{}] attempts. " +
+                "[{}] Failed to process {} after [{}] attempts. " +
                 "Envelope will be skipped as defined by recovery strategy. Last exception: {}",
+                projectionId.id,
                 offsetLogParameter,
                 retries + 1,
                 exception)

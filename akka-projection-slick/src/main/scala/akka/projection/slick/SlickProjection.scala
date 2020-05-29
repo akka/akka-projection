@@ -16,6 +16,7 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.internal.NoopStatusObserver
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.internal.SlickProjectionImpl
@@ -51,7 +52,8 @@ object SlickProjection {
       databaseConfig,
       settingsOpt = None,
       SlickProjectionImpl.ExactlyOnce(),
-      SlickProjectionImpl.SingleHandlerStrategy(handler))
+      SlickProjectionImpl.SingleHandlerStrategy(handler),
+      NoopStatusObserver)
 
   /**
    * Create a [[Projection]] with at-least-once processing semantics.
@@ -76,7 +78,8 @@ object SlickProjection {
       databaseConfig,
       settingsOpt = None,
       SlickProjectionImpl.AtLeastOnce(),
-      SlickProjectionImpl.SingleHandlerStrategy(handler))
+      SlickProjectionImpl.SingleHandlerStrategy(handler),
+      NoopStatusObserver)
 
   /**
    * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
@@ -99,7 +102,8 @@ object SlickProjection {
       databaseConfig,
       settingsOpt = None,
       SlickProjectionImpl.ExactlyOnce(),
-      SlickProjectionImpl.GroupedHandlerStrategy(handler))
+      SlickProjectionImpl.GroupedHandlerStrategy(handler),
+      NoopStatusObserver)
 
 }
 

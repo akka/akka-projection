@@ -30,3 +30,13 @@ Scala
 Java
 :  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #update-offset }
 
+## Status tracking
+
+The status of a `Projection` can be tracked by implementing a @apidoc[StatusObserver] and enable it with 
+`withStatusObserver` before running the `Projection`.
+
+The `StatusObserver` is called when errors occur and envelopes are retried or the projection is restarted.
+It also has callbacks for processing progress and projection lifecyle.
+
+The intention is that the implementation of the `StatusObserver` would maintain a view that can be accessed
+from an administrative UI to have an overview of current status of the projections. 

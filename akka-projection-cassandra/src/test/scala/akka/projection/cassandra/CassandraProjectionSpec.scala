@@ -28,6 +28,7 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.TestStatusObserver
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.scaladsl.Handler
@@ -431,11 +432,15 @@ class CassandraProjectionSpec
 
       val handler = concatHandlerFail4()
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
           .withSaveOffset(2, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+          .withStatusObserver(statusObserver)
 
       projectionTestKit.run(projection) {
         withClue("checking: all expected values were concatenated") {
@@ -449,6 +454,13 @@ class CassandraProjectionSpec
         // 1 + 3 => 1 original attempt and 3 retries
         handler.attempts shouldBe 1 + 3
       }
+
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 1))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 2))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 3))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 4))
+      statusProbe.expectNoMessage()
 
       withClue("check: all offsets were seen") {
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
@@ -647,13 +659,19 @@ class CassandraProjectionSpec
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
+
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
           .withSaveOffset(1, Duration.Zero)
+          .withStatusObserver(statusObserver)
 
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
+
+      statusProbe.expectMessage(TestStatusObserver.Started)
 
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
@@ -665,6 +683,9 @@ class CassandraProjectionSpec
       // completed without failure
       handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
+
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectNoMessage()
     }
 
     "call start and stop of the handler when using TestKit.runWithTestSink" in {
@@ -711,30 +732,49 @@ class CassandraProjectionSpec
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true, Some(progressProbe.ref))
+
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
           .withSettings(ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0))
           .withSaveOffset(1, Duration.Zero)
+          .withStatusObserver(statusObserver)
 
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
 
+      statusProbe.expectMessage(TestStatusObserver.Started)
+
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "abc")))
       handlerProbe.expectMessage("def")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "def")))
       handlerProbe.expectMessage("ghi")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "ghi")))
       // fail 4
       handlerProbe.expectMessage(handler.failedMessage)
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 1))
 
       // backoff will restart
+      statusProbe.expectMessage(TestStatusObserver.Restarted(1))
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("jkl")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))
       handlerProbe.expectMessage("mno")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "mno")))
       handlerProbe.expectMessage("pqr")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 6, "pqr")))
       // now completed without failure
       handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
+
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectNoMessage()
     }
 
     "call start and stop of handler when failed but no restart" in {

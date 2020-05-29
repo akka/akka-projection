@@ -17,6 +17,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.projection.internal.NoopStatusObserver
 import akka.stream.KillSwitches
 import akka.stream.OverflowStrategy
 import akka.stream.SharedKillSwitch
@@ -54,6 +55,11 @@ object ProjectionBehaviorSpec {
 
     override def withSettings(settings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
+
+    override val statusObserver: StatusObserver[Int] = NoopStatusObserver
+
+    override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =
+      this // no need for StatusObserver in tests
 
     /*
      * INTERNAL API

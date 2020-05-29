@@ -16,11 +16,13 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.cassandra.internal.CassandraProjectionImpl.AtLeastOnce
 import akka.projection.cassandra.internal.CassandraProjectionImpl.AtMostOnce
 import akka.projection.cassandra.internal.CassandraProjectionImpl.OffsetStrategy
+import akka.projection.internal.NoopStatusObserver
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 
@@ -59,7 +61,8 @@ object CassandraProjection {
       sourceProvider,
       settingsOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = SingleHandlerStrategy(handler))
+      handlerStrategy = SingleHandlerStrategy(handler),
+      statusObserver = NoopStatusObserver)
 
   /**
    * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
@@ -81,7 +84,8 @@ object CassandraProjection {
       sourceProvider,
       settingsOpt = None,
       offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(Duration.Zero)),
-      handlerStrategy = GroupedHandlerStrategy(handler))
+      handlerStrategy = GroupedHandlerStrategy(handler),
+      statusObserver = NoopStatusObserver)
 
   /**
    * Create a [[Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
@@ -97,13 +101,16 @@ object CassandraProjection {
       sourceProvider,
       settingsOpt = None,
       offsetStrategy = AtMostOnce(),
-      handlerStrategy = SingleHandlerStrategy(handler))
+      handlerStrategy = SingleHandlerStrategy(handler),
+      statusObserver = NoopStatusObserver)
 }
 
 trait CassandraProjection[Envelope] extends Projection[Envelope] {
   private[cassandra] def offsetStrategy: OffsetStrategy
 
   override def withSettings(settings: ProjectionSettings): CassandraProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjection[Envelope]
 
   /**
    * For testing purposes the offset table can be created programmatically.
@@ -118,6 +125,8 @@ trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envel
 
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceCassandraProjection[Envelope]
+
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
@@ -125,6 +134,8 @@ trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envel
 
 trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): GroupedCassandraProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedCassandraProjection[Envelope]
 
   def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): GroupedCassandraProjection[Envelope]
 
@@ -135,6 +146,8 @@ trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelo
   private[cassandra] def atMostOnceStrategy: AtMostOnce = offsetStrategy.asInstanceOf[AtMostOnce]
 
   override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtMostOnceCassandraProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
 }

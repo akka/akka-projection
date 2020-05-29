@@ -9,6 +9,7 @@ import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.ProjectionSettings;
 import akka.projection.RunningProjection;
+import akka.projection.StatusObserver;
 import akka.stream.scaladsl.Source;
 
 import java.util.concurrent.CompletableFuture;
@@ -29,8 +30,6 @@ import java.util.concurrent.TimeUnit;
 //#testkit-duration
 
 //#testkit-assertion-import
-import akka.stream.testkit.TestSubscriber;
-import akka.actor.testkit.typed.javadsl.TestProbe;
 import static org.junit.Assert.assertEquals;
 
 //#testkit-assertion-import
@@ -66,6 +65,16 @@ public class TestKitDocExample {
 
     @Override
     public Projection<String> withSettings(ProjectionSettings settings) {
+      return null;
+    }
+
+    @Override
+    public StatusObserver<String> statusObserver() {
+      return null;
+    }
+
+    @Override
+    public Projection<String> withStatusObserver(StatusObserver<String> observer) {
       return null;
     }
 
