@@ -21,6 +21,7 @@ import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.DelayStrategy
 import akka.stream.scaladsl.Source
+import akka.stream.testkit.scaladsl.TestSink
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -122,14 +123,15 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       val strBuffer = new StringBuffer("")
       val projection = TestProjection(Source(1 to 5), strBuffer, _ <= 5)
 
-      val sinkProbe = projectionTestKit.runWithTestSink(projection)
-
-      sinkProbe.request(5)
-      sinkProbe.expectNextN(5)
-      sinkProbe.expectComplete()
+      projectionTestKit.runWithTestSink(projection) { sinkProbe =>
+        sinkProbe.request(5)
+        sinkProbe.expectNextN(5)
+        sinkProbe.expectComplete()
+      }
 
       strBuffer.toString shouldBe "1-2-3-4-5"
     }
+
   }
 
   case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
@@ -176,7 +178,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
     private class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch)
         extends RunningProjection {
 
-      val futureDone = source.run()
+      private val futureDone = source.run()
 
       override def stop()(implicit ec: ExecutionContext): Future[Done] = {
         killSwitch.shutdown()

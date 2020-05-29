@@ -214,7 +214,7 @@ import akka.stream.scaladsl.Source
             .map(_ => Done)
       }
 
-      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.tryStop()))
+      RunningProjection.stopHandlerOnTermination(composedSource, () => handler.tryStop())
     }
 
     private[projection] def newRunningInstance(): RunningProjection = {
@@ -227,9 +227,6 @@ import akka.stream.scaladsl.Source
       extends RunningProjection {
 
     private val streamDone = source.run()
-    private val allStopped: Future[Done] =
-      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.tryStop())(
-        systemProvider.classicSystem.dispatcher)
 
     /**
      * INTERNAL API
@@ -241,7 +238,7 @@ import akka.stream.scaladsl.Source
     @InternalApi
     override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
       killSwitch.shutdown()
-      allStopped
+      streamDone
     }
   }
 

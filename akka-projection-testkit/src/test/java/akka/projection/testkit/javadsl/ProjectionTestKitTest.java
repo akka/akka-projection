@@ -29,7 +29,6 @@ import akka.stream.SharedKillSwitch;
 import akka.stream.javadsl.DelayStrategy;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
-import akka.stream.testkit.TestSubscriber;
 import org.scalatestplus.junit.JUnitSuite;
 
 import static org.junit.Assert.assertEquals;
@@ -52,7 +51,9 @@ public class ProjectionTestKitTest extends JUnitSuite {
         StringBuffer strBuffer = new StringBuffer("");
         TestProjection prj = new TestProjection(src, strBuffer, i -> i <= 6);
 
-        projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
+        projectionTestKit.run(prj, () -> {
+            assertEquals(strBuffer.toString(), "1-2-3-4-5-6");
+        });
     }
 
     @Test
@@ -103,7 +104,9 @@ public class ProjectionTestKitTest extends JUnitSuite {
         });
 
         try {
-            projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
+            projectionTestKit.run(prj, () -> {
+                assertEquals(strBuffer.toString(), "1-2-3-4");
+            });
             Assert.fail("should not reach that line");
         } catch (RuntimeException ex) {
             assertEquals(ex.getMessage(), streamFailureMsg);
@@ -123,7 +126,9 @@ public class ProjectionTestKitTest extends JUnitSuite {
         TestProjection prj = new TestProjection(failingSource, strBuffer, i ->  i <= 4);
 
         try {
-            projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
+            projectionTestKit.run(prj, () -> {
+                assertEquals(strBuffer.toString(), "1-2-3-4");
+            });
             Assert.fail("should not reach that line");
         } catch (RuntimeException ex) {
             assertEquals(ex.getMessage(), streamFailureMsg);
@@ -138,11 +143,12 @@ public class ProjectionTestKitTest extends JUnitSuite {
                 .boxed().collect(Collectors.toList());
 
         TestProjection prj = new TestProjection(Source.from(elements), strBuffer, i -> i <= 5);
-        TestSubscriber.Probe<Done> sinkProbe = projectionTestKit.runWithTestSink(prj);
 
-        sinkProbe.request(5);
-        sinkProbe.expectNextN(5);
-        sinkProbe.expectComplete();
+        projectionTestKit.runWithTestSink(prj, sinkProbe -> {
+            sinkProbe.request(5);
+            sinkProbe.expectNextN(5);
+            sinkProbe.expectComplete();
+        });
 
         assertEquals(strBuffer.toString(), "1-2-3-4-5");
 

@@ -10,6 +10,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.jdk.DurationConverters._
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.InternalApi
 import akka.event.Logging
@@ -194,8 +195,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         offsetsF
       }
 
-      val futSource = sourceProvider.source(readOffsets)
-
       val handlerFlow: Flow[Envelope, Done, _] =
         strategy match {
           case ExactlyOnce(recoveryStrategyOpt) =>
@@ -226,13 +225,14 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
                 .mapAsync(parallelism = 1)(storeOffset)
         }
 
-      val composedSource =
+      val composedSource: Source[Done, NotUsed] =
         Source
-          .futureSource(handler.tryStart().flatMap(_ => futSource))
+          .futureSource(handler.tryStart().flatMap(_ => sourceProvider.source(readOffsets)))
           .via(killSwitch.flow)
           .via(handlerFlow)
+          .mapMaterializedValue(_ => NotUsed)
 
-      composedSource.via(RunningProjection.stopHandlerWhenFailed(() => handler.tryStop()))
+      RunningProjection.stopHandlerOnTermination(composedSource, () => handler.tryStop())
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
@@ -244,9 +244,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       extends RunningProjection {
 
     private val streamDone = source.run()
-    private val allStopped: Future[Done] =
-      RunningProjection.stopHandlerWhenStreamCompletedNormally(streamDone, () => handler.tryStop())(
-        systemProvider.classicSystem.dispatcher)
 
     /**
      * INTERNAL API
@@ -257,7 +254,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     @InternalApi
     override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
       killSwitch.shutdown()
-      allStopped
+      streamDone
     }
   }
 
