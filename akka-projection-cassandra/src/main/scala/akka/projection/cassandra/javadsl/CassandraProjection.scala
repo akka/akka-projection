@@ -7,7 +7,7 @@ package akka.projection.cassandra.javadsl
 import java.util.concurrent.CompletionStage
 
 import akka.Done
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.projection.HandlerRecoveryStrategy
@@ -70,7 +70,7 @@ object CassandraProjection {
    * For production it's recommended to create the table with DDL statements
    * before the system is started.
    */
-  def initializeOffsetTable(systemProvider: ClassicActorSystemProvider): CompletionStage[Done]
+  def initializeOffsetTable(system: ActorSystem[_]): CompletionStage[Done]
 }
 
 @DoNotInherit trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {

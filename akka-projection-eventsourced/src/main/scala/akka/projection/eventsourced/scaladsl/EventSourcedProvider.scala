@@ -8,7 +8,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.NotUsed
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
@@ -21,14 +21,14 @@ import akka.stream.scaladsl.Source
 object EventSourcedProvider {
 
   def eventsByTag[Event](
-      systemProvider: ClassicActorSystemProvider,
+      system: ActorSystem[_],
       readJournalPluginId: String,
       tag: String): SourceProvider[Offset, EventEnvelope[Event]] = {
 
     val eventsByTagQuery =
-      PersistenceQuery(systemProvider).readJournalFor[EventsByTagQuery](readJournalPluginId)
+      PersistenceQuery(system).readJournalFor[EventsByTagQuery](readJournalPluginId)
 
-    new EventsByTagSourceProvider(eventsByTagQuery, tag, systemProvider)
+    new EventsByTagSourceProvider(eventsByTagQuery, tag, system)
   }
 
   /**
@@ -38,9 +38,9 @@ object EventSourcedProvider {
   private class EventsByTagSourceProvider[Event](
       eventsByTagQuery: EventsByTagQuery,
       tag: String,
-      systemProvider: ClassicActorSystemProvider)
+      system: ActorSystem[_])
       extends SourceProvider[Offset, EventEnvelope[Event]] {
-    implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
+    implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[Event], NotUsed]] =
       offset().map { offsetOpt =>

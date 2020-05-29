@@ -4,9 +4,9 @@
 
 package docs.kafka
 
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.util.Random
 
 import akka.Done
@@ -32,9 +32,9 @@ import slick.dbio.DBIO
 import slick.jdbc.H2Profile
 
 //#imports
-import akka.projection.kafka.KafkaSourceProvider
-import akka.projection.MergeableOffset
 import akka.kafka.ConsumerSettings
+import akka.projection.MergeableOffset
+import akka.projection.kafka.KafkaSourceProvider
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -199,8 +199,8 @@ object KafkaDocExample {
   }
 
   def consumerProjection(n: Int): Projection[ConsumerRecord[String, String]] = {
-    import IllustrateSourceProvider.sourceProvider
     import IllustrateExactlyOnce.databaseConfig
+    import IllustrateSourceProvider.sourceProvider
 
     val projectionId = ProjectionId("WordCount", s"wordcount-$n")
     SlickProjection.exactlyOnce(

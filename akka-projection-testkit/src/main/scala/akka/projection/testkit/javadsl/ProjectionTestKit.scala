@@ -7,11 +7,13 @@ package akka.projection.testkit.javadsl
 import java.time.Duration
 
 import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.javadsl.ActorTestKit
+import akka.actor.typed.ActorSystem
 import akka.actor.typed.javadsl.Adapter
 import akka.annotation.ApiMayChange
 import akka.japi.function.Effect
@@ -31,8 +33,8 @@ object ProjectionTestKit {
 @ApiMayChange
 final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
-  private implicit val system = testKit.system
-  private implicit val dispatcher = testKit.system.classicSystem.dispatcher
+  private implicit val system: ActorSystem[Void] = testKit.system
+  private implicit val executionContext: ExecutionContext = system.executionContext
   private implicit val settings: TestKitSettings = TestKitSettings(system)
 
   /**
@@ -94,7 +96,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
     val running =
       projection
         .withSettings(settingsForTest)
-        .run()(testKit.system.classicSystem)
+        .run()(testKit.system)
 
     try {
       probe.awaitAssert(max, interval, () => assertFunction())

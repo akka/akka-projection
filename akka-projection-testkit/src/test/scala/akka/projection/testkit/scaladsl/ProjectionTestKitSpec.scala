@@ -10,8 +10,8 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.ClassicActorSystemProvider
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.typed.ActorSystem
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
@@ -33,7 +33,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     "assert progress of a projection" in {
 
-      val strBuffer = new StringBuffer("")
+      val strBuffer = new StringBuffer()
       val prj = TestProjection(Source(1 to 20), strBuffer, _ <= 6)
 
       // stop as soon we observe that all expected elements passed through
@@ -44,7 +44,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     "retry assertion function until it succeeds within a max timeout" in {
 
-      val strBuffer = new StringBuffer("")
+      val strBuffer = new StringBuffer()
 
       // simulate slow stream by adding some delay on each element
       val delayedSrc = Source(1 to 20)
@@ -60,7 +60,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     "retry assertion function and fail when timeout expires" in {
 
-      val strBuffer = new StringBuffer("")
+      val strBuffer = new StringBuffer()
 
       // simulate slow stream by adding some delay on each element
       val delayedSrc = Source(1 to 20).delayWith(
@@ -80,7 +80,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
       val streamFailureMsg = "stream failure"
 
-      val strBuffer = new StringBuffer("")
+      val strBuffer = new StringBuffer()
 
       val prj = TestProjection(Source(1 to 20), strBuffer, {
         case envelope if envelope < 3 => true
@@ -101,7 +101,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
       val streamFailureMsg = "stream failure"
 
-      val strBuffer = new StringBuffer("")
+      val strBuffer = new StringBuffer()
 
       // this source will 'emit' an exception and fail the stream
       val failingSource = Source.single(1).concat(Source.failed(new RuntimeException(streamFailureMsg)))
@@ -120,7 +120,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     "run a projection with a TestSink" in {
 
-      val strBuffer = new StringBuffer("")
+      val strBuffer = new StringBuffer()
       val projection = TestProjection(Source(1 to 5), strBuffer, _ <= 5)
 
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
@@ -142,10 +142,10 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
 
-    override def run()(implicit systemProvider: ClassicActorSystemProvider) =
+    override def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(strBuffer, predicate).newRunningInstance()
 
-    private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _] =
+    private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
       new InternalProjectionState(strBuffer, predicate).mappedSource()
 
     /*
@@ -154,7 +154,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
      * when building the mappedSource and when running the projection (to stop)
      */
     private class InternalProjectionState(strBuffer: StringBuffer, predicate: Int => Boolean)(
-        implicit val systemProvider: ClassicActorSystemProvider) {
+        implicit val system: ActorSystem[_]) {
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 

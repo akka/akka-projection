@@ -67,8 +67,6 @@ public interface CassandraProjectionDocExample {
         return CompletableFuture.completedFuture(Done.getInstance());
       }
     }
-
-
   }
   //#handler
 

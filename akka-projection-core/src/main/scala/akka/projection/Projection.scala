@@ -10,7 +10,7 @@ import scala.util.control.NoStackTrace
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.stream.scaladsl.RestartSource
@@ -41,14 +41,14 @@ trait Projection[Envelope] {
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi
-  private[projection] def mappedSource()(implicit systemProvider: ClassicActorSystemProvider): Source[Done, _]
+  private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _]
 
   /**
    * INTERNAL API
    * Return a RunningProjection
    */
   @InternalApi
-  private[projection] def run()(implicit systemProvider: ClassicActorSystemProvider): RunningProjection
+  private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection
 
 }
 

@@ -5,9 +5,9 @@
 package akka.projection;
 
 import akka.Done;
-import akka.actor.ClassicActorSystemProvider;
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.typed.ActorRef;
+import akka.actor.typed.ActorSystem;
 import akka.stream.scaladsl.Source;
 
 /**
@@ -33,12 +33,12 @@ public class ProjectionBehaviorCompileTest {
         }
 
         @Override
-        public Source<Done, ?> mappedSource(ClassicActorSystemProvider systemProvider) {
+        public Source<Done, ?> mappedSource(ActorSystem<?> system) {
             return null;
         }
 
         @Override
-        public RunningProjection run(ClassicActorSystemProvider systemProvider) {
+        public RunningProjection run(ActorSystem<?> system) {
             return null;
         }
 

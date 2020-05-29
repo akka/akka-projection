@@ -4,6 +4,30 @@
 
 package akka.projection.testkit.javadsl;
 
+import akka.Done;
+import akka.NotUsed;
+import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
+import akka.actor.typed.ActorSystem;
+import akka.japi.function.Function;
+import akka.projection.Projection;
+import akka.projection.ProjectionId;
+import akka.projection.ProjectionSettings;
+import akka.projection.RunningProjection;
+import akka.stream.DelayOverflowStrategy;
+import akka.stream.KillSwitches;
+import akka.stream.SharedKillSwitch;
+import akka.stream.javadsl.DelayStrategy;
+import akka.stream.javadsl.Sink;
+import akka.stream.javadsl.Source;
+import org.junit.Assert;
+import org.junit.ClassRule;
+import org.junit.ComparisonFailure;
+import org.junit.Test;
+import org.scalatestplus.junit.JUnitSuite;
+import scala.compat.java8.FutureConverters;
+import scala.concurrent.ExecutionContext;
+import scala.concurrent.Future;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -12,54 +36,33 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import akka.projection.*;
-import org.junit.*;
-import scala.compat.java8.FutureConverters;
-import scala.concurrent.ExecutionContext;
-import scala.concurrent.Future;
-
-import akka.Done;
-import akka.NotUsed;
-import akka.actor.ClassicActorSystemProvider;
-import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
-import akka.japi.function.Function;
-import akka.stream.DelayOverflowStrategy;
-import akka.stream.KillSwitches;
-import akka.stream.SharedKillSwitch;
-import akka.stream.javadsl.DelayStrategy;
-import akka.stream.javadsl.Sink;
-import akka.stream.javadsl.Source;
-import org.scalatestplus.junit.JUnitSuite;
-
 import static org.junit.Assert.assertEquals;
 
 public class ProjectionTestKitTest extends JUnitSuite {
 
-    private List<Integer> elements = IntStream.rangeClosed(1, 20)
+    private final List<Integer> elements = IntStream.rangeClosed(1, 20)
             .boxed().collect(Collectors.toList());
 
-    private Source<Integer, NotUsed> src = Source.from(elements);
+    private final Source<Integer, NotUsed> src = Source.from(elements);
 
     @ClassRule
     public static final TestKitJunitResource testKitJunit = new TestKitJunitResource();
 
 
-    private ProjectionTestKit projectionTestKit = new ProjectionTestKit(testKitJunit.testKit());
+    private final ProjectionTestKit projectionTestKit = new ProjectionTestKit(testKitJunit.testKit());
 
     @Test
     public void assertProgressOfAProjection() {
-        StringBuffer strBuffer = new StringBuffer("");
+        StringBuffer strBuffer = new StringBuffer();
         TestProjection prj = new TestProjection(src, strBuffer, i -> i <= 6);
 
-        projectionTestKit.run(prj, () -> {
-            assertEquals(strBuffer.toString(), "1-2-3-4-5-6");
-        });
+        projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
     }
 
     @Test
     public void retryAssertionFunctionUntilItSucceedsWithinAMaxTimeout() {
 
-        StringBuffer strBuffer = new StringBuffer("");
+        StringBuffer strBuffer = new StringBuffer();
 
         Source<Integer, NotUsed> delayedSrc = src.delayWith(
                 () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(200), __ -> true),
@@ -67,14 +70,12 @@ public class ProjectionTestKitTest extends JUnitSuite {
 
         TestProjection prj = new TestProjection(delayedSrc, strBuffer, i -> i <= 6);
 
-        projectionTestKit.run(prj, Duration.ofSeconds(2), () -> {
-            assertEquals(strBuffer.toString(), "1-2-3-4-5-6");
-        });
+        projectionTestKit.run(prj, Duration.ofSeconds(2), () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
     }
 
     @Test
     public void retryAssertionFunctionAndFailWhenTimeoutExpires() {
-        StringBuffer strBuffer = new StringBuffer("");
+        StringBuffer strBuffer = new StringBuffer();
 
         Source<Integer, NotUsed> delayedSrc = src.delayWith(
                 () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(1000), __ -> true),
@@ -83,9 +84,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
         TestProjection prj = new TestProjection(delayedSrc, strBuffer, i -> i <= 2);
 
         try {
-            projectionTestKit.run(prj, Duration.ofSeconds(1), () -> {
-                assertEquals(strBuffer.toString(), "1-2");
-            });
+            projectionTestKit.run(prj, Duration.ofSeconds(1), () -> assertEquals(strBuffer.toString(), "1-2"));
             Assert.fail("should not reach that line");
         } catch (ComparisonFailure failure) {
             // that was expected
@@ -96,7 +95,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
     public void failureInsideProjectionPropagatesToTestkit() {
 
         String streamFailureMsg = "stream failure";
-        StringBuffer strBuffer = new StringBuffer("");
+        StringBuffer strBuffer = new StringBuffer();
 
         TestProjection prj = new TestProjection(src, strBuffer, i -> {
          if (i < 3) return true;
@@ -104,9 +103,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
         });
 
         try {
-            projectionTestKit.run(prj, () -> {
-                assertEquals(strBuffer.toString(), "1-2-3-4");
-            });
+            projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
             Assert.fail("should not reach that line");
         } catch (RuntimeException ex) {
             assertEquals(ex.getMessage(), streamFailureMsg);
@@ -118,7 +115,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
     public void failureInsideStreamPropagatesToTestkit() {
 
         String streamFailureMsg = "stream failure";
-        StringBuffer strBuffer = new StringBuffer("");
+        StringBuffer strBuffer = new StringBuffer();
 
         Source<Integer, NotUsed> failingSource =
                 Source.single(1).concat(Source.failed(new RuntimeException(streamFailureMsg)));
@@ -126,9 +123,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
         TestProjection prj = new TestProjection(failingSource, strBuffer, i ->  i <= 4);
 
         try {
-            projectionTestKit.run(prj, () -> {
-                assertEquals(strBuffer.toString(), "1-2-3-4");
-            });
+            projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
             Assert.fail("should not reach that line");
         } catch (RuntimeException ex) {
             assertEquals(ex.getMessage(), streamFailureMsg);
@@ -138,7 +133,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
     @Test
     public void runAProjectionWithATestSink() {
 
-        StringBuffer strBuffer = new StringBuffer("");
+        StringBuffer strBuffer = new StringBuffer();
         List<Integer> elements = IntStream.rangeClosed(1, 5)
                 .boxed().collect(Collectors.toList());
 
@@ -174,14 +169,14 @@ public class ProjectionTestKitTest extends JUnitSuite {
         }
 
         @Override
-        public akka.stream.scaladsl.Source<Done, NotUsed> mappedSource(ClassicActorSystemProvider systemProvider) {
-            return new InternalProjectionState(strBuffer, predicate, systemProvider).mappedSource();
+        public akka.stream.scaladsl.Source<Done, NotUsed> mappedSource(ActorSystem<?> system) {
+            return new InternalProjectionState(strBuffer, predicate, system).mappedSource();
         }
 
 
         @Override
-        public RunningProjection run(ClassicActorSystemProvider systemProvider) {
-            return new InternalProjectionState(strBuffer, predicate, systemProvider).newRunningInstance();
+        public RunningProjection run(ActorSystem<?> system) {
+            return new InternalProjectionState(strBuffer, predicate, system).newRunningInstance();
         }
 
         @Override
@@ -197,15 +192,15 @@ public class ProjectionTestKitTest extends JUnitSuite {
          */
         private class InternalProjectionState {
 
-            final private ClassicActorSystemProvider systemProvider;
+            final private ActorSystem<?> system;
             final private SharedKillSwitch killSwitch;
             final private StringBuffer strBuffer;
             final private Predicate<Integer> predicate;
 
-            private InternalProjectionState(StringBuffer strBuffer, Predicate<Integer> predicate, ClassicActorSystemProvider systemProvider) {
+            private InternalProjectionState(StringBuffer strBuffer, Predicate<Integer> predicate, ActorSystem<?>  system) {
                 this.strBuffer = strBuffer;
                 this.predicate = predicate;
-                this.systemProvider = systemProvider;
+                this.system = system;
                 this.killSwitch = KillSwitches.shared(TestProjection.this.projectionId().id());
             }
 
@@ -226,7 +221,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
             }
 
             private RunningProjection newRunningInstance() {
-                return new TestRunningProjection(mappedSource(), killSwitch, systemProvider);
+                return new TestRunningProjection(mappedSource(), killSwitch, system);
             }
         }
 
@@ -235,9 +230,9 @@ public class ProjectionTestKitTest extends JUnitSuite {
             final private SharedKillSwitch killSwitch;
             final private Future<Done> futureDone;
 
-            private TestRunningProjection(akka.stream.scaladsl.Source<Done, NotUsed> source, SharedKillSwitch killSwitch, ClassicActorSystemProvider systemProvider) {
+            private TestRunningProjection(akka.stream.scaladsl.Source<Done, NotUsed> source, SharedKillSwitch killSwitch, ActorSystem<?> system) {
                 this.killSwitch = killSwitch;
-                CompletionStage<Done> done = source.asJava().runWith(Sink.ignore(), systemProvider);
+                CompletionStage<Done> done = source.asJava().runWith(Sink.ignore(), system);
                 this.futureDone = FutureConverters.toScala(done);
             }
 

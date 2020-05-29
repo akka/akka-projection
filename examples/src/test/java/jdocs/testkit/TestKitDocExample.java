@@ -4,7 +4,7 @@
 
 package jdocs.testkit;
 import akka.Done;
-import akka.actor.ClassicActorSystemProvider;
+import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.ProjectionSettings;
@@ -70,12 +70,12 @@ public class TestKitDocExample {
     }
 
     @Override
-    public Source<Done, ?> mappedSource(ClassicActorSystemProvider systemProvider) {
+    public Source<Done, ?> mappedSource(ActorSystem<?> system) {
       return null;
     }
 
     @Override
-    public RunningProjection run(ClassicActorSystemProvider systemProvider) {
+    public RunningProjection run(ActorSystem<?> system) {
       return null;
     }
   };
@@ -84,21 +84,19 @@ public class TestKitDocExample {
 
   void illustrateTestKitRun() {
     //#testkit-run
-    projectionTestKit.run(projection, () -> {
+    projectionTestKit.run(projection, () ->
       cartCheckoutRepository
         .findById("abc-def")
-        .toCompletableFuture().get(1,TimeUnit.SECONDS);
-    });
+        .toCompletableFuture().get(1, TimeUnit.SECONDS));
     //#testkit-run
   }
 
   void illustrateTestKitRunWithMaxAndInterval() {
     //#testkit-run-max-interval
-    projectionTestKit.run(projection, Duration.ofSeconds(5), Duration.ofMillis(300), () -> {
+    projectionTestKit.run(projection, Duration.ofSeconds(5), Duration.ofMillis(300), () ->
       cartCheckoutRepository
         .findById("abc-def")
-        .toCompletableFuture().get(1, TimeUnit.SECONDS);
-    });
+        .toCompletableFuture().get(1, TimeUnit.SECONDS));
     //#testkit-run-max-interval
   }
 
