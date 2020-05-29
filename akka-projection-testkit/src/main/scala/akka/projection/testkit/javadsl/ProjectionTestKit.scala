@@ -44,7 +44,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * If the assert function doesn't complete without error within 3 seconds the test will fail.
    *
    * @param projection - the Projection to run
-   * @param assertFunction - a function that exercise the test assertions
+   * @param assertFunction - a function that exercises the test assertions
    */
   def run(projection: Projection[_], assertFunction: Effect): Unit =
     runInternal(projection, assertFunction, settings.SingleExpectDefaultTimeout.asJava, 100.millis.asJava)
@@ -59,7 +59,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    *
    * @param projection - the Projection to run
    * @param max - Duration delimiting the max duration of the test
-   * @param assertFunction - a function that exercise the test assertions
+   * @param assertFunction - a function that exercises the test assertions
    */
   def run(projection: Projection[_], max: Duration, assertFunction: Effect): Unit =
     runInternal(projection, assertFunction, max, 100.millis.asJava)
@@ -76,7 +76,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * @param projection - the Projection to run
    * @param max - Duration delimiting the max duration of the test
    * @param interval - Duration defining the internval in each the assert function will be called
-   * @param assertFunction - a function that exercise the test assertions
+   * @param assertFunction - a function that exercises the test assertions
    */
   def run(projection: Projection[_], max: Duration, interval: Duration, assertFunction: Effect): Unit =
     runInternal(projection, assertFunction, max, interval)
@@ -108,7 +108,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * control over the pace in which the elements flow through the Projection.
    *
    * The assertion function receives a `TestSubscriber.Probe` that you can use
-   * request elements.
+   * to request elements.
    *
    * The Projection starts as soon as the first element is requested by the `TestSubscriber.Probe`, new elements will be emitted
    * as requested. The Projection is stopped once the assert function completes.
