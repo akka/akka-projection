@@ -39,6 +39,7 @@ import akka.projection.javadsl.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -69,6 +70,26 @@ public interface CassandraProjectionDocExample {
     }
   }
   //#handler
+
+  //#grouped-handler
+  public class GroupedShoppingCartHandler extends Handler<List<EventEnvelope<ShoppingCart.Event>>> {
+    private Logger logger = LoggerFactory.getLogger(getClass());
+
+    @Override
+    public CompletionStage<Done> process(List<EventEnvelope<ShoppingCart.Event>> envelopes) {
+      envelopes.forEach(env -> {
+        ShoppingCart.Event event = env.event();
+        if (event instanceof ShoppingCart.CheckedOut) {
+          ShoppingCart.CheckedOut checkedOut = (ShoppingCart.CheckedOut) event;
+          logger.info("Shopping cart {} was checked out at {}", checkedOut.cartId, checkedOut.eventTime);
+        } else {
+          logger.debug("Shopping cart {} changed by {}", event.getCartId(), event);
+        }
+      });
+      return CompletableFuture.completedFuture(Done.getInstance());
+    }
+  }
+  //#grouped-handler
 
   public static void illustrateAtLeastOnce() {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
@@ -106,6 +127,27 @@ public interface CassandraProjectionDocExample {
         sourceProvider,
         new ShoppingCartHandler());
     //#atMostOnce
+
+  }
+
+  public static void illustrateGrouped() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+
+    SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
+      EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), "carts-1");
+
+    //#grouped
+    int groupAfterEnvelopes = 20;
+    Duration groupAfterDuration = Duration.ofMillis(500);
+
+    Projection<EventEnvelope<ShoppingCart.Event>> projection =
+      CassandraProjection.groupedWithin(
+        ProjectionId.of("shopping-carts", "carts-1"),
+        sourceProvider,
+        new GroupedShoppingCartHandler()
+      )
+      .withGroup(groupAfterEnvelopes, groupAfterDuration);
+    //#grouped
 
   }
 

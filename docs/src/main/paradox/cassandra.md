@@ -38,12 +38,14 @@ This means that if the projection is restarted from a previously stored offset s
 than once.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #atLeastOnce }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #atLeastOnce }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atLeastOnce }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #projection-imports #atLeastOnce }
 
-The `saveOffsetAfterEnvelopes` and `saveOffsetAfterDuration` parameters control how often the offset is stored.
+The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
+This window can be defined with `withSaveOffset` of the returned `AtLeastOnceCassandraProjection`.
+The default settings for the window is defined in configuration section `akka.projection.at-least-once`.
 There is a performance benefit of not storing the offset too often but the drawback is that there can be more
 duplicates when the projection that will be processed again when the projection is restarted.
 
@@ -56,21 +58,36 @@ processing semantics. This means that if the projection is restarted from previo
 may not have been processed.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #atLeastOnce }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #atMostOnce }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #projection-imports #atLeastOnce }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atMostOnce }
 
 Since the offset must be stored for each envelope this is slower than @ref:[at-least-once](#at-least-once), which
 can batch offsets before storing.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
-## Grouping
+## groupedWithin
 
 The envelopes can be grouped before processing, which can be useful for batch updates.
 
-TODO: Implementation in progress, see [PR #118](https://github.com/akka/akka-projection/pull/118)
+Scala
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #grouped }
+
+Java
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #grouped }
+
+The envelopes are grouped within a time window, or limited by a number of envelopes, whatever happens first.
+This window can be defined with `withGroup` of the returned `GroupedCassandraProjection`. The default settings for
+the window is defined in configuration section `akka.projection.grouped`.
+
+When using `groupedWithin` the handler is a @scala[`Handler[immutable.Seq[EventEnvelope[ShoppingCart.Event]]]`]@java[`Handler<List<EventEnvelope<ShoppingCart.Event>>>`].
+The @ref:[`GroupedShoppingCartHandler` is shown below](#grouped-handler).
+
+It stores the offset in Cassandra immediately after the `handler` has processed the envelopes, but that
+is still with at-least-once processing semantics. This means that if the projection is restarted
+from previously stored offset the previous group of envelopes may be processed more than once.
 
 ## Handler
 
@@ -88,6 +105,16 @@ Java
 
 Such simple handlers can also be defined as plain @scala[functions]@java[lambdas] via the helper
 @scala[`Handler.apply`]@java[`Handler.fromFunction`] factory method.
+
+### Grouped handler
+
+When using @ref:[`CassandraProjection.groupedWithin`](#groupedwithin) the handler is processing a @scala[`Seq`]@java[`List`] of envolopes.
+
+Scala
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #grouped-handler }
+
+Java
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #grouped-handler }
 
 ### Stateful handler
 

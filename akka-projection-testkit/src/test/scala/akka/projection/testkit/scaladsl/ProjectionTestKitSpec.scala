@@ -21,7 +21,6 @@ import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.DelayStrategy
 import akka.stream.scaladsl.Source
-import akka.stream.testkit.scaladsl.TestSink
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.wordspec.AnyWordSpecLike
 

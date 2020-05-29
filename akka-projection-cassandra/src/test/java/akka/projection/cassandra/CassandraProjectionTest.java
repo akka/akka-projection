@@ -139,6 +139,22 @@ public class CassandraProjectionTest extends JUnitSuite {
     });
   }
 
+  static class GroupedConcatHandler extends Handler<List<Envelope>> {
+    private final StringBuffer str;
+
+    GroupedConcatHandler(StringBuffer str) {
+      this.str = str;
+    }
+
+    @Override
+    public CompletionStage<Done> process(List<Envelope> envelopes) {
+      for (Envelope env : envelopes) {
+        str.append(env.message).append("|");
+      }
+      return CompletableFuture.completedFuture(Done.getInstance());
+    }
+  }
+
   @Test
   public void atLeastOnceShouldStoreOffset() {
     String entityId = UUID.randomUUID().toString();
@@ -196,6 +212,26 @@ public class CassandraProjectionTest extends JUnitSuite {
     projectionTestKit.run(projection2, () -> {
       assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString());
     });
+  }
+
+  @Test
+  public void groupedShouldStoreOffset() {
+    String entityId = UUID.randomUUID().toString();
+    ProjectionId projectionId = genRandomProjectionId();
+
+    StringBuffer str = new StringBuffer();
+
+    Projection<Envelope> projection = CassandraProjection
+      .groupedWithin(
+        projectionId,
+        new TestSourceProvider(entityId),
+        new GroupedConcatHandler(str))
+      .withGroup(3, Duration.ofMinutes(1));
+
+    projectionTestKit.run(projection, () ->
+      assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
+
+    assertStoredOffset(projectionId, 6L);
   }
 
   @Test

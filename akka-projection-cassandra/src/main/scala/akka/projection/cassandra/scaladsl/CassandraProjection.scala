@@ -4,7 +4,9 @@
 
 package akka.projection.cassandra.scaladsl
 
+import scala.collection.immutable
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
@@ -18,7 +20,7 @@ import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.cassandra.internal.CassandraProjectionImpl.AtLeastOnce
 import akka.projection.cassandra.internal.CassandraProjectionImpl.AtMostOnce
-import akka.projection.cassandra.internal.CassandraProjectionImpl.Strategy
+import akka.projection.cassandra.internal.CassandraProjectionImpl.OffsetStrategy
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 
@@ -33,11 +35,20 @@ import akka.projection.scaladsl.SourceProvider
  */
 @ApiMayChange
 object CassandraProjection {
+  import CassandraProjectionImpl.AtLeastOnce
+  import CassandraProjectionImpl.AtMostOnce
+  import CassandraProjectionImpl.GroupedHandlerStrategy
+  import CassandraProjectionImpl.SingleHandlerStrategy
 
   /**
    * Create a [[Projection]] with at-least-once processing semantics. It stores the offset in Cassandra
    * after the `handler` has processed the envelope. This means that if the projection is restarted
-   * from previously stored offset some elements may be processed more than once.
+   * from previously stored offset some envelopes may be processed more than once.
+   *
+   * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
+   * This window can be defined with [[AtLeastOnceCassandraProjection.withSaveOffset]] of the returned
+   * `AtLeastOnceCassandraProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.at-least-once`.
    */
   def atLeastOnce[Offset, Envelope](
       projectionId: ProjectionId,
@@ -46,9 +57,31 @@ object CassandraProjection {
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      CassandraProjectionImpl.AtLeastOnce(),
       settingsOpt = None,
-      handler)
+      offsetStrategy = AtLeastOnce(),
+      handlerStrategy = SingleHandlerStrategy(handler))
+
+  /**
+   * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
+   * The envelopes are grouped within a time window, or limited by a number of envelopes,
+   * whatever happens first. This window can be defined with [[GroupedCassandraProjection.withGroup]] of
+   * the returned `GroupedCassandraProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.grouped`.
+   *
+   * It stores the offset in Cassandra immediately after the `handler` has processed the envelopes, but that
+   * is still with at-least-once processing semantics. This means that if the projection is restarted
+   * from previously stored offset the previous group of envelopes may be processed more than once.
+   */
+  def groupedWithin[Offset, Envelope](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      handler: Handler[immutable.Seq[Envelope]]): GroupedCassandraProjection[Envelope] =
+    new CassandraProjectionImpl(
+      projectionId,
+      sourceProvider,
+      settingsOpt = None,
+      offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(Duration.Zero)),
+      handlerStrategy = GroupedHandlerStrategy(handler))
 
   /**
    * Create a [[Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
@@ -62,13 +95,13 @@ object CassandraProjection {
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
-      CassandraProjectionImpl.AtMostOnce(),
       settingsOpt = None,
-      handler)
+      offsetStrategy = AtMostOnce(),
+      handlerStrategy = SingleHandlerStrategy(handler))
 }
 
 trait CassandraProjection[Envelope] extends Projection[Envelope] {
-  private[cassandra] def strategy: Strategy
+  private[cassandra] def offsetStrategy: OffsetStrategy
 
   override def withSettings(settings: ProjectionSettings): CassandraProjection[Envelope]
 
@@ -81,16 +114,25 @@ trait CassandraProjection[Envelope] extends Projection[Envelope] {
 }
 
 trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
-  private[cassandra] def atLeastOnceStrategy: AtLeastOnce = strategy.asInstanceOf[AtLeastOnce]
+  private[cassandra] def atLeastOnceStrategy: AtLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
 
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Envelope]
+
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
 }
 
+trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): GroupedCassandraProjection[Envelope]
+
+  def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): GroupedCassandraProjection[Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): GroupedCassandraProjection[Envelope]
+}
+
 trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
-  private[cassandra] def atMostOnceStrategy: AtMostOnce = strategy.asInstanceOf[AtMostOnce]
+  private[cassandra] def atMostOnceStrategy: AtMostOnce = offsetStrategy.asInstanceOf[AtMostOnce]
 
   override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
 

@@ -6,6 +6,7 @@ package docs.slick
 
 import java.time.Instant
 
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
 import akka.actor.typed.ActorSystem
@@ -80,6 +81,28 @@ class SlickProjectionDocExample {
   }
   //#handler
 
+  //#grouped-handler
+  import scala.collection.immutable
+
+  class GroupedShoppingCartHandler(repository: OrderRepository)(implicit ec: ExecutionContext)
+      extends SlickHandler[immutable.Seq[EventEnvelope[ShoppingCart.Event]]] {
+    private val logger = LoggerFactory.getLogger(getClass)
+
+    override def process(envelopes: immutable.Seq[EventEnvelope[ShoppingCart.Event]]): DBIO[Done] = {
+      val dbios = envelopes.map(_.event).map {
+        case ShoppingCart.CheckedOut(cartId, time) =>
+          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          repository.save(Order(cartId, time))
+
+        case otherEvent =>
+          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          DBIO.successful(Done)
+      }
+      DBIO.sequence(dbios).map(_ => Done)
+    }
+  }
+  //#grouped-handler
+
   private val system = ActorSystem[Nothing](Behaviors.empty, "Example")
   //#db-config
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
@@ -117,7 +140,23 @@ class SlickProjectionDocExample {
           sourceProvider,
           dbConfig,
           handler = new ShoppingCartHandler(repository))
+        .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
     //#atLeastOnce
+  }
+
+  object IllustrateGrouped {
+    //#grouped
+    implicit val ec = system.executionContext
+
+    val projection =
+      SlickProjection
+        .groupedWithin(
+          projectionId = ProjectionId("ShoppingCarts", "carts-1"),
+          sourceProvider,
+          dbConfig,
+          handler = new GroupedShoppingCartHandler(repository))
+        .withGroup(groupAfterEnvelopes = 20, groupAfterDuration = 500.millis)
+    //#grouped
   }
 
 }

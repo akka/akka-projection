@@ -8,6 +8,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.collection.immutable
 import scala.annotation.tailrec
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
@@ -80,7 +81,7 @@ object CassandraProjectionSpec {
     val keyspace = "test"
     val table = "test_model"
 
-    def concatToText(id: String, payload: String)(implicit ec: ExecutionContext): Future[Done.type] = {
+    def concatToText(id: String, payload: String): Future[Done] = {
       for {
         concatStr <- findById(id).map {
           case Some(concatStr) => concatStr.concat(payload)
@@ -90,17 +91,17 @@ object CassandraProjectionSpec {
       } yield Done
     }
 
+    def save(concatStr: ConcatStr): Future[Done] = {
+      session.executeWrite(
+        s"INSERT INTO $keyspace.$table (id, concatenated) VALUES (?, ?)",
+        concatStr.id,
+        concatStr.text)
+    }
+
     def findById(id: String): Future[Option[ConcatStr]] = {
       session.selectOne(s"SELECT concatenated FROM $keyspace.$table WHERE id = ?", id).map {
         case Some(row) => Some(ConcatStr(id, row.getString("concatenated")))
         case None      => None
-      }
-    }
-
-    def readValue(id: String): Future[String] = {
-      findById(id).map {
-        case Some(concatStr) => concatStr.text
-        case _               => "N/A"
       }
     }
 
@@ -477,6 +478,51 @@ class CassandraProjectionSpec
       withClue("check - event handler did failed 4 times") {
         // 1 + 3 => 1 original attempt and 3 retries
         handler.attempts shouldBe 1 + 3
+      }
+    }
+  }
+
+  "A Cassandra grouped projection" must {
+
+    "persist projection and offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val groupedHandler: Handler[immutable.Seq[Envelope]] = new Handler[immutable.Seq[Envelope]] {
+        private var state: Future[Option[ConcatStr]] = repository.findById(entityId)
+
+        override def process(group: immutable.Seq[Envelope]): Future[Done] = {
+          val newState = state.flatMap { s =>
+            val concatStr = group.foldLeft(s) {
+              case (None, env)      => Some(ConcatStr(env.id, env.message))
+              case (Some(acc), env) => Some(acc.concat(env.message))
+            }
+            val ok = concatStr match {
+
+              case Some(c) => repository.save(c)
+              case None    => Future.successful(Done)
+            }
+            ok.map(_ => concatStr)
+          }
+          state = newState
+          newState.map(_ => Done)
+        }
+      }
+
+      val projection =
+        CassandraProjection
+          .groupedWithin[Long, Envelope](projectionId, sourceProvider(system, entityId), groupedHandler)
+          .withGroup(groupAfterEnvelopes = 3, groupAfterDuration = 1.minute)
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          val concatStr = repository.findById(entityId).futureValue.get
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
+        offset shouldBe 6L
       }
     }
   }

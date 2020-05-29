@@ -8,6 +8,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.collection.immutable
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -496,6 +497,41 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
 
       withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+  }
+
+  "A Slick grouped projection" must {
+
+    "persist projection and offset in the same write operation (transactional)" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val slickProjection =
+        SlickProjection.groupedWithin(
+          projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          databaseConfig = dbConfig,
+          // build event handler from simple lambda
+          handler = SlickHandler[immutable.Seq[Envelope]] { envelopes =>
+            val dbios = envelopes.map(env => repository.concatToText(env.id, env.message))
+            DBIOAction.sequence(dbios).map(_ => Done)
+          })
+
+      projectionTestKit.run(slickProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
         offset shouldBe 6L
       }
