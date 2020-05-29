@@ -30,10 +30,11 @@ jobs:
 
     - stage: test
       env:
-        - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+52-5dc56a6d"
+        - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+95-24f2b2e6"
         - CMD="test"
       name: "Run tests with Scala 2.13 and AdoptOpenJDK 8"
     - env:
+        - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+95-24f2b2e6"
         - JDK="adopt@~1.11-0"
         - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
         - CMD="test"
