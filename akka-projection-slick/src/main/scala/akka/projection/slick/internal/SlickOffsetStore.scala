@@ -66,6 +66,10 @@ import slick.jdbc.JdbcProfile
     }
   }
 
+  def clearOffset(projectionId: ProjectionId): slick.dbio.DBIO[_] = {
+    offsetTable.filter(row => row.projectionName === projectionId.name && row.projectionKey === projectionId.key).delete
+  }
+
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
 
     def projectionName = column[String]("PROJECTION_NAME", O.Length(255, varying = false))

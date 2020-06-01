@@ -25,6 +25,7 @@ object Dependencies {
   object Compile {
     val akkaActorTyped = "com.typesafe.akka" %% "akka-actor-typed" % Versions.akka
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
+    val akkaProtobufV3 = "com.typesafe.akka" %% "akka-protobuf-v3" % Versions.akka
     val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
 
     // TestKit in compile scope for ProjectionTestKit
@@ -68,6 +69,7 @@ object Dependencies {
     deps ++= Seq(
         Compile.akkaStream,
         Compile.akkaActorTyped,
+        Compile.akkaProtobufV3,
         // akka-persistence-query is only needed for OffsetSerialization, but that is always used together
         // with more specific modules, such as akka-projection-cassandra, which defines the required
         // dependency on akka-persistence-query

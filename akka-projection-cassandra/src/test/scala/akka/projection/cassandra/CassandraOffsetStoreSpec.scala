@@ -204,5 +204,25 @@ class CassandraOffsetStoreSpec
       val instant3 = selectLastUpdated(projectionId)
       instant3 shouldBe instant2
     }
+
+    "clear offset" in {
+      val projectionId = ProjectionId("projection-clear", "00")
+
+      withClue("check - save offset") {
+        offsetStore.saveOffset(projectionId, 3L).futureValue
+      }
+
+      withClue("check - read offset") {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(3)
+      }
+
+      withClue("check - clear") {
+        offsetStore.clearOffset(projectionId).futureValue
+      }
+
+      withClue("check - read offset") {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe None
+      }
+    }
   }
 }

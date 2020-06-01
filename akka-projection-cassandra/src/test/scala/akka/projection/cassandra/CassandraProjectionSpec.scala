@@ -31,6 +31,7 @@ import akka.projection.ProjectionSettings
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.scaladsl.Handler
+import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
@@ -46,7 +47,7 @@ object CassandraProjectionSpec {
 
   def offsetExtractor(env: Envelope): Long = env.offset
 
-  def sourceProvider(system: ActorSystem[_], id: String): SourceProvider[Long, Envelope] = {
+  def sourceProvider(system: ActorSystem[_], id: String, complete: Boolean = true): SourceProvider[Long, Envelope] = {
 
     val envelopes =
       List(
@@ -57,7 +58,8 @@ object CassandraProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    TestSourceProvider(system, Source(envelopes))
+    val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
+    TestSourceProvider(system, src)
   }
 
   case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, _])
@@ -761,6 +763,72 @@ class CassandraProjectionSpec
       // completed with failure
       handlerProbe.expectMessage(handler.failedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
+    }
+  }
+
+  "CassandraProjection management" must {
+    "restart from beginning when offset is cleared" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId, complete = false), concatHandler)
+          .withSaveOffset(1, Duration.Zero)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      val concatStr1 = repository.findById(entityId).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
+      eventually {
+        val concatStr = repository.findById(entityId).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr"
+      }
+    }
+
+    "restart from updated offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId, complete = false), concatHandler)
+          .withSaveOffset(1, Duration.Zero)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      val concatStr1 = repository.findById(entityId).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).updateOffset(projectionId, 3L).futureValue shouldBe Done
+      eventually {
+        val concatStr = repository.findById(entityId).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr"
+      }
     }
   }
 }

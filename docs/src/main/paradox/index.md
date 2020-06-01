@@ -15,6 +15,7 @@
 * [JPA](jpa.md)
 * [Running](running.md)
 * [Projection Settings](projection-settings.md)
+* [Management](management.md)
 * [Testing](testing.md)
 
 @@@

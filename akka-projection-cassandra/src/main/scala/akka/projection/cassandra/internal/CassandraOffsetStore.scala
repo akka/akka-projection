@@ -73,6 +73,14 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
     }
   }
 
+  def clearOffset(projectionId: ProjectionId): Future[Done] = {
+    session.executeWrite(
+      s"DELETE FROM $keyspace.$table WHERE projection_name = ? AND partition = ? AND projection_key = ?",
+      projectionId.name,
+      idToPartition(projectionId),
+      projectionId.key)
+  }
+
   // FIXME maybe we need to make this public for user's tests
   def createKeyspaceAndTable(): Future[Done] = {
     session

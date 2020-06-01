@@ -23,6 +23,7 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
@@ -65,7 +66,7 @@ object SlickProjectionSpec {
 
   case class Envelope(id: String, offset: Long, message: String)
 
-  def sourceProvider(system: ActorSystem[_], id: String): SourceProvider[Long, Envelope] = {
+  def sourceProvider(system: ActorSystem[_], id: String, complete: Boolean = true): SourceProvider[Long, Envelope] = {
 
     val envelopes =
       List(
@@ -76,7 +77,8 @@ object SlickProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    TestSourceProvider(system, Source(envelopes))
+    val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
+    TestSourceProvider(system, src)
   }
 
   case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, _])
@@ -1041,6 +1043,88 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       // completed with failure
       handlerProbe.expectMessage(handler.failedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
+    }
+  }
+
+  "SlickProjection management" must {
+    "restart from beginning when offset is cleared" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val eventHandler = new SlickHandler[Envelope] {
+        override def process(envelope: Envelope): slick.dbio.DBIO[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val projection =
+        SlickProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider(system, entityId, complete = false),
+            databaseConfig = dbConfig,
+            eventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      val concatStr1 = dbConfig.db.run(repository.findById(entityId)).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
+      eventually {
+        val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr"
+      }
+    }
+
+    "restart from updated offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val eventHandler = new SlickHandler[Envelope] {
+        override def process(envelope: Envelope): slick.dbio.DBIO[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val projection =
+        SlickProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider(system, entityId, complete = false),
+            databaseConfig = dbConfig,
+            eventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      val concatStr1 = dbConfig.db.run(repository.findById(entityId)).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).updateOffset(projectionId, 3L).futureValue shouldBe Done
+      eventually {
+        val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr"
+      }
     }
   }
 }

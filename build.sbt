@@ -9,6 +9,7 @@ lazy val core =
       name := "akka-projection-core",
       Compile / packageBin / packageOptions += Package.ManifestAttributes(
           "Automatic-Module-Name" -> "akka.projection.core"))
+    .settings(Protobuf.settings)
 
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))

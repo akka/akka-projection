@@ -16,6 +16,7 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
+import akka.projection.ProjectionOffsetManagement
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.internal.HandlerRecoveryImpl
@@ -159,18 +160,18 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    */
   private class InternalProjectionState(settings: ProjectionSettings)(implicit system: ActorSystem[_]) {
 
-    private val offsetStore = createOffsetStore()
+    implicit val executionContext: ExecutionContext = system.executionContext
 
-    private val killSwitch = KillSwitches.shared(projectionId.id)
+    val offsetStore = createOffsetStore()
+
+    val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
+
+    // TODO: add a LogSource for projection when we have a name and key
+    private val logger = Logging(system.classicSystem, this.getClass)
 
     private[projection] def mappedSource(): Source[Done, _] = {
 
       import databaseConfig.profile.api._
-
-      // TODO: add a LogSource for projection when we have a name and key
-      val logger = Logging(system.classicSystem, this.getClass)
-
-      implicit val executionContext: ExecutionContext = system.executionContext
 
       def applyUserRecovery(recoveryStrategy: HandlerRecoveryStrategy, firstOffset: Offset, lastOffset: Offset)(
           futureCallback: () => Future[Done]): Future[Done] =
@@ -300,25 +301,38 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new SlickRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
+      new SlickRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
   }
 
-  private class SlickRunningProjection(source: Source[Done, _], killSwitch: SharedKillSwitch)(
+  private class SlickRunningProjection(source: Source[Done, _], projectionState: InternalProjectionState)(
       implicit system: ActorSystem[_])
-      extends RunningProjection {
+      extends RunningProjection
+      with ProjectionOffsetManagement[Offset] {
+
+    private implicit val executionContext: ExecutionContext = system.executionContext
 
     private val streamDone = source.run()
 
-    /**
-     * INTERNAL API
-     *
-     * Stop the projection if it's running.
-     * @return Future[Done] - the returned Future should return the stream materialized value.
-     */
-    @InternalApi
-    override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
-      killSwitch.shutdown()
+    override def stop(): Future[Done] = {
+      projectionState.killSwitch.shutdown()
       streamDone
+    }
+
+    // ProjectionOffsetManagement
+    override def getOffset(): Future[Option[Offset]] = {
+      projectionState.offsetStore.readOffset(projectionId)
+    }
+
+    // ProjectionOffsetManagement
+    override def setOffset(offset: Option[Offset]): Future[Done] = {
+      offset match {
+        case Some(o) =>
+          val dbio = projectionState.offsetStore.saveOffset(projectionId, o)
+          databaseConfig.db.run(dbio).map(_ => Done)
+        case None =>
+          val dbio = projectionState.offsetStore.clearOffset(projectionId)
+          databaseConfig.db.run(dbio).map(_ => Done)
+      }
     }
   }
 

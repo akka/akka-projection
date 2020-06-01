@@ -105,11 +105,17 @@ private[projection] object RunningProjection {
 private[projection] trait RunningProjection {
 
   /**
-   * INTERNAL API
-   *
    * Stop the projection if it's running.
    * @return Future[Done] - the returned Future should return the stream materialized value.
    */
-  @InternalApi
-  private[projection] def stop()(implicit ec: ExecutionContext): Future[Done]
+  def stop(): Future[Done]
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] trait ProjectionOffsetManagement[Offset] {
+  def getOffset(): Future[Option[Offset]]
+  def setOffset(offset: Option[Offset]): Future[Done]
 }
