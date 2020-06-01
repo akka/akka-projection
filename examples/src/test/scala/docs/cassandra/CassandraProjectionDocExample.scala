@@ -64,6 +64,25 @@ object CassandraProjectionDocExample {
   }
   //#handler
 
+  //#grouped-handler
+  import scala.collection.immutable
+
+  class GroupedShoppingCartHandler extends Handler[immutable.Seq[EventEnvelope[ShoppingCart.Event]]] {
+    private val logger = LoggerFactory.getLogger(getClass)
+
+    override def process(envelopes: immutable.Seq[EventEnvelope[ShoppingCart.Event]]): Future[Done] = {
+      envelopes.map(_.event).foreach {
+        case ShoppingCart.CheckedOut(cartId, time) =>
+          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+
+        case otherEvent =>
+          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+      }
+      Future.successful(Done)
+    }
+  }
+  //#grouped-handler
+
   //#sourceProvider
   val sourceProvider =
     EventSourcedProvider
@@ -78,7 +97,7 @@ object CassandraProjectionDocExample {
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
           handler = new ShoppingCartHandler)
-        .withSaveOffset(100, 500.millis)
+        .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
     //#atLeastOnce
   }
 
@@ -92,13 +111,25 @@ object CassandraProjectionDocExample {
     //#atMostOnce
   }
 
+  object IllustrateGrouped {
+    //#grouped
+    val projection =
+      CassandraProjection
+        .groupedWithin(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider,
+          handler = new GroupedShoppingCartHandler)
+        .withGroup(groupAfterEnvelopes = 20, groupAfterDuration = 500.millis)
+    //#grouped
+  }
+
   object IllustrateRunningWithShardedDaemon {
 
     //#running-source-provider
     def sourceProvider(tag: String) =
       EventSourcedProvider
         .eventsByTag[ShoppingCart.Event](
-          systemProvider = system,
+          system = system,
           readJournalPluginId = CassandraReadJournal.Identifier,
           tag = tag)
     //#running-source-provider

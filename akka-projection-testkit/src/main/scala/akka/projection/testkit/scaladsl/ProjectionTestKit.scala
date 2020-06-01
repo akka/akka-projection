@@ -5,13 +5,14 @@
 package akka.projection.testkit.scaladsl
 
 import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl._
-import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
 import akka.projection.ProjectionSettings
@@ -27,8 +28,8 @@ object ProjectionTestKit {
 @ApiMayChange
 final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
-  private implicit val system = testKit.system
-  private implicit val dispatcher = testKit.system.classicSystem.dispatcher
+  private implicit val system: ActorSystem[Nothing] = testKit.system
+  private implicit val executionContext: ExecutionContext = testKit.system.executionContext
   private implicit val settings: TestKitSettings = TestKitSettings(system)
 
   /**
@@ -89,8 +90,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
     val running =
       projection
         .withSettings(settingsForTest)
-        .run()(testKit.system.classicSystem)
-
+        .run()(testKit.system)
     try {
       probe.awaitAssert(assertFunction, max.dilated, interval)
     } finally {
@@ -99,19 +99,25 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
   }
 
   /**
-   * Run a Projection with an attached `TestSink` allowing
-   * control over the pace the elements flow through the Projection.
+   * Run a Projection with an attached `TestSubscriber.Probe` allowing
+   * control over the pace in which the elements flow through the Projection.
    *
-   * The Projection starts as soon as the first element is requested by the `TestSink`, new elements will be emitted
-   * as requested by the `TestSink`. The Projection won't stop by itself, therefore it's recommended to cancel the
-   * `TestSink` probe to gracefully stop the Projection.
+   * The assertion function receives a `TestSubscriber.Probe` that you can use
+   * request elements.
+   *
+   * The Projection starts as soon as the first element is requested by the `TestSubscriber.Probe`, new elements will be emitted
+   * as requested. The Projection is stopped once the assert function completes.
    *
    * @param projection - the Projection to run
+   * @param assertFunction - a function receiving a `TestSubscriber.Probe[Done]`
    */
-  def runWithTestSink[T](projection: Projection[_]): TestSubscriber.Probe[Done] = {
-    val sinkProbe = TestSink.probe[Done](testKit.system.toClassic)
-    // FIXME handler.stop is not called when running like this
-    projection.mappedSource().runWith(sinkProbe)
+  def runWithTestSink(projection: Projection[_])(assertFunction: TestSubscriber.Probe[Done] => Unit): Unit = {
+    val sinkProbe = projection.mappedSource().runWith(TestSink.probe[Done](testKit.system.classicSystem))
+    try {
+      assertFunction(sinkProbe)
+    } finally {
+      sinkProbe.cancel()
+    }
   }
 
 }

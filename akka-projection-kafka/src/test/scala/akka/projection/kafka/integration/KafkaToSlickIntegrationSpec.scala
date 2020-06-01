@@ -14,6 +14,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
+import akka.actor.typed.scaladsl.adapter._
 import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
@@ -141,7 +142,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       produceEvents(topicName)
 
       val kafkaSourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
-        KafkaSourceProvider(system, consumerDefaults.withGroupId(groupId), Set(topicName))
+        KafkaSourceProvider(system.toTyped, consumerDefaults.withGroupId(groupId), Set(topicName))
 
       val slickProjection =
         SlickProjection.exactlyOnce(
@@ -171,7 +172,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       produceEvents(topicName)
 
       val kafkaSourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
-        KafkaSourceProvider(system, consumerDefaults.withGroupId(groupId), Set(topicName))
+        KafkaSourceProvider(system.toTyped, consumerDefaults.withGroupId(groupId), Set(topicName))
 
       // repository will fail to insert the "AddToCart" event type once only
       val failedOnce = new AtomicBoolean

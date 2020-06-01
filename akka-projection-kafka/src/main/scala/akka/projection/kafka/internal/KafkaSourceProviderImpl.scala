@@ -9,8 +9,8 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
-import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.kafka.ConsumerSettings
 import akka.kafka.RestrictedConsumer
@@ -40,15 +40,14 @@ import org.apache.kafka.common.TopicPartition
  * INTERNAL API
  */
 @InternalApi private[akka] class KafkaSourceProviderImpl[K, V](
-    systemProvider: ClassicActorSystemProvider,
+    system: ActorSystem[_],
     settings: ConsumerSettings[K, V],
     topics: Set[String],
     metadataClient: MetadataClientAdapter)
     extends SourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
   import KafkaSourceProviderImpl._
 
-  private val system = systemProvider.classicSystem.asInstanceOf[ExtendedActorSystem]
-  private implicit val dispatcher: ExecutionContext = systemProvider.classicSystem.dispatcher
+  private implicit val executionContext: ExecutionContext = system.executionContext
 
   private val subscription = Subscriptions.topics(topics).withPartitionAssignmentHandler(new ProjectionPartitionHandler)
   private val assignedPartitions = new AtomicReference[Set[TopicPartition]](EmptyTps)

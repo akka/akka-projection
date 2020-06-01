@@ -4,11 +4,13 @@
 
 package akka.projection.internal
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 import akka.Done
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.Scheduler
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
 import akka.pattern.after
@@ -24,13 +26,14 @@ import akka.projection.HandlerRecoveryStrategy
 
   def applyUserRecovery[Offset](
       recoveryStrategy: HandlerRecoveryStrategy,
-      offset: Offset,
+      firstOffset: Offset, // used for logging
+      lastOffset: Offset, // used for logging
       logger: LoggingAdapter,
-      futureCallback: () => Future[Done])(implicit systemProvider: ClassicActorSystemProvider): Future[Done] = {
+      futureCallback: () => Future[Done])(implicit system: ActorSystem[_]): Future[Done] = {
     import HandlerRecoveryStrategy.Internal._
 
-    implicit val scheduler = systemProvider.classicSystem.scheduler
-    implicit val dispatcher = systemProvider.classicSystem.dispatcher
+    implicit val scheduler: Scheduler = system.classicSystem.scheduler
+    implicit val executionContext: ExecutionContext = system.executionContext
 
     val tryFutureCallback: () => Future[Done] = { () =>
       try {
@@ -45,30 +48,33 @@ import akka.projection.HandlerRecoveryStrategy
     // this will count as one attempt
     val firstAttempt = tryFutureCallback()
 
+    def offsetLogParameter: String =
+      if (firstOffset == lastOffset) s"envelope with offset [$firstOffset]"
+      else s"envelopes with offsets from [$firstOffset] to [$lastOffset]"
+
     firstAttempt.recoverWith {
       case err =>
         recoveryStrategy match {
           case Fail =>
             logger.error(
               cause = err,
-              template =
-                "Failed to process envelope with offset [{}]. Projection will stop as defined by recovery strategy.",
-              offset)
+              template = "Failed to process {}. Projection will stop as defined by recovery strategy.",
+              offsetLogParameter)
             firstAttempt
 
           case Skip =>
             logger.warning(
-              "Failed to process envelope with offset [{}]. " +
+              "Failed to process {}. " +
               "Envelope will be skipped as defined by recovery strategy. Exception: {}",
-              offset,
+              offsetLogParameter,
               err)
             futDone
 
           case RetryAndFail(retries, delay) =>
             logger.warning(
-              "First attempt to process envelope with offset [{}] failed. Will retry [{}] time(s). " +
+              "First attempt to process {} failed. Will retry [{}] time(s). " +
               "Exception: {}",
-              offset,
+              offsetLogParameter,
               retries,
               err)
 
@@ -79,17 +85,17 @@ import akka.projection.HandlerRecoveryStrategy
               logger.error(
                 cause = exception,
                 template =
-                  "Failed to process envelope with offset [{}] after [{}] attempts. " +
+                  "Failed to process {} after [{}] attempts. " +
                   "Projection will stop as defined by recovery strategy.",
-                offset,
+                offsetLogParameter,
                 retries + 1)
             }
             retried
 
           case RetryAndSkip(retries, delay) =>
             logger.warning(
-              "First attempt to process envelope with offset [{}] failed. Will retry [{}] time(s). Exception: {}",
-              offset,
+              "First attempt to process {} failed. Will retry [{}] time(s). Exception: {}",
+              offsetLogParameter,
               retries,
               err)
 
@@ -98,9 +104,9 @@ import akka.projection.HandlerRecoveryStrategy
             val retried = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delay))
             retried.failed.foreach { exception =>
               logger.warning(
-                "Failed to process envelope with offset [{}] after [{}] attempts. " +
+                "Failed to process {} after [{}] attempts. " +
                 "Envelope will be skipped as defined by recovery strategy. Last exception: {}",
-                offset,
+                offsetLogParameter,
                 retries + 1,
                 exception)
             }

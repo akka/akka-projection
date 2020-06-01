@@ -4,7 +4,7 @@
 
 package jdocs.testkit;
 import akka.Done;
-import akka.actor.ClassicActorSystemProvider;
+import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.ProjectionSettings;
@@ -24,6 +24,7 @@ import akka.projection.testkit.javadsl.ProjectionTestKit;
 
 //#testkit-duration
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 //#testkit-duration
 
@@ -69,12 +70,12 @@ public class TestKitDocExample {
     }
 
     @Override
-    public Source<Done, ?> mappedSource(ClassicActorSystemProvider systemProvider) {
+    public Source<Done, ?> mappedSource(ActorSystem<?> system) {
       return null;
     }
 
     @Override
-    public RunningProjection run(ClassicActorSystemProvider systemProvider) {
+    public RunningProjection run(ActorSystem<?> system) {
       return null;
     }
   };
@@ -82,38 +83,20 @@ public class TestKitDocExample {
   CartCheckoutRepository cartCheckoutRepository = new CartCheckoutRepository();
 
   void illustrateTestKitRun() {
-
     //#testkit-run
-    projectionTestKit.run(projection, () -> {
-
-      TestProbe<CartView> testProbe = testKit.testKit().createTestProbe("cart-view-probe");
+    projectionTestKit.run(projection, () ->
       cartCheckoutRepository
-              .findById("abc-def")
-              // use a probe to capture the async result
-              .thenAccept(view -> testProbe.ref().tell(view));
-
-      CartView cartView = testProbe.expectMessageClass(CartView.class);
-      assertEquals("abc-def", cartView.id);
-
-    });
+        .findById("abc-def")
+        .toCompletableFuture().get(1, TimeUnit.SECONDS));
     //#testkit-run
-
   }
 
   void illustrateTestKitRunWithMaxAndInterval() {
     //#testkit-run-max-interval
-    projectionTestKit.run(projection, Duration.ofSeconds(5), Duration.ofMillis(300), () -> {
-
-      TestProbe<CartView> testProbe = testKit.testKit().createTestProbe("cart-view-probe");
+    projectionTestKit.run(projection, Duration.ofSeconds(5), Duration.ofMillis(300), () ->
       cartCheckoutRepository
-              .findById("abc-def")
-              // use a probe to capture the async result
-              .thenAccept(view -> testProbe.ref().tell(view));
-
-      CartView cartView = testProbe.expectMessageClass(CartView.class);
-      assertEquals("abc-def", cartView.id);
-
-    });
+        .findById("abc-def")
+        .toCompletableFuture().get(1, TimeUnit.SECONDS));
     //#testkit-run-max-interval
   }
 
@@ -121,19 +104,13 @@ public class TestKitDocExample {
   void illustrateTestKitRunWithTestSink() {
 
     //#testkit-sink-probe
-    TestSubscriber.Probe<Done> sinkProbe = projectionTestKit.runWithTestSink(projection);
-    sinkProbe.request(1);
-    sinkProbe.expectNext(Done.getInstance());
-    sinkProbe.cancel();
-
-    TestProbe<CartView> testProbe = testKit.testKit().createTestProbe("cart-view-probe");
-    cartCheckoutRepository
-      .findById("abc-def")
-       // use a probe to capture the async result
-       .thenAccept(view -> testProbe.ref().tell(view));
-
-    CartView cartView = testProbe.expectMessageClass(CartView.class);
-    assertEquals("abc-def", cartView.id);
+    projectionTestKit.runWithTestSink(projection, sinkProbe -> {
+      sinkProbe.request(1);
+      sinkProbe.expectNext(Done.getInstance());
+      cartCheckoutRepository
+        .findById("abc-def")
+        .toCompletableFuture().get(1, TimeUnit.SECONDS);
+    });
 
     //#testkit-sink-probe
   }

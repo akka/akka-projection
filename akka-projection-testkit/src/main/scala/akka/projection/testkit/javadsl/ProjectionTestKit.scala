@@ -7,13 +7,17 @@ package akka.projection.testkit.javadsl
 import java.time.Duration
 
 import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.javadsl.ActorTestKit
+import akka.actor.typed.ActorSystem
 import akka.actor.typed.javadsl.Adapter
 import akka.annotation.ApiMayChange
+import akka.japi.function.Effect
+import akka.japi.function.Procedure
 import akka.projection.Projection
 import akka.projection.ProjectionSettings
 import akka.stream.testkit.TestSubscriber
@@ -29,8 +33,8 @@ object ProjectionTestKit {
 @ApiMayChange
 final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
-  private implicit val system = testKit.system
-  private implicit val dispatcher = testKit.system.classicSystem.dispatcher
+  private implicit val system: ActorSystem[Void] = testKit.system
+  private implicit val executionContext: ExecutionContext = system.executionContext
   private implicit val settings: TestKitSettings = TestKitSettings(system)
 
   /**
@@ -42,9 +46,9 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * If the assert function doesn't complete without error within 3 seconds the test will fail.
    *
    * @param projection - the Projection to run
-   * @param assertFunction - a Runnable that exercise the test assertions
+   * @param assertFunction - a function that exercises the test assertions
    */
-  def run(projection: Projection[_], assertFunction: Runnable): Unit =
+  def run(projection: Projection[_], assertFunction: Effect): Unit =
     runInternal(projection, assertFunction, settings.SingleExpectDefaultTimeout.asJava, 100.millis.asJava)
 
   /**
@@ -57,9 +61,9 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    *
    * @param projection - the Projection to run
    * @param max - Duration delimiting the max duration of the test
-   * @param assertFunction - a Runnable that exercise the test assertions
+   * @param assertFunction - a function that exercises the test assertions
    */
-  def run(projection: Projection[_], max: Duration, assertFunction: Runnable): Unit =
+  def run(projection: Projection[_], max: Duration, assertFunction: Effect): Unit =
     runInternal(projection, assertFunction, max, 100.millis.asJava)
 
   /**
@@ -74,14 +78,14 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * @param projection - the Projection to run
    * @param max - Duration delimiting the max duration of the test
    * @param interval - Duration defining the internval in each the assert function will be called
-   * @param assertFunction - a Runnable that exercise the test assertions
+   * @param assertFunction - a function that exercises the test assertions
    */
-  def run(projection: Projection[_], max: Duration, interval: Duration, assertFunction: Runnable): Unit =
+  def run(projection: Projection[_], max: Duration, interval: Duration, assertFunction: Effect): Unit =
     runInternal(projection, assertFunction, max, interval)
 
   private def runInternal(
       projection: Projection[_],
-      assertFunction: Runnable,
+      assertFunction: Effect,
       max: Duration,
       interval: Duration): Unit = {
 
@@ -92,31 +96,35 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
     val running =
       projection
         .withSettings(settingsForTest)
-        .run()(testKit.system.classicSystem)
+        .run()(testKit.system)
 
     try {
-      probe.awaitAssert(max, interval, () => {
-        assertFunction.run()
-        Done
-      })
+      probe.awaitAssert(max, interval, () => assertFunction())
     } finally {
       Await.result(running.stop(), max.asScala)
     }
   }
 
   /**
-   * Run a Projection with an attached `TestSink` allowing
-   * control over the pace the elements flow through the Projection.
+   * Run a Projection with an attached `TestSubscriber.Probe` allowing
+   * control over the pace in which the elements flow through the Projection.
    *
-   * The Projection starts as soon as the first element is requested by the `TestSink`, new elements will be emitted
-   * as requested by the `TestSink`. The Projection won't stop by itself, therefore it's recommended to cancel the
-   * `TestSink` probe to gracefully stop the Projection.
+   * The assertion function receives a `TestSubscriber.Probe` that you can use
+   * to request elements.
+   *
+   * The Projection starts as soon as the first element is requested by the `TestSubscriber.Probe`, new elements will be emitted
+   * as requested. The Projection is stopped once the assert function completes.
    *
    * @param projection - the Projection to run
+   * @param assertFunction - a function receiving a `TestSubscriber.Probe[Done]`
    */
-  def runWithTestSink[T](projection: Projection[_]): TestSubscriber.Probe[Done] = {
-    val sinkProbe = TestSink.probe[Done](Adapter.toClassic(testKit.system))
-    projection.mappedSource().runWith(sinkProbe)
+  def runWithTestSink(projection: Projection[_], assertFunction: Procedure[TestSubscriber.Probe[Done]]): Unit = {
+    val sinkProbe = projection.mappedSource().runWith(TestSink.probe[Done](Adapter.toClassic(testKit.system)))
+    try {
+      assertFunction(sinkProbe)
+    } finally {
+      sinkProbe.cancel()
+    }
   }
 
 }

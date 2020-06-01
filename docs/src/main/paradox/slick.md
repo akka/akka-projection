@@ -48,17 +48,30 @@ than once.
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #atLeastOnce }
 
-The `saveOffsetAfterEnvelopes` and `saveOffsetAfterDuration` parameters control how often the offset is stored.
+The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
+This window can be defined with `withSaveOffset` of the returned `AtLeastOnceSlickProjection`.
+The default settings for the window is defined in configuration section `akka.projection.at-least-once`.
 There is a performance benefit of not storing the offset too often but the drawback is that there can be more
 duplicates when the projection that will be processed again when the projection is restarted.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
-## Grouping
+## groupedWithin
 
 The envelopes can be grouped before processing, which can be useful for batch updates.
 
-TODO: Implementation in progress, see [PR #118](https://github.com/akka/akka-projection/pull/118)
+Scala
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #grouped }
+
+The envelopes are grouped within a time window, or limited by a number of envelopes, whatever happens first.
+This window can be defined with `withGroup` of the returned `GroupedSlickProjection`. The default settings for
+the window is defined in configuration section `akka.projection.grouped`.
+
+When using `groupedWithin` the handler is a `SlickHandler[immutable.Seq[EventEnvelope[ShoppingCart.Event]]]`.
+The @ref:[`GroupedShoppingCartHandler` is shown below](#grouped-handler).
+
+The offset is stored in the same transaction as the `DBIO` returned from the `handler`, which means exactly-once
+processing semantics if the projection is restarted from previously stored offset.
 
 ## Handler
 
@@ -81,6 +94,13 @@ Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #db-config }
 
 Such simple handlers can also be defined as plain functions via the helper `SlickHandler.apply` factory method.
+
+### Grouped handler
+
+When using @ref:[`SlickProjection.groupedWithin`](#groupedwithin) the handler is processing a `Seq` of envolopes.
+
+Scala
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #grouped-handler }
 
 ### Stateful handler
 
@@ -126,7 +146,7 @@ The supported offset types of the `SlickProjection` are:
 * `akka.persistence.query.Offset` types from @ref:[events from Akka Persistence](eventsourced.md)
 * `MergeableOffset` that is used for @ref:[messages from Kafka](kafka.md)
 * `String`
-* @scala[`Int`]@java[Integer]
+* `Int`
 * `Long`
 
 ## Configuration

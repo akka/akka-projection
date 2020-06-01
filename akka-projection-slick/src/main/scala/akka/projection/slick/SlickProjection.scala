@@ -4,12 +4,13 @@
 
 package akka.projection.slick
 
+import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
 import akka.Done
-import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
@@ -20,7 +21,7 @@ import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.internal.SlickProjectionImpl
 import akka.projection.slick.internal.SlickProjectionImpl.AtLeastOnce
 import akka.projection.slick.internal.SlickProjectionImpl.ExactlyOnce
-import akka.projection.slick.internal.SlickProjectionImpl.Strategy
+import akka.projection.slick.internal.SlickProjectionImpl.OffsetStrategy
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
@@ -48,15 +49,21 @@ object SlickProjection {
       projectionId,
       sourceProvider,
       databaseConfig,
-      SlickProjectionImpl.ExactlyOnce(),
       settingsOpt = None,
-      handler)
+      SlickProjectionImpl.ExactlyOnce(),
+      SlickProjectionImpl.SingleHandlerStrategy(handler))
 
   /**
    * Create a [[Projection]] with at-least-once processing semantics.
    *
    * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
-   * This means that if the projection is restarted from previously stored offset some elements may be processed more than once.
+   * This means that if the projection is restarted from previously stored offset some elements may be processed more
+   * than once.
+   *
+   * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
+   * This window can be defined with [[AtLeastOnceSlickProjection.withSaveOffset]] of the returned
+   * `AtLeastOnceSlickProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.at-least-once`.
    */
   def atLeastOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
@@ -67,14 +74,37 @@ object SlickProjection {
       projectionId,
       sourceProvider,
       databaseConfig,
-      SlickProjectionImpl.AtLeastOnce(),
       settingsOpt = None,
-      handler)
+      SlickProjectionImpl.AtLeastOnce(),
+      SlickProjectionImpl.SingleHandlerStrategy(handler))
+
+  /**
+   * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
+   * The envelopes are grouped within a time window, or limited by a number of envelopes,
+   * whatever happens first. This window can be defined with [[GroupedSlickProjection.withGroup]] of
+   * the returned `GroupedSlickProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.grouped`.
+   *
+   * It stores the offset in a relational database table using Slick in the same transaction
+   * as the DBIO returned from the `handler`.
+   */
+  def groupedWithin[Offset, Envelope, P <: JdbcProfile: ClassTag](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      databaseConfig: DatabaseConfig[P],
+      handler: SlickHandler[immutable.Seq[Envelope]]): GroupedSlickProjection[Envelope] =
+    new SlickProjectionImpl(
+      projectionId,
+      sourceProvider,
+      databaseConfig,
+      settingsOpt = None,
+      SlickProjectionImpl.ExactlyOnce(),
+      SlickProjectionImpl.GroupedHandlerStrategy(handler))
 
 }
 
 trait SlickProjection[Envelope] extends Projection[Envelope] {
-  private[slick] def strategy: Strategy
+  private[slick] def offsetStrategy: OffsetStrategy
 
   override def withSettings(settings: ProjectionSettings): SlickProjection[Envelope]
 
@@ -83,26 +113,30 @@ trait SlickProjection[Envelope] extends Projection[Envelope] {
    * For production it's recommended to create the table with DDL statements
    * before the system is started.
    */
-  def createOffsetTableIfNotExists()(implicit systemProvider: ClassicActorSystemProvider): Future[Done]
+  def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done]
 }
 
 trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
-  private[slick] def atLeastOnceStrategy: AtLeastOnce = strategy.asInstanceOf[AtLeastOnce]
+  private[slick] def atLeastOnceStrategy: AtLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
 
   override def withSettings(settings: ProjectionSettings): AtLeastOnceSlickProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Envelope]
 
-  /**
-   * Java API
-   */
-  def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceSlickProjection[Envelope]
-
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceSlickProjection[Envelope]
 }
 
+trait GroupedSlickProjection[Envelope] extends SlickProjection[Envelope] {
+
+  override def withSettings(settings: ProjectionSettings): GroupedSlickProjection[Envelope]
+
+  def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): GroupedSlickProjection[Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): GroupedSlickProjection[Envelope]
+}
+
 trait ExactlyOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
-  private[slick] def exactlyOnceStrategy: ExactlyOnce = strategy.asInstanceOf[ExactlyOnce]
+  private[slick] def exactlyOnceStrategy: ExactlyOnce = offsetStrategy.asInstanceOf[ExactlyOnce]
 
   override def withSettings(settings: ProjectionSettings): ExactlyOnceSlickProjection[Envelope]
 
@@ -127,8 +161,9 @@ object SlickHandler {
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
  *
- * Error handling strategy for when processing an `Envelope` fails can be defined in the supported
- * [[HandlerRecoveryStrategyHandler]] in settings or passed to the [[akka.projection.Projection]].
+ * Supported error handling strategies for when processing an `Envelope` fails can be
+ * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
+ * implementation.
  */
 @ApiMayChange
 trait SlickHandler[Envelope] extends HandlerLifecycle {
