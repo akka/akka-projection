@@ -9,7 +9,7 @@ import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
 import akka.projection.OffsetVerification
-import akka.projection.Success
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.javadsl.Source
 
 trait SourceProvider[Offset, Envelope] {
@@ -18,6 +18,6 @@ trait SourceProvider[Offset, Envelope] {
 
   def extractOffset(envelope: Envelope): Offset
 
-  def verifyOffset(offset: Offset): OffsetVerification = Success
+  def verifyOffset(offset: Offset): OffsetVerification = VerificationSuccess
 
 }

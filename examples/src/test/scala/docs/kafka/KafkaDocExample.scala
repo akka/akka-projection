@@ -34,7 +34,6 @@ import slick.jdbc.H2Profile
 
 //#imports
 import akka.kafka.ConsumerSettings
-import akka.projection.MergeableOffset
 import akka.projection.kafka.KafkaSourceProvider
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord

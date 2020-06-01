@@ -14,12 +14,10 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.projection.Success
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
-import akka.projection.SkipOffset
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
@@ -28,6 +26,8 @@ import akka.projection.slick.ExactlyOnceSlickProjection
 import akka.projection.slick.GroupedSlickProjection
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
@@ -186,28 +186,21 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           recoveryStrategy: HandlerRecoveryStrategy,
           offset: Offset,
           env: Envelope): Future[Done] = {
-        // run user function and offset storage on the same transaction
-        // any side-effect in user function is at-least-once
-        val txDBIO =
-          offsetStore
-            .saveOffset(projectionId, offset)
-            .flatMap { _ =>
-              val dbio = handler.process(env)
-              dbio
-            }
-            .transactionally
-
-        sourceProvider.verifyOffset(offset) match {
-          case Success =>
-            applyUserRecovery(recoveryStrategy, offset, offset) { () =>
+        applyUserRecovery(recoveryStrategy, offset, offset) { () =>
+          val handlerAction = handler.process(env)
+          sourceProvider.verifyOffset(offset) match {
+            case VerificationSuccess =>
+              // run user function and offset storage on the same transaction
+              // any side-effect in user function is at-least-once
+              val txDBIO = offsetStore.saveOffset(projectionId, offset).flatMap(_ => handlerAction).transactionally
               databaseConfig.db.run(txDBIO).map(_ => Done)
-            }
-          case SkipOffset(reason) =>
-            logger.warning(
-              "The offset failed source provider verification after the envelope was processed. " +
-              "The transaction will not be executed. Skipping envelope with reason: {}",
-              reason)
-            Future.successful(Done)
+            case VerificationFailure(reason) =>
+              logger.warning(
+                "The offset failed source provider verification after the envelope was processed. " +
+                "The transaction will not be executed. Skipping envelope with reason: {}",
+                reason)
+              Future.successful(Done)
+          }
         }
       }
 
@@ -247,8 +240,8 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         .mapConcat { env =>
           val offset = sourceProvider.extractOffset(env)
           sourceProvider.verifyOffset(offset) match {
-            case Success => List(offset -> env)
-            case SkipOffset(reason) =>
+            case VerificationSuccess => List(offset -> env)
+            case VerificationFailure(reason) =>
               logger.warning("Source provider instructed projection to skip envelope with reason: {}", reason)
               Nil
           }

@@ -18,13 +18,13 @@ import akka.kafka.Subscriptions
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.PartitionAssignmentHandler
 import akka.projection.OffsetVerification
-import akka.projection.SkipOffset
-import akka.projection.Success
 import akka.projection.kafka.GroupOffsets
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import akka.NotUsed
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 
@@ -78,9 +78,10 @@ import org.apache.kafka.common.TopicPartition
 
   override def verifyOffset(offsets: GroupOffsets): OffsetVerification = {
     if ((assignedPartitions.get() -- offsets.partitions) == EmptyTps)
-      SkipOffset("The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
+      VerificationFailure(
+        "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
     else
-      Success
+      VerificationSuccess
   }
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =

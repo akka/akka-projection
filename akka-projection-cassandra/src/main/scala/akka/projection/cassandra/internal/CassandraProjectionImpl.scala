@@ -17,12 +17,10 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.projection.Success
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
-import akka.projection.SkipOffset
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.javadsl
 import akka.projection.cassandra.scaladsl
@@ -30,6 +28,8 @@ import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
@@ -220,8 +220,8 @@ import akka.stream.scaladsl.Source
           .mapConcat { env =>
             val offset = sourceProvider.extractOffset(env)
             sourceProvider.verifyOffset(offset) match {
-              case Success => List(offset -> env)
-              case SkipOffset(reason) =>
+              case VerificationSuccess => List(offset -> env)
+              case VerificationFailure(reason) =>
                 logger.warning("Source provider instructed projection to skip record with reason: {}", reason)
                 Nil
             }

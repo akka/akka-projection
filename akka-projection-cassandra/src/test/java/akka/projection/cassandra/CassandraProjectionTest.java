@@ -8,7 +8,6 @@ import akka.Done;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.OffsetVerification;
-import akka.projection.Success;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.internal.CassandraOffsetStore;
