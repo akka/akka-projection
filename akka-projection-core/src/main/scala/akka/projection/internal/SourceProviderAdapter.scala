@@ -8,9 +8,9 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
+import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
 import scala.concurrent.Future
-import scala.jdk.FutureConverters._
-import scala.jdk.OptionConverters._
 
 import akka.annotation.InternalApi
 import akka.projection.javadsl
@@ -29,9 +29,9 @@ import akka.stream.scaladsl.Source
     // it _should_ not be used for the blocking operation of getting offsets themselves
     val ec = akka.dispatch.ExecutionContexts.parasitic
     val offsetAdapter = new Supplier[CompletionStage[Optional[Offset]]] {
-      override def get(): CompletionStage[Optional[Offset]] = offset().map(_.toJava)(ec).asJava
+      override def get(): CompletionStage[Optional[Offset]] = offset().map(_.asJava)(ec).toJava
     }
-    delegate.source(offsetAdapter).asScala.map(_.asScala)(ec)
+    delegate.source(offsetAdapter).toScala.map(_.asScala)(ec)
   }
 
   def extractOffset(envelope: Envelope): Offset =

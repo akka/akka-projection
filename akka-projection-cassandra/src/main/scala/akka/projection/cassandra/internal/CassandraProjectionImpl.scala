@@ -7,10 +7,10 @@ package akka.projection.cassandra.internal
 import java.util.concurrent.CompletionStage
 
 import scala.collection.immutable
+import scala.compat.java8.DurationConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-import scala.jdk.DurationConverters._
 
 import akka.Done
 import akka.NotUsed

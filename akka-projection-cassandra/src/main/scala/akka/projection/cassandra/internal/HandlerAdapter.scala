@@ -5,7 +5,6 @@
 package akka.projection.cassandra.internal
 
 import scala.collection.immutable
-import scala.jdk.CollectionConverters._
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Future
 
@@ -13,6 +12,7 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.javadsl
 import akka.projection.scaladsl
+import akka.util.ccompat.JavaConverters._
 
 /**
  * INTERNAL API: Adapter from javadsl.Handler to scaladsl.Handler
