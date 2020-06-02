@@ -28,6 +28,6 @@ private[projection] object SlickSettings {
   val configPath = "akka.projection.slick"
 
   def apply(system: ActorSystem[_]): SlickSettings =
-    SlickSettings(system.classicSystem.settings.config.getConfig(configPath))
+    SlickSettings(system.settings.config.getConfig(configPath))
 
 }

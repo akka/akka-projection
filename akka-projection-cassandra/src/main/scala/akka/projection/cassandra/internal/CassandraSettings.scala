@@ -25,5 +25,5 @@ private[projection] case class CassandraSettings(config: Config) {
 private[projection] object CassandraSettings {
 
   def apply(system: ActorSystem[_]): CassandraSettings =
-    CassandraSettings(system.classicSystem.settings.config.getConfig("akka.projection.cassandra"))
+    CassandraSettings(system.settings.config.getConfig("akka.projection.cassandra"))
 }
