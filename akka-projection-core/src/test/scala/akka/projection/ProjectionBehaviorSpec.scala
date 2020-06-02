@@ -122,8 +122,9 @@ object ProjectionBehaviorSpec {
           }
         // make sure the StopObserved is sent to testProbe before returned Future is completed
         stopFut
-          .andThen { _ =>
-            testProbe.ref ! StopObserved
+          .andThen {
+            case _ =>
+              testProbe.ref ! StopObserved
           }
       }
 

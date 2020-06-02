@@ -70,14 +70,16 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   /**
    * A convenience method to serialize asynchronous operations to occur one after another is complete
    */
-  private def serialize(batches: Map[String, Seq[ProjectionContextImpl[Offset, Envelope]]])(
-      op: (String, Seq[ProjectionContextImpl[Offset, Envelope]]) => Future[Done]): Future[Done] = {
+  private def serialize(batches: Map[String, immutable.Seq[ProjectionContextImpl[Offset, Envelope]]])(
+      op: (String, immutable.Seq[ProjectionContextImpl[Offset, Envelope]]) => Future[Done]): Future[Done] = {
 
     val logProgressEvery: Int = 5
     val size = batches.size
     logger.debug("Processing [{}] partitioned batches serially", size)
 
-    def loop(remaining: List[(String, Seq[ProjectionContextImpl[Offset, Envelope]])], n: Int): Future[Done] = {
+    def loop(
+        remaining: List[(String, immutable.Seq[ProjectionContextImpl[Offset, Envelope]])],
+        n: Int): Future[Done] = {
       remaining match {
         case Nil => Future.successful(Done)
         case (key, batch) :: tail =>
@@ -306,7 +308,11 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         .futureSource(
           handlerLifecycle
             .tryStart()
-            .flatMap(_ => sourceProvider.source(() => readOffsets())))
+            .flatMap { _ =>
+              sourceProvider
+                .source(() => readOffsets())
+                .map(_.mapMaterializedValue(_ => NotUsed))
+            })
         .via(killSwitch.flow)
         .map(env => ProjectionContextImpl(sourceProvider.extractOffset(env), env))
         .filter { context =>
@@ -353,7 +359,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     src.watchTermination() { (_, futDone) =>
       handlerStrategy.recreateHandlerOnNextAccess()
       futDone
-        .andThen(_ => handlerLifecycle.tryStop())
+        .andThen { case _ => handlerLifecycle.tryStop() }
         .andThen {
           case Success(_) =>
             statusObserver.stopped(projectionId)

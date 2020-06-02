@@ -5,6 +5,7 @@
 package docs.kafka
 
 import scala.concurrent.Await
+import akka.actor.typed.scaladsl._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -54,7 +55,7 @@ object KafkaDocExample {
     override def process(session: HibernateJdbcSession, envelope: ConsumerRecord[String, String]): Unit = {
       val word = envelope.value
       val newCount = state.getOrElse(word, 0) + 1
-      logger.info(
+      logger.infoN(
         "{} consumed from topic/partition {}/{}. Word count for [{}] is {}",
         projectionId,
         envelope.topic,
@@ -99,7 +100,7 @@ object KafkaDocExample {
       val key = word
       val producerRecord = new ProducerRecord(topic, key, word)
       val result = sendProducer.send(producerRecord).map { recordMetadata =>
-        logger.info("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition)
+        logger.infoN("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition)
         Done
       }
       // FIXME support for async Handler, issue #23

@@ -6,7 +6,8 @@ import sbt._
 object Dependencies {
 
   val Scala213 = "2.13.2"
-  val ScalaVersions = Seq(Scala213)
+  val Scala212 = "2.12.11"
+  val ScalaVersions = Seq(Scala212, Scala213)
 
   val AkkaVersionInDocs = "2.6"
   val AlpakkaVersionInDocs = "2.0"

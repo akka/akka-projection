@@ -1,7 +1,5 @@
 import akka.projections.Dependencies
 
-scalaVersion := Dependencies.Scala213
-
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
     .settings(Dependencies.core)

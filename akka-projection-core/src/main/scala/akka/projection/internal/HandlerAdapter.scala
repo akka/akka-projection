@@ -7,13 +7,12 @@ package akka.projection.internal
 import scala.collection.immutable
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Future
-import scala.jdk.CollectionConverters._
 
 import akka.Done
 import akka.annotation.InternalApi
-import akka.projection.internal.ActorHandlerInit
 import akka.projection.javadsl
 import akka.projection.scaladsl
+import akka.util.ccompat.JavaConverters._
 
 object HandlerAdapter {
   def apply[Envelope](delegate: javadsl.Handler[Envelope]): scaladsl.Handler[Envelope] = {

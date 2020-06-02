@@ -46,7 +46,8 @@ import slick.jdbc.JdbcProfile
     results.map {
       case Nil => None
       case reps if reps.forall(_.mergeable) =>
-        Some(fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(reps)).asInstanceOf[Offset])
+        Some(
+          fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(reps.toList)).asInstanceOf[Offset])
       case reps =>
         reps.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
     }
@@ -58,8 +59,10 @@ import slick.jdbc.JdbcProfile
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): slick.dbio.DBIO[_] = {
     val now: Instant = Instant.now(clock)
     toStorageRepresentation(projectionId, offset) match {
-      case offset: SingleOffset  => newRow(offset, now)
-      case MultipleOffsets(reps) => DBIO.sequence(reps.map(rep => newRow(rep, now)))
+      case offset: SingleOffset => newRow(offset, now)
+      case MultipleOffsets(reps) =>
+        val actions = reps.map(rep => newRow(rep, now))
+        DBIO.sequence(actions)
     }
   }
 
