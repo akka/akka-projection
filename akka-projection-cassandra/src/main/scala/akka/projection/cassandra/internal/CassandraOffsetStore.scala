@@ -29,7 +29,8 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 
   private implicit val executionContext: ExecutionContext = system.executionContext
   private val cassandraSettings = CassandraSettings(system)
-  val session: CassandraSession = CassandraSessionRegistry(system).sessionFor(cassandraSettings.sessionConfigPath)
+  private val session: CassandraSession =
+    CassandraSessionRegistry(system).sessionFor(cassandraSettings.sessionConfigPath)
 
   val keyspace: String = cassandraSettings.keyspace
   val table: String = cassandraSettings.table

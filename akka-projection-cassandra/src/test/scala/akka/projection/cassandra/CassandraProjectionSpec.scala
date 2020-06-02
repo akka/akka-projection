@@ -33,6 +33,7 @@ import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
@@ -127,7 +128,7 @@ class CassandraProjectionSpec
 
   private implicit val ec: ExecutionContext = system.executionContext
   private val offsetStore = new CassandraOffsetStore(system)
-  private val session = offsetStore.session
+  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
   private val repository = new TestRepository(session)
   private val projectionTestKit = new ProjectionTestKit(testKit)
 

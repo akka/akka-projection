@@ -46,7 +46,7 @@ public class CassandraProjectionTest extends JUnitSuite {
   @BeforeClass
   public static void beforeAll() throws Exception {
     offsetStore = new CassandraOffsetStore(testKit.system());
-    session = new CassandraSession(offsetStore.session());
+    session =  CassandraSessionRegistry.get(testKit.system()).sessionFor("akka.projection.cassandra.session-config");
     Await.result(offsetStore.createKeyspaceAndTable(), scala.concurrent.duration.Duration.create(10, TimeUnit.SECONDS));
   }
 
