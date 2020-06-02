@@ -14,9 +14,9 @@ import com.typesafe.config.Config
 @InternalApi
 private[projection] case class SlickSettings(config: Config) {
 
-  def schema: Option[String] =
+  val schema: Option[String] =
     Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty)
-  def table: String = config.getString("offset-store.table")
+  val table: String = config.getString("offset-store.table")
 }
 
 /**
