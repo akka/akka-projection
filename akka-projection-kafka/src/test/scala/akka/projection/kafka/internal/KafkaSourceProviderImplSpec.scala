@@ -80,36 +80,34 @@ class KafkaSourceProviderImplSpec
 
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
         provider.partitionHandler.onAssign(Set(tp0, tp1), null)
+        provider.partitionHandler.onRevoke(Set.empty, null)
 
         sinkProbe.request(10)
-
-        //projection.verifyNextN(10)
         var records = projection.processNextN(10)
         sinkProbe.expectNextN(10)
 
         withClue("checking: processed records contain 5 from each partition") {
-          records.foreach(println)
           records.length shouldBe 10
           records.count(_.partition() == tp0.partition()) shouldBe 5
           records.count(_.partition() == tp1.partition()) shouldBe 5
         }
 
-        println("reassigning partitions")
+        // assign only tp0 to this projection
         provider.partitionHandler.onAssign(Set(tp0), null)
+        provider.partitionHandler.onRevoke(Set(tp1), null)
 
+        // only 5 records should remain, because the other 5 were filtered out
         sinkProbe.request(5)
-        //projection.verifyNextN(10)
         records = projection.processNextN(5)
         sinkProbe.expectNextN(5)
 
         withClue("checking: after rebalance processed records should only have records from partition 0") {
-          records.foreach(println)
           records.count(_.partition() == tp0.partition()) shouldBe 5
           records.count(_.partition() == tp1.partition()) shouldBe 0
         }
       }
 
-      projection.cancelProbes()
+      projection.cancelProbe()
     }
   }
 
@@ -120,42 +118,28 @@ class KafkaSourceProviderImplSpec
     override def stop(): Unit = ()
   }
 
-  // TODO: Adapt TestProjection from ProjectionTestKitSpec instead of implementing something completely custom
+  // NOTE: Copied mostly from ProjectionTestKitSpec.
+  // Maybe a `TestProjection` could be abstracted out and reused to reduce test boilerplate
   case class TestProjection(
       sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]],
       topic: String,
       partitions: Int)
       extends Projection[ConsumerRecord[Int, Int]] {
 
-    val groupOffsets = GroupOffsets(
+    val groupOffsets: GroupOffsets = GroupOffsets(
       (0 until partitions).map(i => TopicPartitionKey(new TopicPartition(topic, i)) -> 0L).toMap)
+
     val (processedQueue, processedProbe) = Source
       .queue[ConsumerRecord[String, String]](0, OverflowStrategy.backpressure)
       .toMat(TestSink.probe(system.classicSystem))(Keep.both)
       .run()
-    val (verifiedQueue, verifiedProbe) = Source
-      .queue[Done](0, OverflowStrategy.backpressure)
-      .toMat(TestSink.probe(system.classicSystem))(Keep.both)
-      .run()
-
-    def verifyNextN(n: Long): Unit = {
-      verifiedProbe.request(n)
-      processedProbe.request(n)
-      verifiedProbe.expectNextN(n)
-      //verifiedProbe.expectNextN(n)
-    }
 
     def processNextN(n: Long): Seq[ConsumerRecord[String, String]] = {
-      //verifiedProbe.request(n)
       processedProbe.request(n)
-      //verifiedProbe.expectNextN(n)
       processedProbe.expectNextN(n)
     }
 
-    def cancelProbes(): Unit = {
-      verifiedProbe.cancel()
-      processedProbe.cancel()
-    }
+    def cancelProbe(): Unit = processedProbe.cancel()
 
     private lazy val internalState = new InternalProjectionState()
 
@@ -183,19 +167,14 @@ class KafkaSourceProviderImplSpec
           .futureSource(futSource)
           .map(env => (sourceProvider.extractOffset(env), env))
           .filter {
-            case (offset, record) =>
-              //Await.result(verifiedQueue.offer(Done), 10.millis)
-              println(s"verifying offset $offset")
-              val pred = sourceProvider.verifyOffset(offset) match {
+            case (offset, _) =>
+              sourceProvider.verifyOffset(offset) match {
                 case VerificationSuccess    => true
                 case VerificationFailure(_) => false
               }
-              println(s"verified offset $offset, predicate: $pred")
-              pred
           }
           .map {
             case (_, record) =>
-              println(s"processing: $record")
               Await.result(processedQueue.offer(record), 10.millis)
               Done
           }
