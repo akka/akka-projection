@@ -26,6 +26,7 @@ import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
+import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
 import com.typesafe.config.ConfigFactory
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -117,8 +118,8 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
   override implicit def patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(30, Seconds), interval = Span(500, Milliseconds))
 
-  val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", config)
-  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile)
+  val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig(SlickSettings.configPath, config)
+  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, SlickSettings(system.toTyped))
   val repository = new EventTypeCountRepository(dbConfig)
 
   override protected def beforeAll(): Unit = {

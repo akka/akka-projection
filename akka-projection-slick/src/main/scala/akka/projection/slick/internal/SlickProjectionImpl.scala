@@ -135,9 +135,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    */
   @InternalApi
   override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
-    new InternalProjectionState(
-      offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile),
-      settings = settingsOrDefaults).newRunningInstance()
+    new InternalProjectionState(settingsOrDefaults).newRunningInstance()
 
   /**
    * INTERNAL API
@@ -146,9 +144,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
-    new InternalProjectionState(
-      offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile),
-      settings = settingsOrDefaults).mappedSource()
+    new InternalProjectionState(settingsOrDefaults).mappedSource()
 
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
@@ -161,8 +157,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    * This internal class will hold the KillSwitch that is needed
    * when building the mappedSource and when running the projection (to stop)
    */
-  private class InternalProjectionState(offsetStore: SlickOffsetStore[P], settings: ProjectionSettings)(
-      implicit system: ActorSystem[_]) {
+  private class InternalProjectionState(settings: ProjectionSettings)(implicit system: ActorSystem[_]) {
+
+    private val offsetStore = createOffsetStore()
 
     private val killSwitch = KillSwitches.shared(projectionId.id)
 
@@ -325,8 +322,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     }
   }
 
+  private def createOffsetStore()(implicit system: ActorSystem[_]) =
+    new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
+
   override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
-    val offsetStore = new SlickOffsetStore(databaseConfig.db, databaseConfig.profile)
-    offsetStore.createIfNotExists
+    createOffsetStore().createIfNotExists
   }
 }

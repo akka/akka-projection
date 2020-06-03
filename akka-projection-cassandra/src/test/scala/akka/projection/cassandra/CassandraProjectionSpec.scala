@@ -127,9 +127,9 @@ class CassandraProjectionSpec
 
   import CassandraProjectionSpec._
 
-  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
   private implicit val ec: ExecutionContext = system.executionContext
-  private val offsetStore = new CassandraOffsetStore(session)
+  private val offsetStore = new CassandraOffsetStore(system)
+  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
   private val repository = new TestRepository(session)
   private val projectionTestKit = new ProjectionTestKit(testKit)
 

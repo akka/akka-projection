@@ -29,13 +29,11 @@ class CassandraOffsetStoreSpec
     with AnyWordSpecLike
     with LogCapturing {
 
-  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
-  private implicit val ec: ExecutionContext = system.executionContext
-
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
-
-  private val offsetStore = new CassandraOffsetStore(session, clock)
+  private val offsetStore = new CassandraOffsetStore(system, clock)
+  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
+  private implicit val ec: ExecutionContext = system.executionContext
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
