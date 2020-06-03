@@ -20,6 +20,7 @@ object Dependencies {
     val scalaTest = "3.1.1"
     val testContainersScala = "0.37.0"
     val junit = "4.12"
+    val h2Driver = "1.4.200"
   }
 
   object Compile {
@@ -37,6 +38,9 @@ object Dependencies {
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
 
     val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
+
+    // not really used in lib code, but in example and test
+    val h2Driver = "com.h2database" % "h2" % Versions.h2Driver
   }
 
   object Test {
@@ -47,7 +51,8 @@ object Dependencies {
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % sbt.Test
     val junit = "junit" % "junit" % Versions.junit % sbt.Test
-    val h2Driver = "com.h2database" % "h2" % "1.4.200" % sbt.Test
+
+    val h2Driver = Compile.h2Driver % sbt.Test
     val logback = "ch.qos.logback" % "logback-classic" % "1.2.3" % sbt.Test
     val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
     val cassandraContainer =
@@ -57,6 +62,8 @@ object Dependencies {
   }
 
   object Examples {
+    val hibernate = "org.hibernate" % "hibernate-core" % "5.2.13.Final"
+
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
     val akkaPersistenceCassandra = "com.typesafe.akka" %% "akka-persistence-cassandra" % "1.0.0"
@@ -83,6 +90,9 @@ object Dependencies {
 
   val eventsourced =
     deps ++= Seq(Compile.akkaPersistenceQuery)
+
+  val jdbc =
+    deps ++= Seq(Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
 
   val slick =
     deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
@@ -114,6 +124,8 @@ object Dependencies {
         Examples.akkaClusterShardingTyped,
         Examples.akkaPersistenceCassandra,
         Examples.akkaPersistenceJdbc,
+        Examples.hibernate,
+        Test.h2Driver,
         Test.akkaTypedTestkit,
         Test.logback,
         Test.testContainers,
