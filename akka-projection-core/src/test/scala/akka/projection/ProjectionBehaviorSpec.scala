@@ -115,13 +115,9 @@ object ProjectionBehaviorSpec {
           }
         // make sure the StopObserved is sent to testProbe before returned Future is completed
         stopFut
-          .map { _ =>
+          .andThen { _ =>
             testProbe.ref ! StopObserved
             Done
-          }
-          .recoverWith { exc =>
-            testProbe.ref ! StopObserved
-            Future.failed(exc)
           }
       }
 

@@ -38,7 +38,7 @@ class TestStatusObserver[Envelope](
       probe ! Started
   }
 
-  override def restarted(projectionId: ProjectionId): Unit = {
+  override def restarted(projectionId: ProjectionId, cause: Throwable): Unit = {
     if (lifecycle)
       probe ! Restarted
   }

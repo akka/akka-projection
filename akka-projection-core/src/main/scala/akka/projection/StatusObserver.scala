@@ -19,7 +19,7 @@ abstract class StatusObserver[-Envelope] {
   /**
    * Called when a projection is restarted due to failure.
    */
-  def restarted(projectionId: ProjectionId): Unit
+  def restarted(projectionId: ProjectionId, cause: Throwable): Unit
 
   /**
    * Called when a projection is stopped.

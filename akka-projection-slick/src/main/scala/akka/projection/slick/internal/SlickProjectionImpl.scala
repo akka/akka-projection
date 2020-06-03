@@ -315,14 +315,13 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
       RunningProjection.stopHandlerOnTermination(
         composedSource,
-        () => handlerStrategy.lifecycle.tryStop(),
-        () => statusObserver.stopped(projectionId))
+        projectionId,
+        handlerStrategy.lifecycle,
+        statusObserver)
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new SlickRunningProjection(
-        RunningProjection.withBackoff(() => mappedSource(), settings, projectionId, statusObserver),
-        this)
+      new SlickRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
   }
 
   private class SlickRunningProjection(source: Source[Done, _], projectionState: InternalProjectionState)(

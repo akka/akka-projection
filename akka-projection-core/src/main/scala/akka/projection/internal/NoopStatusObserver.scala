@@ -19,7 +19,7 @@ import akka.projection.StatusObserver
 
   def started(projectionId: ProjectionId): Unit = ()
 
-  def restarted(projectionId: ProjectionId): Unit = ()
+  def restarted(projectionId: ProjectionId, cause: Throwable): Unit = ()
 
   def stopped(projectionId: ProjectionId): Unit = ()
 

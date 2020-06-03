@@ -290,14 +290,13 @@ import akka.stream.scaladsl.Source
 
       RunningProjection.stopHandlerOnTermination(
         composedSource,
-        () => handlerStrategy.lifecycle.tryStop(),
-        () => statusObserver.stopped(projectionId))
+        projectionId,
+        handlerStrategy.lifecycle,
+        statusObserver)
     }
 
     private[projection] def newRunningInstance(): RunningProjection = {
-      new CassandraRunningProjection(
-        RunningProjection.withBackoff(() => mappedSource(), settings, projectionId, statusObserver),
-        this)
+      new CassandraRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
     }
   }
 
