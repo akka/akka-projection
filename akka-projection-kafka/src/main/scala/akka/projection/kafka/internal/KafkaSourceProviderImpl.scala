@@ -84,6 +84,8 @@ import org.apache.kafka.common.TopicPartition
         "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
   }
 
+  override def isOffsetMergeable: Boolean = true
+
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) =>
       readOffsets()

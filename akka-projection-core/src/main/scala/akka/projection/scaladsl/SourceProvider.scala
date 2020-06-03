@@ -18,4 +18,6 @@ trait SourceProvider[Offset, Envelope] {
 
   def verifyOffset(offset: Offset): OffsetVerification = VerificationSuccess
 
+  def isOffsetMergeable: Boolean = false
+
 }

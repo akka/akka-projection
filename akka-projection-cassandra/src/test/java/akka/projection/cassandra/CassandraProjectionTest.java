@@ -68,7 +68,7 @@ public class CassandraProjectionTest extends JUnitSuite {
     }
   }
 
-  static class TestSourceProvider implements SourceProvider<Long, Envelope> {
+  static class TestSourceProvider extends SourceProvider<Long, Envelope> {
 
     private final String entityId;
 

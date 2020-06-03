@@ -217,14 +217,18 @@ import akka.stream.scaladsl.Source
         Source
           .futureSource(handlerStrategy.lifecycle.tryStart().flatMap(_ => sourceProvider.source(readOffsets)))
           .via(killSwitch.flow)
-          .mapConcat { env =>
-            val offset = sourceProvider.extractOffset(env)
-            sourceProvider.verifyOffset(offset) match {
-              case VerificationSuccess => List(offset -> env)
-              case VerificationFailure(reason) =>
-                logger.warning("Source provider instructed projection to skip record with reason: {}", reason)
-                Nil
-            }
+          .map(env => (sourceProvider.extractOffset(env), env))
+          .filter {
+            case (offset, _) =>
+              sourceProvider.verifyOffset(offset) match {
+                case VerificationSuccess => true
+                case VerificationFailure(reason) =>
+                  logger.warning(
+                    "Source provider instructed projection to skip offset [{}] with reason: {}",
+                    offset,
+                    reason)
+                  false
+              }
           }
           .mapMaterializedValue(_ => NotUsed)
 

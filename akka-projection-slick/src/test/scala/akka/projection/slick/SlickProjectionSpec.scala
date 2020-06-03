@@ -9,38 +9,33 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.collection.immutable
 import scala.annotation.tailrec
-import scala.collection.mutable.ListBuffer
+import scala.collection.immutable
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.concurrent.Await
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.typed.scaladsl.adapter._
 import akka.actor.testkit.typed.TestException
-import akka.projection.OffsetVerification
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.OffsetVerification
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.OffsetVerification.VerificationSuccess
-import akka.projection.slick.SlickProjectionSpec.sourceProvider
-import akka.projection.OffsetVerification.VerificationFailure
-import akka.projection.slick.SlickProjectionSpec.sourceProvider
+import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
-import akka.stream.testkit.scaladsl.TestSource
-import akka.stream.OverflowStrategy
-import akka.stream.scaladsl.Keep
-import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.TestSink
+import akka.stream.testkit.scaladsl.TestSource
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException
@@ -559,9 +554,11 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       projectionTestKit.runWithTestSink(slickProjection) { testSink =>
         for (_ <- 1 to 6) {
-          testSink.requestNext()
+          testSink.request(1)
           withClue("checking: offset verified after handler function was run") {
-            verifiedProbe.requestNext() shouldEqual envelopeProbe.requestNext().offset
+            val nextEnvelopeOffset = envelopeProbe.requestNext().offset
+            val nextOffset = verifiedProbe.requestNext()
+            nextEnvelopeOffset shouldEqual nextOffset
           }
         }
       }
@@ -990,6 +987,75 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         dbConfig.db.run(repository.findById(entityId)).futureValue.value.text should include("elem-17")
       }
 
+    }
+
+    "verify offsets before processing an envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      val (verifiedQueue, verifiedProbe) = Source
+        .queue[Long](1, OverflowStrategy.backpressure)
+        .toMat(TestSink.probe(actorSystem.classicSystem))(Keep.both)
+        .run()
+
+      val testVerification = (offset: Long) => {
+        Await.ready(verifiedQueue.offer(offset), 10.millis)
+        VerificationSuccess
+      }
+
+      val slickHandler = SlickHandler[Envelope] { envelope =>
+        withClue("checking: offset verified before handler function was run") {
+          verifiedProbe.requestNext() shouldEqual envelope.offset
+        }
+        repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, testVerification)
+
+      val slickProjection =
+        SlickProjection.atLeastOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          databaseConfig = dbConfig,
+          handler = slickHandler)
+
+      projectionTestKit.run(slickProjection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+
+      verifiedProbe.cancel()
+    }
+
+    "skip record if offset verification fails before processing envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val testVerification = (offset: Long) => {
+        if (offset == 3L)
+          VerificationFailure("test")
+        else
+          VerificationSuccess
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, testVerification)
+
+      val slickProjection =
+        SlickProjection.atLeastOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          databaseConfig = dbConfig,
+          handler = SlickHandler[Envelope] { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+          })
+
+      projectionTestKit.run(slickProjection) {
+        withClue("checking: all values except skipped were concatenated") {
+          val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
+        }
+      }
     }
 
   }

@@ -26,6 +26,8 @@ import akka.projection.slick.ExactlyOnceSlickProjection
 import akka.projection.slick.GroupedSlickProjection
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
+import akka.projection.MergeableKey
+import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.KillSwitches
@@ -207,20 +209,54 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       def processEnvelopesAndStoreOffsetInSameTransaction(
           handler: SlickHandler[immutable.Seq[Envelope]],
           recoveryStrategy: HandlerRecoveryStrategy,
-          envsAndOffsets: immutable.Seq[(Offset, Envelope)]): Future[Done] = {
-        val firstOffset = envsAndOffsets.head._1
-        val lastOffset = envsAndOffsets.last._1
-        val envelopes = envsAndOffsets.map(_._2)
-        // run user function and offset storage on the same transaction
-        // any side-effect in user function is at-least-once
-        val txDBIO =
-          offsetStore
-            .saveOffset(projectionId, lastOffset)
-            .flatMap(_ => handler.process(envelopes))
-            .transactionally
+          envelopesAndOffsets: immutable.Seq[(Offset, Envelope)]): Future[Done] = {
 
-        applyUserRecovery(recoveryStrategy, firstOffset, lastOffset) { () =>
-          databaseConfig.db.run(txDBIO).map(_ => Done)
+        def processEnvelopeGroup(partitioned: immutable.Seq[(Offset, Envelope)]): Future[Done] = {
+          val (firstOffset, _) = partitioned.head
+          val (lastOffset, _) = partitioned.last
+          val envelopes = partitioned.map { case (_, env) => env }
+
+          applyUserRecovery(recoveryStrategy, firstOffset, lastOffset) { () =>
+            val handlerAction = handler.process(envelopes)
+            sourceProvider.verifyOffset(lastOffset) match {
+              case VerificationSuccess =>
+                // run user function and offset storage on the same transaction
+                // any side-effect in user function is at-least-once
+                val txDBIO =
+                  offsetStore.saveOffset(projectionId, lastOffset).flatMap(_ => handlerAction).transactionally
+                databaseConfig.db.run(txDBIO).mapTo[Done]
+              case VerificationFailure(reason) =>
+                logger.warning(
+                  "The offset failed source provider verification after the envelope was processed. " +
+                  "The transaction will not be executed. Skipping envelope(s) with reason: {}",
+                  reason)
+                Future.successful(Done)
+            }
+          }
+        }
+
+        // FIXME create a SourceProvider trait that implies mergeable offsets?
+        sourceProvider match {
+          case sp if sp.isOffsetMergeable =>
+            val batches: immutable.Iterable[Future[Done]] = envelopesAndOffsets
+              .groupBy {
+                // FIXME matched source provider should always be MergeableOffset
+                case (offset: MergeableOffset[MergeableKey, _], env) =>
+                  // FIXME we can assume there's only one actual offset per envelope, but there should be a better way to represent this
+                  val mergeableKey = offset.entries.head._1
+                  mergeableKey.surrogateKey
+                case _ =>
+                  // should never happen
+                  throw new IllegalStateException("The offset should always be of type MergeableOffset")
+              }
+              .map {
+                case (surrogateKey, partitionedEnvelopes) =>
+                  logger.debug("Processing grouped envelopes for MergeableOffset with key [{}]", surrogateKey)
+                  processEnvelopeGroup(partitionedEnvelopes)
+              }
+            Future.sequence(batches).mapTo[Done]
+          case _ =>
+            processEnvelopeGroup(envelopesAndOffsets)
         }
       }
 
@@ -237,14 +273,18 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       }
 
       val offsetFlow: Flow[Envelope, (Offset, Envelope), NotUsed] = Flow[Envelope]
-        .mapConcat { env =>
-          val offset = sourceProvider.extractOffset(env)
-          sourceProvider.verifyOffset(offset) match {
-            case VerificationSuccess => List(offset -> env)
-            case VerificationFailure(reason) =>
-              logger.warning("Source provider instructed projection to skip envelope with reason: {}", reason)
-              Nil
-          }
+        .map(env => (sourceProvider.extractOffset(env), env))
+        .filter {
+          case (offset, _) =>
+            sourceProvider.verifyOffset(offset) match {
+              case VerificationSuccess => true
+              case VerificationFailure(reason) =>
+                logger.warning(
+                  "Source provider instructed projection to skip offset [{}] with reason: {}",
+                  offset,
+                  reason)
+                false
+            }
         }
 
       def storeOffset(offset: Offset): Future[Done] = {

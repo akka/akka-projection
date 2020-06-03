@@ -12,12 +12,14 @@ import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.javadsl.Source
 
-trait SourceProvider[Offset, Envelope] {
+abstract class SourceProvider[Offset, Envelope] {
 
   def source(offset: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[Source[Envelope, _]]
 
   def extractOffset(envelope: Envelope): Offset
 
   def verifyOffset(offset: Offset): OffsetVerification = VerificationSuccess
+
+  def isOffsetMergeable: Boolean = false
 
 }

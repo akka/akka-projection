@@ -8,8 +8,8 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.collection.immutable
 import scala.annotation.tailrec
+import scala.collection.immutable
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
@@ -25,6 +25,9 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.OffsetVerification
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
@@ -33,11 +36,14 @@ import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.stream.OverflowStrategy
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
+import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -46,7 +52,10 @@ object CassandraProjectionSpec {
 
   def offsetExtractor(env: Envelope): Long = env.offset
 
-  def sourceProvider(system: ActorSystem[_], id: String): SourceProvider[Long, Envelope] = {
+  def sourceProvider(
+      system: ActorSystem[_],
+      id: String,
+      verifyOffsetF: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
 
     val envelopes =
       List(
@@ -57,10 +66,13 @@ object CassandraProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    TestSourceProvider(system, Source(envelopes))
+    TestSourceProvider(system, Source(envelopes), verifyOffsetF)
   }
 
-  case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, _])
+  case class TestSourceProvider(
+      system: ActorSystem[_],
+      src: Source[Envelope, _],
+      offsetVerificationF: Long => OffsetVerification)
       extends SourceProvider[Long, Envelope] {
     implicit val executionContext: ExecutionContext = system.executionContext
     override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
@@ -70,6 +82,8 @@ object CassandraProjectionSpec {
       }
 
     override def extractOffset(env: Envelope): Long = env.offset
+
+    override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
   }
 
   // test model is as simple as a text that gets other string concatenated to it
@@ -330,7 +344,10 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, TestSourceProvider(system, source), concatHandler())
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            TestSourceProvider(system, source, _ => VerificationSuccess),
+            concatHandler())
           .withSaveOffset(10, 1.minute)
 
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
@@ -370,7 +387,10 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, TestSourceProvider(system, source), concatHandler())
+          .atLeastOnce[Long, Envelope](
+            projectionId,
+            TestSourceProvider(system, source, _ => VerificationSuccess),
+            concatHandler())
           .withSaveOffset(10, 2.seconds)
 
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
@@ -478,6 +498,67 @@ class CassandraProjectionSpec
       withClue("check - event handler did failed 4 times") {
         // 1 + 3 => 1 original attempt and 3 retries
         handler.attempts shouldBe 1 + 3
+      }
+    }
+
+    "verify offsets before processing an envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      val (verifiedQueue, verifiedProbe) = Source
+        .queue[Long](1, OverflowStrategy.backpressure)
+        .toMat(TestSink.probe(system.classicSystem))(Keep.both)
+        .run()
+
+      val testVerification = (offset: Long) => {
+        Await.ready(verifiedQueue.offer(offset), 10.millis)
+        VerificationSuccess
+      }
+
+      val handler = Handler[Envelope] { envelope =>
+        withClue("checking: offset verified before handler function was run") {
+          verifiedProbe.requestNext() shouldEqual envelope.offset
+        }
+        repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, testVerification)
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, testSourceProvider, handler)
+
+      projectionTestKit.run(projection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr = repository.findById(entityId).futureValue.get
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+
+      verifiedProbe.cancel()
+    }
+
+    "skip record if offset verification fails before processing envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val testVerification = (offset: Long) => {
+        if (offset == 3L)
+          VerificationFailure("test")
+        else
+          VerificationSuccess
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, testVerification)
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, testSourceProvider, concatHandler())
+
+      projectionTestKit.run(projection) {
+        withClue("checking: all values except skipped were concatenated") {
+          val concatStr = repository.findById(entityId).futureValue.get
+          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
+        }
       }
     }
   }
