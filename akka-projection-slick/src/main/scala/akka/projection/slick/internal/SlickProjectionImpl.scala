@@ -137,7 +137,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    */
   @InternalApi
   override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection = {
-    statusObserver.started(projectionId)
     new InternalProjectionState(settingsOrDefaults).newRunningInstance()
   }
 
@@ -242,6 +241,8 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         offsetsF
       }
 
+      statusObserver.started(projectionId)
+
       val handlerFlow: Flow[Envelope, Done, _] =
         offsetStrategy match {
           case ExactlyOnce(recoveryStrategyOpt) =>
@@ -312,7 +313,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           .via(handlerFlow)
           .mapMaterializedValue(_ => NotUsed)
 
-      RunningProjection.stopHandlerOnTermination(composedSource, () => handlerStrategy.lifecycle.tryStop())
+      RunningProjection.stopHandlerOnTermination(
+        composedSource,
+        () => handlerStrategy.lifecycle.tryStop(),
+        () => statusObserver.stopped(projectionId))
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
@@ -329,8 +333,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     private implicit val executionContext: ExecutionContext = system.executionContext
 
     private val streamDone = source.run()
-
-    streamDone.onComplete(_ => statusObserver.stopped(projectionId))(system.executionContext)
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()

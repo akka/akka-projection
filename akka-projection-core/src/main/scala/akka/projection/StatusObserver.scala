@@ -12,6 +12,7 @@ abstract class StatusObserver[-Envelope] {
 
   /**
    * Called when a projection is started.
+   * Also called after the projection has been restarted.
    */
   def started(projectionId: ProjectionId): Unit
 
@@ -22,6 +23,7 @@ abstract class StatusObserver[-Envelope] {
 
   /**
    * Called when a projection is stopped.
+   * Also called before the projection is restarted.
    */
   def stopped(projectionId: ProjectionId): Unit
 

@@ -92,12 +92,28 @@ private[projection] object RunningProjection {
    *
    * The stopHandler function is called on success or failure. In case of failure, the original failure is preserved.
    */
-  def stopHandlerOnTermination(src: Source[Done, NotUsed], stopHandler: () => Future[Done])(
-      implicit ec: ExecutionContext): Source[Done, Future[Done]] = {
+  def stopHandlerOnTermination(
+      src: Source[Done, NotUsed],
+      stopHandler: () => Future[Done],
+      stopStatusObserver: () => Unit)(implicit ec: ExecutionContext): Source[Done, Future[Done]] = {
+
+    val fullStopCallback: () => Future[Done] =
+      () => {
+        stopHandler()
+          .recoverWith { exc =>
+            stopStatusObserver()
+            Future.failed(exc)
+          }
+          .map { _ =>
+            stopStatusObserver()
+            Done
+          }
+      }
+
     src.watchTermination() { (_, futDone) =>
       futDone
         .flatMap { _ =>
-          stopHandler().recoverWith {
+          fullStopCallback().recoverWith {
             // if stop fails we need to wrap it so
             // on the next recoverWith we don't call it twice
             case exc => Future.failed(StopHandlerException(exc))
@@ -107,7 +123,7 @@ private[projection] object RunningProjection {
           case StopHandlerException(exc) => Future.failed(exc)
           case streamFailure             =>
             // ignore error in stop failure and preserve original stream failure
-            stopHandler().recoverWith(_ => Future.failed(streamFailure))
+            fullStopCallback().recoverWith(_ => Future.failed(streamFailure))
         }
         .map(_ => Done)
     }

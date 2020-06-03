@@ -110,7 +110,6 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * @param assertFunction - a function receiving a `TestSubscriber.Probe[Done]`
    */
   def runWithTestSink(projection: Projection[_])(assertFunction: TestSubscriber.Probe[Done] => Unit): Unit = {
-    projection.statusObserver.started(projection.projectionId)
     val sinkProbe = projection.mappedSource().runWith(TestSink.probe[Done](testKit.system.classicSystem))
     try {
       assertFunction(sinkProbe)

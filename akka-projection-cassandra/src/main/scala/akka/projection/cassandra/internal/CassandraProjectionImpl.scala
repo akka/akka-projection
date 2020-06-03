@@ -157,7 +157,6 @@ import akka.stream.scaladsl.Source
    */
   @InternalApi
   override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection = {
-    statusObserver.started(projectionId)
     new InternalProjectionState(settingsOrDefaults).newRunningInstance()
   }
 
@@ -168,8 +167,9 @@ import akka.stream.scaladsl.Source
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi
-  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] = {
     new InternalProjectionState(settingsOrDefaults).mappedSource()
+  }
 
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
@@ -194,6 +194,8 @@ import akka.stream.scaladsl.Source
 
     private[projection] def mappedSource(): Source[Done, _] = {
       val readOffsets = () => offsetStore.readOffset(projectionId)
+
+      statusObserver.started(projectionId)
 
       val source: Source[(Offset, Envelope), NotUsed] =
         Source
@@ -286,7 +288,10 @@ import akka.stream.scaladsl.Source
             .map(_ => Done)
       }
 
-      RunningProjection.stopHandlerOnTermination(composedSource, () => handlerStrategy.lifecycle.tryStop())
+      RunningProjection.stopHandlerOnTermination(
+        composedSource,
+        () => handlerStrategy.lifecycle.tryStop(),
+        () => statusObserver.stopped(projectionId))
     }
 
     private[projection] def newRunningInstance(): RunningProjection = {
@@ -302,8 +307,6 @@ import akka.stream.scaladsl.Source
       with ProjectionOffsetManagement[Offset] {
 
     private val streamDone = source.run()
-
-    streamDone.onComplete(_ => statusObserver.stopped(projectionId))(system.executionContext)
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()

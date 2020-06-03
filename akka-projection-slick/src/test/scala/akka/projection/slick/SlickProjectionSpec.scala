@@ -1037,7 +1037,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
 
       // backoff will restart
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
       statusProbe.expectMessage(TestStatusObserver.Restarted)
+      statusProbe.expectMessage(TestStatusObserver.Started)
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("jkl")
       progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))
