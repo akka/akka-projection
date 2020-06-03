@@ -238,8 +238,7 @@ import akka.stream.scaladsl.Source
         }
 
       def reportProgress[T](after: Future[T], env: Envelope): Future[T] = {
-        after.foreach(_ => statusObserver.progress(projectionId, env))
-        after
+        after.andThen(_ => statusObserver.progress(projectionId, env))
       }
 
       val composedSource: Source[Done, NotUsed] = offsetStrategy match {
