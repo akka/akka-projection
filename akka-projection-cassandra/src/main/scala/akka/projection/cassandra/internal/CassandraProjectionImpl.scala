@@ -9,6 +9,7 @@ import java.util.concurrent.CompletionStage
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.DurationConverters._
 import scala.util.control.NonFatal
@@ -23,6 +24,7 @@ import akka.projection.ProjectionId
 import akka.projection.ProjectionOffsetManagement
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
+import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.javadsl
@@ -194,6 +196,7 @@ import akka.stream.scaladsl.Source
     val offsetStore = new CassandraOffsetStore(system)
 
     val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
+    val abort: Promise[Done] = Promise()
 
     private[projection] def mappedSource(): Source[Done, _] = {
       val readOffsets = () => offsetStore.readOffset(projectionId)
@@ -229,7 +232,7 @@ import akka.stream.scaladsl.Source
             Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
               case elem @ (offset, envelope) =>
                 handlerRecovery
-                  .applyRecovery(envelope, offset, offset, () => handler.process(envelope))
+                  .applyRecovery(envelope, offset, offset, abort.future, () => handler.process(envelope))
                   .map(_ => elem)
             }
 
@@ -247,7 +250,12 @@ import akka.stream.scaladsl.Source
                 val (lastOffset, lastEnvelope) = group.last
                 val envelopes = group.map { case (_, env) => env }
                 handlerRecovery
-                  .applyRecovery(firstEnvelope, firstOffset, lastOffset, () => grouped.handler.process(envelopes))
+                  .applyRecovery(
+                    firstEnvelope,
+                    firstOffset,
+                    lastOffset,
+                    abort.future,
+                    () => grouped.handler.process(envelopes))
                   .map(_ => lastOffset -> lastEnvelope)
               }
         }
@@ -303,7 +311,8 @@ import akka.stream.scaladsl.Source
                   offsetStore
                     .saveOffset(projectionId, offset)
                     .flatMap(_ =>
-                      handlerRecovery.applyRecovery(envelope, offset, offset, () => handler.process(envelope))),
+                      handlerRecovery
+                        .applyRecovery(envelope, offset, offset, abort.future, () => handler.process(envelope))),
                   envelope)
             }
             .map(_ => Done)
@@ -330,6 +339,9 @@ import akka.stream.scaladsl.Source
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()
+      // if the handler is retrying it will be aborted by this,
+      // otherwise the stream would not be completed by the killSwitch until after all retries
+      projectionState.abort.failure(AbortProjectionException)
       streamDone
     }
 

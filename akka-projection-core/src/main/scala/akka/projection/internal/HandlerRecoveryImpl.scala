@@ -6,6 +6,10 @@ package akka.projection.internal
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.concurrent.duration.FiniteDuration
+import scala.util.Failure
+import scala.util.Success
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -47,6 +51,7 @@ import akka.projection.StatusObserver
       env: Envelope,
       firstOffset: Offset, // used for logging
       lastOffset: Offset, // used for logging
+      abort: Future[Done], // retries can be aborted by failing this Future
       futureCallback: () => Future[Done])(implicit system: ActorSystem[_]): Future[Done] = {
     import HandlerRecoveryImpl.futDone
     import HandlerRecoveryStrategy.Internal._
@@ -55,12 +60,16 @@ import akka.projection.StatusObserver
     implicit val executionContext: ExecutionContext = system.executionContext
 
     val tryFutureCallback: () => Future[Done] = { () =>
-      try {
-        futureCallback()
-      } catch {
-        case NonFatal(e) =>
-          // in case the callback throws instead of returning failed Future
-          Future.failed(e)
+      if (abort.isCompleted) {
+        abort
+      } else {
+        try {
+          futureCallback()
+        } catch {
+          case NonFatal(e) =>
+            // in case the callback throws instead of returning failed Future
+            Future.failed(e)
+        }
       }
     }
 
@@ -68,7 +77,7 @@ import akka.projection.StatusObserver
       tryFutureCallback().recoverWith {
         // using recoverWith instead of `.failed.foreach` to make sure that calls to statusObserver
         // are invoked in sequential order
-        case err =>
+        case err if !abort.isCompleted =>
           statusObserver.error(projectionId, env, err, recoveryStrategy)
           Future.failed(err)
       }
@@ -82,8 +91,22 @@ import akka.projection.StatusObserver
       else s"envelopes with offsets from [$firstOffset] to [$lastOffset]"
 
     firstAttempt.recoverWith {
+      case _ if abort.isCompleted =>
+        abort
       case err =>
         statusObserver.error(projectionId, env, err, recoveryStrategy)
+
+        def delayFunction(delay: FiniteDuration): Int => Option[FiniteDuration] = { _ =>
+          abort.value match {
+            case None             => Some(delay)
+            case Some(Success(_)) =>
+              // abort immediately, will return the completed `abort: Future` from tryFutureCallback
+              Some(Duration.Zero)
+            case Some(Failure(abortErr)) =>
+              // by throwing from the delay function the `retry` will stop
+              throw abortErr
+          }
+        }
 
         recoveryStrategy match {
           case Fail =>
@@ -113,16 +136,17 @@ import akka.projection.StatusObserver
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val retried = after(delay, scheduler)(retry(retryFutureCallback, retries - 1, delay))
+            val retried = after(delay, scheduler)(retry(retryFutureCallback, retries - 1, delayFunction(delay)))
             retried.failed.foreach { exception =>
-              logger.error(
-                cause = exception,
-                template =
-                  "[{}] Failed to process {} after [{}] attempts. " +
-                  "Projection will stop as defined by recovery strategy.",
-                projectionId,
-                offsetLogParameter,
-                retries + 1)
+              if (!abort.isCompleted)
+                logger.error(
+                  cause = exception,
+                  template =
+                    "[{}] Failed to process {} after [{}] attempts. " +
+                    "Projection will stop as defined by recovery strategy.",
+                  projectionId,
+                  offsetLogParameter,
+                  retries + 1)
             }
             retried
 
@@ -136,7 +160,7 @@ import akka.projection.StatusObserver
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val retried = after(delay, scheduler)(retry(retryFutureCallback, retries - 1, delay))
+            val retried = after(delay, scheduler)(retry(retryFutureCallback, retries - 1, delayFunction(delay)))
             retried.failed.foreach { exception =>
               logger.warning(
                 "[{}] Failed to process {} after [{}] attempts. " +

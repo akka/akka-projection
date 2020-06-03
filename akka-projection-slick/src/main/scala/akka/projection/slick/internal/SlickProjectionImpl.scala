@@ -7,6 +7,7 @@ package akka.projection.slick.internal
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.Success
@@ -22,6 +23,7 @@ import akka.projection.ProjectionId
 import akka.projection.ProjectionOffsetManagement
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
+import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.HandlerLifecycle
@@ -174,6 +176,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     val offsetStore = createOffsetStore()
 
     val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
+    val abort: Promise[Done] = Promise()
 
     // TODO: add a LogSource for projection when we have a name and key
     private val logger = Logging(system.classicSystem, this.getClass)
@@ -187,7 +190,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           handlerRecovery: HandlerRecoveryImpl[Offset, Envelope],
           offset: Offset,
           env: Envelope): Future[Done] = {
-        handlerRecovery.applyRecovery(env, offset, offset, {
+        handlerRecovery.applyRecovery(env, offset, offset, abort.future, {
           () =>
             val handlerAction = handler.process(env)
             sourceProvider.verifyOffset(offset) match {
@@ -219,7 +222,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           val (lastOffset, _) = partitioned.last
           val envelopes = partitioned.map { case (_, env) => env }
 
-          handlerRecovery.applyRecovery(envelopes.head, firstOffset, lastOffset, {
+          handlerRecovery.applyRecovery(envelopes.head, firstOffset, lastOffset, abort.future, {
             () =>
               val handlerAction = handler.process(envelopes)
               sourceProvider.verifyOffset(lastOffset) match {
@@ -270,7 +273,12 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           offset: Offset): Future[Done] = {
         // user function in one transaction (may be composed of several DBIOAction)
         val dbio = handler.process(env).transactionally
-        handlerRecovery.applyRecovery(env, offset, offset, () => databaseConfig.db.run(dbio).map(_ => Done))
+        handlerRecovery.applyRecovery(
+          env,
+          offset,
+          offset,
+          abort.future,
+          () => databaseConfig.db.run(dbio).map(_ => Done))
       }
 
       val offsetFlow: Flow[Envelope, (Offset, Envelope), NotUsed] = Flow[Envelope]
@@ -443,6 +451,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()
+      // if the handler is retrying it will be aborted by this,
+      // otherwise the stream would not be completed by the killSwitch until after all retries
+      projectionState.abort.failure(AbortProjectionException)
       streamDone
     }
 
