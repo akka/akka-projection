@@ -117,7 +117,6 @@ object ProjectionBehaviorSpec {
         stopFut
           .andThen { _ =>
             testProbe.ref ! StopObserved
-            Done
           }
       }
 

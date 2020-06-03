@@ -90,11 +90,9 @@ private[projection] object RunningProjection {
         .andThen {
           case Success(_) =>
             statusObserver.stopped(projectionId)
-            Future.successful(Done)
           case Failure(exc) =>
             Try(statusObserver.stopped(projectionId))
             statusObserver.restarted(projectionId, exc)
-            Future.successful(Done)
         }
     }
   }
