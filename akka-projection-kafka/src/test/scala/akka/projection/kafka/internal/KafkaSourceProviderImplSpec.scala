@@ -5,7 +5,6 @@
 package akka.projection.kafka.internal
 
 import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -21,6 +20,8 @@ import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
+import akka.projection.StatusObserver
+import akka.projection.internal.NoopStatusObserver
 import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.GroupOffsets.TopicPartitionKey
 import akka.projection.kafka.internal.KafkaSourceProviderImpl.ReadOffsets
@@ -59,10 +60,9 @@ class KafkaSourceProviderImplSpec
     "successfully verify offsets from assigned partitions" in {
       val topic = "topic"
       val partitions = 2
-
       val settings = ConsumerSettings(system, new StringDeserializer, new StringDeserializer)
         .withBootstrapServers("localhost:9092")
-      val metadataClient = new TestMetadataClientAdapter(topic, partitions)
+      val metadataClient = new TestMetadataClientAdapter(partitions)
       val tp0 = new TopicPartition(topic, 0)
       val tp1 = new TopicPartition(topic, 1)
 
@@ -115,7 +115,7 @@ class KafkaSourceProviderImplSpec
     }
   }
 
-  class TestMetadataClientAdapter(topic: String, partitions: Int) extends MetadataClientAdapter {
+  class TestMetadataClientAdapter(partitions: Int) extends MetadataClientAdapter {
     override def getBeginningOffsets(assignedTps: Set[TopicPartition]): Future[Map[TopicPartition, Long]] =
       Future.successful((0 until partitions).map(i => new TopicPartition("topic", i) -> 0L).toMap)
     override def numPartitions(topics: Set[String]): Future[Int] = Future.successful(partitions)
@@ -156,6 +156,12 @@ class KafkaSourceProviderImplSpec
     override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       internalState.newRunningInstance()
 
+    override val statusObserver: StatusObserver[ConsumerRecord[Int, Int]] = NoopStatusObserver
+
+    override def withStatusObserver(
+        observer: StatusObserver[ConsumerRecord[Int, Int]]): Projection[ConsumerRecord[Int, Int]] =
+      this // no need for StatusObserver in tests
+
     /*
      * INTERNAL API
      * This internal class will hold the KillSwitch that is needed
@@ -193,7 +199,7 @@ class KafkaSourceProviderImplSpec
 
       private val futureDone = source.run()
 
-      override def stop()(implicit ec: ExecutionContext): Future[Done] = {
+      override def stop(): Future[Done] = {
         killSwitch.shutdown()
         futureDone
       }

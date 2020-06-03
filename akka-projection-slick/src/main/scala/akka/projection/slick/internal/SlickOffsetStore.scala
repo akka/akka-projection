@@ -24,6 +24,7 @@ import slick.jdbc.JdbcProfile
 @InternalApi private[akka] class SlickOffsetStore[P <: JdbcProfile](
     val db: P#Backend#Database,
     val profile: P,
+    slickSettings: SlickSettings,
     clock: Clock) {
   import OffsetSerialization.MultipleOffsets
   import OffsetSerialization.SingleOffset
@@ -31,8 +32,8 @@ import slick.jdbc.JdbcProfile
   import OffsetSerialization.toStorageRepresentation
   import profile.api._
 
-  def this(db: P#Backend#Database, profile: P) =
-    this(db, profile, Clock.systemUTC())
+  def this(db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
+    this(db, profile, slickSettings, Clock.systemUTC())
 
   def readOffset[Offset](projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
     val action = offsetTable.filter(_.projectionName === projectionId.name).result.map { maybeRow =>
@@ -65,7 +66,11 @@ import slick.jdbc.JdbcProfile
     }
   }
 
-  class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, "AKKA_PROJECTION_OFFSET_STORE") {
+  def clearOffset(projectionId: ProjectionId): slick.dbio.DBIO[_] = {
+    offsetTable.filter(row => row.projectionName === projectionId.name && row.projectionKey === projectionId.key).delete
+  }
+
+  class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
 
     def projectionName = column[String]("PROJECTION_NAME", O.Length(255, varying = false))
     def projectionKey = column[String]("PROJECTION_KEY", O.Length(255, varying = false))

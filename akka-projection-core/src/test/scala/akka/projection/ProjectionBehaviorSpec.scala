@@ -4,7 +4,10 @@
 
 package akka.projection
 
-import scala.concurrent.ExecutionContext
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+
+import scala.concurrent.duration._
 import scala.concurrent.Future
 
 import akka.Done
@@ -12,11 +15,15 @@ import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
+import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.projection.internal.NoopStatusObserver
 import akka.stream.KillSwitches
+import akka.stream.OverflowStrategy
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 import org.scalatest.wordspec.AnyWordSpecLike
+import akka.projection.scaladsl.ProjectionManagement
 
 object ProjectionBehaviorSpec {
 
@@ -25,14 +32,20 @@ object ProjectionBehaviorSpec {
   case class Consumed(n: Int, currentState: String) extends ProbeMessage
   case object StopObserved extends ProbeMessage
 
+  private val TestProjectionId = ProjectionId("test-projection", "00")
+
   /*
    * This TestProjection has a internal state that we can use to prove that on restart,
    * the actor is taking a new projection instance.
    */
-  case class TestProjection(src: Source[Int, NotUsed], testProbe: TestProbe[ProbeMessage], failToStop: Boolean = false)
+  case class TestProjection(
+      src: Source[Int, NotUsed],
+      testProbe: TestProbe[ProbeMessage],
+      failToStop: Boolean = false,
+      override val projectionId: ProjectionId = ProjectionBehaviorSpec.TestProjectionId)
       extends Projection[Int] {
 
-    override def projectionId: ProjectionId = ProjectionId("test-projection-with-internal-state", "00")
+    private val offsetStore = new AtomicInteger
 
     override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(testProbe, failToStop).newRunningInstance()
@@ -42,6 +55,11 @@ object ProjectionBehaviorSpec {
 
     override def withSettings(settings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
+
+    override val statusObserver: StatusObserver[Int] = NoopStatusObserver
+
+    override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =
+      this // no need for StatusObserver in tests
 
     /*
      * INTERNAL API
@@ -63,6 +81,8 @@ object ProjectionBehaviorSpec {
         if (strBuffer.toString.isEmpty) strBuffer.append(i)
         else strBuffer.append("-").append(i)
 
+        offsetStore.incrementAndGet()
+
         testProbe.ref ! Consumed(i, strBuffer.toString)
         Future.successful(Done)
       }
@@ -76,12 +96,14 @@ object ProjectionBehaviorSpec {
         testProbe: TestProbe[ProbeMessage],
         failToStop: Boolean = false,
         killSwitch: SharedKillSwitch)(implicit system: ActorSystem[_])
-        extends RunningProjection {
+        extends RunningProjection
+        with ProjectionOffsetManagement[Int] {
+      import system.executionContext
 
       testProbe.ref ! StartObserved
       private val futureDone = source.run()
 
-      override def stop()(implicit ec: ExecutionContext): Future[Done] = {
+      override def stop(): Future[Done] = {
         val stopFut =
           if (failToStop) {
             // this simulates a failure when stopping the stream
@@ -91,8 +113,39 @@ object ProjectionBehaviorSpec {
             killSwitch.shutdown()
             futureDone
           }
-        stopFut.onComplete(_ => testProbe.ref ! StopObserved)
+        // make sure the StopObserved is sent to testProbe before returned Future is completed
         stopFut
+          .andThen { _ =>
+            testProbe.ref ! StopObserved
+          }
+      }
+
+      override def getOffset(): Future[Option[Int]] = {
+        offsetStore.get() match {
+          case 0 => Future.successful(None)
+          case n => Future.successful(Some(n))
+        }
+      }
+
+      override def setOffset(offset: Option[Int]): Future[Done] = {
+        offset match {
+          case None =>
+            offsetStore.set(0)
+            Future.successful(Done)
+          case Some(n) =>
+            if (n <= 3) {
+              offsetStore.set(n)
+              Future.successful(Done)
+            } else {
+              import akka.pattern.after
+              import akka.actor.typed.scaladsl.adapter._
+              after(100.millis, system.toClassic.scheduler) {
+                offsetStore.set(n)
+                Future.successful(Done)
+              }
+            }
+        }
+
       }
     }
   }
@@ -100,6 +153,26 @@ object ProjectionBehaviorSpec {
 class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
 
   import ProjectionBehaviorSpec._
+  import ProjectionBehavior.Internal._
+
+  private def setupTestProjection(projectionId: ProjectionId = TestProjectionId)
+      : (TestProbe[ProbeMessage], ActorRef[ProjectionBehavior.Command], AtomicReference[ActorRef[Int]]) = {
+    val srcRef = new AtomicReference[ActorRef[Int]]()
+    import akka.actor.typed.scaladsl.adapter._
+    val src =
+      Source.actorRef(PartialFunction.empty, PartialFunction.empty, 10, OverflowStrategy.fail).mapMaterializedValue {
+        ref =>
+          srcRef.set(ref.toTyped)
+          NotUsed
+      }
+
+    val testProbe = testKit.createTestProbe[ProbeMessage]()
+    val projectionRef = testKit.spawn(ProjectionBehavior(TestProjection(src, testProbe, projectionId = projectionId)))
+    eventually {
+      srcRef.get() should not be null
+    }
+    (testProbe, projectionRef, srcRef)
+  }
 
   "A ProjectionBehavior" must {
 
@@ -151,6 +224,128 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       testProbe.expectTerminated(projectionRef)
 
+    }
+
+    "provide access to current offset" in {
+      val (testProbe, projectionRef, srcRef) = setupTestProjection()
+      srcRef.get() ! 1
+      srcRef.get() ! 2
+
+      testProbe.expectMessage(StartObserved)
+      testProbe.expectMessage(Consumed(1, "1"))
+      testProbe.expectMessage(Consumed(2, "1-2"))
+
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(2)))
+
+      srcRef.get() ! 3
+      testProbe.expectMessage(Consumed(3, "1-2-3"))
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(3)))
+    }
+
+    "support update of current offset" in {
+      val (testProbe, projectionRef, srcRef) = setupTestProjection()
+      srcRef.get() ! 1
+      srcRef.get() ! 2
+      srcRef.get() ! 3
+
+      testProbe.expectMessage(StartObserved)
+      testProbe.expectMessage(Consumed(1, "1"))
+      testProbe.expectMessage(Consumed(2, "1-2"))
+      testProbe.expectMessage(Consumed(3, "1-2-3"))
+
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(3)))
+
+      val setOffsetProbe = createTestProbe[Done]()
+      projectionRef ! SetOffset(TestProjectionId, Some(2), setOffsetProbe.ref)
+      testProbe.expectMessage(StopObserved)
+      setOffsetProbe.expectMessage(Done)
+      testProbe.expectMessage(StartObserved)
+
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(2)))
+    }
+
+    "handle offset operations sequentially" in {
+      val (testProbe, projectionRef, srcRef) = setupTestProjection()
+      srcRef.get() ! 1
+      srcRef.get() ! 2
+
+      testProbe.expectMessage(StartObserved)
+      testProbe.expectMessage(Consumed(1, "1"))
+      testProbe.expectMessage(Consumed(2, "1-2"))
+
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+      val setOffsetProbe = createTestProbe[Done]()
+
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      projectionRef ! SetOffset(TestProjectionId, Some(3), setOffsetProbe.ref)
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! SetOffset(TestProjectionId, Some(7), setOffsetProbe.ref)
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(2)))
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(3)))
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(7)))
+
+      testProbe.expectMessage(StopObserved)
+      testProbe.expectMessage(StartObserved)
+      testProbe.expectMessage(StopObserved)
+      testProbe.expectMessage(StartObserved)
+      testProbe.expectMessage(StopObserved)
+      testProbe.expectMessage(StartObserved)
+    }
+
+    "work with ProjectionManagement extension" in {
+      val projectionId1 = ProjectionId("test-projection-ext", "1")
+      val projectionId2 = ProjectionId("test-projection-ext", "2")
+
+      val (testProbe1, _, srcRef1) = setupTestProjection(projectionId1)
+      val (testProbe2, _, srcRef2) = setupTestProjection(projectionId2)
+      srcRef1.get() ! 1
+      srcRef1.get() ! 2
+      testProbe1.expectMessage(StartObserved)
+      testProbe1.expectMessage(Consumed(1, "1"))
+      testProbe1.expectMessage(Consumed(2, "1-2"))
+
+      srcRef2.get() ! 1
+      srcRef2.get() ! 2
+      srcRef2.get() ! 3
+      testProbe2.expectMessage(StartObserved)
+      testProbe2.expectMessage(Consumed(1, "1"))
+      testProbe2.expectMessage(Consumed(2, "1-2"))
+      testProbe2.expectMessage(Consumed(3, "1-2-3"))
+
+      ProjectionManagement(system).getOffset[Int](projectionId1).futureValue shouldBe Some(2)
+      ProjectionManagement(system).getOffset[Int](projectionId2).futureValue shouldBe Some(3)
+
+      ProjectionManagement(system).updateOffset[Int](projectionId1, 5).futureValue shouldBe Done
+      ProjectionManagement(system).getOffset[Int](projectionId1).futureValue shouldBe Some(5)
+      ProjectionManagement(system).getOffset[Int](projectionId2).futureValue shouldBe Some(3)
+      testProbe1.expectMessage(StopObserved)
+      testProbe1.expectMessage(StartObserved)
+      testProbe2.expectNoMessage()
+
+      ProjectionManagement(system).updateOffset[Int](projectionId2, 7).futureValue shouldBe Done
+      ProjectionManagement(system).getOffset[Int](projectionId1).futureValue shouldBe Some(5)
+      ProjectionManagement(system).getOffset[Int](projectionId2).futureValue shouldBe Some(7)
+      testProbe2.expectMessage(StopObserved)
+      testProbe2.expectMessage(StartObserved)
+      testProbe1.expectNoMessage()
+
+      ProjectionManagement(system).clearOffset(projectionId1).futureValue shouldBe Done
+      ProjectionManagement(system).getOffset[Int](projectionId1).futureValue shouldBe None
+      ProjectionManagement(system).getOffset[Int](projectionId2).futureValue shouldBe Some(7)
+      testProbe1.expectMessage(StopObserved)
+      testProbe1.expectMessage(StartObserved)
+      testProbe2.expectNoMessage()
     }
   }
 

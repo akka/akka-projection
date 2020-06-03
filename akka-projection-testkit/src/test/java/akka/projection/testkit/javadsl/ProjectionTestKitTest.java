@@ -13,6 +13,8 @@ import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.ProjectionSettings;
 import akka.projection.RunningProjection;
+import akka.projection.StatusObserver;
+import akka.projection.internal.NoopStatusObserver;
 import akka.stream.DelayOverflowStrategy;
 import akka.stream.KillSwitches;
 import akka.stream.SharedKillSwitch;
@@ -185,6 +187,17 @@ public class ProjectionTestKitTest extends JUnitSuite {
             return this;
         }
 
+        @Override
+        public StatusObserver<Integer> statusObserver() {
+            return NoopStatusObserver.getInstance();
+        }
+
+        @Override
+        public Projection<Integer> withStatusObserver(StatusObserver<Integer> observer) {
+            // no need for StatusObserver in tests
+            return this;
+        }
+
         /*
          * INTERNAL API
          * This internal class will hold the KillSwitch that is needed
@@ -237,7 +250,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
             }
 
             @Override
-            public Future<Done> stop(ExecutionContext ec) {
+            public Future<Done> stop() {
                 killSwitch.shutdown();
                 return this.futureDone;
             }

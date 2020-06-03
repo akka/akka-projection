@@ -29,13 +29,11 @@ class CassandraOffsetStoreSpec
     with AnyWordSpecLike
     with LogCapturing {
 
-  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra")
-  private implicit val ec: ExecutionContext = system.executionContext
-
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
-
-  private val offsetStore = new CassandraOffsetStore(session, clock)
+  private val offsetStore = new CassandraOffsetStore(system, clock)
+  private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
+  private implicit val ec: ExecutionContext = system.executionContext
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -205,6 +203,26 @@ class CassandraOffsetStoreSpec
       offsetStore.saveOffset(projectionId, 16).futureValue
       val instant3 = selectLastUpdated(projectionId)
       instant3 shouldBe instant2
+    }
+
+    "clear offset" in {
+      val projectionId = ProjectionId("projection-clear", "00")
+
+      withClue("check - save offset") {
+        offsetStore.saveOffset(projectionId, 3L).futureValue
+      }
+
+      withClue("check - read offset") {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(3)
+      }
+
+      withClue("check - clear") {
+        offsetStore.clearOffset(projectionId).futureValue
+      }
+
+      withClue("check - read offset") {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe None
+      }
     }
   }
 }

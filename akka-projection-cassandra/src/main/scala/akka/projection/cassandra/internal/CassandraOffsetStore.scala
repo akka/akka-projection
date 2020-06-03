@@ -11,28 +11,33 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.Done
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraOffsetStore(session: CassandraSession, clock: Clock)(
-    implicit ec: ExecutionContext) {
+@InternalApi private[akka] class CassandraOffsetStore(system: ActorSystem[_], clock: Clock) {
   import OffsetSerialization.fromStorageRepresentation
   import OffsetSerialization.toStorageRepresentation
 
-  // FIXME make keyspace and table names configurable
-  val keyspace = "akka_projection"
-  val table = "offset_store"
-  val cassandraPartitions = 5
+  private implicit val executionContext: ExecutionContext = system.executionContext
+  private val cassandraSettings = CassandraSettings(system)
+  private val session: CassandraSession =
+    CassandraSessionRegistry(system).sessionFor(cassandraSettings.sessionConfigPath)
 
-  def this(session: CassandraSession)(implicit ec: ExecutionContext) =
-    this(session, Clock.systemUTC())
+  val keyspace: String = cassandraSettings.keyspace
+  val table: String = cassandraSettings.table
+  private val cassandraPartitions = 5
+
+  def this(system: ActorSystem[_]) =
+    this(system, Clock.systemUTC())
 
   def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
     val partition = idToPartition(projectionId)
@@ -66,6 +71,14 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
           manifest,
           Instant.now(clock))
     }
+  }
+
+  def clearOffset(projectionId: ProjectionId): Future[Done] = {
+    session.executeWrite(
+      s"DELETE FROM $keyspace.$table WHERE projection_name = ? AND partition = ? AND projection_key = ?",
+      projectionId.name,
+      idToPartition(projectionId),
+      projectionId.key)
   }
 
   // FIXME maybe we need to make this public for user's tests

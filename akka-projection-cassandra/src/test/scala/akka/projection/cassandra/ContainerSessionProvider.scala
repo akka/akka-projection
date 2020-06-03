@@ -49,6 +49,6 @@ object ContainerSessionProvider {
       ""
     else
       """
-      akka.projection.cassandra.session-provider = "akka.projection.cassandra.ContainerSessionProvider"
+      akka.projection.cassandra.session-config.session-provider = "akka.projection.cassandra.ContainerSessionProvider"
       """
 }

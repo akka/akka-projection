@@ -14,10 +14,12 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
+import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.cassandra.internal.GroupedHandlerAdapter
 import akka.projection.cassandra.internal.HandlerAdapter
+import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SourceProviderAdapter
 import akka.projection.javadsl.Handler
 import akka.projection.javadsl.SourceProvider
@@ -52,7 +54,8 @@ object CassandraProjection {
       new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = SingleHandlerStrategy(new HandlerAdapter(handler)))
+      handlerStrategy = SingleHandlerStrategy(new HandlerAdapter(handler)),
+      statusObserver = NoopStatusObserver)
 
   /**
    * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
@@ -75,7 +78,8 @@ object CassandraProjection {
       settingsOpt = None,
       offsetStrategy = CassandraProjectionImpl
         .AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(scala.concurrent.duration.Duration.Zero)),
-      handlerStrategy = GroupedHandlerStrategy(new GroupedHandlerAdapter(handler)))
+      handlerStrategy = GroupedHandlerStrategy(new GroupedHandlerAdapter(handler)),
+      statusObserver = NoopStatusObserver)
 
   /**
    * Create a [[Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
@@ -91,12 +95,15 @@ object CassandraProjection {
       new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       offsetStrategy = AtMostOnce(),
-      handlerStrategy = SingleHandlerStrategy(new HandlerAdapter(handler)))
+      handlerStrategy = SingleHandlerStrategy(new HandlerAdapter(handler)),
+      statusObserver = NoopStatusObserver)
 }
 
 @DoNotInherit trait CassandraProjection[Envelope] extends Projection[Envelope] {
 
   override def withSettings(settings: ProjectionSettings): CassandraProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjection[Envelope]
 
   /**
    * For testing purposes the offset table can be created programmatically.
@@ -109,6 +116,8 @@ object CassandraProjection {
 @DoNotInherit trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
 
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceCassandraProjection[Envelope]
+
   def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceCassandraProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
@@ -117,6 +126,8 @@ object CassandraProjection {
 trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): GroupedCassandraProjection[Envelope]
 
+  override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedCassandraProjection[Envelope]
+
   def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: java.time.Duration): GroupedCassandraProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): GroupedCassandraProjection[Envelope]
@@ -124,6 +135,8 @@ trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope]
 
 @DoNotInherit trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtMostOnceCassandraProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
 }
