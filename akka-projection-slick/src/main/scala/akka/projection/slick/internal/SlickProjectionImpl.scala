@@ -8,6 +8,7 @@ import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.NotUsed
@@ -229,7 +230,14 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       }
 
       def reportProgress[T](after: Future[T], env: Envelope): Future[T] = {
-        after.andThen(_ => statusObserver.progress(projectionId, env))
+        after.map { done =>
+          try {
+            statusObserver.progress(projectionId, env)
+          } catch {
+            case NonFatal(_) => // ignore
+          }
+          done
+        }
       }
 
       // -------------------------------------------------------

@@ -11,6 +11,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.DurationConverters._
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.NotUsed
@@ -238,7 +239,14 @@ import akka.stream.scaladsl.Source
         }
 
       def reportProgress[T](after: Future[T], env: Envelope): Future[T] = {
-        after.andThen(_ => statusObserver.progress(projectionId, env))
+        after.map { done =>
+          try {
+            statusObserver.progress(projectionId, env)
+          } catch {
+            case NonFatal(_) => // ignore
+          }
+          done
+        }
       }
 
       val composedSource: Source[Done, NotUsed] = offsetStrategy match {
