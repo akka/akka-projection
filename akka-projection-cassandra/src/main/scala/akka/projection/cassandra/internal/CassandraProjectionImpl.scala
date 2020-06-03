@@ -226,14 +226,12 @@ import akka.stream.scaladsl.Source
               .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
               .filterNot(_.isEmpty)
               .mapAsync(parallelism = 1) { group =>
-                val firstOffset = group.head._1
-                val last = group.last
-                val lastOffset = last._1
-                val lastEnv = last._2
-                val envelopes = group.map(_._2)
+                val (firstOffset, firstEnvelope) = group.head
+                val (lastOffset, lastEnvelope) = group.last
+                val envelopes = group.map { case (_, env) => env }
                 handlerRecovery
-                  .applyRecovery(group.head._2, firstOffset, lastOffset, () => grouped.handler.process(envelopes))
-                  .map(_ => lastOffset -> lastEnv)
+                  .applyRecovery(firstEnvelope, firstOffset, lastOffset, () => grouped.handler.process(envelopes))
+                  .map(_ => lastOffset -> lastEnvelope)
               }
         }
 
