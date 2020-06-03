@@ -4,8 +4,6 @@
 
 package akka.projection.internal
 
-import java.util.concurrent.atomic.AtomicInteger
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.NonFatal
@@ -66,12 +64,12 @@ import akka.projection.StatusObserver
       }
     }
 
-    def retryFutureCallback(attemptCount: AtomicInteger): () => Future[Done] = { () =>
+    val retryFutureCallback: () => Future[Done] = { () =>
       tryFutureCallback().recoverWith {
         // using recoverWith instead of `.failed.foreach` to make sure that calls to statusObserver
         // are invoked in sequential order
         case err =>
-          statusObserver.error(projectionId, env, err, attemptCount.incrementAndGet(), recoveryStrategy)
+          statusObserver.error(projectionId, env, err, recoveryStrategy)
           Future.failed(err)
       }
     }
@@ -85,7 +83,7 @@ import akka.projection.StatusObserver
 
     firstAttempt.recoverWith {
       case err =>
-        statusObserver.error(projectionId, env, err, errorCount = 1, recoveryStrategy)
+        statusObserver.error(projectionId, env, err, recoveryStrategy)
 
         recoveryStrategy match {
           case Fail =>
@@ -115,8 +113,7 @@ import akka.projection.StatusObserver
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val attemptCount = new AtomicInteger(1)
-            val retried = after(delay, scheduler)(retry(retryFutureCallback(attemptCount), retries - 1, delay))
+            val retried = after(delay, scheduler)(retry(retryFutureCallback, retries - 1, delay))
             retried.failed.foreach { exception =>
               logger.error(
                 cause = exception,
@@ -139,8 +136,7 @@ import akka.projection.StatusObserver
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val attemptCount = new AtomicInteger(1)
-            val retried = after(delay, scheduler)(retry(retryFutureCallback(attemptCount), retries - 1, delay))
+            val retried = after(delay, scheduler)(retry(retryFutureCallback, retries - 1, delay))
             retried.failed.foreach { exception =>
               logger.warning(
                 "[{}] Failed to process {} after [{}] attempts. " +

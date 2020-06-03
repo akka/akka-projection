@@ -61,7 +61,7 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 1
-      statusProbe.expectMessage(Err(env3, someTestException, 1))
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "skip" in {
@@ -74,7 +74,7 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 1
-      statusProbe.expectMessage(Err(env3, someTestException, 1))
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "retryAndFail 1" in {
@@ -87,8 +87,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 2
-      statusProbe.expectMessage(Err(env3, someTestException, 1))
-      statusProbe.expectMessage(Err(env3, someTestException, 2))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "retryAndFail 3" in {
@@ -101,10 +101,10 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 4
-      statusProbe.expectMessage(Err(env3, someTestException, 1))
-      statusProbe.expectMessage(Err(env3, someTestException, 2))
-      statusProbe.expectMessage(Err(env3, someTestException, 3))
-      statusProbe.expectMessage(Err(env3, someTestException, 4))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "retryAndFail after delay" in {
@@ -122,8 +122,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       handler.attempts shouldBe 1
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 2
-      statusProbe.expectMessage(Err(env3, someTestException, 1))
-      statusProbe.expectMessage(Err(env3, someTestException, 2))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "retryAndSkip 1" in {
@@ -136,8 +136,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 2
-      statusProbe.expectMessage(Err(env3, someTestException, 1))
-      statusProbe.expectMessage(Err(env3, someTestException, 2))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
       statusProbe.expectNoMessage(20.millis)
     }
 
@@ -151,10 +151,10 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 4
-      statusProbe.expectMessage(Err(env3, someTestException, 1))
-      statusProbe.expectMessage(Err(env3, someTestException, 2))
-      statusProbe.expectMessage(Err(env3, someTestException, 3))
-      statusProbe.expectMessage(Err(env3, someTestException, 4))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
       statusProbe.expectNoMessage(20.millis)
     }
   }

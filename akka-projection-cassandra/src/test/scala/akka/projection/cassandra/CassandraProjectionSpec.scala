@@ -456,10 +456,10 @@ class CassandraProjectionSpec
       }
 
       val someTestException = TestException("err")
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 1))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 2))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 3))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 4))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
       statusProbe.expectNoMessage()
 
       withClue("check: all offsets were seen") {
@@ -758,10 +758,10 @@ class CassandraProjectionSpec
       // fail 4
       handlerProbe.expectMessage(handler.failedMessage)
       val someTestException = TestException("err")
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException, 1))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
 
       // backoff will restart
-      statusProbe.expectMessage(TestStatusObserver.Restarted(1))
+      statusProbe.expectMessage(TestStatusObserver.Restarted)
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("jkl")
       progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))

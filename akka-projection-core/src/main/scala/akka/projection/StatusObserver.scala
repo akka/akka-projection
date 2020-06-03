@@ -17,11 +17,8 @@ abstract class StatusObserver[-Envelope] {
 
   /**
    * Called when a projection is restarted due to failure.
-   *
-   * The `restartCount` starts at 1 for the first restart after failure and is incremented for each restart that
-   * also failed. The counter is reset when at least one envelope has been processed successfully.
    */
-  def restarted(projectionId: ProjectionId, restartCount: Int): Unit
+  def restarted(projectionId: ProjectionId): Unit
 
   /**
    * Called when a projection is stopped.
@@ -37,16 +34,12 @@ abstract class StatusObserver[-Envelope] {
   /**
    * Called when processing of an envelope failed.
    *
-   * The `errorCount` starts at 1 for the first error and is incremented for each retry that also failed.
-   * It is only a counter for the specific envelope, not a total number of errors.
-   *
-   * From the `recoveryStrategy` and the `errorCount` it's possible to derive what next step will be;
-   * fail, skip, retry.
+   * From the `recoveryStrategy` and keeping track how many times `error` is called it's possible to derive
+   * what next step will be; fail, skip, retry.
    */
   def error(
       projectionId: ProjectionId,
       env: Envelope,
       cause: Throwable,
-      errorCount: Int,
       recoveryStrategy: HandlerRecoveryStrategy): Unit
 }

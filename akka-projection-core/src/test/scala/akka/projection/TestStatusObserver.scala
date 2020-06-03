@@ -10,16 +10,16 @@ object TestStatusObserver {
   sealed trait Status
 
   case object Started extends Status
-  final case class Restarted(restartCount: Int) extends Status
+  case object Restarted extends Status
   case object Stopped extends Status
 
   final case class Progress[Envelope](env: Envelope) extends Status
 
-  final case class Err[Envelope](env: Envelope, cause: Throwable, errorCount: Int) extends Status {
+  final case class Err[Envelope](env: Envelope, cause: Throwable) extends Status {
     // don't include cause message in equals
     override def equals(obj: Any): Boolean = obj match {
-      case Err(`env`, e, `errorCount`) => e.getClass == cause.getClass
-      case _                           => false
+      case Err(`env`, e) => e.getClass == cause.getClass
+      case _             => false
     }
 
     override def hashCode(): Int = env.hashCode()
@@ -33,22 +33,22 @@ class TestStatusObserver[Envelope](
     extends StatusObserver[Envelope] {
   import TestStatusObserver._
 
-  def started(projectionId: ProjectionId): Unit = {
+  override def started(projectionId: ProjectionId): Unit = {
     if (lifecycle)
       probe ! Started
   }
 
-  def restarted(projectionId: ProjectionId, restartCount: Int): Unit = {
+  override def restarted(projectionId: ProjectionId): Unit = {
     if (lifecycle)
-      probe ! Restarted(restartCount)
+      probe ! Restarted
   }
 
-  def stopped(projectionId: ProjectionId): Unit = {
+  override def stopped(projectionId: ProjectionId): Unit = {
     if (lifecycle)
       probe ! Stopped
   }
 
-  def progress(projectionId: ProjectionId, env: Envelope): Unit = {
+  override def progress(projectionId: ProjectionId, env: Envelope): Unit = {
     progressProbe.foreach(_ ! Progress(env))
   }
 
@@ -56,7 +56,7 @@ class TestStatusObserver[Envelope](
       projectionId: ProjectionId,
       env: Envelope,
       cause: Throwable,
-      errorCount: Int,
-      recoveryStrategy: HandlerRecoveryStrategy): Unit =
-    probe ! Err(env, cause, errorCount)
+      recoveryStrategy: HandlerRecoveryStrategy): Unit = {
+    probe ! Err(env, cause)
+  }
 }

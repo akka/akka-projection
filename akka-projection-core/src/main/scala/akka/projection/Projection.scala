@@ -4,8 +4,6 @@
 
 package akka.projection
 
-import java.util.concurrent.atomic.AtomicInteger
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.NoStackTrace
@@ -72,21 +70,14 @@ private[projection] object RunningProjection {
       settings: ProjectionSettings,
       projectionId: ProjectionId,
       statusObserver: StatusObserver[_])(implicit ec: ExecutionContext): Source[Done, _] = {
-    val count = new AtomicInteger(0)
     RestartSource
       .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
         () =>
           source()
-            .map { elem =>
-              // TODO can we do this in a more elegant/efficient way?
-              // reset on first element
-              count.set(0)
-              elem
-            }
             .watchTermination()(Keep.right)
             .mapMaterializedValue { f =>
               f.failed.foreach { _ =>
-                statusObserver.restarted(projectionId, count.incrementAndGet())
+                statusObserver.restarted(projectionId)
               }
               NotUsed
             }
