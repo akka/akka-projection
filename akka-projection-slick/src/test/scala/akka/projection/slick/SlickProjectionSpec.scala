@@ -138,7 +138,7 @@ object SlickProjectionSpec {
     }
 
     /**
-     * Try to insert a row with a null value. This will code the DB ops to fail
+     * Try to insert a row with a null value. This will cause the DB ops to fail
      */
     def updateWithNullValue(id: String)(implicit ec: ExecutionContext) = {
       concatStrTable.insertOrUpdate(ConcatStr(id, null)).map(_ => Done)
@@ -208,7 +208,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
   "A Slick exactly-once projection" must {
 
-    "persist projection and offset in same the same write operation (transactional)" in {
+    "persist projection and offset in the same write operation (transactional)" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
