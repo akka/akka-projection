@@ -48,7 +48,20 @@ import java.util.concurrent.CompletionStage;
 
 //#projection-settings-imports
 import akka.projection.ProjectionSettings;
+
 //#projection-settings-imports
+
+//#get-offset
+import akka.projection.javadsl.ProjectionManagement;
+import akka.persistence.query.Offset;
+import akka.projection.ProjectionId;
+
+//#get-offset
+
+//#update-offset
+import akka.persistence.query.Sequence;
+
+//#update-offset
 
 public interface CassandraProjectionDocExample {
 
@@ -222,5 +235,40 @@ public interface CassandraProjectionDocExample {
             .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     //#projection-settings
 
+  }
+
+  public static void illustrateGetOffset() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+    //#get-offset
+
+    ProjectionId projectionId = ProjectionId.of("shopping-carts", "carts-1");
+    CompletionStage<Optional<Offset>> currentOffset =
+      ProjectionManagement.get(system).getOffset(projectionId);
+    //#get-offset
+  }
+
+  public static void illustrateClearOffset() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+    //#clear-offset
+
+    ProjectionId projectionId = ProjectionId.of("shopping-carts", "carts-1");
+    CompletionStage<Done> done = ProjectionManagement.get(system).clearOffset(projectionId);
+    //#clear-offset
+  }
+
+  public static void illustrateUpdateOffset() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+    //#update-offset
+
+    ProjectionId projectionId = ProjectionId.of("shopping-carts", "carts-1");
+    CompletionStage<Optional<Sequence>> currentOffset =
+      ProjectionManagement.get(system).getOffset(projectionId);
+    currentOffset.thenAccept(optionalOffset -> {
+      if (optionalOffset.isPresent()) {
+        Sequence newOffset = new Sequence(optionalOffset.get().value());
+        CompletionStage<Done> done = ProjectionManagement.get(system).updateOffset(projectionId, newOffset);
+      }
+    });
+    //#update-offset
   }
 }

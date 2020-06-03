@@ -237,7 +237,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
             }
 
             @Override
-            public Future<Done> stop(ExecutionContext ec) {
+            public Future<Done> stop() {
                 killSwitch.shutdown();
                 return this.futureDone;
             }

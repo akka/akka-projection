@@ -19,6 +19,7 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
+import akka.projection.ProjectionOffsetManagement
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.StrictRecoveryStrategy
@@ -193,16 +194,16 @@ import akka.stream.scaladsl.Source
    * when building the mappedSource and when running the projection (to stop)
    */
   private class InternalProjectionState(settings: ProjectionSettings)(implicit system: ActorSystem[_]) {
+    // FIXME maybe use the session-dispatcher config
+    implicit val ec: ExecutionContext = system.executionContext
 
-    private val killSwitch = KillSwitches.shared(projectionId.id)
+    private val logger = Logging(system.classicSystem, this.getClass)
+
+    val offsetStore = new CassandraOffsetStore(system)
+
+    val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
 
     private[projection] def mappedSource(): Source[Done, _] = {
-      // FIXME maybe use the session-dispatcher config
-      implicit val ec: ExecutionContext = system.executionContext
-
-      val logger = Logging(system.classicSystem, this.getClass)
-
-      val offsetStore = new CassandraOffsetStore(system)
       val readOffsets = () => offsetStore.readOffset(projectionId)
 
       val source: Source[(Offset, Envelope), NotUsed] =
@@ -285,28 +286,37 @@ import akka.stream.scaladsl.Source
     }
 
     private[projection] def newRunningInstance(): RunningProjection = {
-      new CassandraRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
+      new CassandraRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
     }
   }
 
-  private class CassandraRunningProjection(source: Source[Done, _], killSwitch: SharedKillSwitch)(
+  private class CassandraRunningProjection(source: Source[Done, _], projectionState: InternalProjectionState)(
       implicit system: ActorSystem[_])
-      extends RunningProjection {
+      extends RunningProjection
+      with ProjectionOffsetManagement[Offset] {
 
     private val streamDone = source.run()
 
-    /**
-     * INTERNAL API
-     *
-     * Stop the projection if it's running.
-     *
-     * @return Future[Done] - the returned Future should return the stream materialized value.
-     */
-    @InternalApi
-    override private[projection] def stop()(implicit ec: ExecutionContext): Future[Done] = {
-      killSwitch.shutdown()
+    override def stop(): Future[Done] = {
+      projectionState.killSwitch.shutdown()
       streamDone
     }
+
+    // ProjectionOffsetManagement
+    override def getOffset(): Future[Option[Offset]] = {
+      projectionState.offsetStore.readOffset(projectionId)
+    }
+
+    // ProjectionOffsetManagement
+    override def setOffset(offset: Option[Offset]): Future[Done] = {
+      offset match {
+        case Some(o) =>
+          projectionState.offsetStore.saveOffset(projectionId, o)
+        case None =>
+          projectionState.offsetStore.clearOffset(projectionId)
+      }
+    }
+
   }
 
   override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {

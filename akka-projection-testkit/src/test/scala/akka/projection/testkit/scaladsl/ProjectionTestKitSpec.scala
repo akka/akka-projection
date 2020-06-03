@@ -4,7 +4,6 @@
 
 package akka.projection.testkit.scaladsl
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -179,7 +178,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
       private val futureDone = source.run()
 
-      override def stop()(implicit ec: ExecutionContext): Future[Done] = {
+      override def stop(): Future[Done] = {
         killSwitch.shutdown()
         futureDone
       }

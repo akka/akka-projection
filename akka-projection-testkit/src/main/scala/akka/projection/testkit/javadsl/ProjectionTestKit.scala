@@ -7,7 +7,6 @@ package akka.projection.testkit.javadsl
 import java.time.Duration
 
 import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import akka.Done
@@ -34,7 +33,6 @@ object ProjectionTestKit {
 final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
   private implicit val system: ActorSystem[Void] = testKit.system
-  private implicit val executionContext: ExecutionContext = system.executionContext
   private implicit val settings: TestKitSettings = TestKitSettings(system)
 
   /**

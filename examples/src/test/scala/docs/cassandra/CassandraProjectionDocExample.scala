@@ -6,6 +6,7 @@ package docs.cassandra
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
+
 //#daemon-imports
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
@@ -168,6 +169,39 @@ object CassandraProjectionDocExample {
         .withSaveOffset(100, 500.millis)
     //#projection-settings
 
+  }
+
+  object IllustrateGetOffset {
+    //#get-offset
+    import akka.projection.scaladsl.ProjectionManagement
+    import akka.persistence.query.Offset
+    import akka.projection.ProjectionId
+
+    val projectionId = ProjectionId("shopping-carts", "carts-1")
+    val currentOffset: Future[Option[Offset]] = ProjectionManagement(system).getOffset[Offset](projectionId)
+    //#get-offset
+  }
+
+  object IllustrateClearOffset {
+    import akka.projection.scaladsl.ProjectionManagement
+    //#clear-offset
+    val projectionId = ProjectionId("shopping-carts", "carts-1")
+    val done: Future[Done] = ProjectionManagement(system).clearOffset(projectionId)
+    //#clear-offset
+  }
+
+  object IllustrateUpdateOffset {
+    import akka.projection.scaladsl.ProjectionManagement
+    import system.executionContext
+    //#update-offset
+    import akka.persistence.query.Sequence
+    val projectionId = ProjectionId("shopping-carts", "carts-1")
+    val currentOffset: Future[Option[Sequence]] = ProjectionManagement(system).getOffset[Sequence](projectionId)
+    currentOffset.foreach {
+      case Some(s) => ProjectionManagement(system).updateOffset[Sequence](projectionId, Sequence(s.value + 1))
+      case None    => // already removed
+    }
+    //#update-offset
   }
 
 }

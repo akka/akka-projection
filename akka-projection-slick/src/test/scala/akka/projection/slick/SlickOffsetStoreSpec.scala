@@ -236,5 +236,25 @@ class SlickOffsetStoreSpec
       val instant3 = selectLastUpdated(projectionId)
       instant3 shouldBe instant2
     }
+
+    "clear offset" in {
+      val projectionId = ProjectionId("projection-clear", "00")
+
+      withClue("check - save offset") {
+        dbConfig.db.run(offsetStore.saveOffset(projectionId, 3L)).futureValue
+      }
+
+      withClue("check - read offset") {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(3L)
+      }
+
+      withClue("check - clear offset") {
+        dbConfig.db.run(offsetStore.clearOffset(projectionId)).futureValue
+      }
+
+      withClue("check - read offset") {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe None
+      }
+    }
   }
 }
