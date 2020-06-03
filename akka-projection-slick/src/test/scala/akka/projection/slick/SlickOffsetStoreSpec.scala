@@ -92,7 +92,7 @@ class SlickOffsetStoreSpec
     dbConfig.db.run(action).futureValue.get.lastUpdated
   }
 
-  "The OffsetStore" must {
+  "The SlickOffsetStore" must {
 
     implicit val ec: ExecutionContext = dbConfig.db.executor.executionContext
 

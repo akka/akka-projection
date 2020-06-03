@@ -200,7 +200,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
     val abort: Promise[Done] = Promise()
 
-    // TODO: add a LogSource for projection when we have a name and key
     private val logger = Logging(system.classicSystem, this.getClass)
 
     private[projection] def mappedSource(): Source[Done, _] = {
