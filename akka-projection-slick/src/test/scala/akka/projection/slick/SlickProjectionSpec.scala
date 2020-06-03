@@ -24,6 +24,7 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.scaladsl.ProjectionManagement
+import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
@@ -264,6 +265,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       val bogusEventHandler = new ConcatHandlerFail4()
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+
       val slickProjection =
         SlickProjection
           .exactlyOnce(
@@ -272,6 +276,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             databaseConfig = dbConfig,
             handler = bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+          .withStatusObserver(statusObserver)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - not all values were concatenated") {
@@ -284,6 +289,13 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
         // 1 + 3 => 1 original attempt and 3 retries
         bogusEventHandler.attempts shouldBe 1 + 3
       }
+
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectNoMessage()
 
       withClue("check - all offsets were seen") {
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
@@ -911,6 +923,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
+
       val projection =
         SlickProjection
           .atLeastOnce[Long, Envelope, H2Profile](
@@ -919,9 +934,12 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             databaseConfig = dbConfig,
             handler)
           .withSaveOffset(1, Duration.Zero)
+          .withStatusObserver(statusObserver)
 
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
+
+      statusProbe.expectMessage(TestStatusObserver.Started)
 
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
@@ -933,6 +951,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       // completed without failure
       handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
+
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectNoMessage()
     }
 
     "call start and stop of the handler when using TestKit.runWithTestSink" in {
@@ -983,6 +1004,10 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true, Some(progressProbe.ref))
+
       val projection =
         SlickProjection
           .atLeastOnce[Long, Envelope, H2Profile](
@@ -992,25 +1017,42 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             handler)
           .withSettings(ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0))
           .withSaveOffset(1, Duration.Zero)
+          .withStatusObserver(statusObserver)
 
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
 
+      statusProbe.expectMessage(TestStatusObserver.Started)
+
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "abc")))
       handlerProbe.expectMessage("def")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "def")))
       handlerProbe.expectMessage("ghi")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "ghi")))
       // fail 4
       handlerProbe.expectMessage(handler.failedMessage)
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
 
       // backoff will restart
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectMessage(TestStatusObserver.Restarted)
+      statusProbe.expectMessage(TestStatusObserver.Started)
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("jkl")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))
       handlerProbe.expectMessage("mno")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "mno")))
       handlerProbe.expectMessage("pqr")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 6, "pqr")))
       // now completed without failure
       handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
+
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectNoMessage()
     }
 
     "call start and stop of handler when failed but no restart" in {

@@ -20,7 +20,7 @@ lazy val testkit =
 lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
     .settings(Dependencies.slick)
-    .dependsOn(core)
+    .dependsOn(core % "compile->compile;test->test")
     .dependsOn(testkit % "test->test")
 
 // provides offset storage backed by a Cassandra table
@@ -28,7 +28,7 @@ lazy val cassandra =
   Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
     .settings(Dependencies.cassandra)
     .settings(Test / parallelExecution := false)
-    .dependsOn(core)
+    .dependsOn(core % "compile->compile;test->test")
     .dependsOn(testkit % "test->test")
 
 // provides source providers for akka-persistence-query

@@ -16,6 +16,8 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.adapter._
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionId
+import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.Handler
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -35,58 +37,84 @@ object HandlerRecoveryImplSpec {
       }
     }
   }
+
 }
 
 class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
   import HandlerRecoveryImplSpec._
-  import HandlerRecoveryImpl.applyUserRecovery
+  import TestStatusObserver._
 
   private val logger = Logging(system.toClassic, getClass)
   private val failOnOffset = 3
   private val env3 = Envelope(offset = failOnOffset, "c")
+  private val projectionId = ProjectionId("test", "1")
+  private val someTestException = TestException("err")
 
   "HandlerRecovery" must {
     "fail" in {
       val strategy = HandlerRecoveryStrategy.fail
+      val statusProbe = createTestProbe[Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
       val handler = new FailHandler(failOnOffset)
       val result =
-        applyUserRecovery(strategy, failOnOffset, failOnOffset, logger, () => handler.process(env3))
+        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 1
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "skip" in {
       val strategy = HandlerRecoveryStrategy.skip
+      val statusProbe = createTestProbe[Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
       val handler = new FailHandler(failOnOffset)
       val result =
-        applyUserRecovery(strategy, failOnOffset, failOnOffset, logger, () => handler.process(env3))
+        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 1
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "retryAndFail 1" in {
       val strategy = HandlerRecoveryStrategy.retryAndFail(1, 20.millis)
+      val statusProbe = createTestProbe[Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
       val handler = new FailHandler(failOnOffset)
       val result =
-        applyUserRecovery(strategy, failOnOffset, failOnOffset, logger, () => handler.process(env3))
+        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 2
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "retryAndFail 3" in {
       val strategy = HandlerRecoveryStrategy.retryAndFail(3, 20.millis)
+      val statusProbe = createTestProbe[Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
       val handler = new FailHandler(failOnOffset)
       val result =
-        applyUserRecovery(strategy, failOnOffset, failOnOffset, logger, () => handler.process(env3))
+        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 4
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "retryAndFail after delay" in {
       val strategy = HandlerRecoveryStrategy.retryAndFail(1, 1.second)
+      val statusProbe = createTestProbe[Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
       val handler = new FailHandler(failOnOffset)
       val result =
-        applyUserRecovery(strategy, failOnOffset, failOnOffset, logger, () => handler.process(env3))
+        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       // first attempt is immediately
       handler.attempts shouldBe 1
       // retries after delay
@@ -94,24 +122,40 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       handler.attempts shouldBe 1
       result.failed.futureValue.getClass shouldBe classOf[TestException]
       handler.attempts shouldBe 2
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
     }
 
     "retryAndSkip 1" in {
       val strategy = HandlerRecoveryStrategy.retryAndSkip(1, 20.millis)
+      val statusProbe = createTestProbe[Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
       val handler = new FailHandler(failOnOffset)
       val result =
-        applyUserRecovery(strategy, failOnOffset, failOnOffset, logger, () => handler.process(env3))
+        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 2
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectNoMessage(20.millis)
     }
 
     "retryAndSkip 3" in {
       val strategy = HandlerRecoveryStrategy.retryAndSkip(3, 20.millis)
+      val statusProbe = createTestProbe[Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
       val handler = new FailHandler(failOnOffset)
       val result =
-        applyUserRecovery(strategy, failOnOffset, failOnOffset, logger, () => handler.process(env3))
+        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, () => handler.process(env3))
       result.futureValue shouldBe Done
       handler.attempts shouldBe 4
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectMessage(Err(env3, someTestException))
+      statusProbe.expectNoMessage(20.millis)
     }
   }
 }

@@ -15,6 +15,8 @@ import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
+import akka.projection.StatusObserver
+import akka.projection.internal.NoopStatusObserver
 import akka.stream.DelayOverflowStrategy
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
@@ -137,6 +139,11 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     override def withSettings(settings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
+
+    override val statusObserver: StatusObserver[Int] = NoopStatusObserver
+
+    override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =
+      this // no need for StatusObserver in tests
 
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
 

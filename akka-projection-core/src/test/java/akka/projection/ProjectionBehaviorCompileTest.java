@@ -8,6 +8,7 @@ import akka.Done;
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
+import akka.projection.internal.NoopStatusObserver;
 import akka.stream.scaladsl.Source;
 
 /**
@@ -42,11 +43,20 @@ public class ProjectionBehaviorCompileTest {
             return null;
         }
 
-
-
         @Override
         public Projection<String> withSettings(ProjectionSettings settings) {
             // no need for ProjectionSettings in tests
+            return this;
+        }
+
+        @Override
+        public StatusObserver<String> statusObserver() {
+            return NoopStatusObserver.getInstance();
+        }
+
+        @Override
+        public Projection<String> withStatusObserver(StatusObserver<String> observer) {
+            // no need for StatusObserver in tests
             return this;
         }
     }

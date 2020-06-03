@@ -6,13 +6,16 @@ package akka.projection
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.util.control.NoStackTrace
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
+import akka.projection.scaladsl.HandlerLifecycle
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
@@ -33,6 +36,10 @@ trait Projection[Envelope] {
   def projectionId: ProjectionId
 
   def withSettings(settings: ProjectionSettings): Projection[Envelope]
+
+  def statusObserver: StatusObserver[Envelope]
+
+  def withStatusObserver(observer: StatusObserver[Envelope]): Projection[Envelope]
 
   /**
    * INTERNAL API
@@ -60,40 +67,34 @@ trait Projection[Envelope] {
 @InternalApi
 private[projection] object RunningProjection {
 
-  def withBackoff(source: () => Source[Done, _], settings: ProjectionSettings): Source[Done, _] =
+  def withBackoff(source: () => Source[Done, _], settings: ProjectionSettings): Source[Done, _] = {
     RestartSource
       .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
         () => source()
       }
-
-  /* internal exception to wrap exceptions coming from stopHandler */
-  private case class StopHandlerException(cause: Throwable) extends RuntimeException(cause) with NoStackTrace
+  }
 
   /**
    * Adds a `watchTermination` on the passed Source that will call the `stopHandler` on completion.
    *
    * The stopHandler function is called on success or failure. In case of failure, the original failure is preserved.
    */
-  def stopHandlerOnTermination(src: Source[Done, NotUsed], stopHandler: () => Future[Done])(
-      implicit ec: ExecutionContext): Source[Done, Future[Done]] = {
+  def stopHandlerOnTermination(
+      src: Source[Done, NotUsed],
+      projectionId: ProjectionId,
+      handlerLifecycle: HandlerLifecycle,
+      statusObserver: StatusObserver[_])(implicit ec: ExecutionContext): Source[Done, Future[Done]] = {
     src.watchTermination() { (_, futDone) =>
       futDone
-        .flatMap { _ =>
-          stopHandler().recoverWith {
-            // if stop fails we need to wrap it so
-            // on the next recoverWith we don't call it twice
-            case exc => Future.failed(StopHandlerException(exc))
-          }
+        .andThen(_ => handlerLifecycle.tryStop())
+        .andThen {
+          case Success(_) =>
+            statusObserver.stopped(projectionId)
+          case Failure(exc) =>
+            Try(statusObserver.stopped(projectionId))
+            statusObserver.restarted(projectionId, exc)
         }
-        .recoverWith {
-          case StopHandlerException(exc) => Future.failed(exc)
-          case streamFailure             =>
-            // ignore error in stop failure and preserve original stream failure
-            stopHandler().recoverWith(_ => Future.failed(streamFailure))
-        }
-        .map(_ => Done)
     }
-
   }
 
 }
