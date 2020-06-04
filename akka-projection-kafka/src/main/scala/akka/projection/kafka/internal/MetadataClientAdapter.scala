@@ -18,24 +18,30 @@ import akka.kafka.scaladsl.MetadataClient
 import akka.kafka.ConsumerSettings
 import org.apache.kafka.common.TopicPartition
 
-@InternalApi
-trait MetadataClientAdapter {
+/**
+ * INTERNAL API
+ */
+@InternalApi trait MetadataClientAdapter {
   def getBeginningOffsets(assignedTps: Set[TopicPartition]): Future[Map[TopicPartition, Long]]
   def numPartitions(topics: Set[String]): Future[Int]
   def stop(): Unit
 }
 
-@InternalApi
-object MetadataClientAdapterImpl {
-  private val KafkaMetadataTimeout = 10.seconds // TODO: get from config
+/**
+ * INTERNAL API
+ */
+@InternalApi object MetadataClientAdapterImpl {
+  private val KafkaMetadataTimeout = 10.seconds // FIXME get from config
 
   private val consumerActorNameCounter = new AtomicInteger
   private def nextConsumerActorName(): String =
     s"kafkaSourceProviderConsumer-${consumerActorNameCounter.incrementAndGet()}"
 }
 
-@InternalApi
-class MetadataClientAdapterImpl(system: ActorSystem[_], settings: ConsumerSettings[_, _])
+/**
+ * INTERNAL API
+ */
+@InternalApi class MetadataClientAdapterImpl(system: ActorSystem[_], settings: ConsumerSettings[_, _])
     extends MetadataClientAdapter {
   import MetadataClientAdapterImpl._
 

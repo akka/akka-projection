@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
 import scala.collection.immutable
-import scala.collection.mutable.ListBuffer
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -20,6 +19,7 @@ import scala.concurrent.duration._
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.TestException
+import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.projection.HandlerRecoveryStrategy
@@ -29,8 +29,8 @@ import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.ProjectionSettings
-import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.TestStatusObserver
+import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Keep
@@ -1012,17 +1012,16 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "verify offsets before processing an envelope" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-
-      val verified = ListBuffer[Long]()
+      val verifiedProbe: TestProbe[Long] = createTestProbe[Long]()
 
       val testVerification = (offset: Long) => {
-        verified += offset
+        verifiedProbe.ref ! offset
         VerificationSuccess
       }
 
       val slickHandler = SlickHandler[Envelope] { envelope =>
         withClue("checking: offset verified before handler function was run") {
-          verified.last shouldEqual envelope.offset
+          verifiedProbe.expectMessage(envelope.offset)
         }
         repository.concatToText(envelope.id, envelope.message)
       }

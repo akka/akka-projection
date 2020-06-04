@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
 import scala.collection.immutable
-import scala.collection.mutable.ListBuffer
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
@@ -23,6 +22,7 @@ import akka.NotUsed
 import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.projection.HandlerRecoveryStrategy
@@ -517,16 +517,16 @@ class CassandraProjectionSpec
     "verify offsets before processing an envelope" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      val verified = ListBuffer[Long]()
+      val verifiedProbe: TestProbe[Long] = createTestProbe[Long]()
 
       val testVerification = (offset: Long) => {
-        verified += offset
+        verifiedProbe.ref ! offset
         VerificationSuccess
       }
 
       val handler = Handler[Envelope] { envelope =>
         withClue("checking: offset verified before handler function was run") {
-          verified.last shouldEqual envelope.offset
+          verifiedProbe.expectMessage(envelope.offset)
         }
         repository.concatToText(envelope.id, envelope.message)
       }
