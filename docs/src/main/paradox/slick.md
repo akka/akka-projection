@@ -151,4 +151,8 @@ The supported offset types of the `SlickProjection` are:
 
 ## Configuration
 
-@@snip [reference.conf](/akka-projection-slick/src/main/resources/reference.conf)
+Make your edits/overrides in your application.conf.
+
+The reference configuration file with the default values:
+
+@@snip [reference.conf](/akka-projection-slick/src/main/resources/reference.conf) { #config }

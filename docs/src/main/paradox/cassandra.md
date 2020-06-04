@@ -268,4 +268,56 @@ for the `CassandraProjection` yet, see [issue #97](https://github.com/akka/akka-
 
 ## Configuration
 
-@@snip [reference.conf](/akka-projection-cassandra/src/main/resources/reference.conf)
+Make your edits/overrides in your application.conf.
+
+The reference configuration file with the default values:
+
+@@snip [reference.conf](/akka-projection-cassandra/src/main/resources/reference.conf) { #config }
+
+### Cassandra driver configuration
+
+All Cassandra driver settings are via its [standard profile mechanism](https://docs.datastax.com/en/developer/java-driver/latest/manual/core/configuration/).
+
+One important setting is to configure the database driver to retry the initial connection:
+
+`datastax-java-driver.advanced.reconnect-on-init = true`
+
+It is not enabled automatically as it is in the driver's reference.conf and is not overridable in a profile.
+
+It is possible to share the same Cassandra session as [Akka Persistence Cassandra](https://doc.akka.io/docs/akka-persistence-cassandra/current/)
+by setting the `session-config-path`:
+
+```
+akka.projection.cassandra {
+  session-config-path = "akka.persistence.cassandra"
+}
+```
+
+or share the same Cassandra session as [Alpakka Cassandra](https://doc.akka.io/docs/alpakka/2.0/cassandra.html):
+
+```
+akka.projection.cassandra {
+  session-config-path = "alpakka.cassandra"
+}
+```
+
+### Cassandra driver overrides
+
+@@snip [reference.conf](/akka-projection-cassandra/src/main/resources/reference.conf) { #profile }
+
+### Contact points configuration
+
+The Cassandra server contact points can be defined with the [Cassandra driver configuration](https://docs.datastax.com/en/developer/java-driver/latest/manual/core/configuration/)
+
+```
+datastax-java-driver {
+  basic.contact-points = ["127.0.0.1:9042"]
+  basic.load-balancing-policy.local-datacenter = "datacenter1"
+}
+```
+
+Alternatively, Akka Discovery can be used for finding the Cassandra server contact points as described
+in the [Alpakka Cassandra documentation](https://doc.akka.io/docs/alpakka/2.0/cassandra.html#using-akka-discovery).
+
+Without any configuration it will use `localhost:9042` as default.
+
