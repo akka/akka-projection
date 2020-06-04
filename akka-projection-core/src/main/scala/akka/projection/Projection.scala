@@ -92,7 +92,7 @@ private[projection] object RunningProjection {
             statusObserver.stopped(projectionId)
           case Failure(exc) =>
             Try(statusObserver.stopped(projectionId))
-            statusObserver.restarted(projectionId, exc)
+            statusObserver.failed(projectionId, exc)
         }
     }
   }
