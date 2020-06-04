@@ -133,10 +133,9 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
   "KafkaSourceProvider with Slick" must {
     "project a model and Kafka offset map to a slick db exactly once" in {
-      val projectionId = ProjectionId("HappyPath", "UserEventCountProjection-1")
-
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()
+      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
       produceEvents(topicName)
 
@@ -156,17 +155,16 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
             repository.incrementCount(projectionId, userEvent.eventType)
           })
 
-      projectionTestKit.run(slickProjection, remainingOrDefault) {
+      projectionTestKit.run(slickProjection) {
         assertEventTypeCount(projectionId)
         assertAllOffsetsObserved(projectionId, topicName)
       }
     }
 
     "project a model and Kafka offset map to a slick db exactly once with a retriable DBIO.failed" in {
-      val projectionId = ProjectionId("OneFailure", "UserEventCountProjection-1")
-
       val topicName = createTopic(suffix = 1, partitions = 3, replication = 1)
       val groupId = createGroupId()
+      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
       produceEvents(topicName)
 
@@ -197,7 +195,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
             })
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis))
 
-      projectionTestKit.run(slickProjection, remainingOrDefault) {
+      projectionTestKit.run(slickProjection) {
         assertEventTypeCount(projectionId)
         assertAllOffsetsObserved(projectionId, topicName)
       }
