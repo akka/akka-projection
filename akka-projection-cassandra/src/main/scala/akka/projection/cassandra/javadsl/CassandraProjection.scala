@@ -23,6 +23,7 @@ import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SourceProviderAdapter
 import akka.projection.javadsl.Handler
 import akka.projection.javadsl.SourceProvider
+import akka.stream.javadsl.FlowWithContext
 
 /**
  * Factories of [[Projection]] where the offset is stored in Cassandra. The envelope handler can
@@ -34,6 +35,7 @@ object CassandraProjection {
   import CassandraProjectionImpl.AtMostOnce
   import CassandraProjectionImpl.GroupedHandlerStrategy
   import CassandraProjectionImpl.SingleHandlerStrategy
+  import CassandraProjectionImpl.FlowHandlerStrategy
 
   /**
    * Create a [[Projection]] with at-least-once processing semantics. It stores the offset in Cassandra
@@ -82,6 +84,39 @@ object CassandraProjection {
       statusObserver = NoopStatusObserver)
 
   /**
+   * Create a [[Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
+   * semantics.
+   *
+   * The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
+   * in the context of the `FlowWithContext` and is stored in Cassandra if corresponding `Done` is emitted.
+   * Since the offset is stored after processing the envelope it means that if the
+   * projection is restarted from previously stored offset some envelopes may be processed more than once.
+   *
+   * If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
+   * will be processed again if the projection is restarted and no later offset was stored.
+   *
+   * The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
+   * that the first offset is stored and when the projection is restarted that offset is considered completed even
+   * though more of the duplicated enveloped were never processed.
+   *
+   * The flow must not reorder elements, because the offsets may be stored in the wrong order and
+   * and when the projection is restarted all envelopes up to the latest stored offset are considered
+   * completed even though some of them may not have been processed. This is the reason the flow is
+   * restricted to `FlowWithContext` rather than ordinary `Flow`.
+   */
+  def atLeastOnceFlow[Offset, Envelope](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _]): AtLeastOnceFlowCassandraProjection[Envelope] =
+    new CassandraProjectionImpl(
+      projectionId,
+      new SourceProviderAdapter(sourceProvider),
+      settingsOpt = None,
+      offsetStrategy = AtLeastOnce(),
+      handlerStrategy = FlowHandlerStrategy(handler.asScala),
+      statusObserver = NoopStatusObserver)
+
+  /**
    * Create a [[Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
    * before the `handler` has processed the envelope. This means that if the projection is restarted
    * from previously stored offset one envelope may not have been processed.
@@ -123,7 +158,7 @@ object CassandraProjection {
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
 }
 
-trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+@DoNotInherit trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   override def withSettings(settings: ProjectionSettings): GroupedCassandraProjection[Envelope]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedCassandraProjection[Envelope]
@@ -139,4 +174,12 @@ trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope]
   override def withStatusObserver(observer: StatusObserver[Envelope]): AtMostOnceCassandraProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
+}
+
+@DoNotInherit trait AtLeastOnceFlowCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
+  override def withSettings(settings: ProjectionSettings): AtLeastOnceFlowCassandraProjection[Envelope]
+
+  def withSaveOffset(
+      afterEnvelopes: Int,
+      afterDuration: java.time.Duration): AtLeastOnceFlowCassandraProjection[Envelope]
 }

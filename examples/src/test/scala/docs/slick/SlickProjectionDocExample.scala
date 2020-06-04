@@ -14,6 +14,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.stream.scaladsl.FlowWithContext
 import docs.eventsourced.ShoppingCart
 
 //#projection-imports
@@ -157,6 +158,33 @@ class SlickProjectionDocExample {
           handler = new GroupedShoppingCartHandler(repository))
         .withGroup(groupAfterEnvelopes = 20, groupAfterDuration = 500.millis)
     //#grouped
+  }
+
+  object IllustrateAtLeastOnceFlow {
+    //#atLeastOnceFlow
+    val logger = LoggerFactory.getLogger(getClass)
+
+    val flow = FlowWithContext[EventEnvelope[ShoppingCart.Event], EventEnvelope[ShoppingCart.Event]]
+      .map(envelope => envelope.event)
+      .map {
+        case ShoppingCart.CheckedOut(cartId, time) =>
+          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          Done
+
+        case otherEvent =>
+          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          Done
+      }
+
+    val projection =
+      SlickProjection
+        .atLeastOnceFlow(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider,
+          dbConfig,
+          handler = flow)
+        .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
+    //#atLeastOnceFlow
   }
 
 }

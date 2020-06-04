@@ -38,6 +38,7 @@ import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
+import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 
 /**
@@ -65,6 +66,10 @@ import akka.stream.scaladsl.Source
       extends HandlerStrategy[Envelope] {
     override def lifecycle: HandlerLifecycle = handler
   }
+  final case class FlowHandlerStrategy[Envelope](flowCtx: FlowWithContext[Envelope, Envelope, Done, Envelope, _])
+      extends HandlerStrategy[Envelope] {
+    override val lifecycle: HandlerLifecycle = new HandlerLifecycle {}
+  }
 }
 
 /**
@@ -84,7 +89,9 @@ import akka.stream.scaladsl.Source
     with javadsl.GroupedCassandraProjection[Envelope]
     with scaladsl.GroupedCassandraProjection[Envelope]
     with javadsl.AtMostOnceCassandraProjection[Envelope]
-    with scaladsl.AtMostOnceCassandraProjection[Envelope] {
+    with scaladsl.AtMostOnceCassandraProjection[Envelope]
+    with scaladsl.AtLeastOnceFlowCassandraProjection[Envelope]
+    with javadsl.AtLeastOnceFlowCassandraProjection[Envelope] {
 
   import CassandraProjectionImpl._
 
@@ -222,7 +229,7 @@ import akka.stream.scaladsl.Source
           }
           .mapMaterializedValue(_ => NotUsed)
 
-      def handlerFlow(
+      def atLeastOnceHandlerFlow(
           recoveryStrategy: HandlerRecoveryStrategy): Flow[(Offset, Envelope), (Offset, Envelope), NotUsed] =
         handlerStrategy match {
           case SingleHandlerStrategy(handler) =>
@@ -258,6 +265,13 @@ import akka.stream.scaladsl.Source
                     () => grouped.handler.process(envelopes))
                   .map(_ => lastOffset -> lastEnvelope)
               }
+
+          case f: FlowHandlerStrategy[Envelope] =>
+            val flow: Flow[(Envelope, Envelope), (Done, Envelope), _] = f.flowCtx.asFlow
+            Flow[(Offset, Envelope)]
+              .map { case (_, env) => env -> env }
+              .via(flow)
+              .map { case (_, env) => sourceProvider.extractOffset(env) -> env }
         }
 
       def reportProgress[T](after: Future[T], env: Envelope): Future[T] = {
@@ -279,13 +293,13 @@ import akka.stream.scaladsl.Source
 
           if (afterEnvelopes == 1)
             // optimization of general AtLeastOnce case
-            source.via(handlerFlow(recoveryStrategy)).mapAsync(1) {
+            source.via(atLeastOnceHandlerFlow(recoveryStrategy)).mapAsync(1) {
               case (offset, envelope) =>
                 reportProgress(offsetStore.saveOffset(projectionId, offset), envelope)
             }
           else
             source
-              .via(handlerFlow(recoveryStrategy))
+              .via(atLeastOnceHandlerFlow(recoveryStrategy))
               .groupedWithin(afterEnvelopes, orAfterDuration)
               .collect { case grouped if grouped.nonEmpty => grouped.last }
               .mapAsync(parallelism = 1) {
@@ -300,7 +314,7 @@ import akka.stream.scaladsl.Source
           val handler = handlerStrategy match {
             case SingleHandlerStrategy(handler) => handler
             case _                              =>
-              // not possible
+              // not possible, no API for this
               throw new IllegalStateException("Unsupported combination of atMostOnce and grouped")
           }
 
