@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
 import scala.collection.immutable
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -1011,19 +1012,17 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
     "verify offsets before processing an envelope" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      val (verifiedQueue, verifiedProbe) = Source
-        .queue[Long](1, OverflowStrategy.backpressure)
-        .toMat(TestSink.probe(actorSystem.classicSystem))(Keep.both)
-        .run()
+
+      val verified = ListBuffer[Long]()
 
       val testVerification = (offset: Long) => {
-        Await.ready(verifiedQueue.offer(offset), 10.millis)
+        verified += offset
         VerificationSuccess
       }
 
       val slickHandler = SlickHandler[Envelope] { envelope =>
         withClue("checking: offset verified before handler function was run") {
-          verifiedProbe.requestNext() shouldEqual envelope.offset
+          verified.last shouldEqual envelope.offset
         }
         repository.concatToText(envelope.id, envelope.message)
       }
@@ -1043,8 +1042,6 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
         }
       }
-
-      verifiedProbe.cancel()
     }
 
     "skip record if offset verification fails before processing envelope" in {

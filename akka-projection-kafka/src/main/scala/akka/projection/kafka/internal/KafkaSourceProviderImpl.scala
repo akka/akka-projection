@@ -4,8 +4,6 @@
 
 package akka.projection.kafka.internal
 
-import java.util.concurrent.atomic.AtomicReference
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -49,7 +47,9 @@ import org.apache.kafka.common.TopicPartition
 
   private[kafka] val partitionHandler = new ProjectionPartitionHandler
   private val subscription = Subscriptions.topics(topics).withPartitionAssignmentHandler(partitionHandler)
-  private val assignedPartitions = new AtomicReference[Set[TopicPartition]](EmptyTps)
+  // assigned partitions is only ever mutated by consumer rebalance partition handler executed in the Kafka consumer
+  // poll thread in the Alpakka Kafka `KafkaConsumerActor`
+  @volatile private var assignedPartitions: Set[TopicPartition] = Set.empty
 
   protected[internal] def _source(
       readOffsets: ReadOffsets,
@@ -77,7 +77,7 @@ import org.apache.kafka.common.TopicPartition
   override def extractOffset(record: ConsumerRecord[K, V]): GroupOffsets = GroupOffsets(record)
 
   override def verifyOffset(offsets: GroupOffsets): OffsetVerification = {
-    if (offsets.partitions.forall(assignedPartitions.get().contains))
+    if (offsets.partitions.forall(assignedPartitions.contains))
       VerificationSuccess
     else
       VerificationFailure(
@@ -105,18 +105,15 @@ import org.apache.kafka.common.TopicPartition
 
   private[kafka] class ProjectionPartitionHandler extends PartitionAssignmentHandler {
     override def onRevoke(revokedTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
-      removeFromAssigned(revokedTps)
+      assignedPartitions = assignedPartitions.diff(revokedTps)
 
     override def onAssign(assignedTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
-      assignedPartitions.set(assignedTps)
+      assignedPartitions = assignedTps
 
     override def onLost(lostTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
-      removeFromAssigned(lostTps)
+      assignedPartitions = assignedPartitions.diff(lostTps)
 
     override def onStop(currentTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
-      assignedPartitions.set(EmptyTps)
-
-    private def removeFromAssigned(revokedTps: Set[TopicPartition]): Set[TopicPartition] =
-      assignedPartitions.accumulateAndGet(revokedTps, (assigned, revoked) => assigned.diff(revoked))
+      assignedPartitions = EmptyTps
   }
 }

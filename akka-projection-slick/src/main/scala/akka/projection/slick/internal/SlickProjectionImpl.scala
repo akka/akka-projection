@@ -8,6 +8,8 @@ import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.util.Failure
+import scala.util.Success
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -192,7 +194,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
               case VerificationSuccess =>
                 // run user function and offset storage on the same transaction
                 // any side-effect in user function is at-least-once
-                val txDBIO = offsetStore.saveOffset(projectionId, offset).flatMap(_ => handlerAction).transactionally
+                val txDBIO = offsetStore
+                  .saveOffset(projectionId, offset)
+                  .flatMap(_ => handlerAction)
+                  .transactionally
                 databaseConfig.db.run(txDBIO).map(_ => Done)
               case VerificationFailure(reason) =>
                 logger.warning(
@@ -235,27 +240,26 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         }
 
         // FIXME create a SourceProvider trait that implies mergeable offsets?
-        sourceProvider match {
-          case sp if sp.isOffsetMergeable =>
-            val batches: immutable.Iterable[Future[Done]] = envelopesAndOffsets
-              .groupBy {
-                // FIXME matched source provider should always be MergeableOffset
-                case (offset: MergeableOffset[MergeableKey, _], env) =>
-                  // FIXME we can assume there's only one actual offset per envelope, but there should be a better way to represent this
-                  val mergeableKey = offset.entries.head._1
-                  mergeableKey.surrogateKey
-                case _ =>
-                  // should never happen
-                  throw new IllegalStateException("The offset should always be of type MergeableOffset")
-              }
-              .map {
-                case (surrogateKey, partitionedEnvelopes) =>
-                  logger.debug("Processing grouped envelopes for MergeableOffset with key [{}]", surrogateKey)
-                  processEnvelopeGroup(partitionedEnvelopes)
-              }
-            Future.sequence(batches).mapTo[Done]
-          case _ =>
-            processEnvelopeGroup(envelopesAndOffsets)
+        if (sourceProvider.isOffsetMergeable) {
+          val batches = envelopesAndOffsets.groupBy {
+            // FIXME matched source provider should always be MergeableOffset
+            case (offset: MergeableOffset[_, _], _) =>
+              // FIXME we can assume there's only one actual offset per envelope, but there should be a better way to represent this
+              val mergeableKey = offset.entries.head._1.asInstanceOf[MergeableKey]
+              mergeableKey.surrogateKey
+            case _ =>
+              // should never happen
+              throw new IllegalStateException("The offset should always be of type MergeableOffset")
+          }
+
+          // process batches in sequence, but not concurrently, in order to provide singled threaded guarantees
+          // to the user envelope handler
+          serialize(batches, (surrogateKey, partitionedEnvelopes) => {
+            logger.debug("Processing grouped envelopes for MergeableOffset with key [{}]", surrogateKey)
+            processEnvelopeGroup(partitionedEnvelopes)
+          })
+        } else {
+          processEnvelopeGroup(envelopesAndOffsets)
         }
       }
 
@@ -392,6 +396,40 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     private[projection] def newRunningInstance(): RunningProjection =
       new SlickRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
+
+    /**
+     * A convenience method to serialize asynchronous operations to occur one after another is complete
+     */
+    private def serialize(
+        batches: Map[String, Seq[(Offset, Envelope)]],
+        op: (String, Seq[(Offset, Envelope)]) => Future[Done],
+        logProgressEvery: Int = 5): Future[Done] = {
+      val size = batches.size
+      logger.info("Processing [{}] partitioned batches serially", size)
+
+      def loop(remaining: List[(String, Seq[(Offset, Envelope)])], n: Int): Future[Done] = {
+        remaining match {
+          case Nil => Future.successful(Done)
+          case (key, batch) :: tail =>
+            op(key, batch).flatMap { _ =>
+              if (n % logProgressEvery == 0)
+                logger.info("Processed batches [{}] of [{}]", n, size)
+              loop(tail, n + 1)
+            }
+        }
+      }
+
+      val result = loop(batches.toList, n = 1)
+
+      result.onComplete {
+        case Success(_) =>
+          logger.info("Processing completed of [{}] batches", size)
+        case Failure(e) =>
+          logger.error(e, "Processing of batches failed")
+      }
+
+      result
+    }
   }
 
   private class SlickRunningProjection(source: Source[Done, _], projectionState: InternalProjectionState)(

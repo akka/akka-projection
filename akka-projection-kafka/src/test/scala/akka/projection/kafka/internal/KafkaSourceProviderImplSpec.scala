@@ -36,22 +36,9 @@ import akka.stream.testkit.scaladsl.TestSink
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.scalatest.BeforeAndAfterAll
-import org.scalatest.OptionValues
-import org.scalatest.concurrent.PatienceConfiguration
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class KafkaSourceProviderImplSpec
-    extends ScalaTestWithActorTestKit
-    with LogCapturing
-    with AnyWordSpecLike
-    with Matchers
-    with ScalaFutures
-    with BeforeAndAfterAll
-    with OptionValues
-    with PatienceConfiguration {
+class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapturing with AnyWordSpecLike {
 
   val projectionTestKit: ProjectionTestKit = ProjectionTestKit(testKit)
   implicit val ec = system.classicSystem.dispatcher
@@ -122,7 +109,7 @@ class KafkaSourceProviderImplSpec
     override def stop(): Unit = ()
   }
 
-  // NOTE: Copied mostly from ProjectionTestKitSpec.
+  // FIXME: Copied mostly from ProjectionTestKitSpec.
   // Maybe a `TestProjection` could be abstracted out and reused to reduce test boilerplate
   case class TestProjection(
       sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]],

@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
 import scala.collection.immutable
+import scala.collection.mutable.ListBuffer
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
@@ -38,14 +39,11 @@ import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
-import akka.stream.OverflowStrategy
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
-import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
-import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -519,19 +517,16 @@ class CassandraProjectionSpec
     "verify offsets before processing an envelope" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      val (verifiedQueue, verifiedProbe) = Source
-        .queue[Long](1, OverflowStrategy.backpressure)
-        .toMat(TestSink.probe(system.classicSystem))(Keep.both)
-        .run()
+      val verified = ListBuffer[Long]()
 
       val testVerification = (offset: Long) => {
-        Await.ready(verifiedQueue.offer(offset), 10.millis)
+        verified += offset
         VerificationSuccess
       }
 
       val handler = Handler[Envelope] { envelope =>
         withClue("checking: offset verified before handler function was run") {
-          verifiedProbe.requestNext() shouldEqual envelope.offset
+          verified.last shouldEqual envelope.offset
         }
         repository.concatToText(envelope.id, envelope.message)
       }
@@ -548,8 +543,6 @@ class CassandraProjectionSpec
           concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
         }
       }
-
-      verifiedProbe.cancel()
     }
 
     "skip record if offset verification fails before processing envelope" in {
