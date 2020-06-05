@@ -13,6 +13,7 @@ import scala.jdk.FutureConverters._
 import scala.jdk.OptionConverters._
 
 import akka.annotation.InternalApi
+import akka.projection.OffsetVerification
 import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.stream.scaladsl.Source
@@ -34,7 +35,7 @@ import akka.stream.scaladsl.Source
     delegate.source(offsetAdapter).asScala.map(_.asScala)(ec)
   }
 
-  def extractOffset(envelope: Envelope): Offset =
-    delegate.extractOffset(envelope)
+  def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
 
+  override def verifyOffset(offset: Offset): OffsetVerification = delegate.verifyOffset(offset)
 }

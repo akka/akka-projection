@@ -18,7 +18,7 @@ object Dependencies {
     val alpakkaKafka = "2.0.3"
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
-    val testContainersScala = "0.36.1"
+    val testContainersScala = "0.37.0"
     val junit = "4.12"
   }
 

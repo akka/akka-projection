@@ -31,6 +31,8 @@ import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
@@ -202,7 +204,19 @@ import akka.stream.scaladsl.Source
         Source
           .futureSource(handlerStrategy.lifecycle.tryStart().flatMap(_ => sourceProvider.source(readOffsets)))
           .via(killSwitch.flow)
-          .map(envelope => sourceProvider.extractOffset(envelope) -> envelope)
+          .map(env => (sourceProvider.extractOffset(env), env))
+          .filter {
+            case (offset, _) =>
+              sourceProvider.verifyOffset(offset) match {
+                case VerificationSuccess => true
+                case VerificationFailure(reason) =>
+                  logger.warning(
+                    "Source provider instructed projection to skip offset [{}] with reason: {}",
+                    offset,
+                    reason)
+                  false
+              }
+          }
           .mapMaterializedValue(_ => NotUsed)
 
       def handlerFlow(
