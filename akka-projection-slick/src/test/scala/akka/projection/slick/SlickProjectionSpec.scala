@@ -1077,7 +1077,8 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
   "SlickProjection lifecycle" must {
 
-    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int) extends SlickHandler[Envelope] {
+    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int = -1, alwaysFailOnOffset: Int = -1)
+        extends SlickHandler[Envelope] {
 
       private var failedOnce = false
       val startMessage = "start"
@@ -1105,6 +1106,9 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           failedOnce = true
           stopMessage = failedMessage
           slick.dbio.DBIO.failed(TestException(s"Fail $failOnceOnOffset"))
+        } else if (envelope.offset == alwaysFailOnOffset) {
+          stopMessage = failedMessage
+          throw TestException(s"Always Fail $alwaysFailOnOffset")
         } else {
           probe ! envelope.message
           slick.dbio.DBIO.successful(Done)
@@ -1281,6 +1285,34 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       // completed with failure
       handlerProbe.expectMessage(handler.failedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "be able to stop when retrying" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, alwaysFailOnOffset = 4)
+
+      val projection =
+        SlickProjection
+          .atLeastOnce(projectionId, sourceProvider(system, entityId), dbConfig, handler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
+          .withSaveOffset(1, Duration.Zero)
+
+      val ref = spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4
+
+      // let it retry for a while
+      Thread.sleep(300)
+
+      ref ! ProjectionBehavior.Stop
+      createTestProbe().expectTerminated(ref)
     }
   }
 

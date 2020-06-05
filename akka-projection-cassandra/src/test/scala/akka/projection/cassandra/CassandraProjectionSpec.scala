@@ -692,7 +692,8 @@ class CassandraProjectionSpec
 
   "CassandraProjection lifecycle" must {
 
-    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int) extends Handler[Envelope] {
+    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int = -1, alwaysFailOnOffset: Int = -1)
+        extends Handler[Envelope] {
 
       private var failedOnce = false
       val startMessage = "start"
@@ -720,6 +721,9 @@ class CassandraProjectionSpec
           failedOnce = true
           stopMessage = failedMessage
           throw TestException(s"Fail $failOnceOnOffset")
+        } else if (envelope.offset == alwaysFailOnOffset) {
+          stopMessage = failedMessage
+          throw TestException(s"Always Fail $alwaysFailOnOffset")
         } else {
           probe ! envelope.message
           Future.successful(Done)
@@ -880,6 +884,34 @@ class CassandraProjectionSpec
       // completed with failure
       handlerProbe.expectMessage(handler.failedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "be able to stop when retrying" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, alwaysFailOnOffset = 4)
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
+          .withSaveOffset(1, Duration.Zero)
+
+      val ref = spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4
+
+      // let it retry for a while
+      Thread.sleep(300)
+
+      ref ! ProjectionBehavior.Stop
+      createTestProbe().expectTerminated(ref)
     }
   }
 

@@ -9,6 +9,7 @@ import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+import scala.util.control.NoStackTrace
 
 import akka.Done
 import akka.NotUsed
@@ -67,10 +68,19 @@ trait Projection[Envelope] {
 @InternalApi
 private[projection] object RunningProjection {
 
+  /**
+   * When stopping an projection the retry mechanism is aborted via this exception.
+   */
+  case object AbortProjectionException extends RuntimeException("Projection aborted.") with NoStackTrace
+
   def withBackoff(source: () => Source[Done, _], settings: ProjectionSettings): Source[Done, _] = {
     RestartSource
       .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
-        () => source()
+        () =>
+          source()
+            .recoverWithRetries(1, {
+              case AbortProjectionException => Source.empty // don't restart
+            })
       }
   }
 
@@ -90,6 +100,8 @@ private[projection] object RunningProjection {
         .andThen {
           case Success(_) =>
             statusObserver.stopped(projectionId)
+          case Failure(AbortProjectionException) =>
+            statusObserver.stopped(projectionId) // no restart
           case Failure(exc) =>
             Try(statusObserver.stopped(projectionId))
             statusObserver.failed(projectionId, exc)
