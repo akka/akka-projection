@@ -723,7 +723,7 @@ class CassandraProjectionSpec
           throw TestException(s"Fail $failOnceOnOffset")
         } else if (envelope.offset == alwaysFailOnOffset) {
           stopMessage = failedMessage
-          throw TestException(s"Fail $alwaysFailOnOffset")
+          throw TestException(s"Always Fail $alwaysFailOnOffset")
         } else {
           probe ! envelope.message
           Future.successful(Done)

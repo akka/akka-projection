@@ -271,14 +271,11 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           handlerRecovery: HandlerRecoveryImpl[Offset, Envelope],
           env: Envelope,
           offset: Offset): Future[Done] = {
-        // user function in one transaction (may be composed of several DBIOAction)
-        val dbio = handler.process(env).transactionally
-        handlerRecovery.applyRecovery(
-          env,
-          offset,
-          offset,
-          abort.future,
-          () => databaseConfig.db.run(dbio).map(_ => Done))
+        handlerRecovery.applyRecovery(env, offset, offset, abort.future, () => {
+          // user function in one transaction (may be composed of several DBIOAction)
+          val dbio = handler.process(env).transactionally
+          databaseConfig.db.run(dbio).map(_ => Done)
+        })
       }
 
       val offsetFlow: Flow[Envelope, (Offset, Envelope), NotUsed] = Flow[Envelope]

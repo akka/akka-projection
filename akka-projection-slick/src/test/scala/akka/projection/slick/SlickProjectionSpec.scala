@@ -1108,7 +1108,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
           slick.dbio.DBIO.failed(TestException(s"Fail $failOnceOnOffset"))
         } else if (envelope.offset == alwaysFailOnOffset) {
           stopMessage = failedMessage
-          throw TestException(s"Fail $alwaysFailOnOffset")
+          throw TestException(s"Always Fail $alwaysFailOnOffset")
         } else {
           probe ! envelope.message
           slick.dbio.DBIO.successful(Done)

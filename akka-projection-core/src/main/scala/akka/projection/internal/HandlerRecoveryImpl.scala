@@ -119,8 +119,9 @@ import akka.projection.StatusObserver
 
           case Skip =>
             logger.warning(
-              "Failed to process {}. " +
+              "[{}] Failed to process {}. " +
               "Envelope will be skipped as defined by recovery strategy. Exception: {}",
+              projectionId.id,
               offsetLogParameter,
               err)
             futDone
