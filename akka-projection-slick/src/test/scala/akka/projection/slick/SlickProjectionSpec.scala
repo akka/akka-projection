@@ -19,6 +19,8 @@ import scala.concurrent.duration._
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.TestException
+import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -31,6 +33,9 @@ import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.slick.internal.SlickOffsetStore
+import akka.projection.slick.internal.SlickSettings
+import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Keep
@@ -60,7 +65,7 @@ object SlickProjectionSpec {
 
           # TODO: configure connection pool and slick async executor
           db = {
-            url = "jdbc:h2:mem:test1"
+            url = "jdbc:h2:mem:projection-test;DB_CLOSE_DELAY=-1"
             driver = org.h2.Driver
             connectionPool = disabled
             keepAliveConnection = true
@@ -165,11 +170,25 @@ object SlickProjectionSpec {
 
 }
 
-class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with AnyWordSpecLike with OptionValues {
+class SlickProjectionSpec
+    extends ScalaTestWithActorTestKit(SlickProjectionSpec.config)
+    with LogCapturing
+    with AnyWordSpecLike
+    with OptionValues {
   import SlickProjectionSpec._
 
   val logger: Logger = LoggerFactory.getLogger(this.getClass)
 
+  val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig(SlickSettings.configPath, config)
+
+  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, SlickSettings(system))
+
+  val projectionTestKit = new ProjectionTestKit(testKit)
+
+  override protected def afterAll(): Unit = {
+    super.afterAll()
+    dbConfig.db.close()
+  }
   val repository = new TestRepository(dbConfig)
 
   implicit val actorSystem: ActorSystem[Nothing] = testKit.system
@@ -177,7 +196,13 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    repository.createTable()
+    // create offset table
+
+    val creationFut =
+      offsetStore.createIfNotExists
+        .flatMap(_ => repository.createTable())
+
+    Await.result(creationFut, 3.seconds)
   }
 
   private def genRandomProjectionId() =
