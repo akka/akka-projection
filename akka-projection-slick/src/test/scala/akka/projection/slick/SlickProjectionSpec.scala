@@ -32,6 +32,7 @@ import akka.projection.ProjectionSettings
 import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
+import akka.stream.scaladsl.FlowWithContext
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
@@ -1073,6 +1074,36 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
       }
     }
 
+  }
+
+  "A Slick flow projection" must {
+
+    "persist projection and offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val flowHandler =
+        FlowWithContext[Envelope, Envelope]
+          .mapAsync(1) { env =>
+            dbConfig.db.run(repository.concatToText(env.id, env.message))
+          }
+
+      val projection =
+        SlickProjection
+          .atLeastOnceFlow(projectionId, sourceProvider(system, entityId), dbConfig, flowHandler)
+          .withSaveOffset(1, 1.minute)
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.get
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
+        offset shouldBe 6L
+      }
+    }
   }
 
   "SlickProjection lifecycle" must {

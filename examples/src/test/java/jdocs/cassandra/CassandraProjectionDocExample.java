@@ -7,8 +7,10 @@ package jdocs.cassandra;
 import java.time.Duration;
 
 import akka.Done;
+import akka.NotUsed;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
+import akka.stream.javadsl.FlowWithContext;
 import jdocs.eventsourced.ShoppingCart;
 
 //#daemon-imports
@@ -164,8 +166,45 @@ public interface CassandraProjectionDocExample {
 
   }
 
+  public static void illustrateAtLeastOnceFlow() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 
-   static class IllustrateRunningWithShardedDaemon {
+    SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
+      EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), "carts-1");
+
+    //#atLeastOnceFlow
+
+    Logger logger = LoggerFactory.getLogger("example");
+
+    FlowWithContext<EventEnvelope<ShoppingCart.Event>, EventEnvelope<ShoppingCart.Event>, Done, EventEnvelope<ShoppingCart.Event>, NotUsed> flow =
+      FlowWithContext.<EventEnvelope<ShoppingCart.Event>, EventEnvelope<ShoppingCart.Event>> create()
+      .map(EventEnvelope::event)
+      .map(event -> {
+        if (event instanceof ShoppingCart.CheckedOut) {
+          ShoppingCart.CheckedOut checkedOut = (ShoppingCart.CheckedOut) event;
+          logger.info("Shopping cart {} was checked out at {}", checkedOut.cartId, checkedOut.eventTime);
+        } else {
+          logger.debug("Shopping cart {} changed by {}", event.getCartId(), event);
+        }
+        return Done.getInstance();
+      });
+
+    int saveOffsetAfterEnvelopes = 100;
+    Duration saveOffsetAfterDuration = Duration.ofMillis(500);
+
+    Projection<EventEnvelope<ShoppingCart.Event>> projection =
+      CassandraProjection.atLeastOnceFlow(
+        ProjectionId.of("shopping-carts", "carts-1"),
+        sourceProvider,
+        flow
+      )
+      .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
+    //#atLeastOnceFlow
+
+  }
+
+
+  static class IllustrateRunningWithShardedDaemon {
 
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 

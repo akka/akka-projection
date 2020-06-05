@@ -15,7 +15,7 @@
     </logger>
 
 
-    <root level="WARN">
+    <root level="DEBUG">
         <appender-ref ref="CapturingAppender" />
     </root>
 </configuration>

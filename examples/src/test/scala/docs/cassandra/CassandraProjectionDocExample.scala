@@ -7,6 +7,7 @@ package docs.cassandra
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 
+import akka.stream.scaladsl.FlowWithContext
 //#daemon-imports
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
@@ -122,6 +123,30 @@ object CassandraProjectionDocExample {
           handler = new GroupedShoppingCartHandler)
         .withGroup(groupAfterEnvelopes = 20, groupAfterDuration = 500.millis)
     //#grouped
+  }
+
+  object IllustrateAtLeastOnceFlow {
+    import akka.persistence.query.Offset
+    //#atLeastOnceFlow
+    val logger = LoggerFactory.getLogger(getClass)
+
+    val flow = FlowWithContext[EventEnvelope[ShoppingCart.Event], EventEnvelope[ShoppingCart.Event]]
+      .map(envelope => envelope.event)
+      .map {
+        case ShoppingCart.CheckedOut(cartId, time) =>
+          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          Done
+
+        case otherEvent =>
+          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          Done
+      }
+
+    val projection =
+      CassandraProjection
+        .atLeastOnceFlow(projectionId = ProjectionId("shopping-carts", "carts-1"), sourceProvider, handler = flow)
+        .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
+    //#atLeastOnceFlow
   }
 
   object IllustrateRunningWithShardedDaemon {
