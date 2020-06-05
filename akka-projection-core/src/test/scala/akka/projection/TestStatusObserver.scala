@@ -10,7 +10,7 @@ object TestStatusObserver {
   sealed trait Status
 
   case object Started extends Status
-  case object Restarted extends Status
+  case object Failed extends Status
   case object Stopped extends Status
 
   final case class Progress[Envelope](env: Envelope) extends Status
@@ -40,7 +40,7 @@ class TestStatusObserver[Envelope](
 
   override def failed(projectionId: ProjectionId, cause: Throwable): Unit = {
     if (lifecycle)
-      probe ! Restarted
+      probe ! Failed
   }
 
   override def stopped(projectionId: ProjectionId): Unit = {
