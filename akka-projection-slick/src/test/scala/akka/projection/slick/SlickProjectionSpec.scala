@@ -1268,7 +1268,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
 
       // backoff will restart
       statusProbe.expectMessage(TestStatusObserver.Stopped)
-      statusProbe.expectMessage(TestStatusObserver.Restarted)
+      statusProbe.expectMessage(TestStatusObserver.Failed)
       statusProbe.expectMessage(TestStatusObserver.Started)
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("jkl")
