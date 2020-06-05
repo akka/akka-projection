@@ -12,6 +12,7 @@ import java.util.concurrent.CompletionStage
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -20,6 +21,7 @@ import akka.annotation.InternalApi
 import akka.japi.function.{ Function => JFunction }
 import akka.projection.Projection
 import akka.projection.ProjectionId
+import akka.projection.StatusObserver
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SourceProviderAdapter
 import akka.projection.javadsl.HandlerLifecycle
@@ -32,7 +34,7 @@ object JdbcProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       sessionFactory: () => S,
-      handler: JdbcHandler[Envelope, S]): JdbcProjection[Envelope] =
+      handler: JdbcHandler[Envelope, S]): ExactlyOnceJdbcProjection[Envelope] =
     new JdbcProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
@@ -43,7 +45,21 @@ object JdbcProjection {
       NoopStatusObserver)
 
 }
+
 trait JdbcProjection[Envelope] extends Projection[Envelope] {
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): JdbcProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): JdbcProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): JdbcProjection[Envelope]
 
   /**
    * For testing purposes the offset table can be created programmatically.
@@ -51,6 +67,23 @@ trait JdbcProjection[Envelope] extends Projection[Envelope] {
    * before the system is started.
    */
   def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): CompletionStage[Done]
+}
+
+trait ExactlyOnceJdbcProjection[Envelope] extends JdbcProjection[Envelope] {
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): ExactlyOnceJdbcProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): ExactlyOnceJdbcProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceJdbcProjection[Envelope]
+
 }
 
 object JdbcSession {

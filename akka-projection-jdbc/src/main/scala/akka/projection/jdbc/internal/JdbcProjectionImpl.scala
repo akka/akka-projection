@@ -19,7 +19,6 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
-import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
@@ -29,6 +28,7 @@ import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
+import akka.projection.jdbc.javadsl.ExactlyOnceJdbcProjection
 import akka.projection.jdbc.javadsl.JdbcHandler
 import akka.projection.jdbc.javadsl.JdbcProjection
 import akka.projection.jdbc.javadsl.JdbcSession
@@ -51,6 +51,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     handler: JdbcHandler[Envelope, S],
     override val statusObserver: StatusObserver[Envelope])
     extends JdbcProjection[Envelope]
+    with ExactlyOnceJdbcProjection[Envelope]
     with SettingsImpl[JdbcProjectionImpl[Offset, Envelope, S]] {
 
   private def copy(
@@ -212,13 +213,13 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       groupAfterDuration: FiniteDuration): JdbcProjectionImpl[Offset, Envelope, S] =
     this // not supported yet
 
-  override def withStatusObserver(observer: StatusObserver[Envelope]): Projection[Envelope] =
+  override def withStatusObserver(observer: StatusObserver[Envelope]): JdbcProjectionImpl[Offset, Envelope, S] =
     copy(statusObserver = observer)
 
   /**
    * INTERNAL API
    */
   override private[akka] def withSettings(settings: ProjectionSettings) =
-    this // will be removed
+    copy(settingsOpt = Option(settings))
 
 }
