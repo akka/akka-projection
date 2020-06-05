@@ -34,9 +34,16 @@ import akka.projection.ProjectionId
    *
    * @param projectionId the projection id
    * @param context      the contextual object returned by `onProcessStart`
-   * @return a contextual object. The returned instance may not be the received one.
    */
-  def onProcessComplete(projectionId: ProjectionId, context: AnyRef): AnyRef
+  def onProcessComplete(projectionId: ProjectionId, context: AnyRef): Unit
+
+  /**
+   * Must be invoked for each failure to process an element.
+   *
+   * @param projectionId the projection id
+   * @param context      the contextual object returned by `onProcessStart`
+   */
+  def onProcessFailure(projectionId: ProjectionId, context: AnyRef): Unit
 
   /**
    * Must be invoked when the stream fails.
@@ -49,14 +56,20 @@ import akka.projection.ProjectionId
 
 }
 
-object NoopProjectionMetrics extends ProjectionMetrics {
+/**
+ * INTERNAL API
+ */
+@InternalStableApi
+private[akka] object NoopProjectionMetrics extends ProjectionMetrics {
 
   override def onProcessStart(
       projectionId: ProjectionId,
       creationTimestamp: Long,
       systemProvider: ClassicActorSystemProvider): AnyRef = null
 
-  override def onProcessComplete(projectionId: ProjectionId, context: AnyRef): AnyRef = null
+  override def onProcessComplete(projectionId: ProjectionId, context: AnyRef): Unit = {}
+
+  override def onProcessFailure(projectionId: ProjectionId, context: AnyRef): Unit = {}
 
   override def onFailure(
       projectionId: ProjectionId,
