@@ -13,10 +13,12 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.projection.Projection
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
 import akka.projection.internal.NoopStatusObserver
+import akka.projection.internal.ProjectionSettings
+import akka.projection.internal.RestartBackoffSettings
+import akka.projection.internal.SettingsImpl
 import akka.stream.DelayOverflowStrategy
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
@@ -134,8 +136,9 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
   }
 
-  case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
-      extends Projection[Int] {
+  private[akka] case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
+      extends Projection[Int]
+      with SettingsImpl[TestProjection] {
 
     override def withSettings(settings: ProjectionSettings): Projection[Int] =
       this // no need for ProjectionSettings in tests
@@ -144,6 +147,10 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =
       this // no need for StatusObserver in tests
+
+    override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
+    override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
+    override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
 
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
 

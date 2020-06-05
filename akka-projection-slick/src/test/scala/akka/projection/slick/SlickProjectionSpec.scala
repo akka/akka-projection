@@ -28,7 +28,6 @@ import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
 import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
@@ -1246,7 +1245,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             handler)
-          .withSettings(ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0))
+          .withRestartBackoff(1.second, 2.seconds, 0.0)
           .withSaveOffset(1, Duration.Zero)
           .withStatusObserver(statusObserver)
 
@@ -1300,9 +1299,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
             sourceProvider = sourceProvider(system, entityId),
             databaseConfig = dbConfig,
             handler)
-          .withSettings(
-            ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
-          ) // no restarts
+          .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0) // no restarts
           .withSaveOffset(1, Duration.Zero)
 
       // not using ProjectionTestKit because want to test restarts

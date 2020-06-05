@@ -31,7 +31,6 @@ import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
 import akka.projection.TestStatusObserver
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
@@ -861,7 +860,7 @@ class CassandraProjectionSpec
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
-          .withSettings(ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0))
+          .withRestartBackoff(1.second, 2.seconds, 0.0)
           .withSaveOffset(1, Duration.Zero)
           .withStatusObserver(statusObserver)
 
@@ -911,9 +910,7 @@ class CassandraProjectionSpec
       val projection =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handler)
-          .withSettings(
-            ProjectionSettings(system).withBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
-          ) // no restarts
+          .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0) // no restarts
           .withSaveOffset(1, Duration.Zero)
 
       // not using ProjectionTestKit because want to test restarts

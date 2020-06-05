@@ -7,7 +7,7 @@ import akka.Done;
 import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
-import akka.projection.ProjectionSettings;
+import akka.projection.internal.ProjectionSettings;
 import akka.projection.RunningProjection;
 import akka.projection.StatusObserver;
 import akka.stream.scaladsl.Source;
@@ -20,6 +20,7 @@ import java.util.concurrent.CompletionStage;
 import org.junit.ClassRule;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
+import scala.concurrent.duration.FiniteDuration;
 
 //#testkit-import
 
@@ -76,6 +77,26 @@ public class TestKitDocExample {
     @Override
     public Projection<String> withStatusObserver(StatusObserver<String> observer) {
       return null;
+    }
+
+    @Override
+    public Projection<String> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor) {
+      return this;
+    }
+
+    @Override
+    public Projection<String> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor, int maxRestarts) {
+      return this;
+    }
+
+    @Override
+    public Projection<String> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor) {
+      return this;
+    }
+
+    @Override
+    public Projection<String> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor, int maxRestarts) {
+      return this;
     }
 
     @Override

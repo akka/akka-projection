@@ -11,7 +11,7 @@ import akka.actor.typed.ActorSystem;
 import akka.japi.function.Function;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
-import akka.projection.ProjectionSettings;
+import akka.projection.internal.ProjectionSettings;
 import akka.projection.RunningProjection;
 import akka.projection.StatusObserver;
 import akka.projection.internal.NoopStatusObserver;
@@ -27,8 +27,8 @@ import org.junit.ComparisonFailure;
 import org.junit.Test;
 import org.scalatestplus.junit.JUnitSuite;
 import scala.compat.java8.FutureConverters;
-import scala.concurrent.ExecutionContext;
 import scala.concurrent.Future;
+import scala.concurrent.duration.FiniteDuration;
 
 import java.time.Duration;
 import java.util.List;
@@ -168,6 +168,26 @@ public class ProjectionTestKitTest extends JUnitSuite {
         @Override
         public ProjectionId projectionId() {
             return ProjectionId.of("test-projection", "00");
+        }
+
+        @Override
+        public Projection<Integer> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor) {
+            return this;
+        }
+
+        @Override
+        public Projection<Integer> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor, int maxRestarts) {
+            return this;
+        }
+
+        @Override
+        public Projection<Integer> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor) {
+            return this;
+        }
+
+        @Override
+        public Projection<Integer> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor, int maxRestarts) {
+            return this;
         }
 
         @Override
