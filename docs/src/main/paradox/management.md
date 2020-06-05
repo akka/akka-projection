@@ -35,7 +35,7 @@ Java
 The status of a `Projection` can be tracked by implementing a @apidoc[StatusObserver] and enable it with 
 `withStatusObserver` before running the `Projection`.
 
-The `StatusObserver` is called when errors occur and envelopes are retried or the projection is restarted.
+The `StatusObserver` is called when errors occur and envelopes are retried or the projection failed (restarted).
 It also has callbacks for processing progress and projection lifecyle.
 
 The intention is that the implementation of the `StatusObserver` would maintain a view that can be accessed
