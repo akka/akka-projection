@@ -63,8 +63,8 @@ object SlickProjection {
    * Create a [[Projection]] with at-least-once processing semantics.
    *
    * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
-   * This means that if the projection is restarted from previously stored offset some elements may be processed more
-   * than once.
+   * This means that if the projection is restarted from previously stored offset then some elements may be processed
+   * more than once.
    *
    * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
    * This window can be defined with [[AtLeastOnceSlickProjection.withSaveOffset]] of the returned
@@ -114,9 +114,9 @@ object SlickProjection {
    * semantics.
    *
    * The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
-   * in the context of the `FlowWithContext` and is stored in Cassandra if corresponding `Done` is emitted.
+   * in the context of the `FlowWithContext` and is stored in Cassandra when corresponding `Done` is emitted.
    * Since the offset is stored after processing the envelope it means that if the
-   * projection is restarted from previously stored offset some envelopes may be processed more than once.
+   * projection is restarted from previously stored offset then some envelopes may be processed more than once.
    *
    * If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
    * will be processed again if the projection is restarted and no later offset was stored.

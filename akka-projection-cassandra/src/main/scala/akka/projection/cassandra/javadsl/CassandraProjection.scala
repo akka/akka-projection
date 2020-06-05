@@ -88,9 +88,9 @@ object CassandraProjection {
    * semantics.
    *
    * The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
-   * in the context of the `FlowWithContext` and is stored in Cassandra if corresponding `Done` is emitted.
+   * in the context of the `FlowWithContext` and is stored in Cassandra when corresponding `Done` is emitted.
    * Since the offset is stored after processing the envelope it means that if the
-   * projection is restarted from previously stored offset some envelopes may be processed more than once.
+   * projection is restarted from previously stored offset then some envelopes may be processed more than once.
    *
    * If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
    * will be processed again if the projection is restarted and no later offset was stored.
