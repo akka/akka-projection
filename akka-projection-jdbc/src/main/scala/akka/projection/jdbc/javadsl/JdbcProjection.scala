@@ -19,6 +19,7 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.japi.function.{ Function => JFunction }
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.StatusObserver
@@ -27,6 +28,8 @@ import akka.projection.internal.SourceProviderAdapter
 import akka.projection.javadsl.HandlerLifecycle
 import akka.projection.javadsl.SourceProvider
 import akka.projection.jdbc.internal.JdbcProjectionImpl
+import akka.projection.jdbc.internal.JdbcProjectionImpl.ExactlyOnce
+import akka.projection.jdbc.internal.JdbcProjectionImpl.OffsetStrategy
 
 object JdbcProjection {
 
@@ -41,12 +44,15 @@ object JdbcProjection {
       sessionFactory,
       settingsOpt = None,
       restartBackoffOpt = None,
-      handler,
-      NoopStatusObserver)
+      offsetStrategy = ExactlyOnce(),
+      handler = handler,
+      statusObserver = NoopStatusObserver)
 
 }
 
 trait JdbcProjection[Envelope] extends Projection[Envelope] {
+
+  private[jdbc] def offsetStrategy: OffsetStrategy
 
   override def withRestartBackoff(
       minBackoff: FiniteDuration,
@@ -71,6 +77,8 @@ trait JdbcProjection[Envelope] extends Projection[Envelope] {
 
 trait ExactlyOnceJdbcProjection[Envelope] extends JdbcProjection[Envelope] {
 
+  private[jdbc] def exactlyOnceStrategy: ExactlyOnce = offsetStrategy.asInstanceOf[ExactlyOnce]
+
   override def withRestartBackoff(
       minBackoff: FiniteDuration,
       maxBackoff: FiniteDuration,
@@ -84,6 +92,7 @@ trait ExactlyOnceJdbcProjection[Envelope] extends JdbcProjection[Envelope] {
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceJdbcProjection[Envelope]
 
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceJdbcProjection[Envelope]
 }
 
 object JdbcSession {

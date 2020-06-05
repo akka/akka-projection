@@ -28,6 +28,8 @@ import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
+import akka.projection.jdbc.internal.JdbcProjectionImpl.AtLeastOnce
+import akka.projection.jdbc.internal.JdbcProjectionImpl.ExactlyOnce
 import akka.projection.jdbc.javadsl.ExactlyOnceJdbcProjection
 import akka.projection.jdbc.javadsl.JdbcHandler
 import akka.projection.jdbc.javadsl.JdbcProjection
@@ -42,12 +44,31 @@ import akka.stream.scaladsl.Source
  * INTERNAL API
  */
 @InternalApi
+private[akka] object JdbcProjectionImpl {
+
+  sealed trait OffsetStrategy
+  sealed trait WithRecoveryStrategy extends OffsetStrategy {
+    def recoveryStrategy: Option[HandlerRecoveryStrategy]
+  }
+  final case class ExactlyOnce(recoveryStrategy: Option[HandlerRecoveryStrategy] = None) extends WithRecoveryStrategy
+  final case class AtLeastOnce(
+      afterEnvelopes: Option[Int] = None,
+      orAfterDuration: Option[FiniteDuration] = None,
+      recoveryStrategy: Option[HandlerRecoveryStrategy] = None)
+      extends WithRecoveryStrategy
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
 private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession](
     val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     sessionFactory: () => S,
     settingsOpt: Option[ProjectionSettings],
     restartBackoffOpt: Option[RestartBackoffSettings],
+    val offsetStrategy: JdbcProjectionImpl.OffsetStrategy,
     handler: JdbcHandler[Envelope, S],
     override val statusObserver: StatusObserver[Envelope])
     extends JdbcProjection[Envelope]
@@ -57,6 +78,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
       restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
+      offsetStrategy: JdbcProjectionImpl.OffsetStrategy = this.offsetStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): JdbcProjectionImpl[Offset, Envelope, S] =
     new JdbcProjectionImpl(
       projectionId,
@@ -64,6 +86,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       sessionFactory,
       settingsOpt,
       restartBackoffOpt,
+      offsetStrategy,
       handler,
       statusObserver)
 
@@ -109,15 +132,12 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       statusObserver.started(projectionId)
       val adapterHandlerLifecycle = new HandlerLifecycleAdapter(handler)
 
-      val handlerRecovery =
-        HandlerRecoveryImpl[Offset, Envelope](
-          projectionId,
-          HandlerRecoveryStrategy.fail, // TODO: remove this when we fully support recovery strategy
-          logger,
-          statusObserver)
+      def processEnvelopeAndStoreOffsetInSameTransaction(
+          env: Envelope,
+          handlerRecovery: HandlerRecoveryImpl[Offset, Envelope]): Future[Done] = {
 
-      def processEnvelopeAndStoreOffsetInSameTransaction(env: Envelope): Future[Done] = {
         val offset = sourceProvider.extractOffset(env)
+
         handlerRecovery.applyRecovery(env, offset, offset, abort.future, () => {
           // this scope ensures that the blocking DB dispatcher is used solely for DB operations
           implicit val executionContext: ExecutionContext = offsetStore.executionContext
@@ -152,10 +172,18 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       }
 
       val handlerFlow =
-        Flow[Envelope]
-          .mapAsync(1) { env =>
-            reportProgress(processEnvelopeAndStoreOffsetInSameTransaction(env), env)
-          }
+        offsetStrategy match {
+          case ExactlyOnce(recoveryStrategyOpt) =>
+            val recoveryStrategy = recoveryStrategyOpt.getOrElse(settings.recoveryStrategy)
+            val handlerRecovery =
+              HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
+            Flow[Envelope]
+              .mapAsync(1) { env =>
+                reportProgress(processEnvelopeAndStoreOffsetInSameTransaction(env, handlerRecovery), env)
+              }
+
+          case _: AtLeastOnce => throw new RuntimeException("Not yet supported")
+        }
 
       val composedSource: Source[Done, NotUsed] =
         Source
@@ -213,6 +241,18 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       groupAfterDuration: FiniteDuration): JdbcProjectionImpl[Offset, Envelope, S] =
     this // not supported yet
 
+  /**
+   * Settings for AtLeastOnceSlickProjection and ExactlyOnceSlickProjection
+   */
+  override def withRecoveryStrategy(
+      recoveryStrategy: HandlerRecoveryStrategy): JdbcProjectionImpl[Offset, Envelope, S] = {
+    val newStrategy =
+      offsetStrategy match {
+        case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+        case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      }
+    copy(offsetStrategy = newStrategy)
+  }
   override def withStatusObserver(observer: StatusObserver[Envelope]): JdbcProjectionImpl[Offset, Envelope, S] =
     copy(statusObserver = observer)
 

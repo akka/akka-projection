@@ -27,6 +27,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.japi.function
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
@@ -290,15 +291,126 @@ class JdbcProjectionSpec
     }
 
     "skip failing events when using RecoveryStrategy.skip" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val bogusEventHandler = new ConcatHandler(_ == 4)
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
+
+      projectionTestKit.run(projection) {
+        withClue("check - not all values were concatenated") {
+          val concatStr = withRepo(_.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
     }
 
     "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val bogusEventHandler = new ConcatHandler(_ == 4)
+
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+          .withStatusObserver(statusObserver)
+
+      projectionTestKit.run(projection) {
+        withClue("check - not all values were concatenated") {
+          val concatStr = withRepo(_.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+
+      withClue("check - event handler did failed 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        bogusEventHandler.attempts shouldBe 1 + 3
+      }
+
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectNoMessage()
+
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
     }
 
     "fail after retrying when using RecoveryStrategy.retryAndFail" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new ConcatHandler(_ == 4)
+
+      val projectionFailing =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      withClue("check: projection failed with stream failure") {
+        projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr = withRepo(_.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+
+      withClue("check - event handler did failed 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        bogusEventHandler.attempts shouldBe 1 + 3
+      }
+
+      withClue("check: last seen offset is 3L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 3L
+      }
+
     }
 
     "restart from previous offset - fail with throwing an exception" in {
@@ -688,7 +800,35 @@ class JdbcProjectionSpec
     }
 
     "be able to stop when retrying" in {
-      pending // needs support for retrying strategy
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, alwaysFailOnOffset = 4)
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = handler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
+
+      val ref = spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4
+
+      // let it retry for a while
+      Thread.sleep(300)
+
+      ref ! ProjectionBehavior.Stop
+      createTestProbe().expectTerminated(ref)
+
     }
   }
 
