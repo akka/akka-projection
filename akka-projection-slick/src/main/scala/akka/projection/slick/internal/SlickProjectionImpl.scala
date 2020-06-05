@@ -436,7 +436,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
         op: (String, Seq[(Offset, Envelope)]) => Future[Done],
         logProgressEvery: Int = 5): Future[Done] = {
       val size = batches.size
-      logger.info("Processing [{}] partitioned batches serially", size)
+      logger.debug("Processing [{}] partitioned batches serially", size)
 
       def loop(remaining: List[(String, Seq[(Offset, Envelope)])], n: Int): Future[Done] = {
         remaining match {
@@ -444,7 +444,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           case (key, batch) :: tail =>
             op(key, batch).flatMap { _ =>
               if (n % logProgressEvery == 0)
-                logger.info("Processed batches [{}] of [{}]", n, size)
+                logger.debug("Processed batches [{}] of [{}]", n, size)
               loop(tail, n + 1)
             }
         }
@@ -454,7 +454,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
       result.onComplete {
         case Success(_) =>
-          logger.info("Processing completed of [{}] batches", size)
+          logger.debug("Processing completed of [{}] batches", size)
         case Failure(e) =>
           logger.error(e, "Processing of batches failed")
       }
