@@ -12,6 +12,8 @@ import java.util.UUID
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
+import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.japi.function
 import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
@@ -29,6 +31,7 @@ import org.scalatest.OptionValues
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
+import org.scalatest.wordspec.AnyWordSpecLike
 
 object JdbcOffsetStoreSpec {
 
@@ -76,7 +79,11 @@ object JdbcOffsetStoreSpec {
   }
 }
 
-abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig) extends JdbcSpec(specConfig.config) with OptionValues {
+abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
+    extends ScalaTestWithActorTestKit(specConfig.config)
+    with AnyWordSpecLike
+    with LogCapturing
+    with OptionValues {
 
   override implicit val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
