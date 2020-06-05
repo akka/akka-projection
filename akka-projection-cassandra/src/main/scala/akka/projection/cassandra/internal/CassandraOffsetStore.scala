@@ -19,6 +19,8 @@ import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
+import com.datastax.oss.driver.api.core.cql.Row
+import com.datastax.oss.driver.api.core.cql.Statement
 
 /**
  * INTERNAL API
@@ -39,14 +41,21 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
   def this(system: ActorSystem[_]) =
     this(system, Clock.systemUTC())
 
+  private def selectOne[T <: Statement[T]](stmt: Statement[T]): Future[Option[Row]] = {
+    session.selectOne(stmt.setExecutionProfileName(cassandraSettings.profile))
+  }
+
+  private def execute[T <: Statement[T]](stmt: Statement[T]): Future[Done] = {
+    session.executeWrite(stmt.setExecutionProfileName(cassandraSettings.profile))
+  }
+
   def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
     val partition = idToPartition(projectionId)
     session
-      .selectOne(
-        s"SELECT projection_key, offset, manifest FROM $keyspace.$table WHERE projection_name = ? AND partition = ? AND projection_key = ?",
-        projectionId.name,
-        partition,
-        projectionId.key)
+      .prepare(
+        s"SELECT projection_key, offset, manifest FROM $keyspace.$table WHERE projection_name = ? AND partition = ? AND projection_key = ?")
+      .map(_.bind(projectionId.name, partition, projectionId.key))
+      .flatMap(selectOne)
       .map { maybeRow =>
         maybeRow.map(row => fromStorageRepresentation[Offset](row.getString("offset"), row.getString("manifest")))
       }
@@ -62,26 +71,21 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
       case _ =>
         val SingleOffset(_, manifest, offsetStr, _) =
           toStorageRepresentation(projectionId, offset).asInstanceOf[SingleOffset]
-        session.executeWrite(
-          s"INSERT INTO $keyspace.$table (projection_name, partition, projection_key, offset, manifest, last_updated) VALUES (?, ?, ?, ?, ?, ?)",
-          projectionId.name,
-          partition,
-          projectionId.key,
-          offsetStr,
-          manifest,
-          Instant.now(clock))
+        session
+          .prepare(
+            s"INSERT INTO $keyspace.$table (projection_name, partition, projection_key, offset, manifest, last_updated) VALUES (?, ?, ?, ?, ?, ?)")
+          .map(_.bind(projectionId.name, partition, projectionId.key, offsetStr, manifest, Instant.now(clock)))
+          .flatMap(execute)
     }
   }
 
   def clearOffset(projectionId: ProjectionId): Future[Done] = {
-    session.executeWrite(
-      s"DELETE FROM $keyspace.$table WHERE projection_name = ? AND partition = ? AND projection_key = ?",
-      projectionId.name,
-      idToPartition(projectionId),
-      projectionId.key)
+    session
+      .prepare(s"DELETE FROM $keyspace.$table WHERE projection_name = ? AND partition = ? AND projection_key = ?")
+      .map(_.bind(projectionId.name, idToPartition(projectionId), projectionId.key))
+      .flatMap(execute)
   }
 
-  // FIXME maybe we need to make this public for user's tests
   def createKeyspaceAndTable(): Future[Done] = {
     session
       .executeDDL(
