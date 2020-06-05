@@ -8,6 +8,7 @@ import java.sql.Connection
 import java.sql.DriverManager
 import java.util.Optional
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
@@ -21,9 +22,12 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.testkit.typed.TestException
+import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.japi.function
+import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
+import akka.projection.TestStatusObserver
 import akka.projection.javadsl.SourceProvider
 import akka.projection.jdbc.JdbcProjectionSpec.Envelope
 import akka.projection.jdbc.JdbcProjectionSpec.PureJdbcSession
@@ -201,7 +205,6 @@ class JdbcProjectionSpec extends JdbcSpec(JdbcProjectionSpec.config) with Option
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-
     // create offset table
     val creationFut = offsetStore
       .createIfNotExists()
@@ -473,20 +476,212 @@ class JdbcProjectionSpec extends JdbcSpec(JdbcProjectionSpec.config) with Option
 
   "JdbcProjection lifecycle" must {
 
+    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int = -1, alwaysFailOnOffset: Int = -1)
+        extends JdbcHandler[Envelope, PureJdbcSession] {
+
+      private var failedOnce = false
+      val startMessage = "start"
+      val completedMessage = "completed"
+      val failedMessage = "failed"
+
+      // stop message can be 'completed' or 'failed'
+      // that allows us to assert that the stopHandler is different execution paths were called in test
+      private var stopMessage = completedMessage
+
+      override def start(): CompletionStage[Done] = {
+        // reset stop message to 'completed' on each new start
+        stopMessage = completedMessage
+        probe ! startMessage
+        CompletableFuture.completedFuture(Done)
+      }
+
+      override def stop(): CompletionStage[Done] = {
+        probe ! stopMessage
+        CompletableFuture.completedFuture(Done)
+      }
+
+      override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
+        if (envelope.offset == failOnceOnOffset && !failedOnce) {
+          failedOnce = true
+          stopMessage = failedMessage
+          throw TestException(s"Fail $failOnceOnOffset")
+        } else if (envelope.offset == alwaysFailOnOffset) {
+          stopMessage = failedMessage
+          throw TestException(s"Always Fail $alwaysFailOnOffset")
+        } else {
+          probe ! envelope.message
+          ()
+        }
+      }
+    }
+
     "call start and stop of the handler" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = handler)
+          .withStatusObserver(statusObserver)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      statusProbe.expectMessage(TestStatusObserver.Started)
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      handlerProbe.expectMessage("jkl")
+      handlerProbe.expectMessage("mno")
+      handlerProbe.expectMessage("pqr")
+      // completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectNoMessage()
     }
 
     "call start and stop of the handler when using TestKit.runWithTestSink" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = handler)
+
+      // not using ProjectionTestKit because want to test restarts
+      projectionTestKit.runWithTestSink(projection) { sinkProbe =>
+        // request all 'strings' (abc to pqr)
+
+        // the start happens inside runWithTestSink
+        handlerProbe.expectMessage(handler.startMessage)
+
+        // request the elements
+        sinkProbe.request(6)
+        handlerProbe.expectMessage("abc")
+        handlerProbe.expectMessage("def")
+        handlerProbe.expectMessage("ghi")
+        handlerProbe.expectMessage("jkl")
+        handlerProbe.expectMessage("mno")
+        handlerProbe.expectMessage("pqr")
+
+        // all elements should have reached the sink
+        sinkProbe.expectNextN(6)
+      }
+
+      // completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
     }
 
     "call start and stop of handler when restarted" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true, Some(progressProbe.ref))
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = handler)
+          .withRestartBackoff(1.second, 2.seconds, 0.0)
+          .withStatusObserver(statusObserver)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      statusProbe.expectMessage(TestStatusObserver.Started)
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "abc")))
+      handlerProbe.expectMessage("def")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "def")))
+      handlerProbe.expectMessage("ghi")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "ghi")))
+      // fail 4
+      handlerProbe.expectMessage(handler.failedMessage)
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+
+      // backoff will restart
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectMessage(TestStatusObserver.Failed)
+      statusProbe.expectMessage(TestStatusObserver.Started)
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("jkl")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))
+      handlerProbe.expectMessage("mno")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "mno")))
+      handlerProbe.expectMessage("pqr")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 6, "pqr")))
+      // now completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectNoMessage()
     }
 
     "call start and stop of handler when failed but no restart" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = handler)
+          .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4, not restarted
+      // completed with failure
+      handlerProbe.expectMessage(handler.failedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "be able to stop when retrying" in {
+      pending // needs support for retrying strategy
     }
   }
 

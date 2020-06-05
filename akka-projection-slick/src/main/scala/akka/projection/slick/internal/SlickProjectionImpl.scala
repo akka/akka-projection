@@ -19,12 +19,19 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.MergeableKey
+import akka.projection.MergeableOffset
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
 import akka.projection.ProjectionOffsetManagement
 import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.internal.HandlerRecoveryImpl
+import akka.projection.internal.ProjectionSettings
+import akka.projection.internal.RestartBackoffSettings
+import akka.projection.internal.SettingsImpl
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.AtLeastOnceFlowSlickProjection
@@ -33,13 +40,6 @@ import akka.projection.slick.ExactlyOnceSlickProjection
 import akka.projection.slick.GroupedSlickProjection
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
-import akka.projection.MergeableKey
-import akka.projection.MergeableOffset
-import akka.projection.OffsetVerification.VerificationFailure
-import akka.projection.OffsetVerification.VerificationSuccess
-import akka.projection.internal.ProjectionSettings
-import akka.projection.internal.RestartBackoffSettings
-import akka.projection.internal.SettingsImpl
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
@@ -353,7 +353,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
                 offsetFlow
                   .mapAsync(1) {
                     case (offset, env) =>
-                      processEnvelopeAndStoreOffsetInSameTransaction(handler, handlerRecovery, offset, env)
+                      reportProgress(
+                        processEnvelopeAndStoreOffsetInSameTransaction(handler, handlerRecovery, offset, env),
+                        env)
                   }
 
               case grouped: GroupedHandlerStrategy[Envelope] =>

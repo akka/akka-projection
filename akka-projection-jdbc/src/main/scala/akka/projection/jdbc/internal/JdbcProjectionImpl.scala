@@ -9,18 +9,23 @@ import java.util.concurrent.CompletionStage
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
+import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.internal.HandlerLifecycleAdapter
+import akka.projection.internal.HandlerRecoveryImpl
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
@@ -82,36 +87,62 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
    */
-  private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings =
-    settingsOpt.getOrElse(ProjectionSettings(system))
+  private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings = {
+    val settings = settingsOpt.getOrElse(ProjectionSettings(system))
+    restartBackoffOpt match {
+      case None    => settings
+      case Some(r) => settings.copy(restartBackoff = r)
+    }
+  }
 
   private class InternalProjectionState(settings: ProjectionSettings)(implicit system: ActorSystem[_]) {
 
     val offsetStore = createOffsetStore()
 
     val killSwitch = KillSwitches.shared(projectionId.id)
-
+    val abort: Promise[Done] = Promise()
     val logger = Logging(system.classicSystem, this.getClass)
 
     private[projection] def mappedSource(): Source[Done, _] = {
 
+      statusObserver.started(projectionId)
       val adapterHandlerLifecycle = new HandlerLifecycleAdapter(handler)
+
+      val handlerRecovery =
+        HandlerRecoveryImpl[Offset, Envelope](
+          projectionId,
+          HandlerRecoveryStrategy.fail, // TODO: remove this when we fully support recovery strategy
+          logger,
+          statusObserver)
 
       def processEnvelopeAndStoreOffsetInSameTransaction(env: Envelope): Future[Done] = {
         val offset = sourceProvider.extractOffset(env)
+        handlerRecovery.applyRecovery(env, offset, offset, abort.future, () => {
+          // this scope ensures that the blocking DB dispatcher is used solely for DB operations
+          implicit val executionContext: ExecutionContext = offsetStore.executionContext
+          withSession(sessionFactory) { sess =>
+            sess.withConnection[Unit] { conn =>
+              offsetStore.saveOffsetBlocking(conn, projectionId, offset)
+            }
+            handler.process(sess, env)
+          }.map(_ => Done)
+        })
 
-        // this scope ensures that the blocking DB dispatcher is used solely for DB operations
-        implicit val executionContext: ExecutionContext = offsetStore.executionContext
-        withSession(sessionFactory) { sess =>
-          sess.withConnection[Unit] { conn =>
-            offsetStore.saveOffsetBlocking(conn, projectionId, offset)
-          }
-          handler.process(sess, env)
-        }.map(_ => Done)
       }
 
       // stream ops should use use the actor system dispatcher
       implicit val executionContext: ExecutionContext = system.executionContext
+
+      def reportProgress[T](after: Future[T], env: Envelope): Future[T] = {
+        after.map { done =>
+          try {
+            statusObserver.progress(projectionId, env)
+          } catch {
+            case NonFatal(_) => // ignore
+          }
+          done
+        }
+      }
 
       val readOffsets = () => {
         val offsetsF = offsetStore.readOffset(projectionId)
@@ -121,7 +152,9 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
 
       val handlerFlow =
         Flow[Envelope]
-          .mapAsync(1)(env => processEnvelopeAndStoreOffsetInSameTransaction(env))
+          .mapAsync(1) { env =>
+            reportProgress(processEnvelopeAndStoreOffsetInSameTransaction(env), env)
+          }
 
       val composedSource: Source[Done, NotUsed] =
         Source
@@ -145,6 +178,9 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()
+      // if the handler is retrying it will be aborted by this,
+      // otherwise the stream would not be completed by the killSwitch until after all retries
+      projectionState.abort.failure(AbortProjectionException)
       streamDone
     }
 

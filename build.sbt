@@ -20,7 +20,7 @@ lazy val testkit =
 lazy val jdbc =
   Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
     .settings(Dependencies.jdbc)
-    .dependsOn(core)
+    .dependsOn(core % "compile->compile;test->test")
     .dependsOn(testkit % "test->test")
 
 // provides offset storage backed by a JDBC (Slick) table
