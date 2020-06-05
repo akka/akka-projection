@@ -15,7 +15,7 @@ import akka.annotation.ApiMayChange
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
+import akka.projection.StatusObserver
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
@@ -55,6 +55,7 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       settingsOpt = None,
+      restartBackoffOpt = None,
       ExactlyOnce(),
       SingleHandlerStrategy(handler),
       NoopStatusObserver)
@@ -81,6 +82,7 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       settingsOpt = None,
+      restartBackoffOpt = None,
       AtLeastOnce(),
       SingleHandlerStrategy(handler),
       NoopStatusObserver)
@@ -105,6 +107,7 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       settingsOpt = None,
+      restartBackoffOpt = None,
       ExactlyOnce(),
       GroupedHandlerStrategy(handler),
       NoopStatusObserver)
@@ -140,6 +143,7 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       settingsOpt = None,
+      restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = FlowHandlerStrategy(handler),
       NoopStatusObserver)
@@ -149,7 +153,18 @@ object SlickProjection {
 trait SlickProjection[Envelope] extends Projection[Envelope] {
   private[slick] def offsetStrategy: OffsetStrategy
 
-  override def withSettings(settings: ProjectionSettings): SlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): SlickProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): SlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): SlickProjection[Envelope]
 
   /**
    * For testing purposes the offset table can be created programmatically.
@@ -162,7 +177,18 @@ trait SlickProjection[Envelope] extends Projection[Envelope] {
 trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
   private[slick] def atLeastOnceStrategy: AtLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
 
-  override def withSettings(settings: ProjectionSettings): AtLeastOnceSlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtLeastOnceSlickProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtLeastOnceSlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceSlickProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Envelope]
 
@@ -170,8 +196,18 @@ trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
 }
 
 trait GroupedSlickProjection[Envelope] extends SlickProjection[Envelope] {
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): GroupedSlickProjection[Envelope]
 
-  override def withSettings(settings: ProjectionSettings): GroupedSlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): GroupedSlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedSlickProjection[Envelope]
 
   def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): GroupedSlickProjection[Envelope]
 
@@ -179,7 +215,18 @@ trait GroupedSlickProjection[Envelope] extends SlickProjection[Envelope] {
 }
 
 trait AtLeastOnceFlowSlickProjection[Envelope] extends SlickProjection[Envelope] {
-  override def withSettings(settings: ProjectionSettings): AtLeastOnceFlowSlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtLeastOnceFlowSlickProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtLeastOnceFlowSlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceFlowSlickProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceFlowSlickProjection[Envelope]
 }
@@ -187,7 +234,18 @@ trait AtLeastOnceFlowSlickProjection[Envelope] extends SlickProjection[Envelope]
 trait ExactlyOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
   private[slick] def exactlyOnceStrategy: ExactlyOnce = offsetStrategy.asInstanceOf[ExactlyOnce]
 
-  override def withSettings(settings: ProjectionSettings): ExactlyOnceSlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): ExactlyOnceSlickProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): ExactlyOnceSlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceSlickProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceSlickProjection[Envelope]
 }

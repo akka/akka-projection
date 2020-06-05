@@ -48,15 +48,8 @@ import java.util.concurrent.CompletionStage;
 
 //#handler-imports
 
-//#projection-settings-imports
-import akka.projection.ProjectionSettings;
-
-//#projection-settings-imports
-
 //#get-offset
 import akka.projection.javadsl.ProjectionManagement;
-import akka.persistence.query.Offset;
-import akka.projection.ProjectionId;
 
 //#get-offset
 
@@ -260,16 +253,13 @@ public interface CassandraProjectionDocExample {
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
             CassandraProjection.atLeastOnce(
-                    ProjectionId.of("shopping-carts", "carts-1"),
-                    sourceProvider,
-                    new ShoppingCartHandler()
-            ).withSettings(
-                    ProjectionSettings.create(system)
-                            .withBackoff(
-                                    Duration.ofSeconds(10), /*minBackoff*/
-                                    Duration.ofSeconds(60), /*maxBackoff*/
-                                    0.5 /*randomFactor*/
-                            )
+                ProjectionId.of("shopping-carts", "carts-1"),
+                sourceProvider,
+                new ShoppingCartHandler()
+            ).withRestartBackoff(
+                Duration.ofSeconds(10), /*minBackoff*/
+                Duration.ofSeconds(60), /*maxBackoff*/
+                0.5 /*randomFactor*/
             )
             .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     //#projection-settings

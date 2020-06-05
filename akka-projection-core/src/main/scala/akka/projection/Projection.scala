@@ -6,6 +6,7 @@ package akka.projection
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -16,6 +17,7 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
+import akka.projection.internal.ProjectionSettings
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
@@ -36,11 +38,42 @@ trait Projection[Envelope] {
 
   def projectionId: ProjectionId
 
-  def withSettings(settings: ProjectionSettings): Projection[Envelope]
+  def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): Projection[Envelope]
+
+  def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): Projection[Envelope]
+
+  /**
+   * Java API
+   */
+  def withRestartBackoff(
+      minBackoff: java.time.Duration,
+      maxBackoff: java.time.Duration,
+      randomFactor: Double): Projection[Envelope]
+
+  /**
+   * Java API
+   */
+  def withRestartBackoff(
+      minBackoff: java.time.Duration,
+      maxBackoff: java.time.Duration,
+      randomFactor: Double,
+      maxRestarts: Int): Projection[Envelope]
 
   def statusObserver: StatusObserver[Envelope]
 
   def withStatusObserver(observer: StatusObserver[Envelope]): Projection[Envelope]
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def withSettings(settings: ProjectionSettings): Projection[Envelope]
 
   /**
    * INTERNAL API
@@ -74,13 +107,13 @@ private[projection] object RunningProjection {
   case object AbortProjectionException extends RuntimeException("Projection aborted.") with NoStackTrace
 
   def withBackoff(source: () => Source[Done, _], settings: ProjectionSettings): Source[Done, _] = {
+    val backoff = settings.restartBackoff
     RestartSource
-      .onFailuresWithBackoff(settings.minBackoff, settings.maxBackoff, settings.randomFactor, settings.maxRestarts) {
-        () =>
-          source()
-            .recoverWithRetries(1, {
-              case AbortProjectionException => Source.empty // don't restart
-            })
+      .onFailuresWithBackoff(backoff.minBackoff, backoff.maxBackoff, backoff.randomFactor, backoff.maxRestarts) { () =>
+        source()
+          .recoverWithRetries(1, {
+            case AbortProjectionException => Source.empty // don't restart
+          })
       }
   }
 

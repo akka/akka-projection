@@ -18,10 +18,12 @@ import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.Projection
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
 import akka.projection.internal.NoopStatusObserver
+import akka.projection.internal.ProjectionSettings
+import akka.projection.internal.RestartBackoffSettings
+import akka.projection.internal.SettingsImpl
 import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.GroupOffsets.TopicPartitionKey
 import akka.projection.kafka.internal.KafkaSourceProviderImpl.ReadOffsets
@@ -111,11 +113,12 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
   // FIXME: Copied mostly from ProjectionTestKitSpec.
   // Maybe a `TestProjection` could be abstracted out and reused to reduce test boilerplate
-  case class TestProjection(
+  private[akka] case class TestProjection(
       sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]],
       topic: String,
       partitions: Int)
-      extends Projection[ConsumerRecord[Int, Int]] {
+      extends Projection[ConsumerRecord[Int, Int]]
+      with SettingsImpl[TestProjection] {
 
     val groupOffsets: GroupOffsets = GroupOffsets(
       (0 until partitions).map(i => TopicPartitionKey(new TopicPartition(topic, i)) -> 0L).toMap)
@@ -135,7 +138,10 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
     private lazy val internalState = new InternalProjectionState()
 
     override def projectionId: ProjectionId = ProjectionId("name", "key")
-    override def withSettings(settings: ProjectionSettings): Projection[ConsumerRecord[Int, Int]] = this
+    override def withSettings(settings: ProjectionSettings): TestProjection = this
+    override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
+    override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
+    override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
 
     override private[projection] def mappedSource()(implicit system: ActorSystem[_]) =
       internalState.mappedSource()

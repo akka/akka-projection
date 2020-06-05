@@ -16,7 +16,6 @@ import akka.annotation.DoNotInherit
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
@@ -61,6 +60,7 @@ object CassandraProjection {
       projectionId,
       sourceProvider,
       settingsOpt = None,
+      restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = SingleHandlerStrategy(handler),
       statusObserver = NoopStatusObserver)
@@ -84,6 +84,7 @@ object CassandraProjection {
       projectionId,
       sourceProvider,
       settingsOpt = None,
+      restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(Duration.Zero)),
       handlerStrategy = GroupedHandlerStrategy(handler),
       statusObserver = NoopStatusObserver)
@@ -117,6 +118,7 @@ object CassandraProjection {
       projectionId,
       sourceProvider,
       settingsOpt = None,
+      restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = FlowHandlerStrategy(handler),
       statusObserver = NoopStatusObserver)
@@ -134,6 +136,7 @@ object CassandraProjection {
       projectionId,
       sourceProvider,
       settingsOpt = None,
+      restartBackoffOpt = None,
       offsetStrategy = AtMostOnce(),
       handlerStrategy = SingleHandlerStrategy(handler),
       statusObserver = NoopStatusObserver)
@@ -142,7 +145,16 @@ object CassandraProjection {
 @DoNotInherit trait CassandraProjection[Envelope] extends Projection[Envelope] {
   private[cassandra] def offsetStrategy: OffsetStrategy
 
-  override def withSettings(settings: ProjectionSettings): CassandraProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): CassandraProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): CassandraProjection[Envelope]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjection[Envelope]
 
@@ -157,7 +169,16 @@ object CassandraProjection {
 @DoNotInherit trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   private[cassandra] def atLeastOnceStrategy: AtLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
 
-  override def withSettings(settings: ProjectionSettings): AtLeastOnceCassandraProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtLeastOnceCassandraProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtLeastOnceCassandraProjection[Envelope]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceCassandraProjection[Envelope]
 
@@ -167,7 +188,16 @@ object CassandraProjection {
 }
 
 @DoNotInherit trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
-  override def withSettings(settings: ProjectionSettings): GroupedCassandraProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): GroupedCassandraProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): GroupedCassandraProjection[Envelope]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedCassandraProjection[Envelope]
 
@@ -179,7 +209,16 @@ object CassandraProjection {
 @DoNotInherit trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
   private[cassandra] def atMostOnceStrategy: AtMostOnce = offsetStrategy.asInstanceOf[AtMostOnce]
 
-  override def withSettings(settings: ProjectionSettings): AtMostOnceCassandraProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtMostOnceCassandraProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtMostOnceCassandraProjection[Envelope]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): AtMostOnceCassandraProjection[Envelope]
 
@@ -187,7 +226,18 @@ object CassandraProjection {
 }
 
 @DoNotInherit trait AtLeastOnceFlowCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
-  override def withSettings(settings: ProjectionSettings): AtLeastOnceFlowCassandraProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtLeastOnceFlowCassandraProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtLeastOnceFlowCassandraProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceFlowCassandraProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceFlowCassandraProjection[Envelope]
 }

@@ -14,7 +14,8 @@ import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
-import akka.projection.ProjectionSettings
+import akka.projection.internal.ProjectionSettings
+import akka.projection.internal.RestartBackoffSettings
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 
@@ -84,7 +85,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
     val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
 
-    val settingsForTest = ProjectionSettings(system).withBackoff(0.millis, 0.millis, 0.0, 0)
+    val settingsForTest = ProjectionSettings(system).copy(RestartBackoffSettings(0.millis, 0.millis, 0.0, 0))
     val running =
       projection
         .withSettings(settingsForTest)

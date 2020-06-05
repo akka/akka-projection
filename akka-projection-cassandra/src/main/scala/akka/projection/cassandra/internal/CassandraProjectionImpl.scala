@@ -11,7 +11,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
-import scala.jdk.DurationConverters._
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -22,7 +21,6 @@ import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionOffsetManagement
-import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
@@ -35,6 +33,9 @@ import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
+import akka.projection.internal.ProjectionSettings
+import akka.projection.internal.RestartBackoffSettings
+import akka.projection.internal.SettingsImpl
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
@@ -79,6 +80,7 @@ import akka.stream.scaladsl.Source
     override val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     settingsOpt: Option[ProjectionSettings],
+    restartBackoffOpt: Option[RestartBackoffSettings],
     val offsetStrategy: CassandraProjectionImpl.OffsetStrategy,
     handlerStrategy: CassandraProjectionImpl.HandlerStrategy[Envelope],
     override val statusObserver: StatusObserver[Envelope])
@@ -91,12 +93,14 @@ import akka.stream.scaladsl.Source
     with javadsl.AtMostOnceCassandraProjection[Envelope]
     with scaladsl.AtMostOnceCassandraProjection[Envelope]
     with scaladsl.AtLeastOnceFlowCassandraProjection[Envelope]
-    with javadsl.AtLeastOnceFlowCassandraProjection[Envelope] {
+    with javadsl.AtLeastOnceFlowCassandraProjection[Envelope]
+    with SettingsImpl[CassandraProjectionImpl[Offset, Envelope]] {
 
   import CassandraProjectionImpl._
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
+      restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
       handlerStrategy: CassandraProjectionImpl.HandlerStrategy[Envelope] = this.handlerStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): CassandraProjectionImpl[Offset, Envelope] =
@@ -104,12 +108,17 @@ import akka.stream.scaladsl.Source
       projectionId,
       sourceProvider,
       settingsOpt,
+      restartBackoffOpt,
       offsetStrategy,
       handlerStrategy,
       statusObserver)
 
   override def withSettings(settings: ProjectionSettings): CassandraProjectionImpl[Offset, Envelope] =
     copy(settingsOpt = Option(settings))
+
+  override def withRestartBackoffSettings(
+      restartBackoff: RestartBackoffSettings): CassandraProjectionImpl[Offset, Envelope] =
+    copy(restartBackoffOpt = Some(restartBackoff))
 
   /**
    * Settings for AtLeastOnceCassandraProjection
@@ -121,15 +130,6 @@ import akka.stream.scaladsl.Source
       .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)))
 
   /**
-   * Java API
-   */
-  override def withSaveOffset(
-      afterEnvelopes: Int,
-      afterDuration: java.time.Duration): CassandraProjectionImpl[Offset, Envelope] =
-    copy(offsetStrategy = atLeastOnceStrategy
-      .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration.toScala)))
-
-  /**
    * Settings for GroupedCassandraProjection
    */
   override def withGroup(
@@ -138,16 +138,6 @@ import akka.stream.scaladsl.Source
     copy(handlerStrategy = handlerStrategy
       .asInstanceOf[GroupedHandlerStrategy[Envelope]]
       .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
-
-  /**
-   * Java API
-   */
-  override def withGroup(
-      groupAfterEnvelopes: Int,
-      groupAfterDuration: java.time.Duration): CassandraProjectionImpl[Offset, Envelope] =
-    copy(handlerStrategy = handlerStrategy
-      .asInstanceOf[GroupedHandlerStrategy[Envelope]]
-      .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration.toScala)))
 
   override def withRecoveryStrategy(
       recoveryStrategy: HandlerRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
@@ -186,8 +176,13 @@ import akka.stream.scaladsl.Source
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
    */
-  private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings =
-    settingsOpt.getOrElse(ProjectionSettings(system))
+  private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings = {
+    val settings = settingsOpt.getOrElse(ProjectionSettings(system))
+    restartBackoffOpt match {
+      case None    => settings
+      case Some(r) => settings.copy(restartBackoff = r)
+    }
+  }
 
   /*
    * INTERNAL API

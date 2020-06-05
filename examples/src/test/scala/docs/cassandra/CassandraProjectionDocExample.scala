@@ -6,7 +6,6 @@ package docs.cassandra
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
-
 import akka.stream.scaladsl.FlowWithContext
 //#daemon-imports
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
@@ -29,13 +28,8 @@ import akka.projection.cassandra.scaladsl.CassandraProjection
 
 //#projection-imports
 
-//#projection-settings-imports
-import scala.concurrent.duration._
-
-import akka.projection.ProjectionSettings
-//#projection-settings-imports
-
 //#handler-imports
+import scala.concurrent.duration._
 import scala.concurrent.Future
 
 import akka.Done
@@ -126,7 +120,6 @@ object CassandraProjectionDocExample {
   }
 
   object IllustrateAtLeastOnceFlow {
-    import akka.persistence.query.Offset
     //#atLeastOnceFlow
     val logger = LoggerFactory.getLogger(getClass)
 
@@ -189,8 +182,7 @@ object CassandraProjectionDocExample {
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
           handler = new ShoppingCartHandler)
-        .withSettings(ProjectionSettings(system)
-          .withBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5))
+        .withRestartBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5)
         .withSaveOffset(100, 500.millis)
     //#projection-settings
 

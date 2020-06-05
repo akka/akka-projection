@@ -4,12 +4,16 @@
 
 package akka.projection;
 
+import java.time.Duration;
+
 import akka.Done;
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
 import akka.projection.internal.NoopStatusObserver;
+import akka.projection.internal.ProjectionSettings;
 import akka.stream.scaladsl.Source;
+import scala.concurrent.duration.FiniteDuration;
 
 /**
  * Compile test: this class serves only for exercising the Java API.
@@ -57,6 +61,26 @@ public class ProjectionBehaviorCompileTest {
         @Override
         public Projection<String> withStatusObserver(StatusObserver<String> observer) {
             // no need for StatusObserver in tests
+            return this;
+        }
+
+        @Override
+        public Projection<String> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor) {
+            return this;
+        }
+
+        @Override
+        public Projection<String> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor, int maxRestarts) {
+            return this;
+        }
+
+        @Override
+        public Projection<String> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor) {
+            return this;
+        }
+
+        @Override
+        public Projection<String> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor, int maxRestarts) {
             return this;
         }
     }

@@ -21,7 +21,6 @@ import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.ProjectionOffsetManagement
-import akka.projection.ProjectionSettings
 import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
@@ -38,6 +37,9 @@ import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
+import akka.projection.internal.ProjectionSettings
+import akka.projection.internal.RestartBackoffSettings
+import akka.projection.internal.SettingsImpl
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
@@ -84,6 +86,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
     settingsOpt: Option[ProjectionSettings],
+    restartBackoffOpt: Option[RestartBackoffSettings],
     val offsetStrategy: SlickProjectionImpl.OffsetStrategy,
     handlerStrategy: SlickProjectionImpl.HandlerStrategy[Envelope],
     override val statusObserver: StatusObserver[Envelope])
@@ -91,12 +94,14 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     with ExactlyOnceSlickProjection[Envelope]
     with AtLeastOnceSlickProjection[Envelope]
     with GroupedSlickProjection[Envelope]
-    with AtLeastOnceFlowSlickProjection[Envelope] {
+    with AtLeastOnceFlowSlickProjection[Envelope]
+    with SettingsImpl[SlickProjectionImpl[Offset, Envelope, P]] {
 
   import SlickProjectionImpl._
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
+      restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
       handlerStrategy: SlickProjectionImpl.HandlerStrategy[Envelope] = this.handlerStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): SlickProjectionImpl[Offset, Envelope, P] =
@@ -105,12 +110,17 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       sourceProvider,
       databaseConfig,
       settingsOpt,
+      restartBackoffOpt,
       offsetStrategy,
       handlerStrategy,
       statusObserver)
 
   override def withSettings(settings: ProjectionSettings): SlickProjectionImpl[Offset, Envelope, P] =
     copy(settingsOpt = Option(settings))
+
+  override def withRestartBackoffSettings(
+      restartBackoff: RestartBackoffSettings): SlickProjectionImpl[Offset, Envelope, P] =
+    copy(restartBackoffOpt = Some(restartBackoff))
 
   /**
    * Settings for AtLeastOnceSlickProjection
@@ -168,8 +178,13 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
    */
-  private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings =
-    settingsOpt.getOrElse(ProjectionSettings(system))
+  private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings = {
+    val settings = settingsOpt.getOrElse(ProjectionSettings(system))
+    restartBackoffOpt match {
+      case None    => settings
+      case Some(r) => settings.copy(restartBackoff = r)
+    }
+  }
 
   /*
    * INTERNAL API
