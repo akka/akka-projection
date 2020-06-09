@@ -4,8 +4,6 @@
 
 package akka.projection;
 
-import java.time.Duration;
-
 import akka.Done;
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.typed.ActorRef;
@@ -14,6 +12,8 @@ import akka.projection.internal.NoopStatusObserver;
 import akka.projection.internal.ProjectionSettings;
 import akka.stream.scaladsl.Source;
 import scala.concurrent.duration.FiniteDuration;
+
+import java.time.Duration;
 
 /**
  * Compile test: this class serves only for exercising the Java API.

@@ -10,16 +10,24 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
-import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.StatusObserver
-import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.cassandra.internal.GroupedHandlerAdapter
 import akka.projection.cassandra.internal.HandlerAdapter
+import akka.projection.internal.AtLeastOnce
+import akka.projection.internal.AtMostOnce
+import akka.projection.internal.FlowHandlerStrategy
+import akka.projection.internal.GroupedHandlerStrategy
+import akka.projection.internal.InternalProjection
 import akka.projection.internal.NoopStatusObserver
+import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.SourceProviderAdapter
+import akka.projection.javadsl.AtLeastOnceFlowProjection
+import akka.projection.javadsl.AtLeastOnceProjection
+import akka.projection.javadsl.AtMostOnceProjection
+import akka.projection.javadsl.GroupedProjection
 import akka.projection.javadsl.Handler
 import akka.projection.javadsl.SourceProvider
 import akka.stream.javadsl.FlowWithContext
@@ -30,11 +38,6 @@ import akka.stream.javadsl.FlowWithContext
  */
 @ApiMayChange
 object CassandraProjection {
-  import CassandraProjectionImpl.AtLeastOnce
-  import CassandraProjectionImpl.AtMostOnce
-  import CassandraProjectionImpl.GroupedHandlerStrategy
-  import CassandraProjectionImpl.SingleHandlerStrategy
-  import CassandraProjectionImpl.FlowHandlerStrategy
 
   /**
    * Create a [[Projection]] with at-least-once processing semantics. It stores the offset in Cassandra
@@ -42,14 +45,14 @@ object CassandraProjection {
    * from previously stored offset some elements may be processed more than once.
    *
    * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
-   * This window can be defined with [[AtLeastOnceCassandraProjection.withSaveOffset]] of the returned
+   * This window can be defined with [[AtLeastOnceProjection.withSaveOffset]] of the returned
    * `AtLeastOnceCassandraProjection`. The default settings for the window is defined in configuration
    * section `akka.projection.at-least-once`.
    */
   def atLeastOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): AtLeastOnceCassandraProjection[Envelope] =
+      handler: Handler[Envelope]): AtLeastOnceProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
@@ -62,7 +65,7 @@ object CassandraProjection {
   /**
    * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
    * The envelopes are grouped within a time window, or limited by a number of envelopes,
-   * whatever happens first. This window can be defined with [[GroupedCassandraProjection.withGroup]] of
+   * whatever happens first. This window can be defined with [[GroupedProjection.withGroup]] of
    * the returned `GroupedCassandraProjection`. The default settings for the window is defined in configuration
    * section `akka.projection.grouped`.
    *
@@ -73,14 +76,14 @@ object CassandraProjection {
   def groupedWithin[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[java.util.List[Envelope]]): GroupedCassandraProjection[Envelope] =
+      handler: Handler[java.util.List[Envelope]]): GroupedProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       restartBackoffOpt = None,
-      offsetStrategy = CassandraProjectionImpl
-        .AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(scala.concurrent.duration.Duration.Zero)),
+      offsetStrategy =
+        AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(scala.concurrent.duration.Duration.Zero)),
       handlerStrategy = GroupedHandlerStrategy(new GroupedHandlerAdapter(handler)),
       statusObserver = NoopStatusObserver)
 
@@ -108,7 +111,7 @@ object CassandraProjection {
   def atLeastOnceFlow[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _]): AtLeastOnceFlowCassandraProjection[Envelope] =
+      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _]): AtLeastOnceFlowProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
@@ -126,7 +129,7 @@ object CassandraProjection {
   def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): AtMostOnceCassandraProjection[Envelope] =
+      handler: Handler[Envelope]): AtMostOnceProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
@@ -137,20 +140,20 @@ object CassandraProjection {
       statusObserver = NoopStatusObserver)
 }
 
-@DoNotInherit trait CassandraProjection[Envelope] extends Projection[Envelope] {
+@DoNotInherit trait CassandraProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
 
   override def withRestartBackoff(
       minBackoff: java.time.Duration,
       maxBackoff: java.time.Duration,
-      randomFactor: Double): CassandraProjection[Envelope]
+      randomFactor: Double): CassandraProjection[Offset, Envelope]
 
   override def withRestartBackoff(
       minBackoff: java.time.Duration,
       maxBackoff: java.time.Duration,
       randomFactor: Double,
-      maxRestarts: Int): CassandraProjection[Envelope]
+      maxRestarts: Int): CassandraProjection[Offset, Envelope]
 
-  override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjection[Envelope]
+  override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjection[Offset, Envelope]
 
   /**
    * For testing purposes the offset table can be created programmatically.
@@ -158,78 +161,4 @@ object CassandraProjection {
    * before the system is started.
    */
   def initializeOffsetTable(system: ActorSystem[_]): CompletionStage[Done]
-}
-
-@DoNotInherit trait AtLeastOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double): AtLeastOnceCassandraProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double,
-      maxRestarts: Int): AtLeastOnceCassandraProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceCassandraProjection[Envelope]
-
-  def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceCassandraProjection[Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Envelope]
-}
-
-@DoNotInherit trait GroupedCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double): GroupedCassandraProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double,
-      maxRestarts: Int): GroupedCassandraProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedCassandraProjection[Envelope]
-
-  def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: java.time.Duration): GroupedCassandraProjection[Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): GroupedCassandraProjection[Envelope]
-}
-
-@DoNotInherit trait AtMostOnceCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double): AtMostOnceCassandraProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double,
-      maxRestarts: Int): AtMostOnceCassandraProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): AtMostOnceCassandraProjection[Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Envelope]
-}
-
-@DoNotInherit trait AtLeastOnceFlowCassandraProjection[Envelope] extends CassandraProjection[Envelope] {
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double): AtLeastOnceFlowCassandraProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double,
-      maxRestarts: Int): AtLeastOnceFlowCassandraProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceFlowCassandraProjection[Envelope]
-
-  def withSaveOffset(
-      afterEnvelopes: Int,
-      afterDuration: java.time.Duration): AtLeastOnceFlowCassandraProjection[Envelope]
 }
