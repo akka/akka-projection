@@ -18,6 +18,9 @@ import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.projection.internal.NoopStatusObserver
+import akka.projection.internal.ProjectionSettings
+import akka.projection.internal.RestartBackoffSettings
+import akka.projection.internal.SettingsImpl
 import akka.stream.KillSwitches
 import akka.stream.OverflowStrategy
 import akka.stream.SharedKillSwitch
@@ -38,12 +41,13 @@ object ProjectionBehaviorSpec {
    * This TestProjection has a internal state that we can use to prove that on restart,
    * the actor is taking a new projection instance.
    */
-  case class TestProjection(
+  private[akka] case class TestProjection(
       src: Source[Int, NotUsed],
       testProbe: TestProbe[ProbeMessage],
       failToStop: Boolean = false,
       override val projectionId: ProjectionId = ProjectionBehaviorSpec.TestProjectionId)
-      extends Projection[Int] {
+      extends Projection[Int]
+      with SettingsImpl[TestProjection] {
 
     private val offsetStore = new AtomicInteger
 
@@ -60,6 +64,10 @@ object ProjectionBehaviorSpec {
 
     override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =
       this // no need for StatusObserver in tests
+
+    override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
+    override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
+    override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
 
     /*
      * INTERNAL API

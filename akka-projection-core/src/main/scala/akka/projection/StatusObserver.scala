@@ -17,9 +17,12 @@ abstract class StatusObserver[-Envelope] {
   def started(projectionId: ProjectionId): Unit
 
   /**
-   * Called when a projection is restarted due to failure.
+   * Called when a projection failed.
+   *
+   * The projection will be restarted unless the projection restart backoff settings
+   * are configured with `max-restarts` limit.
    */
-  def restarted(projectionId: ProjectionId, cause: Throwable): Unit
+  def failed(projectionId: ProjectionId, cause: Throwable): Unit
 
   /**
    * Called when a projection is stopped.

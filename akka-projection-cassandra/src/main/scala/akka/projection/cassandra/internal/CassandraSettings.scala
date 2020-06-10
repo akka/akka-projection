@@ -16,6 +16,7 @@ private[projection] case class CassandraSettings(config: Config) {
   val keyspace: String = config.getString("offset-store.keyspace")
   val table: String = config.getString("offset-store.table")
   val sessionConfigPath: String = config.getString("session-config-path")
+  val profile: String = "akka-projection-cassandra-profile"
 }
 
 /**

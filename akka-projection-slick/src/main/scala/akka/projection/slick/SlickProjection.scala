@@ -15,7 +15,7 @@ import akka.annotation.ApiMayChange
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.ProjectionId
-import akka.projection.ProjectionSettings
+import akka.projection.StatusObserver
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
@@ -23,6 +23,7 @@ import akka.projection.slick.internal.SlickProjectionImpl
 import akka.projection.slick.internal.SlickProjectionImpl.AtLeastOnce
 import akka.projection.slick.internal.SlickProjectionImpl.ExactlyOnce
 import akka.projection.slick.internal.SlickProjectionImpl.OffsetStrategy
+import akka.stream.scaladsl.FlowWithContext
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
@@ -33,6 +34,9 @@ import slick.jdbc.JdbcProfile
  */
 @ApiMayChange
 object SlickProjection {
+  import SlickProjectionImpl.GroupedHandlerStrategy
+  import SlickProjectionImpl.SingleHandlerStrategy
+  import SlickProjectionImpl.FlowHandlerStrategy
 
   /**
    * Create a [[Projection]] with exactly-once processing semantics.
@@ -51,16 +55,17 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       settingsOpt = None,
-      SlickProjectionImpl.ExactlyOnce(),
-      SlickProjectionImpl.SingleHandlerStrategy(handler),
+      restartBackoffOpt = None,
+      ExactlyOnce(),
+      SingleHandlerStrategy(handler),
       NoopStatusObserver)
 
   /**
    * Create a [[Projection]] with at-least-once processing semantics.
    *
    * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
-   * This means that if the projection is restarted from previously stored offset some elements may be processed more
-   * than once.
+   * This means that if the projection is restarted from previously stored offset then some elements may be processed
+   * more than once.
    *
    * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
    * This window can be defined with [[AtLeastOnceSlickProjection.withSaveOffset]] of the returned
@@ -77,8 +82,9 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       settingsOpt = None,
-      SlickProjectionImpl.AtLeastOnce(),
-      SlickProjectionImpl.SingleHandlerStrategy(handler),
+      restartBackoffOpt = None,
+      AtLeastOnce(),
+      SingleHandlerStrategy(handler),
       NoopStatusObserver)
 
   /**
@@ -101,8 +107,45 @@ object SlickProjection {
       sourceProvider,
       databaseConfig,
       settingsOpt = None,
-      SlickProjectionImpl.ExactlyOnce(),
-      SlickProjectionImpl.GroupedHandlerStrategy(handler),
+      restartBackoffOpt = None,
+      ExactlyOnce(),
+      GroupedHandlerStrategy(handler),
+      NoopStatusObserver)
+
+  /**
+   * Create a [[Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
+   * semantics.
+   *
+   * The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
+   * in the context of the `FlowWithContext` and is stored in Cassandra when corresponding `Done` is emitted.
+   * Since the offset is stored after processing the envelope it means that if the
+   * projection is restarted from previously stored offset then some envelopes may be processed more than once.
+   *
+   * If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
+   * will be processed again if the projection is restarted and no later offset was stored.
+   *
+   * The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
+   * that the first offset is stored and when the projection is restarted that offset is considered completed even
+   * though more of the duplicated enveloped were never processed.
+   *
+   * The flow must not reorder elements, because the offsets may be stored in the wrong order and
+   * and when the projection is restarted all envelopes up to the latest stored offset are considered
+   * completed even though some of them may not have been processed. This is the reason the flow is
+   * restricted to `FlowWithContext` rather than ordinary `Flow`.
+   */
+  def atLeastOnceFlow[Offset, Envelope, P <: JdbcProfile: ClassTag](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      databaseConfig: DatabaseConfig[P],
+      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _]): AtLeastOnceFlowSlickProjection[Envelope] =
+    new SlickProjectionImpl(
+      projectionId,
+      sourceProvider,
+      databaseConfig,
+      settingsOpt = None,
+      restartBackoffOpt = None,
+      offsetStrategy = AtLeastOnce(),
+      handlerStrategy = FlowHandlerStrategy(handler),
       NoopStatusObserver)
 
 }
@@ -110,7 +153,18 @@ object SlickProjection {
 trait SlickProjection[Envelope] extends Projection[Envelope] {
   private[slick] def offsetStrategy: OffsetStrategy
 
-  override def withSettings(settings: ProjectionSettings): SlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): SlickProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): SlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): SlickProjection[Envelope]
 
   /**
    * For testing purposes the offset table can be created programmatically.
@@ -123,7 +177,18 @@ trait SlickProjection[Envelope] extends Projection[Envelope] {
 trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
   private[slick] def atLeastOnceStrategy: AtLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
 
-  override def withSettings(settings: ProjectionSettings): AtLeastOnceSlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtLeastOnceSlickProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtLeastOnceSlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceSlickProjection[Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Envelope]
 
@@ -131,18 +196,56 @@ trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
 }
 
 trait GroupedSlickProjection[Envelope] extends SlickProjection[Envelope] {
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): GroupedSlickProjection[Envelope]
 
-  override def withSettings(settings: ProjectionSettings): GroupedSlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): GroupedSlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedSlickProjection[Envelope]
 
   def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): GroupedSlickProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): GroupedSlickProjection[Envelope]
 }
 
+trait AtLeastOnceFlowSlickProjection[Envelope] extends SlickProjection[Envelope] {
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtLeastOnceFlowSlickProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtLeastOnceFlowSlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceFlowSlickProjection[Envelope]
+
+  def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceFlowSlickProjection[Envelope]
+}
+
 trait ExactlyOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
   private[slick] def exactlyOnceStrategy: ExactlyOnce = offsetStrategy.asInstanceOf[ExactlyOnce]
 
-  override def withSettings(settings: ProjectionSettings): ExactlyOnceSlickProjection[Envelope]
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): ExactlyOnceSlickProjection[Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): ExactlyOnceSlickProjection[Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceSlickProjection[Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceSlickProjection[Envelope]
 }

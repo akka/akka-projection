@@ -26,6 +26,8 @@ import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
+import akka.projection.StringKey
+import akka.projection.kafka.GroupOffsets
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
 import com.typesafe.config.ConfigFactory
@@ -139,7 +141,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
       produceEvents(topicName)
 
-      val kafkaSourceProvider: SourceProvider[MergeableOffset[Long], ConsumerRecord[String, String]] =
+      val kafkaSourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
         KafkaSourceProvider(system.toTyped, consumerDefaults.withGroupId(groupId), Set(topicName))
 
       val slickProjection =
@@ -168,7 +170,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
       produceEvents(topicName)
 
-      val kafkaSourceProvider: SourceProvider[MergeableOffset[Long], ConsumerRecord[String, String]] =
+      val kafkaSourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
         KafkaSourceProvider(system.toTyped, consumerDefaults.withGroupId(groupId), Set(topicName))
 
       // repository will fail to insert the "AddToCart" event type once only
@@ -211,12 +213,12 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     def offsetForUser(userId: String) = userEvents.count(_.userId == userId) - 1
 
     withClue("check - all offsets were seen") {
-      val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId).futureValue.value
+      val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId).futureValue.value
       offset shouldBe MergeableOffset(
         Map(
-          s"$topicName-0" -> offsetForUser(user1),
-          s"$topicName-1" -> offsetForUser(user2),
-          s"$topicName-2" -> offsetForUser(user3)))
+          StringKey(s"$topicName-0") -> offsetForUser(user1),
+          StringKey(s"$topicName-1") -> offsetForUser(user2),
+          StringKey(s"$topicName-2") -> offsetForUser(user3)))
     }
   }
 

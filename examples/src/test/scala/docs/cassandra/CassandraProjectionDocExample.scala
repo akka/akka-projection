@@ -6,7 +6,7 @@ package docs.cassandra
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
-
+import akka.stream.scaladsl.FlowWithContext
 //#daemon-imports
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
@@ -28,13 +28,8 @@ import akka.projection.cassandra.scaladsl.CassandraProjection
 
 //#projection-imports
 
-//#projection-settings-imports
-import scala.concurrent.duration._
-
-import akka.projection.ProjectionSettings
-//#projection-settings-imports
-
 //#handler-imports
+import scala.concurrent.duration._
 import scala.concurrent.Future
 
 import akka.Done
@@ -124,6 +119,29 @@ object CassandraProjectionDocExample {
     //#grouped
   }
 
+  object IllustrateAtLeastOnceFlow {
+    //#atLeastOnceFlow
+    val logger = LoggerFactory.getLogger(getClass)
+
+    val flow = FlowWithContext[EventEnvelope[ShoppingCart.Event], EventEnvelope[ShoppingCart.Event]]
+      .map(envelope => envelope.event)
+      .map {
+        case ShoppingCart.CheckedOut(cartId, time) =>
+          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          Done
+
+        case otherEvent =>
+          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          Done
+      }
+
+    val projection =
+      CassandraProjection
+        .atLeastOnceFlow(projectionId = ProjectionId("shopping-carts", "carts-1"), sourceProvider, handler = flow)
+        .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
+    //#atLeastOnceFlow
+  }
+
   object IllustrateRunningWithShardedDaemon {
 
     //#running-source-provider
@@ -164,8 +182,7 @@ object CassandraProjectionDocExample {
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
           handler = new ShoppingCartHandler)
-        .withSettings(ProjectionSettings(system)
-          .withBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5))
+        .withRestartBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5)
         .withSaveOffset(100, 500.millis)
     //#projection-settings
 

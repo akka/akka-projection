@@ -10,8 +10,10 @@ import scala.collection.immutable
 
 import akka.annotation.InternalApi
 import akka.persistence.query
+import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.StringKey
 
 /**
  * INTERNAL API
@@ -36,11 +38,11 @@ import akka.projection.ProjectionId
     val offset: Offset = rep match {
       case SingleOffset(_, manifest, offsetStr, _) => fromStorageRepresentation[Offset](offsetStr, manifest)
       case MultipleOffsets(reps) =>
-        val offsets: Map[String, Inner] = reps.map {
+        val offsets: Map[StringKey, Inner] = reps.map {
           case SingleOffset(id, manifest, offsetStr, _) =>
-            id.key -> fromStorageRepresentation[Inner](offsetStr, manifest)
+            StringKey(id.key) -> fromStorageRepresentation[Inner](offsetStr, manifest)
         }.toMap
-        MergeableOffset[Inner](offsets).asInstanceOf[Offset]
+        MergeableOffset[StringKey, Inner](offsets).asInstanceOf[Offset]
     }
     offset
   }
@@ -72,10 +74,10 @@ import akka.projection.ProjectionId
       case i: Int                   => SingleOffset(id, IntManifest, i.toString, mergeable)
       case seq: query.Sequence      => SingleOffset(id, SequenceManifest, seq.value.toString, mergeable)
       case tbu: query.TimeBasedUUID => SingleOffset(id, TimeBasedUUIDManifest, tbu.value.toString, mergeable)
-      case mrg: MergeableOffset[_] =>
+      case mrg: MergeableOffset[_, _] =>
         MultipleOffsets(mrg.entries.map {
-          case (surrogateKey, innerOffset) =>
-            toStorageRepresentation(ProjectionId(id.name, surrogateKey), innerOffset, mergeable = true)
+          case (key: MergeableKey, innerOffset) =>
+            toStorageRepresentation(ProjectionId(id.name, key.surrogateKey), innerOffset, mergeable = true)
               .asInstanceOf[SingleOffset]
         }.toSeq)
       case _ => throw new IllegalArgumentException(s"Unsupported offset type, found [${offset.getClass.getName}]")

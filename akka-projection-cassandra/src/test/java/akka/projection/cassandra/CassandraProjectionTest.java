@@ -7,6 +7,7 @@ package akka.projection.cassandra;
 import akka.Done;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
+import akka.projection.OffsetVerification;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.internal.CassandraOffsetStore;
@@ -67,7 +68,7 @@ public class CassandraProjectionTest extends JUnitSuite {
     }
   }
 
-  static class TestSourceProvider implements SourceProvider<Long, Envelope> {
+  static class TestSourceProvider extends SourceProvider<Long, Envelope> {
 
     private final String entityId;
 

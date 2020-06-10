@@ -223,9 +223,31 @@ Those methods are also called when the `Projection` is restarted after failure.
 
 ## Processing with Akka Streams
 
-An Akka Streams `Flow` can be used instead of a handler for processing the envelopes with at-least-once semantics.
+An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes with at-least-once
+semantics.
 
-TODO: Implementation in progress, see [PR #119](https://github.com/akka/akka-projection/pull/119)
+Scala
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #atLeastOnceFlow }
+
+Java
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atLeastOnceFlow }
+
+The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
+in the context of the `FlowWithContext` and is stored in Cassandra when corresponding `Done` is emitted.
+Since the offset is stored after processing the envelope it means that if the projection is restarted
+from previously stored offset some envelopes may be processed more than once.
+
+There are a few caveats to be aware of:
+
+* If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
+  will be processed again if the projection is restarted and no later offset was stored.
+* The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
+  that the first offset is stored and when the projection is restarted that offset is considered completed even
+  though more of the duplicated enveloped were never processed.
+* The flow must not reorder elements, because the offsets may be stored in the wrong order and
+  and when the projection is restarted all envelopes up to the latest stored offset are considered
+  completed even though some of them may not have been processed. This is the reason the flow is
+  restricted to `FlowWithContext` rather than ordinary `Flow`.
 
 ## Schema
 
@@ -268,4 +290,56 @@ for the `CassandraProjection` yet, see [issue #97](https://github.com/akka/akka-
 
 ## Configuration
 
-@@snip [reference.conf](/akka-projection-cassandra/src/main/resources/reference.conf)
+Make your edits/overrides in your application.conf.
+
+The reference configuration file with the default values:
+
+@@snip [reference.conf](/akka-projection-cassandra/src/main/resources/reference.conf) { #config }
+
+### Cassandra driver configuration
+
+All Cassandra driver settings are via its [standard profile mechanism](https://docs.datastax.com/en/developer/java-driver/latest/manual/core/configuration/).
+
+One important setting is to configure the database driver to retry the initial connection:
+
+`datastax-java-driver.advanced.reconnect-on-init = true`
+
+It is not enabled automatically as it is in the driver's reference.conf and is not overridable in a profile.
+
+It is possible to share the same Cassandra session as [Akka Persistence Cassandra](https://doc.akka.io/docs/akka-persistence-cassandra/current/)
+by setting the `session-config-path`:
+
+```
+akka.projection.cassandra {
+  session-config-path = "akka.persistence.cassandra"
+}
+```
+
+or share the same Cassandra session as [Alpakka Cassandra](https://doc.akka.io/docs/alpakka/2.0/cassandra.html):
+
+```
+akka.projection.cassandra {
+  session-config-path = "alpakka.cassandra"
+}
+```
+
+### Cassandra driver overrides
+
+@@snip [reference.conf](/akka-projection-cassandra/src/main/resources/reference.conf) { #profile }
+
+### Contact points configuration
+
+The Cassandra server contact points can be defined with the [Cassandra driver configuration](https://docs.datastax.com/en/developer/java-driver/latest/manual/core/configuration/)
+
+```
+datastax-java-driver {
+  basic.contact-points = ["127.0.0.1:9042"]
+  basic.load-balancing-policy.local-datacenter = "datacenter1"
+}
+```
+
+Alternatively, Akka Discovery can be used for finding the Cassandra server contact points as described
+in the [Alpakka Cassandra documentation](https://doc.akka.io/docs/alpakka/2.0/cassandra.html#using-akka-discovery).
+
+Without any configuration it will use `localhost:9042` as default.
+
