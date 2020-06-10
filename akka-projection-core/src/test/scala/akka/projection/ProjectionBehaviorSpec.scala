@@ -17,6 +17,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
@@ -50,6 +51,8 @@ object ProjectionBehaviorSpec {
       with SettingsImpl[TestProjection] {
 
     private val offsetStore = new AtomicInteger
+
+    private[akka] def actorHandlerInit[M]: Option[ActorHandlerInit[M]] = None
 
     override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(testProbe, failToStop).newRunningInstance()

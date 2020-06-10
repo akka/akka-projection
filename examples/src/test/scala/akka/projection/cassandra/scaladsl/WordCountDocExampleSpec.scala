@@ -120,7 +120,6 @@ class WordCountDocExampleSpec
 
       //#actorHandler
       val handler = ActorHandler(
-        projectionId,
         WordCountProcessor(projectionId, repository),
         envelopeMessage = (env, replyTo) => WordCountProcessor.Handle(env, replyTo))
 
