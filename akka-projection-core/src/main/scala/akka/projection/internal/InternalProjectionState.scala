@@ -4,15 +4,6 @@
 
 package akka.projection.internal
 
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
-import scala.concurrent.duration.FiniteDuration
-import scala.util.Failure
-import scala.util.Success
-import scala.util.control.NonFatal
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -33,6 +24,15 @@ import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration.FiniteDuration
+import scala.util.Failure
+import scala.util.Success
+import scala.util.control.NonFatal
+
 /**
  * INTERNAL API
  */
@@ -48,6 +48,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   def logger: LoggingAdapter
   implicit def system: ActorSystem[_]
   implicit def executionContext: ExecutionContext
+
+  var telemetry: Telemetry = null
 
   def readOffsets(): Future[Option[Offset]]
   def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done]
@@ -112,12 +114,17 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
-          Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
-            case elem @ (offset, envelope) =>
-              handlerRecovery
-                .applyRecovery(envelope, offset, offset, abort.future, () => handler.process(envelope))
-                .map(_ => elem)
-          }
+          Flow[(Offset, Envelope)]
+            .mapAsync(parallelism = 1) {
+              case elem @ (offset, envelope) =>
+                telemetry
+                  .map(_.onEnvelopeReady(projectionId, offset, envelope))
+                  .map { _ =>
+                    handlerRecovery
+                      .applyRecovery(envelope, offset, offset, abort.future, () => handler.process(envelope))
+                      .map(_ => elem)
+                  }
+            }
 
         case grouped: GroupedHandlerStrategy[Envelope] =>
           val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
@@ -276,6 +283,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   def mappedSource(): Source[Done, _] = {
 
     statusObserver.started(projectionId)
+    telemetry = TelemetryProvider.started(projectionId)
 
     val source: Source[(Offset, Envelope), NotUsed] =
       Source
@@ -284,7 +292,13 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             .tryStart()
             .flatMap(_ => sourceProvider.source(() => readOffsets())))
         .via(killSwitch.flow)
-        .map(env => (sourceProvider.extractOffset(env), env))
+        .map { env =>
+          val offset = sourceProvider.extractOffset(env)
+
+          val extraInfo = telemetry.onEnvelopeReady(projectionId, offset, env)
+          // TODO: add the extraInfo as context on the following tuple.
+          (offset, env)
+        }
         .filter {
           case (offset, _) =>
             sourceProvider.verifyOffset(offset) match {
