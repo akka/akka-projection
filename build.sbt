@@ -32,15 +32,15 @@ lazy val cassandra =
     .dependsOn(testkit % "test->test")
 
 // provides source providers for akka-persistence-query
-lazy val eventsourced =
-  Project(id = "akka-projection-eventsourced", base = file("akka-projection-eventsourced"))
+lazy val `source-eventsourced` =
+  Project(id = "akka-projection-source-eventsourced", base = file("akka-projection-source-eventsourced"))
     .settings(Dependencies.eventsourced)
     .dependsOn(core)
     .dependsOn(testkit % "test->test")
 
 // provides offset storage backed by Kafka managed offset commits
-lazy val kafka =
-  Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
+lazy val `source-kafka` =
+  Project(id = "akka-projection-source-kafka", base = file("akka-projection-source-kafka"))
     .settings(Dependencies.kafka)
     .settings(Test / parallelExecution := false)
     .dependsOn(core)
@@ -51,8 +51,8 @@ lazy val examples = project
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
   .dependsOn(cassandra % "test->test")
-  .dependsOn(eventsourced)
-  .dependsOn(kafka % "test->test")
+  .dependsOn(`source-eventsourced`)
+  .dependsOn(`source-kafka` % "test->test")
   .dependsOn(testkit % "test->test")
   .settings(Test / parallelExecution := false, publish / skip := true)
 
@@ -100,7 +100,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, eventsourced, kafka, examples, docs)
+  .aggregate(core, testkit, slick, cassandra, `source-eventsourced`, `source-kafka`, examples, docs)
   .settings(publish / skip := true, whitesourceIgnore := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
