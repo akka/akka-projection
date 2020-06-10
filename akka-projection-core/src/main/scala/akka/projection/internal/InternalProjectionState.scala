@@ -4,10 +4,13 @@
 
 package akka.projection.internal
 
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
+import scala.util.Failure
+import scala.util.Success
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -15,11 +18,14 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.MergeableKey
+import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
@@ -52,6 +58,41 @@ abstract class InternalProjectionState[Offset, Envelope](
       }
       done
     }
+  }
+
+  /**
+   * A convenience method to serialize asynchronous operations to occur one after another is complete
+   */
+  private def serialize(batches: Map[String, Seq[(Offset, Envelope)]])(
+      op: (String, Seq[(Offset, Envelope)]) => Future[Done]): Future[Done] = {
+
+    val logProgressEvery: Int = 5
+    val size = batches.size
+    logger.debug("Processing [{}] partitioned batches serially", size)
+
+    def loop(remaining: List[(String, Seq[(Offset, Envelope)])], n: Int): Future[Done] = {
+      remaining match {
+        case Nil => Future.successful(Done)
+        case (key, batch) :: tail =>
+          op(key, batch).flatMap { _ =>
+            if (n % logProgressEvery == 0)
+              logger.debug("Processed batches [{}] of [{}]", n, size)
+            loop(tail, n + 1)
+          }
+      }
+    }
+
+    val result = loop(batches.toList, n = 1)
+
+    result.onComplete {
+      case Success(_) =>
+        logger.debug("Processing completed of [{}] batches", size)
+      case Failure(e) =>
+        logger.error(e, "Processing of batches failed")
+    }
+
+    result
+
   }
 
   private def atLeastOnceProcessing(
@@ -128,16 +169,71 @@ abstract class InternalProjectionState[Offset, Envelope](
     val handlerRecovery =
       HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
+    def processGrouped(
+        handler: Handler[immutable.Seq[Envelope]],
+        handlerRecovery: HandlerRecoveryImpl[Offset, Envelope],
+        envelopesAndOffsets: immutable.Seq[(Offset, Envelope)]): Future[Done] = {
+
+      def processEnvelopes(partitioned: immutable.Seq[(Offset, Envelope)]): Future[Done] = {
+        val (firstOffset, _) = partitioned.head
+        val (lastOffset, _) = partitioned.last
+        val envelopes = partitioned.map { case (_, env) => env }
+
+        handlerRecovery.applyRecovery(
+          envelopes.head,
+          firstOffset,
+          lastOffset,
+          abort.future,
+          () => handler.process(envelopes))
+      }
+
+      // FIXME create a SourceProvider trait that implies mergeable offsets?
+      if (sourceProvider.isOffsetMergeable) {
+        val batches = envelopesAndOffsets.groupBy {
+          // FIXME matched source provider should always be MergeableOffset
+          case (offset: MergeableOffset[_, _], _) =>
+            // FIXME we can assume there's only one actual offset per envelope, but there should be a better way to represent this
+            val mergeableKey = offset.entries.head._1.asInstanceOf[MergeableKey]
+            mergeableKey.surrogateKey
+          case _ =>
+            // should never happen
+            throw new IllegalStateException("The offset should always be of type MergeableOffset")
+        }
+
+        // process batches in sequence, but not concurrently, in order to provide singled threaded guarantees
+        // to the user envelope handler
+        serialize(batches) { (surrogateKey, partitionedEnvelopes) =>
+          logger.debug("Processing grouped envelopes for MergeableOffset with key [{}]", surrogateKey)
+          processEnvelopes(partitionedEnvelopes)
+        }
+
+      } else {
+        processEnvelopes(envelopesAndOffsets)
+      }
+
+    }
+
     handlerStrategy match {
       case SingleHandlerStrategy(handler) =>
         source
           .mapAsync(1) {
             case (offset, env) =>
-              handlerRecovery.applyRecovery(env, offset, offset, abort.future, () => handler.process(env))
+              val processed =
+                handlerRecovery.applyRecovery(env, offset, offset, abort.future, () => handler.process(env))
+              reportProgress(processed, env)
           }
 
       case grouped: GroupedHandlerStrategy[Envelope] =>
-        throw new IllegalStateException("not ported yet")
+        val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
+        val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
+
+        source
+          .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
+          .filterNot(_.isEmpty)
+          .mapAsync(parallelism = 1) { group =>
+            val (_, lastEnvelope) = group.last
+            reportProgress(processGrouped(grouped.handler, handlerRecovery, group), lastEnvelope)
+          }
 
       case _: FlowHandlerStrategy[Envelope] =>
         // not possible, no API for this
@@ -157,12 +253,12 @@ abstract class InternalProjectionState[Offset, Envelope](
         source
           .mapAsync(parallelism = 1) {
             case (offset, envelope) =>
-              reportProgress(
-                saveOffset(projectionId, offset)
-                  .flatMap(_ =>
-                    handlerRecovery
-                      .applyRecovery(envelope, offset, offset, abort.future, () => handler.process(envelope))),
-                envelope)
+              val processed =
+                saveOffset(projectionId, offset).flatMap { _ =>
+                  handlerRecovery
+                    .applyRecovery(envelope, offset, offset, abort.future, () => handler.process(envelope))
+                }
+              reportProgress(processed, envelope)
           }
           .map(_ => Done)
       case _ =>

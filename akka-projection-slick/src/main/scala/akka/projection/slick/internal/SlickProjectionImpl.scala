@@ -7,8 +7,6 @@ package akka.projection.slick.internal
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-import scala.util.Failure
-import scala.util.Success
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -172,39 +170,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     private[projection] def newRunningInstance(): RunningProjection =
       new SlickRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
 
-    /**
-     * A convenience method to serialize asynchronous operations to occur one after another is complete
-     */
-    private def serialize(
-        batches: Map[String, Seq[(Offset, Envelope)]],
-        op: (String, Seq[(Offset, Envelope)]) => Future[Done],
-        logProgressEvery: Int = 5): Future[Done] = {
-      val size = batches.size
-      logger.debug("Processing [{}] partitioned batches serially", size)
-
-      def loop(remaining: List[(String, Seq[(Offset, Envelope)])], n: Int): Future[Done] = {
-        remaining match {
-          case Nil => Future.successful(Done)
-          case (key, batch) :: tail =>
-            op(key, batch).flatMap { _ =>
-              if (n % logProgressEvery == 0)
-                logger.debug("Processed batches [{}] of [{}]", n, size)
-              loop(tail, n + 1)
-            }
-        }
-      }
-
-      val result = loop(batches.toList, n = 1)
-
-      result.onComplete {
-        case Success(_) =>
-          logger.debug("Processing completed of [{}] batches", size)
-        case Failure(e) =>
-          logger.error(e, "Processing of batches failed")
-      }
-
-      result
-    }
   }
 
   private class SlickRunningProjection(source: Source[Done, _], projectionState: SlickInternalProjectionState)(

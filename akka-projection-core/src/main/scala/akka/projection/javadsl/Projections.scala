@@ -4,8 +4,6 @@
 
 package akka.projection.javadsl
 
-import scala.concurrent.duration.FiniteDuration
-
 import akka.annotation.DoNotInherit
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.StatusObserver
