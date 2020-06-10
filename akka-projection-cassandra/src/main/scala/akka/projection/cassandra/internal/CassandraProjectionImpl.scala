@@ -22,8 +22,8 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
-import akka.projection.cassandra.javadsl
-import akka.projection.cassandra.scaladsl
+import akka.projection.javadsl
+import akka.projection.scaladsl
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjectionState
@@ -45,16 +45,14 @@ import akka.stream.scaladsl.Source
     val offsetStrategy: OffsetStrategy,
     handlerStrategy: HandlerStrategy[Envelope],
     override val statusObserver: StatusObserver[Envelope])
-    extends scaladsl.CassandraProjection[Offset, Envelope]
-    with javadsl.CassandraProjection[Offset, Envelope]
-    with scaladsl.AtLeastOnceCassandraProjection[Offset, Envelope]
-    with javadsl.AtLeastOnceCassandraProjection[Offset, Envelope]
-    with scaladsl.GroupedCassandraProjection[Offset, Envelope]
-    with javadsl.GroupedCassandraProjection[Offset, Envelope]
-    with scaladsl.AtMostOnceCassandraProjection[Offset, Envelope]
-    with javadsl.AtMostOnceCassandraProjection[Offset, Envelope]
-    with scaladsl.AtLeastOnceFlowCassandraProjection[Offset, Envelope]
-    with javadsl.AtLeastOnceFlowCassandraProjection[Offset, Envelope]
+    extends scaladsl.AtLeastOnceProjection[Offset, Envelope]
+    with javadsl.AtLeastOnceProjection[Offset, Envelope]
+    with scaladsl.GroupedProjection[Offset, Envelope]
+    with javadsl.GroupedProjection[Offset, Envelope]
+    with scaladsl.AtMostOnceProjection[Offset, Envelope]
+    with javadsl.AtMostOnceProjection[Offset, Envelope]
+    with scaladsl.AtLeastOnceFlowProjection[Offset, Envelope]
+    with javadsl.AtLeastOnceFlowProjection[Offset, Envelope]
     with SettingsImpl[CassandraProjectionImpl[Offset, Envelope]] {
 
   private def copy(
@@ -207,16 +205,6 @@ import akka.stream.scaladsl.Source
       }
     }
 
-  }
-
-  override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
-    val offsetStore = new CassandraOffsetStore(system)
-    offsetStore.createKeyspaceAndTable()
-  }
-
-  override def initializeOffsetTable(system: ActorSystem[_]): CompletionStage[Done] = {
-    import scala.compat.java8.FutureConverters._
-    createOffsetTableIfNotExists()(system).toJava
   }
 
 }

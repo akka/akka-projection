@@ -29,11 +29,10 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.slick.AtLeastOnceSlickFlowProjection
-import akka.projection.slick.AtLeastOnceSlickProjection
-import akka.projection.slick.ExactlyOnceSlickProjection
-import akka.projection.slick.GroupedSlickProjection
-import akka.projection.slick.SlickProjection
+import akka.projection.scaladsl.AtLeastOnceFlowProjection
+import akka.projection.scaladsl.AtLeastOnceProjection
+import akka.projection.scaladsl.ExactlyOnceProjection
+import akka.projection.scaladsl.GroupedProjection
 import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
@@ -48,11 +47,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     handlerStrategy: HandlerStrategy[Envelope],
     override val statusObserver: StatusObserver[Envelope],
     offsetStore: SlickOffsetStore[P])
-    extends SlickProjection[Offset, Envelope]
-    with ExactlyOnceSlickProjection[Offset, Envelope]
-    with GroupedSlickProjection[Offset, Envelope]
-    with AtLeastOnceSlickProjection[Offset, Envelope]
-    with AtLeastOnceSlickFlowProjection[Offset, Envelope]
+    extends ExactlyOnceProjection[Offset, Envelope]
+    with GroupedProjection[Offset, Envelope]
+    with AtLeastOnceProjection[Offset, Envelope]
+    with AtLeastOnceFlowProjection[Offset, Envelope]
     with SettingsImpl[SlickProjectionImpl[Offset, Envelope, P]] {
 
   private def copy(
@@ -207,7 +205,4 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     }
   }
 
-  override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
-    offsetStore.createIfNotExists
-  }
 }

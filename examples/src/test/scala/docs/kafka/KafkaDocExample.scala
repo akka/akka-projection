@@ -167,7 +167,7 @@ object KafkaDocExample {
         handler = new WordCountHandler(projectionId))
     //#exactlyOnce
 
-    projection.createOffsetTableIfNotExists()
+    SlickProjection.createOffsetTableIfNotExists(databaseConfig)
   }
 
   object IllustrateSendingToKafka {
@@ -195,7 +195,7 @@ object KafkaDocExample {
 
     //#sendToKafkaProjection
 
-    projection.createOffsetTableIfNotExists()
+    SlickProjection.createOffsetTableIfNotExists(dbConfig)
   }
 
   def consumerProjection(n: Int): Projection[ConsumerRecord[String, String]] = {

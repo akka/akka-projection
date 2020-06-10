@@ -6,26 +6,22 @@ package akka.projection.slick
 
 import scala.collection.immutable
 import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
-import akka.annotation.DoNotInherit
 import akka.event.Logging
-import akka.projection.HandlerRecoveryStrategy
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
-import akka.projection.StatusObserver
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
-import akka.projection.internal.InternalProjection
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
+import akka.projection.scaladsl.AtLeastOnceFlowProjection
 import akka.projection.scaladsl.AtLeastOnceProjection
 import akka.projection.scaladsl.ExactlyOnceProjection
 import akka.projection.scaladsl.GroupedProjection
@@ -58,8 +54,7 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[Envelope])(
-      implicit system: ActorSystem[_]): ExactlyOnceSlickProjection[Offset, Envelope] = {
+      handler: SlickHandler[Envelope])(implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
     val offsetStore: SlickOffsetStore[P] =
       new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
@@ -128,8 +123,7 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[Envelope])(
-      implicit system: ActorSystem[_]): AtLeastOnceSlickProjection[Offset, Envelope] = {
+      handler: SlickHandler[Envelope])(implicit system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
 
     import databaseConfig.profile.api._
 
@@ -174,7 +168,7 @@ object SlickProjection {
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
       handler: SlickHandler[immutable.Seq[Envelope]])(
-      implicit system: ActorSystem[_]): GroupedSlickProjection[Offset, Envelope] = {
+      implicit system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
     val offsetStore: SlickOffsetStore[P] =
       new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
@@ -248,7 +242,7 @@ object SlickProjection {
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
       handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _])(
-      implicit system: ActorSystem[_]): AtLeastOnceSlickFlowProjection[Offset, Envelope] = {
+      implicit system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
 
     val offsetStore: SlickOffsetStore[P] =
       new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
@@ -265,114 +259,12 @@ object SlickProjection {
       offsetStore)
   }
 
-}
-
-trait SlickProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): SlickProjection[Offset, Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): SlickProjection[Offset, Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): SlickProjection[Offset, Envelope]
-
-  /**
-   * For testing purposes the offset table can be created programmatically.
-   * For production it's recommended to create the table with DDL statements
-   * before the system is started.
-   */
-  def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done]
-}
-
-@DoNotInherit trait ExactlyOnceSlickProjection[Offset, Envelope]
-    extends ExactlyOnceProjection[Offset, Envelope]
-    with SlickProjection[Offset, Envelope] {
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): ExactlyOnceSlickProjection[Offset, Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): ExactlyOnceSlickProjection[Offset, Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceSlickProjection[Offset, Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceSlickProjection[Offset, Envelope]
-}
-@DoNotInherit trait AtLeastOnceSlickProjection[Offset, Envelope]
-    extends AtLeastOnceProjection[Offset, Envelope]
-    with SlickProjection[Offset, Envelope] {
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): AtLeastOnceSlickProjection[Offset, Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): AtLeastOnceSlickProjection[Offset, Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceSlickProjection[Offset, Envelope]
-
-  def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Offset, Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceSlickProjection[Offset, Envelope]
-}
-
-@DoNotInherit trait AtLeastOnceSlickFlowProjection[Offset, Envelope]
-    extends AtLeastOnceProjection[Offset, Envelope]
-    with SlickProjection[Offset, Envelope] {
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): AtLeastOnceSlickFlowProjection[Offset, Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): AtLeastOnceSlickFlowProjection[Offset, Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceSlickFlowProjection[Offset, Envelope]
-
-  def withSaveOffset(
-      afterEnvelopes: Int,
-      afterDuration: FiniteDuration): AtLeastOnceSlickFlowProjection[Offset, Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceSlickFlowProjection[Offset, Envelope]
-}
-
-@DoNotInherit trait GroupedSlickProjection[Offset, Envelope]
-    extends GroupedProjection[Offset, Envelope]
-    with SlickProjection[Offset, Envelope] {
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): GroupedSlickProjection[Offset, Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): GroupedSlickProjection[Offset, Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedSlickProjection[Offset, Envelope]
-
-  def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): GroupedSlickProjection[Offset, Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): GroupedSlickProjection[Offset, Envelope]
+  def createOffsetTableIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+      implicit system: ActorSystem[_]): Future[Done] = {
+    val offsetStore: SlickOffsetStore[P] =
+      new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
+    offsetStore.createIfNotExists
+  }
 }
 
 object SlickHandler {
