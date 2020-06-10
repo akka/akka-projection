@@ -20,25 +20,25 @@ script:
 
 jobs:
   include:
-    - stage: check
-      env: CMD="verifyCodeStyle"
-      name: "Code style check. Run locally with: sbt verifyCodeStyle"
-    - env: CMD="Test/compile"
-      name: "Compile all code with 2.13"
-    - env: CMD="unidoc; docs/paradox"
-      name: "Create API and reference documentation"
+#    - stage: check
+#      env: CMD="verifyCodeStyle"
+#      name: "Code style check. Run locally with: sbt verifyCodeStyle"
+#    - env: CMD="Test/compile"
+#      name: "Compile all code with 2.13"
+#    - env: CMD="unidoc; docs/paradox"
+#      name: "Create API and reference documentation"
 
     - stage: test
       env:
         - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+95-24f2b2e6"
-        - CMD="test"
+        - CMD="akka-projection-kafka/testOnly *.KafkaToSlickIntegrationSpec"
       name: "Run tests with Scala 2.13 and AdoptOpenJDK 8"
-    - env:
-        - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+95-24f2b2e6"
-        - JDK="adopt@~1.11-0"
-        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="test"
-      name: "Run tests with Scala 2.13 and AdoptOpenJDK 11"
+#    - env:
+#        - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+95-24f2b2e6"
+#        - JDK="adopt@~1.11-0"
+#        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
+#        - CMD="test"
+#      name: "Run tests with Scala 2.13 and AdoptOpenJDK 11"
 
     - stage: whitesource
       name: WhiteSource
