@@ -31,7 +31,7 @@ jobs:
     - stage: test
       env:
         - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+95-24f2b2e6"
-        - CMD="akka-projection-kafka/testOnly *.KafkaToSlickIntegrationSpec"
+        - CMD="akka-projection-kafka/testOnly *.KafkaToSlickIntegrationSpec -- -DtimesToRepeat=50"
       name: "Run tests with Scala 2.13 and AdoptOpenJDK 8"
 #    - env:
 #        - AKKA_SNAPSHOT="-Dbuild.akka.version=2.6.5+95-24f2b2e6"

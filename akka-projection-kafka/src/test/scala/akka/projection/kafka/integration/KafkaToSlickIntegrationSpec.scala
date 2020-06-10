@@ -15,12 +15,14 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.typed.scaladsl.adapter._
+import akka.event.Logging
 import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
+import akka.projection.kafka.Repeated
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
@@ -114,8 +116,12 @@ object KafkaToSlickIntegrationSpec {
   }
 }
 
-class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config)) {
+class KafkaToSlickIntegrationSpec
+    extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config))
+    with Repeated {
   import KafkaToSlickIntegrationSpec._
+
+  private val logger = Logging(system, getClass)
 
   override implicit def patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(30, Seconds), interval = Span(500, Milliseconds))
@@ -157,9 +163,14 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
             repository.incrementCount(projectionId, userEvent.eventType)
           })
 
-      projectionTestKit.run(slickProjection) {
-        assertEventTypeCount(projectionId)
-        assertAllOffsetsObserved(projectionId, topicName)
+      try {
+        logger.info("Assert begin")
+        projectionTestKit.run(slickProjection) {
+          assertEventTypeCount(projectionId)
+          assertAllOffsetsObserved(projectionId, topicName)
+        }
+      } finally {
+        logger.info("Assert end")
       }
     }
 
@@ -198,13 +209,13 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis))
 
       try {
-        log.info("Assert begin")
+        logger.info("Assert begin")
         projectionTestKit.run(slickProjection) {
           assertEventTypeCount(projectionId)
           assertAllOffsetsObserved(projectionId, topicName)
         }
       } finally {
-        log.info("Assert end")
+        logger.info("Assert end")
       }
     }
   }
