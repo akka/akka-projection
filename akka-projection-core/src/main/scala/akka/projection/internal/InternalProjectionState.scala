@@ -16,6 +16,7 @@ import scala.util.control.NonFatal
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableKey
@@ -32,7 +33,11 @@ import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 
-abstract class InternalProjectionState[Offset, Envelope](
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[akka] abstract class InternalProjectionState[Offset, Envelope](
     projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     offsetStrategy: OffsetStrategy,
