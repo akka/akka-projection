@@ -37,7 +37,7 @@ The offset is stored in the same transaction as the `DBIO` returned from the `ha
 processing semantics if the projection is restarted from previously stored offset.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #projection-imports #exactlyOnce }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #projection-imports #actor-system #exactlyOnce }
 
 ## at-least-once
 
@@ -46,7 +46,7 @@ This means that if the projection is restarted from a previously stored offset s
 than once.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #atLeastOnce }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #atLeastOnce }
 
 The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
 This window can be defined with `withSaveOffset` of the returned `AtLeastOnceSlickProjection`.
@@ -61,7 +61,7 @@ The @ref:[`ShoppingCartHandler` is shown below](#handler).
 The envelopes can be grouped before processing, which can be useful for batch updates.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #grouped }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #grouped }
 
 The envelopes are grouped within a time window, or limited by a number of envelopes, whatever happens first.
 This window can be defined with `withGroup` of the returned `GroupedSlickProjection`. The default settings for
@@ -129,7 +129,7 @@ An Akka Streams `FlowWithContext` can be used instead of a handler for processin
 semantics.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #atLeastOnceFlow }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #atLeastOnceFlow }
 
 The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
 in the context of the `FlowWithContext` and is stored in the database when corresponding `Done` is emitted.

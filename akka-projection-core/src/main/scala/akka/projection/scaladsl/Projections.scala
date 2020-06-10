@@ -12,7 +12,26 @@ import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
+import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.InternalProjection
+@DoNotInherit trait ExactlyOnceProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
+  private[projection] def exactlyOnceStrategy: ExactlyOnce = offsetStrategy.asInstanceOf[ExactlyOnce]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): ExactlyOnceProjection[Offset, Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): ExactlyOnceProjection[Offset, Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceProjection[Offset, Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceProjection[Offset, Envelope]
+}
 
 @DoNotInherit trait AtLeastOnceFlowProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
 

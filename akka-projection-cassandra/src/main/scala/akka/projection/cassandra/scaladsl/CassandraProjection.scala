@@ -13,9 +13,10 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
-import akka.projection.Projection
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.StatusObserver
+import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
@@ -165,4 +166,93 @@ object CassandraProjection {
    * before the system is started.
    */
   def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done]
+}
+@DoNotInherit trait AtLeastOnceFlowCassandraProjection[Offset, Envelope]
+    extends AtLeastOnceFlowProjection[Offset, Envelope]
+    with CassandraProjection[Offset, Envelope] {
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtLeastOnceFlowCassandraProjection[Offset, Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtLeastOnceFlowCassandraProjection[Offset, Envelope]
+
+  override def withStatusObserver(
+      observer: StatusObserver[Envelope]): AtLeastOnceFlowCassandraProjection[Offset, Envelope]
+
+  def withSaveOffset(
+      afterEnvelopes: Int,
+      afterDuration: FiniteDuration): AtLeastOnceFlowCassandraProjection[Offset, Envelope]
+}
+
+@DoNotInherit trait AtLeastOnceCassandraProjection[Offset, Envelope]
+    extends AtLeastOnceProjection[Offset, Envelope]
+    with CassandraProjection[Offset, Envelope] {
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtLeastOnceCassandraProjection[Offset, Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtLeastOnceCassandraProjection[Offset, Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceCassandraProjection[Offset, Envelope]
+
+  def withSaveOffset(
+      afterEnvelopes: Int,
+      afterDuration: FiniteDuration): AtLeastOnceCassandraProjection[Offset, Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceCassandraProjection[Offset, Envelope]
+}
+
+@DoNotInherit trait AtMostOnceCassandraProjection[Offset, Envelope]
+    extends AtMostOnceProjection[Offset, Envelope]
+    with CassandraProjection[Offset, Envelope] {
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): AtMostOnceCassandraProjection[Offset, Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): AtMostOnceCassandraProjection[Offset, Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): AtMostOnceCassandraProjection[Offset, Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceCassandraProjection[Offset, Envelope]
+}
+
+@DoNotInherit trait GroupedCassandraProjection[Offset, Envelope]
+    extends GroupedProjection[Offset, Envelope]
+    with CassandraProjection[Offset, Envelope] {
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double): GroupedCassandraProjection[Offset, Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      maxRestarts: Int): GroupedCassandraProjection[Offset, Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedCassandraProjection[Offset, Envelope]
+
+  def withGroup(
+      groupAfterEnvelopes: Int,
+      groupAfterDuration: FiniteDuration): GroupedCassandraProjection[Offset, Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): GroupedCassandraProjection[Offset, Envelope]
 }

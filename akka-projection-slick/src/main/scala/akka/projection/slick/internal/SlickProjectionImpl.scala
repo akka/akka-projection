@@ -30,9 +30,11 @@ import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
-import akka.projection.scaladsl
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.slick.AtLeastOnceSlickFlowProjection
+import akka.projection.slick.AtLeastOnceSlickProjection
 import akka.projection.slick.ExactlyOnceSlickProjection
+import akka.projection.slick.GroupedSlickProjection
 import akka.projection.slick.SlickProjection
 import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
@@ -46,12 +48,13 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     restartBackoffOpt: Option[RestartBackoffSettings],
     val offsetStrategy: OffsetStrategy,
     handlerStrategy: HandlerStrategy[Envelope],
-    override val statusObserver: StatusObserver[Envelope])
+    override val statusObserver: StatusObserver[Envelope],
+    offsetStore: SlickOffsetStore[P])
     extends SlickProjection[Offset, Envelope]
     with ExactlyOnceSlickProjection[Offset, Envelope]
-    with scaladsl.GroupedProjection[Offset, Envelope]
-    with scaladsl.AtLeastOnceProjection[Offset, Envelope]
-    with scaladsl.AtLeastOnceFlowProjection[Offset, Envelope]
+    with GroupedSlickProjection[Offset, Envelope]
+    with AtLeastOnceSlickProjection[Offset, Envelope]
+    with AtLeastOnceSlickFlowProjection[Offset, Envelope]
     with SettingsImpl[SlickProjectionImpl[Offset, Envelope, P]] {
 
   private def copy(
@@ -68,7 +71,8 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       restartBackoffOpt,
       offsetStrategy,
       handlerStrategy,
-      statusObserver)
+      statusObserver,
+      offsetStore)
 
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
@@ -116,6 +120,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     val newStrategy = offsetStrategy match {
       case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
       case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s              => s
     }
     copy(offsetStrategy = newStrategy)
   }
@@ -157,8 +162,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     implicit val executionContext: ExecutionContext = system.executionContext
     override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
-
-    val offsetStore: SlickOffsetStore[P] = createOffsetStore()
 
     override def readOffsets(): Future[Option[Offset]] =
       offsetStore.readOffset(projectionId)
@@ -223,26 +226,23 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     // ProjectionOffsetManagement
     override def getOffset(): Future[Option[Offset]] = {
-      projectionState.offsetStore.readOffset(projectionId)
+      offsetStore.readOffset(projectionId)
     }
 
     // ProjectionOffsetManagement
     override def setOffset(offset: Option[Offset]): Future[Done] = {
       offset match {
         case Some(o) =>
-          val dbio = projectionState.offsetStore.saveOffset(projectionId, o)
+          val dbio = offsetStore.saveOffset(projectionId, o)
           databaseConfig.db.run(dbio).map(_ => Done)
         case None =>
-          val dbio = projectionState.offsetStore.clearOffset(projectionId)
+          val dbio = offsetStore.clearOffset(projectionId)
           databaseConfig.db.run(dbio).map(_ => Done)
       }
     }
   }
 
-  private def createOffsetStore()(implicit system: ActorSystem[_]) =
-    new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
-
   override def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
-    createOffsetStore().createIfNotExists
+    offsetStore.createIfNotExists
   }
 }

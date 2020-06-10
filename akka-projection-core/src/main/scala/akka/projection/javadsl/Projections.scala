@@ -4,11 +4,33 @@
 
 package akka.projection.javadsl
 
+import scala.concurrent.duration.FiniteDuration
+
 import akka.annotation.DoNotInherit
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
+import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.InternalProjection
+
+@DoNotInherit trait ExactlyOnceProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
+  private[projection] def exactlyOnceStrategy: ExactlyOnce = offsetStrategy.asInstanceOf[ExactlyOnce]
+
+  override def withRestartBackoff(
+      minBackoff: java.time.Duration,
+      maxBackoff: java.time.Duration,
+      randomFactor: Double): ExactlyOnceProjection[Offset, Envelope]
+
+  override def withRestartBackoff(
+      minBackoff: java.time.Duration,
+      maxBackoff: java.time.Duration,
+      randomFactor: Double,
+      maxRestarts: Int): ExactlyOnceProjection[Offset, Envelope]
+
+  override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceProjection[Offset, Envelope]
+
+  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceProjection[Offset, Envelope]
+}
 
 @DoNotInherit trait AtLeastOnceFlowProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
 
