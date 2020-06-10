@@ -196,13 +196,13 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis))
 
       try {
-        log.debug("Assert begin")
+        log.info("Assert begin")
         projectionTestKit.run(slickProjection) {
           assertEventTypeCount(projectionId)
           assertAllOffsetsObserved(projectionId, topicName)
         }
       } finally {
-        log.debug("Assert end")
+        log.info("Assert end")
       }
     }
   }
