@@ -104,7 +104,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       source: Source[(Offset, Envelope), NotUsed],
       afterEnvelopes: Int,
       orAfterDuration: FiniteDuration,
-      recoveryStrategy: HandlerRecoveryStrategy) = {
+      recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
 
     val atLeastOnceHandlerFlow: Flow[(Offset, Envelope), (Offset, Envelope), NotUsed] =
       handlerStrategy match {

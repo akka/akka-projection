@@ -41,14 +41,14 @@ import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
 
 /**
- * Factories of [[Projection]] where the offset is stored in a relational database table using Slick.
+ * Factories of [[akka.projection.Projection]] where the offset is stored in a relational database table using Slick.
  * The envelope handler can integrate with anything, such as publishing to a message broker, or updating a relational read model.
  */
 @ApiMayChange
 object SlickProjection {
 
   /**
-   * Create a [[Projection]] with exactly-once processing semantics.
+   * Create a [[akka.projection.Projection]] with exactly-once processing semantics.
    *
    * It stores the offset in a relational database table using Slick in the same transaction
    * as the DBIO returned from the `handler`.
@@ -113,7 +113,7 @@ object SlickProjection {
   }
 
   /**
-   * Create a [[Projection]] with at-least-once processing semantics.
+   * Create a [[akka.projection.Projection]] with at-least-once processing semantics.
    *
    * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
    * This means that if the projection is restarted from previously stored offset then some elements may be processed
@@ -136,8 +136,7 @@ object SlickProjection {
     val offsetStore: SlickOffsetStore[P] =
       new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
 
-    // lift to Future handler
-    val liftedHandler = new Handler[Envelope] {
+    val adaptedSlickHandler = new Handler[Envelope] {
       implicit val ec = system.executionContext
       override def process(envelope: Envelope): Future[Done] = {
         // user function in one transaction (may be composed of several DBIOAction)
@@ -155,13 +154,13 @@ object SlickProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       AtLeastOnce(),
-      SingleHandlerStrategy(liftedHandler),
+      SingleHandlerStrategy(adaptedSlickHandler),
       NoopStatusObserver,
       offsetStore)
   }
 
   /**
-   * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
+   * Create a [[akka.projection.Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
    * The envelopes are grouped within a time window, or limited by a number of envelopes,
    * whatever happens first. This window can be defined with [[GroupedProjection.withGroup]] of
    * the returned `GroupedSlickProjection`. The default settings for the window is defined in configuration
@@ -180,8 +179,7 @@ object SlickProjection {
     val offsetStore: SlickOffsetStore[P] =
       new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
 
-    // lift to Future handler
-    val liftedHandler = new Handler[immutable.Seq[Envelope]] {
+    val adaptedSlickHandler = new Handler[immutable.Seq[Envelope]] {
 
       implicit val ec = system.executionContext
       import databaseConfig.profile.api._
@@ -219,13 +217,13 @@ object SlickProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       ExactlyOnce(),
-      GroupedHandlerStrategy(liftedHandler),
+      GroupedHandlerStrategy(adaptedSlickHandler),
       NoopStatusObserver,
       offsetStore)
   }
 
   /**
-   * Create a [[Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
+   * Create a [[akka.projection.Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
    * semantics.
    *
    * The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried

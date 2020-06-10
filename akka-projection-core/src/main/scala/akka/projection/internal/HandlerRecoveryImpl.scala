@@ -51,7 +51,7 @@ import akka.projection.StatusObserver
       env: Envelope,
       firstOffset: Offset, // used for logging
       lastOffset: Offset, // used for logging
-      abort: Future[Done], // retrives can be aborted by failing this Future
+      abort: Future[Done], // retries can be aborted by failing this Future
       futureCallback: () => Future[Done])(implicit system: ActorSystem[_]): Future[Done] = {
     import HandlerRecoveryImpl.futDone
     import HandlerRecoveryStrategy.Internal._

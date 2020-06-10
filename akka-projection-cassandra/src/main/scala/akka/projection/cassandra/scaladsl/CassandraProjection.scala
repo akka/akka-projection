@@ -34,7 +34,7 @@ import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.FlowWithContext
 
 /**
- * Factories of [[Projection]] where the offset is stored in Cassandra. The envelope handler can
+ * Factories of [[akka.projection.Projection]] where the offset is stored in Cassandra. The envelope handler can
  * integrate with anything, such as publishing to a message broker, or updating a read model in Cassandra.
  *
  * The envelope handler function can be stateful, with variables and mutable data structures.
@@ -46,7 +46,7 @@ import akka.stream.scaladsl.FlowWithContext
 object CassandraProjection {
 
   /**
-   * Create a [[Projection]] with at-least-once processing semantics. It stores the offset in Cassandra
+   * Create a [[akka.projection.Projection]] with at-least-once processing semantics. It stores the offset in Cassandra
    * after the `handler` has processed the envelope. This means that if the projection is restarted
    * from previously stored offset some envelopes may be processed more than once.
    *
@@ -69,7 +69,7 @@ object CassandraProjection {
       statusObserver = NoopStatusObserver)
 
   /**
-   * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
+   * Create a [[akka.projection.Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
    * The envelopes are grouped within a time window, or limited by a number of envelopes,
    * whatever happens first. This window can be defined with [[GroupedProjection.withGroup]] of
    * the returned `GroupedCassandraProjection`. The default settings for the window is defined in configuration
@@ -93,7 +93,7 @@ object CassandraProjection {
       statusObserver = NoopStatusObserver)
 
   /**
-   * Create a [[Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
+   * Create a [[akka.projection.Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
    * semantics.
    *
    * The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
@@ -127,7 +127,7 @@ object CassandraProjection {
       statusObserver = NoopStatusObserver)
 
   /**
-   * Create a [[Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
+   * Create a [[akka.projection.Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
    * before the `handler` has processed the envelope. This means that if the projection is restarted
    * from previously stored offset one envelope may not have been processed.
    */
