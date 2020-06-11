@@ -79,6 +79,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   private def timedProcess[T](eventProcessing: () => Future[T]): () => Future[T] = { () =>
     val telemetryContext = telemetry.beforeProcess(projectionId)
     eventProcessing().map { t =>
+      // TODO: measuring eventProcessing without knowing the size of the batch/group is
+      //  not correct. The afterProcess() should include, at least, the number of processed
+      //  events to amortize the metric (divide by n and also report n times).
       telemetry.afterProcess(projectionId, telemetryContext)
       t
     }
@@ -142,7 +145,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 context.offset,
                 context.offset,
                 abort.future,
-                timedProcess(() => handler.process(context.envelope)))
+                timedProcess(context, () => handler.process(context.envelope)))
               .map(_ => context)
           }
 
@@ -166,7 +169,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   first.offset,
                   last.offset,
                   abort.future,
-                  () => handler.process(envelopes))
+                  timedProcess(group, () => handler.process(envelopes)))
                 .map(_ => last)
             }
 
@@ -218,7 +221,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           firstOffset,
           lastOffset,
           abort.future,
-          () => handler.process(envelopes))
+          timedProcess(() => handler.process(envelopes)))
       }
 
       sourceProvider match {
@@ -280,11 +283,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           .filterNot(_.isEmpty)
           .mapAsync(parallelism = 1) { group =>
             val last = group.last
-<<<<<<< HEAD
-            reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope)
-=======
-            reportProgress(processGrouped(grouped.handler, handlerRecovery, group), last.envelope, group.length)
->>>>>>> Report time to process (userland). Report count of successes.
+            reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope, group.length)
           }
 
       case _: FlowHandlerStrategy[_] =>
