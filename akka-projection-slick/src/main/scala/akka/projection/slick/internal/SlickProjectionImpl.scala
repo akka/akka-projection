@@ -20,19 +20,21 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.internal.AtLeastOnce
+import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
+import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
-import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.AtLeastOnceFlowProjection
 import akka.projection.scaladsl.AtLeastOnceProjection
 import akka.projection.scaladsl.ExactlyOnceProjection
 import akka.projection.scaladsl.GroupedProjection
+import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
@@ -51,7 +53,8 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     with GroupedProjection[Offset, Envelope]
     with AtLeastOnceProjection[Offset, Envelope]
     with AtLeastOnceFlowProjection[Offset, Envelope]
-    with SettingsImpl[SlickProjectionImpl[Offset, Envelope, P]] {
+    with SettingsImpl[SlickProjectionImpl[Offset, Envelope, P]]
+    with InternalProjection {
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
@@ -116,7 +119,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     val newStrategy = offsetStrategy match {
       case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
       case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
-      case s              => s
+      //NOTE: AtMostOnce has its own withRecoveryStrategy variant
+      // this method is not available for AtMostOnceProjection
+      case s: AtMostOnce => s
     }
     copy(offsetStrategy = newStrategy)
   }

@@ -5,13 +5,12 @@
 package akka.projection.internal
 
 import akka.annotation.InternalApi
-import akka.projection.Projection
 
 /**
  * INTERNAL API
  */
 @InternalApi
-private[projection] trait InternalProjection[Offset, Envelope] extends Projection[Envelope] {
+private[projection] trait InternalProjection {
 
   /**
    * INTERNAL API

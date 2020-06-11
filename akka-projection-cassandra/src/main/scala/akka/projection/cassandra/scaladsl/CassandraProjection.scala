@@ -4,28 +4,20 @@
 
 package akka.projection.cassandra.scaladsl
 
-import java.util.concurrent.CompletionStage
-
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
-import akka.annotation.DoNotInherit
-import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
-import akka.projection.StatusObserver
-import akka.projection.StrictRecoveryStrategy
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.internal.CassandraProjectionImpl
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
-import akka.projection.internal.InternalProjection
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.scaladsl.AtLeastOnceFlowProjection

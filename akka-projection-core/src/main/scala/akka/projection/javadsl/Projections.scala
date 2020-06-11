@@ -6,31 +6,14 @@ package akka.projection.javadsl
 
 import akka.annotation.DoNotInherit
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.Projection
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
-import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.InternalProjection
 
-@DoNotInherit trait ExactlyOnceProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
-  private[projection] def exactlyOnceStrategy: ExactlyOnce = offsetStrategy.asInstanceOf[ExactlyOnce]
-
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double): ExactlyOnceProjection[Offset, Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: java.time.Duration,
-      maxBackoff: java.time.Duration,
-      randomFactor: Double,
-      maxRestarts: Int): ExactlyOnceProjection[Offset, Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceProjection[Offset, Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceProjection[Offset, Envelope]
-}
-
-@DoNotInherit trait AtLeastOnceFlowProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
+@DoNotInherit
+trait AtLeastOnceFlowProjection[Offset, Envelope] extends Projection[Envelope] {
+  self: InternalProjection =>
 
   override def withRestartBackoff(
       minBackoff: java.time.Duration,
@@ -50,7 +33,9 @@ import akka.projection.internal.InternalProjection
       afterDuration: java.time.Duration): AtLeastOnceFlowProjection[Offset, Envelope]
 }
 
-@DoNotInherit trait AtLeastOnceProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
+@DoNotInherit
+trait AtLeastOnceProjection[Offset, Envelope] extends Projection[Envelope] {
+  self: InternalProjection =>
 
   override def withRestartBackoff(
       minBackoff: java.time.Duration,
@@ -70,7 +55,9 @@ import akka.projection.internal.InternalProjection
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceProjection[Offset, Envelope]
 }
 
-@DoNotInherit trait AtMostOnceProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
+@DoNotInherit
+trait AtMostOnceProjection[Offset, Envelope] extends Projection[Envelope] {
+  self: InternalProjection =>
 
   override def withRestartBackoff(
       minBackoff: java.time.Duration,
@@ -88,7 +75,10 @@ import akka.projection.internal.InternalProjection
   def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceProjection[Offset, Envelope]
 }
 
-@DoNotInherit trait GroupedProjection[Offset, Envelope] extends InternalProjection[Offset, Envelope] {
+@DoNotInherit
+trait GroupedProjection[Offset, Envelope] extends Projection[Envelope] {
+  self: InternalProjection =>
+
   override def withRestartBackoff(
       minBackoff: java.time.Duration,
       maxBackoff: java.time.Duration,

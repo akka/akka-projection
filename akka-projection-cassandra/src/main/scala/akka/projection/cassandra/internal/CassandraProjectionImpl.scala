@@ -4,8 +4,6 @@
 
 package akka.projection.cassandra.internal
 
-import java.util.concurrent.CompletionStage
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
@@ -22,15 +20,16 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
-import akka.projection.javadsl
-import akka.projection.scaladsl
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
+import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
+import akka.projection.javadsl
+import akka.projection.scaladsl
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
@@ -53,7 +52,8 @@ import akka.stream.scaladsl.Source
     with javadsl.AtMostOnceProjection[Offset, Envelope]
     with scaladsl.AtLeastOnceFlowProjection[Offset, Envelope]
     with javadsl.AtLeastOnceFlowProjection[Offset, Envelope]
-    with SettingsImpl[CassandraProjectionImpl[Offset, Envelope]] {
+    with SettingsImpl[CassandraProjectionImpl[Offset, Envelope]]
+    with InternalProjection {
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
