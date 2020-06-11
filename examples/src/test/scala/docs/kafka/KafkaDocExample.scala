@@ -18,7 +18,7 @@ import akka.kafka.scaladsl.SendProducer
 import akka.projection.Projection
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
-import akka.projection.kafka.GroupOffsets
+import akka.projection.mongo.GroupOffsets
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
@@ -34,7 +34,7 @@ import slick.jdbc.H2Profile
 
 //#imports
 import akka.kafka.ConsumerSettings
-import akka.projection.kafka.KafkaSourceProvider
+import akka.projection.mongo.KafkaSourceProvider
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -232,12 +232,12 @@ object KafkaDocExample {
 
   /**
    * {{{
-   * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 3 --topic words
-   * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic words
+   * bin/mongo-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 3 --topic words
+   * bin/mongo-console-producer.sh --bootstrap-server localhost:9092 --topic words
    *
-   * sbt "examples/test:runMain docs.kafka.KafkaDocExample"
+   * sbt "examples/test:runMain docs.mongo.KafkaDocExample"
    *
-   * bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic words --from-beginning
+   * bin/mongo-console-consumer.sh --bootstrap-server localhost:9092 --topic words --from-beginning
    *
    * }}}
    */

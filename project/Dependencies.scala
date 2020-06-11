@@ -20,6 +20,7 @@ object Dependencies {
     val scalaTest = "3.1.1"
     val testContainersScala = "0.37.0"
     val junit = "4.12"
+    val mongo = "2.9.0"
   }
 
   object Compile {
@@ -36,7 +37,9 @@ object Dependencies {
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
 
-    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
+    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-mongo" % Versions.alpakkaKafka
+    
+    val mongo = "org.mongodb.scala" %% "mongo-scala-driver" % Versions.mongo
   }
 
   object Test {
@@ -52,8 +55,9 @@ object Dependencies {
     val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
     val cassandraContainer =
       "com.dimafeng" %% "testcontainers-scala-cassandra" % Versions.testContainersScala % sbt.Test
+    val mongoContainer = "org.testcontainers" % "mongodb" % "1.14.3" % sbt.Test
 
-    val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
+    val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-mongo-testkit" % Versions.alpakkaKafka % sbt.Test
   }
 
   object Examples {
@@ -107,6 +111,9 @@ object Dependencies {
         Test.logback,
         Test.testContainers,
         Test.scalatestJUnit)
+  
+  val mongo =
+    deps ++= Seq(Compile.mongo, Test.akkaTypedTestkit, Test.akkaStreamTestkit, Test.logback, Test.testContainers, Test.mongoContainer)
 
   val examples =
     deps ++= Seq(

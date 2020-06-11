@@ -40,12 +40,19 @@ lazy val eventsourced =
 
 // provides offset storage backed by Kafka managed offset commits
 lazy val kafka =
-  Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
+  Project(id = "akka-projection-mongo", base = file("akka-projection-mongo"))
     .settings(Dependencies.kafka)
     .settings(Test / parallelExecution := false)
     .dependsOn(core)
     .dependsOn(testkit % "test->test")
     .dependsOn(slick % "test->test;test->compile")
+
+lazy val mongo =
+  Project(id = "akka-projection-mongo", base = file("akka-projection-mongo"))
+    .settings(Dependencies.mongo)
+    .settings(Test / parallelExecution := false)
+    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(testkit % "test->test")
 
 lazy val examples = project
   .settings(Dependencies.examples)
@@ -82,9 +89,9 @@ lazy val docs = project
         "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
         "javadoc.akka.stream.alpakka.base_url" -> "",
         // Alpakka Kafka
-        "extref.alpakka-kafka.base_url" -> s"https://doc.akka.io/docs/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/%s",
-        "scaladoc.akka.kafka.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/",
-        "javadoc.akka.kafka.base_url" -> "",
+        "extref.alpakka-mongo.base_url" -> s"https://doc.akka.io/docs/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/%s",
+        "scaladoc.akka.mongo.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/",
+        "javadoc.akka.mongo.base_url" -> "",
         // Java
         "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
         // Scala
@@ -100,7 +107,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, eventsourced, kafka, examples, docs)
+  .aggregate(core, testkit, slick, cassandra, eventsourced, kafka, mongo, examples, docs)
   .settings(publish / skip := true, whitesourceIgnore := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
