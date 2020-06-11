@@ -22,7 +22,6 @@ import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
-import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection

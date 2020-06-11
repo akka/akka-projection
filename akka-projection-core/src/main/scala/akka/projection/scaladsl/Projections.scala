@@ -11,8 +11,6 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
-import akka.projection.internal.AtLeastOnce
-import akka.projection.internal.AtMostOnce
 import akka.projection.internal.InternalProjection
 @DoNotInherit
 trait ExactlyOnceProjection[Offset, Envelope] extends Projection[Envelope] {
