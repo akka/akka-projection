@@ -7,8 +7,8 @@ package akka.projection
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.concurrent.duration._
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
@@ -21,12 +21,12 @@ import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
+import akka.projection.scaladsl.ProjectionManagement
 import akka.stream.KillSwitches
 import akka.stream.OverflowStrategy
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 import org.scalatest.wordspec.AnyWordSpecLike
-import akka.projection.scaladsl.ProjectionManagement
 
 object ProjectionBehaviorSpec {
 
@@ -145,8 +145,8 @@ object ProjectionBehaviorSpec {
               offsetStore.set(n)
               Future.successful(Done)
             } else {
-              import akka.pattern.after
               import akka.actor.typed.scaladsl.adapter._
+              import akka.pattern.after
               after(100.millis, system.toClassic.scheduler) {
                 offsetStore.set(n)
                 Future.successful(Done)
@@ -160,8 +160,8 @@ object ProjectionBehaviorSpec {
 }
 class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
 
-  import ProjectionBehaviorSpec._
   import ProjectionBehavior.Internal._
+  import ProjectionBehaviorSpec._
 
   private def setupTestProjection(projectionId: ProjectionId = TestProjectionId)
       : (TestProbe[ProbeMessage], ActorRef[ProjectionBehavior.Command], AtomicReference[ActorRef[Int]]) = {

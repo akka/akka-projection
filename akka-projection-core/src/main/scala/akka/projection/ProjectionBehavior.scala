@@ -10,9 +10,9 @@ import scala.util.Success
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
-import akka.actor.typed.scaladsl.StashBuffer
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.StashBuffer
 import akka.annotation.InternalApi
 import akka.projection.scaladsl.ProjectionManagement
 
@@ -76,8 +76,8 @@ object ProjectionBehavior {
     context: ActorContext[ProjectionBehavior.Command],
     projection: Projection[Envelope],
     stashBuffer: StashBuffer[ProjectionBehavior.Command]) {
-  import ProjectionBehavior._
   import ProjectionBehavior.Internal._
+  import ProjectionBehavior._
 
   private def projectionId = projection.projectionId
 

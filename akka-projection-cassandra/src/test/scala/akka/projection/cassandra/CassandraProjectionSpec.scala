@@ -40,8 +40,8 @@ import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
-import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Flow
+import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber

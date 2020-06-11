@@ -31,8 +31,8 @@ import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
-import akka.stream.scaladsl.FlowWithContext
 import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
@@ -657,6 +657,7 @@ class SlickProjectionSpec extends SlickSpec(SlickProjectionSpec.config) with Any
   "A Slick grouped projection" must {
 
     "persist projection and offset in the same write operation (transactional)" in {
+
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 

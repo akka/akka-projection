@@ -5,9 +5,9 @@
 package akka.projection.cassandra.internal
 
 import scala.collection.immutable
-import scala.jdk.CollectionConverters._
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
 
 import akka.Done
 import akka.annotation.InternalApi
