@@ -11,6 +11,8 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
+import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
@@ -19,11 +21,7 @@ import akka.projection.slick.internal.SlickSettings
 import akka.projection.testkit.internal.TestClock
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import org.scalatest.BeforeAndAfterAll
 import org.scalatest.OptionValues
-import org.scalatest.concurrent.PatienceConfiguration
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.matchers.should.Matchers
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -39,7 +37,7 @@ object SlickOffsetStoreSpec {
 
       # TODO: configure connection pool and slick async executor
       db = {
-       url = "jdbc:h2:mem:test1"
+       url = "jdbc:h2:mem:offset-store-test;DB_CLOSE_DELAY=-1"
        driver = org.h2.Driver
        connectionPool = disabled
        keepAliveConnection = true
@@ -53,12 +51,10 @@ object SlickOffsetStoreSpec {
     """)
 }
 class SlickOffsetStoreSpec
-    extends AnyWordSpecLike
-    with Matchers
-    with ScalaFutures
-    with BeforeAndAfterAll
-    with OptionValues
-    with PatienceConfiguration {
+    extends ScalaTestWithActorTestKit(SlickOffsetStoreSpec.config)
+    with LogCapturing
+    with AnyWordSpecLike
+    with OptionValues {
 
   override implicit val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
@@ -76,7 +72,7 @@ class SlickOffsetStoreSpec
 
   override protected def beforeAll(): Unit = {
     // create offset table
-    Await.ready(offsetStore.createIfNotExists, 3.seconds)
+    Await.result(offsetStore.createIfNotExists, 3.seconds)
   }
 
   override protected def afterAll(): Unit = {
