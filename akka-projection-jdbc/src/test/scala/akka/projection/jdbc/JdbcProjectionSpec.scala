@@ -21,6 +21,8 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.testkit.typed.TestException
+import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.japi.function
 import akka.japi.function.Creator
@@ -45,6 +47,7 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException
 import org.scalatest.OptionValues
+import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -192,7 +195,11 @@ object JdbcProjectionSpec {
 
 }
 
-class JdbcProjectionSpec extends JdbcSpec(JdbcProjectionSpec.config) with OptionValues {
+class JdbcProjectionSpec
+    extends ScalaTestWithActorTestKit(JdbcProjectionSpec.config)
+    with AnyWordSpecLike
+    with LogCapturing
+    with OptionValues {
 
   val logger: Logger = LoggerFactory.getLogger(this.getClass)
 
@@ -214,7 +221,7 @@ class JdbcProjectionSpec extends JdbcSpec(JdbcProjectionSpec.config) with Option
         JdbcSession.withConnection(jdbcSessionFactory) { conn =>
           TestRepository(conn).createTable()
         })
-    Await.ready(creationFut, 3.seconds)
+    Await.result(creationFut, 3.seconds)
   }
 
   private def genRandomProjectionId() =
