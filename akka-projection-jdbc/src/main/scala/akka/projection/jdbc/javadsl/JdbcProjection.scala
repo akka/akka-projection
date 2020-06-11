@@ -17,8 +17,11 @@ import scala.util.control.NonFatal
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
+import akka.event.Logging
 import akka.japi.function.Creator
 import akka.japi.function.{ Function => JFunction }
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.NoopStatusObserver
@@ -53,15 +56,14 @@ object JdbcProjection {
 
     val adaptedHandler = new Handler[Envelope] {
 
+      private val logger = Logging(system.classicSystem, classOf[JdbcProjectionImpl[_, _, _]])
+
       override def process(envelope: Envelope): Future[Done] = {
         val offset = sourceProvider.extractOffset(envelope)
-
         // this scope ensures that the blocking DB dispatcher is used solely for DB operations
         implicit val executionContext: ExecutionContext = offsetStore.executionContext
-
         JdbcSession
           .withSession(sessionFactory) { sess =>
-
             sess.withConnection[Unit] { conn =>
               offsetStore.saveOffsetBlocking(conn, projectionId, offset)
             }
@@ -69,6 +71,7 @@ object JdbcProjection {
             handler.process(sess, envelope)
           }
           .map(_ => Done)
+
       }
 
       override def start(): Future[Done] = handler.start().toScala

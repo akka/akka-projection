@@ -63,13 +63,13 @@ object SlickProjection {
 
         implicit val ec = system.executionContext
 
+        private val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
+
         import databaseConfig.profile.api._
         override def process(envelope: Envelope): Future[Done] = {
 
           val offset = sourceProvider.extractOffset(envelope)
           val handlerAction = handler.process(envelope)
-
-          val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
 
           sourceProvider.verifyOffset(offset) match {
             case VerificationSuccess =>
