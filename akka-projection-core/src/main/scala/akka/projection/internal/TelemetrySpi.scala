@@ -4,15 +4,13 @@
 
 package akka.projection.internal
 
+import akka.actor.ActorSystem
 import akka.projection.ProjectionId
 
 object TelemetryProvider {
-  // this is separate because it creates a bunch of internals
-  // provided in the Telemetry instance
-  def started(projectionId: ProjectionId): Telemetry = {
-    ???
-  }
+  def start(projectionId: ProjectionId)(system: ActorSystem): Telemetry = ???
 }
+
 class Telemetry {
 
   // Per projection
@@ -22,8 +20,8 @@ class Telemetry {
   // Per envelope
   def beforeProcess[Offset, Envelope](projectionId: ProjectionId): AnyRef = { ??? }
   def afterProcess[Offset, Envelope](projectionId: ProjectionId, telemetryContext: AnyRef): Unit = {}
-  // Only invoked when the offset is committed. Pass the context of all the envelopes committed
-  def onEnvelopeSuccess[Offset, Envelope](projectionId: ProjectionId, telemetryContexts: AnyRef*): Unit = {}
+  // Only invoked when the offset is committed. Pass the number of envelopes committed
+  def onEnvelopeSuccess[Offset, Envelope](projectionId: ProjectionId, successCount: Int): Unit = {}
   // Invoked when processing an envelope fails. If the operation is part of a batch
   // or a group it will be invoked once anyway
   def error[Offset, Envelope](projectionId: ProjectionId, cause: Throwable): Unit = {}

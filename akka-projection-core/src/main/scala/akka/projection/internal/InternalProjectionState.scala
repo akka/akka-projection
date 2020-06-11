@@ -28,8 +28,8 @@ import akka.projection.ProjectionId
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.scaladsl.Handler
-import akka.projection.scaladsl.MergeableOffsetSourceProvider
 import akka.projection.scaladsl.HandlerLifecycle
+import akka.projection.scaladsl.MergeableOffsetSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.stream.KillSwitches
@@ -53,19 +53,34 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   implicit def system: ActorSystem[_]
   implicit def executionContext: ExecutionContext
 
+  var telemetry: Telemetry = _
+
   def readOffsets(): Future[Option[Offset]]
   def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done]
   val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
   val abort: Promise[Done] = Promise()
 
-  private def reportProgress[T](after: Future[T], env: Envelope): Future[T] = {
-    after.map { done =>
-      try {
-        statusObserver.progress(projectionId, env)
-      } catch {
-        case NonFatal(_) => // ignore
+  private def reportProgress[T](after: Future[T], envelope: Envelope, batchSize: Int): Future[T] = {
+    after
+      .map { done =>
+        try {
+          statusObserver.progress(projectionId, envelope)
+        } catch {
+          case NonFatal(_) => // ignore
+        }
+        done
       }
-      done
+      .map { done =>
+        telemetry.onEnvelopeSuccess(projectionId, batchSize)
+        done
+      }
+  }
+
+  private def timedProcess[T](eventProcessing: () => Future[T]): () => Future[T] = { () =>
+    val telemetryContext = telemetry.beforeProcess(projectionId)
+    eventProcessing().map { t =>
+      telemetry.afterProcess(projectionId, telemetryContext)
+      t
     }
   }
 
@@ -127,7 +142,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 context.offset,
                 context.offset,
                 abort.future,
-                () => handler.process(context.envelope))
+                timedProcess(() => handler.process(context.envelope)))
               .map(_ => context)
           }
 
@@ -160,23 +175,25 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             f.flowCtx.asFlow
           Flow[ProjectionContextImpl[Offset, Envelope]]
             .map { context => context.envelope -> context }
-            .via(flow)
+            .via(flow) // TODO: measure this userflow
             .map { case (_, context) => context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]] }
       }
 
     if (afterEnvelopes == 1)
       // optimization of general AtLeastOnce case
       source.via(atLeastOnceHandlerFlow).mapAsync(1) { context =>
-        reportProgress(saveOffset(projectionId, context.offset), context.envelope)
+        reportProgress(saveOffset(projectionId, context.offset), context.envelope, 1)
       }
-    else
+    else {
       source
         .via(atLeastOnceHandlerFlow)
         .groupedWithin(afterEnvelopes, orAfterDuration)
-        .collect { case grouped if grouped.nonEmpty => grouped.last }
-        .mapAsync(parallelism = 1) { context =>
-          reportProgress(saveOffset(projectionId, context.offset), context.envelope)
+        .filterNot(_.isEmpty)
+        .mapAsync(parallelism = 1) { group =>
+          val last = group.last
+          reportProgress(saveOffset(projectionId, last.offset), last.envelope, group.length)
         }
+    }
   }
 
   private def exactlyOnceProcessing(
@@ -243,17 +260,14 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         source
           .mapAsync(1) { context =>
             logger.warning(" Processing {}", context.envelope)
-            val eventualDone: () => Future[Done] = () => {
-              handler.process(context.envelope)
-            }
             val processed =
               handlerRecovery.applyRecovery(
                 context.envelope,
                 context.offset,
                 context.offset,
                 abort.future,
-                eventualDone)
-            reportProgress(processed, context.envelope)
+                timedProcess(() => handler.process(context.envelope)))
+            reportProgress(processed, context.envelope, 1)
           }
 
       case grouped: GroupedHandlerStrategy[Envelope] =>
@@ -266,7 +280,11 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           .filterNot(_.isEmpty)
           .mapAsync(parallelism = 1) { group =>
             val last = group.last
+<<<<<<< HEAD
             reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope)
+=======
+            reportProgress(processGrouped(grouped.handler, handlerRecovery, group), last.envelope, group.length)
+>>>>>>> Report time to process (userland). Report count of successes.
           }
 
       case _: FlowHandlerStrategy[_] =>
@@ -295,9 +313,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                     context.offset,
                     context.offset,
                     abort.future,
-                    () => handler.process(context.envelope))
+                    timedProcess(() => handler.process(context.envelope)))
               }
-            reportProgress(processed, context.envelope)
+            reportProgress(processed, context.envelope, 1)
           }
           .map(_ => Done)
       case _ =>
@@ -311,6 +329,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
 
     val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
+    telemetry = TelemetryProvider.start(projectionId)
 
     val source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed] =
       Source
