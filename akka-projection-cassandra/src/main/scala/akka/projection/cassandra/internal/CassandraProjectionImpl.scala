@@ -20,6 +20,9 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
+import akka.projection.internal.AtLeastOnce
+import akka.projection.internal.AtMostOnce
+import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
@@ -93,30 +96,49 @@ import akka.stream.scaladsl.Source
    */
   override def withSaveOffset(
       afterEnvelopes: Int,
-      afterDuration: FiniteDuration): CassandraProjectionImpl[Offset, Envelope] =
-    copy(offsetStrategy = atLeastOnceStrategy
-      .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)))
+      afterDuration: FiniteDuration): CassandraProjectionImpl[Offset, Envelope] = {
+
+    // safe cast: withSaveOffset is only available to AtLeastOnceProjection
+    val atLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
+
+    copy(offsetStrategy =
+      atLeastOnce.copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)))
+  }
 
   /**
    * Settings for GroupedCassandraProjection
    */
   override def withGroup(
       groupAfterEnvelopes: Int,
-      groupAfterDuration: FiniteDuration): CassandraProjectionImpl[Offset, Envelope] =
-    copy(handlerStrategy = handlerStrategy
-      .asInstanceOf[GroupedHandlerStrategy[Envelope]]
-      .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
+      groupAfterDuration: FiniteDuration): CassandraProjectionImpl[Offset, Envelope] = {
+
+    // safe cast: withGroup is only available to GroupedProjections
+    val groupedHandler = handlerStrategy.asInstanceOf[GroupedHandlerStrategy[Envelope]]
+
+    copy(handlerStrategy =
+      groupedHandler.copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
+  }
 
   override def withRecoveryStrategy(
-      recoveryStrategy: HandlerRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
-    copy(offsetStrategy = atLeastOnceStrategy.copy(recoveryStrategy = Some(recoveryStrategy)))
+      recoveryStrategy: HandlerRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] = {
+
+    // safe cast: withRecoveryStrategy(HandlerRecoveryStrategy) is only available to AtLeastOnceProjection
+    val atLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
+
+    copy(offsetStrategy = atLeastOnce.copy(recoveryStrategy = Some(recoveryStrategy)))
+  }
 
   /**
    * Settings for AtMostOnceCassandraProjection
    */
   override def withRecoveryStrategy(
-      recoveryStrategy: StrictRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] =
-    copy(offsetStrategy = atMostOnceStrategy.copy(recoveryStrategy = Some(recoveryStrategy)))
+      recoveryStrategy: StrictRecoveryStrategy): CassandraProjectionImpl[Offset, Envelope] = {
+
+    // safe cast: withRecoveryStrategy(StrictRecoveryStrategy) is only available to AtMostOnceProjection
+    val atMostOnce = offsetStrategy.asInstanceOf[AtMostOnce]
+
+    copy(offsetStrategy = atMostOnce.copy(Some(recoveryStrategy)))
+  }
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjectionImpl[Offset, Envelope] =
     copy(statusObserver = observer)

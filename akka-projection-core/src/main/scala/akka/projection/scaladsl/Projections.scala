@@ -58,8 +58,6 @@ trait AtLeastOnceFlowProjection[Offset, Envelope] extends Projection[Envelope] {
 trait AtLeastOnceProjection[Offset, Envelope] extends Projection[Envelope] {
   self: InternalProjection =>
 
-  private[projection] def atLeastOnceStrategy: AtLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
-
   override def withRestartBackoff(
       minBackoff: FiniteDuration,
       maxBackoff: FiniteDuration,
@@ -81,8 +79,6 @@ trait AtLeastOnceProjection[Offset, Envelope] extends Projection[Envelope] {
 @DoNotInherit
 trait AtMostOnceProjection[Offset, Envelope] extends Projection[Envelope] {
   self: InternalProjection =>
-
-  private[projection] def atMostOnceStrategy: AtMostOnce = offsetStrategy.asInstanceOf[AtMostOnce]
 
   override def withRestartBackoff(
       minBackoff: FiniteDuration,
