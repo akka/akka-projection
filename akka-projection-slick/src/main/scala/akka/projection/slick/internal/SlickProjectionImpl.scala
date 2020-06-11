@@ -96,33 +96,42 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    */
   override def withSaveOffset(
       afterEnvelopes: Int,
-      afterDuration: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] =
-    copy(offsetStrategy = offsetStrategy
-      .asInstanceOf[AtLeastOnce]
-      .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)))
+      afterDuration: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] = {
+
+    // safe cast: withSaveOffset is only available to AtLeastOnceProjection
+    val atLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
+
+    copy(offsetStrategy =
+      atLeastOnce.copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)))
+  }
 
   /**
    * Settings for GroupedSlickProjection
    */
   override def withGroup(
       groupAfterEnvelopes: Int,
-      groupAfterDuration: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] =
-    copy(handlerStrategy = handlerStrategy
-      .asInstanceOf[GroupedHandlerStrategy[Envelope]]
-      .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
+      groupAfterDuration: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] = {
+
+    // safe cast: withGroup is only available to GroupedProjections
+    val groupedHandler = handlerStrategy.asInstanceOf[GroupedHandlerStrategy[Envelope]]
+
+    copy(handlerStrategy =
+      groupedHandler.copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
+  }
 
   /**
    * Settings for AtLeastOnceSlickProjection and ExactlyOnceSlickProjection
    */
   override def withRecoveryStrategy(
       recoveryStrategy: HandlerRecoveryStrategy): SlickProjectionImpl[Offset, Envelope, P] = {
-    val newStrategy = offsetStrategy match {
-      case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
-      case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
-      //NOTE: AtMostOnce has its own withRecoveryStrategy variant
-      // this method is not available for AtMostOnceProjection
-      case s: AtMostOnce => s
-    }
+    val newStrategy =
+      offsetStrategy match {
+        case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+        case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+        //NOTE: AtMostOnce has its own withRecoveryStrategy variant
+        // this method is not available for AtMostOnceProjection
+        case s: AtMostOnce => s
+      }
     copy(offsetStrategy = newStrategy)
   }
 
