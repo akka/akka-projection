@@ -4,25 +4,33 @@
 
 package akka.projection.internal
 
-import akka.actor.ActorSystem
+import akka.actor.ExtendedActorSystem
+import akka.actor.typed.ActorSystem
 import akka.projection.ProjectionId
 
 object TelemetryProvider {
-  def start(projectionId: ProjectionId)(system: ActorSystem): Telemetry = ???
+  def start(projectionId: ProjectionId)(system: ActorSystem[_]): Telemetry = {
+    val dynamicAccess = system.dynamicAccess
+    val telemetryFqcn = system.settings.config.getString("akka.projection.telemetry.fqcn")
+    val t = dynamicAccess.createInstanceFor[Telemetry](telemetryFqcn, Nil).get
+    t.started(projectionId)
+    t
+  }
 }
 
-class Telemetry {
+abstract class Telemetry {
 
   // Per projection
-  def failed(projectionId: ProjectionId, cause: Throwable): Unit = { /* will release all internals*/ }
-  def stopped(projectionId: ProjectionId): Unit = { /* will release all internals*/ }
+  private[projection] def started(projectionId: ProjectionId): Unit
+  def failed(projectionId: ProjectionId, cause: Throwable): Unit
+  def stopped(projectionId: ProjectionId): Unit
 
   // Per envelope
-  def beforeProcess[Offset, Envelope](projectionId: ProjectionId): AnyRef = { ??? }
-  def afterProcess[Offset, Envelope](projectionId: ProjectionId, telemetryContext: AnyRef): Unit = {}
+  def beforeProcess[Offset, Envelope](projectionId: ProjectionId): AnyRef
+  def afterProcess[Offset, Envelope](projectionId: ProjectionId, telemetryContext: AnyRef): Unit
   // Only invoked when the offset is committed. Pass the number of envelopes committed
-  def onEnvelopeSuccess[Offset, Envelope](projectionId: ProjectionId, successCount: Int): Unit = {}
+  def onEnvelopeSuccess[Offset, Envelope](projectionId: ProjectionId, successCount: Int): Unit
   // Invoked when processing an envelope fails. If the operation is part of a batch
   // or a group it will be invoked once anyway
-  def error[Offset, Envelope](projectionId: ProjectionId, cause: Throwable): Unit = {}
+  def error[Offset, Envelope](projectionId: ProjectionId, cause: Throwable): Unit
 }
