@@ -139,7 +139,6 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
     private lazy val internalState = new InternalProjectionState()
 
     override def projectionId: ProjectionId = ProjectionId("name", "key")
-    override def withSettings(settings: ProjectionSettings): TestProjection = this
     override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
     override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
     override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this

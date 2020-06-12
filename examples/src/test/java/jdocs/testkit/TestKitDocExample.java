@@ -67,11 +67,6 @@ public class TestKitDocExample {
     }
 
     @Override
-    public Projection<String> withSettings(ProjectionSettings settings) {
-      return null;
-    }
-
-    @Override
     public StatusObserver<String> statusObserver() {
       return null;
     }

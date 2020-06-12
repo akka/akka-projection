@@ -17,8 +17,6 @@ import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.ApiMayChange
 import akka.projection.Projection
-import akka.projection.internal.ProjectionSettings
-import akka.projection.internal.RestartBackoffSettings
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 
@@ -42,6 +40,9 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    *
    * If the assert function doesn't complete without error within 3 seconds the test will fail.
    *
+   * Note: when testing a Projection with this method, the Restart Backoff is disabled.
+   * Any backoff configuration settings from `.conf` file or programmatically added will be overwritten.
+   *
    * @param projection - the Projection to run
    * @param assertFunction - a by-name code block that exercise the test assertions
    */
@@ -55,6 +56,9 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * will be called every 100 milliseconds until it completes without errors (no exceptions or assertion errors are thrown).
    *
    * If the assert function doesn't complete without error within the passed `max` duration the test will fail.
+   *
+   * Note: when testing a Projection with this method, the Restart Backoff is disabled.
+   * Any backoff configuration settings from `.conf` file or programmatically added will be overwritten.
    *
    * @param projection - the Projection to run
    * @param max - FiniteDuration delimiting the max duration of the test
@@ -72,9 +76,12 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    *
    * If the assert function doesn't complete without error within the passed `max` duration the test will fail.
    *
+   * Note: when testing a Projection with this method, the Restart Backoff is disabled.
+   * Any backoff configuration settings from `.conf` file or programmatically added will be overwritten.
+   *
    * @param projection - the Projection to run
    * @param max - FiniteDuration delimiting the max duration of the test
-   * @param interval - FiniteDuration defining the internval in each the assert function will be called
+   * @param interval - FiniteDuration defining the interval in each the assert function will be called
    * @param assertFunction - a by-name code block that exercise the test assertions
    */
   def run(projection: Projection[_], max: FiniteDuration, interval: FiniteDuration)(assertFunction: => Unit): Unit =
@@ -87,13 +94,10 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
       interval: FiniteDuration): Unit = {
 
     val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
-
     val actorHandler = spawnActorHandler(projection)
-
-    val settingsForTest = ProjectionSettings(system).copy(RestartBackoffSettings(0.millis, 0.millis, 0.0, 0))
     val running =
       projection
-        .withSettings(settingsForTest)
+        .withRestartBackoff(0.millis, 0.millis, 0.0, 0)
         .run()(testKit.system)
     try {
       probe.awaitAssert(assertFunction, max.dilated, interval)

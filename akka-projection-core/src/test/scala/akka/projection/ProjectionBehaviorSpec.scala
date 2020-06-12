@@ -60,9 +60,6 @@ object ProjectionBehaviorSpec {
     override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
       new InternalProjectionState(testProbe, failToStop).mappedSource()
 
-    override def withSettings(settings: ProjectionSettings): Projection[Int] =
-      this // no need for ProjectionSettings in tests
-
     override val statusObserver: StatusObserver[Int] = NoopStatusObserver
 
     override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =

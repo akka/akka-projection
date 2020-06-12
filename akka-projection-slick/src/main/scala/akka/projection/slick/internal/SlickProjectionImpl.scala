@@ -85,9 +85,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     }
   }
 
-  override def withSettings(settings: ProjectionSettings): SlickProjectionImpl[Offset, Envelope, P] =
-    copy(settingsOpt = Option(settings))
-
   override def withRestartBackoffSettings(
       restartBackoff: RestartBackoffSettings): SlickProjectionImpl[Offset, Envelope, P] =
     copy(restartBackoffOpt = Some(restartBackoff))
