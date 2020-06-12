@@ -8,7 +8,6 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.stream.scaladsl.FlowWithContext
 //#daemon-imports
-import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.projection.ProjectionBehavior
 
@@ -168,8 +167,7 @@ object CassandraProjectionDocExample {
       name = "shopping-carts",
       numberOfInstances = ShoppingCart.tags.size,
       behaviorFactory = n => ProjectionBehavior(projection(ShoppingCart.tags(n))),
-      settings = ShardedDaemonProcessSettings(system),
-      stopMessage = Some(ProjectionBehavior.Stop))
+      stopMessage = ProjectionBehavior.Stop)
     //#running-with-daemon-process
   }
 
