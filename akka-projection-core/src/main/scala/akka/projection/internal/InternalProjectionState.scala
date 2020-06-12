@@ -328,7 +328,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
 
     val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
-    telemetry = TelemetryProvider.start(projectionId)(system)
+    telemetry = TelemetryProvider.start(projectionId, system)
 
     val source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed] =
       Source

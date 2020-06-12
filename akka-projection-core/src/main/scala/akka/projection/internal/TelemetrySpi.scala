@@ -4,24 +4,24 @@
 
 package akka.projection.internal
 
-import akka.actor.ExtendedActorSystem
 import akka.actor.typed.ActorSystem
 import akka.projection.ProjectionId
 
 object TelemetryProvider {
-  def start(projectionId: ProjectionId)(system: ActorSystem[_]): Telemetry = {
+  def start(projectionId: ProjectionId, system: ActorSystem[_]): Telemetry = {
     val dynamicAccess = system.dynamicAccess
     val telemetryFqcn = system.settings.config.getString("akka.projection.telemetry.fqcn")
-    val t = dynamicAccess.createInstanceFor[Telemetry](telemetryFqcn, Nil).get
-    t.started(projectionId)
-    t
+    dynamicAccess
+      .createInstanceFor[Telemetry](
+        telemetryFqcn,
+        Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
+      .get
   }
 }
 
-abstract class Telemetry {
+abstract class Telemetry(projectionId: ProjectionId, system: ActorSystem[_]) {
 
   // Per projection
-  private[projection] def started(projectionId: ProjectionId): Unit
   def failed(projectionId: ProjectionId, cause: Throwable): Unit
   def stopped(projectionId: ProjectionId): Unit
 

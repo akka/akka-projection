@@ -20,6 +20,8 @@ import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.internal.InternalProjectionStateMetricsSpec.Envelope
+import akka.projection.internal.InternalProjectionStateMetricsSpec.sourceProvider
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.SharedKillSwitch
@@ -80,63 +82,48 @@ object InternalProjectionStateMetricsSpec {
     def concat(newMsg: String) = copy(text = text + "|" + newMsg)
   }
 
-  class InMemRepository() {}
-
 }
 
 class InternalProjectionStateMetricsSpec
     extends ScalaTestWithActorTestKit(InternalProjectionStateMetricsSpec.config)
     with AnyWordSpecLike
     with LogCapturing {
-  import InternalProjectionStateMetricsSpec._
 
   val logger: Logger = LoggerFactory.getLogger(this.getClass)
 
   implicit val actorSystem: ActorSystem[Nothing] = testKit.system
   implicit val executionContext: ExecutionContext = testKit.system.executionContext
 
-  //  val repository = new InMemRepository()
-
-  private def genRandomProjectionId() =
-    ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
-
   "A metric counting successful offset progress" must {
     " when running on `at-least-once`" must {
+
       "handle single envelopes (without afterEnvelops optimization)" in {
-        val entityId = UUID.randomUUID().toString
-        val projectionId = genRandomProjectionId()
-
-        // The projectionSettings will only be used as a fallback. The OffsetHandler and
-        // the HandlerStrategy arguments take precedence
-        val projectionSettings = ProjectionSettings(system)
-        val atLeastOnce =
-          AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(scala.concurrent.duration.Duration.Zero))
-        var concatStr = ""
-        val handlerStrategy = SingleHandlerStrategy(new Handler[Envelope] {
-          override def process(envelope: Envelope): Future[Done] = synchronized {
-            concatStr = if (concatStr == "") envelope.message else s"$concatStr|${envelope.message}"
-            Future.successful(Done)
-          }
-        })
-        val projectionState =
-          new InMemInternalProjectionState[Long, Envelope](
-            projectionId,
-            sourceProvider(system, entityId),
-            atLeastOnce,
-            handlerStrategy,
-            NoopStatusObserver,
-            projectionSettings)
-
-        runInternal(projectionState) {
+        val tt = new TelemetryTester(
+          AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(scala.concurrent.duration.Duration.Zero)),
+          (handler) => SingleHandlerStrategy(handler))
+        runInternal(tt.projectionState) {
           withClue("check - all values were concatenated") {
-            concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
+            tt.concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
           }
           withClue("the success counter reflects all events as processed") {
-            projectionState.telemetry.asInstanceOf[InMemTelemetry].successfullyProcessed.get should be(6)
+            tt.inMemTelemetry.successfullyProcessed.get should be(6)
           }
         }
       }
-      "handle single envelopes (with afterEnvelops optimization)" in {}
+
+      "handle single envelopes (with afterEnvelops optimization)" in {
+        val tt = new TelemetryTester(
+          AtLeastOnce(afterEnvelopes = Some(3), orAfterDuration = Some(500.millis)),
+          (handler) => SingleHandlerStrategy(handler))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.successfullyProcessed.get should be(6)
+            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(2)
+          }
+        }
+      }
+
       "handle grouped envelopes" in {}
       "handle flows" in {}
     }
@@ -154,6 +141,7 @@ class InternalProjectionStateMetricsSpec
     // TODO: use ProjectionTest's sink to control the pace.
   }
 
+  // inspired on ProjectionTestkit's runInternal
   private def runInternal(
       projectionState: InMemInternalProjectionState[_, _],
       max: FiniteDuration = 3.seconds,
@@ -169,6 +157,40 @@ class InternalProjectionStateMetricsSpec
       Await.result(running.stop(), max)
     }
   }
+
+}
+
+class TelemetryTester(
+    val offsetStrategy: OffsetStrategy,
+    val handlerStrategyFactory: (Handler[Envelope]) => HandlerStrategy[Envelope])(implicit system: ActorSystem[_]) {
+  private def genRandomProjectionId() =
+    ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
+
+  private val entityId = UUID.randomUUID().toString
+  private val projectionId = genRandomProjectionId()
+
+  val projectionSettings = ProjectionSettings(system)
+
+  // The projectionSettings will only be used as a fallback. The OffsetHandler and
+  // the HandlerStrategy arguments take precedence
+  var concatStr = ""
+  private val handler = new Handler[Envelope] {
+    override def process(envelope: Envelope): Future[Done] = synchronized {
+      concatStr = if (concatStr == "") envelope.message else s"$concatStr|${envelope.message}"
+      Future.successful(Done)
+    }
+  }
+  private val handlerStrategy = handlerStrategyFactory(handler)
+  val projectionState =
+    new InMemInternalProjectionState[Long, Envelope](
+      projectionId,
+      sourceProvider(system, entityId),
+      offsetStrategy,
+      handlerStrategy,
+      NoopStatusObserver,
+      projectionSettings)
+
+  lazy val inMemTelemetry = projectionState.telemetry.asInstanceOf[InMemTelemetry]
 
 }
 
@@ -206,9 +228,9 @@ class InMemInternalProjectionState[Offset, Envelope](
     }
   }
 }
-class InMemTelemetry extends Telemetry {
+class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry(projectionId, system) {
   val successfullyProcessed = new AtomicInteger(0)
-  override private[projection] def started(projectionId: ProjectionId): Unit = {}
+  val successfullyProcessedInvocations = new AtomicInteger(0)
 
   override def failed(projectionId: ProjectionId, cause: Throwable): Unit = ???
 
@@ -219,7 +241,8 @@ class InMemTelemetry extends Telemetry {
   override def afterProcess[Offset, Envelope](projectionId: ProjectionId, telemetryContext: AnyRef): Unit = {}
 
   override def onEnvelopeSuccess[Offset, Envelope](projectionId: ProjectionId, successCount: Int): Unit = {
-    successfullyProcessed.incrementAndGet()
+    successfullyProcessedInvocations.incrementAndGet()
+    successfullyProcessed.addAndGet(successCount)
   }
 
   override def error[Offset, Envelope](projectionId: ProjectionId, cause: Throwable): Unit = ???
