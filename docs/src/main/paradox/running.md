@@ -74,10 +74,31 @@ For this example, we configure as many `ShardedDaemonProcess` as tags and we def
 
 The `ProjectionBehavior` is an Actor `Behavior` that knows how to manage the Projection lifecyle. The Projection starts to consume the events as soon as the actor is spawned and will restart the source in case of failures (see @ref:[Projection Settings](projection-settings.md)).
 
-### Running with local Actor
+## Running with local Actor
 
-TODO: Explain how to directly use `ProjectionBehavior` and when it would make sense or not.
+You can spawn the `ProjectionBehavior` as any other `Behavior`. This can be useful for testing or when running
+a local `ActorSystem` without Akka Cluster.
 
-### Running in Cluster Singleton
+Scala
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #running-with-actor }
 
-TODO: Explain how run `ProjectionBehavior` as a cluster singleton and when it would make sense or not.
+Java
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #running-with-actor }
+
+Be aware of that the projection and its offset storage is based on that only one instance of the unique `ProjectionId`
+is running at a time. If more than one instance with the same `ProjectionId` are running concurrently they will
+overwrite each others offset storage with undefined and unpredictable results.
+
+## Running in Cluster Singleton
+
+If you know that you only need one or a few projection instances an alternative to @ref:[Sharded Daemon Process](#running-with-sharded-daemon-process)
+is to use [Akka Cluster Singleton](https://doc.akka.io/docs/akka/current/typed/cluster-singleton.html)  
+
+Scala
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #running-with-singleton }
+
+Java
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #singleton-imports #running-with-singleton }
+
+Be aware of that all projection instances that are running with Cluster Singleton will be running on the same node
+in the Cluster.
