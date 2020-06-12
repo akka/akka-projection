@@ -1,0 +1,1458 @@
+/*
+ * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
+ */
+
+package akka.projection.mongo
+
+import java.util.UUID
+import java.util.concurrent.atomic.{ AtomicBoolean, AtomicInteger, AtomicReference }
+
+import akka.actor.testkit.typed.TestException
+import akka.actor.testkit.typed.scaladsl.TestProbe
+import akka.actor.typed.{ ActorRef, ActorSystem }
+import akka.projection.OffsetVerification.{ VerificationFailure, VerificationSuccess }
+import akka.projection.mongo.internal.{ MongoOffsetStore, MongoSettings }
+import akka.projection.scaladsl.{ ProjectionManagement, SourceProvider }
+import akka.projection.{
+  HandlerRecoveryStrategy,
+  OffsetVerification,
+  ProjectionBehavior,
+  ProjectionId,
+  TestStatusObserver
+}
+import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.{ FlowWithContext, Keep, Source }
+import akka.stream.testkit.scaladsl.{ TestSink, TestSource }
+import akka.stream.testkit.{ TestPublisher, TestSubscriber }
+import akka.{ Done, NotUsed }
+import com.typesafe.config.{ Config, ConfigFactory }
+import org.bson.BsonInvalidOperationException
+import org.bson.codecs.configuration.CodecRegistries
+import org.mongodb.scala.bson.codecs.Macros
+import org.mongodb.scala.model.ReplaceOptions
+import org.mongodb.scala.result.UpdateResult
+import org.mongodb.scala.{ ClientSession, Completed, Document, MongoClient, MongoCollection }
+import org.scalatest.OptionValues
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.slf4j.{ Logger, LoggerFactory }
+
+import scala.annotation.tailrec
+import scala.collection.immutable
+import scala.concurrent.duration._
+import scala.concurrent.{ Await, ExecutionContext, Future }
+
+object MongoProjectionSpec {
+  def config: Config = ConfigFactory.parseString("""
+      akka {
+       loglevel = "DEBUG"
+       projection.mongo = {
+
+          offset-store {
+            schema = "test"
+            table = "AKKA_PROJECTION_OFFSET_STORE"
+          }
+       }
+      }
+      """)
+
+  case class Envelope(id: String, offset: Long, message: String)
+
+  def sourceProvider(
+      system: ActorSystem[_],
+      id: String,
+      complete: Boolean = true,
+      verifyOffsetF: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
+    val envelopes =
+      List(
+        Envelope(id, 1L, "abc"),
+        Envelope(id, 2L, "def"),
+        Envelope(id, 3L, "ghi"),
+        Envelope(id, 4L, "jkl"),
+        Envelope(id, 5L, "mno"),
+        Envelope(id, 6L, "pqr"))
+
+    val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
+    TestSourceProvider(system, src, verifyOffsetF)
+  }
+
+  case class TestSourceProvider(
+      system: ActorSystem[_],
+      src: Source[Envelope, _],
+      offsetVerificationF: Long => OffsetVerification)
+      extends SourceProvider[Long, Envelope] {
+    implicit val executionContext: ExecutionContext = system.executionContext
+    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
+      offset().map {
+        case Some(o) => src.dropWhile(_.offset <= o)
+        case _       => src
+      }
+
+    override def extractOffset(env: Envelope): Long = env.offset
+
+    override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
+  }
+  // test model is as simple as a text that gets other string concatenated to it
+  case class ConcatStr(_id: String, text: String) {
+    def concat(newMsg: String) = copy(text = text + "|" + newMsg)
+  }
+
+  class TestRepository(val mongoClient: MongoClient, val mongoDatabase: String) {
+
+//    private class ConcatStrTable(tag: Tag) extends Table[ConcatStr](tag, "TEST_MODEL") {
+//      def id = column[String]("ID", O.PrimaryKey)
+//
+//      def concatenated = column[String]("CONCATENATED")
+//
+//      def * = (id, concatenated).mapTo[ConcatStr]
+//    }
+
+    def concatToText(id: String, payload: String)(implicit ec: ExecutionContext): TransactionCtx[Done] = {
+      for {
+        concatStr <- findById(id).map {
+          case Some(concatStr) => concatStr.concat(payload)
+          case _               => ConcatStr(id, payload)
+        }
+        _ <- new TransactionCtx[UpdateResult]() {
+          override def apply(ctx: ClientSession): Future[UpdateResult] =
+            concatStrTable.replaceOne(ctx, Document("_id" -> id), concatStr, ReplaceOptions().upsert(true)).toFuture()
+        }
+      } yield Done
+    }
+
+    /**
+     * Try to insert a row with a null value. This will code the DB ops to fail
+     */
+    def updateWithNullValue(id: String)(implicit ec: ExecutionContext): TransactionCtx[Done] = { ctx =>
+      concatStrTable
+        .replaceOne(ctx, Document("_id" -> id), ConcatStr(id, null), ReplaceOptions().upsert(true))
+        .toFuture()
+        .map(_ => Done)
+    }
+
+    def findById(id: String): TransactionCtx[Option[ConcatStr]] = { ctx =>
+      concatStrTable.find(ctx, Document("_id" -> id)).headOption
+    }
+
+    private val concatStrTable: MongoCollection[ConcatStr] =
+      mongoClient
+        .getDatabase(mongoDatabase)
+        .getCollection[ConcatStr]("TEST_MODEL")
+        .withCodecRegistry(
+          CodecRegistries.fromRegistries(
+            CodecRegistries.fromProviders(Macros.createCodecProvider[ConcatStr]),
+            MongoClient.DEFAULT_CODEC_REGISTRY))
+
+    def readValue(id: String)(implicit ec: ExecutionContext): Future[String] = {
+      val action = findById(id).map {
+        case Some(concatStr) => concatStr.text
+        case _               => "N/A"
+      }
+      TransactionCtx.withSession(mongoClient.startSession())(action)
+    }
+
+    def createTable(): Future[Completed] =
+      mongoClient
+        .getDatabase(concatStrTable.namespace.getDatabaseName)
+        .createCollection(concatStrTable.namespace.getCollectionName)
+        .toFuture()
+  }
+
+}
+
+class MongoProjectionSpec extends MongoSpecBase(MongoProjectionSpec.config) with AnyWordSpecLike with OptionValues {
+  import MongoProjectionSpec._
+
+  val logger: Logger = LoggerFactory.getLogger(this.getClass)
+
+  lazy val mongoClient: MongoClient = MongoClient(clientSettings)
+
+  lazy val offsetStore = new MongoOffsetStore(mongoClient, MongoSettings(system))
+
+  lazy val repository = new TestRepository(mongoClient, "test")
+
+  override protected def afterAll(): Unit = {
+    mongoClient.close()
+    super.afterAll()
+  }
+
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+    Await.ready(repository.createTable(), 3.seconds)
+    Await.ready(offsetStore.createIfNotExists, 3.seconds)
+  }
+
+  private def genRandomProjectionId() =
+    ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
+
+  @tailrec private def eventuallyExpectError(sinkProbe: TestSubscriber.Probe[_]): Throwable = {
+    sinkProbe.expectNextOrError() match {
+      case Right(_)  => eventuallyExpectError(sinkProbe)
+      case Left(exc) => exc
+    }
+  }
+
+  private val concatHandlerFail4Msg = "fail on fourth envelope"
+
+  class ConcatHandlerFail4() extends MongoHandler[Envelope] {
+    private val _attempts = new AtomicInteger()
+    def attempts: Int = _attempts.get
+
+    override def process(envelope: Envelope): TransactionCtx[Done] = {
+      if (envelope.offset == 4L) {
+        _attempts.incrementAndGet()
+        (ctx: ClientSession) => Future.failed(TestException(concatHandlerFail4Msg + s" after $attempts attempts"))
+      } else {
+        repository.concatToText(envelope.id, envelope.message)
+      }
+    }
+  }
+
+  "A Mongo exactly-once projection" must {
+
+    "persist projection and offset in same the same write operation (transactional)" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val mongoProjection =
+        MongoProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          // build event handler from simple lambda
+          handler = MongoHandler[Envelope] { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+          })
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "skip failing events when using RecoveryStrategy.skip" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val bogusEventHandler = new ConcatHandlerFail4()
+
+      val mongoProjection =
+        MongoProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("check - not all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val bogusEventHandler = new ConcatHandlerFail4()
+
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+
+      val mongoProjection =
+        MongoProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+          .withStatusObserver(statusObserver)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("check - not all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+
+      withClue("check - event handler did failed 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        bogusEventHandler.attempts shouldBe 1 + 3
+      }
+
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectNoMessage()
+
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "fail after retrying when using RecoveryStrategy.retryAndFail" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new ConcatHandlerFail4()
+
+      val mongoProjectionFailing =
+        MongoProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      withClue("check: projection failed with stream failure") {
+        projectionTestKit.runWithTestSink(mongoProjectionFailing) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr =
+          TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+
+      withClue("check - event handler did failed 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        bogusEventHandler.attempts shouldBe 1 + 3
+      }
+
+      withClue("check: last seen offset is 3L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 3L
+      }
+
+    }
+
+    "restart from previous offset - fail with DBIOAction.failed" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new ConcatHandlerFail4()
+      val mongoProjectionFailing =
+        MongoProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          bogusEventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      withClue("check: projection failed with stream failure") {
+        projectionTestKit.runWithTestSink(mongoProjectionFailing) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr =
+          TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+      withClue("check: last seen offset is 3L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 3L
+      }
+
+      // re-run projection without failing function
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] = {
+          repository.concatToText(envelope.id, envelope.message)
+        }
+      }
+      val mongoProjection =
+        MongoProjection.exactlyOnce(
+          projectionId = projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          eventHandler)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+
+      withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "restart from previous offset - fail with throwing an exception" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new ConcatHandlerFail4()
+      val mongoProjectionFailing =
+        MongoProjection.exactlyOnce(
+          projectionId = projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          bogusEventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      withClue("check: projection failed with stream failure") {
+        projectionTestKit.runWithTestSink(mongoProjectionFailing) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr =
+          TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+      withClue("check: last seen offset is 3L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 3L
+      }
+
+      // re-run projection without failing function
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+      val mongoProjection =
+        MongoProjection.exactlyOnce(
+          projectionId = projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          eventHandler)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+
+      withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "restart from previous offset - fail with bad insert on user code" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          if (envelope.offset == 4L) repository.updateWithNullValue(envelope.id)
+          else repository.concatToText(envelope.id, envelope.message)
+      }
+      val mongoProjectionFailing =
+        MongoProjection.exactlyOnce(
+          projectionId = projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          bogusEventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      projectionTestKit.runWithTestSink(mongoProjectionFailing) { sinkProbe =>
+
+        sinkProbe.request(1000)
+        eventuallyExpectError(sinkProbe).getClass shouldBe classOf[BsonInvalidOperationException]
+      }
+
+      withClue("check: projection is consumed up to third") {
+        val concatStr =
+          TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+      withClue("check: last seen offset is 3L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 3L
+      }
+
+      // re-run projection without failing function
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+      val mongoProjection =
+        MongoProjection.exactlyOnce(
+          projectionId = projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          eventHandler)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+
+      withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "verify offsets before and after processing an envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      val (verifiedQueue, verifiedProbe) = Source
+        .queue[Long](1, OverflowStrategy.backpressure)
+        .toMat(TestSink.probe(actorSystem.classicSystem))(Keep.both)
+        .run()
+      val (envelopeQueue, envelopeProbe) = Source
+        .queue[Envelope](1, OverflowStrategy.backpressure)
+        .toMat(TestSink.probe(actorSystem.classicSystem))(Keep.both)
+        .run()
+
+      val testVerification = (offset: Long) => {
+        Await.ready(verifiedQueue.offer(offset), 10.millis)
+        VerificationSuccess
+      }
+
+      val mongoHandler = MongoHandler[Envelope] { envelope =>
+        withClue("checking: offset verified before handler function was run") {
+          verifiedProbe.requestNext() shouldEqual envelope.offset
+        }
+        Await.ready(envelopeQueue.offer(envelope), 10.millis)
+        repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+
+      val mongoProjection =
+        MongoProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          db = mongoClient,
+          handler = mongoHandler)
+
+      projectionTestKit.runWithTestSink(mongoProjection) { testSink =>
+        for (_ <- 1 to 6) {
+          testSink.request(1)
+          withClue("checking: offset verified after handler function was run") {
+            val nextEnvelopeOffset = envelopeProbe.requestNext().offset
+            val nextOffset = verifiedProbe.requestNext()
+            nextEnvelopeOffset shouldEqual nextOffset
+          }
+        }
+      }
+
+      verifiedProbe.cancel()
+      envelopeProbe.cancel()
+    }
+
+    "skip record if offset verification fails before processing envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val testVerification = (offset: Long) => {
+        if (offset == 3L)
+          VerificationFailure("test")
+        else
+          VerificationSuccess
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+
+      val mongoProjection =
+        MongoProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          db = mongoClient,
+          handler = MongoHandler[Envelope] { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+          })
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values except skipped were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
+        }
+      }
+    }
+
+    "skip record if offset verification fails after processing envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      val offset3Observed = new AtomicBoolean()
+
+      val testVerification = (offset: Long) => {
+        // SkipOffset on the second verification
+        if (offset3Observed.get() && offset == 3L)
+          VerificationFailure("test")
+        else
+          VerificationSuccess
+      }
+
+      val mongoHandler = MongoHandler[Envelope] { envelope =>
+        if (envelope.offset == 3L)
+          offset3Observed.set(true)
+        repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+
+      val mongoProjection =
+        MongoProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          db = mongoClient,
+          handler = mongoHandler)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values except skipped were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
+        }
+      }
+    }
+  }
+
+  "A Mongo grouped projection" must {
+
+    "persist projection and offset in the same write operation (transactional)" in {
+
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val mongoProjection =
+        MongoProjection.groupedWithin(
+          projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          // build event handler from simple lambda
+          handler = MongoHandler[immutable.Seq[Envelope]] { envelopes =>
+            val dbios = envelopes.map(env => repository.concatToText(env.id, env.message))
+            TransactionCtx.sequence(dbios).map(_ => Done)
+          })
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+  }
+
+  "A Mongo at-least-once projection" must {
+
+    "persist projection and offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+      val mongoProjection =
+        MongoProjection.atLeastOnce(
+          projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          eventHandler)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "skip failing events when using RecoveryStrategy.skip, save after 1" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val eventHandler = new ConcatHandlerFail4()
+      val mongoProjection =
+        MongoProjection
+          .atLeastOnce(projectionId, sourceProvider = sourceProvider(system, entityId), db = mongoClient, eventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "skip failing events when using RecoveryStrategy.skip, save after 2" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val eventHandler = new ConcatHandlerFail4()
+      val mongoProjection =
+        MongoProjection
+          .atLeastOnce(projectionId, sourceProvider = sourceProvider(system, entityId), db = mongoClient, eventHandler)
+          .withSaveOffset(2, 1.minute)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("check - all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "restart from previous offset - handler throwing an exception, save after 1" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new ConcatHandlerFail4()
+      val mongoProjectionFailing =
+        MongoProjection
+          .atLeastOnce(
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            bogusEventHandler)
+          .withSaveOffset(1, Duration.Zero)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      withClue("check: projection failed with stream failure") {
+        projectionTestKit.runWithTestSink(mongoProjectionFailing) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr =
+          TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+      withClue(s"check: last seen offset is 3L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 3L
+      }
+
+      // re-run projection without failing function
+
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+      val mongoProjection =
+        MongoProjection.atLeastOnce(
+          projectionId = projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          db = mongoClient,
+          eventHandler)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+
+      withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "restart from previous offset - handler throwing an exception, save after 2" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new ConcatHandlerFail4()
+      val mongoProjectionFailing =
+        MongoProjection
+          .atLeastOnce(
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            bogusEventHandler)
+          .withSaveOffset(2, 1.minute)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      withClue("check: projection failed with stream failure") {
+        projectionTestKit.runWithTestSink(mongoProjectionFailing) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr =
+          TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+      withClue(s"check: last seen offset is 2L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 2L
+      }
+
+      // re-run projection without failing function
+
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+      val mongoProjection =
+        MongoProjection
+          .atLeastOnce(
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            eventHandler)
+          .withSaveOffset(2, 1.minute)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          // note that 3rd is duplicated
+          concatStr.text shouldBe "abc|def|ghi|ghi|jkl|mno|pqr"
+        }
+      }
+
+      withClue("check: all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
+    "save offset after number of elements" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      import akka.actor.typed.scaladsl.adapter._
+      val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
+      val source = TestSource.probe[Envelope](system.toClassic).mapMaterializedValue { probe =>
+        sourceProbe.set(probe)
+        NotUsed
+      }
+
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+      val mongoProjection =
+        MongoProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId = projectionId,
+            sourceProvider = TestSourceProvider(system, source, _ => VerificationSuccess),
+            db = mongoClient,
+            eventHandler)
+          .withSaveOffset(10, 1.minute)
+
+      projectionTestKit.runWithTestSink(mongoProjection) { sinkProbe =>
+
+        eventually {
+          sourceProbe.get should not be null
+        }
+        sinkProbe.request(1000)
+
+        (1 to 15).foreach { n =>
+          sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        }
+        eventually {
+          TransactionCtx
+            .withSession(mongoClient.startSession())(repository.findById(entityId))
+            .futureValue
+            .value
+            .text should include("elem-15")
+        }
+        offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 10L
+
+        (16 to 22).foreach { n =>
+          sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        }
+        eventually {
+          TransactionCtx
+            .withSession(mongoClient.startSession())(repository.findById(entityId))
+            .futureValue
+            .value
+            .text should include("elem-22")
+        }
+        offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 20L
+      }
+
+    }
+
+    "save offset after idle duration" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      import akka.actor.typed.scaladsl.adapter._
+      val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
+      val source = TestSource.probe[Envelope](system.toClassic).mapMaterializedValue { probe =>
+        sourceProbe.set(probe)
+        NotUsed
+      }
+
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+      val mongoProjection =
+        MongoProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId = projectionId,
+            sourceProvider = TestSourceProvider(system, source, _ => VerificationSuccess),
+            db = mongoClient,
+            eventHandler)
+          .withSaveOffset(10, 2.seconds)
+
+      projectionTestKit.runWithTestSink(mongoProjection) { sinkProbe =>
+
+        eventually {
+          sourceProbe.get should not be null
+        }
+        sinkProbe.request(1000)
+
+        (1 to 15).foreach { n =>
+          sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        }
+        eventually {
+          TransactionCtx
+            .withSession(mongoClient.startSession())(repository.findById(entityId))
+            .futureValue
+            .value
+            .text should include("elem-15")
+        }
+        offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 10L
+
+        (16 to 17).foreach { n =>
+          sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
+        }
+        eventually {
+          offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 17L
+        }
+        TransactionCtx
+          .withSession(mongoClient.startSession())(repository.findById(entityId))
+          .futureValue
+          .value
+          .text should include("elem-17")
+      }
+
+    }
+
+    "verify offsets before processing an envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      val verifiedProbe: TestProbe[Long] = createTestProbe[Long]()
+
+      val testVerification = (offset: Long) => {
+        verifiedProbe.ref ! offset
+        VerificationSuccess
+      }
+
+      val mongoHandler = MongoHandler[Envelope] { envelope =>
+        withClue("checking: offset verified before handler function was run") {
+          verifiedProbe.expectMessage(envelope.offset)
+        }
+        repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+
+      val mongoProjection =
+        MongoProjection.atLeastOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          db = mongoClient,
+          handler = mongoHandler)
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+    }
+
+    "skip record if offset verification fails before processing envelope" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val testVerification = (offset: Long) => {
+        if (offset == 3L)
+          VerificationFailure("test")
+        else
+          VerificationSuccess
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+
+      val mongoProjection =
+        MongoProjection.atLeastOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          db = mongoClient,
+          handler = MongoHandler[Envelope] { envelope =>
+            repository.concatToText(envelope.id, envelope.message)
+          })
+
+      projectionTestKit.run(mongoProjection) {
+        withClue("checking: all values except skipped were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
+        }
+      }
+    }
+
+  }
+
+  "A Mongo flow projection" must {
+
+    "persist projection and offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val flowHandler =
+        FlowWithContext[Envelope, Envelope]
+          .mapAsync(1) { env =>
+            TransactionCtx.withSession(mongoClient.startSession())(repository.concatToText(env.id, env.message))
+          }
+
+      val projection =
+        MongoProjection
+          .atLeastOnceFlow(projectionId, sourceProvider(system, entityId), mongoClient, flowHandler)
+          .withSaveOffset(1, 1.minute)
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          val concatStr =
+            TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.get
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
+        offset shouldBe 6L
+      }
+    }
+  }
+
+  "MongoProjection lifecycle" must {
+
+    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int = -1, alwaysFailOnOffset: Int = -1)
+        extends MongoHandler[Envelope] {
+
+      private var failedOnce = false
+      val startMessage = "start"
+      val completedMessage = "completed"
+      val failedMessage = "failed"
+
+      // stop message can be 'completed' or 'failed'
+      // that allows us to assert that the stopHandler is different execution paths were called in test
+      private var stopMessage = completedMessage
+
+      override def start(): Future[Done] = {
+        // reset stop message to 'completed' on each new start
+        stopMessage = completedMessage
+        probe ! startMessage
+        Future.successful(Done)
+      }
+
+      override def stop(): Future[Done] = {
+        probe ! stopMessage
+        Future.successful(Done)
+      }
+
+      override def process(envelope: Envelope): TransactionCtx[Done] = { ctx =>
+        if (envelope.offset == failOnceOnOffset && !failedOnce) {
+          failedOnce = true
+          stopMessage = failedMessage
+          Future.failed(TestException(s"Fail $failOnceOnOffset"))
+        } else if (envelope.offset == alwaysFailOnOffset) {
+          stopMessage = failedMessage
+          throw TestException(s"Always Fail $alwaysFailOnOffset")
+        } else {
+          probe ! envelope.message
+          Future.successful(Done)
+        }
+      }
+    }
+
+    "call start and stop of the handler" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
+
+      val projection =
+        MongoProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            handler)
+          .withSaveOffset(1, Duration.Zero)
+          .withStatusObserver(statusObserver)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      statusProbe.expectMessage(TestStatusObserver.Started)
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      handlerProbe.expectMessage("jkl")
+      handlerProbe.expectMessage("mno")
+      handlerProbe.expectMessage("pqr")
+      // completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectNoMessage()
+    }
+
+    "call start and stop of the handler when using TestKit.runWithTestSink" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+
+      val projection =
+        MongoProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            handler)
+          .withSaveOffset(1, Duration.Zero)
+
+      // not using ProjectionTestKit because want to test restarts
+      projectionTestKit.runWithTestSink(projection) { sinkProbe =>
+        // request all 'strings' (abc to pqr)
+
+        // the start happens inside runWithTestSink
+        handlerProbe.expectMessage(handler.startMessage)
+
+        // request the elements
+        sinkProbe.request(6)
+        handlerProbe.expectMessage("abc")
+        handlerProbe.expectMessage("def")
+        handlerProbe.expectMessage("ghi")
+        handlerProbe.expectMessage("jkl")
+        handlerProbe.expectMessage("mno")
+        handlerProbe.expectMessage("pqr")
+
+        // all elements should have reached the sink
+        sinkProbe.expectNextN(6)
+      }
+
+      // completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "call start and stop of handler when restarted" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true, Some(progressProbe.ref))
+
+      val projection =
+        MongoProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            handler)
+          .withRestartBackoff(1.second, 2.seconds, 0.0)
+          .withSaveOffset(1, Duration.Zero)
+          .withStatusObserver(statusObserver)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      statusProbe.expectMessage(TestStatusObserver.Started)
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "abc")))
+      handlerProbe.expectMessage("def")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "def")))
+      handlerProbe.expectMessage("ghi")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "ghi")))
+      // fail 4
+      handlerProbe.expectMessage(handler.failedMessage)
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+
+      // backoff will restart
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectMessage(TestStatusObserver.Failed)
+      statusProbe.expectMessage(TestStatusObserver.Started)
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("jkl")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))
+      handlerProbe.expectMessage("mno")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "mno")))
+      handlerProbe.expectMessage("pqr")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 6, "pqr")))
+      // now completed without failure
+      handlerProbe.expectMessage(handler.completedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+      statusProbe.expectNoMessage()
+    }
+
+    "call start and stop of handler when failed but no restart" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+
+      val projection =
+        MongoProjection
+          .atLeastOnce[Long, Envelope](
+            projectionId = projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            db = mongoClient,
+            handler)
+          .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0) // no restarts
+          .withSaveOffset(1, Duration.Zero)
+
+      // not using ProjectionTestKit because want to test restarts
+      spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4, not restarted
+      // completed with failure
+      handlerProbe.expectMessage(handler.failedMessage)
+      handlerProbe.expectNoMessage() // no duplicate stop
+    }
+
+    "be able to stop when retrying" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, alwaysFailOnOffset = 4)
+
+      val projection =
+        MongoProjection
+          .atLeastOnce(projectionId, sourceProvider(system, entityId), mongoClient, handler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
+          .withSaveOffset(1, Duration.Zero)
+
+      val ref = spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4
+
+      // let it retry for a while
+      Thread.sleep(300)
+
+      ref ! ProjectionBehavior.Stop
+      createTestProbe().expectTerminated(ref)
+    }
+  }
+
+  "MongoProjection management" must {
+    "restart from beginning when offset is cleared" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val projection =
+        MongoProjection
+          .exactlyOnce(projectionId, sourceProvider(system, entityId, complete = false), db = mongoClient, eventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      val concatStr1 =
+        TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
+      eventually {
+        val concatStr =
+          TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr"
+      }
+    }
+
+    "restart from updated offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val eventHandler = new MongoHandler[Envelope] {
+        override def process(envelope: Envelope): TransactionCtx[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val projection =
+        MongoProjection
+          .exactlyOnce(projectionId, sourceProvider(system, entityId, complete = false), db = mongoClient, eventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      val concatStr1 =
+        TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).updateOffset(projectionId, 3L).futureValue shouldBe Done
+      eventually {
+        val concatStr =
+          TransactionCtx.withSession(mongoClient.startSession())(repository.findById(entityId)).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr"
+      }
+    }
+  }
+}

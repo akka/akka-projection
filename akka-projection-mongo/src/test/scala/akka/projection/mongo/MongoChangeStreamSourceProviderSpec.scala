@@ -44,13 +44,13 @@ class MongoChangeStreamSourceProviderSpec extends MongoSpecBase() {
 //    }
 
     "resume from beginning offsets when none are provided" in assertAllStagesStopped {
-      val provider = MongoChangeStreamSourceProvider(system.toTyped, clientSettings, Seq.empty)
+      val provider = MongoChangeStreamSourceProvider(system, clientSettings, Seq.empty)
       val readOffsetsHandler = () => Future.successful(None)
       val probe = Source
         .futureSource(provider.source(readOffsetsHandler))
-        .runWith(TestSink.probe)
+        .runWith(TestSink.probe(actorSystem.classicSystem))
 
-      Await.result(produce(1 to 100), remainingOrDefault)
+      produce(1 to 100).futureValue
 
       probe.request(1)
       val first = probe.expectNext()

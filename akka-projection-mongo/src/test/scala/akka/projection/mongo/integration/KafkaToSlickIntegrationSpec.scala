@@ -22,13 +22,13 @@
 //import akka.projection.mongo.KafkaSourceProvider
 //import akka.projection.mongo.KafkaSpecBase
 //import akka.projection.scaladsl.SourceProvider
-//import akka.projection.slick.SlickHandler
+//import akka.projection.slick.MongoHandler
 //import akka.projection.slick.SlickProjection
 //import akka.projection.slick.SlickProjectionSpec
-//import akka.projection.slick.internal.SlickOffsetStore
+//import akka.projection.slick.internal.MongoOffsetStore
 //import akka.projection.StringKey
 //import akka.projection.mongo.GroupOffsets
-//import akka.projection.slick.internal.SlickSettings
+//import akka.projection.slick.internal.MongoSettings
 //import akka.stream.scaladsl.Source
 //import com.typesafe.config.ConfigFactory
 //import org.apache.mongo.clients.consumer.ConsumerRecord
@@ -96,7 +96,7 @@
 //        case 0 =>
 //          // The update statement updated no records so insert a seed record instead. If this insert fails because
 //          // another projection inserted it in the meantime then the envelope will be processed again based on the
-//          // retry policy of the `SlickHandler`
+//          // retry policy of the `MongoHandler`
 //          val insert = userEventCountTable += UserEventCount(id.name, eventType, 1)
 //          if (doTransientFailure(eventType))
 //            DBIO.failed(new RuntimeException(s"Failed to insert event type: $eventType"))
@@ -120,8 +120,8 @@
 //  override implicit def patienceConfig: PatienceConfig =
 //    PatienceConfig(timeout = Span(30, Seconds), interval = Span(500, Milliseconds))
 //
-//  val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig(SlickSettings.configPath, config)
-//  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, SlickSettings(system.toTyped))
+//  val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig(MongoSettings.configPath, config)
+//  val offsetStore = new MongoOffsetStore(dbConfig.db, dbConfig.profile, MongoSettings(system.toTyped))
 //  val repository = new EventTypeCountRepository(dbConfig)
 //
 //  override protected def beforeAll(): Unit = {
@@ -150,7 +150,7 @@
 //          projectionId,
 //          sourceProvider = kafkaSourceProvider,
 //          dbConfig,
-//          SlickHandler[ConsumerRecord[String, String]] { envelope =>
+//          MongoHandler[ConsumerRecord[String, String]] { envelope =>
 //            val userId = envelope.key()
 //            val eventType = envelope.value()
 //            val userEvent = UserEvent(userId, eventType)

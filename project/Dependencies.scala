@@ -113,7 +113,7 @@ object Dependencies {
         Test.scalatestJUnit)
   
   val mongo =
-    deps ++= Seq(Compile.mongo, Test.akkaTypedTestkit, Test.akkaStreamTestkit, Test.logback, Test.testContainers, Test.mongoContainer)
+    deps ++= Seq(Compile.mongo, Compile.akkaPersistenceQuery % "optional;provided", Test.akkaTypedTestkit, Test.akkaStreamTestkit, Test.logback, Test.testContainers, Test.mongoContainer)
 
   val examples =
     deps ++= Seq(

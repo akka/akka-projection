@@ -5,8 +5,7 @@
 package akka.projection.mongo
 
 import akka.actor.ActorSystem
-import akka.actor.testkit.typed.scaladsl.ActorTestKit
-import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.{ ActorTestKit, LogCapturing, ScalaTestWithActorTestKit }
 import akka.actor.typed.scaladsl.adapter._
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.testkit.TestKit
@@ -26,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.testcontainers.containers.MongoDBContainer
 
 abstract class MongoSpecBase(val config: Config)
-    extends TestKit(ActorSystem("Spec", config))
+    extends ScalaTestWithActorTestKit(config)
     with Suite
     with AnyWordSpecLike
     with OptionValues
@@ -40,7 +39,6 @@ abstract class MongoSpecBase(val config: Config)
 
   protected def this() = this(config = ConfigFactory.load)
 
-  val testKit = ActorTestKit(system.toTyped)
   val projectionTestKit = new ProjectionTestKit(testKit)
 
   implicit val actorSystem = testKit.system
