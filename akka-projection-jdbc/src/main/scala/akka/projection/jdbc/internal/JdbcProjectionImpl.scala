@@ -17,6 +17,7 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
@@ -125,6 +126,9 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): JdbcProjectionImpl[Offset, Envelope, S] =
     copy(statusObserver = observer)
+
+  private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
+    handlerStrategy.actorHandlerInit
 
   /**
    * INTERNAL API

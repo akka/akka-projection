@@ -12,8 +12,11 @@ import scala.concurrent.duration._
 import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.javadsl.ActorTestKit
+import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.javadsl.Adapter
+import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.ApiMayChange
 import akka.japi.function.Effect
 import akka.japi.function.Procedure
@@ -90,6 +93,8 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
 
     val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
 
+    val actorHandler = spawnActorHandler(projection)
+
     val settingsForTest = ProjectionSettings(system).copy(RestartBackoffSettings(0.millis, 0.millis, 0.0, 0))
 
     val running =
@@ -101,6 +106,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
       probe.awaitAssert(max, interval, () => assertFunction())
     } finally {
       Await.result(running.stop(), max.asScala)
+      actorHandler.foreach(ref => testKit.stop(ref))
     }
   }
 
@@ -118,11 +124,21 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * @param assertFunction - a function receiving a `TestSubscriber.Probe[Done]`
    */
   def runWithTestSink(projection: Projection[_], assertFunction: Procedure[TestSubscriber.Probe[Done]]): Unit = {
+    val actorHandler = spawnActorHandler(projection)
     val sinkProbe = projection.mappedSource().runWith(TestSink.probe[Done](Adapter.toClassic(testKit.system)))
     try {
       assertFunction(sinkProbe)
     } finally {
       sinkProbe.cancel()
+      actorHandler.foreach(ref => testKit.stop(ref))
+    }
+  }
+
+  private def spawnActorHandler(projection: Projection[_]): Option[ActorRef[_]] = {
+    projection.actorHandlerInit[Any].map { init =>
+      val ref = testKit.spawn(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart))
+      init.setActor(ref)
+      ref
     }
   }
 
