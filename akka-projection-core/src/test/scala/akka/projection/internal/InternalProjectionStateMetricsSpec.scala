@@ -152,12 +152,42 @@ class InternalProjectionStateMetricsSpec
       }
     }
     " when running on `exactly-once`" must {
-      "handle single envelopes" in {}
-      "handle grouped envelopes" in {}
+      "handle single envelopes" in {
+        val tt =
+          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.successfullyProcessed.get should be(6)
+            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(6)
+          }
+        }
+      }
+      "handle grouped envelopes" in {
+        val tt =
+          new TelemetryTester(ExactlyOnce(), GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2)))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.successfullyProcessed.get should be(6)
+            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(3)
+          }
+        }
+      }
       "handle flows (UNSUPPORTED)" ignore {}
     }
     " when running on `at-most-once`" must {
-      "handle single envelopes" in {}
+      "handle single envelopes" in {
+        val tt =
+          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.successfullyProcessed.get should be(6)
+            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(6)
+          }
+        }
+      }
       "handle grouped envelopes (not used)" ignore {}
       "handle flows (UNSUPPORTED)" ignore {}
     }
