@@ -688,11 +688,7 @@ class CassandraProjectionSpec
           .atLeastOnce(projectionId, sourceProvider(system, entityId), actorHandler)
           .withSaveOffset(1, 1.minute)
 
-      projectionTestKit.runWithTestSink(projection) { testProbe =>
-        testProbe.request(100)
-        testProbe.expectNextN(6)
-        testProbe.expectComplete()
-      }
+      val projectionRef = spawn(ProjectionBehavior(projection))
 
       receiveProbe.receiveMessage().message shouldBe "abc"
       receiveProbe.receiveMessage().message shouldBe "def"
@@ -700,6 +696,8 @@ class CassandraProjectionSpec
       receiveProbe.receiveMessage().message shouldBe "jkl"
       receiveProbe.receiveMessage().message shouldBe "mno"
       receiveProbe.receiveMessage().message shouldBe "pqr"
+
+      projectionRef ! ProjectionBehavior.Stop
 
       stopProbe.receiveMessage()
 

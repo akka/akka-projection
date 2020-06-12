@@ -17,7 +17,6 @@ import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.cassandra.ContainerSessionProvider
 import akka.projection.cassandra.scaladsl.CassandraProjection
-import akka.projection.scaladsl.ActorHandler
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import docs.cassandra.WordCountDocExample._
