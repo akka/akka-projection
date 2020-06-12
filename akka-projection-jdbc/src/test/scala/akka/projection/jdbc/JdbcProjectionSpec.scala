@@ -28,6 +28,10 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.japi.function
 import akka.japi.function.Creator
+import akka.projection.HandlerRecoveryStrategy
+import akka.projection.OffsetVerification
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
@@ -95,7 +99,11 @@ object JdbcProjectionSpec {
 
   case class Envelope(id: String, offset: Long, message: String)
 
-  def sourceProvider(system: ActorSystem[_], id: String, complete: Boolean = true): SourceProvider[Long, Envelope] = {
+  def sourceProvider(
+      system: ActorSystem[_],
+      id: String,
+      complete: Boolean = true,
+      verifyOffsetF: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
 
     val envelopes =
       List(
@@ -107,10 +115,13 @@ object JdbcProjectionSpec {
         Envelope(id, 6L, "pqr"))
 
     val src = if (complete) ScalaSource(envelopes) else ScalaSource(envelopes).concat(ScalaSource.maybe)
-    TestSourceProvider(system, src.asJava)
+    TestSourceProvider(system, src.asJava, verifyOffsetF)
   }
 
-  case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, _])
+  case class TestSourceProvider(
+      system: ActorSystem[_],
+      src: Source[Envelope, _],
+      offsetVerificationF: Long => OffsetVerification)
       extends SourceProvider[Long, Envelope] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
@@ -126,6 +137,9 @@ object JdbcProjectionSpec {
     }
 
     override def extractOffset(env: Envelope): Long = env.offset
+
+    override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
+
   }
   // test model is as simple as a text that gets other string concatenated to it
   case class ConcatStr(id: String, text: String) {
@@ -296,15 +310,128 @@ class JdbcProjectionSpec
     }
 
     "skip failing events when using RecoveryStrategy.skip" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val bogusEventHandler = new ConcatHandler(_ == 4)
+
+      val projectionFailing =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionCreator,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
+
+      projectionTestKit.run(projectionFailing) {
+        withClue("check - not all values were concatenated") {
+          val concatStr = withRepo(_.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
     }
 
     "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val bogusEventHandler = new ConcatHandler(_ == 4)
+
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+
+      val projectionFailing =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionCreator,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
+          .withStatusObserver(statusObserver)
+
+      projectionTestKit.run(projectionFailing) {
+        withClue("check - not all values were concatenated") {
+          val concatStr = withRepo(_.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
+        }
+      }
+
+      withClue("check - event handler did failed 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        bogusEventHandler.attempts shouldBe 1 + 3
+      }
+
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectNoMessage()
+
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+
     }
 
     "fail after retrying when using RecoveryStrategy.retryAndFail" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new ConcatHandler(_ == 4)
+
+      val projectionFailing =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionCreator,
+            handler = bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      withClue("check: projection failed with stream failure") {
+        projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
+          sinkProbe.request(1000)
+          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        }
+      }
+      withClue("check: projection is consumed up to third") {
+        val concatStr = withRepo(_.findById(entityId)).futureValue.value
+        concatStr.text shouldBe "abc|def|ghi"
+      }
+
+      withClue("check - event handler did failed 4 times") {
+        // 1 + 3 => 1 original attempt and 3 retries
+        bogusEventHandler.attempts shouldBe 1 + 3
+      }
+
+      withClue("check: last seen offset is 3L") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 3L
+      }
     }
 
     "restart from previous offset - fail with throwing an exception" in {
@@ -423,15 +550,107 @@ class JdbcProjectionSpec
     }
 
     "verify offsets before and after processing an envelope" in {
-      pending
+
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      case class ProbeMessage(str: String, offset: Long)
+      val verificationProbe = testKit.createTestProbe[ProbeMessage]("verification")
+      val processProbe = testKit.createTestProbe[ProbeMessage]("processing")
+
+      val testVerification = (offset: Long) => {
+        verificationProbe.ref ! ProbeMessage("verification", offset)
+        VerificationSuccess
+      }
+
+      val handler = new JdbcHandler[Envelope, PureJdbcSession] {
+        override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
+
+          withClue("checking: offset verified before handler function was run") {
+            verificationProbe.receiveMessage().offset shouldEqual envelope.offset
+          }
+          processProbe.ref ! ProbeMessage("process", envelope.offset)
+
+          session.withConnection { conn =>
+            TestRepository(conn).concatToText(envelope.id, envelope.message)
+          }
+        }
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+
+      val projection =
+        JdbcProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          jdbcSessionCreator,
+          handler = handler)
+
+      projectionTestKit.runWithTestSink(projection) { testSink =>
+        for (i <- 1 to 6) {
+          testSink.request(1)
+          withClue("checking: offset verified after handler function was run") {
+            processProbe.receiveMessage().offset shouldBe i
+          }
+        }
+      }
+
     }
 
     "skip record if offset verification fails before processing envelope" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val testVerification = (offset: Long) => {
+        if (offset == 3L)
+          VerificationFailure("test")
+        else
+          VerificationSuccess
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+
+      val projection =
+        JdbcProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          jdbcSessionCreator,
+          handler = new ConcatHandler())
+
+      projectionTestKit.run(projection) {
+        withClue("checking: all values except skipped were concatenated") {
+          val concatStr = withRepo(_.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
+        }
+      }
     }
 
     "skip record if offset verification fails after processing envelope" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val testVerification = (offset: Long) => {
+        if (offset == 3L)
+          VerificationFailure("test")
+        else
+          VerificationSuccess
+      }
+
+      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+
+      val projection =
+        JdbcProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = testSourceProvider,
+          jdbcSessionCreator,
+          handler = new ConcatHandler())
+
+      projectionTestKit.run(projection) {
+        withClue("checking: all values except skipped were concatenated") {
+          val concatStr = withRepo(_.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
+        }
+      }
     }
   }
 
