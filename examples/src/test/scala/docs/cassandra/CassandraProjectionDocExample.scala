@@ -173,6 +173,60 @@ object CassandraProjectionDocExample {
     //#running-with-daemon-process
   }
 
+  object IllustrateRunningWithActor {
+
+    Behaviors.setup[String] { context =>
+      //#running-with-actor
+      def sourceProvider(tag: String) =
+        EventSourcedProvider
+          .eventsByTag[ShoppingCart.Event](
+            system = system,
+            readJournalPluginId = CassandraReadJournal.Identifier,
+            tag = tag)
+
+      def projection(tag: String) =
+        CassandraProjection
+          .atLeastOnce(
+            projectionId = ProjectionId("shopping-carts", tag),
+            sourceProvider(tag),
+            handler = new ShoppingCartHandler)
+
+      val projection1 = projection("carts-1")
+
+      context.spawn(ProjectionBehavior(projection1), projection1.projectionId.id)
+      //#running-with-actor
+
+      Behaviors.empty
+    }
+  }
+
+  object IllustrateRunningWithSingleton {
+
+    //#running-with-singleton
+    import akka.cluster.typed.ClusterSingleton
+    import akka.cluster.typed.SingletonActor
+
+    def sourceProvider(tag: String) =
+      EventSourcedProvider
+        .eventsByTag[ShoppingCart.Event](
+          system = system,
+          readJournalPluginId = CassandraReadJournal.Identifier,
+          tag = tag)
+
+    def projection(tag: String) =
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", tag),
+          sourceProvider(tag),
+          handler = new ShoppingCartHandler)
+
+    val projection1 = projection("carts-1")
+
+    ClusterSingleton(system).init(SingletonActor(ProjectionBehavior(projection1), projection1.projectionId.id))
+    //#running-with-singleton
+
+  }
+
   object IllustrateProjectionSettings {
 
     //#projection-settings
