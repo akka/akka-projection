@@ -71,12 +71,12 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         done
       }
       .map { done =>
-        telemetry.onEnvelopeSuccess(projectionId, batchSize)
+        telemetry.onOffsetStored(projectionId, batchSize)
         done
       }
   }
 
-  private def timedProcess[T](eventProcessing: () => Future[T]): () => Future[T] = { () =>
+  private def measured[T](eventProcessing: () => Future[T]): () => Future[T] = { () =>
     val telemetryContext = telemetry.beforeProcess(projectionId)
     eventProcessing().map { t =>
       // TODO: measuring eventProcessing without knowing the size of the batch/group is
@@ -136,7 +136,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         case single: SingleHandlerStrategy[Envelope] =>
           val handler = single.handler()
           val handlerRecovery =
-            HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
+            HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
           Flow[ProjectionContextImpl[Offset, Envelope]].mapAsync(parallelism = 1) { context =>
             handlerRecovery
@@ -145,7 +145,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 context.offset,
                 context.offset,
                 abort.future,
-                timedProcess(() => handler.process(context.envelope)))
+                measured(() => handler.process(context.envelope)))
               .map(_ => context)
           }
 
@@ -154,7 +154,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
           val handler = grouped.handler()
           val handlerRecovery =
-            HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
+            HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
           Flow[ProjectionContextImpl[Offset, Envelope]]
             .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
@@ -169,7 +169,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   first.offset,
                   last.offset,
                   abort.future,
-                  timedProcess(() => handler.process(envelopes)))
+                  measured(() => handler.process(envelopes)))
                 .map(_ => last)
             }
 
@@ -204,7 +204,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
 
     val handlerRecovery =
-      HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
+      HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
     def processGrouped(
         handler: Handler[immutable.Seq[Envelope]],
@@ -221,7 +221,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           firstOffset,
           lastOffset,
           abort.future,
-          timedProcess(() => handler.process(envelopes)))
+          measured(() => handler.process(envelopes)))
       }
 
       sourceProvider match {
@@ -269,7 +269,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 context.offset,
                 context.offset,
                 abort.future,
-                timedProcess(() => handler.process(context.envelope)))
+                measured(() => handler.process(context.envelope)))
             reportProgress(processed, context.envelope, 1)
           }
 
@@ -297,7 +297,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
 
     val handlerRecovery =
-      HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
+      HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
     handlerStrategy match {
       case single: SingleHandlerStrategy[Envelope] =>
@@ -312,7 +312,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                     context.offset,
                     context.offset,
                     abort.future,
-                    timedProcess(() => handler.process(context.envelope)))
+                    measured(() => handler.process(context.envelope)))
               }
             reportProgress(processed, context.envelope, 1)
           }

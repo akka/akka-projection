@@ -2,11 +2,13 @@ package akka.projection.internal
 
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Random
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -15,6 +17,7 @@ import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.ActorSystem
 import akka.event.Logging
 import akka.event.LoggingAdapter
+import akka.projection.HandlerRecoveryStrategy
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionContext
@@ -97,94 +100,125 @@ class InternalProjectionStateMetricsSpec
   implicit val executionContext: ExecutionContext = testKit.system.executionContext
   val zero = scala.concurrent.duration.Duration.Zero
 
-  "A metric counting successful offset progress" must {
+  "A metric counting events via offsets committed" must {
     " when running on `at-least-once`" must {
 
-      "handle single envelopes (without afterEnvelops optimization)" in {
-        val single = Handlers.single
-        val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
+      " use a singleHandler" must {
+        "count envelopes (without afterEnvelops optimization)" in {
+          val single = Handlers.single
+          val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
 
-        runInternal(tt.projectionState) {
-          withClue("check - all values were concatenated") {
-            single.concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
+          runInternal(tt.projectionState) {
+            withClue("check - all values were concatenated") {
+              single.concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
+            }
+            withClue("the success counter reflects all events as processed") {
+              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            }
           }
-          withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.successfullyProcessed.get should be(6)
+        }
+        "count envelopes (with afterEnvelops optimization)" in {
+          val tt =
+            new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(Handlers.single))
+
+          runInternal(tt.projectionState) {
+            withClue("the success counter reflects all events as processed") {
+              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
+            }
+          }
+        }
+
+        "count envelopes more than once in case of failure" in {
+          val single = Handlers.singleWithFailure(0.5f)
+          val tt = new TelemetryTester(
+            AtLeastOnce(
+              afterEnvelopes = Some(1),
+              // using retryAndFail to try to get all message through
+              recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(10, 30.millis))),
+            SingleHandlerStrategy(single))
+
+          runInternal(tt.projectionState) {
+            withClue("the success counter reflects all events as processed") {
+              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+              tt.inMemTelemetry.errorInvocations.get should be > (0)
+              tt.inMemTelemetry.lastErrorThrowable.get.getMessage should be("Oh, no! Handler errored.")
+            }
+          }
+        }
+
+      }
+      " use a groupedHandler" must {
+        "count" ignore {
+          // this currently fails because reportProgress has no info of the group size.
+          val tt = new TelemetryTester(
+            AtLeastOnce(),
+            GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
+
+          runInternal(tt.projectionState) {
+            withClue("the success counter reflects all events as processed") {
+              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
+            }
           }
         }
       }
+      " use a flowHandler" must {
+        "count envelopes" in {
+          val tt =
+            new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](Handlers.flow))
 
-      "handle single envelopes (with afterEnvelops optimization)" in {
-        val tt =
-          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(Handlers.single))
-
-        runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.successfullyProcessed.get should be(6)
-            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(2)
-          }
-        }
-      }
-
-      "handle grouped envelopes" ignore {
-        // this currently fails because reportProgress has no info of the group size.
-        val tt = new TelemetryTester(
-          AtLeastOnce(),
-          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
-
-        runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.successfullyProcessed.get should be(6)
-            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(3)
-          }
-        }
-      }
-      "handle flows" in {
-        val tt =
-          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](Handlers.flow))
-
-        runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.successfullyProcessed.get should be(6)
-            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(2)
+          runInternal(tt.projectionState) {
+            withClue("the success counter reflects all events as processed") {
+              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
+            }
           }
         }
       }
     }
     " when running on `exactly-once`" must {
-      "handle single envelopes" in {
-        val tt =
-          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+      " use a singleHandler" must {
+        "count envelopes" in {
+          val tt =
+            new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
 
-        runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.successfullyProcessed.get should be(6)
-            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(6)
+          runInternal(tt.projectionState) {
+            withClue("the success counter reflects all events as processed") {
+              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+            }
           }
         }
       }
-      "handle grouped envelopes" in {
-        val tt =
-          new TelemetryTester(ExactlyOnce(), GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2)))
+      " use a groupedHandler" must {
+        "count envelopes" in {
+          val tt =
+            new TelemetryTester(ExactlyOnce(), GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2)))
 
-        runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.successfullyProcessed.get should be(6)
-            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(3)
+          runInternal(tt.projectionState) {
+            withClue("the success counter reflects all events as processed") {
+              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
+            }
           }
         }
       }
-      "handle flows (UNSUPPORTED)" ignore {}
+      " use a flowHandler" must {
+        "count envelopes (UNSUPPORTED)" ignore {}
+      }
     }
     " when running on `at-most-once`" must {
-      "handle single envelopes" in {
-        val tt =
-          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+      " use a singleHandler" must {
+        "count envelopes" in {
+          val tt =
+            new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
 
-        runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.successfullyProcessed.get should be(6)
-            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(6)
+          runInternal(tt.projectionState) {
+            withClue("the success counter reflects all events as processed") {
+              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+            }
           }
         }
       }
@@ -220,10 +254,14 @@ object Handlers {
   }
   // The projectionSettings will only be used as a fallback. The OffsetHandler and
   // the HandlerStrategy arguments take precedence
-  val single = new Handler[Envelope] with ConcatHandlers {
+  val single = singleWithFailure()
+  def singleWithFailure(successRatio: Float = 1.0f) = new Handler[Envelope] with ConcatHandlers {
+    require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
     override def concatStr = acc
     var acc = ""
-    override def process(envelope: Envelope): Future[Done] = synchronized {
+    override def process(envelope: Envelope): Future[Done] = {
+      if (Random.between(0f, 1f) > successRatio)
+        Future.failed(throw new RuntimeException("Oh, no! Handler errored."))
       acc = append(acc, envelope.message)
       Future.successful(Done)
     }
@@ -232,7 +270,7 @@ object Handlers {
   val grouped = new Handler[Seq[Envelope]] with ConcatHandlers {
     override def concatStr = acc
     var acc = ""
-    override def process(envelopes: Seq[Envelope]): Future[Done] = synchronized {
+    override def process(envelopes: Seq[Envelope]): Future[Done] = {
       val x = envelopes.map(_.message).mkString("|")
       acc = append(acc, x)
       Future.successful(Done)
@@ -311,21 +349,29 @@ class InMemInternalProjectionState[Offset, Envelope](
   }
 }
 class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry(projectionId, system) {
-  val successfullyProcessed = new AtomicInteger(0)
-  val successfullyProcessedInvocations = new AtomicInteger(0)
+  val afterProcessInvocations = new AtomicInteger(0)
+  val offsetsSuccessfullyCommitted = new AtomicInteger(0)
+  val onOffsetStoredInvocations = new AtomicInteger(0)
+  val errorInvocations = new AtomicInteger(0)
+  val lastErrorThrowable = new AtomicReference[Throwable]()
 
   override def failed(projectionId: ProjectionId, cause: Throwable): Unit = ???
 
   override def stopped(projectionId: ProjectionId): Unit = ???
 
-  override def beforeProcess[Offset, Envelope](projectionId: ProjectionId): AnyRef = { null }
+  override def beforeProcess(projectionId: ProjectionId): AnyRef = { null }
 
-  override def afterProcess[Offset, Envelope](projectionId: ProjectionId, telemetryContext: AnyRef): Unit = {}
-
-  override def onEnvelopeSuccess[Offset, Envelope](projectionId: ProjectionId, successCount: Int): Unit = {
-    successfullyProcessedInvocations.incrementAndGet()
-    successfullyProcessed.addAndGet(successCount)
+  override def afterProcess(projectionId: ProjectionId, telemetryContext: AnyRef): Unit = {
+    afterProcessInvocations.incrementAndGet()
   }
 
-  override def error[Offset, Envelope](projectionId: ProjectionId, cause: Throwable): Unit = ???
+  override def onOffsetStored(projectionId: ProjectionId, successCount: Int): Unit = {
+    onOffsetStoredInvocations.incrementAndGet()
+    offsetsSuccessfullyCommitted.addAndGet(successCount)
+  }
+
+  override def error(projectionId: ProjectionId, cause: Throwable): Unit = {
+    lastErrorThrowable.set(cause)
+    errorInvocations.incrementAndGet()
+  }
 }

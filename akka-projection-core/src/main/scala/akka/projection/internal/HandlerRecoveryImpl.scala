@@ -34,8 +34,9 @@ import akka.projection.StatusObserver
       projectionId: ProjectionId,
       recoveryStrategy: HandlerRecoveryStrategy,
       logger: LoggingAdapter,
-      statusObserver: StatusObserver[Envelope]): HandlerRecoveryImpl[Offset, Envelope] =
-    new HandlerRecoveryImpl(projectionId, recoveryStrategy, logger, statusObserver)
+      statusObserver: StatusObserver[Envelope],
+      telemetry: Telemetry): HandlerRecoveryImpl[Offset, Envelope] =
+    new HandlerRecoveryImpl(projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
 }
 
@@ -46,7 +47,8 @@ import akka.projection.StatusObserver
     projectionId: ProjectionId,
     recoveryStrategy: HandlerRecoveryStrategy,
     logger: LoggingAdapter,
-    statusObserver: StatusObserver[Envelope]) {
+    statusObserver: StatusObserver[Envelope],
+    telemetry: Telemetry) {
   def applyRecovery(
       env: Envelope,
       firstOffset: Offset, // used for logging
@@ -63,23 +65,20 @@ import akka.projection.StatusObserver
       if (abort.isCompleted) {
         abort
       } else {
-        try {
+        (try {
           futureCallback()
         } catch {
           case NonFatal(e) =>
             // in case the callback throws instead of returning failed Future
             Future.failed(e)
+        }).recoverWith {
+          // using recoverWith instead of `.failed.foreach` to make sure that calls to statusObserver
+          // are invoked in sequential order
+          case err if !abort.isCompleted =>
+            telemetry.error(projectionId, err)
+            statusObserver.error(projectionId, env, err, recoveryStrategy)
+            Future.failed(err)
         }
-      }
-    }
-
-    val retryFutureCallback: () => Future[Done] = { () =>
-      tryFutureCallback().recoverWith {
-        // using recoverWith instead of `.failed.foreach` to make sure that calls to statusObserver
-        // are invoked in sequential order
-        case err if !abort.isCompleted =>
-          statusObserver.error(projectionId, env, err, recoveryStrategy)
-          Future.failed(err)
       }
     }
 
@@ -94,8 +93,6 @@ import akka.projection.StatusObserver
       case _ if abort.isCompleted =>
         abort
       case err =>
-        statusObserver.error(projectionId, env, err, recoveryStrategy)
-
         def delayFunction(delay: FiniteDuration): Int => Option[FiniteDuration] = { _ =>
           abort.value match {
             case None             => Some(delay)
@@ -137,7 +134,7 @@ import akka.projection.StatusObserver
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val retried = after(delay, scheduler)(retry(retryFutureCallback, retries - 1, delayFunction(delay)))
+            val retried = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delayFunction(delay)))
             retried.failed.foreach { exception =>
               if (!abort.isCompleted)
                 logger.error(
@@ -161,7 +158,7 @@ import akka.projection.StatusObserver
 
             // retries - 1 because retry() is based on attempts
             // first attempt is performed immediately and therefore we must first delay
-            val retried = after(delay, scheduler)(retry(retryFutureCallback, retries - 1, delayFunction(delay)))
+            val retried = after(delay, scheduler)(retry(tryFutureCallback, retries - 1, delayFunction(delay)))
             retried.failed.foreach { exception =>
               logger.warning(
                 "[{}] Failed to process {} after [{}] attempts. " +

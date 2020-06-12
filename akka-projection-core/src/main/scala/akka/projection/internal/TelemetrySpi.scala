@@ -5,6 +5,7 @@
 package akka.projection.internal
 
 import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 import akka.projection.ProjectionId
 
 object TelemetryProvider {
@@ -26,11 +27,30 @@ abstract class Telemetry(projectionId: ProjectionId, system: ActorSystem[_]) {
   def stopped(projectionId: ProjectionId): Unit
 
   // Per envelope
-  def beforeProcess[Offset, Envelope](projectionId: ProjectionId): AnyRef
-  def afterProcess[Offset, Envelope](projectionId: ProjectionId, telemetryContext: AnyRef): Unit
-  // Only invoked when the offset is committed. Pass the number of envelopes committed
-  def onEnvelopeSuccess[Offset, Envelope](projectionId: ProjectionId, successCount: Int): Unit
+  def beforeProcess(projectionId: ProjectionId): AnyRef
+  def afterProcess(projectionId: ProjectionId, telemetryContext: AnyRef): Unit
+
+  /** Only invoked when the offset is committed. Pass the number of envelopes committed */
+  def onOffsetStored(projectionId: ProjectionId, batchSize: Int): Unit
   // Invoked when processing an envelope fails. If the operation is part of a batch
   // or a group it will be invoked once anyway
-  def error[Offset, Envelope](projectionId: ProjectionId, cause: Throwable): Unit
+  def error(projectionId: ProjectionId, cause: Throwable): Unit
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object NoopTelemetry extends Telemetry(null, null) {
+  override def failed(projectionId: ProjectionId, cause: Throwable): Unit = {}
+
+  override def stopped(projectionId: ProjectionId): Unit = {}
+
+  override def beforeProcess(projectionId: ProjectionId): AnyRef = null
+
+  override def afterProcess(projectionId: ProjectionId, telemetryContext: AnyRef): Unit = {}
+
+  /** Only invoked when the offset is committed. Pass the number of envelopes committed */
+  override def onOffsetStored(projectionId: ProjectionId, batchSize: Int): Unit = {}
+
+  override def error(projectionId: ProjectionId, cause: Throwable): Unit = {}
 }
