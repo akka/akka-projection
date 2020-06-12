@@ -264,8 +264,10 @@ public interface CassandraProjectionDocExample {
       );
     }
 
-    ActorRef<ProjectionBehavior.Command> projection1 =
-        context.spawn(ProjectionBehavior.create(projection("carts-1")), "projection1");
+    Projection<EventEnvelope<ShoppingCart.Event>> projection1 = projection("carts-1");
+
+    ActorRef<ProjectionBehavior.Command> projection1Ref =
+        context.spawn(ProjectionBehavior.create(projection1), projection1.projectionId().id());
     //#running-with-actor
   }
 
@@ -286,9 +288,11 @@ public interface CassandraProjectionDocExample {
       );
     }
 
-    ActorRef<ProjectionBehavior.Command> projection1 =
+    Projection<EventEnvelope<ShoppingCart.Event>> projection1 = projection("carts-1");
+
+    ActorRef<ProjectionBehavior.Command> projection1Ref =
         ClusterSingleton.get(system).init(SingletonActor.of(
-        ProjectionBehavior.create(projection("carts-1")), "projection1"));
+        ProjectionBehavior.create(projection1), projection1.projectionId().id()));
     //#running-with-singleton
   }
 

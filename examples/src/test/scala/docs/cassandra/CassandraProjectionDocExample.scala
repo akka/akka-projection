@@ -191,7 +191,9 @@ object CassandraProjectionDocExample {
             sourceProvider(tag),
             handler = new ShoppingCartHandler)
 
-      context.spawn(ProjectionBehavior(projection("carts-1")), "projection1")
+      val projection1 = projection("carts-1")
+
+      context.spawn(ProjectionBehavior(projection1), projection1.projectionId.id)
       //#running-with-actor
 
       Behaviors.empty
@@ -218,7 +220,9 @@ object CassandraProjectionDocExample {
           sourceProvider(tag),
           handler = new ShoppingCartHandler)
 
-    ClusterSingleton(system).init(SingletonActor(ProjectionBehavior(projection("carts-1")), "projection1"))
+    val projection1 = projection("carts-1")
+
+    ClusterSingleton(system).init(SingletonActor(ProjectionBehavior(projection1), projection1.projectionId.id))
     //#running-with-singleton
 
   }
