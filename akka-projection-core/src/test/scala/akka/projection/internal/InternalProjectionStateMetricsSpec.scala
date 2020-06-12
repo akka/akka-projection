@@ -141,8 +141,9 @@ class InternalProjectionStateMetricsSpec
           runInternal(tt.projectionState) {
             withClue("the success counter reflects all events as processed") {
               tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-              tt.inMemTelemetry.errorInvocations.get should be > (0)
-              tt.inMemTelemetry.lastErrorThrowable.get.getMessage should be("Oh, no! Handler errored.")
+              // the two asserts below are part of the failures metrics. Move them elsewhere
+//              tt.inMemTelemetry.errorInvocations.get should be > (0)
+//              tt.inMemTelemetry.lastErrorThrowable.get.getMessage should be("Oh, no! Handler errored.")
             }
           }
         }
