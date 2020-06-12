@@ -85,8 +85,7 @@ Scala
 Java
 :  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #running-with-actor }
 
-Be aware of that the projection and its offset storage is based on that only one instance of the unique `ProjectionId`
-is running at a time. If more than one instance with the same `ProjectionId` are running concurrently they will
+Be aware of that the projection and its offset storage is based on the `ProjectionId`. If more than one instance with the same `ProjectionId` are running concurrently they will
 overwrite each others offset storage with undefined and unpredictable results.
 
 ## Running in Cluster Singleton
