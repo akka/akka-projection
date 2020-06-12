@@ -11,7 +11,6 @@ import akka.Done
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.scaladsl.StatefulHandler
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.scaladsl.Source
 import org.slf4j.LoggerFactory
@@ -111,6 +110,8 @@ object WordCountDocExample {
   object IllustrateStatefulHandlerLoadingInitialState {
 
     //#loadingInitialState
+    import akka.projection.scaladsl.StatefulHandler
+
     class WordCountHandler(projectionId: ProjectionId, repository: WordCountRepository)(implicit ec: ExecutionContext)
         extends StatefulHandler[Map[Word, Count], WordEnvelope] {
 
@@ -132,6 +133,8 @@ object WordCountDocExample {
   object IllustrateStatefulHandlerLoadingStateOnDemand {
 
     //#loadingOnDemand
+    import akka.projection.scaladsl.StatefulHandler
+
     class WordCountHandler(projectionId: ProjectionId, repository: WordCountRepository)(implicit ec: ExecutionContext)
         extends StatefulHandler[Map[Word, Count], WordEnvelope] {
 
