@@ -145,7 +145,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 context.offset,
                 context.offset,
                 abort.future,
-                timedProcess(context, () => handler.process(context.envelope)))
+                timedProcess(() => handler.process(context.envelope)))
               .map(_ => context)
           }
 
@@ -169,7 +169,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   first.offset,
                   last.offset,
                   abort.future,
-                  timedProcess(group, () => handler.process(envelopes)))
+                  timedProcess(() => handler.process(envelopes)))
                 .map(_ => last)
             }
 
