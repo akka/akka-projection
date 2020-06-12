@@ -92,28 +92,43 @@ class WordCountDocExampleSpec
 
       val projectionId = genRandomProjectionId()
 
-      val handler = new WordCountHandler(projectionId, repository)
-
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, WordEnvelope](projectionId, new WordSource, handler)
+          .atLeastOnce[Long, WordEnvelope](
+            projectionId,
+            sourceProvider = new WordSource,
+            handler = new WordCountHandler(projectionId, repository))
 
       runAndAssert(projection)
     }
 
-    "have support for actor Behavior as handler" in {
+    "have support for actor Behavior as handler - loading initial state" in {
+      import IllstrateActorLoadingInitialState._
+
+      val projectionId = genRandomProjectionId()
+
+      //#actorHandlerProjection
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, WordEnvelope](
+            projectionId,
+            sourceProvider = new WordSource,
+            handler = new WordCountActorHandler(WordCountProcessor(projectionId, repository)))
+      //#actorHandlerProjection
+
+      runAndAssert(projection)
+    }
+
+    "have support for actor Behavior as handler - loading state on demand" in {
       import IllstrateActorLoadingStateOnDemand._
 
       val projectionId = genRandomProjectionId()
 
-      //#actorHandler
       val handler = new WordCountActorHandler(WordCountProcessor(projectionId, repository))
 
       val projection =
         CassandraProjection
           .atLeastOnce[Long, WordEnvelope](projectionId, new WordSource, handler)
-          .withSaveOffset(afterEnvelopes = 1, afterDuration = Duration.Zero)
-      //#actorHandler
 
       runAndAssert(projection)
     }

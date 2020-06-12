@@ -2,9 +2,9 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.scaladsl
+package akka.projection.javadsl
 
-import scala.concurrent.Future
+import java.util.concurrent.CompletionStage
 
 import akka.Done
 import akka.actor.typed.ActorRef
@@ -23,19 +23,19 @@ abstract class ActorHandler[Envelope, T](val behavior: Behavior[T]) extends Hand
 
   /**
    * The `process` method is invoked for each `Envelope`.
-   * One envelope is processed at a time. The returned `Future` is to be completed when the processing
+   * One envelope is processed at a time. The returned `CompletionStage` is to be completed when the processing
    * of the `envelope` has finished. It will not be invoked with the next envelope until after the returned
-   * `Future` has been completed.
+   * `CompletionStage` has been completed.
    *
    * The `behavior` is spawned when the `Projection` is started and the `ActorRef` is passed in as
    * a parameter here.
    *
    * You will typically use the `AskPattern.ask` to delegate the processing of the `envelope` to
-   * the actor and the returned `Future` corresponds to the reply of the `ask`.
+   * the actor and the returned `CompletionStage` corresponds to the reply of the `ask`.
    */
-  def process(envelope: Envelope, actor: ActorRef[T]): Future[Done]
+  def process(envelope: Envelope, actor: ActorRef[T]): CompletionStage[Done]
 
-  override final def process(envelope: Envelope): Future[Done] =
+  override final def process(envelope: Envelope): CompletionStage[Done] =
     process(envelope, getActor())
 
 }

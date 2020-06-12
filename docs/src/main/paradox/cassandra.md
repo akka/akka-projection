@@ -209,67 +209,21 @@ Scala
 Java
 :  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingOnDemand }
 
-### Handler as an actor
+### Actor handler
 
-A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html).
+A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html),
+which is described in @ref:[Processing with Actor](actor.md).
 
-An actor `Behavior` for the word count example that was introduced in the section about @ref:[Stateful handler](#stateful-handler):
+### Flow handler
 
-Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #behaviorLoadingInitialState }
-
-FIXME Java examples
-
-The handler and the `Projection` can be definined as:
-
-Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/akka/projection/cassandra/scaladsl/WordCountDocExampleSpec.scala) { #projection }
-
-The `Behavior` given to the `ActorHandler` is spawned automatically and each envelope is sent to the actor
-with the `envelopeMessage` factory defined for the `ActorHandler`. In addition to the envelope there is also
-an @scala[`replyTo: ActorRef[Try[Done]]`]@java[`replyTo: ActorRef<FIXME>`] parameter in the `envelopeMessage` factory.
-The actor is supposed to send a response message to that `ActorRef` when it has completed the processing of the
-envelope. The @scala[`Try`]@java[FIXME] indicates if the processing was successful or failed.
-
-Another implementation that is loading the current count for a word on demand, and thereafter caches it in the
-in-memory state: 
-
-Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #behaviorLoadingOnDemand }   
+An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes,
+which is described in @ref:[Processing with Akka Streams](flow.md).
 
 ### Handler lifecycle
 
 You can override the `start` and `stop` methods of the @apidoc[Handler] to implement initialization
 before first envelope is processed and resource cleanup when the projection is stopped.
 Those methods are also called when the `Projection` is restarted after failure.
-
-## Processing with Akka Streams
-
-An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes with at-least-once
-semantics.
-
-Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #atLeastOnceFlow }
-
-Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atLeastOnceFlow }
-
-The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
-in the context of the `FlowWithContext` and is stored in Cassandra when corresponding `Done` is emitted.
-Since the offset is stored after processing the envelope it means that if the projection is restarted
-from previously stored offset some envelopes may be processed more than once.
-
-There are a few caveats to be aware of:
-
-* If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
-  will be processed again if the projection is restarted and no later offset was stored.
-* The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
-  that the first offset is stored and when the projection is restarted that offset is considered completed even
-  though more of the duplicated enveloped were never processed.
-* The flow must not reorder elements, because the offsets may be stored in the wrong order and
-  and when the projection is restarted all envelopes up to the latest stored offset are considered
-  completed even though some of them may not have been processed. This is the reason the flow is
-  restricted to `FlowWithContext` rather than ordinary `Flow`.
 
 ## Schema
 

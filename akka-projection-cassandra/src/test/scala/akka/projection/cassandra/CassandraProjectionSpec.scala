@@ -25,6 +25,9 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.Behavior
+import akka.actor.typed.PostStop
+import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
@@ -34,13 +37,13 @@ import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.scaladsl.CassandraProjection
+import akka.projection.scaladsl.ActorHandler
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
-import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
@@ -629,17 +632,6 @@ class CassandraProjectionSpec
             repository.concatToText(env.id, env.message)
           }
 
-      // throttle not in FlowWithContext yet. It's possible to do like this.
-      val _ =
-        Flow[Envelope]
-          .throttle(1, 50.millis)
-          .asFlowWithContext[Envelope, Envelope, Envelope]({
-            case (env, _) => env
-          }) { env => env }
-          .mapAsync(1) { env =>
-            repository.concatToText(env.id, env.message)
-          }
-
       val projection =
         CassandraProjection
           .atLeastOnceFlow(projectionId, sourceProvider(system, entityId), flowHandler)
@@ -651,6 +643,66 @@ class CassandraProjectionSpec
           concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
         }
       }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
+        offset shouldBe 6L
+      }
+    }
+  }
+
+  "A Cassandra projection with actor handler" must {
+
+    "start and stop actor" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val receiveProbe = createTestProbe[Envelope]()
+      val stopProbe = createTestProbe[Done]()
+
+      case class Req(envelope: Envelope, replyTo: ActorRef[Done])
+
+      val behavior: Behavior[Req] =
+        Behaviors
+          .receiveMessage[Req] {
+            case Req(env, replyTo) =>
+              receiveProbe.ref ! env
+              replyTo ! Done
+              Behaviors.same
+          }
+          .receiveSignal {
+            case (_, PostStop) =>
+              stopProbe.ref ! Done
+              Behaviors.same
+          }
+
+      val actorHandler: Handler[Envelope] = new ActorHandler[Envelope, Req](behavior) {
+        import akka.actor.typed.scaladsl.AskPattern._
+
+        override def process(envelope: Envelope, actor: ActorRef[Req]): Future[Done] = {
+          actor.ask[Done](replyTo => Req(envelope, replyTo))
+        }
+      }
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce(projectionId, sourceProvider(system, entityId), actorHandler)
+          .withSaveOffset(1, 1.minute)
+
+      projectionTestKit.runWithTestSink(projection) { testProbe =>
+        testProbe.request(100)
+        testProbe.expectNextN(6)
+        testProbe.expectComplete()
+      }
+
+      receiveProbe.receiveMessage().message shouldBe "abc"
+      receiveProbe.receiveMessage().message shouldBe "def"
+      receiveProbe.receiveMessage().message shouldBe "ghi"
+      receiveProbe.receiveMessage().message shouldBe "jkl"
+      receiveProbe.receiveMessage().message shouldBe "mno"
+      receiveProbe.receiveMessage().message shouldBe "pqr"
+
+      stopProbe.receiveMessage()
+
       withClue("check - all offsets were seen") {
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
         offset shouldBe 6L

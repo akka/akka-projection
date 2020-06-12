@@ -172,6 +172,28 @@ object WordCountDocExample {
   }
 
   object IllstrateActorLoadingInitialState {
+    import akka.actor.typed.ActorRef
+    import akka.actor.typed.Behavior
+
+    //#actorHandler
+    import akka.projection.scaladsl.ActorHandler
+
+    class WordCountActorHandler(behavior: Behavior[WordCountProcessor.Command])(implicit system: ActorSystem[_])
+        extends ActorHandler[WordEnvelope, WordCountProcessor.Command](behavior) {
+      import akka.actor.typed.scaladsl.AskPattern._
+      import system.executionContext
+
+      private implicit val askTimeout: Timeout = 5.seconds
+
+      override def process(envelope: WordEnvelope, actor: ActorRef[WordCountProcessor.Command]): Future[Done] = {
+        actor.ask[Try[Done]](replyTo => WordCountProcessor.Handle(envelope, replyTo)).map {
+          case Success(_)   => Done
+          case Failure(exc) => throw exc
+        }
+      }
+    }
+    //#actorHandler
+
     //#behaviorLoadingInitialState
     import akka.actor.typed.ActorRef
     import akka.actor.typed.Behavior

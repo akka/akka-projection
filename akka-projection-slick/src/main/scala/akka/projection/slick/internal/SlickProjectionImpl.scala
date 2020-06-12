@@ -140,7 +140,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     copy(statusObserver = observer)
 
   private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
-    None // ActorHandler not supported by SlickProjection (doesn't make sense for DBIO handler)
+    handlerStrategy.actorHandlerInit
 
   /**
    * INTERNAL API
