@@ -30,9 +30,55 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
-import akka.projection.jdbc.javadsl.JdbcSession
+import akka.projection.jdbc.JdbcSession
+import akka.projection.jdbc.scaladsl.JdbcHandler
+import akka.projection.scaladsl
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] object JdbcProjectionImpl {
+
+  private[projection] def createOffsetStore[S <: JdbcSession](sessionFactory: () => S)(
+      implicit system: ActorSystem[_]) =
+    new JdbcOffsetStore[S](JdbcSettings(system), sessionFactory)
+
+  private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionFactory: () => S,
+      handler: JdbcHandler[Envelope, S],
+      offsetStore: JdbcOffsetStore[S])(implicit system: ActorSystem[_]) = {
+
+    new Handler[Envelope] {
+
+      private val logger = Logging(system.classicSystem, classOf[JdbcProjectionImpl[_, _, _]])
+
+      override def process(envelope: Envelope): Future[Done] = {
+        val offset = sourceProvider.extractOffset(envelope)
+        // this scope ensures that the blocking DB dispatcher is used solely for DB operations
+        implicit val executionContext: ExecutionContext = offsetStore.executionContext
+        JdbcSession
+          .withSession(sessionFactory) { sess =>
+            sess.withConnection[Unit] { conn =>
+              offsetStore.saveOffsetBlocking(conn, projectionId, offset)
+            }
+            // run users handler
+            handler.process(sess, envelope)
+          }
+          .map(_ => Done)
+
+      }
+
+      override def start(): Future[Done] = handler.start()
+      override def stop(): Future[Done] = handler.stop()
+    }
+  }
+}
 
 /**
  * INTERNAL API
@@ -48,9 +94,13 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     handlerStrategy: HandlerStrategy[Envelope],
     override val statusObserver: StatusObserver[Envelope],
     offsetStore: JdbcOffsetStore[S])
-    extends javadsl.ExactlyOnceProjection[Offset, Envelope]
+    extends scaladsl.ExactlyOnceProjection[Offset, Envelope]
+    with javadsl.ExactlyOnceProjection[Offset, Envelope]
+    with scaladsl.GroupedProjection[Offset, Envelope]
     with javadsl.GroupedProjection[Offset, Envelope]
+    with scaladsl.AtLeastOnceProjection[Offset, Envelope]
     with javadsl.AtLeastOnceProjection[Offset, Envelope]
+    with scaladsl.AtLeastOnceFlowProjection[Offset, Envelope]
     with javadsl.AtLeastOnceFlowProjection[Offset, Envelope]
     with SettingsImpl[JdbcProjectionImpl[Offset, Envelope, S]]
     with InternalProjection {

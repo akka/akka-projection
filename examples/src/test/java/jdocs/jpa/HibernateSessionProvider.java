@@ -5,7 +5,7 @@
 package jdocs.jpa;
 
 import akka.japi.function.Function;
-import akka.projection.jdbc.javadsl.JdbcSession;
+import akka.projection.jdbc.JdbcSession;
 import org.hibernate.Session;
 import org.hibernate.jdbc.ReturningWork;
 

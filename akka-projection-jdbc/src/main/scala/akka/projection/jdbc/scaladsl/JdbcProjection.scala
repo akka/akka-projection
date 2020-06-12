@@ -2,25 +2,20 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.jdbc.javadsl
+package akka.projection.jdbc.scaladsl
 
-import java.util.concurrent.CompletionStage
-
-import scala.compat.java8.FutureConverters._
+import scala.concurrent.Future
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.japi.function.Creator
 import akka.projection.ProjectionId
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.SourceProviderAdapter
-import akka.projection.javadsl.ExactlyOnceProjection
-import akka.projection.javadsl.SourceProvider
 import akka.projection.jdbc.JdbcSession
-import akka.projection.jdbc.internal.JdbcHandlerAdapter
 import akka.projection.jdbc.internal.JdbcProjectionImpl
+import akka.projection.scaladsl.ExactlyOnceProjection
+import akka.projection.scaladsl.SourceProvider
 
 object JdbcProjection {
 
@@ -34,25 +29,23 @@ object JdbcProjection {
   def exactlyOnce[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      sessionCreator: Creator[S],
+      sessionFactory: () => S,
       handler: JdbcHandler[Envelope, S])(implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
-    val sessionFactory = () => sessionCreator.create()
-    val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)
 
     val adaptedHandler =
       JdbcProjectionImpl.adaptedHandlerForExactlyOnce(
         projectionId,
-        javaSourceProvider,
+        sourceProvider,
         sessionFactory,
-        new JdbcHandlerAdapter(handler),
+        handler,
         offsetStore)
 
     new JdbcProjectionImpl(
       projectionId,
-      javaSourceProvider,
-      sessionFactory = sessionFactory,
+      sourceProvider,
+      sessionFactory,
       settingsOpt = None,
       restartBackoffOpt = None,
       ExactlyOnce(),
@@ -67,7 +60,7 @@ object JdbcProjection {
    * before the system is started.
    */
   def createOffsetTableIfNotExists[S <: JdbcSession](sessionFactory: () => S)(
-      implicit system: ActorSystem[_]): CompletionStage[Done] =
-    JdbcProjectionImpl.createOffsetStore(sessionFactory).createIfNotExists().toJava
+      implicit system: ActorSystem[_]): Future[Done] =
+    JdbcProjectionImpl.createOffsetStore(sessionFactory).createIfNotExists()
 
 }
