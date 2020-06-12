@@ -9,6 +9,7 @@ import java.util.concurrent.CompletionStage
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.internal.CassandraProjectionImpl
@@ -108,7 +109,8 @@ object CassandraProjection {
   def atLeastOnceFlow[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _]): AtLeastOnceFlowProjection[Offset, Envelope] =
+      handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])
+      : AtLeastOnceFlowProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),

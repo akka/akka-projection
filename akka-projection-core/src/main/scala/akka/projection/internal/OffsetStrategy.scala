@@ -10,6 +10,7 @@ import scala.concurrent.duration.FiniteDuration
 import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionContext
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
@@ -91,7 +92,7 @@ private[projection] final case class GroupedHandlerStrategy[Envelope](
  */
 @InternalApi
 private[projection] final case class FlowHandlerStrategy[Envelope](
-    flowCtx: FlowWithContext[Envelope, Envelope, Done, Envelope, _])
+    flowCtx: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])
     extends HandlerStrategy[Envelope] {
   override val lifecycle: HandlerLifecycle = new HandlerLifecycle {}
 
