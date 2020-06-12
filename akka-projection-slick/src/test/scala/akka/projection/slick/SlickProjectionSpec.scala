@@ -183,7 +183,7 @@ class SlickProjectionSpec
 
   val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, SlickSettings(system))
 
-  val projectionTestKit = new ProjectionTestKit(testKit)
+  val projectionTestKit = ProjectionTestKit(testKit)
 
   override protected def afterAll(): Unit = {
     super.afterAll()

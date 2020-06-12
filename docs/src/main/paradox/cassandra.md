@@ -130,7 +130,7 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #mutableState }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #mutableState }
 
 @@@ note
 
@@ -153,7 +153,7 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #envelope #sourceProvider }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #envelope #sourceProvider }
 
 and a repository for the interaction with the database:
 
@@ -161,15 +161,15 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #repository }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #repository }
 
 The `Projection` can be definined as:
 
 Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/akka/projection/cassandra/scaladsl/WordCountDocExampleSpec.scala) { #projection }
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExampleSpec.scala) { #projection }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExampleTest.java) { #projection }
 
 The `handler` can be implemented as follows.
 
@@ -190,15 +190,15 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingInitialState }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingInitialState }
 
 The `StatefulHandler` has two methods that needs to be implemented. 
 
 * `initialState` - Invoked to load the initial state when the projection is started or if previous `process` failed.
 * `process(state, envelope)` - Invoked for each `Envelope`, one at a time. The `state` parameter is the completed
-  value of the previously returned `Future[State]` or the `initialState`.
+  value of the previously returned @scala[`Future[State]`]@java[`CompletionStage<State>`] or the `initialState`.
 
-If the previously returned `Future[State]` failed it will call `initialState` again and use that value.
+If the previously returned @scala[`Future[State]`]@java[`CompletionStage<State>`] failed it will call `initialState` again and use that value.
 
 Another implementation would be a handler that is loading the current count for a word on demand, and thereafter
 caches it in the in-memory state:
@@ -207,7 +207,7 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingOnDemand }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingOnDemand }
 
 ### Handler as an actor
 
