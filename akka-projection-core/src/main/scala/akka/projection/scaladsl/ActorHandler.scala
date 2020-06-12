@@ -33,9 +33,9 @@ abstract class ActorHandler[Envelope, T](val behavior: Behavior[T]) extends Hand
    * You will typically use the `AskPattern.ask` to delegate the processing of the `envelope` to
    * the actor and the returned `Future` corresponds to the reply of the `ask`.
    */
-  def process(envelope: Envelope, actor: ActorRef[T]): Future[Done]
+  def process(actor: ActorRef[T], envelope: Envelope): Future[Done]
 
   override final def process(envelope: Envelope): Future[Done] =
-    process(envelope, getActor())
+    process(getActor(), envelope)
 
 }

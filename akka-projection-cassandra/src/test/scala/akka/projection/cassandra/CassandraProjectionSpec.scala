@@ -678,7 +678,7 @@ class CassandraProjectionSpec
       val actorHandler: Handler[Envelope] = new ActorHandler[Envelope, Req](behavior) {
         import akka.actor.typed.scaladsl.AskPattern._
 
-        override def process(envelope: Envelope, actor: ActorRef[Req]): Future[Done] = {
+        override def process(actor: ActorRef[Req], envelope: Envelope): Future[Done] = {
           actor.ask[Done](replyTo => Req(envelope, replyTo))
         }
       }

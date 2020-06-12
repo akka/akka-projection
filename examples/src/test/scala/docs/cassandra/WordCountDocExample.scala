@@ -185,7 +185,7 @@ object WordCountDocExample {
 
       private implicit val askTimeout: Timeout = 5.seconds
 
-      override def process(envelope: WordEnvelope, actor: ActorRef[WordCountProcessor.Command]): Future[Done] = {
+      override def process(actor: ActorRef[WordCountProcessor.Command], envelope: WordEnvelope): Future[Done] = {
         actor.ask[Try[Done]](replyTo => WordCountProcessor.Handle(envelope, replyTo)).map {
           case Success(_)   => Done
           case Failure(exc) => throw exc
@@ -290,7 +290,7 @@ object WordCountDocExample {
 
       private implicit val askTimeout: Timeout = 5.seconds
 
-      override def process(envelope: WordEnvelope, actor: ActorRef[WordCountProcessor.Command]): Future[Done] = {
+      override def process(actor: ActorRef[WordCountProcessor.Command], envelope: WordEnvelope): Future[Done] = {
         actor.ask[Try[Done]](replyTo => WordCountProcessor.Handle(envelope, replyTo)).map {
           case Success(_)   => Done
           case Failure(exc) => throw exc
