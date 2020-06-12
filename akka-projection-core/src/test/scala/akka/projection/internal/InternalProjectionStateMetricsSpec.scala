@@ -17,6 +17,7 @@ import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationSuccess
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
@@ -25,6 +26,7 @@ import akka.projection.internal.InternalProjectionStateMetricsSpec.sourceProvide
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.SharedKillSwitch
+import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -93,17 +95,18 @@ class InternalProjectionStateMetricsSpec
 
   implicit val actorSystem: ActorSystem[Nothing] = testKit.system
   implicit val executionContext: ExecutionContext = testKit.system.executionContext
+  val zero = scala.concurrent.duration.Duration.Zero
 
   "A metric counting successful offset progress" must {
     " when running on `at-least-once`" must {
 
       "handle single envelopes (without afterEnvelops optimization)" in {
-        val tt = new TelemetryTester(
-          AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(scala.concurrent.duration.Duration.Zero)),
-          (handler) => SingleHandlerStrategy(handler))
+        val single = Handlers.single
+        val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
+
         runInternal(tt.projectionState) {
           withClue("check - all values were concatenated") {
-            tt.concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
+            single.concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
           }
           withClue("the success counter reflects all events as processed") {
             tt.inMemTelemetry.successfullyProcessed.get should be(6)
@@ -112,9 +115,8 @@ class InternalProjectionStateMetricsSpec
       }
 
       "handle single envelopes (with afterEnvelops optimization)" in {
-        val tt = new TelemetryTester(
-          AtLeastOnce(afterEnvelopes = Some(3), orAfterDuration = Some(500.millis)),
-          (handler) => SingleHandlerStrategy(handler))
+        val tt =
+          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(Handlers.single))
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
@@ -124,18 +126,40 @@ class InternalProjectionStateMetricsSpec
         }
       }
 
-      "handle grouped envelopes" in {}
-      "handle flows" in {}
+      "handle grouped envelopes" ignore {
+        // this currently fails because reportProgress has no info of the group size.
+        val tt = new TelemetryTester(
+          AtLeastOnce(),
+          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.successfullyProcessed.get should be(6)
+            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(3)
+          }
+        }
+      }
+      "handle flows" in {
+        val tt =
+          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](Handlers.flow))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.successfullyProcessed.get should be(6)
+            tt.inMemTelemetry.successfullyProcessedInvocations.get should be(2)
+          }
+        }
+      }
     }
     " when running on `exactly-once`" must {
       "handle single envelopes" in {}
       "handle grouped envelopes" in {}
-      "handle flows (not used)" ignore {}
+      "handle flows (UNSUPPORTED)" ignore {}
     }
     " when running on `at-most-once`" must {
       "handle single envelopes" in {}
       "handle grouped envelopes (not used)" ignore {}
-      "handle flows (not used)" ignore {}
+      "handle flows (UNSUPPORTED)" ignore {}
     }
 
     // TODO: use ProjectionTest's sink to control the pace.
@@ -160,27 +184,55 @@ class InternalProjectionStateMetricsSpec
 
 }
 
-class TelemetryTester(
-    val offsetStrategy: OffsetStrategy,
-    val handlerStrategyFactory: (Handler[Envelope]) => HandlerStrategy[Envelope])(implicit system: ActorSystem[_]) {
+object Handlers {
+  trait ConcatHandlers {
+    def concatStr = ""
+  }
+  // The projectionSettings will only be used as a fallback. The OffsetHandler and
+  // the HandlerStrategy arguments take precedence
+  val single = new Handler[Envelope] with ConcatHandlers {
+    override def concatStr = acc
+    var acc = ""
+    override def process(envelope: Envelope): Future[Done] = synchronized {
+      acc = append(acc, envelope.message)
+      Future.successful(Done)
+    }
+  }
+
+  val grouped = new Handler[Seq[Envelope]] with ConcatHandlers {
+    override def concatStr = acc
+    var acc = ""
+    override def process(envelopes: Seq[Envelope]): Future[Done] = synchronized {
+      val x = envelopes.map(_.message).mkString("|")
+      acc = append(acc, x)
+      Future.successful(Done)
+    }
+  }
+
+  val flow: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
+    var acc = ""
+    FlowWithContext[Envelope, ProjectionContext]
+      .map { env =>
+        acc = append(acc, env.message)
+        Done
+      }
+  }
+
+  private def append(acc: String, x: String) =
+    if (acc == "") x else s"${acc}|${x}"
+
+}
+
+class TelemetryTester(offsetStrategy: OffsetStrategy, handlerStrategy: HandlerStrategy[Envelope])(
+    implicit system: ActorSystem[_]) {
   private def genRandomProjectionId() =
     ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
 
   private val entityId = UUID.randomUUID().toString
   private val projectionId = genRandomProjectionId()
 
-  val projectionSettings = ProjectionSettings(system)
+  private val projectionSettings = ProjectionSettings(system)
 
-  // The projectionSettings will only be used as a fallback. The OffsetHandler and
-  // the HandlerStrategy arguments take precedence
-  var concatStr = ""
-  private val handler = new Handler[Envelope] {
-    override def process(envelope: Envelope): Future[Done] = synchronized {
-      concatStr = if (concatStr == "") envelope.message else s"$concatStr|${envelope.message}"
-      Future.successful(Done)
-    }
-  }
-  private val handlerStrategy = handlerStrategyFactory(handler)
   val projectionState =
     new InMemInternalProjectionState[Long, Envelope](
       projectionId,
