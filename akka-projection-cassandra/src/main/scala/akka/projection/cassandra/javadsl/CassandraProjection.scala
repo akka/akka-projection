@@ -12,12 +12,12 @@ import akka.annotation.ApiMayChange
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.internal.CassandraProjectionImpl
-import akka.projection.cassandra.internal.GroupedHandlerAdapter
-import akka.projection.cassandra.internal.HandlerAdapter
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.FlowHandlerStrategy
+import akka.projection.internal.GroupedHandlerAdapter
 import akka.projection.internal.GroupedHandlerStrategy
+import akka.projection.internal.HandlerAdapter
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.SourceProviderAdapter

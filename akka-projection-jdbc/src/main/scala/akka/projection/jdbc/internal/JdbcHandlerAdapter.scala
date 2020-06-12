@@ -14,7 +14,7 @@ import akka.projection.jdbc.javadsl
 import akka.projection.jdbc.scaladsl
 
 /**
- * INTERNAL API: Adapter from javadsl.Handler to scaladsl.Handler
+ * INTERNAL API: Adapter from javadsl.JdbcHandler to scaladsl.JdbcHandler
  */
 @InternalApi private[projection] class JdbcHandlerAdapter[Envelope, S <: JdbcSession](
     delegate: javadsl.JdbcHandler[Envelope, S])

@@ -2,7 +2,7 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.jdbc.scaladsl
+package akka.projection.jdbc
 
 import java.sql.Connection
 import java.sql.DriverManager
@@ -29,9 +29,10 @@ import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
-import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.internal.JdbcOffsetStore
 import akka.projection.jdbc.internal.JdbcSettings
+import akka.projection.jdbc.scaladsl.JdbcHandler
+import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.scaladsl.Source
