@@ -175,10 +175,17 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
 
         case f: FlowHandlerStrategy[Envelope] =>
           val flow =
-            f.flowCtx.asFlow
+            f.flowCtx.asFlow.watchTermination() {
+              case (_, futDone) =>
+                futDone.recoverWith {
+                  case t: Throwable =>
+                    telemetry.error(projectionId, t)
+                    futDone
+                }
+            }
           Flow[ProjectionContextImpl[Offset, Envelope]]
             .map { context => context.envelope -> context }
-            .via(flow) // TODO: measure this userflow
+            .via(flow)
             .map { case (_, context) => context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]] }
       }
 

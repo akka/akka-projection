@@ -11,12 +11,17 @@ import akka.projection.ProjectionId
 object TelemetryProvider {
   def start(projectionId: ProjectionId, system: ActorSystem[_]): Telemetry = {
     val dynamicAccess = system.dynamicAccess
-    val telemetryFqcn = system.settings.config.getString("akka.projection.telemetry.fqcn")
-    dynamicAccess
-      .createInstanceFor[Telemetry](
-        telemetryFqcn,
-        Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
-      .get
+    if (system.settings.config.hasPath("akka.projection.telemetry.fqcn")) {
+      val telemetryFqcn = system.settings.config.getString("akka.projection.telemetry.fqcn")
+      dynamicAccess
+        .createInstanceFor[Telemetry](
+          telemetryFqcn,
+          Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
+        .get
+    } else {
+      // TODO: review this default: should use a default value in reference.conf instead?
+      NoopTelemetry
+    }
   }
 }
 
