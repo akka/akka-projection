@@ -53,11 +53,11 @@ class InternalProjectionStateMetricsSpec
 
   // TODO: use ProjectionTest's sink to control the pace and have more fine grained assertions
 
-  "A metric counting events via offsets committed" must {
+  "A metric counting offsets committed" must {
     " when running on `at-least-once`" must {
 
       " use a singleHandler" must {
-        "count envelopes (without afterEnvelops optimization)" in {
+        "count offsets (without afterEnvelops optimization)" in {
           val single = Handlers.single
           val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
 
@@ -70,7 +70,7 @@ class InternalProjectionStateMetricsSpec
             }
           }
         }
-        "count envelopes (with afterEnvelops optimization)" in {
+        "count offsets (with afterEnvelops optimization)" in {
           val tt =
             new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(Handlers.single))
 
@@ -81,7 +81,7 @@ class InternalProjectionStateMetricsSpec
             }
           }
         }
-        "count envelopes only once in case of failure" in {
+        "count offsets only once in case of failure" in {
           val single = Handlers.singleWithFailure(0.5f)
           val tt = new TelemetryTester(
             AtLeastOnce(
@@ -98,7 +98,7 @@ class InternalProjectionStateMetricsSpec
         }
       }
       " use a groupedHandler" must {
-        "count envelopes" ignore {
+        "count offsets" ignore {
           // TODO: this tests fails. Need changes in prod code: `reportProgress has no info of the group size.
           val tt = new TelemetryTester(
             AtLeastOnce(),
@@ -116,7 +116,7 @@ class InternalProjectionStateMetricsSpec
         }
       }
       " use a flowHandler" must {
-        "count envelopes" in {
+        "count offsets" in {
           val tt =
             new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](Handlers.flow))
 
@@ -127,7 +127,7 @@ class InternalProjectionStateMetricsSpec
             }
           }
         }
-        "count envelopes only once in case of failure" in {
+        "count offsets only once in case of failure" in {
           val flow = Handlers.flowWithFailureAndRetries(0.8f, maxRetries)
           val tt =
             new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](flow))
@@ -142,7 +142,7 @@ class InternalProjectionStateMetricsSpec
     }
     " when running on `exactly-once`" must {
       " use a singleHandler" must {
-        "count envelopes" in {
+        "count offsets" in {
           val tt =
             new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
 
@@ -155,7 +155,7 @@ class InternalProjectionStateMetricsSpec
         }
       }
       " use a groupedHandler" must {
-        "count envelopes" in {
+        "count offsets" in {
           val tt =
             new TelemetryTester(ExactlyOnce(), GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2)))
 
@@ -168,12 +168,12 @@ class InternalProjectionStateMetricsSpec
         }
       }
       " use a flowHandler" must {
-        "count envelopes (UNSUPPORTED)" ignore {}
+        "count offsets (UNSUPPORTED)" ignore {}
       }
     }
     " when running on `at-most-once`" must {
       " use a singleHandler" must {
-        "count envelopes" in {
+        "count offsets" in {
           val tt =
             new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
 
