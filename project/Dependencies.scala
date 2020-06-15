@@ -62,7 +62,7 @@ object Dependencies {
       "com.dimafeng" %% "testcontainers-scala-cassandra" % Versions.testContainersScala % sbt.Test
     val mongoContainer = "org.testcontainers" % "mongodb" % "1.14.3" % sbt.Test
 
-    val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-mongo-testkit" % Versions.alpakkaKafka % sbt.Test
+    val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
   }
 
   object Examples {

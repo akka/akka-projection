@@ -47,7 +47,7 @@ lazy val eventsourced =
 
 // provides offset storage backed by Kafka managed offset commits
 lazy val kafka =
-  Project(id = "akka-projection-mongo", base = file("akka-projection-mongo"))
+  Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
     .settings(Dependencies.kafka)
     .settings(Test / parallelExecution := false)
     .dependsOn(core)
@@ -97,9 +97,9 @@ lazy val docs = project
         "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
         "javadoc.akka.stream.alpakka.base_url" -> "",
         // Alpakka Kafka
-        "extref.alpakka-mongo.base_url" -> s"https://doc.akka.io/docs/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/%s",
-        "scaladoc.akka.mongo.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/",
-        "javadoc.akka.mongo.base_url" -> "",
+        "extref.alpakka-kafka.base_url" -> s"https://doc.akka.io/docs/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/%s",
+        "scaladoc.akka.kafka.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/",
+        "javadoc.akka.kafka.base_url" -> "",
         // Java
         "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
         // Scala

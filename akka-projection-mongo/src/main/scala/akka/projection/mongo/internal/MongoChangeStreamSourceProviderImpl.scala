@@ -37,33 +37,7 @@ import reactivestreams.Implicits._
 
   private implicit val executionContext: ExecutionContext = system.executionContext
 
-//  private[mongo] val partitionHandler = new ProjectionPartitionHandler
-//  private val subscription = Subscriptions.topics(topics).withPartitionAssignmentHandler(partitionHandler)
-//  // assigned partitions is only ever mutated by consumer rebalance partition handler executed in the Kafka consumer
-//  // poll thread in the Alpakka Kafka `KafkaConsumerActor`
-//  @volatile private var assignedPartitions: Set[TopicPartition] = Set.empty
-
-//  protected[internal] def _source(
-//      readOffsets: ReadOffsets,
-//      numPartitions: Int): Source[ConsumerRecord[K, V], Consumer.Control] =
-//    Consumer
-//      .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets))
-//      .flatMapMerge(numPartitions, {
-//        case (_, partitionedSource) => partitionedSource
-//      })
-
   override def source(readOffsets: ReadOffsets): Future[Source[ChangeStreamDocument[Document], NotUsed]] = {
-    // get the total number of partitions to configure the `breadth` parameter, or we could just use a really large
-    // number.  i don't think using a large number would present a problem.
-//    val numPartitionsF = metadataClient.numPartitions(topics)
-//    numPartitionsF.failed.foreach(_ => metadataClient.stop())
-//    numPartitionsF.map { numPartitions =>
-//      _source(readOffsets, numPartitions)
-//        .watchTermination()(Keep.right)
-//        .mapMaterializedValue { terminated =>
-//          terminated.onComplete(_ => metadataClient.stop())
-//        }
-//    }
     readOffsets()
       .map {
         case Some(value) =>
