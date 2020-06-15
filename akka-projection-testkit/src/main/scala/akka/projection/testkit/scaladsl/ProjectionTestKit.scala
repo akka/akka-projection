@@ -10,7 +10,6 @@ import scala.concurrent.duration._
 import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
-import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.SupervisorStrategy
@@ -40,7 +39,8 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * Projection is started and stopped by the TestKit. While the projection is running, the assert function
    * will be called every 100 milliseconds until it completes without errors (no exceptions or assertion errors are thrown).
    *
-   * If the assert function doesn't complete without error within 3 seconds the test will fail.
+   * If the assert function doesn't complete without error within the configuration provided to
+   * `akka.actor.testkit.typed.single-expect-default` (3 seconds by default with no dilation) then the test will fail.
    *
    * @param projection - the Projection to run
    * @param assertFunction - a by-name code block that exercise the test assertions
@@ -74,7 +74,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    *
    * @param projection - the Projection to run
    * @param max - FiniteDuration delimiting the max duration of the test
-   * @param interval - FiniteDuration defining the internval in each the assert function will be called
+   * @param interval - FiniteDuration defining the interval in each the assert function will be called
    * @param assertFunction - a by-name code block that exercise the test assertions
    */
   def run(projection: Projection[_], max: FiniteDuration, interval: FiniteDuration)(assertFunction: => Unit): Unit =
@@ -96,7 +96,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
         .withSettings(settingsForTest)
         .run()(testKit.system)
     try {
-      probe.awaitAssert(assertFunction, max.dilated, interval)
+      probe.awaitAssert(assertFunction, max, interval)
     } finally {
       Await.result(running.stop(), max)
       actorHandler.foreach(ref => testKit.stop(ref))
