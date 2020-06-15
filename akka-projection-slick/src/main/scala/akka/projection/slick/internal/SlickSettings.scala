@@ -16,6 +16,7 @@ private[projection] case class SlickSettings(config: Config) {
 
   val schema: Option[String] =
     Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty)
+
   val table: String = config.getString("offset-store.table")
 }
 

@@ -16,6 +16,13 @@ lazy val testkit =
     .settings(Dependencies.testKit)
     .dependsOn(core)
 
+// provides offset storage backed by a JDBC table
+lazy val jdbc =
+  Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
+    .settings(Dependencies.jdbc)
+    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(testkit % "test->test")
+
 // provides offset storage backed by a JDBC (Slick) table
 lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
@@ -50,6 +57,7 @@ lazy val kafka =
 lazy val examples = project
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
+  .dependsOn(jdbc % "test->test")
   .dependsOn(cassandra % "test->test")
   .dependsOn(eventsourced)
   .dependsOn(kafka % "test->test")
@@ -100,7 +108,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, slick, cassandra, eventsourced, kafka, examples, docs)
+  .aggregate(core, testkit, jdbc, slick, cassandra, eventsourced, kafka, examples, docs)
   .settings(publish / skip := true, whitesourceIgnore := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)

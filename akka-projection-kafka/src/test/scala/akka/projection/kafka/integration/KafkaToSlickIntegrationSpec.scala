@@ -140,10 +140,6 @@ class KafkaToSlickIntegrationSpec
   }
 
   "KafkaSourceProvider with Slick" must {
-    "test" in {
-      succeed
-    }
-
     "project a model and Kafka offset map to a slick db exactly once" in {
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()

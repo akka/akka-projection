@@ -6,40 +6,45 @@ package akka.projection.slick
 
 import scala.collection.immutable
 import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
-import akka.projection.HandlerRecoveryStrategy
-import akka.projection.Projection
+import akka.event.Logging
+import akka.projection.OffsetVerification.VerificationFailure
+import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
-import akka.projection.StatusObserver
+import akka.projection.internal.AtLeastOnce
+import akka.projection.internal.ExactlyOnce
+import akka.projection.internal.FlowHandlerStrategy
+import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.NoopStatusObserver
+import akka.projection.internal.SingleHandlerStrategy
+import akka.projection.scaladsl.AtLeastOnceFlowProjection
+import akka.projection.scaladsl.AtLeastOnceProjection
+import akka.projection.scaladsl.ExactlyOnceProjection
+import akka.projection.scaladsl.GroupedProjection
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickProjectionImpl
-import akka.projection.slick.internal.SlickProjectionImpl.AtLeastOnce
-import akka.projection.slick.internal.SlickProjectionImpl.ExactlyOnce
-import akka.projection.slick.internal.SlickProjectionImpl.OffsetStrategy
+import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.FlowWithContext
 import slick.basic.DatabaseConfig
 import slick.dbio.DBIO
 import slick.jdbc.JdbcProfile
 
 /**
- * Factories of [[Projection]] where the offset is stored in a relational database table using Slick.
+ * Factories of [[akka.projection.Projection]] where the offset is stored in a relational database table using Slick.
  * The envelope handler can integrate with anything, such as publishing to a message broker, or updating a relational read model.
  */
 @ApiMayChange
 object SlickProjection {
-  import SlickProjectionImpl.GroupedHandlerStrategy
-  import SlickProjectionImpl.SingleHandlerStrategy
-  import SlickProjectionImpl.FlowHandlerStrategy
 
   /**
-   * Create a [[Projection]] with exactly-once processing semantics.
+   * Create a [[akka.projection.Projection]] with exactly-once processing semantics.
    *
    * It stores the offset in a relational database table using Slick in the same transaction
    * as the DBIO returned from the `handler`.
@@ -49,7 +54,45 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[Envelope]): ExactlyOnceSlickProjection[Envelope] =
+      handler: SlickHandler[Envelope])(implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
+
+    val offsetStore = createOffsetStore(databaseConfig)
+
+    val adaptedSlickHandler =
+      new Handler[Envelope] {
+
+        implicit val ec = system.executionContext
+
+        private val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
+
+        import databaseConfig.profile.api._
+        override def process(envelope: Envelope): Future[Done] = {
+
+          val offset = sourceProvider.extractOffset(envelope)
+          val handlerAction = handler.process(envelope)
+
+          sourceProvider.verifyOffset(offset) match {
+            case VerificationSuccess =>
+              // run user function and offset storage on the same transaction
+              // any side-effect in user function is at-least-once
+              val txDBIO = offsetStore
+                .saveOffset(projectionId, offset)
+                .flatMap(_ => handlerAction)
+                .transactionally
+              databaseConfig.db.run(txDBIO).map(_ => Done)
+            case VerificationFailure(reason) =>
+              logger.warning(
+                "The offset failed source provider verification after the envelope was processed. " +
+                "The transaction will not be executed. Skipping envelope with reason: {}",
+                reason)
+              Future.successful(Done)
+          }
+
+        }
+        override def start(): Future[Done] = handler.start()
+        override def stop(): Future[Done] = handler.stop()
+      }
+
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -57,18 +100,20 @@ object SlickProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       ExactlyOnce(),
-      SingleHandlerStrategy(handler),
-      NoopStatusObserver)
+      SingleHandlerStrategy(adaptedSlickHandler),
+      NoopStatusObserver,
+      offsetStore)
+  }
 
   /**
-   * Create a [[Projection]] with at-least-once processing semantics.
+   * Create a [[akka.projection.Projection]] with at-least-once processing semantics.
    *
    * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
    * This means that if the projection is restarted from previously stored offset then some elements may be processed
    * more than once.
    *
    * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
-   * This window can be defined with [[AtLeastOnceSlickProjection.withSaveOffset]] of the returned
+   * This window can be defined with [[AtLeastOnceProjection.withSaveOffset]] of the returned
    * `AtLeastOnceSlickProjection`. The default settings for the window is defined in configuration
    * section `akka.projection.at-least-once`.
    */
@@ -76,7 +121,21 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[Envelope]): AtLeastOnceSlickProjection[Envelope] =
+      handler: SlickHandler[Envelope])(implicit system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
+
+    import databaseConfig.profile.api._
+
+    val adaptedSlickHandler = new Handler[Envelope] {
+      implicit val ec = system.executionContext
+      override def process(envelope: Envelope): Future[Done] = {
+        // user function in one transaction (may be composed of several DBIOAction)
+        val dbio = handler.process(envelope).map(_ => Done).transactionally
+        databaseConfig.db.run(dbio)
+      }
+      override def start(): Future[Done] = handler.start()
+      override def stop(): Future[Done] = handler.stop()
+    }
+
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -84,13 +143,15 @@ object SlickProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       AtLeastOnce(),
-      SingleHandlerStrategy(handler),
-      NoopStatusObserver)
+      SingleHandlerStrategy(adaptedSlickHandler),
+      NoopStatusObserver,
+      createOffsetStore(databaseConfig))
+  }
 
   /**
-   * Create a [[Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
+   * Create a [[akka.projection.Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
    * The envelopes are grouped within a time window, or limited by a number of envelopes,
-   * whatever happens first. This window can be defined with [[GroupedSlickProjection.withGroup]] of
+   * whatever happens first. This window can be defined with [[GroupedProjection.withGroup]] of
    * the returned `GroupedSlickProjection`. The default settings for the window is defined in configuration
    * section `akka.projection.grouped`.
    *
@@ -101,7 +162,42 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[immutable.Seq[Envelope]]): GroupedSlickProjection[Envelope] =
+      handler: SlickHandler[immutable.Seq[Envelope]])(
+      implicit system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
+
+    val offsetStore = createOffsetStore(databaseConfig)
+
+    val adaptedSlickHandler = new Handler[immutable.Seq[Envelope]] {
+
+      implicit val ec = system.executionContext
+      import databaseConfig.profile.api._
+
+      val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
+
+      override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
+
+        val lastOffset = sourceProvider.extractOffset(envelopes.last)
+        val handlerAction = handler.process(envelopes)
+
+        sourceProvider.verifyOffset(lastOffset) match {
+          case VerificationSuccess =>
+            // run user function and offset storage on the same transaction
+            // any side-effect in user function is at-least-once
+            val txDBIO =
+              offsetStore.saveOffset(projectionId, lastOffset).flatMap(_ => handlerAction).transactionally
+            databaseConfig.db.run(txDBIO).mapTo[Done]
+          case VerificationFailure(reason) =>
+            logger.warning(
+              "The offset failed source provider verification after the envelope was processed. " +
+              "The transaction will not be executed. Skipping envelope(s) with reason: {}",
+              reason)
+            Future.successful(Done)
+        }
+      }
+      override def start(): Future[Done] = handler.start()
+      override def stop(): Future[Done] = handler.stop()
+    }
+
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -109,11 +205,13 @@ object SlickProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       ExactlyOnce(),
-      GroupedHandlerStrategy(handler),
-      NoopStatusObserver)
+      GroupedHandlerStrategy(adaptedSlickHandler),
+      NoopStatusObserver,
+      offsetStore)
+  }
 
   /**
-   * Create a [[Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
+   * Create a [[akka.projection.Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
    * semantics.
    *
    * The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
@@ -137,7 +235,9 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _]): AtLeastOnceFlowSlickProjection[Envelope] =
+      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _])(
+      implicit system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
+
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -146,108 +246,18 @@ object SlickProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = FlowHandlerStrategy(handler),
-      NoopStatusObserver)
+      NoopStatusObserver,
+      createOffsetStore(databaseConfig))
+  }
 
-}
+  def createOffsetTableIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+      implicit system: ActorSystem[_]): Future[Done] = {
+    createOffsetStore(databaseConfig).createIfNotExists
+  }
 
-trait SlickProjection[Envelope] extends Projection[Envelope] {
-  private[slick] def offsetStrategy: OffsetStrategy
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): SlickProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): SlickProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): SlickProjection[Envelope]
-
-  /**
-   * For testing purposes the offset table can be created programmatically.
-   * For production it's recommended to create the table with DDL statements
-   * before the system is started.
-   */
-  def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done]
-}
-
-trait AtLeastOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
-  private[slick] def atLeastOnceStrategy: AtLeastOnce = offsetStrategy.asInstanceOf[AtLeastOnce]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): AtLeastOnceSlickProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): AtLeastOnceSlickProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceSlickProjection[Envelope]
-
-  def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceSlickProjection[Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): AtLeastOnceSlickProjection[Envelope]
-}
-
-trait GroupedSlickProjection[Envelope] extends SlickProjection[Envelope] {
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): GroupedSlickProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): GroupedSlickProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedSlickProjection[Envelope]
-
-  def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): GroupedSlickProjection[Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): GroupedSlickProjection[Envelope]
-}
-
-trait AtLeastOnceFlowSlickProjection[Envelope] extends SlickProjection[Envelope] {
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): AtLeastOnceFlowSlickProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): AtLeastOnceFlowSlickProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceFlowSlickProjection[Envelope]
-
-  def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): AtLeastOnceFlowSlickProjection[Envelope]
-}
-
-trait ExactlyOnceSlickProjection[Envelope] extends SlickProjection[Envelope] {
-  private[slick] def exactlyOnceStrategy: ExactlyOnce = offsetStrategy.asInstanceOf[ExactlyOnce]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double): ExactlyOnceSlickProjection[Envelope]
-
-  override def withRestartBackoff(
-      minBackoff: FiniteDuration,
-      maxBackoff: FiniteDuration,
-      randomFactor: Double,
-      maxRestarts: Int): ExactlyOnceSlickProjection[Envelope]
-
-  override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceSlickProjection[Envelope]
-
-  def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceSlickProjection[Envelope]
+  private def createOffsetStore[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+      implicit system: ActorSystem[_]) =
+    new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
 }
 
 object SlickHandler {

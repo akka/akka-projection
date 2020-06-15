@@ -7,7 +7,6 @@ package akka.projection.cassandra;
 import akka.Done;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
-import akka.projection.OffsetVerification;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.internal.CassandraOffsetStore;
@@ -46,6 +45,9 @@ public class CassandraProjectionTest extends JUnitSuite {
 
   @BeforeClass
   public static void beforeAll() throws Exception {
+    // don't use futureValue (patience) here because it can take a while to start the test container
+    Await.result(ContainerSessionProvider.started(), scala.concurrent.duration.Duration.create(30, TimeUnit.SECONDS));
+
     offsetStore = new CassandraOffsetStore(testKit.system());
     session =  CassandraSessionRegistry.get(testKit.system()).sessionFor("akka.projection.cassandra.session-config");
     Await.result(offsetStore.createKeyspaceAndTable(), scala.concurrent.duration.Duration.create(10, TimeUnit.SECONDS));
@@ -103,7 +105,7 @@ public class CassandraProjectionTest extends JUnitSuite {
 
 
 
-  private ProjectionTestKit projectionTestKit = new ProjectionTestKit(testKit.testKit());
+  private ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
 
   private ProjectionId genRandomProjectionId() {
     return ProjectionId.of(UUID.randomUUID().toString(), UUID.randomUUID().toString());
@@ -168,6 +170,7 @@ public class CassandraProjectionTest extends JUnitSuite {
         projectionId,
         new TestSourceProvider(entityId),
         concatHandler(str))
+
       .withSaveOffset(1, Duration.ZERO);
 
     projectionTestKit.run(projection, () -> {

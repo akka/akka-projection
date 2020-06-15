@@ -14,6 +14,8 @@
 * [Slick](slick.md)
 * [JPA](jpa.md)
 * [Running](running.md)
+* [Actor](actor.md)
+* [Flow](flow.md)
 * [Projection Settings](projection-settings.md)
 * [Management](management.md)
 * [Testing](testing.md)

@@ -130,7 +130,7 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #mutableState }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #mutableState }
 
 @@@ note
 
@@ -153,7 +153,7 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #envelope #sourceProvider }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #envelope #sourceProvider }
 
 and a repository for the interaction with the database:
 
@@ -161,15 +161,15 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #repository }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #repository }
 
 The `Projection` can be definined as:
 
 Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/akka/projection/cassandra/scaladsl/WordCountDocExampleSpec.scala) { #projection }
+:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExampleSpec.scala) { #projection }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExampleTest.java) { #projection }
 
 The `handler` can be implemented as follows.
 
@@ -190,15 +190,15 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingInitialState }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingInitialState }
 
 The `StatefulHandler` has two methods that needs to be implemented. 
 
 * `initialState` - Invoked to load the initial state when the projection is started or if previous `process` failed.
 * `process(state, envelope)` - Invoked for each `Envelope`, one at a time. The `state` parameter is the completed
-  value of the previously returned `Future[State]` or the `initialState`.
+  value of the previously returned @scala[`Future[State]`]@java[`CompletionStage<State>`] or the `initialState`.
 
-If the previously returned `Future[State]` failed it will call `initialState` again and use that value.
+If the previously returned @scala[`Future[State]`]@java[`CompletionStage<State>`] failed it will call `initialState` again and use that value.
 
 Another implementation would be a handler that is loading the current count for a word on demand, and thereafter
 caches it in the in-memory state:
@@ -207,47 +207,23 @@ Scala
 :  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingOnDemand }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #todo }
+:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingOnDemand }
 
-### Handler as an actor
+### Actor handler
 
-A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html).
- 
-TODO: Documentation pending, see [PR #116](https://github.com/akka/akka-projection/pull/116)
+A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html),
+which is described in @ref:[Processing with Actor](actor.md).
+
+### Flow handler
+
+An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes,
+which is described in @ref:[Processing with Akka Streams](flow.md).
 
 ### Handler lifecycle
 
 You can override the `start` and `stop` methods of the @apidoc[Handler] to implement initialization
 before first envelope is processed and resource cleanup when the projection is stopped.
 Those methods are also called when the `Projection` is restarted after failure.
-
-## Processing with Akka Streams
-
-An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes with at-least-once
-semantics.
-
-Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #atLeastOnceFlow }
-
-Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atLeastOnceFlow }
-
-The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
-in the context of the `FlowWithContext` and is stored in Cassandra when corresponding `Done` is emitted.
-Since the offset is stored after processing the envelope it means that if the projection is restarted
-from previously stored offset some envelopes may be processed more than once.
-
-There are a few caveats to be aware of:
-
-* If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
-  will be processed again if the projection is restarted and no later offset was stored.
-* The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
-  that the first offset is stored and when the projection is restarted that offset is considered completed even
-  though more of the duplicated enveloped were never processed.
-* The flow must not reorder elements, because the offsets may be stored in the wrong order and
-  and when the projection is restarted all envelopes up to the latest stored offset are considered
-  completed even though some of them may not have been processed. This is the reason the flow is
-  restricted to `FlowWithContext` rather than ordinary `Flow`.
 
 ## Schema
 

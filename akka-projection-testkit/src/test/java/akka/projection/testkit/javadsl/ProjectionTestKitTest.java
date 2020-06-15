@@ -11,6 +11,7 @@ import akka.actor.typed.ActorSystem;
 import akka.japi.function.Function;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
+import akka.projection.internal.ActorHandlerInit;
 import akka.projection.internal.ProjectionSettings;
 import akka.projection.RunningProjection;
 import akka.projection.StatusObserver;
@@ -26,6 +27,7 @@ import org.junit.ClassRule;
 import org.junit.ComparisonFailure;
 import org.junit.Test;
 import org.scalatestplus.junit.JUnitSuite;
+import scala.Option;
 import scala.compat.java8.FutureConverters;
 import scala.concurrent.Future;
 import scala.concurrent.duration.FiniteDuration;
@@ -51,7 +53,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
     public static final TestKitJunitResource testKitJunit = new TestKitJunitResource();
 
 
-    private final ProjectionTestKit projectionTestKit = new ProjectionTestKit(testKitJunit.testKit());
+    private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKitJunit.testKit());
 
     @Test
     public void assertProgressOfAProjection() {
@@ -193,6 +195,11 @@ public class ProjectionTestKitTest extends JUnitSuite {
         @Override
         public akka.stream.scaladsl.Source<Done, NotUsed> mappedSource(ActorSystem<?> system) {
             return new InternalProjectionState(strBuffer, predicate, system).mappedSource();
+        }
+
+        @Override
+        public <M> Option<ActorHandlerInit<M>> actorHandlerInit() {
+            return Option.empty();
         }
 
 

@@ -17,6 +17,7 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.ProjectionSettings
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.stream.scaladsl.RestartSource
@@ -83,6 +84,11 @@ trait Projection[Envelope] {
    */
   @InternalApi
   private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _]
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]]
 
   /**
    * INTERNAL API

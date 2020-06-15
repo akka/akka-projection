@@ -104,7 +104,10 @@ class SlickProjectionDocExample {
   }
   //#grouped-handler
 
-  private val system = ActorSystem[Nothing](Behaviors.empty, "Example")
+  //#actor-system
+  implicit val system = ActorSystem[Nothing](Behaviors.empty, "Example")
+  //#actor-system
+
   //#db-config
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
 

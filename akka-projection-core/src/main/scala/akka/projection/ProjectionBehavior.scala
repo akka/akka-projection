@@ -10,9 +10,10 @@ import scala.util.Success
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
-import akka.actor.typed.scaladsl.StashBuffer
+import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.StashBuffer
 import akka.annotation.InternalApi
 import akka.projection.scaladsl.ProjectionManagement
 
@@ -59,6 +60,11 @@ object ProjectionBehavior {
     Behaviors.setup[Command] { ctx =>
       Behaviors.withStash[Command](1000) { stashBuffer =>
         ctx.log.info("Starting projection [{}]", projection.projectionId)
+        projection.actorHandlerInit[Any].foreach { init =>
+          val ref = ctx.spawnAnonymous(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart))
+          init.setActor(ref)
+          ctx.log.debug("Started actor handler [{}] for projection [{}]", ref, projection.projectionId)
+        }
         val running = projection.run()(ctx.system)
         if (running.isInstanceOf[ProjectionOffsetManagement[_]])
           ProjectionManagement(ctx.system).register(projection.projectionId, ctx.self)
@@ -76,8 +82,8 @@ object ProjectionBehavior {
     context: ActorContext[ProjectionBehavior.Command],
     projection: Projection[Envelope],
     stashBuffer: StashBuffer[ProjectionBehavior.Command]) {
-  import ProjectionBehavior._
   import ProjectionBehavior.Internal._
+  import ProjectionBehavior._
 
   private def projectionId = projection.projectionId
 
