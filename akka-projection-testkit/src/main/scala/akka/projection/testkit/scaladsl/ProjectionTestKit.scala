@@ -91,7 +91,9 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
         .withSettings(settingsForTest)
         .run()(testKit.system)
     try {
-      probe.awaitAssert(assertFunction, max.dilated, interval)
+      println(s"max: $max")
+      println(s"max.dilated: ${max.dilated}")
+      probe.awaitAssert(assertFunction, max, interval)
     } finally {
       Await.result(running.stop(), max)
     }

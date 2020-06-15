@@ -20,6 +20,8 @@ import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.StringKey
+import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
 import akka.projection.kafka.Repeated
@@ -28,8 +30,6 @@ import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
-import akka.projection.StringKey
-import akka.projection.kafka.GroupOffsets
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
 import com.typesafe.config.ConfigFactory
@@ -140,6 +140,10 @@ class KafkaToSlickIntegrationSpec
   }
 
   "KafkaSourceProvider with Slick" must {
+    "test" in {
+      succeed
+    }
+
     "project a model and Kafka offset map to a slick db exactly once" in {
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()
