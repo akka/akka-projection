@@ -200,7 +200,7 @@ class MongoProjectionSpec extends MongoSpecBase(MongoProjectionSpec.config) with
     override def process(envelope: Envelope): TransactionCtx[Done] = {
       if (envelope.offset == 4L) {
         _attempts.incrementAndGet()
-        (ctx: ClientSession) => Future.failed(TestException(concatHandlerFail4Msg + s" after $attempts attempts"))
+        (_: ClientSession) => Future.failed(TestException(concatHandlerFail4Msg + s" after $attempts attempts"))
       } else {
         repository.concatToText(envelope.id, envelope.message)
       }

@@ -17,7 +17,7 @@ import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
 import akka.projection.mongo.TransactionCtx
 import org.bson.BsonDocumentWrapper
-import org.bson.codecs.configuration.{ CodecRegistries, CodecRegistry }
+import org.bson.codecs.configuration.CodecRegistries
 import org.mongodb.scala._
 import org.mongodb.scala.bson.codecs.Macros
 
@@ -60,10 +60,7 @@ import org.mongodb.scala.bson.codecs.Macros
     val _id = OffsetRowId(rep.id.name, rep.id.key)
     offsetTable
       .replaceOne(
-        filter = Document(
-          "_id" -> new BsonDocumentWrapper(
-            _id,
-            OffsetRowId.offsetRowIdCodec.get(classOf[OffsetRowId], MongoClient.DEFAULT_CODEC_REGISTRY))),
+        filter = Document("_id" -> new BsonDocumentWrapper(_id, offsetTable.codecRegistry.get(classOf[OffsetRowId]))),
         replacement = OffsetRow(_id, rep.offsetStr, rep.manifest, rep.mergeable, now),
         clientSession = clientSession,
         options = model.ReplaceOptions().upsert(true))
@@ -87,28 +84,9 @@ import org.mongodb.scala.bson.codecs.Macros
       .toFuture()
   }
 
-//  class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, mongoSettings.schema, mongoSettings.table) {
-//
-//    def projectionName = column[String]("PROJECTION_NAME", O.Length(255, varying = false))
-//    def projectionKey = column[String]("PROJECTION_KEY", O.Length(255, varying = false))
-//    def offset = column[String]("OFFSET", O.Length(255, varying = false))
-//    def manifest = column[String]("MANIFEST", O.Length(4))
-//    def mergeable = column[Boolean]("MERGEABLE")
-//    def lastUpdated = column[Instant]("LAST_UPDATED")
-//    def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
-//
-//    def * = (projectionName, projectionKey, offset, manifest, mergeable, lastUpdated).mapTo[OffsetRow]
-//  }
-
   case class OffsetRow(_id: OffsetRowId, offsetStr: String, manifest: String, mergeable: Boolean, lastUpdated: Instant)
-  object OffsetRow {
-    implicit val offsetRowCodec = Macros.createCodec[OffsetRow]
-  }
 
   case class OffsetRowId(projectionName: String, projectionKey: String)
-  object OffsetRowId {
-    implicit val offsetRowIdCodec = Macros.createCodecProvider[OffsetRowId]
-  }
 
   val offsetTable: MongoCollection[OffsetRow] =
     db.getDatabase(mongoSettings.schema)

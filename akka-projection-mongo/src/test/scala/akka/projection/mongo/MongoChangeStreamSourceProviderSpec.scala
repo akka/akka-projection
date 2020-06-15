@@ -4,8 +4,7 @@
 
 package akka.projection.mongo
 
-import scala.concurrent.{ Await, Future }
-import akka.actor.typed.scaladsl.adapter._
+import scala.concurrent.Future
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink

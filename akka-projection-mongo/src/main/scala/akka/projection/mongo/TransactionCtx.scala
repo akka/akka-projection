@@ -1,6 +1,5 @@
 package akka.projection.mongo
 
-import akka.Done
 import org.mongodb.scala._
 
 import scala.concurrent.{ ExecutionContext, Future }

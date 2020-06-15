@@ -6,7 +6,6 @@ package akka.projection.mongo
 
 import scala.collection.immutable
 import scala.concurrent.Future
-import scala.reflect.ClassTag
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -29,7 +28,7 @@ import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.FlowWithContext
-import org.mongodb.scala.{ MongoClient, MongoDatabase }
+import org.mongodb.scala.MongoClient
 
 /**
  * Factories of [[akka.projection.Projection]] where the offset is stored in mongoDB.
