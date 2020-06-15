@@ -51,6 +51,8 @@ private[projection] final case class AtLeastOnce(
 @InternalApi
 private[projection] sealed trait HandlerStrategy[Envelope] {
   def lifecycle: HandlerLifecycle
+
+  def actorHandlerInit[T]: Option[ActorHandlerInit[T]]
 }
 
 /**
@@ -60,6 +62,11 @@ private[projection] sealed trait HandlerStrategy[Envelope] {
 private[projection] final case class SingleHandlerStrategy[Envelope](handler: Handler[Envelope])
     extends HandlerStrategy[Envelope] {
   override def lifecycle: HandlerLifecycle = handler
+
+  override def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = handler match {
+    case init: ActorHandlerInit[T] @unchecked => Some(init)
+    case _                                    => None
+  }
 }
 
 /**
@@ -72,6 +79,11 @@ private[projection] final case class GroupedHandlerStrategy[Envelope](
     orAfterDuration: Option[FiniteDuration] = None)
     extends HandlerStrategy[Envelope] {
   override def lifecycle: HandlerLifecycle = handler
+
+  override def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = handler match {
+    case init: ActorHandlerInit[T] @unchecked => Some(init)
+    case _                                    => None
+  }
 }
 
 /**
@@ -82,4 +94,6 @@ private[projection] final case class FlowHandlerStrategy[Envelope](
     flowCtx: FlowWithContext[Envelope, Envelope, Done, Envelope, _])
     extends HandlerStrategy[Envelope] {
   override val lifecycle: HandlerLifecycle = new HandlerLifecycle {}
+
+  override def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 }

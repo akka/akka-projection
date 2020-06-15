@@ -20,9 +20,9 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
-import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
@@ -142,6 +142,9 @@ import akka.stream.scaladsl.Source
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjectionImpl[Offset, Envelope] =
     copy(statusObserver = observer)
+
+  private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
+    handlerStrategy.actorHandlerInit
 
   /**
    * INTERNAL API

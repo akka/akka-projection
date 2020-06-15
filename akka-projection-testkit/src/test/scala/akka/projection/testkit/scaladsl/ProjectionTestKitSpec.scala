@@ -15,6 +15,7 @@ import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
@@ -153,6 +154,8 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
     override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
 
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
+
+    private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
     override def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(strBuffer, predicate).newRunningInstance()

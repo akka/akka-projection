@@ -56,22 +56,20 @@ object SlickProjection {
       databaseConfig: DatabaseConfig[P],
       handler: SlickHandler[Envelope])(implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
-    val offsetStore: SlickOffsetStore[P] =
-      new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
+    val offsetStore = createOffsetStore(databaseConfig)
 
-    // lift to Future handler
-    val liftedHandler =
+    val adaptedSlickHandler =
       new Handler[Envelope] {
 
         implicit val ec = system.executionContext
+
+        private val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
 
         import databaseConfig.profile.api._
         override def process(envelope: Envelope): Future[Done] = {
 
           val offset = sourceProvider.extractOffset(envelope)
           val handlerAction = handler.process(envelope)
-
-          val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
 
           sourceProvider.verifyOffset(offset) match {
             case VerificationSuccess =>
@@ -102,7 +100,7 @@ object SlickProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       ExactlyOnce(),
-      SingleHandlerStrategy(liftedHandler),
+      SingleHandlerStrategy(adaptedSlickHandler),
       NoopStatusObserver,
       offsetStore)
   }
@@ -127,9 +125,6 @@ object SlickProjection {
 
     import databaseConfig.profile.api._
 
-    val offsetStore: SlickOffsetStore[P] =
-      new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
-
     val adaptedSlickHandler = new Handler[Envelope] {
       implicit val ec = system.executionContext
       override def process(envelope: Envelope): Future[Done] = {
@@ -150,7 +145,7 @@ object SlickProjection {
       AtLeastOnce(),
       SingleHandlerStrategy(adaptedSlickHandler),
       NoopStatusObserver,
-      offsetStore)
+      createOffsetStore(databaseConfig))
   }
 
   /**
@@ -170,8 +165,7 @@ object SlickProjection {
       handler: SlickHandler[immutable.Seq[Envelope]])(
       implicit system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
-    val offsetStore: SlickOffsetStore[P] =
-      new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
+    val offsetStore = createOffsetStore(databaseConfig)
 
     val adaptedSlickHandler = new Handler[immutable.Seq[Envelope]] {
 
@@ -244,9 +238,6 @@ object SlickProjection {
       handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _])(
       implicit system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
 
-    val offsetStore: SlickOffsetStore[P] =
-      new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
-
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -256,15 +247,17 @@ object SlickProjection {
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = FlowHandlerStrategy(handler),
       NoopStatusObserver,
-      offsetStore)
+      createOffsetStore(databaseConfig))
   }
 
   def createOffsetTableIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]): Future[Done] = {
-    val offsetStore: SlickOffsetStore[P] =
-      new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
-    offsetStore.createIfNotExists
+    createOffsetStore(databaseConfig).createIfNotExists
   }
+
+  private def createOffsetStore[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+      implicit system: ActorSystem[_]) =
+    new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
 }
 
 object SlickHandler {

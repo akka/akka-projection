@@ -219,4 +219,6 @@ private[projection] class MongoProjectionImpl[Offset, Envelope](
     }
   }
 
+  override private[akka] def actorHandlerInit[T] = handlerStrategy.actorHandlerInit
+
 }

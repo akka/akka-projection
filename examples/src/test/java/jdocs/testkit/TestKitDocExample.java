@@ -7,6 +7,7 @@ import akka.Done;
 import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
+import akka.projection.internal.ActorHandlerInit;
 import akka.projection.internal.ProjectionSettings;
 import akka.projection.RunningProjection;
 import akka.projection.StatusObserver;
@@ -20,6 +21,7 @@ import java.util.concurrent.CompletionStage;
 import org.junit.ClassRule;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
+import scala.Option;
 import scala.concurrent.duration.FiniteDuration;
 
 //#testkit-import
@@ -102,6 +104,11 @@ public class TestKitDocExample {
     @Override
     public Source<Done, ?> mappedSource(ActorSystem<?> system) {
       return null;
+    }
+
+    @Override
+    public <M> Option<ActorHandlerInit<M>> actorHandlerInit() {
+      return Option.empty();
     }
 
     @Override
