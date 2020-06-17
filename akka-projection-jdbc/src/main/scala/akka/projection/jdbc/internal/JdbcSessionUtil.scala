@@ -12,7 +12,6 @@ import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 import akka.annotation.InternalApi
-import akka.japi.function.{ Function => JFunction }
 import akka.projection.jdbc.JdbcSession
 
 object JdbcSessionUtil {
