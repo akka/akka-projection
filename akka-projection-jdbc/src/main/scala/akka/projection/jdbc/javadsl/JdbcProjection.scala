@@ -35,11 +35,12 @@ object JdbcProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       sessionCreator: Creator[S],
-      handler: JdbcHandler[Envelope, S])(implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
+      handler: JdbcHandler[Envelope, S],
+      system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
     val sessionFactory = () => sessionCreator.create()
     val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
-    val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)
+    val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
     val adaptedHandler =
       JdbcProjectionImpl.adaptedHandlerForExactlyOnce(
@@ -47,7 +48,7 @@ object JdbcProjection {
         javaSourceProvider,
         sessionFactory,
         new JdbcHandlerAdapter(handler),
-        offsetStore)
+        offsetStore)(system)
 
     new JdbcProjectionImpl(
       projectionId,
@@ -66,8 +67,9 @@ object JdbcProjection {
    * For production it's recommended to create the table with DDL statements
    * before the system is started.
    */
-  def createOffsetTableIfNotExists[S <: JdbcSession](sessionFactory: () => S)(
-      implicit system: ActorSystem[_]): CompletionStage[Done] =
-    JdbcProjectionImpl.createOffsetStore(sessionFactory).createIfNotExists().toJava
+  def createOffsetTableIfNotExists[S <: JdbcSession](
+      sessionFactory: () => S,
+      system: ActorSystem[_]): CompletionStage[Done] =
+    JdbcProjectionImpl.createOffsetStore(sessionFactory)(system).createIfNotExists().toJava
 
 }
