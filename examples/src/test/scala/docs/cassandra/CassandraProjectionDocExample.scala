@@ -142,6 +142,32 @@ object CassandraProjectionDocExample {
     //#atLeastOnceFlow
   }
 
+  object IllustrateRecoveryStrategy {
+    //#withRecoveryStrategy
+    import akka.projection.HandlerRecoveryStrategy
+
+    val projection =
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider,
+          handler = new ShoppingCartHandler)
+        .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 10, delay = 1.second))
+    //#withRecoveryStrategy
+  }
+
+  object IllustrateRestart {
+    //#withRestartBackoff
+    val projection =
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider,
+          handler = new ShoppingCartHandler)
+        .withRestartBackoff(minBackoff = 200.millis, maxBackoff = 5.seconds, randomFactor = 0.1)
+    //#withRestartBackoff
+  }
+
   object IllustrateRunningWithShardedDaemon {
 
     //#running-source-provider

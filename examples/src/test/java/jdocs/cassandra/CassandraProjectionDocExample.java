@@ -56,6 +56,11 @@ import java.util.concurrent.CompletionStage;
 
 //#handler-imports
 
+//#withRecoveryStrategy
+import akka.projection.HandlerRecoveryStrategy;
+
+//#withRecoveryStrategy
+
 //#get-offset
 import akka.projection.javadsl.ProjectionManagement;
 
@@ -202,6 +207,44 @@ public interface CassandraProjectionDocExample {
             .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     //#atLeastOnceFlow
 
+  }
+
+  public static void illustrateRecoveryStrategy() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+
+    SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
+        EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), "carts-1");
+
+    //#withRecoveryStrategy
+    Projection<EventEnvelope<ShoppingCart.Event>> projection =
+        CassandraProjection.atLeastOnce(
+            ProjectionId.of("shopping-carts", "carts-1"),
+            sourceProvider,
+            new ShoppingCartHandler()
+        )
+        .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(10, Duration.ofSeconds(1)));
+    //#withRecoveryStrategy
+  }
+
+  public static void illustrateRestart() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+
+    SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
+        EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), "carts-1");
+
+    //#withRestartBackoff
+    Duration minBackoff = Duration.ofMillis(200);
+    Duration maxBackoff = Duration.ofSeconds(5);
+    double randomFactor = 0.1;
+
+    Projection<EventEnvelope<ShoppingCart.Event>> projection =
+        CassandraProjection.atLeastOnce(
+            ProjectionId.of("shopping-carts", "carts-1"),
+            sourceProvider,
+            new ShoppingCartHandler()
+        )
+        .withRestartBackoff(minBackoff, maxBackoff, randomFactor);
+    //#withRestartBackoff
   }
 
 
