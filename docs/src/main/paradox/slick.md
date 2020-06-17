@@ -123,6 +123,8 @@ You can override the `start` and `stop` methods of the @apidoc[SlickHandler] to 
 before first envelope is processed and resource cleanup when the projection is stopped.
 Those methods are also called when the `Projection` is restarted after failure.
 
+See also @ref:[error handling](error.md).
+
 ## Processing with Akka Streams
 
 An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes with at-least-once

@@ -16,6 +16,7 @@
 * [Running](running.md)
 * [Actor](actor.md)
 * [Flow](flow.md)
+* [Error](error.md)
 * [Projection Settings](projection-settings.md)
 * [Management](management.md)
 * [Testing](testing.md)

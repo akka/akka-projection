@@ -225,6 +225,8 @@ You can override the `start` and `stop` methods of the @apidoc[Handler] to imple
 before first envelope is processed and resource cleanup when the projection is stopped.
 Those methods are also called when the `Projection` is restarted after failure.
 
+See also @ref:[error handling](error.md).
+
 ## Schema
 
 The database schema for the offset storage table.
