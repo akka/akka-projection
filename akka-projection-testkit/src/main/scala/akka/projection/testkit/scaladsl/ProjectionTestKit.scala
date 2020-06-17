@@ -10,7 +10,6 @@ import scala.concurrent.duration._
 import akka.Done
 import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
-import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.SupervisorStrategy
@@ -38,7 +37,8 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
    * Projection is started and stopped by the TestKit. While the projection is running, the assert function
    * will be called every 100 milliseconds until it completes without errors (no exceptions or assertion errors are thrown).
    *
-   * If the assert function doesn't complete without error within 3 seconds the test will fail.
+   * If the assert function doesn't complete without error within the configuration provided to
+   * `akka.actor.testkit.typed.single-expect-default` (3 seconds by default with no dilation) then the test will fail.
    *
    * Note: when testing a Projection with this method, the Restart Backoff is disabled.
    * Any backoff configuration settings from `.conf` file or programmatically added will be overwritten.
@@ -100,7 +100,7 @@ final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
         .withRestartBackoff(0.millis, 0.millis, 0.0, 0)
         .run()(testKit.system)
     try {
-      probe.awaitAssert(assertFunction, max.dilated, interval)
+      probe.awaitAssert(assertFunction, max, interval)
     } finally {
       Await.result(running.stop(), max)
       actorHandler.foreach(ref => testKit.stop(ref))
