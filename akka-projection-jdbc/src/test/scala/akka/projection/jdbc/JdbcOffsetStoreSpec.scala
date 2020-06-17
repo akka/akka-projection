@@ -19,8 +19,8 @@ import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
-import akka.projection.jdbc.JdbcSession.tryWithResource
-import akka.projection.jdbc.JdbcSession.withConnection
+import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
+import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
 import akka.projection.jdbc.internal.JdbcOffsetStore
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.testkit.internal.TestClock

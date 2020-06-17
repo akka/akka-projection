@@ -62,7 +62,7 @@ private[projection] object JdbcProjectionImpl {
         val offset = sourceProvider.extractOffset(envelope)
         // this scope ensures that the blocking DB dispatcher is used solely for DB operations
         implicit val executionContext: ExecutionContext = offsetStore.executionContext
-        JdbcSession
+        JdbcSessionUtil
           .withSession(sessionFactory) { sess =>
             sess.withConnection[Unit] { conn =>
               offsetStore.saveOffsetBlocking(conn, projectionId, offset)

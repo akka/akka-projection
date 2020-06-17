@@ -30,6 +30,7 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.jdbc.internal.JdbcOffsetStore
+import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.jdbc.scaladsl.JdbcProjection
@@ -146,7 +147,7 @@ object JdbcProjectionSpec {
 
     private def insertOrUpdate(concatStr: ConcatStr): Done = {
       val stmtStr = s"""MERGE INTO "$table" ("ID","CONCATENATED")  VALUES (?,?)"""
-      JdbcSession.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
+      JdbcSessionUtil.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
         stmt.setString(1, concatStr.id)
         stmt.setString(2, concatStr.text)
         stmt.executeUpdate()
@@ -158,7 +159,7 @@ object JdbcProjectionSpec {
 
       val stmtStr = s"SELECT * FROM $table WHERE ID = ?"
 
-      JdbcSession.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
+      JdbcSessionUtil.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
         stmt.setString(1, id)
         val resultSet = stmt.executeQuery()
         if (resultSet.first()) {
@@ -181,7 +182,7 @@ object JdbcProjectionSpec {
       val alterTableStatement =
         s"""alter table "$table" add constraint "PK_ID" primary key("ID");"""
 
-      JdbcSession.tryWithResource(conn.createStatement()) { stmt =>
+      JdbcSessionUtil.tryWithResource(conn.createStatement()) { stmt =>
         stmt.execute(createTableStatement)
         stmt.execute(alterTableStatement)
         Done
@@ -217,7 +218,7 @@ class JdbcProjectionSpec
     val creationFut = offsetStore
       .createIfNotExists()
       .flatMap(_ =>
-        JdbcSession.withConnection(jdbcSessionFactory) { conn =>
+        JdbcSessionUtil.withConnection(jdbcSessionFactory) { conn =>
           TestRepository(conn).createTable()
         })
     Await.result(creationFut, 3.seconds)
@@ -237,7 +238,7 @@ class JdbcProjectionSpec
   private val concatHandlerFail4Msg = "fail on fourth envelope"
 
   private def withRepo[R](block: TestRepository => R): Future[R] = {
-    JdbcSession.withConnection(jdbcSessionFactory) { conn =>
+    JdbcSessionUtil.withConnection(jdbcSessionFactory) { conn =>
       block(TestRepository(conn))
     }
   }
