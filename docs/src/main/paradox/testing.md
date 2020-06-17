@@ -47,6 +47,9 @@ Java
 
 By default, the test will run for 3 seconds. The assert function will be called every 100 milliseconds. Those values can be modified programatically.
 
+
+Note: when testing a Projection with this method, the Restart Backoff is disabled. Any backoff configuration settings from `.conf` file or programmatically added will be overwritten.
+
 Scala
 :  @@snip [TestKitDocExample.scala](/examples/src/test/scala/docs/testkit/TestKitDocExample.scala) { #testkit-duration #testkit-run-max-interval }
 

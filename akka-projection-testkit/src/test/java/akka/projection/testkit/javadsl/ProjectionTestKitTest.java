@@ -209,12 +209,6 @@ public class ProjectionTestKitTest extends JUnitSuite {
         }
 
         @Override
-        public Projection<Integer> withSettings(ProjectionSettings settings) {
-            // no need for ProjectionSettings in tests
-            return this;
-        }
-
-        @Override
         public StatusObserver<Integer> statusObserver() {
             return NoopStatusObserver.getInstance();
         }

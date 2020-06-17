@@ -84,9 +84,6 @@ import akka.stream.scaladsl.Source
     }
   }
 
-  override def withSettings(settings: ProjectionSettings): CassandraProjectionImpl[Offset, Envelope] =
-    copy(settingsOpt = Option(settings))
-
   override def withRestartBackoffSettings(
       restartBackoff: RestartBackoffSettings): CassandraProjectionImpl[Offset, Envelope] =
     copy(restartBackoffOpt = Some(restartBackoff))

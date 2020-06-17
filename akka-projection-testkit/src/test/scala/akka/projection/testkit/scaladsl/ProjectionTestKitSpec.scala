@@ -141,9 +141,6 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       extends Projection[Int]
       with SettingsImpl[TestProjection] {
 
-    override def withSettings(settings: ProjectionSettings): Projection[Int] =
-      this // no need for ProjectionSettings in tests
-
     override val statusObserver: StatusObserver[Int] = NoopStatusObserver
 
     override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =

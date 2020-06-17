@@ -73,11 +73,6 @@ trait Projection[Envelope] {
 
   /**
    * INTERNAL API
-   */
-  @InternalApi private[akka] def withSettings(settings: ProjectionSettings): Projection[Envelope]
-
-  /**
-   * INTERNAL API
    *
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.

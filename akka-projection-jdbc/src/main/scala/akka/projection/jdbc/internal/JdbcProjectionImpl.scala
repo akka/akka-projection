@@ -85,9 +85,6 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     }
   }
 
-  override def withSettings(settings: ProjectionSettings) =
-    copy(settingsOpt = Option(settings))
-
   override def withRestartBackoffSettings(
       restartBackoff: RestartBackoffSettings): JdbcProjectionImpl[Offset, Envelope, S] =
     copy(restartBackoffOpt = Some(restartBackoff))
