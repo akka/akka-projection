@@ -53,7 +53,7 @@ object ProjectionBehavior {
     apply(projectionFactory)
 
   /**
-   * Java API:  The `ProjectionBehavior` and its `Projection` can be stopped with this message.
+   * Java API: The `ProjectionBehavior` and its `Projection` can be stopped with this message.
    */
   def stopMessage(): Command = Stop
 
