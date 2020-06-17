@@ -6,15 +6,10 @@ package akka.projection.jdbc
 
 import java.sql.Connection
 import java.sql.DriverManager
-import java.util.Optional
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.function.Supplier
 
 import scala.annotation.tailrec
-import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -27,7 +22,6 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.japi.function
-import akka.japi.function.Creator
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
@@ -35,21 +29,14 @@ import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
-import akka.projection.javadsl.SourceProvider
-import akka.projection.jdbc.JdbcProjectionSpec.Envelope
-import akka.projection.jdbc.JdbcProjectionSpec.PureJdbcSession
-import akka.projection.jdbc.JdbcProjectionSpec.TestRepository
-import akka.projection.jdbc.JdbcProjectionSpec.jdbcSessionCreator
-import akka.projection.jdbc.JdbcProjectionSpec.jdbcSessionFactory
-import akka.projection.jdbc.JdbcProjectionSpec.sourceProvider
 import akka.projection.jdbc.internal.JdbcOffsetStore
+import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.JdbcSettings
-import akka.projection.jdbc.javadsl.JdbcHandler
-import akka.projection.jdbc.javadsl.JdbcProjection
-import akka.projection.jdbc.javadsl.JdbcSession
+import akka.projection.jdbc.scaladsl.JdbcHandler
+import akka.projection.jdbc.scaladsl.JdbcProjection
+import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
-import akka.stream.javadsl.Source
-import akka.stream.scaladsl.{ Source => ScalaSource }
+import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestSubscriber
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -92,10 +79,7 @@ object JdbcProjectionSpec {
     override def close(): Unit = conn.close()
   }
 
-  // Java API requires a Creator
-  val jdbcSessionCreator: Creator[PureJdbcSession] = () => new PureJdbcSession
-  // internal API needs Creator adapted to Scala function
-  val jdbcSessionFactory: () => PureJdbcSession = jdbcSessionCreator.create _
+  val jdbcSessionFactory = () => new PureJdbcSession
 
   case class Envelope(id: String, offset: Long, message: String)
 
@@ -114,8 +98,8 @@ object JdbcProjectionSpec {
         Envelope(id, 5L, "mno"),
         Envelope(id, 6L, "pqr"))
 
-    val src = if (complete) ScalaSource(envelopes) else ScalaSource(envelopes).concat(ScalaSource.maybe)
-    TestSourceProvider(system, src.asJava, verifyOffsetF)
+    val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
+    TestSourceProvider(system, src, verifyOffsetF)
   }
 
   case class TestSourceProvider(
@@ -123,18 +107,14 @@ object JdbcProjectionSpec {
       src: Source[Envelope, _],
       offsetVerificationF: Long => OffsetVerification)
       extends SourceProvider[Long, Envelope] {
+
     implicit val executionContext: ExecutionContext = system.executionContext
 
-    override def source(offset: Supplier[CompletionStage[Optional[Long]]]): CompletionStage[Source[Envelope, _]] = {
-      offset
-        .get()
-        .toScala
-        .map { offsetOpt =>
-          if (offsetOpt.isPresent) src.dropWhile(_.offset <= offsetOpt.get())
-          else src
-        }
-        .toJava
-    }
+    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
+      offset().map {
+        case Some(o) => src.dropWhile(_.offset <= o)
+        case _       => src
+      }
 
     override def extractOffset(env: Envelope): Long = env.offset
 
@@ -167,7 +147,7 @@ object JdbcProjectionSpec {
 
     private def insertOrUpdate(concatStr: ConcatStr): Done = {
       val stmtStr = s"""MERGE INTO "$table" ("ID","CONCATENATED")  VALUES (?,?)"""
-      JdbcSession.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
+      JdbcSessionUtil.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
         stmt.setString(1, concatStr.id)
         stmt.setString(2, concatStr.text)
         stmt.executeUpdate()
@@ -179,7 +159,7 @@ object JdbcProjectionSpec {
 
       val stmtStr = s"SELECT * FROM $table WHERE ID = ?"
 
-      JdbcSession.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
+      JdbcSessionUtil.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
         stmt.setString(1, id)
         val resultSet = stmt.executeQuery()
         if (resultSet.first()) {
@@ -202,7 +182,7 @@ object JdbcProjectionSpec {
       val alterTableStatement =
         s"""alter table "$table" add constraint "PK_ID" primary key("ID");"""
 
-      JdbcSession.tryWithResource(conn.createStatement()) { stmt =>
+      JdbcSessionUtil.tryWithResource(conn.createStatement()) { stmt =>
         stmt.execute(createTableStatement)
         stmt.execute(alterTableStatement)
         Done
@@ -218,6 +198,8 @@ class JdbcProjectionSpec
     with AnyWordSpecLike
     with LogCapturing
     with OptionValues {
+
+  import JdbcProjectionSpec._
 
   val logger: Logger = LoggerFactory.getLogger(this.getClass)
 
@@ -236,7 +218,7 @@ class JdbcProjectionSpec
     val creationFut = offsetStore
       .createIfNotExists()
       .flatMap(_ =>
-        JdbcSession.withConnection(jdbcSessionFactory) { conn =>
+        JdbcSessionUtil.withConnection(jdbcSessionFactory) { conn =>
           TestRepository(conn).createTable()
         })
     Await.result(creationFut, 3.seconds)
@@ -256,7 +238,7 @@ class JdbcProjectionSpec
   private val concatHandlerFail4Msg = "fail on fourth envelope"
 
   private def withRepo[R](block: TestRepository => R): Future[R] = {
-    JdbcSession.withConnection(jdbcSessionFactory) { conn =>
+    JdbcSessionUtil.withConnection(jdbcSessionFactory) { conn =>
       block(TestRepository(conn))
     }
   }
@@ -293,7 +275,7 @@ class JdbcProjectionSpec
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
-          jdbcSessionCreator,
+          jdbcSessionFactory,
           handler = new ConcatHandler)
 
       projectionTestKit.run(projection) {
@@ -325,7 +307,7 @@ class JdbcProjectionSpec
           .exactlyOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionCreator,
+            jdbcSessionFactory,
             handler = bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
@@ -361,7 +343,7 @@ class JdbcProjectionSpec
           .exactlyOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionCreator,
+            jdbcSessionFactory,
             handler = bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
           .withStatusObserver(statusObserver)
@@ -403,7 +385,7 @@ class JdbcProjectionSpec
           .exactlyOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionCreator,
+            jdbcSessionFactory,
             handler = bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
@@ -444,7 +426,7 @@ class JdbcProjectionSpec
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
-          jdbcSessionCreator,
+          jdbcSessionFactory,
           handler = bogusEventHandler)
 
       withClue("check - offset is empty") {
@@ -472,7 +454,7 @@ class JdbcProjectionSpec
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
-          jdbcSessionCreator,
+          jdbcSessionFactory,
           handler = new ConcatHandler())
 
       projectionTestKit.run(projection) {
@@ -506,7 +488,7 @@ class JdbcProjectionSpec
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
-          jdbcSessionCreator,
+          jdbcSessionFactory,
           handler = bogusEventHandler)
 
       withClue("check - offset is empty") {
@@ -533,7 +515,7 @@ class JdbcProjectionSpec
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
-          jdbcSessionCreator,
+          jdbcSessionFactory,
           handler = new ConcatHandler())
 
       projectionTestKit.run(projection) {
@@ -583,7 +565,7 @@ class JdbcProjectionSpec
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = testSourceProvider,
-          jdbcSessionCreator,
+          jdbcSessionFactory,
           handler = handler)
 
       projectionTestKit.runWithTestSink(projection) { testSink =>
@@ -614,7 +596,7 @@ class JdbcProjectionSpec
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = testSourceProvider,
-          jdbcSessionCreator,
+          jdbcSessionFactory,
           handler = new ConcatHandler())
 
       projectionTestKit.run(projection) {
@@ -642,7 +624,7 @@ class JdbcProjectionSpec
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = testSourceProvider,
-          jdbcSessionCreator,
+          jdbcSessionFactory,
           handler = new ConcatHandler())
 
       projectionTestKit.run(projection) {
@@ -720,16 +702,16 @@ class JdbcProjectionSpec
       // that allows us to assert that the stopHandler is different execution paths were called in test
       private var stopMessage = completedMessage
 
-      override def start(): CompletionStage[Done] = {
+      override def start(): Future[Done] = {
         // reset stop message to 'completed' on each new start
         stopMessage = completedMessage
         probe ! startMessage
-        CompletableFuture.completedFuture(Done)
+        Future.successful(Done)
       }
 
-      override def stop(): CompletionStage[Done] = {
+      override def stop(): Future[Done] = {
         probe ! stopMessage
-        CompletableFuture.completedFuture(Done)
+        Future.successful(Done)
       }
 
       override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
@@ -762,7 +744,7 @@ class JdbcProjectionSpec
           .exactlyOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionCreator,
+            jdbcSessionFactory,
             handler = handler)
           .withStatusObserver(statusObserver)
 
@@ -798,7 +780,7 @@ class JdbcProjectionSpec
           .exactlyOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionCreator,
+            jdbcSessionFactory,
             handler = handler)
 
       // not using ProjectionTestKit because want to test restarts
@@ -842,7 +824,7 @@ class JdbcProjectionSpec
           .exactlyOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionCreator,
+            jdbcSessionFactory,
             handler = handler)
           .withRestartBackoff(1.second, 2.seconds, 0.0)
           .withStatusObserver(statusObserver)
@@ -895,7 +877,7 @@ class JdbcProjectionSpec
           .exactlyOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionCreator,
+            jdbcSessionFactory,
             handler = handler)
           .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
 

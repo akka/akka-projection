@@ -17,10 +17,9 @@ import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.projection.internal.OffsetSerialization.fromStorageRepresentation
 import akka.projection.internal.OffsetSerialization.toStorageRepresentation
+import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.internal.DialectDefaults.InsertIndices
-import akka.projection.jdbc.javadsl.JdbcSession
-import akka.projection.jdbc.javadsl.JdbcSession.tryWithResource
-import akka.projection.jdbc.javadsl.JdbcSession.withConnection
+import akka.projection.jdbc.internal.JdbcSessionUtil._
 
 /**
  * INTERNAL API
