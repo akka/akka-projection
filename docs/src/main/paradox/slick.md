@@ -37,7 +37,7 @@ The offset is stored in the same transaction as the `DBIO` returned from the `ha
 processing semantics if the projection is restarted from previously stored offset.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #projection-imports #actor-system #exactlyOnce }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #projection-imports #exactlyOnce }
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
@@ -48,7 +48,7 @@ This means that if the projection is restarted from a previously stored offset s
 than once.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #atLeastOnce }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #atLeastOnce }
 
 The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
 This window can be defined with `withSaveOffset` of the returned `AtLeastOnceProjection`.
@@ -63,7 +63,7 @@ The @ref:[`ShoppingCartHandler` is shown below](#handler).
 The envelopes can be grouped before processing, which can be useful for batch updates.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #grouped }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #grouped }
 
 The envelopes are grouped within a time window, or limited by a number of envelopes, whatever happens first.
 This window can be defined with `withGroup` of the returned `GroupedProjection`. The default settings for

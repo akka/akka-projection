@@ -18,6 +18,9 @@ of an envelope fails. The alternatives are:
   invoking the handler with the same envelope a number of `retries` with the `delay` between each attempt.
   It will give up, discard the element and continue with next if all attempts fail.
 
+The following example is using the `CassandraProjection` but the same can be used with `JdbcProjection` or
+`SlickProjection`.
+
 The `HandlerRecoveryStrategy` can be defined `withRecoveryStrategy`:
 
 Scala
@@ -36,6 +39,9 @@ in configuration:
 
 The `Projection` will be restarted if it fails, for example if the offset can't be saved or processing of an
 envelope fails after applying the @ref:[Handler recovery](#handler-recovery).
+
+The following example is using the `CassandraProjection` but the same can be used with `JdbcProjection` or
+`SlickProjection`.
 
 The restart can be defined with exponential backoff settings:
 

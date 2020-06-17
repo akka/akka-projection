@@ -155,9 +155,7 @@ class JdbcProjectionDocExample {
   }
   // #grouped-handler
 
-  // #actor-system
   ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
-  // #actor-system
 
   // #sourceProvider
   SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
