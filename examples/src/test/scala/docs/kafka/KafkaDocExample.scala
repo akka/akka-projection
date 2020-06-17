@@ -8,7 +8,6 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.Random
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -22,6 +21,7 @@ import akka.projection.ProjectionId
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.kafka.GroupOffsets
+import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory
 
 //#imports
 import akka.kafka.ConsumerSettings
-import akka.projection.kafka.KafkaSourceProvider
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -72,27 +71,16 @@ object KafkaDocExample {
 
   class WordSource(implicit ec: ExecutionContext) extends SourceProvider[Long, WordEnvelope] {
 
-    private val words = Vector("aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg")
-    private val rnd = new Random(17) // same sequence each time
-    private val src = Source
-      .fromIterator(() =>
-        new Iterator[WordEnvelope] {
-          private var offset = 0L
-          override def hasNext: Boolean = true
-
-          override def next(): WordEnvelope = {
-            val i = rnd.nextInt(words.size)
-            offset += 1
-            WordEnvelope(offset, words(i))
-          }
-        })
-      .throttle(1, 1.second)
+    private val src = Source(
+      List(WordEnvelope(1L, "abc"), WordEnvelope(2L, "def"), WordEnvelope(3L, "ghi"), WordEnvelope(4L, "abc")))
 
     override def source(offset: () => Future[Option[Long]]): Future[Source[WordEnvelope, _]] = {
-      offset().map {
-        case Some(o) => src.dropWhile(_.offset <= o)
-        case _       => src
-      }
+      offset()
+        .map {
+          case Some(o) => src.dropWhile(_.offset <= o)
+          case _       => src
+        }
+        .map(_.throttle(1, 1.second))
     }
 
     override def extractOffset(env: WordEnvelope): Long = env.offset

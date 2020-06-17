@@ -2,7 +2,7 @@
 
 The @apidoc[SlickProjection] has support for storing the offset in a relational database with
 [Slick](http://scala-slick.org) (JDBC). This is only an option for Scala and for Java the
-@ref:[offset can be stored in relational DB with JPA](jpa.md).
+@ref:[offset can be stored in relational DB with JDBC](jdbc.md).
 
 The source of the envelopes can be @ref:[events from Akka Persistence](eventsourced.md) or any other `SourceProvider`
 with supported @ref:[offset types](#offset-types).

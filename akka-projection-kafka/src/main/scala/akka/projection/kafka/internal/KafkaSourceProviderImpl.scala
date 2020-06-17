@@ -4,8 +4,14 @@
 
 package akka.projection.kafka.internal
 
+import java.util.Optional
+import java.util.concurrent.CompletionStage
+import java.util.function.Supplier
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -18,7 +24,8 @@ import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.kafka.GroupOffsets
-import akka.projection.scaladsl.SourceProvider
+import akka.projection.javadsl
+import akka.projection.scaladsl
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -40,7 +47,8 @@ import org.apache.kafka.common.TopicPartition
     settings: ConsumerSettings[K, V],
     topics: Set[String],
     metadataClient: MetadataClientAdapter)
-    extends SourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
+    extends javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
   import KafkaSourceProviderImpl._
 
   private implicit val executionContext: ExecutionContext = system.executionContext
@@ -72,6 +80,11 @@ import org.apache.kafka.common.TopicPartition
           terminated.onComplete(_ => metadataClient.stop())
         }
     }
+  }
+
+  override def source(readOffsets: Supplier[CompletionStage[Optional[GroupOffsets]]])
+      : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], _]] = {
+    source(() => readOffsets.get().toScala.map(_.asScala)).map(_.asJava).toJava
   }
 
   override def extractOffset(record: ConsumerRecord[K, V]): GroupOffsets = GroupOffsets(record)
