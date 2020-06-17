@@ -20,7 +20,11 @@ import akka.projection.scaladsl.ProjectionManagement
 object ProjectionBehavior {
 
   sealed trait Command
-  object Stop extends Command // FIXME replyTo Done
+
+  /**
+   * The `ProjectionBehavior` and its `Projection` can be stopped with this message.
+   */
+  object Stop extends Command
 
   /**
    * INTERNAL API
@@ -49,7 +53,7 @@ object ProjectionBehavior {
     apply(projectionFactory)
 
   /**
-   * Java API: The top message used to stop the projection.
+   * Java API:  The `ProjectionBehavior` and its `Projection` can be stopped with this message.
    */
   def stopMessage(): Command = Stop
 
