@@ -12,6 +12,7 @@ import scala.concurrent.ExecutionContext
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
+import akka.projection.ProjectionContext
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.stream.scaladsl.FlowWithContext
@@ -167,7 +168,7 @@ class SlickProjectionDocExample {
     //#atLeastOnceFlow
     val logger = LoggerFactory.getLogger(getClass)
 
-    val flow = FlowWithContext[EventEnvelope[ShoppingCart.Event], EventEnvelope[ShoppingCart.Event]]
+    val flow = FlowWithContext[EventEnvelope[ShoppingCart.Event], ProjectionContext]
       .map(envelope => envelope.event)
       .map {
         case ShoppingCart.CheckedOut(cartId, time) =>

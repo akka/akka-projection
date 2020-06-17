@@ -14,6 +14,7 @@ import akka.annotation.ApiMayChange
 import akka.event.Logging
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.ExactlyOnce
@@ -235,7 +236,7 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _])(
+      handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])(
       implicit system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
 
     new SlickProjectionImpl(

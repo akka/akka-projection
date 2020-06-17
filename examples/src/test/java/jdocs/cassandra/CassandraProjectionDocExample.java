@@ -12,6 +12,7 @@ import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
+import akka.projection.ProjectionContext;
 import akka.stream.javadsl.FlowWithContext;
 import jdocs.eventsourced.ShoppingCart;
 
@@ -182,8 +183,8 @@ public interface CassandraProjectionDocExample {
 
     Logger logger = LoggerFactory.getLogger("example");
 
-    FlowWithContext<EventEnvelope<ShoppingCart.Event>, EventEnvelope<ShoppingCart.Event>, Done, EventEnvelope<ShoppingCart.Event>, NotUsed> flow =
-        FlowWithContext.<EventEnvelope<ShoppingCart.Event>, EventEnvelope<ShoppingCart.Event>>create()
+    FlowWithContext<EventEnvelope<ShoppingCart.Event>, ProjectionContext, Done, ProjectionContext, NotUsed> flow =
+        FlowWithContext.<EventEnvelope<ShoppingCart.Event>, ProjectionContext> create()
             .map(EventEnvelope::event)
             .map(event -> {
               if (event instanceof ShoppingCart.CheckedOut) {

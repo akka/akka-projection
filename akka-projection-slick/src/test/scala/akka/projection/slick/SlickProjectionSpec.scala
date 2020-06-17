@@ -29,6 +29,7 @@ import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.ProjectionManagement
@@ -1108,7 +1109,7 @@ class SlickProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val flowHandler =
-        FlowWithContext[Envelope, Envelope]
+        FlowWithContext[Envelope, ProjectionContext]
           .mapAsync(1) { env =>
             dbConfig.db.run(repository.concatToText(env.id, env.message))
           }

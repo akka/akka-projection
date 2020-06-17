@@ -33,6 +33,7 @@ import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.cassandra.internal.CassandraOffsetStore
@@ -627,7 +628,7 @@ class CassandraProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val flowHandler =
-        FlowWithContext[Envelope, Envelope]
+        FlowWithContext[Envelope, ProjectionContext]
           .mapAsync(1) { env =>
             repository.concatToText(env.id, env.message)
           }

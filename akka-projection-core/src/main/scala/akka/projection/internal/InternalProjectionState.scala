@@ -68,14 +68,14 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   /**
    * A convenience method to serialize asynchronous operations to occur one after another is complete
    */
-  private def serialize(batches: Map[String, Seq[(Offset, Envelope)]])(
-      op: (String, Seq[(Offset, Envelope)]) => Future[Done]): Future[Done] = {
+  private def serialize(batches: Map[String, Seq[ProjectionContextImpl[Offset, Envelope]]])(
+      op: (String, Seq[ProjectionContextImpl[Offset, Envelope]]) => Future[Done]): Future[Done] = {
 
     val logProgressEvery: Int = 5
     val size = batches.size
     logger.debug("Processing [{}] partitioned batches serially", size)
 
-    def loop(remaining: List[(String, Seq[(Offset, Envelope)])], n: Int): Future[Done] = {
+    def loop(remaining: List[(String, Seq[ProjectionContextImpl[Offset, Envelope]])], n: Int): Future[Done] = {
       remaining match {
         case Nil => Future.successful(Done)
         case (key, batch) :: tail =>
@@ -101,22 +101,27 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   }
 
   private def atLeastOnceProcessing(
-      source: Source[(Offset, Envelope), NotUsed],
+      source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed],
       afterEnvelopes: Int,
       orAfterDuration: FiniteDuration,
       recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
 
-    val atLeastOnceHandlerFlow: Flow[(Offset, Envelope), (Offset, Envelope), NotUsed] =
+    val atLeastOnceHandlerFlow
+        : Flow[ProjectionContextImpl[Offset, Envelope], ProjectionContextImpl[Offset, Envelope], NotUsed] =
       handlerStrategy match {
         case SingleHandlerStrategy(handler) =>
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
-          Flow[(Offset, Envelope)].mapAsync(parallelism = 1) {
-            case elem @ (offset, envelope) =>
-              handlerRecovery
-                .applyRecovery(envelope, offset, offset, abort.future, () => handler.process(envelope))
-                .map(_ => elem)
+          Flow[ProjectionContextImpl[Offset, Envelope]].mapAsync(parallelism = 1) { context =>
+            handlerRecovery
+              .applyRecovery(
+                context.envelope,
+                context.offset,
+                context.offset,
+                abort.future,
+                () => handler.process(context.envelope))
+              .map(_ => context)
           }
 
         case grouped: GroupedHandlerStrategy[Envelope] =>
@@ -125,50 +130,49 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
-          Flow[(Offset, Envelope)]
+          Flow[ProjectionContextImpl[Offset, Envelope]]
             .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
             .filterNot(_.isEmpty)
             .mapAsync(parallelism = 1) { group =>
-              val (firstOffset, firstEnvelope) = group.head
-              val (lastOffset, lastEnvelope) = group.last
-              val envelopes = group.map { case (_, env) => env }
+              val first = group.head
+              val last = group.last
+              val envelopes = group.map { _.envelope }
               handlerRecovery
                 .applyRecovery(
-                  firstEnvelope,
-                  firstOffset,
-                  lastOffset,
+                  first.envelope,
+                  first.offset,
+                  last.offset,
                   abort.future,
                   () => grouped.handler.process(envelopes))
-                .map(_ => lastOffset -> lastEnvelope)
+                .map(_ => last)
             }
 
         case f: FlowHandlerStrategy[Envelope] =>
-          val flow: Flow[(Envelope, Envelope), (Done, Envelope), _] = f.flowCtx.asFlow
-          Flow[(Offset, Envelope)]
-            .map { case (_, env) => env -> env }
+          val flow =
+            f.flowCtx.asFlow
+          Flow[ProjectionContextImpl[Offset, Envelope]]
+            .map { context => context.envelope -> context }
             .via(flow)
-            .map { case (_, env) => sourceProvider.extractOffset(env) -> env }
+            .map { case (_, context) => context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]] }
       }
 
     if (afterEnvelopes == 1)
       // optimization of general AtLeastOnce case
-      source.via(atLeastOnceHandlerFlow).mapAsync(1) {
-        case (offset, envelope) =>
-          reportProgress(saveOffset(projectionId, offset), envelope)
+      source.via(atLeastOnceHandlerFlow).mapAsync(1) { context =>
+        reportProgress(saveOffset(projectionId, context.offset), context.envelope)
       }
     else
       source
         .via(atLeastOnceHandlerFlow)
         .groupedWithin(afterEnvelopes, orAfterDuration)
         .collect { case grouped if grouped.nonEmpty => grouped.last }
-        .mapAsync(parallelism = 1) {
-          case (offset, envelope) =>
-            reportProgress(saveOffset(projectionId, offset), envelope)
+        .mapAsync(parallelism = 1) { context =>
+          reportProgress(saveOffset(projectionId, context.offset), context.envelope)
         }
   }
 
   private def exactlyOnceProcessing(
-      source: Source[(Offset, Envelope), NotUsed],
+      source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed],
       recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
 
     val handlerRecovery =
@@ -177,12 +181,12 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     def processGrouped(
         handler: Handler[immutable.Seq[Envelope]],
         handlerRecovery: HandlerRecoveryImpl[Offset, Envelope],
-        envelopesAndOffsets: immutable.Seq[(Offset, Envelope)]): Future[Done] = {
+        envelopesAndOffsets: immutable.Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
 
-      def processEnvelopes(partitioned: immutable.Seq[(Offset, Envelope)]): Future[Done] = {
-        val (firstOffset, _) = partitioned.head
-        val (lastOffset, _) = partitioned.last
-        val envelopes = partitioned.map { case (_, env) => env }
+      def processEnvelopes(partitioned: immutable.Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
+        val firstOffset = partitioned.head.offset
+        val lastOffset = partitioned.last.offset
+        val envelopes = partitioned.map { _.envelope }
 
         handlerRecovery.applyRecovery(
           envelopes.head,
@@ -196,7 +200,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       if (sourceProvider.isOffsetMergeable) {
         val batches = envelopesAndOffsets.groupBy {
           // FIXME matched source provider should always be MergeableOffset
-          case (offset: MergeableOffset[_, _], _) =>
+          case ProjectionContextImpl(offset: MergeableOffset[_, _], _) =>
             // FIXME we can assume there's only one actual offset per envelope, but there should be a better way to represent this
             val mergeableKey = offset.entries.head._1.asInstanceOf[MergeableKey]
             mergeableKey.surrogateKey
@@ -221,11 +225,19 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     handlerStrategy match {
       case SingleHandlerStrategy(handler) =>
         source
-          .mapAsync(1) {
-            case (offset, env) =>
-              val processed =
-                handlerRecovery.applyRecovery(env, offset, offset, abort.future, () => handler.process(env))
-              reportProgress(processed, env)
+          .mapAsync(1) { context =>
+            logger.warning(" Processing {}", context.envelope)
+            val eventualDone: () => Future[Done] = () => {
+              handler.process(context.envelope)
+            }
+            val processed =
+              handlerRecovery.applyRecovery(
+                context.envelope,
+                context.offset,
+                context.offset,
+                abort.future,
+                eventualDone)
+            reportProgress(processed, context.envelope)
           }
 
       case grouped: GroupedHandlerStrategy[Envelope] =>
@@ -236,18 +248,18 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
           .filterNot(_.isEmpty)
           .mapAsync(parallelism = 1) { group =>
-            val (_, lastEnvelope) = group.last
-            reportProgress(processGrouped(grouped.handler, handlerRecovery, group), lastEnvelope)
+            val last = group.last
+            reportProgress(processGrouped(grouped.handler, handlerRecovery, group), last.envelope)
           }
 
-      case _: FlowHandlerStrategy[Envelope] =>
+      case _: FlowHandlerStrategy[_] =>
         // not possible, no API for this
         throw new IllegalStateException("Unsupported combination of exactlyOnce and flow")
     }
   }
 
   private def atMostOnceProcessing(
-      source: Source[(Offset, Envelope), NotUsed],
+      source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed],
       recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
 
     val handlerRecovery =
@@ -256,14 +268,18 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     handlerStrategy match {
       case SingleHandlerStrategy(handler) =>
         source
-          .mapAsync(parallelism = 1) {
-            case (offset, envelope) =>
-              val processed =
-                saveOffset(projectionId, offset).flatMap { _ =>
-                  handlerRecovery
-                    .applyRecovery(envelope, offset, offset, abort.future, () => handler.process(envelope))
-                }
-              reportProgress(processed, envelope)
+          .mapAsync(parallelism = 1) { context =>
+            val processed =
+              saveOffset(projectionId, context.offset).flatMap { _ =>
+                handlerRecovery
+                  .applyRecovery(
+                    context.envelope,
+                    context.offset,
+                    context.offset,
+                    abort.future,
+                    () => handler.process(context.envelope))
+              }
+            reportProgress(processed, context.envelope)
           }
           .map(_ => Done)
       case _ =>
@@ -277,25 +293,24 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
 
     statusObserver.started(projectionId)
 
-    val source: Source[(Offset, Envelope), NotUsed] =
+    val source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed] =
       Source
         .futureSource(
           handlerStrategy.lifecycle
             .tryStart()
             .flatMap(_ => sourceProvider.source(() => readOffsets())))
         .via(killSwitch.flow)
-        .map(env => (sourceProvider.extractOffset(env), env))
-        .filter {
-          case (offset, _) =>
-            sourceProvider.verifyOffset(offset) match {
-              case VerificationSuccess => true
-              case VerificationFailure(reason) =>
-                logger.warning(
-                  "Source provider instructed projection to skip offset [{}] with reason: {}",
-                  offset,
-                  reason)
-                false
-            }
+        .map(env => ProjectionContextImpl(sourceProvider.extractOffset(env), env))
+        .filter { context =>
+          sourceProvider.verifyOffset(context.offset) match {
+            case VerificationSuccess => true
+            case VerificationFailure(reason) =>
+              logger.warning(
+                "Source provider instructed projection to skip offset [{}] with reason: {}",
+                context.offset,
+                reason)
+              false
+          }
         }
         .mapMaterializedValue(_ => NotUsed)
 
