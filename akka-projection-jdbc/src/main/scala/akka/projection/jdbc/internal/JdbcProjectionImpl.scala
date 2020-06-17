@@ -52,11 +52,9 @@ private[projection] object JdbcProjectionImpl {
       sourceProvider: SourceProvider[Offset, Envelope],
       sessionFactory: () => S,
       handler: JdbcHandler[Envelope, S],
-      offsetStore: JdbcOffsetStore[S])(implicit system: ActorSystem[_]) = {
+      offsetStore: JdbcOffsetStore[S]) = {
 
     new Handler[Envelope] {
-
-      private val logger = Logging(system.classicSystem, classOf[JdbcProjectionImpl[_, _, _]])
 
       override def process(envelope: Envelope): Future[Done] = {
         val offset = sourceProvider.extractOffset(envelope)

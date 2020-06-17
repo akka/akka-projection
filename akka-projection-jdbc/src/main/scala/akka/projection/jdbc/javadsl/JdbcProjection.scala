@@ -48,7 +48,7 @@ object JdbcProjection {
         javaSourceProvider,
         sessionFactory,
         new JdbcHandlerAdapter(handler),
-        offsetStore)(system)
+        offsetStore)
 
     new JdbcProjectionImpl(
       projectionId,
