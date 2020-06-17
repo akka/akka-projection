@@ -124,4 +124,18 @@ public class WordCountDocExampleTest extends JUnitSuite {
     runAndAssert(projection);
   }
 
+  @Test
+  public void shouldSupportActorLoadStateOnDemandAndManageUpdatedState() {
+    ProjectionId projectionId = genRandomProjectionId();
+    ActorSystem<?> system = testKit.system();
+
+    Projection<WordEnvelope> projection = CassandraProjection
+        .atLeastOnce(
+            projectionId,
+            new WordSource(),
+            new IllstrateActorLoadingStateOnDemand.WordCountActorHandler(IllstrateActorLoadingStateOnDemand.WordCountProcessor.create(projectionId, repository), system));
+
+    runAndAssert(projection);
+  }
+
 }
