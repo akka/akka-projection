@@ -11,13 +11,23 @@ import scala.jdk.CollectionConverters._
 
 import akka.Done
 import akka.annotation.InternalApi
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.javadsl
 import akka.projection.scaladsl
+
+object HandlerAdapter {
+  def apply[Envelope](delegate: javadsl.Handler[Envelope]): scaladsl.Handler[Envelope] = {
+    delegate match {
+      case a: javadsl.ActorHandler[Envelope, Any] @unchecked => new ActorHandlerAdapter[Envelope](a)
+      case _                                                 => new HandlerAdapter(delegate)
+    }
+  }
+}
 
 /**
  * INTERNAL API: Adapter from javadsl.Handler to scaladsl.Handler
  */
-@InternalApi private[akka] class HandlerAdapter[Envelope](delegate: javadsl.Handler[Envelope])
+@InternalApi private[akka] class HandlerAdapter[Envelope] private (delegate: javadsl.Handler[Envelope])
     extends scaladsl.Handler[Envelope] {
 
   override def process(envelope: Envelope): Future[Done] = {
@@ -70,4 +80,24 @@ private[akka] class HandlerLifecycleAdapter(delegate: javadsl.HandlerLifecycle) 
    */
   override def stop(): Future[Done] =
     delegate.stop().toScala
+}
+
+/**
+ * INTERNAL API: Adapter from javadsl.ActorHandler to scaladsl.ActorHandler
+ */
+@InternalApi private[akka] class ActorHandlerAdapter[Envelope](delegate: javadsl.ActorHandler[Envelope, Any])
+    extends scaladsl.Handler[Envelope]
+    with ActorHandlerInit[Any] {
+
+  override private[projection] def behavior = delegate.behavior
+
+  override final def process(envelope: Envelope): Future[Done] =
+    delegate.process(getActor(), envelope).toScala
+
+  override def start(): Future[Done] =
+    delegate.start().toScala
+
+  override def stop(): Future[Done] =
+    delegate.stop().toScala
+
 }

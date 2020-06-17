@@ -57,7 +57,7 @@ object CassandraProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = SingleHandlerStrategy(new HandlerAdapter(handler)),
+      handlerStrategy = SingleHandlerStrategy(HandlerAdapter(handler)),
       statusObserver = NoopStatusObserver)
 
   /**
@@ -135,7 +135,7 @@ object CassandraProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy = AtMostOnce(),
-      handlerStrategy = SingleHandlerStrategy(new HandlerAdapter(handler)),
+      handlerStrategy = SingleHandlerStrategy(HandlerAdapter(handler)),
       statusObserver = NoopStatusObserver)
 
   def createOffsetTableIfNotExists(system: ActorSystem[_]): CompletionStage[Done] = {

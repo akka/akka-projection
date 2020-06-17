@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
+import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.ContainerSessionProvider;
@@ -28,6 +29,8 @@ import scala.concurrent.Await;
 
 import static jdocs.cassandra.WordCountDocExample.*;
 import static jdocs.cassandra.WordCountDocExample.IllustrateStatefulHandlerLoadingInitialState.WordCountHandler;
+import static jdocs.cassandra.WordCountDocExample.IllstrateActorLoadingInitialState.WordCountActorHandler;
+import static jdocs.cassandra.WordCountDocExample.IllstrateActorLoadingInitialState.WordCountProcessor;
 import static org.junit.Assert.assertEquals;
 
 public class WordCountDocExampleTest extends JUnitSuite {
@@ -101,6 +104,22 @@ public class WordCountDocExampleTest extends JUnitSuite {
             projectionId,
             new WordSource(),
             new IllustrateStatefulHandlerLoadingStateOnDemand.WordCountHandler(projectionId, repository));
+
+    runAndAssert(projection);
+  }
+
+  @Test
+  public void shouldSupportActorLoadInitialStateAndManageUpdatedState() {
+    ProjectionId projectionId = genRandomProjectionId();
+    ActorSystem<?> system = testKit.system();
+
+    //#actorHandlerProjection
+    Projection<WordEnvelope> projection = CassandraProjection
+        .atLeastOnce(
+            projectionId,
+            new WordSource(),
+            new WordCountActorHandler(WordCountProcessor.create(projectionId, repository), system));
+    //#actorHandlerProjection
 
     runAndAssert(projection);
   }
