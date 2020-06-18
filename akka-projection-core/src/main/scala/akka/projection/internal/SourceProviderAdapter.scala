@@ -16,6 +16,7 @@ import akka.annotation.InternalApi
 import akka.projection.OffsetVerification
 import akka.projection.javadsl
 import akka.projection.scaladsl
+import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
 /**

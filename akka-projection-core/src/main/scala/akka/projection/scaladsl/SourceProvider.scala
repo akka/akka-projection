@@ -27,11 +27,10 @@ trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, 
 
 }
 
-trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_, _], Envelope]
-    extends SourceProvider[Offset, Envelope] {
-  def groupByKey(
-      envs: immutable.Seq[ProjectionContextImpl[_, Envelope]]): Map[String, immutable.Seq[ProjectionContext]] = {
+object MergeableOffsetSourceProvider {
 
+  private[projection] def groupByKey[Envelope](
+      envs: immutable.Seq[ProjectionContextImpl[_, Envelope]]): Map[String, immutable.Seq[ProjectionContext]] = {
     val groups: Map[String, immutable.Seq[ProjectionContext]] = envs
       .asInstanceOf[immutable.Seq[ProjectionContextImpl[MergeableOffset[MergeableKey, _], Envelope]]]
       .flatMap { context => context.offset.entries.toSeq.map { case (key, _) => (key, context) } }
@@ -43,14 +42,13 @@ trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_, _], Envelope]
       }
     groups
   }
+
 }
 
-//trait MergeableOffsetSourceProvider[Offset, Envelope]
-//    extends BaseSourceProvider[MergeableOffset[MergeableKey, _], MergeableEntry[MergeableKey, Offset], Envelope] {
-//  def groupByKey(envs: immutable.Seq[(MergeableEntry[MergeableKey, Offset], Envelope)])
-//      : Map[MergeableKey, immutable.Seq[Envelope]] = {
-//    envs
-//      .groupBy { case (entry, _) => entry.key }
-//      .map { case (key, keyAndEnvs) => key -> keyAndEnvs.map { case (_, env) => env } }
-//  }
-//}
+trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_, _], Envelope]
+    extends SourceProvider[Offset, Envelope] {
+
+  private[projection] def groupByKey(
+      envs: immutable.Seq[ProjectionContextImpl[_, Envelope]]): Map[String, immutable.Seq[ProjectionContext]]
+
+}

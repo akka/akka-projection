@@ -112,7 +112,7 @@ public interface WordCountDocExample {
   }
 
   //#sourceProvider
-  class WordSource extends SourceProvider<Long, WordEnvelope> {
+  class WordSource implements SourceProvider<Long, WordEnvelope> {
 
     private final Source<WordEnvelope, NotUsed> src = Source.from(
         Arrays.asList(new WordEnvelope(1L, "abc"), new WordEnvelope(2L, "def"), new WordEnvelope(3L, "ghi"), new WordEnvelope(4L, "abc")));

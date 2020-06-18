@@ -130,7 +130,7 @@ public class JdbcProjectionTest extends JUnitSuite {
         }
     }
 
-    static class TestSourceProvider extends SourceProvider<Long, Envelope> {
+    static class TestSourceProvider implements SourceProvider<Long, Envelope> {
 
 
         private final List<Envelope> envelopes;
