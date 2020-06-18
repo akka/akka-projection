@@ -71,6 +71,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         done
       }
       .map { done =>
+        // when grouping, invocations to reportProgress pass a
+        // single `Envelope` and (wrongly) indicate a batchSize of 1
         telemetry.onOffsetStored(projectionId, batchSize)
         done
       }
@@ -79,9 +81,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   private def measured[T](eventProcessing: () => Future[T]): () => Future[T] = { () =>
     val telemetryContext = telemetry.beforeProcess(projectionId)
     eventProcessing().map { t =>
-      // TODO: measuring eventProcessing without knowing the size of the batch/group is
-      //  not correct. The afterProcess() should include, at least, the number of processed
-      //  events to amortize the metric (divide by n and also report n times).
       telemetry.afterProcess(projectionId, telemetryContext)
       t
     }
@@ -170,7 +169,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   last.offset,
                   abort.future,
                   measured(() => handler.process(envelopes)))
-                .map(_ => last)
+                .map { _ =>
+                  last.copy(groupSize = envelopes.length)
+                }
             }
 
         case f: FlowHandlerStrategy[Envelope] =>
@@ -192,16 +193,18 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     if (afterEnvelopes == 1)
       // optimization of general AtLeastOnce case
       source.via(atLeastOnceHandlerFlow).mapAsync(1) { context =>
-        reportProgress(saveOffset(projectionId, context.offset), context.envelope, 1)
+        reportProgress(saveOffset(projectionId, context.offset), context.envelope, context.groupSize)
       }
     else {
       source
         .via(atLeastOnceHandlerFlow)
         .groupedWithin(afterEnvelopes, orAfterDuration)
         .filterNot(_.isEmpty)
-        .mapAsync(parallelism = 1) { group =>
-          val last = group.last
-          reportProgress(saveOffset(projectionId, last.offset), last.envelope, group.length)
+        .mapAsync(parallelism = 1) { batch =>
+          // TODO: is grouped * afterEnvelopes supported?
+          val totalNumberOfEnvelopes = batch.map { _.groupSize }.sum
+          val last = batch.last
+          reportProgress(saveOffset(projectionId, last.offset), last.envelope, totalNumberOfEnvelopes)
         }
     }
   }

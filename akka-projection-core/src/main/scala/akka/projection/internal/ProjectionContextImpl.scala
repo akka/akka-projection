@@ -12,8 +12,9 @@ import akka.projection.ProjectionContext
  */
 @InternalApi private[projection] case class ProjectionContextImpl[Offset, Envelope] private (
     offset: Offset,
-    envelope: Envelope)
-    extends ProjectionContext
+    envelope: Envelope,
+    groupSize: Int = 1 // TODO: make it a volatile var in the case class ??
+) extends ProjectionContext
 
 /**
  * INTERNAL API

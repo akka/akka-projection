@@ -1,15 +1,15 @@
 package akka.projection.internal.metrics
 
-import akka.projection.HandlerRecoveryStrategy
-import akka.projection.internal.AtLeastOnce
-import akka.projection.internal.GroupedHandlerStrategy
-import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 import scala.concurrent.duration._
 
+import akka.projection.HandlerRecoveryStrategy
+import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
+import akka.projection.internal.GroupedHandlerStrategy
+import akka.projection.internal.SingleHandlerStrategy
+import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
 class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpec {
   "A metric counting offsets committed" must {
@@ -58,10 +58,9 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
       }
     }
     " in `at-least-once` with groupedHandler" must {
-      "count offsets" ignore {
-        // TODO: this tests fails. Need changes in prod code: `reportProgress has no info of the group size.
+      "count offsets (without afterEnvelops optimization)" in {
         val tt = new TelemetryTester(
-          AtLeastOnce(),
+          AtLeastOnce(afterEnvelopes = Some(1)),
           GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
 
         runInternal(tt.projectionState) {
@@ -71,8 +70,32 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           }
         }
       }
-      "count envelopes only once in case of failure" ignore {
-        // TODO: fix the happy path first
+      "count offsets (with afterEnvelops optimization)" in {
+        val tt = new TelemetryTester(
+          AtLeastOnce(afterEnvelopes = Some(3)),
+          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(1)
+          }
+        }
+      }
+      "count envelopes only once in case of failure" in {
+        val single = Handlers.groupedWithFailures(0.5f)
+        val tt = new TelemetryTester(
+          AtLeastOnce(
+            afterEnvelopes = Some(2),
+            recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
+          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(3), orAfterDuration = Some(500.millis)))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(1)
+          }
+        }
       }
     }
     " in `at-least-once` with flowHandler" must {
@@ -154,9 +177,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
         }
       }
     }
-    " in `exactly-once` with flowHandler" must {
-      "count offsets (UNSUPPORTED)" ignore {}
-    }
+    " in `exactly-once` with flowHandler count offsets (UNSUPPORTED)" ignore {}
 
     // at-most-once
     " in `at-most-once` with singleHandler" must {
@@ -185,12 +206,9 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
         }
       }
     }
-    " in `at-most-once` with groupedHandler" must {
-      "count offsets (UNSUPPORTED)" ignore {}
-    }
-    " in `at-most-once` with flowHandler" must {
-      "count offsets (UNSUPPORTED)" ignore {}
-    }
+    " in `at-most-once` with groupedHandler count offsets (UNSUPPORTED)" ignore {}
+    " in `at-most-once` with flowHandler count offsets (UNSUPPORTED)" ignore {}
+
   }
 
 }
