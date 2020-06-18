@@ -281,9 +281,8 @@ public interface CassandraProjectionDocExample {
           ProjectionBehavior.Command.class,
           "shopping-carts",
           ShoppingCart.tags.size(),
-          id -> ProjectionBehavior.create(projection(ShoppingCart.tags.get(id))),
-          ShardedDaemonProcessSettings.create(system),
-          Optional.of(ProjectionBehavior.stopMessage())
+          id -> ProjectionBehavior.create(projection(ShoppingCart.tags.get((Integer) id))),
+          ProjectionBehavior.stopMessage()
       );
       //#running-with-daemon-process
     }
