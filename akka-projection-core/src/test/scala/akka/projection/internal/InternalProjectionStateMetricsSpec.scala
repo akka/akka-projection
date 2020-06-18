@@ -24,6 +24,9 @@ import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.internal.InternalProjectionStateMetricsSpec.Envelope
+import akka.projection.internal.InternalProjectionStateMetricsSpec.Handlers
+import akka.projection.internal.InternalProjectionStateMetricsSpec.TelemetryTester
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.SharedKillSwitch
@@ -36,7 +39,192 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-class InternalProjectionStateMetricsSpec
+class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpec {
+  "A metric counting offsets committed" must {
+    // at-least-once
+    " in `at-least-once` with singleHandler" must {
+      "count offsets (without afterEnvelops optimization)" in {
+        val single = Handlers.single
+        val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
+
+        runInternal(tt.projectionState) {
+          withClue("check - all values were concatenated") {
+            single.concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
+          }
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+          }
+        }
+      }
+      "count offsets (with afterEnvelops optimization)" in {
+        val tt =
+          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(Handlers.single))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
+          }
+        }
+      }
+      "count offsets only once in case of failure" in {
+        val single = Handlers.singleWithFailure(0.5f)
+        val tt = new TelemetryTester(
+          AtLeastOnce(
+            afterEnvelopes = Some(1),
+            // using retryAndFail to try to get all message through
+            recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
+          SingleHandlerStrategy(single))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+          }
+        }
+      }
+    }
+    " in `at-least-once` with groupedHandler" must {
+      "count offsets" ignore {
+        // TODO: this tests fails. Need changes in prod code: `reportProgress has no info of the group size.
+        val tt = new TelemetryTester(
+          AtLeastOnce(),
+          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
+          }
+        }
+      }
+      "count envelopes only once in case of failure" ignore {
+        // TODO: fix the happy path first
+      }
+    }
+    " in `at-least-once` with flowHandler" must {
+      "count offsets" in {
+        val tt =
+          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](Handlers.flow))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
+          }
+        }
+      }
+      "count offsets only once in case of failure" in {
+        val flow = Handlers.flowWithFailureAndRetries(0.8f, maxRetries)
+        val tt =
+          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
+          }
+        }
+      }
+    }
+
+    // exactly-once
+    " in `exactly-once` with singleHandler" must {
+      "count offsets" in {
+        val tt =
+          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+          }
+        }
+      }
+      "count offsets only once in case of failure" in {
+        val single = Handlers.singleWithFailure(0.5f)
+        val tt = new TelemetryTester(
+          // using retryAndFail to try to get all message through
+          ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
+          SingleHandlerStrategy(single))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+          }
+        }
+      }
+    }
+    " in `exactly-once` with groupedHandler" must {
+      "count offsets" in {
+        val grouped = Handlers.grouped
+        val grouHandler = GroupedHandlerStrategy(grouped, afterEnvelopes = Some(2))
+        val tt =
+          new TelemetryTester(ExactlyOnce(), grouHandler)
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
+          }
+        }
+      }
+      "count offsets only once in case of failure" in {
+        val groupedWithFailures = Handlers.groupedWithFailures(0.5f)
+        val tt = new TelemetryTester(
+          ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
+          GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2)))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+          }
+        }
+      }
+    }
+    " in `exactly-once` with flowHandler" must {
+      "count offsets (UNSUPPORTED)" ignore {}
+    }
+
+    // at-most-once
+    " in `at-most-once` with singleHandler" must {
+      "count offsets" in {
+        val tt =
+          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+          }
+        }
+      }
+      "count offsets once in case of failure" in {
+        val single = Handlers.singleWithFailure(0.5f)
+        val tt = new TelemetryTester(
+          // using retryAndFail to try to get all message through
+          AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.skip)),
+          SingleHandlerStrategy(single))
+
+        runInternal(tt.projectionState) {
+          withClue("the success counter reflects all events as processed") {
+            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+          }
+        }
+      }
+    }
+    " in `at-most-once` with groupedHandler" must {
+      "count offsets (UNSUPPORTED)" ignore {}
+    }
+    " in `at-most-once` with flowHandler" must {
+      "count offsets (UNSUPPORTED)" ignore {}
+    }
+  }
+
+}
+
+// TODO: use ProjectionTest's sink to control the pace and have more fine grained assertions
+abstract class InternalProjectionStateMetricsSpec
     extends ScalaTestWithActorTestKit(InternalProjectionStateMetricsSpec.config)
     with AnyWordSpecLike
     with LogCapturing {
@@ -51,188 +239,10 @@ class InternalProjectionStateMetricsSpec
 
   val maxRetries = 100
 
-  // TODO: use ProjectionTest's sink to control the pace and have more fine grained assertions
-
-  "A metric counting offsets committed" must {
-    " when running on `at-least-once`" must {
-      " use a singleHandler" must {
-        "count offsets (without afterEnvelops optimization)" in {
-          val single = Handlers.single
-          val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
-
-          runInternal(tt.projectionState) {
-            withClue("check - all values were concatenated") {
-              single.concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
-            }
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            }
-          }
-        }
-        "count offsets (with afterEnvelops optimization)" in {
-          val tt =
-            new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(Handlers.single))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
-            }
-          }
-        }
-        "count offsets only once in case of failure" in {
-          val single = Handlers.singleWithFailure(0.5f)
-          val tt = new TelemetryTester(
-            AtLeastOnce(
-              afterEnvelopes = Some(1),
-              // using retryAndFail to try to get all message through
-              recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
-            SingleHandlerStrategy(single))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            }
-          }
-        }
-      }
-      " use a groupedHandler" must {
-        "count offsets" ignore {
-          // TODO: this tests fails. Need changes in prod code: `reportProgress has no info of the group size.
-          val tt = new TelemetryTester(
-            AtLeastOnce(),
-            GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
-            }
-          }
-        }
-        "count envelopes only once in case of failure" ignore {
-          // TODO: fix the happy path first
-        }
-      }
-      " use a flowHandler" must {
-        "count offsets" in {
-          val tt =
-            new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](Handlers.flow))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
-            }
-          }
-        }
-        "count offsets only once in case of failure" in {
-          val flow = Handlers.flowWithFailureAndRetries(0.8f, maxRetries)
-          val tt =
-            new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](flow))
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
-            }
-          }
-        }
-      }
-    }
-    " when running on `exactly-once`" must {
-      " use a singleHandler" must {
-        "count offsets" in {
-          val tt =
-            new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
-            }
-          }
-        }
-        "count offsets only once in case of failure" in {
-          val single = Handlers.singleWithFailure(0.5f)
-          val tt = new TelemetryTester(
-            // using retryAndFail to try to get all message through
-            ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
-            SingleHandlerStrategy(single))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            }
-          }
-        }
-      }
-      " use a groupedHandler" must {
-        "count offsets" in {
-          val grouped = Handlers.grouped
-          val grouHandler = GroupedHandlerStrategy(grouped, afterEnvelopes = Some(2))
-          val tt =
-            new TelemetryTester(ExactlyOnce(), grouHandler)
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
-            }
-          }
-        }
-        "count offsets only once in case of failure" in {
-          val groupedWithFailures = Handlers.groupedWithFailures(0.5f)
-          val tt = new TelemetryTester(
-            ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
-            GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2)))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            }
-          }
-        }
-      }
-      " use a flowHandler" must {
-        "count offsets (UNSUPPORTED)" ignore {}
-      }
-    }
-    " when running on `at-most-once`" must {
-      " use a singleHandler" must {
-        "count offsets" in {
-          val tt =
-            new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-              tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
-            }
-          }
-        }
-        "count offsets once in case of failure" in {
-          val single = Handlers.singleWithFailure(0.5f)
-          val tt = new TelemetryTester(
-            // using retryAndFail to try to get all message through
-            AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.skip)),
-            SingleHandlerStrategy(single))
-
-          runInternal(tt.projectionState) {
-            withClue("the success counter reflects all events as processed") {
-              tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            }
-          }
-        }
-      }
-      "handle grouped envelopes (UNSUPPORTED)" ignore {}
-      "handle flows (UNSUPPORTED)" ignore {}
-    }
-  }
-
   // inspired on ProjectionTestkit's runInternal
-  private def runInternal(
+  protected def runInternal(
       projectionState: InMemInternalProjectionState[_, _],
-      max: FiniteDuration = 3.seconds,
+      max: FiniteDuration = 5.seconds,
       interval: FiniteDuration = 100.millis)(assertFunction: => Unit): Unit = {
 
     val probe = testKit.createTestProbe[Nothing]("internal-projection-state-probe")
