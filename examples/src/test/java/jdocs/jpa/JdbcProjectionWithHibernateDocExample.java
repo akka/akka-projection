@@ -43,7 +43,7 @@ public class JdbcProjectionWithHibernateDocExample {
                         ProjectionId.of("shopping-carts", "carts-1"),
                         sourceProvider,
                         sessionProvider::newInstance,
-                        new HibernateHandler(),
+                        () -> new HibernateHandler(),
                         system
                 );
 

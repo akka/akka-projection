@@ -21,7 +21,7 @@ object KafkaSourceProvider {
       system: ActorSystem[_],
       settings: ConsumerSettings[K, V],
       topics: java.util.Set[String]): SourceProvider[GroupOffsets, ConsumerRecord[K, V]] = {
-    import scala.collection.JavaConverters._
+    import akka.util.ccompat.JavaConverters._
     new KafkaSourceProviderImpl[K, V](
       system,
       settings,

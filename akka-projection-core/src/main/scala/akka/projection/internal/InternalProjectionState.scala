@@ -11,6 +11,7 @@ import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.Success
+import scala.util.Try
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -24,9 +25,10 @@ import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
-import akka.projection.RunningProjection
+import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.scaladsl.Handler
+import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
@@ -41,7 +43,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     offsetStrategy: OffsetStrategy,
-    handlerStrategy: HandlerStrategy[Envelope],
+    handlerStrategy: HandlerStrategy,
     statusObserver: StatusObserver[Envelope],
     settings: ProjectionSettings) {
 
@@ -109,7 +111,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     val atLeastOnceHandlerFlow
         : Flow[ProjectionContextImpl[Offset, Envelope], ProjectionContextImpl[Offset, Envelope], NotUsed] =
       handlerStrategy match {
-        case SingleHandlerStrategy(handler) =>
+        case single: SingleHandlerStrategy[Envelope] =>
+          val handler = single.handler()
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
@@ -127,6 +130,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         case grouped: GroupedHandlerStrategy[Envelope] =>
           val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
           val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
+          val handler = grouped.handler()
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
@@ -143,7 +147,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   first.offset,
                   last.offset,
                   abort.future,
-                  () => grouped.handler.process(envelopes))
+                  () => handler.process(envelopes))
                 .map(_ => last)
             }
 
@@ -223,7 +227,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     }
 
     handlerStrategy match {
-      case SingleHandlerStrategy(handler) =>
+      case single: SingleHandlerStrategy[Envelope] =>
+        val handler = single.handler()
         source
           .mapAsync(1) { context =>
             logger.warning(" Processing {}", context.envelope)
@@ -243,13 +248,14 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       case grouped: GroupedHandlerStrategy[Envelope] =>
         val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
         val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
+        val handler = grouped.handler()
 
         source
           .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
           .filterNot(_.isEmpty)
           .mapAsync(parallelism = 1) { group =>
             val last = group.last
-            reportProgress(processGrouped(grouped.handler, handlerRecovery, group), last.envelope)
+            reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope)
           }
 
       case _: FlowHandlerStrategy[_] =>
@@ -266,7 +272,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
     handlerStrategy match {
-      case SingleHandlerStrategy(handler) =>
+      case single: SingleHandlerStrategy[Envelope] =>
+        val handler = single.handler()
         source
           .mapAsync(parallelism = 1) { context =>
             val processed =
@@ -291,12 +298,13 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
 
   def mappedSource(): Source[Done, _] = {
 
+    val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
 
     val source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed] =
       Source
         .futureSource(
-          handlerStrategy.lifecycle
+          handlerLifecycle
             .tryStart()
             .flatMap(_ => sourceProvider.source(() => readOffsets())))
         .via(killSwitch.flow)
@@ -330,7 +338,31 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           atMostOnceProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
       }
 
-    RunningProjection.stopHandlerOnTermination(composedSource, projectionId, handlerStrategy.lifecycle, statusObserver)
+    stopHandlerOnTermination(composedSource, handlerLifecycle)
 
+  }
+
+  /**
+   * Adds a `watchTermination` on the passed Source that will call the `stopHandler` on completion.
+   *
+   * The stopHandler function is called on success or failure. In case of failure, the original failure is preserved.
+   */
+  private def stopHandlerOnTermination(
+      src: Source[Done, NotUsed],
+      handlerLifecycle: HandlerLifecycle): Source[Done, Future[Done]] = {
+    src.watchTermination() { (_, futDone) =>
+      handlerStrategy.recreateHandlerOnNextAccess()
+      futDone
+        .andThen(_ => handlerLifecycle.tryStop())
+        .andThen {
+          case Success(_) =>
+            statusObserver.stopped(projectionId)
+          case Failure(AbortProjectionException) =>
+            statusObserver.stopped(projectionId) // no restart
+          case Failure(exc) =>
+            Try(statusObserver.stopped(projectionId))
+            statusObserver.failed(projectionId, exc)
+        }
+    }
   }
 }

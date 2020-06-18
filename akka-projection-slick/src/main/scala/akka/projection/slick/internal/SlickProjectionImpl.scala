@@ -47,7 +47,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     settingsOpt: Option[ProjectionSettings],
     restartBackoffOpt: Option[RestartBackoffSettings],
     val offsetStrategy: OffsetStrategy,
-    handlerStrategy: HandlerStrategy[Envelope],
+    handlerStrategy: HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
     offsetStore: SlickOffsetStore[P])
     extends ExactlyOnceProjection[Offset, Envelope]
@@ -61,7 +61,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
       restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
-      handlerStrategy: HandlerStrategy[Envelope] = this.handlerStrategy,
+      handlerStrategy: HandlerStrategy = this.handlerStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): SlickProjectionImpl[Offset, Envelope, P] =
     new SlickProjectionImpl(
       projectionId,

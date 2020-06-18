@@ -92,7 +92,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
         .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
     //#atLeastOnce
   }
@@ -103,7 +103,7 @@ object CassandraProjectionDocExample {
       CassandraProjection.atMostOnce(
         projectionId = ProjectionId("shopping-carts", "carts-1"),
         sourceProvider,
-        handler = new ShoppingCartHandler)
+        handler = () => new ShoppingCartHandler)
     //#atMostOnce
   }
 
@@ -114,7 +114,7 @@ object CassandraProjectionDocExample {
         .groupedWithin(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          handler = new GroupedShoppingCartHandler)
+          handler = () => new GroupedShoppingCartHandler)
         .withGroup(groupAfterEnvelopes = 20, groupAfterDuration = 500.millis)
     //#grouped
   }
@@ -151,7 +151,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
         .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 10, delay = 1.second))
     //#withRecoveryStrategy
   }
@@ -163,7 +163,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
         .withRestartBackoff(minBackoff = 200.millis, maxBackoff = 5.seconds, randomFactor = 0.1)
     //#withRestartBackoff
   }
@@ -185,7 +185,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", tag),
           sourceProvider(tag),
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
         .withSaveOffset(100, 500.millis)
     //#running-projection
 
@@ -214,7 +214,7 @@ object CassandraProjectionDocExample {
           .atLeastOnce(
             projectionId = ProjectionId("shopping-carts", tag),
             sourceProvider(tag),
-            handler = new ShoppingCartHandler)
+            handler = () => new ShoppingCartHandler)
 
       val projection1 = projection("carts-1")
 
@@ -243,7 +243,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", tag),
           sourceProvider(tag),
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
 
     val projection1 = projection("carts-1")
 
@@ -260,7 +260,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
         .withRestartBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5)
         .withSaveOffset(100, 500.millis)
     //#projection-settings
