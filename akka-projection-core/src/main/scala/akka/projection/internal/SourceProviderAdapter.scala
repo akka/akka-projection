@@ -37,5 +37,5 @@ import akka.stream.scaladsl.Source
 
   def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
 
-  override def verifyOffset(offset: Offset): OffsetVerification = delegate.verifyOffset(offset)
+  //override def verifyOffset(offset: Offset): OffsetVerification = delegate.verifyOffset(offset)
 }

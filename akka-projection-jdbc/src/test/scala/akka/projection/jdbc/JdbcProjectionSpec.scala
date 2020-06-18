@@ -35,6 +35,7 @@ import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestSubscriber
@@ -106,7 +107,8 @@ object JdbcProjectionSpec {
       system: ActorSystem[_],
       src: Source[Envelope, _],
       offsetVerificationF: Long => OffsetVerification)
-      extends SourceProvider[Long, Envelope] {
+      extends SourceProvider[Long, Envelope]
+      with VerifiableSourceProvider[Long, Envelope] {
 
     implicit val executionContext: ExecutionContext = system.executionContext
 

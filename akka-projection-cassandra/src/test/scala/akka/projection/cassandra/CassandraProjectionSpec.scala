@@ -42,6 +42,7 @@ import akka.projection.scaladsl.ActorHandler
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
@@ -80,7 +81,8 @@ object CassandraProjectionSpec {
       system: ActorSystem[_],
       src: Source[Envelope, _],
       offsetVerificationF: Long => OffsetVerification)
-      extends SourceProvider[Long, Envelope] {
+      extends SourceProvider[Long, Envelope]
+      with VerifiableSourceProvider[Long, Envelope] {
     implicit val executionContext: ExecutionContext = system.executionContext
     override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
       offset().map {

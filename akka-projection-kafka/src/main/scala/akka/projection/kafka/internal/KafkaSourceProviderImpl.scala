@@ -18,7 +18,9 @@ import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.kafka.GroupOffsets
+import akka.projection.scaladsl.MergeableOffsetSourceProvider
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -40,7 +42,9 @@ import org.apache.kafka.common.TopicPartition
     settings: ConsumerSettings[K, V],
     topics: Set[String],
     metadataClient: MetadataClientAdapter)
-    extends SourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
+    extends SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with MergeableOffsetSourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
   import KafkaSourceProviderImpl._
 
   private implicit val executionContext: ExecutionContext = system.executionContext
@@ -83,8 +87,6 @@ import org.apache.kafka.common.TopicPartition
       VerificationFailure(
         "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
   }
-
-  override def isOffsetMergeable: Boolean = true
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) =>
