@@ -69,7 +69,7 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
           if (resultSet.first()) {
             val offsetStr = resultSet.getString("OFFSET")
             val manifest = resultSet.getString("MANIFEST")
-            Some(fromStorageRepresentation(offsetStr, manifest))
+            Some(fromStorageRepresentation[Offset](offsetStr, manifest))
           } else None
         }
       }
