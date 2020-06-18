@@ -16,7 +16,6 @@ import akka.annotation.InternalApi
 import akka.projection.OffsetVerification
 import akka.projection.javadsl
 import akka.projection.scaladsl
-import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
 /**
@@ -37,6 +36,12 @@ import akka.stream.scaladsl.Source
   }
 
   def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
+}
 
-  //override def verifyOffset(offset: Offset): OffsetVerification = delegate.verifyOffset(offset)
+@InternalApi private[akka] class VerifiableSourceProviderAdapter[Offset, Envelope](
+    delegate: javadsl.VerifiableSourceProvider[Offset, Envelope])
+    extends SourceProviderAdapter[Offset, Envelope](delegate)
+    with scaladsl.VerifiableSourceProvider[Offset, Envelope] {
+
+  override def verifyOffset(offset: Offset): OffsetVerification = delegate.verifyOffset(offset)
 }

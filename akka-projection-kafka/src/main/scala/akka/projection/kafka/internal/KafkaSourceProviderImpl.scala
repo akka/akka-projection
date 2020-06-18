@@ -4,15 +4,9 @@
 
 package akka.projection.kafka.internal
 
-import java.util
-import java.util.Optional
-import java.util.concurrent.CompletionStage
-import java.util.function.Supplier
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.jdk.CollectionConverters._
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -24,11 +18,10 @@ import akka.kafka.scaladsl.PartitionAssignmentHandler
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
+import akka.projection.ProjectionContext
 import akka.projection.internal.ProjectionContextImpl
 import akka.projection.kafka.GroupOffsets
-import akka.projection.javadsl
 import akka.projection.scaladsl
-import akka.projection.ProjectionContext
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -51,11 +44,8 @@ import org.apache.kafka.common.TopicPartition
     topics: Set[String],
     metadataClient: MetadataClientAdapter)
     extends scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
     with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with javadsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with javadsl.MergeableOffsetSourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
+    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
   import KafkaSourceProviderImpl._
 
   private implicit val executionContext: ExecutionContext = system.executionContext
@@ -130,14 +120,17 @@ import org.apache.kafka.common.TopicPartition
       assignedPartitions = EmptyTps
   }
 
-  /**
-   * Java DSL
-   */
-  def source(offset: Supplier[CompletionStage[Optional[GroupOffsets]]])
-      : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], _]] = ???
-
-  override private[projection] def groupByKey(envs: util.List[ProjectionContextImpl[_, ConsumerRecord[K, V]]]) =
-    groupByKey(envs.asScala.toSeq).map { case (key, envs) => key -> envs.asJava }.asJava
+//  /**
+//   * Java DSL
+//   */
+//  override def source(offset: Supplier[CompletionStage[Optional[GroupOffsets]]])
+//      : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], _]] = {
+//    val scalaOffset = offset.get().asScala.map(_.toScala)
+//    source(() => scalaOffset).map(_.asJava).asJava
+//  }
+//
+//  override private[projection] def groupByKey(envs: util.List[ProjectionContextImpl[_, ConsumerRecord[K, V]]]) =
+//    groupByKey(envs.asScala.toSeq).map { case (key, envs) => key -> envs.asJava }.asJava
 
   override private[projection] def groupByKey(envs: Seq[ProjectionContextImpl[_, ConsumerRecord[K, V]]]) = {
     val groups: Map[String, immutable.Seq[ProjectionContext]] = envs

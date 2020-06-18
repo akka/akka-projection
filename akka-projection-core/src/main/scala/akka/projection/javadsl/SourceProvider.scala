@@ -8,14 +8,10 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.jdk.CollectionConverters._
-
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
-import akka.projection.OffsetVerification.VerificationSuccess
-import akka.projection.internal.ProjectionContextImpl
 import akka.projection.ProjectionContext
-import akka.projection.scaladsl.MergeableOffsetSourceProvider
+import akka.projection.internal.ProjectionContextImpl
 import akka.stream.javadsl.Source
 
 trait SourceProvider[Offset, Envelope] {
