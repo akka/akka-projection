@@ -52,9 +52,6 @@ object Common extends AutoPlugin {
         "-skip-packages",
         "akka.pattern" // for some reason Scaladoc creates this
       ),
-    // FIXME enable "-Xfatal-warnings", but then we need the silencer
-    Compile / scalacOptions --= Seq("-Xfatal-warnings"),
-    Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     scalafmtOnCompile := true,
     autoAPIMappings := true,
     apiURL := Some(url(s"https://doc.akka.io/api/akka-projection/${projectInfoVersion.value}")),
