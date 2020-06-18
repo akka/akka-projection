@@ -7,10 +7,19 @@ package akka.projection.cassandra;
 import akka.Done;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
+import akka.actor.testkit.typed.javadsl.TestProbe;
+import akka.actor.typed.ActorRef;
+import akka.actor.typed.ActorSystem;
+import akka.actor.typed.Behavior;
+import akka.actor.typed.PostStop;
+import akka.actor.typed.javadsl.AskPattern;
+import akka.actor.typed.javadsl.Behaviors;
 import akka.projection.Projection;
+import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.internal.CassandraOffsetStore;
 import akka.projection.cassandra.javadsl.CassandraProjection;
+import akka.projection.javadsl.ActorHandler;
 import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
@@ -103,7 +112,47 @@ public class CassandraProjectionTest extends JUnitSuite {
     }
   }
 
+  static class TestActorHandler extends ActorHandler<Envelope, TestHandlerBehavior.Req> {
+    private final ActorSystem<?> system;
+    private final Duration askTimeout = Duration.ofSeconds(5);
 
+    public TestActorHandler(Behavior<TestHandlerBehavior.Req> behavior, ActorSystem<?> system) {
+      super(behavior);
+      this.system = system;
+    }
+
+    @Override
+    public CompletionStage<Done> process(ActorRef<TestHandlerBehavior.Req> actor, Envelope envelope) {
+      return AskPattern.ask(actor, (ActorRef<Done> replyTo) -> new TestHandlerBehavior.Req(envelope, replyTo),
+          askTimeout, system.scheduler());
+    }
+  }
+
+  static class TestHandlerBehavior {
+    static class Req {
+      public final Envelope envelope;
+      public final ActorRef<Done> replyTo;
+
+      Req(Envelope envelope, ActorRef<Done> replyTo) {
+        this.envelope = envelope;
+        this.replyTo = replyTo;
+      }
+    }
+
+    static Behavior<Req> create(ActorRef<Envelope> receiveProbe, ActorRef<Done> stopProbe) {
+      return Behaviors.receive(Req.class)
+          .onMessage(Req.class, req -> {
+            receiveProbe.tell(req.envelope);
+            req.replyTo.tell(Done.getInstance());
+            return Behaviors.same();
+          })
+          .onSignal(PostStop.class, postStop -> {
+            stopProbe.tell(Done.getInstance());
+            return Behaviors.same();
+          })
+          .build();
+    }
+  }
 
   private ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
 
@@ -293,6 +342,37 @@ public class CassandraProjectionTest extends JUnitSuite {
       // failed: jkl not included
       assertEquals("abc|def|ghi|mno|pqr|", str.toString());
     });
+  }
+
+  @Test
+  public void actorHandlerShouldStartStopActor() {
+    String entityId = UUID.randomUUID().toString();
+    ProjectionId projectionId = genRandomProjectionId();
+
+    TestProbe<Envelope> receiveProbe = testKit.createTestProbe();
+    TestProbe<Done> stopProbe = testKit.createTestProbe();
+
+    Projection<Envelope> projection = CassandraProjection
+        .atLeastOnce(
+            projectionId,
+            new TestSourceProvider(entityId),
+            new TestActorHandler(TestHandlerBehavior.create(receiveProbe.getRef(), stopProbe.getRef()), testKit.system()))
+        .withSaveOffset(1, Duration.ZERO);
+
+    ActorRef<ProjectionBehavior.Command> projectionRef = testKit.spawn(ProjectionBehavior.create(projection));
+
+    assertEquals("abc", receiveProbe.receiveMessage().message);
+    assertEquals("def", receiveProbe.receiveMessage().message);
+    assertEquals("ghi", receiveProbe.receiveMessage().message);
+    assertEquals("jkl", receiveProbe.receiveMessage().message);
+    assertEquals("mno", receiveProbe.receiveMessage().message);
+    assertEquals("pqr", receiveProbe.receiveMessage().message);
+
+    projectionRef.tell(ProjectionBehavior.stopMessage());
+
+    stopProbe.receiveMessage();
+
+    assertStoredOffset(projectionId, 6L);
   }
 
 

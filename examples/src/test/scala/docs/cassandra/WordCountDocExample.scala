@@ -204,7 +204,6 @@ object WordCountDocExample {
     object WordCountProcessor {
       trait Command
       final case class Handle(envelope: WordEnvelope, replyTo: ActorRef[Try[Done]]) extends Command
-      case object Stop extends Command
       private final case class InitialState(state: Map[Word, Count]) extends Command
       private final case class SaveCompleted(word: Word, saveResult: Try[Done]) extends Command
 
@@ -253,8 +252,6 @@ object WordCountDocExample {
               SaveCompleted(word, saveResult)
             }
             saving(state, replyTo) // will reply from SaveCompleted
-          case Stop =>
-            Behaviors.stopped
           case _: InitialState =>
             Behaviors.unhandled
         }
@@ -268,8 +265,6 @@ object WordCountDocExample {
               case Success(_)   => idle(state.updated(word, state.getOrElse(word, 0) + 1))
               case Failure(exc) => throw exc // restart, reload state from db
             }
-          case Stop =>
-            Behaviors.stopped
         }
     }
     //#behaviorLoadingInitialState
@@ -302,7 +297,6 @@ object WordCountDocExample {
     object WordCountProcessor {
       trait Command
       final case class Handle(envelope: WordEnvelope, replyTo: ActorRef[Try[Done]]) extends Command
-      case object Stop extends Command
       private final case class LoadCompleted(word: Word, loadResult: Try[Count]) extends Command
       private final case class SaveCompleted(word: Word, saveResult: Try[Done]) extends Command
 
@@ -335,8 +329,6 @@ object WordCountDocExample {
                 save(word, count + 1)
                 saving(state, replyTo) // will reply from SaveCompleted
             }
-          case Stop =>
-            Behaviors.stopped
         }
 
       private def load(word: String): Unit = {
@@ -357,8 +349,6 @@ object WordCountDocExample {
                 replyTo ! Failure(exc)
                 idle(state)
             }
-          case Stop =>
-            Behaviors.stopped
         }
 
       private def save(word: String, count: Count): Unit = {
@@ -380,8 +370,6 @@ object WordCountDocExample {
                 // so that it was actually saved, best to reload
                 idle(state - word)
             }
-          case Stop =>
-            Behaviors.stopped
         }
     }
     //#behaviorLoadingOnDemand
