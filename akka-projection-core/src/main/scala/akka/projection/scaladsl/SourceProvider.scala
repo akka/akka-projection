@@ -9,6 +9,7 @@ import scala.concurrent.Future
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.scaladsl.Source
+import com.github.ghik.silencer.silent
 
 trait SourceProvider[Offset, Envelope] {
 
@@ -16,6 +17,7 @@ trait SourceProvider[Offset, Envelope] {
 
   def extractOffset(envelope: Envelope): Offset
 
+  @silent("never used")
   def verifyOffset(offset: Offset): OffsetVerification = VerificationSuccess
 
   def isOffsetMergeable: Boolean = false

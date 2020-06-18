@@ -37,19 +37,7 @@ object Common extends AutoPlugin {
     crossVersion := CrossVersion.binary,
     crossScalaVersions := Dependencies.ScalaVersions,
     scalaVersion := Dependencies.Scala213,
-    scalacOptions ++= Seq(
-        "-unchecked",
-        "-deprecation",
-        "-language:_",
-        //"-Xfatal-warnings", //FIXME need silencer first
-        "-Ywarn-unused",
-        "-encoding",
-        "UTF-8",
-        "-unchecked",
-        "-Xlint",
-        "-Ywarn-dead-code"),
     javacOptions ++= List("-Xlint:unchecked", "-Xlint:deprecation"),
-    Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
     Compile / doc / scalacOptions := scalacOptions.value ++ Seq(
         "-doc-title",
         "Akka Projection",

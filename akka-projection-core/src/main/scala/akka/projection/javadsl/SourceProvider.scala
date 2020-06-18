@@ -11,6 +11,7 @@ import java.util.function.Supplier
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.javadsl.Source
+import com.github.ghik.silencer.silent
 
 abstract class SourceProvider[Offset, Envelope] {
 
@@ -18,6 +19,7 @@ abstract class SourceProvider[Offset, Envelope] {
 
   def extractOffset(envelope: Envelope): Offset
 
+  @silent("never used")
   def verifyOffset(offset: Offset): OffsetVerification = VerificationSuccess
 
   def isOffsetMergeable: Boolean = false
