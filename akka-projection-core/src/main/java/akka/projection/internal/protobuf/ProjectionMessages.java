@@ -9,65 +9,68 @@ package akka.projection.internal.protobuf;
 
 public final class ProjectionMessages {
   private ProjectionMessages() {}
-  public static void registerAllExtensions(
-      akka.protobufv3.internal.ExtensionRegistryLite registry) {
-  }
 
   public static void registerAllExtensions(
-      akka.protobufv3.internal.ExtensionRegistry registry) {
-    registerAllExtensions(
-        (akka.protobufv3.internal.ExtensionRegistryLite) registry);
+      akka.protobufv3.internal.ExtensionRegistryLite registry) {}
+
+  public static void registerAllExtensions(akka.protobufv3.internal.ExtensionRegistry registry) {
+    registerAllExtensions((akka.protobufv3.internal.ExtensionRegistryLite) registry);
   }
-  public interface ProjectionIdOrBuilder extends
+
+  public interface ProjectionIdOrBuilder
+      extends
       // @@protoc_insertion_point(interface_extends:akka.projection.ProjectionId)
       akka.protobufv3.internal.MessageOrBuilder {
 
     /**
      * <code>required string name = 1;</code>
+     *
      * @return Whether the name field is set.
      */
     boolean hasName();
     /**
      * <code>required string name = 1;</code>
+     *
      * @return The name.
      */
     java.lang.String getName();
     /**
      * <code>required string name = 1;</code>
+     *
      * @return The bytes for name.
      */
-    akka.protobufv3.internal.ByteString
-        getNameBytes();
+    akka.protobufv3.internal.ByteString getNameBytes();
 
     /**
      * <code>required string key = 2;</code>
+     *
      * @return Whether the key field is set.
      */
     boolean hasKey();
     /**
      * <code>required string key = 2;</code>
+     *
      * @return The key.
      */
     java.lang.String getKey();
     /**
      * <code>required string key = 2;</code>
+     *
      * @return The bytes for key.
      */
-    akka.protobufv3.internal.ByteString
-        getKeyBytes();
+    akka.protobufv3.internal.ByteString getKeyBytes();
   }
-  /**
-   * Protobuf type {@code akka.projection.ProjectionId}
-   */
-  public  static final class ProjectionId extends
-      akka.protobufv3.internal.GeneratedMessageV3 implements
+  /** Protobuf type {@code akka.projection.ProjectionId} */
+  public static final class ProjectionId extends akka.protobufv3.internal.GeneratedMessageV3
+      implements
       // @@protoc_insertion_point(message_implements:akka.projection.ProjectionId)
       ProjectionIdOrBuilder {
-  private static final long serialVersionUID = 0L;
+    private static final long serialVersionUID = 0L;
     // Use ProjectionId.newBuilder() to construct.
     private ProjectionId(akka.protobufv3.internal.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
+
     private ProjectionId() {
       name_ = "";
       key_ = "";
@@ -81,10 +84,10 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public final akka.protobufv3.internal.UnknownFieldSet
-    getUnknownFields() {
+    public final akka.protobufv3.internal.UnknownFieldSet getUnknownFields() {
       return this.unknownFields;
     }
+
     private ProjectionId(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
@@ -104,48 +107,53 @@ public final class ProjectionMessages {
             case 0:
               done = true;
               break;
-            case 10: {
-              akka.protobufv3.internal.ByteString bs = input.readBytes();
-              bitField0_ |= 0x00000001;
-              name_ = bs;
-              break;
-            }
-            case 18: {
-              akka.protobufv3.internal.ByteString bs = input.readBytes();
-              bitField0_ |= 0x00000002;
-              key_ = bs;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
+            case 10:
+              {
+                akka.protobufv3.internal.ByteString bs = input.readBytes();
+                bitField0_ |= 0x00000001;
+                name_ = bs;
+                break;
               }
-              break;
-            }
+            case 18:
+              {
+                akka.protobufv3.internal.ByteString bs = input.readBytes();
+                bitField0_ |= 0x00000002;
+                key_ = bs;
+                break;
+              }
+            default:
+              {
+                if (!parseUnknownField(input, unknownFields, extensionRegistry, tag)) {
+                  done = true;
+                }
+                break;
+              }
           }
         }
       } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
         throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new akka.protobufv3.internal.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
+        throw new akka.protobufv3.internal.InvalidProtocolBufferException(e)
+            .setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
-    public static final akka.protobufv3.internal.Descriptors.Descriptor
-        getDescriptor() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_ProjectionId_descriptor;
+
+    public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_ProjectionId_descriptor;
     }
 
     @java.lang.Override
     protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_ProjectionId_fieldAccessorTable
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_ProjectionId_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.class, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder.class);
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.class,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder.class);
     }
 
     private int bitField0_;
@@ -153,6 +161,7 @@ public final class ProjectionMessages {
     private volatile java.lang.Object name_;
     /**
      * <code>required string name = 1;</code>
+     *
      * @return Whether the name field is set.
      */
     public boolean hasName() {
@@ -160,6 +169,7 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string name = 1;</code>
+     *
      * @return The name.
      */
     public java.lang.String getName() {
@@ -167,8 +177,7 @@ public final class ProjectionMessages {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        akka.protobufv3.internal.ByteString bs = 
-            (akka.protobufv3.internal.ByteString) ref;
+        akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         if (bs.isValidUtf8()) {
           name_ = s;
@@ -178,15 +187,14 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string name = 1;</code>
+     *
      * @return The bytes for name.
      */
-    public akka.protobufv3.internal.ByteString
-        getNameBytes() {
+    public akka.protobufv3.internal.ByteString getNameBytes() {
       java.lang.Object ref = name_;
       if (ref instanceof java.lang.String) {
-        akka.protobufv3.internal.ByteString b = 
-            akka.protobufv3.internal.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
+        akka.protobufv3.internal.ByteString b =
+            akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
         name_ = b;
         return b;
       } else {
@@ -198,6 +206,7 @@ public final class ProjectionMessages {
     private volatile java.lang.Object key_;
     /**
      * <code>required string key = 2;</code>
+     *
      * @return Whether the key field is set.
      */
     public boolean hasKey() {
@@ -205,6 +214,7 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string key = 2;</code>
+     *
      * @return The key.
      */
     public java.lang.String getKey() {
@@ -212,8 +222,7 @@ public final class ProjectionMessages {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        akka.protobufv3.internal.ByteString bs = 
-            (akka.protobufv3.internal.ByteString) ref;
+        akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         if (bs.isValidUtf8()) {
           key_ = s;
@@ -223,15 +232,14 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string key = 2;</code>
+     *
      * @return The bytes for key.
      */
-    public akka.protobufv3.internal.ByteString
-        getKeyBytes() {
+    public akka.protobufv3.internal.ByteString getKeyBytes() {
       java.lang.Object ref = key_;
       if (ref instanceof java.lang.String) {
-        akka.protobufv3.internal.ByteString b = 
-            akka.protobufv3.internal.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
+        akka.protobufv3.internal.ByteString b =
+            akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
         key_ = b;
         return b;
       } else {
@@ -240,6 +248,7 @@ public final class ProjectionMessages {
     }
 
     private byte memoizedIsInitialized = -1;
+
     @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -260,7 +269,7 @@ public final class ProjectionMessages {
 
     @java.lang.Override
     public void writeTo(akka.protobufv3.internal.CodedOutputStream output)
-                        throws java.io.IOException {
+        throws java.io.IOException {
       if (((bitField0_ & 0x00000001) != 0)) {
         akka.protobufv3.internal.GeneratedMessageV3.writeString(output, 1, name_);
       }
@@ -290,22 +299,21 @@ public final class ProjectionMessages {
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
-       return true;
+        return true;
       }
       if (!(obj instanceof akka.projection.internal.protobuf.ProjectionMessages.ProjectionId)) {
         return super.equals(obj);
       }
-      akka.projection.internal.protobuf.ProjectionMessages.ProjectionId other = (akka.projection.internal.protobuf.ProjectionMessages.ProjectionId) obj;
+      akka.projection.internal.protobuf.ProjectionMessages.ProjectionId other =
+          (akka.projection.internal.protobuf.ProjectionMessages.ProjectionId) obj;
 
       if (hasName() != other.hasName()) return false;
       if (hasName()) {
-        if (!getName()
-            .equals(other.getName())) return false;
+        if (!getName().equals(other.getName())) return false;
       }
       if (hasKey() != other.hasKey()) return false;
       if (hasKey()) {
-        if (!getKey()
-            .equals(other.getKey())) return false;
+        if (!getKey().equals(other.getKey())) return false;
       }
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
@@ -332,87 +340,97 @@ public final class ProjectionMessages {
     }
 
     public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
-        java.nio.ByteBuffer data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+        java.nio.ByteBuffer data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
-        java.nio.ByteBuffer data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        java.nio.ByteBuffer data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
         akka.protobufv3.internal.ByteString data)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
         akka.protobufv3.internal.ByteString data,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(byte[] data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
+        byte[] data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
-        byte[] data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        byte[] data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+        java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseDelimitedFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
-        akka.protobufv3.internal.CodedInputStream input)
+        java.io.InputStream input, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+        parseDelimitedFrom(java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input);
+    }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+        parseDelimitedFrom(
+            java.io.InputStream input,
+            akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+            throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input, extensionRegistry);
+    }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
+        akka.protobufv3.internal.CodedInputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
+    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId parseFrom(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
 
     @java.lang.Override
-    public Builder newBuilderForType() { return newBuilder(); }
+    public Builder newBuilderForType() {
+      return newBuilder();
+    }
+
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId prototype) {
+
+    public static Builder newBuilder(
+        akka.projection.internal.protobuf.ProjectionMessages.ProjectionId prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+
     @java.lang.Override
     public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
+      return this == DEFAULT_INSTANCE ? new Builder() : new Builder().mergeFrom(this);
     }
 
     @java.lang.Override
@@ -421,41 +439,42 @@ public final class ProjectionMessages {
       Builder builder = new Builder(parent);
       return builder;
     }
-    /**
-     * Protobuf type {@code akka.projection.ProjectionId}
-     */
-    public static final class Builder extends
-        akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder> implements
+    /** Protobuf type {@code akka.projection.ProjectionId} */
+    public static final class Builder
+        extends akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder>
+        implements
         // @@protoc_insertion_point(builder_implements:akka.projection.ProjectionId)
         akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder {
-      public static final akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptor() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_ProjectionId_descriptor;
+      public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_ProjectionId_descriptor;
       }
 
       @java.lang.Override
       protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_ProjectionId_fieldAccessorTable
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_ProjectionId_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.class, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder.class);
+                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.class,
+                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder.class);
       }
 
-      // Construct using akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.newBuilder()
+      // Construct using
+      // akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.newBuilder()
       private Builder() {
         maybeForceBuilderInitialization();
       }
 
-      private Builder(
-          akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
+      private Builder(akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
+
       private void maybeForceBuilderInitialization() {
-        if (akka.protobufv3.internal.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+        if (akka.protobufv3.internal.GeneratedMessageV3.alwaysUseFieldBuilders) {}
       }
+
       @java.lang.Override
       public Builder clear() {
         super.clear();
@@ -467,14 +486,16 @@ public final class ProjectionMessages {
       }
 
       @java.lang.Override
-      public akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptorForType() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_ProjectionId_descriptor;
+      public akka.protobufv3.internal.Descriptors.Descriptor getDescriptorForType() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_ProjectionId_descriptor;
       }
 
       @java.lang.Override
-      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getDefaultInstanceForType() {
-        return akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance();
+      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+          getDefaultInstanceForType() {
+        return akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+            .getDefaultInstance();
       }
 
       @java.lang.Override
@@ -488,7 +509,8 @@ public final class ProjectionMessages {
 
       @java.lang.Override
       public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId buildPartial() {
-        akka.projection.internal.protobuf.ProjectionMessages.ProjectionId result = new akka.projection.internal.protobuf.ProjectionMessages.ProjectionId(this);
+        akka.projection.internal.protobuf.ProjectionMessages.ProjectionId result =
+            new akka.projection.internal.protobuf.ProjectionMessages.ProjectionId(this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -508,46 +530,53 @@ public final class ProjectionMessages {
       public Builder clone() {
         return super.clone();
       }
+
       @java.lang.Override
       public Builder setField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.setField(field, value);
       }
+
       @java.lang.Override
-      public Builder clearField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
+      public Builder clearField(akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
         return super.clearField(field);
       }
+
       @java.lang.Override
-      public Builder clearOneof(
-          akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
+      public Builder clearOneof(akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
         return super.clearOneof(oneof);
       }
+
       @java.lang.Override
       public Builder setRepeatedField(
           akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          int index, java.lang.Object value) {
+          int index,
+          java.lang.Object value) {
         return super.setRepeatedField(field, index, value);
       }
+
       @java.lang.Override
       public Builder addRepeatedField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.addRepeatedField(field, value);
       }
+
       @java.lang.Override
       public Builder mergeFrom(akka.protobufv3.internal.Message other) {
         if (other instanceof akka.projection.internal.protobuf.ProjectionMessages.ProjectionId) {
-          return mergeFrom((akka.projection.internal.protobuf.ProjectionMessages.ProjectionId)other);
+          return mergeFrom(
+              (akka.projection.internal.protobuf.ProjectionMessages.ProjectionId) other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId other) {
-        if (other == akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()) return this;
+      public Builder mergeFrom(
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId other) {
+        if (other
+            == akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                .getDefaultInstance()) return this;
         if (other.hasName()) {
           bitField0_ |= 0x00000001;
           name_ = other.name_;
@@ -583,7 +612,9 @@ public final class ProjectionMessages {
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
-          parsedMessage = (akka.projection.internal.protobuf.ProjectionMessages.ProjectionId) e.getUnfinishedMessage();
+          parsedMessage =
+              (akka.projection.internal.protobuf.ProjectionMessages.ProjectionId)
+                  e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -592,11 +623,13 @@ public final class ProjectionMessages {
         }
         return this;
       }
+
       private int bitField0_;
 
       private java.lang.Object name_ = "";
       /**
        * <code>required string name = 1;</code>
+       *
        * @return Whether the name field is set.
        */
       public boolean hasName() {
@@ -604,13 +637,13 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string name = 1;</code>
+       *
        * @return The name.
        */
       public java.lang.String getName() {
         java.lang.Object ref = name_;
         if (!(ref instanceof java.lang.String)) {
-          akka.protobufv3.internal.ByteString bs =
-              (akka.protobufv3.internal.ByteString) ref;
+          akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
           if (bs.isValidUtf8()) {
             name_ = s;
@@ -622,15 +655,14 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string name = 1;</code>
+       *
        * @return The bytes for name.
        */
-      public akka.protobufv3.internal.ByteString
-          getNameBytes() {
+      public akka.protobufv3.internal.ByteString getNameBytes() {
         java.lang.Object ref = name_;
         if (ref instanceof String) {
-          akka.protobufv3.internal.ByteString b = 
-              akka.protobufv3.internal.ByteString.copyFromUtf8(
-                  (java.lang.String) ref);
+          akka.protobufv3.internal.ByteString b =
+              akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
           name_ = b;
           return b;
         } else {
@@ -639,21 +671,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string name = 1;</code>
+       *
        * @param value The name to set.
        * @return This builder for chaining.
        */
-      public Builder setName(
-          java.lang.String value) {
+      public Builder setName(java.lang.String value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000001;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000001;
         name_ = value;
         onChanged();
         return this;
       }
       /**
        * <code>required string name = 1;</code>
+       *
        * @return This builder for chaining.
        */
       public Builder clearName() {
@@ -664,15 +697,15 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string name = 1;</code>
+       *
        * @param value The bytes for name to set.
        * @return This builder for chaining.
        */
-      public Builder setNameBytes(
-          akka.protobufv3.internal.ByteString value) {
+      public Builder setNameBytes(akka.protobufv3.internal.ByteString value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000001;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000001;
         name_ = value;
         onChanged();
         return this;
@@ -681,6 +714,7 @@ public final class ProjectionMessages {
       private java.lang.Object key_ = "";
       /**
        * <code>required string key = 2;</code>
+       *
        * @return Whether the key field is set.
        */
       public boolean hasKey() {
@@ -688,13 +722,13 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string key = 2;</code>
+       *
        * @return The key.
        */
       public java.lang.String getKey() {
         java.lang.Object ref = key_;
         if (!(ref instanceof java.lang.String)) {
-          akka.protobufv3.internal.ByteString bs =
-              (akka.protobufv3.internal.ByteString) ref;
+          akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
           if (bs.isValidUtf8()) {
             key_ = s;
@@ -706,15 +740,14 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string key = 2;</code>
+       *
        * @return The bytes for key.
        */
-      public akka.protobufv3.internal.ByteString
-          getKeyBytes() {
+      public akka.protobufv3.internal.ByteString getKeyBytes() {
         java.lang.Object ref = key_;
         if (ref instanceof String) {
-          akka.protobufv3.internal.ByteString b = 
-              akka.protobufv3.internal.ByteString.copyFromUtf8(
-                  (java.lang.String) ref);
+          akka.protobufv3.internal.ByteString b =
+              akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
           key_ = b;
           return b;
         } else {
@@ -723,21 +756,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string key = 2;</code>
+       *
        * @param value The key to set.
        * @return This builder for chaining.
        */
-      public Builder setKey(
-          java.lang.String value) {
+      public Builder setKey(java.lang.String value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000002;
         key_ = value;
         onChanged();
         return this;
       }
       /**
        * <code>required string key = 2;</code>
+       *
        * @return This builder for chaining.
        */
       public Builder clearKey() {
@@ -748,19 +782,20 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string key = 2;</code>
+       *
        * @param value The bytes for key to set.
        * @return This builder for chaining.
        */
-      public Builder setKeyBytes(
-          akka.protobufv3.internal.ByteString value) {
+      public Builder setKeyBytes(akka.protobufv3.internal.ByteString value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000002;
         key_ = value;
         onChanged();
         return this;
       }
+
       @java.lang.Override
       public final Builder setUnknownFields(
           final akka.protobufv3.internal.UnknownFieldSet unknownFields) {
@@ -773,30 +808,33 @@ public final class ProjectionMessages {
         return super.mergeUnknownFields(unknownFields);
       }
 
-
       // @@protoc_insertion_point(builder_scope:akka.projection.ProjectionId)
     }
 
     // @@protoc_insertion_point(class_scope:akka.projection.ProjectionId)
-    private static final akka.projection.internal.protobuf.ProjectionMessages.ProjectionId DEFAULT_INSTANCE;
+    private static final akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+        DEFAULT_INSTANCE;
+
     static {
       DEFAULT_INSTANCE = new akka.projection.internal.protobuf.ProjectionMessages.ProjectionId();
     }
 
-    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getDefaultInstance() {
+    public static akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+        getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
-    @java.lang.Deprecated public static final akka.protobufv3.internal.Parser<ProjectionId>
-        PARSER = new akka.protobufv3.internal.AbstractParser<ProjectionId>() {
-      @java.lang.Override
-      public ProjectionId parsePartialFrom(
-          akka.protobufv3.internal.CodedInputStream input,
-          akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-          throws akka.protobufv3.internal.InvalidProtocolBufferException {
-        return new ProjectionId(input, extensionRegistry);
-      }
-    };
+    @java.lang.Deprecated
+    public static final akka.protobufv3.internal.Parser<ProjectionId> PARSER =
+        new akka.protobufv3.internal.AbstractParser<ProjectionId>() {
+          @java.lang.Override
+          public ProjectionId parsePartialFrom(
+              akka.protobufv3.internal.CodedInputStream input,
+              akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+              throws akka.protobufv3.internal.InvalidProtocolBufferException {
+            return new ProjectionId(input, extensionRegistry);
+          }
+        };
 
     public static akka.protobufv3.internal.Parser<ProjectionId> parser() {
       return PARSER;
@@ -808,60 +846,63 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getDefaultInstanceForType() {
+    public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+        getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
-
   }
 
-  public interface GetOffsetOrBuilder extends
+  public interface GetOffsetOrBuilder
+      extends
       // @@protoc_insertion_point(interface_extends:akka.projection.GetOffset)
       akka.protobufv3.internal.MessageOrBuilder {
 
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return Whether the projectionId field is set.
      */
     boolean hasProjectionId();
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return The projectionId.
      */
     akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId();
-    /**
-     * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-     */
-    akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder();
+    /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+    akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+        getProjectionIdOrBuilder();
 
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return Whether the replyTo field is set.
      */
     boolean hasReplyTo();
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return The replyTo.
      */
     java.lang.String getReplyTo();
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return The bytes for replyTo.
      */
-    akka.protobufv3.internal.ByteString
-        getReplyToBytes();
+    akka.protobufv3.internal.ByteString getReplyToBytes();
   }
-  /**
-   * Protobuf type {@code akka.projection.GetOffset}
-   */
-  public  static final class GetOffset extends
-      akka.protobufv3.internal.GeneratedMessageV3 implements
+  /** Protobuf type {@code akka.projection.GetOffset} */
+  public static final class GetOffset extends akka.protobufv3.internal.GeneratedMessageV3
+      implements
       // @@protoc_insertion_point(message_implements:akka.projection.GetOffset)
       GetOffsetOrBuilder {
-  private static final long serialVersionUID = 0L;
+    private static final long serialVersionUID = 0L;
     // Use GetOffset.newBuilder() to construct.
     private GetOffset(akka.protobufv3.internal.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
+
     private GetOffset() {
       replyTo_ = "";
     }
@@ -874,10 +915,10 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public final akka.protobufv3.internal.UnknownFieldSet
-    getUnknownFields() {
+    public final akka.protobufv3.internal.UnknownFieldSet getUnknownFields() {
       return this.unknownFields;
     }
+
     private GetOffset(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
@@ -897,55 +938,64 @@ public final class ProjectionMessages {
             case 0:
               done = true;
               break;
-            case 10: {
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder subBuilder = null;
-              if (((bitField0_ & 0x00000001) != 0)) {
-                subBuilder = projectionId_.toBuilder();
+            case 10:
+              {
+                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+                    subBuilder = null;
+                if (((bitField0_ & 0x00000001) != 0)) {
+                  subBuilder = projectionId_.toBuilder();
+                }
+                projectionId_ =
+                    input.readMessage(
+                        akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.PARSER,
+                        extensionRegistry);
+                if (subBuilder != null) {
+                  subBuilder.mergeFrom(projectionId_);
+                  projectionId_ = subBuilder.buildPartial();
+                }
+                bitField0_ |= 0x00000001;
+                break;
               }
-              projectionId_ = input.readMessage(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.PARSER, extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(projectionId_);
-                projectionId_ = subBuilder.buildPartial();
+            case 18:
+              {
+                akka.protobufv3.internal.ByteString bs = input.readBytes();
+                bitField0_ |= 0x00000002;
+                replyTo_ = bs;
+                break;
               }
-              bitField0_ |= 0x00000001;
-              break;
-            }
-            case 18: {
-              akka.protobufv3.internal.ByteString bs = input.readBytes();
-              bitField0_ |= 0x00000002;
-              replyTo_ = bs;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
+            default:
+              {
+                if (!parseUnknownField(input, unknownFields, extensionRegistry, tag)) {
+                  done = true;
+                }
+                break;
               }
-              break;
-            }
           }
         }
       } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
         throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new akka.protobufv3.internal.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
+        throw new akka.protobufv3.internal.InvalidProtocolBufferException(e)
+            .setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
-    public static final akka.protobufv3.internal.Descriptors.Descriptor
-        getDescriptor() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_GetOffset_descriptor;
+
+    public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_GetOffset_descriptor;
     }
 
     @java.lang.Override
     protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_GetOffset_fieldAccessorTable
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_GetOffset_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              akka.projection.internal.protobuf.ProjectionMessages.GetOffset.class, akka.projection.internal.protobuf.ProjectionMessages.GetOffset.Builder.class);
+              akka.projection.internal.protobuf.ProjectionMessages.GetOffset.class,
+              akka.projection.internal.protobuf.ProjectionMessages.GetOffset.Builder.class);
     }
 
     private int bitField0_;
@@ -953,6 +1003,7 @@ public final class ProjectionMessages {
     private akka.projection.internal.protobuf.ProjectionMessages.ProjectionId projectionId_;
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return Whether the projectionId field is set.
      */
     public boolean hasProjectionId() {
@@ -960,22 +1011,27 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return The projectionId.
      */
     public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId() {
-      return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+      return projectionId_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()
+          : projectionId_;
     }
-    /**
-     * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-     */
-    public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder() {
-      return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+    /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+    public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+        getProjectionIdOrBuilder() {
+      return projectionId_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()
+          : projectionId_;
     }
 
     public static final int REPLYTO_FIELD_NUMBER = 2;
     private volatile java.lang.Object replyTo_;
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return Whether the replyTo field is set.
      */
     public boolean hasReplyTo() {
@@ -983,6 +1039,7 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return The replyTo.
      */
     public java.lang.String getReplyTo() {
@@ -990,8 +1047,7 @@ public final class ProjectionMessages {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        akka.protobufv3.internal.ByteString bs = 
-            (akka.protobufv3.internal.ByteString) ref;
+        akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         if (bs.isValidUtf8()) {
           replyTo_ = s;
@@ -1001,15 +1057,14 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return The bytes for replyTo.
      */
-    public akka.protobufv3.internal.ByteString
-        getReplyToBytes() {
+    public akka.protobufv3.internal.ByteString getReplyToBytes() {
       java.lang.Object ref = replyTo_;
       if (ref instanceof java.lang.String) {
-        akka.protobufv3.internal.ByteString b = 
-            akka.protobufv3.internal.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
+        akka.protobufv3.internal.ByteString b =
+            akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
         replyTo_ = b;
         return b;
       } else {
@@ -1018,6 +1073,7 @@ public final class ProjectionMessages {
     }
 
     private byte memoizedIsInitialized = -1;
+
     @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -1042,7 +1098,7 @@ public final class ProjectionMessages {
 
     @java.lang.Override
     public void writeTo(akka.protobufv3.internal.CodedOutputStream output)
-                        throws java.io.IOException {
+        throws java.io.IOException {
       if (((bitField0_ & 0x00000001) != 0)) {
         output.writeMessage(1, getProjectionId());
       }
@@ -1059,8 +1115,7 @@ public final class ProjectionMessages {
 
       size = 0;
       if (((bitField0_ & 0x00000001) != 0)) {
-        size += akka.protobufv3.internal.CodedOutputStream
-          .computeMessageSize(1, getProjectionId());
+        size += akka.protobufv3.internal.CodedOutputStream.computeMessageSize(1, getProjectionId());
       }
       if (((bitField0_ & 0x00000002) != 0)) {
         size += akka.protobufv3.internal.GeneratedMessageV3.computeStringSize(2, replyTo_);
@@ -1073,22 +1128,21 @@ public final class ProjectionMessages {
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
-       return true;
+        return true;
       }
       if (!(obj instanceof akka.projection.internal.protobuf.ProjectionMessages.GetOffset)) {
         return super.equals(obj);
       }
-      akka.projection.internal.protobuf.ProjectionMessages.GetOffset other = (akka.projection.internal.protobuf.ProjectionMessages.GetOffset) obj;
+      akka.projection.internal.protobuf.ProjectionMessages.GetOffset other =
+          (akka.projection.internal.protobuf.ProjectionMessages.GetOffset) obj;
 
       if (hasProjectionId() != other.hasProjectionId()) return false;
       if (hasProjectionId()) {
-        if (!getProjectionId()
-            .equals(other.getProjectionId())) return false;
+        if (!getProjectionId().equals(other.getProjectionId())) return false;
       }
       if (hasReplyTo() != other.hasReplyTo()) return false;
       if (hasReplyTo()) {
-        if (!getReplyTo()
-            .equals(other.getReplyTo())) return false;
+        if (!getReplyTo().equals(other.getReplyTo())) return false;
       }
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
@@ -1115,87 +1169,95 @@ public final class ProjectionMessages {
     }
 
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
-        java.nio.ByteBuffer data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+        java.nio.ByteBuffer data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
-        java.nio.ByteBuffer data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        java.nio.ByteBuffer data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
         akka.protobufv3.internal.ByteString data)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
         akka.protobufv3.internal.ByteString data,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(byte[] data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
+        byte[] data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
-        byte[] data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        byte[] data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+        java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseDelimitedFrom(java.io.InputStream input)
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
+        java.io.InputStream input, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseDelimitedFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+        java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input);
     }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseDelimitedFrom(
+        java.io.InputStream input, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input, extensionRegistry);
+    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
-        akka.protobufv3.internal.CodedInputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
+        akka.protobufv3.internal.CodedInputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset parseFrom(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
 
     @java.lang.Override
-    public Builder newBuilderForType() { return newBuilder(); }
+    public Builder newBuilderForType() {
+      return newBuilder();
+    }
+
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(akka.projection.internal.protobuf.ProjectionMessages.GetOffset prototype) {
+
+    public static Builder newBuilder(
+        akka.projection.internal.protobuf.ProjectionMessages.GetOffset prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+
     @java.lang.Override
     public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
+      return this == DEFAULT_INSTANCE ? new Builder() : new Builder().mergeFrom(this);
     }
 
     @java.lang.Override
@@ -1204,24 +1266,25 @@ public final class ProjectionMessages {
       Builder builder = new Builder(parent);
       return builder;
     }
-    /**
-     * Protobuf type {@code akka.projection.GetOffset}
-     */
-    public static final class Builder extends
-        akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder> implements
+    /** Protobuf type {@code akka.projection.GetOffset} */
+    public static final class Builder
+        extends akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder>
+        implements
         // @@protoc_insertion_point(builder_implements:akka.projection.GetOffset)
         akka.projection.internal.protobuf.ProjectionMessages.GetOffsetOrBuilder {
-      public static final akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptor() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_GetOffset_descriptor;
+      public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_GetOffset_descriptor;
       }
 
       @java.lang.Override
       protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_GetOffset_fieldAccessorTable
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_GetOffset_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                akka.projection.internal.protobuf.ProjectionMessages.GetOffset.class, akka.projection.internal.protobuf.ProjectionMessages.GetOffset.Builder.class);
+                akka.projection.internal.protobuf.ProjectionMessages.GetOffset.class,
+                akka.projection.internal.protobuf.ProjectionMessages.GetOffset.Builder.class);
       }
 
       // Construct using akka.projection.internal.protobuf.ProjectionMessages.GetOffset.newBuilder()
@@ -1229,17 +1292,17 @@ public final class ProjectionMessages {
         maybeForceBuilderInitialization();
       }
 
-      private Builder(
-          akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
+      private Builder(akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
+
       private void maybeForceBuilderInitialization() {
-        if (akka.protobufv3.internal.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
+        if (akka.protobufv3.internal.GeneratedMessageV3.alwaysUseFieldBuilders) {
           getProjectionIdFieldBuilder();
         }
       }
+
       @java.lang.Override
       public Builder clear() {
         super.clear();
@@ -1255,13 +1318,14 @@ public final class ProjectionMessages {
       }
 
       @java.lang.Override
-      public akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptorForType() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_GetOffset_descriptor;
+      public akka.protobufv3.internal.Descriptors.Descriptor getDescriptorForType() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_GetOffset_descriptor;
       }
 
       @java.lang.Override
-      public akka.projection.internal.protobuf.ProjectionMessages.GetOffset getDefaultInstanceForType() {
+      public akka.projection.internal.protobuf.ProjectionMessages.GetOffset
+          getDefaultInstanceForType() {
         return akka.projection.internal.protobuf.ProjectionMessages.GetOffset.getDefaultInstance();
       }
 
@@ -1276,7 +1340,8 @@ public final class ProjectionMessages {
 
       @java.lang.Override
       public akka.projection.internal.protobuf.ProjectionMessages.GetOffset buildPartial() {
-        akka.projection.internal.protobuf.ProjectionMessages.GetOffset result = new akka.projection.internal.protobuf.ProjectionMessages.GetOffset(this);
+        akka.projection.internal.protobuf.ProjectionMessages.GetOffset result =
+            new akka.projection.internal.protobuf.ProjectionMessages.GetOffset(this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -1300,46 +1365,52 @@ public final class ProjectionMessages {
       public Builder clone() {
         return super.clone();
       }
+
       @java.lang.Override
       public Builder setField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.setField(field, value);
       }
+
       @java.lang.Override
-      public Builder clearField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
+      public Builder clearField(akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
         return super.clearField(field);
       }
+
       @java.lang.Override
-      public Builder clearOneof(
-          akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
+      public Builder clearOneof(akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
         return super.clearOneof(oneof);
       }
+
       @java.lang.Override
       public Builder setRepeatedField(
           akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          int index, java.lang.Object value) {
+          int index,
+          java.lang.Object value) {
         return super.setRepeatedField(field, index, value);
       }
+
       @java.lang.Override
       public Builder addRepeatedField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.addRepeatedField(field, value);
       }
+
       @java.lang.Override
       public Builder mergeFrom(akka.protobufv3.internal.Message other) {
         if (other instanceof akka.projection.internal.protobuf.ProjectionMessages.GetOffset) {
-          return mergeFrom((akka.projection.internal.protobuf.ProjectionMessages.GetOffset)other);
+          return mergeFrom((akka.projection.internal.protobuf.ProjectionMessages.GetOffset) other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(akka.projection.internal.protobuf.ProjectionMessages.GetOffset other) {
-        if (other == akka.projection.internal.protobuf.ProjectionMessages.GetOffset.getDefaultInstance()) return this;
+      public Builder mergeFrom(
+          akka.projection.internal.protobuf.ProjectionMessages.GetOffset other) {
+        if (other
+            == akka.projection.internal.protobuf.ProjectionMessages.GetOffset.getDefaultInstance())
+          return this;
         if (other.hasProjectionId()) {
           mergeProjectionId(other.getProjectionId());
         }
@@ -1376,7 +1447,9 @@ public final class ProjectionMessages {
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
-          parsedMessage = (akka.projection.internal.protobuf.ProjectionMessages.GetOffset) e.getUnfinishedMessage();
+          parsedMessage =
+              (akka.projection.internal.protobuf.ProjectionMessages.GetOffset)
+                  e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -1385,13 +1458,18 @@ public final class ProjectionMessages {
         }
         return this;
       }
+
       private int bitField0_;
 
       private akka.projection.internal.protobuf.ProjectionMessages.ProjectionId projectionId_;
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder> projectionIdBuilder_;
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>
+          projectionIdBuilder_;
       /**
        * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+       *
        * @return Whether the projectionId field is set.
        */
       public boolean hasProjectionId() {
@@ -1399,19 +1477,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+       *
        * @return The projectionId.
        */
       public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId() {
         if (projectionIdBuilder_ == null) {
-          return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+          return projectionId_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                  .getDefaultInstance()
+              : projectionId_;
         } else {
           return projectionIdBuilder_.getMessage();
         }
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public Builder setProjectionId(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public Builder setProjectionId(
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
         if (projectionIdBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -1424,11 +1505,10 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       public Builder setProjectionId(
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder builderForValue) {
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+              builderForValue) {
         if (projectionIdBuilder_ == null) {
           projectionId_ = builderForValue.build();
           onChanged();
@@ -1438,16 +1518,20 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public Builder mergeProjectionId(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public Builder mergeProjectionId(
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
         if (projectionIdBuilder_ == null) {
-          if (((bitField0_ & 0x00000001) != 0) &&
-              projectionId_ != null &&
-              projectionId_ != akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()) {
+          if (((bitField0_ & 0x00000001) != 0)
+              && projectionId_ != null
+              && projectionId_
+                  != akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                      .getDefaultInstance()) {
             projectionId_ =
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.newBuilder(projectionId_).mergeFrom(value).buildPartial();
+                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.newBuilder(
+                        projectionId_)
+                    .mergeFrom(value)
+                    .buildPartial();
           } else {
             projectionId_ = value;
           }
@@ -1458,9 +1542,7 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       public Builder clearProjectionId() {
         if (projectionIdBuilder_ == null) {
           projectionId_ = null;
@@ -1471,37 +1553,38 @@ public final class ProjectionMessages {
         bitField0_ = (bitField0_ & ~0x00000001);
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder getProjectionIdBuilder() {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+          getProjectionIdBuilder() {
         bitField0_ |= 0x00000001;
         onChanged();
         return getProjectionIdFieldBuilder().getBuilder();
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder() {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+          getProjectionIdOrBuilder() {
         if (projectionIdBuilder_ != null) {
           return projectionIdBuilder_.getMessageOrBuilder();
         } else {
-          return projectionId_ == null ?
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+          return projectionId_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                  .getDefaultInstance()
+              : projectionId_;
         }
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder> 
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>
           getProjectionIdFieldBuilder() {
         if (projectionIdBuilder_ == null) {
-          projectionIdBuilder_ = new akka.protobufv3.internal.SingleFieldBuilderV3<
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>(
-                  getProjectionId(),
-                  getParentForChildren(),
-                  isClean());
+          projectionIdBuilder_ =
+              new akka.protobufv3.internal.SingleFieldBuilderV3<
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>(
+                  getProjectionId(), getParentForChildren(), isClean());
           projectionId_ = null;
         }
         return projectionIdBuilder_;
@@ -1510,6 +1593,7 @@ public final class ProjectionMessages {
       private java.lang.Object replyTo_ = "";
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @return Whether the replyTo field is set.
        */
       public boolean hasReplyTo() {
@@ -1517,13 +1601,13 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @return The replyTo.
        */
       public java.lang.String getReplyTo() {
         java.lang.Object ref = replyTo_;
         if (!(ref instanceof java.lang.String)) {
-          akka.protobufv3.internal.ByteString bs =
-              (akka.protobufv3.internal.ByteString) ref;
+          akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
           if (bs.isValidUtf8()) {
             replyTo_ = s;
@@ -1535,15 +1619,14 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @return The bytes for replyTo.
        */
-      public akka.protobufv3.internal.ByteString
-          getReplyToBytes() {
+      public akka.protobufv3.internal.ByteString getReplyToBytes() {
         java.lang.Object ref = replyTo_;
         if (ref instanceof String) {
-          akka.protobufv3.internal.ByteString b = 
-              akka.protobufv3.internal.ByteString.copyFromUtf8(
-                  (java.lang.String) ref);
+          akka.protobufv3.internal.ByteString b =
+              akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
           replyTo_ = b;
           return b;
         } else {
@@ -1552,21 +1635,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @param value The replyTo to set.
        * @return This builder for chaining.
        */
-      public Builder setReplyTo(
-          java.lang.String value) {
+      public Builder setReplyTo(java.lang.String value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000002;
         replyTo_ = value;
         onChanged();
         return this;
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @return This builder for chaining.
        */
       public Builder clearReplyTo() {
@@ -1577,19 +1661,20 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @param value The bytes for replyTo to set.
        * @return This builder for chaining.
        */
-      public Builder setReplyToBytes(
-          akka.protobufv3.internal.ByteString value) {
+      public Builder setReplyToBytes(akka.protobufv3.internal.ByteString value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000002;
         replyTo_ = value;
         onChanged();
         return this;
       }
+
       @java.lang.Override
       public final Builder setUnknownFields(
           final akka.protobufv3.internal.UnknownFieldSet unknownFields) {
@@ -1602,30 +1687,33 @@ public final class ProjectionMessages {
         return super.mergeUnknownFields(unknownFields);
       }
 
-
       // @@protoc_insertion_point(builder_scope:akka.projection.GetOffset)
     }
 
     // @@protoc_insertion_point(class_scope:akka.projection.GetOffset)
-    private static final akka.projection.internal.protobuf.ProjectionMessages.GetOffset DEFAULT_INSTANCE;
+    private static final akka.projection.internal.protobuf.ProjectionMessages.GetOffset
+        DEFAULT_INSTANCE;
+
     static {
       DEFAULT_INSTANCE = new akka.projection.internal.protobuf.ProjectionMessages.GetOffset();
     }
 
-    public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset getDefaultInstance() {
+    public static akka.projection.internal.protobuf.ProjectionMessages.GetOffset
+        getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
-    @java.lang.Deprecated public static final akka.protobufv3.internal.Parser<GetOffset>
-        PARSER = new akka.protobufv3.internal.AbstractParser<GetOffset>() {
-      @java.lang.Override
-      public GetOffset parsePartialFrom(
-          akka.protobufv3.internal.CodedInputStream input,
-          akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-          throws akka.protobufv3.internal.InvalidProtocolBufferException {
-        return new GetOffset(input, extensionRegistry);
-      }
-    };
+    @java.lang.Deprecated
+    public static final akka.protobufv3.internal.Parser<GetOffset> PARSER =
+        new akka.protobufv3.internal.AbstractParser<GetOffset>() {
+          @java.lang.Override
+          public GetOffset parsePartialFrom(
+              akka.protobufv3.internal.CodedInputStream input,
+              akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+              throws akka.protobufv3.internal.InvalidProtocolBufferException {
+            return new GetOffset(input, extensionRegistry);
+          }
+        };
 
     public static akka.protobufv3.internal.Parser<GetOffset> parser() {
       return PARSER;
@@ -1637,60 +1725,60 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public akka.projection.internal.protobuf.ProjectionMessages.GetOffset getDefaultInstanceForType() {
+    public akka.projection.internal.protobuf.ProjectionMessages.GetOffset
+        getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
-
   }
 
-  public interface CurrentOffsetOrBuilder extends
+  public interface CurrentOffsetOrBuilder
+      extends
       // @@protoc_insertion_point(interface_extends:akka.projection.CurrentOffset)
       akka.protobufv3.internal.MessageOrBuilder {
 
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return Whether the projectionId field is set.
      */
     boolean hasProjectionId();
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return The projectionId.
      */
     akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId();
-    /**
-     * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-     */
-    akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder();
+    /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+    akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+        getProjectionIdOrBuilder();
 
     /**
      * <code>optional .akka.projection.Offset offset = 2;</code>
+     *
      * @return Whether the offset field is set.
      */
     boolean hasOffset();
     /**
      * <code>optional .akka.projection.Offset offset = 2;</code>
+     *
      * @return The offset.
      */
     akka.projection.internal.protobuf.ProjectionMessages.Offset getOffset();
-    /**
-     * <code>optional .akka.projection.Offset offset = 2;</code>
-     */
+    /** <code>optional .akka.projection.Offset offset = 2;</code> */
     akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder getOffsetOrBuilder();
   }
-  /**
-   * Protobuf type {@code akka.projection.CurrentOffset}
-   */
-  public  static final class CurrentOffset extends
-      akka.protobufv3.internal.GeneratedMessageV3 implements
+  /** Protobuf type {@code akka.projection.CurrentOffset} */
+  public static final class CurrentOffset extends akka.protobufv3.internal.GeneratedMessageV3
+      implements
       // @@protoc_insertion_point(message_implements:akka.projection.CurrentOffset)
       CurrentOffsetOrBuilder {
-  private static final long serialVersionUID = 0L;
+    private static final long serialVersionUID = 0L;
     // Use CurrentOffset.newBuilder() to construct.
     private CurrentOffset(akka.protobufv3.internal.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
-    private CurrentOffset() {
-    }
+
+    private CurrentOffset() {}
 
     @java.lang.Override
     @SuppressWarnings({"unused"})
@@ -1700,10 +1788,10 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public final akka.protobufv3.internal.UnknownFieldSet
-    getUnknownFields() {
+    public final akka.protobufv3.internal.UnknownFieldSet getUnknownFields() {
       return this.unknownFields;
     }
+
     private CurrentOffset(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
@@ -1723,62 +1811,75 @@ public final class ProjectionMessages {
             case 0:
               done = true;
               break;
-            case 10: {
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder subBuilder = null;
-              if (((bitField0_ & 0x00000001) != 0)) {
-                subBuilder = projectionId_.toBuilder();
+            case 10:
+              {
+                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+                    subBuilder = null;
+                if (((bitField0_ & 0x00000001) != 0)) {
+                  subBuilder = projectionId_.toBuilder();
+                }
+                projectionId_ =
+                    input.readMessage(
+                        akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.PARSER,
+                        extensionRegistry);
+                if (subBuilder != null) {
+                  subBuilder.mergeFrom(projectionId_);
+                  projectionId_ = subBuilder.buildPartial();
+                }
+                bitField0_ |= 0x00000001;
+                break;
               }
-              projectionId_ = input.readMessage(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.PARSER, extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(projectionId_);
-                projectionId_ = subBuilder.buildPartial();
+            case 18:
+              {
+                akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder subBuilder =
+                    null;
+                if (((bitField0_ & 0x00000002) != 0)) {
+                  subBuilder = offset_.toBuilder();
+                }
+                offset_ =
+                    input.readMessage(
+                        akka.projection.internal.protobuf.ProjectionMessages.Offset.PARSER,
+                        extensionRegistry);
+                if (subBuilder != null) {
+                  subBuilder.mergeFrom(offset_);
+                  offset_ = subBuilder.buildPartial();
+                }
+                bitField0_ |= 0x00000002;
+                break;
               }
-              bitField0_ |= 0x00000001;
-              break;
-            }
-            case 18: {
-              akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder subBuilder = null;
-              if (((bitField0_ & 0x00000002) != 0)) {
-                subBuilder = offset_.toBuilder();
+            default:
+              {
+                if (!parseUnknownField(input, unknownFields, extensionRegistry, tag)) {
+                  done = true;
+                }
+                break;
               }
-              offset_ = input.readMessage(akka.projection.internal.protobuf.ProjectionMessages.Offset.PARSER, extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(offset_);
-                offset_ = subBuilder.buildPartial();
-              }
-              bitField0_ |= 0x00000002;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
           }
         }
       } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
         throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new akka.protobufv3.internal.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
+        throw new akka.protobufv3.internal.InvalidProtocolBufferException(e)
+            .setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
-    public static final akka.protobufv3.internal.Descriptors.Descriptor
-        getDescriptor() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_CurrentOffset_descriptor;
+
+    public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_CurrentOffset_descriptor;
     }
 
     @java.lang.Override
     protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_CurrentOffset_fieldAccessorTable
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_CurrentOffset_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.class, akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.Builder.class);
+              akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.class,
+              akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.Builder.class);
     }
 
     private int bitField0_;
@@ -1786,6 +1887,7 @@ public final class ProjectionMessages {
     private akka.projection.internal.protobuf.ProjectionMessages.ProjectionId projectionId_;
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return Whether the projectionId field is set.
      */
     public boolean hasProjectionId() {
@@ -1793,22 +1895,27 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return The projectionId.
      */
     public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId() {
-      return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+      return projectionId_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()
+          : projectionId_;
     }
-    /**
-     * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-     */
-    public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder() {
-      return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+    /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+    public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+        getProjectionIdOrBuilder() {
+      return projectionId_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()
+          : projectionId_;
     }
 
     public static final int OFFSET_FIELD_NUMBER = 2;
     private akka.projection.internal.protobuf.ProjectionMessages.Offset offset_;
     /**
      * <code>optional .akka.projection.Offset offset = 2;</code>
+     *
      * @return Whether the offset field is set.
      */
     public boolean hasOffset() {
@@ -1816,19 +1923,24 @@ public final class ProjectionMessages {
     }
     /**
      * <code>optional .akka.projection.Offset offset = 2;</code>
+     *
      * @return The offset.
      */
     public akka.projection.internal.protobuf.ProjectionMessages.Offset getOffset() {
-      return offset_ == null ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance() : offset_;
+      return offset_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()
+          : offset_;
     }
-    /**
-     * <code>optional .akka.projection.Offset offset = 2;</code>
-     */
-    public akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder getOffsetOrBuilder() {
-      return offset_ == null ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance() : offset_;
+    /** <code>optional .akka.projection.Offset offset = 2;</code> */
+    public akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder
+        getOffsetOrBuilder() {
+      return offset_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()
+          : offset_;
     }
 
     private byte memoizedIsInitialized = -1;
+
     @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -1855,7 +1967,7 @@ public final class ProjectionMessages {
 
     @java.lang.Override
     public void writeTo(akka.protobufv3.internal.CodedOutputStream output)
-                        throws java.io.IOException {
+        throws java.io.IOException {
       if (((bitField0_ & 0x00000001) != 0)) {
         output.writeMessage(1, getProjectionId());
       }
@@ -1872,12 +1984,10 @@ public final class ProjectionMessages {
 
       size = 0;
       if (((bitField0_ & 0x00000001) != 0)) {
-        size += akka.protobufv3.internal.CodedOutputStream
-          .computeMessageSize(1, getProjectionId());
+        size += akka.protobufv3.internal.CodedOutputStream.computeMessageSize(1, getProjectionId());
       }
       if (((bitField0_ & 0x00000002) != 0)) {
-        size += akka.protobufv3.internal.CodedOutputStream
-          .computeMessageSize(2, getOffset());
+        size += akka.protobufv3.internal.CodedOutputStream.computeMessageSize(2, getOffset());
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -1887,22 +1997,21 @@ public final class ProjectionMessages {
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
-       return true;
+        return true;
       }
       if (!(obj instanceof akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset)) {
         return super.equals(obj);
       }
-      akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset other = (akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset) obj;
+      akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset other =
+          (akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset) obj;
 
       if (hasProjectionId() != other.hasProjectionId()) return false;
       if (hasProjectionId()) {
-        if (!getProjectionId()
-            .equals(other.getProjectionId())) return false;
+        if (!getProjectionId().equals(other.getProjectionId())) return false;
       }
       if (hasOffset() != other.hasOffset()) return false;
       if (hasOffset()) {
-        if (!getOffset()
-            .equals(other.getOffset())) return false;
+        if (!getOffset().equals(other.getOffset())) return false;
       }
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
@@ -1929,87 +2038,97 @@ public final class ProjectionMessages {
     }
 
     public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
-        java.nio.ByteBuffer data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+        java.nio.ByteBuffer data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
-        java.nio.ByteBuffer data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        java.nio.ByteBuffer data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
         akka.protobufv3.internal.ByteString data)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
         akka.protobufv3.internal.ByteString data,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(byte[] data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
+        byte[] data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
-        byte[] data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        byte[] data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+        java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseDelimitedFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
-        akka.protobufv3.internal.CodedInputStream input)
+        java.io.InputStream input, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset
+        parseDelimitedFrom(java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input);
+    }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset
+        parseDelimitedFrom(
+            java.io.InputStream input,
+            akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+            throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input, extensionRegistry);
+    }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
+        akka.protobufv3.internal.CodedInputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
+    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset parseFrom(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
 
     @java.lang.Override
-    public Builder newBuilderForType() { return newBuilder(); }
+    public Builder newBuilderForType() {
+      return newBuilder();
+    }
+
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset prototype) {
+
+    public static Builder newBuilder(
+        akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+
     @java.lang.Override
     public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
+      return this == DEFAULT_INSTANCE ? new Builder() : new Builder().mergeFrom(this);
     }
 
     @java.lang.Override
@@ -2018,43 +2137,45 @@ public final class ProjectionMessages {
       Builder builder = new Builder(parent);
       return builder;
     }
-    /**
-     * Protobuf type {@code akka.projection.CurrentOffset}
-     */
-    public static final class Builder extends
-        akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder> implements
+    /** Protobuf type {@code akka.projection.CurrentOffset} */
+    public static final class Builder
+        extends akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder>
+        implements
         // @@protoc_insertion_point(builder_implements:akka.projection.CurrentOffset)
         akka.projection.internal.protobuf.ProjectionMessages.CurrentOffsetOrBuilder {
-      public static final akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptor() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_CurrentOffset_descriptor;
+      public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_CurrentOffset_descriptor;
       }
 
       @java.lang.Override
       protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_CurrentOffset_fieldAccessorTable
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_CurrentOffset_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.class, akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.Builder.class);
+                akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.class,
+                akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.Builder.class);
       }
 
-      // Construct using akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.newBuilder()
+      // Construct using
+      // akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.newBuilder()
       private Builder() {
         maybeForceBuilderInitialization();
       }
 
-      private Builder(
-          akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
+      private Builder(akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
+
       private void maybeForceBuilderInitialization() {
-        if (akka.protobufv3.internal.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
+        if (akka.protobufv3.internal.GeneratedMessageV3.alwaysUseFieldBuilders) {
           getProjectionIdFieldBuilder();
           getOffsetFieldBuilder();
         }
       }
+
       @java.lang.Override
       public Builder clear() {
         super.clear();
@@ -2074,14 +2195,16 @@ public final class ProjectionMessages {
       }
 
       @java.lang.Override
-      public akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptorForType() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_CurrentOffset_descriptor;
+      public akka.protobufv3.internal.Descriptors.Descriptor getDescriptorForType() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_CurrentOffset_descriptor;
       }
 
       @java.lang.Override
-      public akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset getDefaultInstanceForType() {
-        return akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.getDefaultInstance();
+      public akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset
+          getDefaultInstanceForType() {
+        return akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset
+            .getDefaultInstance();
       }
 
       @java.lang.Override
@@ -2095,7 +2218,8 @@ public final class ProjectionMessages {
 
       @java.lang.Override
       public akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset buildPartial() {
-        akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset result = new akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset(this);
+        akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset result =
+            new akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset(this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -2123,46 +2247,53 @@ public final class ProjectionMessages {
       public Builder clone() {
         return super.clone();
       }
+
       @java.lang.Override
       public Builder setField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.setField(field, value);
       }
+
       @java.lang.Override
-      public Builder clearField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
+      public Builder clearField(akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
         return super.clearField(field);
       }
+
       @java.lang.Override
-      public Builder clearOneof(
-          akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
+      public Builder clearOneof(akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
         return super.clearOneof(oneof);
       }
+
       @java.lang.Override
       public Builder setRepeatedField(
           akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          int index, java.lang.Object value) {
+          int index,
+          java.lang.Object value) {
         return super.setRepeatedField(field, index, value);
       }
+
       @java.lang.Override
       public Builder addRepeatedField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.addRepeatedField(field, value);
       }
+
       @java.lang.Override
       public Builder mergeFrom(akka.protobufv3.internal.Message other) {
         if (other instanceof akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset) {
-          return mergeFrom((akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset)other);
+          return mergeFrom(
+              (akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset) other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset other) {
-        if (other == akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset.getDefaultInstance()) return this;
+      public Builder mergeFrom(
+          akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset other) {
+        if (other
+            == akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset
+                .getDefaultInstance()) return this;
         if (other.hasProjectionId()) {
           mergeProjectionId(other.getProjectionId());
         }
@@ -2199,7 +2330,9 @@ public final class ProjectionMessages {
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
-          parsedMessage = (akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset) e.getUnfinishedMessage();
+          parsedMessage =
+              (akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset)
+                  e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -2208,13 +2341,18 @@ public final class ProjectionMessages {
         }
         return this;
       }
+
       private int bitField0_;
 
       private akka.projection.internal.protobuf.ProjectionMessages.ProjectionId projectionId_;
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder> projectionIdBuilder_;
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>
+          projectionIdBuilder_;
       /**
        * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+       *
        * @return Whether the projectionId field is set.
        */
       public boolean hasProjectionId() {
@@ -2222,19 +2360,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+       *
        * @return The projectionId.
        */
       public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId() {
         if (projectionIdBuilder_ == null) {
-          return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+          return projectionId_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                  .getDefaultInstance()
+              : projectionId_;
         } else {
           return projectionIdBuilder_.getMessage();
         }
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public Builder setProjectionId(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public Builder setProjectionId(
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
         if (projectionIdBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2247,11 +2388,10 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       public Builder setProjectionId(
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder builderForValue) {
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+              builderForValue) {
         if (projectionIdBuilder_ == null) {
           projectionId_ = builderForValue.build();
           onChanged();
@@ -2261,16 +2401,20 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public Builder mergeProjectionId(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public Builder mergeProjectionId(
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
         if (projectionIdBuilder_ == null) {
-          if (((bitField0_ & 0x00000001) != 0) &&
-              projectionId_ != null &&
-              projectionId_ != akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()) {
+          if (((bitField0_ & 0x00000001) != 0)
+              && projectionId_ != null
+              && projectionId_
+                  != akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                      .getDefaultInstance()) {
             projectionId_ =
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.newBuilder(projectionId_).mergeFrom(value).buildPartial();
+                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.newBuilder(
+                        projectionId_)
+                    .mergeFrom(value)
+                    .buildPartial();
           } else {
             projectionId_ = value;
           }
@@ -2281,9 +2425,7 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       public Builder clearProjectionId() {
         if (projectionIdBuilder_ == null) {
           projectionId_ = null;
@@ -2294,37 +2436,38 @@ public final class ProjectionMessages {
         bitField0_ = (bitField0_ & ~0x00000001);
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder getProjectionIdBuilder() {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+          getProjectionIdBuilder() {
         bitField0_ |= 0x00000001;
         onChanged();
         return getProjectionIdFieldBuilder().getBuilder();
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder() {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+          getProjectionIdOrBuilder() {
         if (projectionIdBuilder_ != null) {
           return projectionIdBuilder_.getMessageOrBuilder();
         } else {
-          return projectionId_ == null ?
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+          return projectionId_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                  .getDefaultInstance()
+              : projectionId_;
         }
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder> 
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>
           getProjectionIdFieldBuilder() {
         if (projectionIdBuilder_ == null) {
-          projectionIdBuilder_ = new akka.protobufv3.internal.SingleFieldBuilderV3<
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>(
-                  getProjectionId(),
-                  getParentForChildren(),
-                  isClean());
+          projectionIdBuilder_ =
+              new akka.protobufv3.internal.SingleFieldBuilderV3<
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>(
+                  getProjectionId(), getParentForChildren(), isClean());
           projectionId_ = null;
         }
         return projectionIdBuilder_;
@@ -2332,9 +2475,13 @@ public final class ProjectionMessages {
 
       private akka.projection.internal.protobuf.ProjectionMessages.Offset offset_;
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.Offset, akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder, akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder> offsetBuilder_;
+              akka.projection.internal.protobuf.ProjectionMessages.Offset,
+              akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder>
+          offsetBuilder_;
       /**
        * <code>optional .akka.projection.Offset offset = 2;</code>
+       *
        * @return Whether the offset field is set.
        */
       public boolean hasOffset() {
@@ -2342,18 +2489,19 @@ public final class ProjectionMessages {
       }
       /**
        * <code>optional .akka.projection.Offset offset = 2;</code>
+       *
        * @return The offset.
        */
       public akka.projection.internal.protobuf.ProjectionMessages.Offset getOffset() {
         if (offsetBuilder_ == null) {
-          return offset_ == null ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance() : offset_;
+          return offset_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()
+              : offset_;
         } else {
           return offsetBuilder_.getMessage();
         }
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 2;</code>
-       */
+      /** <code>optional .akka.projection.Offset offset = 2;</code> */
       public Builder setOffset(akka.projection.internal.protobuf.ProjectionMessages.Offset value) {
         if (offsetBuilder_ == null) {
           if (value == null) {
@@ -2367,9 +2515,7 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000002;
         return this;
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 2;</code>
-       */
+      /** <code>optional .akka.projection.Offset offset = 2;</code> */
       public Builder setOffset(
           akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder builderForValue) {
         if (offsetBuilder_ == null) {
@@ -2381,16 +2527,19 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000002;
         return this;
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 2;</code>
-       */
-      public Builder mergeOffset(akka.projection.internal.protobuf.ProjectionMessages.Offset value) {
+      /** <code>optional .akka.projection.Offset offset = 2;</code> */
+      public Builder mergeOffset(
+          akka.projection.internal.protobuf.ProjectionMessages.Offset value) {
         if (offsetBuilder_ == null) {
-          if (((bitField0_ & 0x00000002) != 0) &&
-              offset_ != null &&
-              offset_ != akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()) {
+          if (((bitField0_ & 0x00000002) != 0)
+              && offset_ != null
+              && offset_
+                  != akka.projection.internal.protobuf.ProjectionMessages.Offset
+                      .getDefaultInstance()) {
             offset_ =
-              akka.projection.internal.protobuf.ProjectionMessages.Offset.newBuilder(offset_).mergeFrom(value).buildPartial();
+                akka.projection.internal.protobuf.ProjectionMessages.Offset.newBuilder(offset_)
+                    .mergeFrom(value)
+                    .buildPartial();
           } else {
             offset_ = value;
           }
@@ -2401,9 +2550,7 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000002;
         return this;
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 2;</code>
-       */
+      /** <code>optional .akka.projection.Offset offset = 2;</code> */
       public Builder clearOffset() {
         if (offsetBuilder_ == null) {
           offset_ = null;
@@ -2414,41 +2561,42 @@ public final class ProjectionMessages {
         bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 2;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder getOffsetBuilder() {
+      /** <code>optional .akka.projection.Offset offset = 2;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder
+          getOffsetBuilder() {
         bitField0_ |= 0x00000002;
         onChanged();
         return getOffsetFieldBuilder().getBuilder();
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 2;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder getOffsetOrBuilder() {
+      /** <code>optional .akka.projection.Offset offset = 2;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder
+          getOffsetOrBuilder() {
         if (offsetBuilder_ != null) {
           return offsetBuilder_.getMessageOrBuilder();
         } else {
-          return offset_ == null ?
-              akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance() : offset_;
+          return offset_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()
+              : offset_;
         }
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 2;</code>
-       */
+      /** <code>optional .akka.projection.Offset offset = 2;</code> */
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.Offset, akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder, akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder> 
+              akka.projection.internal.protobuf.ProjectionMessages.Offset,
+              akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder>
           getOffsetFieldBuilder() {
         if (offsetBuilder_ == null) {
-          offsetBuilder_ = new akka.protobufv3.internal.SingleFieldBuilderV3<
-              akka.projection.internal.protobuf.ProjectionMessages.Offset, akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder, akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder>(
-                  getOffset(),
-                  getParentForChildren(),
-                  isClean());
+          offsetBuilder_ =
+              new akka.protobufv3.internal.SingleFieldBuilderV3<
+                  akka.projection.internal.protobuf.ProjectionMessages.Offset,
+                  akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder,
+                  akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder>(
+                  getOffset(), getParentForChildren(), isClean());
           offset_ = null;
         }
         return offsetBuilder_;
       }
+
       @java.lang.Override
       public final Builder setUnknownFields(
           final akka.protobufv3.internal.UnknownFieldSet unknownFields) {
@@ -2461,30 +2609,33 @@ public final class ProjectionMessages {
         return super.mergeUnknownFields(unknownFields);
       }
 
-
       // @@protoc_insertion_point(builder_scope:akka.projection.CurrentOffset)
     }
 
     // @@protoc_insertion_point(class_scope:akka.projection.CurrentOffset)
-    private static final akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset DEFAULT_INSTANCE;
+    private static final akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset
+        DEFAULT_INSTANCE;
+
     static {
       DEFAULT_INSTANCE = new akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset();
     }
 
-    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset getDefaultInstance() {
+    public static akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset
+        getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
-    @java.lang.Deprecated public static final akka.protobufv3.internal.Parser<CurrentOffset>
-        PARSER = new akka.protobufv3.internal.AbstractParser<CurrentOffset>() {
-      @java.lang.Override
-      public CurrentOffset parsePartialFrom(
-          akka.protobufv3.internal.CodedInputStream input,
-          akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-          throws akka.protobufv3.internal.InvalidProtocolBufferException {
-        return new CurrentOffset(input, extensionRegistry);
-      }
-    };
+    @java.lang.Deprecated
+    public static final akka.protobufv3.internal.Parser<CurrentOffset> PARSER =
+        new akka.protobufv3.internal.AbstractParser<CurrentOffset>() {
+          @java.lang.Override
+          public CurrentOffset parsePartialFrom(
+              akka.protobufv3.internal.CodedInputStream input,
+              akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+              throws akka.protobufv3.internal.InvalidProtocolBufferException {
+            return new CurrentOffset(input, extensionRegistry);
+          }
+        };
 
     public static akka.protobufv3.internal.Parser<CurrentOffset> parser() {
       return PARSER;
@@ -2496,75 +2647,78 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset getDefaultInstanceForType() {
+    public akka.projection.internal.protobuf.ProjectionMessages.CurrentOffset
+        getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
-
   }
 
-  public interface SetOffsetOrBuilder extends
+  public interface SetOffsetOrBuilder
+      extends
       // @@protoc_insertion_point(interface_extends:akka.projection.SetOffset)
       akka.protobufv3.internal.MessageOrBuilder {
 
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return Whether the projectionId field is set.
      */
     boolean hasProjectionId();
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return The projectionId.
      */
     akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId();
-    /**
-     * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-     */
-    akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder();
+    /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+    akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+        getProjectionIdOrBuilder();
 
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return Whether the replyTo field is set.
      */
     boolean hasReplyTo();
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return The replyTo.
      */
     java.lang.String getReplyTo();
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return The bytes for replyTo.
      */
-    akka.protobufv3.internal.ByteString
-        getReplyToBytes();
+    akka.protobufv3.internal.ByteString getReplyToBytes();
 
     /**
      * <code>optional .akka.projection.Offset offset = 3;</code>
+     *
      * @return Whether the offset field is set.
      */
     boolean hasOffset();
     /**
      * <code>optional .akka.projection.Offset offset = 3;</code>
+     *
      * @return The offset.
      */
     akka.projection.internal.protobuf.ProjectionMessages.Offset getOffset();
-    /**
-     * <code>optional .akka.projection.Offset offset = 3;</code>
-     */
+    /** <code>optional .akka.projection.Offset offset = 3;</code> */
     akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder getOffsetOrBuilder();
   }
-  /**
-   * Protobuf type {@code akka.projection.SetOffset}
-   */
-  public  static final class SetOffset extends
-      akka.protobufv3.internal.GeneratedMessageV3 implements
+  /** Protobuf type {@code akka.projection.SetOffset} */
+  public static final class SetOffset extends akka.protobufv3.internal.GeneratedMessageV3
+      implements
       // @@protoc_insertion_point(message_implements:akka.projection.SetOffset)
       SetOffsetOrBuilder {
-  private static final long serialVersionUID = 0L;
+    private static final long serialVersionUID = 0L;
     // Use SetOffset.newBuilder() to construct.
     private SetOffset(akka.protobufv3.internal.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
+
     private SetOffset() {
       replyTo_ = "";
     }
@@ -2577,10 +2731,10 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public final akka.protobufv3.internal.UnknownFieldSet
-    getUnknownFields() {
+    public final akka.protobufv3.internal.UnknownFieldSet getUnknownFields() {
       return this.unknownFields;
     }
+
     private SetOffset(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
@@ -2600,68 +2754,82 @@ public final class ProjectionMessages {
             case 0:
               done = true;
               break;
-            case 10: {
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder subBuilder = null;
-              if (((bitField0_ & 0x00000001) != 0)) {
-                subBuilder = projectionId_.toBuilder();
+            case 10:
+              {
+                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+                    subBuilder = null;
+                if (((bitField0_ & 0x00000001) != 0)) {
+                  subBuilder = projectionId_.toBuilder();
+                }
+                projectionId_ =
+                    input.readMessage(
+                        akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.PARSER,
+                        extensionRegistry);
+                if (subBuilder != null) {
+                  subBuilder.mergeFrom(projectionId_);
+                  projectionId_ = subBuilder.buildPartial();
+                }
+                bitField0_ |= 0x00000001;
+                break;
               }
-              projectionId_ = input.readMessage(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.PARSER, extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(projectionId_);
-                projectionId_ = subBuilder.buildPartial();
+            case 18:
+              {
+                akka.protobufv3.internal.ByteString bs = input.readBytes();
+                bitField0_ |= 0x00000002;
+                replyTo_ = bs;
+                break;
               }
-              bitField0_ |= 0x00000001;
-              break;
-            }
-            case 18: {
-              akka.protobufv3.internal.ByteString bs = input.readBytes();
-              bitField0_ |= 0x00000002;
-              replyTo_ = bs;
-              break;
-            }
-            case 26: {
-              akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder subBuilder = null;
-              if (((bitField0_ & 0x00000004) != 0)) {
-                subBuilder = offset_.toBuilder();
+            case 26:
+              {
+                akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder subBuilder =
+                    null;
+                if (((bitField0_ & 0x00000004) != 0)) {
+                  subBuilder = offset_.toBuilder();
+                }
+                offset_ =
+                    input.readMessage(
+                        akka.projection.internal.protobuf.ProjectionMessages.Offset.PARSER,
+                        extensionRegistry);
+                if (subBuilder != null) {
+                  subBuilder.mergeFrom(offset_);
+                  offset_ = subBuilder.buildPartial();
+                }
+                bitField0_ |= 0x00000004;
+                break;
               }
-              offset_ = input.readMessage(akka.projection.internal.protobuf.ProjectionMessages.Offset.PARSER, extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(offset_);
-                offset_ = subBuilder.buildPartial();
+            default:
+              {
+                if (!parseUnknownField(input, unknownFields, extensionRegistry, tag)) {
+                  done = true;
+                }
+                break;
               }
-              bitField0_ |= 0x00000004;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
           }
         }
       } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
         throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new akka.protobufv3.internal.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
+        throw new akka.protobufv3.internal.InvalidProtocolBufferException(e)
+            .setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
-    public static final akka.protobufv3.internal.Descriptors.Descriptor
-        getDescriptor() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_SetOffset_descriptor;
+
+    public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_SetOffset_descriptor;
     }
 
     @java.lang.Override
     protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_SetOffset_fieldAccessorTable
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_SetOffset_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              akka.projection.internal.protobuf.ProjectionMessages.SetOffset.class, akka.projection.internal.protobuf.ProjectionMessages.SetOffset.Builder.class);
+              akka.projection.internal.protobuf.ProjectionMessages.SetOffset.class,
+              akka.projection.internal.protobuf.ProjectionMessages.SetOffset.Builder.class);
     }
 
     private int bitField0_;
@@ -2669,6 +2837,7 @@ public final class ProjectionMessages {
     private akka.projection.internal.protobuf.ProjectionMessages.ProjectionId projectionId_;
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return Whether the projectionId field is set.
      */
     public boolean hasProjectionId() {
@@ -2676,22 +2845,27 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+     *
      * @return The projectionId.
      */
     public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId() {
-      return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+      return projectionId_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()
+          : projectionId_;
     }
-    /**
-     * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-     */
-    public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder() {
-      return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+    /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+    public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+        getProjectionIdOrBuilder() {
+      return projectionId_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()
+          : projectionId_;
     }
 
     public static final int REPLYTO_FIELD_NUMBER = 2;
     private volatile java.lang.Object replyTo_;
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return Whether the replyTo field is set.
      */
     public boolean hasReplyTo() {
@@ -2699,6 +2873,7 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return The replyTo.
      */
     public java.lang.String getReplyTo() {
@@ -2706,8 +2881,7 @@ public final class ProjectionMessages {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        akka.protobufv3.internal.ByteString bs = 
-            (akka.protobufv3.internal.ByteString) ref;
+        akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         if (bs.isValidUtf8()) {
           replyTo_ = s;
@@ -2717,15 +2891,14 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string replyTo = 2;</code>
+     *
      * @return The bytes for replyTo.
      */
-    public akka.protobufv3.internal.ByteString
-        getReplyToBytes() {
+    public akka.protobufv3.internal.ByteString getReplyToBytes() {
       java.lang.Object ref = replyTo_;
       if (ref instanceof java.lang.String) {
-        akka.protobufv3.internal.ByteString b = 
-            akka.protobufv3.internal.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
+        akka.protobufv3.internal.ByteString b =
+            akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
         replyTo_ = b;
         return b;
       } else {
@@ -2737,6 +2910,7 @@ public final class ProjectionMessages {
     private akka.projection.internal.protobuf.ProjectionMessages.Offset offset_;
     /**
      * <code>optional .akka.projection.Offset offset = 3;</code>
+     *
      * @return Whether the offset field is set.
      */
     public boolean hasOffset() {
@@ -2744,19 +2918,24 @@ public final class ProjectionMessages {
     }
     /**
      * <code>optional .akka.projection.Offset offset = 3;</code>
+     *
      * @return The offset.
      */
     public akka.projection.internal.protobuf.ProjectionMessages.Offset getOffset() {
-      return offset_ == null ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance() : offset_;
+      return offset_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()
+          : offset_;
     }
-    /**
-     * <code>optional .akka.projection.Offset offset = 3;</code>
-     */
-    public akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder getOffsetOrBuilder() {
-      return offset_ == null ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance() : offset_;
+    /** <code>optional .akka.projection.Offset offset = 3;</code> */
+    public akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder
+        getOffsetOrBuilder() {
+      return offset_ == null
+          ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()
+          : offset_;
     }
 
     private byte memoizedIsInitialized = -1;
+
     @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -2787,7 +2966,7 @@ public final class ProjectionMessages {
 
     @java.lang.Override
     public void writeTo(akka.protobufv3.internal.CodedOutputStream output)
-                        throws java.io.IOException {
+        throws java.io.IOException {
       if (((bitField0_ & 0x00000001) != 0)) {
         output.writeMessage(1, getProjectionId());
       }
@@ -2807,15 +2986,13 @@ public final class ProjectionMessages {
 
       size = 0;
       if (((bitField0_ & 0x00000001) != 0)) {
-        size += akka.protobufv3.internal.CodedOutputStream
-          .computeMessageSize(1, getProjectionId());
+        size += akka.protobufv3.internal.CodedOutputStream.computeMessageSize(1, getProjectionId());
       }
       if (((bitField0_ & 0x00000002) != 0)) {
         size += akka.protobufv3.internal.GeneratedMessageV3.computeStringSize(2, replyTo_);
       }
       if (((bitField0_ & 0x00000004) != 0)) {
-        size += akka.protobufv3.internal.CodedOutputStream
-          .computeMessageSize(3, getOffset());
+        size += akka.protobufv3.internal.CodedOutputStream.computeMessageSize(3, getOffset());
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -2825,27 +3002,25 @@ public final class ProjectionMessages {
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
-       return true;
+        return true;
       }
       if (!(obj instanceof akka.projection.internal.protobuf.ProjectionMessages.SetOffset)) {
         return super.equals(obj);
       }
-      akka.projection.internal.protobuf.ProjectionMessages.SetOffset other = (akka.projection.internal.protobuf.ProjectionMessages.SetOffset) obj;
+      akka.projection.internal.protobuf.ProjectionMessages.SetOffset other =
+          (akka.projection.internal.protobuf.ProjectionMessages.SetOffset) obj;
 
       if (hasProjectionId() != other.hasProjectionId()) return false;
       if (hasProjectionId()) {
-        if (!getProjectionId()
-            .equals(other.getProjectionId())) return false;
+        if (!getProjectionId().equals(other.getProjectionId())) return false;
       }
       if (hasReplyTo() != other.hasReplyTo()) return false;
       if (hasReplyTo()) {
-        if (!getReplyTo()
-            .equals(other.getReplyTo())) return false;
+        if (!getReplyTo().equals(other.getReplyTo())) return false;
       }
       if (hasOffset() != other.hasOffset()) return false;
       if (hasOffset()) {
-        if (!getOffset()
-            .equals(other.getOffset())) return false;
+        if (!getOffset().equals(other.getOffset())) return false;
       }
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
@@ -2876,87 +3051,95 @@ public final class ProjectionMessages {
     }
 
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
-        java.nio.ByteBuffer data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+        java.nio.ByteBuffer data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
-        java.nio.ByteBuffer data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        java.nio.ByteBuffer data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
         akka.protobufv3.internal.ByteString data)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
         akka.protobufv3.internal.ByteString data,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(byte[] data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
+        byte[] data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
-        byte[] data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        byte[] data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+        java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseDelimitedFrom(java.io.InputStream input)
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
+        java.io.InputStream input, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseDelimitedFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+        java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input);
     }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseDelimitedFrom(
+        java.io.InputStream input, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input, extensionRegistry);
+    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
-        akka.protobufv3.internal.CodedInputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
+        akka.protobufv3.internal.CodedInputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset parseFrom(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
 
     @java.lang.Override
-    public Builder newBuilderForType() { return newBuilder(); }
+    public Builder newBuilderForType() {
+      return newBuilder();
+    }
+
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(akka.projection.internal.protobuf.ProjectionMessages.SetOffset prototype) {
+
+    public static Builder newBuilder(
+        akka.projection.internal.protobuf.ProjectionMessages.SetOffset prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+
     @java.lang.Override
     public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
+      return this == DEFAULT_INSTANCE ? new Builder() : new Builder().mergeFrom(this);
     }
 
     @java.lang.Override
@@ -2965,24 +3148,25 @@ public final class ProjectionMessages {
       Builder builder = new Builder(parent);
       return builder;
     }
-    /**
-     * Protobuf type {@code akka.projection.SetOffset}
-     */
-    public static final class Builder extends
-        akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder> implements
+    /** Protobuf type {@code akka.projection.SetOffset} */
+    public static final class Builder
+        extends akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder>
+        implements
         // @@protoc_insertion_point(builder_implements:akka.projection.SetOffset)
         akka.projection.internal.protobuf.ProjectionMessages.SetOffsetOrBuilder {
-      public static final akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptor() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_SetOffset_descriptor;
+      public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_SetOffset_descriptor;
       }
 
       @java.lang.Override
       protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_SetOffset_fieldAccessorTable
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_SetOffset_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                akka.projection.internal.protobuf.ProjectionMessages.SetOffset.class, akka.projection.internal.protobuf.ProjectionMessages.SetOffset.Builder.class);
+                akka.projection.internal.protobuf.ProjectionMessages.SetOffset.class,
+                akka.projection.internal.protobuf.ProjectionMessages.SetOffset.Builder.class);
       }
 
       // Construct using akka.projection.internal.protobuf.ProjectionMessages.SetOffset.newBuilder()
@@ -2990,18 +3174,18 @@ public final class ProjectionMessages {
         maybeForceBuilderInitialization();
       }
 
-      private Builder(
-          akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
+      private Builder(akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
+
       private void maybeForceBuilderInitialization() {
-        if (akka.protobufv3.internal.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
+        if (akka.protobufv3.internal.GeneratedMessageV3.alwaysUseFieldBuilders) {
           getProjectionIdFieldBuilder();
           getOffsetFieldBuilder();
         }
       }
+
       @java.lang.Override
       public Builder clear() {
         super.clear();
@@ -3023,13 +3207,14 @@ public final class ProjectionMessages {
       }
 
       @java.lang.Override
-      public akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptorForType() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_SetOffset_descriptor;
+      public akka.protobufv3.internal.Descriptors.Descriptor getDescriptorForType() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_SetOffset_descriptor;
       }
 
       @java.lang.Override
-      public akka.projection.internal.protobuf.ProjectionMessages.SetOffset getDefaultInstanceForType() {
+      public akka.projection.internal.protobuf.ProjectionMessages.SetOffset
+          getDefaultInstanceForType() {
         return akka.projection.internal.protobuf.ProjectionMessages.SetOffset.getDefaultInstance();
       }
 
@@ -3044,7 +3229,8 @@ public final class ProjectionMessages {
 
       @java.lang.Override
       public akka.projection.internal.protobuf.ProjectionMessages.SetOffset buildPartial() {
-        akka.projection.internal.protobuf.ProjectionMessages.SetOffset result = new akka.projection.internal.protobuf.ProjectionMessages.SetOffset(this);
+        akka.projection.internal.protobuf.ProjectionMessages.SetOffset result =
+            new akka.projection.internal.protobuf.ProjectionMessages.SetOffset(this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -3076,46 +3262,52 @@ public final class ProjectionMessages {
       public Builder clone() {
         return super.clone();
       }
+
       @java.lang.Override
       public Builder setField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.setField(field, value);
       }
+
       @java.lang.Override
-      public Builder clearField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
+      public Builder clearField(akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
         return super.clearField(field);
       }
+
       @java.lang.Override
-      public Builder clearOneof(
-          akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
+      public Builder clearOneof(akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
         return super.clearOneof(oneof);
       }
+
       @java.lang.Override
       public Builder setRepeatedField(
           akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          int index, java.lang.Object value) {
+          int index,
+          java.lang.Object value) {
         return super.setRepeatedField(field, index, value);
       }
+
       @java.lang.Override
       public Builder addRepeatedField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.addRepeatedField(field, value);
       }
+
       @java.lang.Override
       public Builder mergeFrom(akka.protobufv3.internal.Message other) {
         if (other instanceof akka.projection.internal.protobuf.ProjectionMessages.SetOffset) {
-          return mergeFrom((akka.projection.internal.protobuf.ProjectionMessages.SetOffset)other);
+          return mergeFrom((akka.projection.internal.protobuf.ProjectionMessages.SetOffset) other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(akka.projection.internal.protobuf.ProjectionMessages.SetOffset other) {
-        if (other == akka.projection.internal.protobuf.ProjectionMessages.SetOffset.getDefaultInstance()) return this;
+      public Builder mergeFrom(
+          akka.projection.internal.protobuf.ProjectionMessages.SetOffset other) {
+        if (other
+            == akka.projection.internal.protobuf.ProjectionMessages.SetOffset.getDefaultInstance())
+          return this;
         if (other.hasProjectionId()) {
           mergeProjectionId(other.getProjectionId());
         }
@@ -3160,7 +3352,9 @@ public final class ProjectionMessages {
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
-          parsedMessage = (akka.projection.internal.protobuf.ProjectionMessages.SetOffset) e.getUnfinishedMessage();
+          parsedMessage =
+              (akka.projection.internal.protobuf.ProjectionMessages.SetOffset)
+                  e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -3169,13 +3363,18 @@ public final class ProjectionMessages {
         }
         return this;
       }
+
       private int bitField0_;
 
       private akka.projection.internal.protobuf.ProjectionMessages.ProjectionId projectionId_;
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder> projectionIdBuilder_;
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>
+          projectionIdBuilder_;
       /**
        * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+       *
        * @return Whether the projectionId field is set.
        */
       public boolean hasProjectionId() {
@@ -3183,19 +3382,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
+       *
        * @return The projectionId.
        */
       public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId getProjectionId() {
         if (projectionIdBuilder_ == null) {
-          return projectionId_ == null ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+          return projectionId_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                  .getDefaultInstance()
+              : projectionId_;
         } else {
           return projectionIdBuilder_.getMessage();
         }
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public Builder setProjectionId(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public Builder setProjectionId(
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
         if (projectionIdBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3208,11 +3410,10 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       public Builder setProjectionId(
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder builderForValue) {
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+              builderForValue) {
         if (projectionIdBuilder_ == null) {
           projectionId_ = builderForValue.build();
           onChanged();
@@ -3222,16 +3423,20 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public Builder mergeProjectionId(akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public Builder mergeProjectionId(
+          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId value) {
         if (projectionIdBuilder_ == null) {
-          if (((bitField0_ & 0x00000001) != 0) &&
-              projectionId_ != null &&
-              projectionId_ != akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance()) {
+          if (((bitField0_ & 0x00000001) != 0)
+              && projectionId_ != null
+              && projectionId_
+                  != akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                      .getDefaultInstance()) {
             projectionId_ =
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.newBuilder(projectionId_).mergeFrom(value).buildPartial();
+                akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.newBuilder(
+                        projectionId_)
+                    .mergeFrom(value)
+                    .buildPartial();
           } else {
             projectionId_ = value;
           }
@@ -3242,9 +3447,7 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000001;
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       public Builder clearProjectionId() {
         if (projectionIdBuilder_ == null) {
           projectionId_ = null;
@@ -3255,37 +3458,38 @@ public final class ProjectionMessages {
         bitField0_ = (bitField0_ & ~0x00000001);
         return this;
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder getProjectionIdBuilder() {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder
+          getProjectionIdBuilder() {
         bitField0_ |= 0x00000001;
         onChanged();
         return getProjectionIdFieldBuilder().getBuilder();
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder getProjectionIdOrBuilder() {
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder
+          getProjectionIdOrBuilder() {
         if (projectionIdBuilder_ != null) {
           return projectionIdBuilder_.getMessageOrBuilder();
         } else {
-          return projectionId_ == null ?
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.getDefaultInstance() : projectionId_;
+          return projectionId_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.ProjectionId
+                  .getDefaultInstance()
+              : projectionId_;
         }
       }
-      /**
-       * <code>required .akka.projection.ProjectionId projectionId = 1;</code>
-       */
+      /** <code>required .akka.projection.ProjectionId projectionId = 1;</code> */
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder> 
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>
           getProjectionIdFieldBuilder() {
         if (projectionIdBuilder_ == null) {
-          projectionIdBuilder_ = new akka.protobufv3.internal.SingleFieldBuilderV3<
-              akka.projection.internal.protobuf.ProjectionMessages.ProjectionId, akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder, akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>(
-                  getProjectionId(),
-                  getParentForChildren(),
-                  isClean());
+          projectionIdBuilder_ =
+              new akka.protobufv3.internal.SingleFieldBuilderV3<
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionId,
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionId.Builder,
+                  akka.projection.internal.protobuf.ProjectionMessages.ProjectionIdOrBuilder>(
+                  getProjectionId(), getParentForChildren(), isClean());
           projectionId_ = null;
         }
         return projectionIdBuilder_;
@@ -3294,6 +3498,7 @@ public final class ProjectionMessages {
       private java.lang.Object replyTo_ = "";
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @return Whether the replyTo field is set.
        */
       public boolean hasReplyTo() {
@@ -3301,13 +3506,13 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @return The replyTo.
        */
       public java.lang.String getReplyTo() {
         java.lang.Object ref = replyTo_;
         if (!(ref instanceof java.lang.String)) {
-          akka.protobufv3.internal.ByteString bs =
-              (akka.protobufv3.internal.ByteString) ref;
+          akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
           if (bs.isValidUtf8()) {
             replyTo_ = s;
@@ -3319,15 +3524,14 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @return The bytes for replyTo.
        */
-      public akka.protobufv3.internal.ByteString
-          getReplyToBytes() {
+      public akka.protobufv3.internal.ByteString getReplyToBytes() {
         java.lang.Object ref = replyTo_;
         if (ref instanceof String) {
-          akka.protobufv3.internal.ByteString b = 
-              akka.protobufv3.internal.ByteString.copyFromUtf8(
-                  (java.lang.String) ref);
+          akka.protobufv3.internal.ByteString b =
+              akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
           replyTo_ = b;
           return b;
         } else {
@@ -3336,21 +3540,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @param value The replyTo to set.
        * @return This builder for chaining.
        */
-      public Builder setReplyTo(
-          java.lang.String value) {
+      public Builder setReplyTo(java.lang.String value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000002;
         replyTo_ = value;
         onChanged();
         return this;
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @return This builder for chaining.
        */
       public Builder clearReplyTo() {
@@ -3361,15 +3566,15 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string replyTo = 2;</code>
+       *
        * @param value The bytes for replyTo to set.
        * @return This builder for chaining.
        */
-      public Builder setReplyToBytes(
-          akka.protobufv3.internal.ByteString value) {
+      public Builder setReplyToBytes(akka.protobufv3.internal.ByteString value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000002;
         replyTo_ = value;
         onChanged();
         return this;
@@ -3377,9 +3582,13 @@ public final class ProjectionMessages {
 
       private akka.projection.internal.protobuf.ProjectionMessages.Offset offset_;
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.Offset, akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder, akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder> offsetBuilder_;
+              akka.projection.internal.protobuf.ProjectionMessages.Offset,
+              akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder>
+          offsetBuilder_;
       /**
        * <code>optional .akka.projection.Offset offset = 3;</code>
+       *
        * @return Whether the offset field is set.
        */
       public boolean hasOffset() {
@@ -3387,18 +3596,19 @@ public final class ProjectionMessages {
       }
       /**
        * <code>optional .akka.projection.Offset offset = 3;</code>
+       *
        * @return The offset.
        */
       public akka.projection.internal.protobuf.ProjectionMessages.Offset getOffset() {
         if (offsetBuilder_ == null) {
-          return offset_ == null ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance() : offset_;
+          return offset_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()
+              : offset_;
         } else {
           return offsetBuilder_.getMessage();
         }
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 3;</code>
-       */
+      /** <code>optional .akka.projection.Offset offset = 3;</code> */
       public Builder setOffset(akka.projection.internal.protobuf.ProjectionMessages.Offset value) {
         if (offsetBuilder_ == null) {
           if (value == null) {
@@ -3412,9 +3622,7 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000004;
         return this;
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 3;</code>
-       */
+      /** <code>optional .akka.projection.Offset offset = 3;</code> */
       public Builder setOffset(
           akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder builderForValue) {
         if (offsetBuilder_ == null) {
@@ -3426,16 +3634,19 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000004;
         return this;
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 3;</code>
-       */
-      public Builder mergeOffset(akka.projection.internal.protobuf.ProjectionMessages.Offset value) {
+      /** <code>optional .akka.projection.Offset offset = 3;</code> */
+      public Builder mergeOffset(
+          akka.projection.internal.protobuf.ProjectionMessages.Offset value) {
         if (offsetBuilder_ == null) {
-          if (((bitField0_ & 0x00000004) != 0) &&
-              offset_ != null &&
-              offset_ != akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()) {
+          if (((bitField0_ & 0x00000004) != 0)
+              && offset_ != null
+              && offset_
+                  != akka.projection.internal.protobuf.ProjectionMessages.Offset
+                      .getDefaultInstance()) {
             offset_ =
-              akka.projection.internal.protobuf.ProjectionMessages.Offset.newBuilder(offset_).mergeFrom(value).buildPartial();
+                akka.projection.internal.protobuf.ProjectionMessages.Offset.newBuilder(offset_)
+                    .mergeFrom(value)
+                    .buildPartial();
           } else {
             offset_ = value;
           }
@@ -3446,9 +3657,7 @@ public final class ProjectionMessages {
         bitField0_ |= 0x00000004;
         return this;
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 3;</code>
-       */
+      /** <code>optional .akka.projection.Offset offset = 3;</code> */
       public Builder clearOffset() {
         if (offsetBuilder_ == null) {
           offset_ = null;
@@ -3459,41 +3668,42 @@ public final class ProjectionMessages {
         bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 3;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder getOffsetBuilder() {
+      /** <code>optional .akka.projection.Offset offset = 3;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder
+          getOffsetBuilder() {
         bitField0_ |= 0x00000004;
         onChanged();
         return getOffsetFieldBuilder().getBuilder();
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 3;</code>
-       */
-      public akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder getOffsetOrBuilder() {
+      /** <code>optional .akka.projection.Offset offset = 3;</code> */
+      public akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder
+          getOffsetOrBuilder() {
         if (offsetBuilder_ != null) {
           return offsetBuilder_.getMessageOrBuilder();
         } else {
-          return offset_ == null ?
-              akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance() : offset_;
+          return offset_ == null
+              ? akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()
+              : offset_;
         }
       }
-      /**
-       * <code>optional .akka.projection.Offset offset = 3;</code>
-       */
+      /** <code>optional .akka.projection.Offset offset = 3;</code> */
       private akka.protobufv3.internal.SingleFieldBuilderV3<
-          akka.projection.internal.protobuf.ProjectionMessages.Offset, akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder, akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder> 
+              akka.projection.internal.protobuf.ProjectionMessages.Offset,
+              akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder,
+              akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder>
           getOffsetFieldBuilder() {
         if (offsetBuilder_ == null) {
-          offsetBuilder_ = new akka.protobufv3.internal.SingleFieldBuilderV3<
-              akka.projection.internal.protobuf.ProjectionMessages.Offset, akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder, akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder>(
-                  getOffset(),
-                  getParentForChildren(),
-                  isClean());
+          offsetBuilder_ =
+              new akka.protobufv3.internal.SingleFieldBuilderV3<
+                  akka.projection.internal.protobuf.ProjectionMessages.Offset,
+                  akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder,
+                  akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder>(
+                  getOffset(), getParentForChildren(), isClean());
           offset_ = null;
         }
         return offsetBuilder_;
       }
+
       @java.lang.Override
       public final Builder setUnknownFields(
           final akka.protobufv3.internal.UnknownFieldSet unknownFields) {
@@ -3506,30 +3716,33 @@ public final class ProjectionMessages {
         return super.mergeUnknownFields(unknownFields);
       }
 
-
       // @@protoc_insertion_point(builder_scope:akka.projection.SetOffset)
     }
 
     // @@protoc_insertion_point(class_scope:akka.projection.SetOffset)
-    private static final akka.projection.internal.protobuf.ProjectionMessages.SetOffset DEFAULT_INSTANCE;
+    private static final akka.projection.internal.protobuf.ProjectionMessages.SetOffset
+        DEFAULT_INSTANCE;
+
     static {
       DEFAULT_INSTANCE = new akka.projection.internal.protobuf.ProjectionMessages.SetOffset();
     }
 
-    public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset getDefaultInstance() {
+    public static akka.projection.internal.protobuf.ProjectionMessages.SetOffset
+        getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
-    @java.lang.Deprecated public static final akka.protobufv3.internal.Parser<SetOffset>
-        PARSER = new akka.protobufv3.internal.AbstractParser<SetOffset>() {
-      @java.lang.Override
-      public SetOffset parsePartialFrom(
-          akka.protobufv3.internal.CodedInputStream input,
-          akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-          throws akka.protobufv3.internal.InvalidProtocolBufferException {
-        return new SetOffset(input, extensionRegistry);
-      }
-    };
+    @java.lang.Deprecated
+    public static final akka.protobufv3.internal.Parser<SetOffset> PARSER =
+        new akka.protobufv3.internal.AbstractParser<SetOffset>() {
+          @java.lang.Override
+          public SetOffset parsePartialFrom(
+              akka.protobufv3.internal.CodedInputStream input,
+              akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+              throws akka.protobufv3.internal.InvalidProtocolBufferException {
+            return new SetOffset(input, extensionRegistry);
+          }
+        };
 
     public static akka.protobufv3.internal.Parser<SetOffset> parser() {
       return PARSER;
@@ -3541,62 +3754,66 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public akka.projection.internal.protobuf.ProjectionMessages.SetOffset getDefaultInstanceForType() {
+    public akka.projection.internal.protobuf.ProjectionMessages.SetOffset
+        getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
-
   }
 
-  public interface OffsetOrBuilder extends
+  public interface OffsetOrBuilder
+      extends
       // @@protoc_insertion_point(interface_extends:akka.projection.Offset)
       akka.protobufv3.internal.MessageOrBuilder {
 
     /**
      * <code>required string manifest = 1;</code>
+     *
      * @return Whether the manifest field is set.
      */
     boolean hasManifest();
     /**
      * <code>required string manifest = 1;</code>
+     *
      * @return The manifest.
      */
     java.lang.String getManifest();
     /**
      * <code>required string manifest = 1;</code>
+     *
      * @return The bytes for manifest.
      */
-    akka.protobufv3.internal.ByteString
-        getManifestBytes();
+    akka.protobufv3.internal.ByteString getManifestBytes();
 
     /**
      * <code>required string value = 2;</code>
+     *
      * @return Whether the value field is set.
      */
     boolean hasValue();
     /**
      * <code>required string value = 2;</code>
+     *
      * @return The value.
      */
     java.lang.String getValue();
     /**
      * <code>required string value = 2;</code>
+     *
      * @return The bytes for value.
      */
-    akka.protobufv3.internal.ByteString
-        getValueBytes();
+    akka.protobufv3.internal.ByteString getValueBytes();
   }
-  /**
-   * Protobuf type {@code akka.projection.Offset}
-   */
-  public  static final class Offset extends
-      akka.protobufv3.internal.GeneratedMessageV3 implements
+  /** Protobuf type {@code akka.projection.Offset} */
+  public static final class Offset extends akka.protobufv3.internal.GeneratedMessageV3
+      implements
       // @@protoc_insertion_point(message_implements:akka.projection.Offset)
       OffsetOrBuilder {
-  private static final long serialVersionUID = 0L;
+    private static final long serialVersionUID = 0L;
     // Use Offset.newBuilder() to construct.
     private Offset(akka.protobufv3.internal.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
+
     private Offset() {
       manifest_ = "";
       value_ = "";
@@ -3610,10 +3827,10 @@ public final class ProjectionMessages {
     }
 
     @java.lang.Override
-    public final akka.protobufv3.internal.UnknownFieldSet
-    getUnknownFields() {
+    public final akka.protobufv3.internal.UnknownFieldSet getUnknownFields() {
       return this.unknownFields;
     }
+
     private Offset(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
@@ -3633,48 +3850,53 @@ public final class ProjectionMessages {
             case 0:
               done = true;
               break;
-            case 10: {
-              akka.protobufv3.internal.ByteString bs = input.readBytes();
-              bitField0_ |= 0x00000001;
-              manifest_ = bs;
-              break;
-            }
-            case 18: {
-              akka.protobufv3.internal.ByteString bs = input.readBytes();
-              bitField0_ |= 0x00000002;
-              value_ = bs;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
+            case 10:
+              {
+                akka.protobufv3.internal.ByteString bs = input.readBytes();
+                bitField0_ |= 0x00000001;
+                manifest_ = bs;
+                break;
               }
-              break;
-            }
+            case 18:
+              {
+                akka.protobufv3.internal.ByteString bs = input.readBytes();
+                bitField0_ |= 0x00000002;
+                value_ = bs;
+                break;
+              }
+            default:
+              {
+                if (!parseUnknownField(input, unknownFields, extensionRegistry, tag)) {
+                  done = true;
+                }
+                break;
+              }
           }
         }
       } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
         throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new akka.protobufv3.internal.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
+        throw new akka.protobufv3.internal.InvalidProtocolBufferException(e)
+            .setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
-    public static final akka.protobufv3.internal.Descriptors.Descriptor
-        getDescriptor() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_Offset_descriptor;
+
+    public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_Offset_descriptor;
     }
 
     @java.lang.Override
     protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_Offset_fieldAccessorTable
+      return akka.projection.internal.protobuf.ProjectionMessages
+          .internal_static_akka_projection_Offset_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              akka.projection.internal.protobuf.ProjectionMessages.Offset.class, akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder.class);
+              akka.projection.internal.protobuf.ProjectionMessages.Offset.class,
+              akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder.class);
     }
 
     private int bitField0_;
@@ -3682,6 +3904,7 @@ public final class ProjectionMessages {
     private volatile java.lang.Object manifest_;
     /**
      * <code>required string manifest = 1;</code>
+     *
      * @return Whether the manifest field is set.
      */
     public boolean hasManifest() {
@@ -3689,6 +3912,7 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string manifest = 1;</code>
+     *
      * @return The manifest.
      */
     public java.lang.String getManifest() {
@@ -3696,8 +3920,7 @@ public final class ProjectionMessages {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        akka.protobufv3.internal.ByteString bs = 
-            (akka.protobufv3.internal.ByteString) ref;
+        akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         if (bs.isValidUtf8()) {
           manifest_ = s;
@@ -3707,15 +3930,14 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string manifest = 1;</code>
+     *
      * @return The bytes for manifest.
      */
-    public akka.protobufv3.internal.ByteString
-        getManifestBytes() {
+    public akka.protobufv3.internal.ByteString getManifestBytes() {
       java.lang.Object ref = manifest_;
       if (ref instanceof java.lang.String) {
-        akka.protobufv3.internal.ByteString b = 
-            akka.protobufv3.internal.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
+        akka.protobufv3.internal.ByteString b =
+            akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
         manifest_ = b;
         return b;
       } else {
@@ -3727,6 +3949,7 @@ public final class ProjectionMessages {
     private volatile java.lang.Object value_;
     /**
      * <code>required string value = 2;</code>
+     *
      * @return Whether the value field is set.
      */
     public boolean hasValue() {
@@ -3734,6 +3957,7 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string value = 2;</code>
+     *
      * @return The value.
      */
     public java.lang.String getValue() {
@@ -3741,8 +3965,7 @@ public final class ProjectionMessages {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        akka.protobufv3.internal.ByteString bs = 
-            (akka.protobufv3.internal.ByteString) ref;
+        akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         if (bs.isValidUtf8()) {
           value_ = s;
@@ -3752,15 +3975,14 @@ public final class ProjectionMessages {
     }
     /**
      * <code>required string value = 2;</code>
+     *
      * @return The bytes for value.
      */
-    public akka.protobufv3.internal.ByteString
-        getValueBytes() {
+    public akka.protobufv3.internal.ByteString getValueBytes() {
       java.lang.Object ref = value_;
       if (ref instanceof java.lang.String) {
-        akka.protobufv3.internal.ByteString b = 
-            akka.protobufv3.internal.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
+        akka.protobufv3.internal.ByteString b =
+            akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
         value_ = b;
         return b;
       } else {
@@ -3769,6 +3991,7 @@ public final class ProjectionMessages {
     }
 
     private byte memoizedIsInitialized = -1;
+
     @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -3789,7 +4012,7 @@ public final class ProjectionMessages {
 
     @java.lang.Override
     public void writeTo(akka.protobufv3.internal.CodedOutputStream output)
-                        throws java.io.IOException {
+        throws java.io.IOException {
       if (((bitField0_ & 0x00000001) != 0)) {
         akka.protobufv3.internal.GeneratedMessageV3.writeString(output, 1, manifest_);
       }
@@ -3819,22 +4042,21 @@ public final class ProjectionMessages {
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
-       return true;
+        return true;
       }
       if (!(obj instanceof akka.projection.internal.protobuf.ProjectionMessages.Offset)) {
         return super.equals(obj);
       }
-      akka.projection.internal.protobuf.ProjectionMessages.Offset other = (akka.projection.internal.protobuf.ProjectionMessages.Offset) obj;
+      akka.projection.internal.protobuf.ProjectionMessages.Offset other =
+          (akka.projection.internal.protobuf.ProjectionMessages.Offset) obj;
 
       if (hasManifest() != other.hasManifest()) return false;
       if (hasManifest()) {
-        if (!getManifest()
-            .equals(other.getManifest())) return false;
+        if (!getManifest().equals(other.getManifest())) return false;
       }
       if (hasValue() != other.hasValue()) return false;
       if (hasValue()) {
-        if (!getValue()
-            .equals(other.getValue())) return false;
+        if (!getValue().equals(other.getValue())) return false;
       }
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
@@ -3861,87 +4083,95 @@ public final class ProjectionMessages {
     }
 
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
-        java.nio.ByteBuffer data)
-        throws akka.protobufv3.internal.InvalidProtocolBufferException {
+        java.nio.ByteBuffer data) throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
-        java.nio.ByteBuffer data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        java.nio.ByteBuffer data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
         akka.protobufv3.internal.ByteString data)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
         akka.protobufv3.internal.ByteString data,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(byte[] data)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
-        byte[] data,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        byte[] data, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws akka.protobufv3.internal.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+        java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
     }
-    public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseDelimitedFrom(java.io.InputStream input)
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
+        java.io.InputStream input, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseDelimitedFrom(
-        java.io.InputStream input,
-        akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+        java.io.InputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input);
     }
+
+    public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseDelimitedFrom(
+        java.io.InputStream input, akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseDelimitedWithIOException(
+          PARSER, input, extensionRegistry);
+    }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
-        akka.protobufv3.internal.CodedInputStream input)
-        throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
+        akka.protobufv3.internal.CodedInputStream input) throws java.io.IOException {
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(PARSER, input);
     }
+
     public static akka.projection.internal.protobuf.ProjectionMessages.Offset parseFrom(
         akka.protobufv3.internal.CodedInputStream input,
         akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return akka.protobufv3.internal.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
+      return akka.protobufv3.internal.GeneratedMessageV3.parseWithIOException(
+          PARSER, input, extensionRegistry);
     }
 
     @java.lang.Override
-    public Builder newBuilderForType() { return newBuilder(); }
+    public Builder newBuilderForType() {
+      return newBuilder();
+    }
+
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(akka.projection.internal.protobuf.ProjectionMessages.Offset prototype) {
+
+    public static Builder newBuilder(
+        akka.projection.internal.protobuf.ProjectionMessages.Offset prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+
     @java.lang.Override
     public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
+      return this == DEFAULT_INSTANCE ? new Builder() : new Builder().mergeFrom(this);
     }
 
     @java.lang.Override
@@ -3950,24 +4180,25 @@ public final class ProjectionMessages {
       Builder builder = new Builder(parent);
       return builder;
     }
-    /**
-     * Protobuf type {@code akka.projection.Offset}
-     */
-    public static final class Builder extends
-        akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder> implements
+    /** Protobuf type {@code akka.projection.Offset} */
+    public static final class Builder
+        extends akka.protobufv3.internal.GeneratedMessageV3.Builder<Builder>
+        implements
         // @@protoc_insertion_point(builder_implements:akka.projection.Offset)
         akka.projection.internal.protobuf.ProjectionMessages.OffsetOrBuilder {
-      public static final akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptor() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_Offset_descriptor;
+      public static final akka.protobufv3.internal.Descriptors.Descriptor getDescriptor() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_Offset_descriptor;
       }
 
       @java.lang.Override
       protected akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_Offset_fieldAccessorTable
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_Offset_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                akka.projection.internal.protobuf.ProjectionMessages.Offset.class, akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder.class);
+                akka.projection.internal.protobuf.ProjectionMessages.Offset.class,
+                akka.projection.internal.protobuf.ProjectionMessages.Offset.Builder.class);
       }
 
       // Construct using akka.projection.internal.protobuf.ProjectionMessages.Offset.newBuilder()
@@ -3975,16 +4206,15 @@ public final class ProjectionMessages {
         maybeForceBuilderInitialization();
       }
 
-      private Builder(
-          akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
+      private Builder(akka.protobufv3.internal.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
+
       private void maybeForceBuilderInitialization() {
-        if (akka.protobufv3.internal.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+        if (akka.protobufv3.internal.GeneratedMessageV3.alwaysUseFieldBuilders) {}
       }
+
       @java.lang.Override
       public Builder clear() {
         super.clear();
@@ -3996,13 +4226,14 @@ public final class ProjectionMessages {
       }
 
       @java.lang.Override
-      public akka.protobufv3.internal.Descriptors.Descriptor
-          getDescriptorForType() {
-        return akka.projection.internal.protobuf.ProjectionMessages.internal_static_akka_projection_Offset_descriptor;
+      public akka.protobufv3.internal.Descriptors.Descriptor getDescriptorForType() {
+        return akka.projection.internal.protobuf.ProjectionMessages
+            .internal_static_akka_projection_Offset_descriptor;
       }
 
       @java.lang.Override
-      public akka.projection.internal.protobuf.ProjectionMessages.Offset getDefaultInstanceForType() {
+      public akka.projection.internal.protobuf.ProjectionMessages.Offset
+          getDefaultInstanceForType() {
         return akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance();
       }
 
@@ -4017,7 +4248,8 @@ public final class ProjectionMessages {
 
       @java.lang.Override
       public akka.projection.internal.protobuf.ProjectionMessages.Offset buildPartial() {
-        akka.projection.internal.protobuf.ProjectionMessages.Offset result = new akka.projection.internal.protobuf.ProjectionMessages.Offset(this);
+        akka.projection.internal.protobuf.ProjectionMessages.Offset result =
+            new akka.projection.internal.protobuf.ProjectionMessages.Offset(this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -4037,38 +4269,41 @@ public final class ProjectionMessages {
       public Builder clone() {
         return super.clone();
       }
+
       @java.lang.Override
       public Builder setField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.setField(field, value);
       }
+
       @java.lang.Override
-      public Builder clearField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
+      public Builder clearField(akka.protobufv3.internal.Descriptors.FieldDescriptor field) {
         return super.clearField(field);
       }
+
       @java.lang.Override
-      public Builder clearOneof(
-          akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
+      public Builder clearOneof(akka.protobufv3.internal.Descriptors.OneofDescriptor oneof) {
         return super.clearOneof(oneof);
       }
+
       @java.lang.Override
       public Builder setRepeatedField(
           akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          int index, java.lang.Object value) {
+          int index,
+          java.lang.Object value) {
         return super.setRepeatedField(field, index, value);
       }
+
       @java.lang.Override
       public Builder addRepeatedField(
-          akka.protobufv3.internal.Descriptors.FieldDescriptor field,
-          java.lang.Object value) {
+          akka.protobufv3.internal.Descriptors.FieldDescriptor field, java.lang.Object value) {
         return super.addRepeatedField(field, value);
       }
+
       @java.lang.Override
       public Builder mergeFrom(akka.protobufv3.internal.Message other) {
         if (other instanceof akka.projection.internal.protobuf.ProjectionMessages.Offset) {
-          return mergeFrom((akka.projection.internal.protobuf.ProjectionMessages.Offset)other);
+          return mergeFrom((akka.projection.internal.protobuf.ProjectionMessages.Offset) other);
         } else {
           super.mergeFrom(other);
           return this;
@@ -4076,7 +4311,9 @@ public final class ProjectionMessages {
       }
 
       public Builder mergeFrom(akka.projection.internal.protobuf.ProjectionMessages.Offset other) {
-        if (other == akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance()) return this;
+        if (other
+            == akka.projection.internal.protobuf.ProjectionMessages.Offset.getDefaultInstance())
+          return this;
         if (other.hasManifest()) {
           bitField0_ |= 0x00000001;
           manifest_ = other.manifest_;
@@ -4112,7 +4349,9 @@ public final class ProjectionMessages {
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (akka.protobufv3.internal.InvalidProtocolBufferException e) {
-          parsedMessage = (akka.projection.internal.protobuf.ProjectionMessages.Offset) e.getUnfinishedMessage();
+          parsedMessage =
+              (akka.projection.internal.protobuf.ProjectionMessages.Offset)
+                  e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -4121,11 +4360,13 @@ public final class ProjectionMessages {
         }
         return this;
       }
+
       private int bitField0_;
 
       private java.lang.Object manifest_ = "";
       /**
        * <code>required string manifest = 1;</code>
+       *
        * @return Whether the manifest field is set.
        */
       public boolean hasManifest() {
@@ -4133,13 +4374,13 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string manifest = 1;</code>
+       *
        * @return The manifest.
        */
       public java.lang.String getManifest() {
         java.lang.Object ref = manifest_;
         if (!(ref instanceof java.lang.String)) {
-          akka.protobufv3.internal.ByteString bs =
-              (akka.protobufv3.internal.ByteString) ref;
+          akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
           if (bs.isValidUtf8()) {
             manifest_ = s;
@@ -4151,15 +4392,14 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string manifest = 1;</code>
+       *
        * @return The bytes for manifest.
        */
-      public akka.protobufv3.internal.ByteString
-          getManifestBytes() {
+      public akka.protobufv3.internal.ByteString getManifestBytes() {
         java.lang.Object ref = manifest_;
         if (ref instanceof String) {
-          akka.protobufv3.internal.ByteString b = 
-              akka.protobufv3.internal.ByteString.copyFromUtf8(
-                  (java.lang.String) ref);
+          akka.protobufv3.internal.ByteString b =
+              akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
           manifest_ = b;
           return b;
         } else {
@@ -4168,21 +4408,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string manifest = 1;</code>
+       *
        * @param value The manifest to set.
        * @return This builder for chaining.
        */
-      public Builder setManifest(
-          java.lang.String value) {
+      public Builder setManifest(java.lang.String value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000001;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000001;
         manifest_ = value;
         onChanged();
         return this;
       }
       /**
        * <code>required string manifest = 1;</code>
+       *
        * @return This builder for chaining.
        */
       public Builder clearManifest() {
@@ -4193,15 +4434,15 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string manifest = 1;</code>
+       *
        * @param value The bytes for manifest to set.
        * @return This builder for chaining.
        */
-      public Builder setManifestBytes(
-          akka.protobufv3.internal.ByteString value) {
+      public Builder setManifestBytes(akka.protobufv3.internal.ByteString value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000001;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000001;
         manifest_ = value;
         onChanged();
         return this;
@@ -4210,6 +4451,7 @@ public final class ProjectionMessages {
       private java.lang.Object value_ = "";
       /**
        * <code>required string value = 2;</code>
+       *
        * @return Whether the value field is set.
        */
       public boolean hasValue() {
@@ -4217,13 +4459,13 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string value = 2;</code>
+       *
        * @return The value.
        */
       public java.lang.String getValue() {
         java.lang.Object ref = value_;
         if (!(ref instanceof java.lang.String)) {
-          akka.protobufv3.internal.ByteString bs =
-              (akka.protobufv3.internal.ByteString) ref;
+          akka.protobufv3.internal.ByteString bs = (akka.protobufv3.internal.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
           if (bs.isValidUtf8()) {
             value_ = s;
@@ -4235,15 +4477,14 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string value = 2;</code>
+       *
        * @return The bytes for value.
        */
-      public akka.protobufv3.internal.ByteString
-          getValueBytes() {
+      public akka.protobufv3.internal.ByteString getValueBytes() {
         java.lang.Object ref = value_;
         if (ref instanceof String) {
-          akka.protobufv3.internal.ByteString b = 
-              akka.protobufv3.internal.ByteString.copyFromUtf8(
-                  (java.lang.String) ref);
+          akka.protobufv3.internal.ByteString b =
+              akka.protobufv3.internal.ByteString.copyFromUtf8((java.lang.String) ref);
           value_ = b;
           return b;
         } else {
@@ -4252,21 +4493,22 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string value = 2;</code>
+       *
        * @param value The value to set.
        * @return This builder for chaining.
        */
-      public Builder setValue(
-          java.lang.String value) {
+      public Builder setValue(java.lang.String value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000002;
         value_ = value;
         onChanged();
         return this;
       }
       /**
        * <code>required string value = 2;</code>
+       *
        * @return This builder for chaining.
        */
       public Builder clearValue() {
@@ -4277,19 +4519,20 @@ public final class ProjectionMessages {
       }
       /**
        * <code>required string value = 2;</code>
+       *
        * @param value The bytes for value to set.
        * @return This builder for chaining.
        */
-      public Builder setValueBytes(
-          akka.protobufv3.internal.ByteString value) {
+      public Builder setValueBytes(akka.protobufv3.internal.ByteString value) {
         if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000002;
         value_ = value;
         onChanged();
         return this;
       }
+
       @java.lang.Override
       public final Builder setUnknownFields(
           final akka.protobufv3.internal.UnknownFieldSet unknownFields) {
@@ -4302,12 +4545,13 @@ public final class ProjectionMessages {
         return super.mergeUnknownFields(unknownFields);
       }
 
-
       // @@protoc_insertion_point(builder_scope:akka.projection.Offset)
     }
 
     // @@protoc_insertion_point(class_scope:akka.projection.Offset)
-    private static final akka.projection.internal.protobuf.ProjectionMessages.Offset DEFAULT_INSTANCE;
+    private static final akka.projection.internal.protobuf.ProjectionMessages.Offset
+        DEFAULT_INSTANCE;
+
     static {
       DEFAULT_INSTANCE = new akka.projection.internal.protobuf.ProjectionMessages.Offset();
     }
@@ -4316,16 +4560,17 @@ public final class ProjectionMessages {
       return DEFAULT_INSTANCE;
     }
 
-    @java.lang.Deprecated public static final akka.protobufv3.internal.Parser<Offset>
-        PARSER = new akka.protobufv3.internal.AbstractParser<Offset>() {
-      @java.lang.Override
-      public Offset parsePartialFrom(
-          akka.protobufv3.internal.CodedInputStream input,
-          akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
-          throws akka.protobufv3.internal.InvalidProtocolBufferException {
-        return new Offset(input, extensionRegistry);
-      }
-    };
+    @java.lang.Deprecated
+    public static final akka.protobufv3.internal.Parser<Offset> PARSER =
+        new akka.protobufv3.internal.AbstractParser<Offset>() {
+          @java.lang.Override
+          public Offset parsePartialFrom(
+              akka.protobufv3.internal.CodedInputStream input,
+              akka.protobufv3.internal.ExtensionRegistryLite extensionRegistry)
+              throws akka.protobufv3.internal.InvalidProtocolBufferException {
+            return new Offset(input, extensionRegistry);
+          }
+        };
 
     public static akka.protobufv3.internal.Parser<Offset> parser() {
       return PARSER;
@@ -4340,91 +4585,91 @@ public final class ProjectionMessages {
     public akka.projection.internal.protobuf.ProjectionMessages.Offset getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
-
   }
 
   private static final akka.protobufv3.internal.Descriptors.Descriptor
-    internal_static_akka_projection_ProjectionId_descriptor;
-  private static final 
-    akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
+      internal_static_akka_projection_ProjectionId_descriptor;
+  private static final akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
       internal_static_akka_projection_ProjectionId_fieldAccessorTable;
   private static final akka.protobufv3.internal.Descriptors.Descriptor
-    internal_static_akka_projection_GetOffset_descriptor;
-  private static final 
-    akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
+      internal_static_akka_projection_GetOffset_descriptor;
+  private static final akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
       internal_static_akka_projection_GetOffset_fieldAccessorTable;
   private static final akka.protobufv3.internal.Descriptors.Descriptor
-    internal_static_akka_projection_CurrentOffset_descriptor;
-  private static final 
-    akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
+      internal_static_akka_projection_CurrentOffset_descriptor;
+  private static final akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
       internal_static_akka_projection_CurrentOffset_fieldAccessorTable;
   private static final akka.protobufv3.internal.Descriptors.Descriptor
-    internal_static_akka_projection_SetOffset_descriptor;
-  private static final 
-    akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
+      internal_static_akka_projection_SetOffset_descriptor;
+  private static final akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
       internal_static_akka_projection_SetOffset_fieldAccessorTable;
   private static final akka.protobufv3.internal.Descriptors.Descriptor
-    internal_static_akka_projection_Offset_descriptor;
-  private static final 
-    akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
+      internal_static_akka_projection_Offset_descriptor;
+  private static final akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable
       internal_static_akka_projection_Offset_fieldAccessorTable;
 
-  public static akka.protobufv3.internal.Descriptors.FileDescriptor
-      getDescriptor() {
+  public static akka.protobufv3.internal.Descriptors.FileDescriptor getDescriptor() {
     return descriptor;
   }
-  private static  akka.protobufv3.internal.Descriptors.FileDescriptor
-      descriptor;
+
+  private static akka.protobufv3.internal.Descriptors.FileDescriptor descriptor;
+
   static {
     java.lang.String[] descriptorData = {
-      "\n\030ProjectionMessages.proto\022\017akka.project" +
-      "ion\")\n\014ProjectionId\022\014\n\004name\030\001 \002(\t\022\013\n\003key" +
-      "\030\002 \002(\t\"Q\n\tGetOffset\0223\n\014projectionId\030\001 \002(" +
-      "\0132\035.akka.projection.ProjectionId\022\017\n\007repl" +
-      "yTo\030\002 \002(\t\"m\n\rCurrentOffset\0223\n\014projection" +
-      "Id\030\001 \002(\0132\035.akka.projection.ProjectionId\022" +
-      "\'\n\006offset\030\002 \001(\0132\027.akka.projection.Offset" +
-      "\"z\n\tSetOffset\0223\n\014projectionId\030\001 \002(\0132\035.ak" +
-      "ka.projection.ProjectionId\022\017\n\007replyTo\030\002 " +
-      "\002(\t\022\'\n\006offset\030\003 \001(\0132\027.akka.projection.Of" +
-      "fset\")\n\006Offset\022\020\n\010manifest\030\001 \002(\t\022\r\n\005valu" +
-      "e\030\002 \002(\tB%\n!akka.projection.internal.prot" +
-      "obufH\001"
+      "\n\030ProjectionMessages.proto\022\017akka.project"
+          + "ion\")\n\014ProjectionId\022\014\n\004name\030\001 \002(\t\022\013\n\003key"
+          + "\030\002 \002(\t\"Q\n\tGetOffset\0223\n\014projectionId\030\001 \002("
+          + "\0132\035.akka.projection.ProjectionId\022\017\n\007repl"
+          + "yTo\030\002 \002(\t\"m\n\rCurrentOffset\0223\n\014projection"
+          + "Id\030\001 \002(\0132\035.akka.projection.ProjectionId\022"
+          + "\'\n\006offset\030\002 \001(\0132\027.akka.projection.Offset"
+          + "\"z\n\tSetOffset\0223\n\014projectionId\030\001 \002(\0132\035.ak"
+          + "ka.projection.ProjectionId\022\017\n\007replyTo\030\002 "
+          + "\002(\t\022\'\n\006offset\030\003 \001(\0132\027.akka.projection.Of"
+          + "fset\")\n\006Offset\022\020\n\010manifest\030\001 \002(\t\022\r\n\005valu"
+          + "e\030\002 \002(\tB%\n!akka.projection.internal.prot"
+          + "obufH\001"
     };
-    descriptor = akka.protobufv3.internal.Descriptors.FileDescriptor
-      .internalBuildGeneratedFileFrom(descriptorData,
-        new akka.protobufv3.internal.Descriptors.FileDescriptor[] {
-        });
+    descriptor =
+        akka.protobufv3.internal.Descriptors.FileDescriptor.internalBuildGeneratedFileFrom(
+            descriptorData, new akka.protobufv3.internal.Descriptors.FileDescriptor[] {});
     internal_static_akka_projection_ProjectionId_descriptor =
-      getDescriptor().getMessageTypes().get(0);
-    internal_static_akka_projection_ProjectionId_fieldAccessorTable = new
-      akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_akka_projection_ProjectionId_descriptor,
-        new java.lang.String[] { "Name", "Key", });
-    internal_static_akka_projection_GetOffset_descriptor =
-      getDescriptor().getMessageTypes().get(1);
-    internal_static_akka_projection_GetOffset_fieldAccessorTable = new
-      akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_akka_projection_GetOffset_descriptor,
-        new java.lang.String[] { "ProjectionId", "ReplyTo", });
+        getDescriptor().getMessageTypes().get(0);
+    internal_static_akka_projection_ProjectionId_fieldAccessorTable =
+        new akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
+            internal_static_akka_projection_ProjectionId_descriptor,
+            new java.lang.String[] {
+              "Name", "Key",
+            });
+    internal_static_akka_projection_GetOffset_descriptor = getDescriptor().getMessageTypes().get(1);
+    internal_static_akka_projection_GetOffset_fieldAccessorTable =
+        new akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
+            internal_static_akka_projection_GetOffset_descriptor,
+            new java.lang.String[] {
+              "ProjectionId", "ReplyTo",
+            });
     internal_static_akka_projection_CurrentOffset_descriptor =
-      getDescriptor().getMessageTypes().get(2);
-    internal_static_akka_projection_CurrentOffset_fieldAccessorTable = new
-      akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_akka_projection_CurrentOffset_descriptor,
-        new java.lang.String[] { "ProjectionId", "Offset", });
-    internal_static_akka_projection_SetOffset_descriptor =
-      getDescriptor().getMessageTypes().get(3);
-    internal_static_akka_projection_SetOffset_fieldAccessorTable = new
-      akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_akka_projection_SetOffset_descriptor,
-        new java.lang.String[] { "ProjectionId", "ReplyTo", "Offset", });
-    internal_static_akka_projection_Offset_descriptor =
-      getDescriptor().getMessageTypes().get(4);
-    internal_static_akka_projection_Offset_fieldAccessorTable = new
-      akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_akka_projection_Offset_descriptor,
-        new java.lang.String[] { "Manifest", "Value", });
+        getDescriptor().getMessageTypes().get(2);
+    internal_static_akka_projection_CurrentOffset_fieldAccessorTable =
+        new akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
+            internal_static_akka_projection_CurrentOffset_descriptor,
+            new java.lang.String[] {
+              "ProjectionId", "Offset",
+            });
+    internal_static_akka_projection_SetOffset_descriptor = getDescriptor().getMessageTypes().get(3);
+    internal_static_akka_projection_SetOffset_fieldAccessorTable =
+        new akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
+            internal_static_akka_projection_SetOffset_descriptor,
+            new java.lang.String[] {
+              "ProjectionId", "ReplyTo", "Offset",
+            });
+    internal_static_akka_projection_Offset_descriptor = getDescriptor().getMessageTypes().get(4);
+    internal_static_akka_projection_Offset_fieldAccessorTable =
+        new akka.protobufv3.internal.GeneratedMessageV3.FieldAccessorTable(
+            internal_static_akka_projection_Offset_descriptor,
+            new java.lang.String[] {
+              "Manifest", "Value",
+            });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

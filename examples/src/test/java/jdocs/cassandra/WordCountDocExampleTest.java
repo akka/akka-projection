@@ -34,21 +34,25 @@ import static jdocs.cassandra.WordCountDocExample.IllstrateActorLoadingInitialSt
 import static org.junit.Assert.assertEquals;
 
 public class WordCountDocExampleTest extends JUnitSuite {
-  @ClassRule
-  public static final TestKitJunitResource testKit = new TestKitJunitResource();
+  @ClassRule public static final TestKitJunitResource testKit = new TestKitJunitResource();
 
-  @Rule
-  public final LogCapturing logCapturing = new LogCapturing();
+  @Rule public final LogCapturing logCapturing = new LogCapturing();
 
   private static CassandraSession session;
   private static CassandraWordCountRepository repository;
 
   @BeforeClass
   public static void beforeAll() throws Exception {
-    Await.result(ContainerSessionProvider.started(), scala.concurrent.duration.Duration.create(30, TimeUnit.SECONDS));
+    Await.result(
+        ContainerSessionProvider.started(),
+        scala.concurrent.duration.Duration.create(30, TimeUnit.SECONDS));
 
-    session =  CassandraSessionRegistry.get(testKit.system()).sessionFor("akka.projection.cassandra.session-config");
-    CassandraProjection.createOffsetTableIfNotExists(testKit.system()).toCompletableFuture().get(10, TimeUnit.SECONDS);
+    session =
+        CassandraSessionRegistry.get(testKit.system())
+            .sessionFor("akka.projection.cassandra.session-config");
+    CassandraProjection.createOffsetTableIfNotExists(testKit.system())
+        .toCompletableFuture()
+        .get(10, TimeUnit.SECONDS);
 
     repository = new CassandraWordCountRepository(session);
     repository.createKeyspaceAndTable().toCompletableFuture().get(10, TimeUnit.SECONDS);
@@ -56,8 +60,14 @@ public class WordCountDocExampleTest extends JUnitSuite {
 
   @AfterClass
   public static void afterAll() throws Exception {
-    session.executeDDL("DROP keyspace akka_projection.offset_store").toCompletableFuture().get(10, TimeUnit.SECONDS);
-    session.executeDDL("DROP keyspace " + repository.keyspace).toCompletableFuture().get(10, TimeUnit.SECONDS);
+    session
+        .executeDDL("DROP keyspace akka_projection.offset_store")
+        .toCompletableFuture()
+        .get(10, TimeUnit.SECONDS);
+    session
+        .executeDDL("DROP keyspace " + repository.keyspace)
+        .toCompletableFuture()
+        .get(10, TimeUnit.SECONDS);
   }
 
   private ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
@@ -73,24 +83,24 @@ public class WordCountDocExampleTest extends JUnitSuite {
     expected.put("def", 1);
     expected.put("ghi", 1);
 
-    projectionTestKit.run(projection, () -> {
-      Map<String, Integer> savedState = repository.loadAll(projectionId.id())
-          .toCompletableFuture().get(3, TimeUnit.SECONDS);
-      assertEquals(expected, savedState);
-    });
+    projectionTestKit.run(
+        projection,
+        () -> {
+          Map<String, Integer> savedState =
+              repository.loadAll(projectionId.id()).toCompletableFuture().get(3, TimeUnit.SECONDS);
+          assertEquals(expected, savedState);
+        });
   }
 
   @Test
   public void shouldLoadInitialStateAndManageUpdatedState() {
     ProjectionId projectionId = genRandomProjectionId();
 
-    //#projection
-    Projection<WordEnvelope> projection = CassandraProjection
-      .atLeastOnce(
-        projectionId,
-        new WordSource(),
-          () -> new WordCountHandler(projectionId, repository));
-    //#projection
+    // #projection
+    Projection<WordEnvelope> projection =
+        CassandraProjection.atLeastOnce(
+            projectionId, new WordSource(), () -> new WordCountHandler(projectionId, repository));
+    // #projection
 
     runAndAssert(projection);
   }
@@ -99,11 +109,13 @@ public class WordCountDocExampleTest extends JUnitSuite {
   public void shouldLoadStateOnDemandAndManageUpdatedState() {
     ProjectionId projectionId = genRandomProjectionId();
 
-    Projection<WordEnvelope> projection = CassandraProjection
-        .atLeastOnce(
+    Projection<WordEnvelope> projection =
+        CassandraProjection.atLeastOnce(
             projectionId,
             new WordSource(),
-            () -> new IllustrateStatefulHandlerLoadingStateOnDemand.WordCountHandler(projectionId, repository));
+            () ->
+                new IllustrateStatefulHandlerLoadingStateOnDemand.WordCountHandler(
+                    projectionId, repository));
 
     runAndAssert(projection);
   }
@@ -113,13 +125,15 @@ public class WordCountDocExampleTest extends JUnitSuite {
     ProjectionId projectionId = genRandomProjectionId();
     ActorSystem<?> system = testKit.system();
 
-    //#actorHandlerProjection
-    Projection<WordEnvelope> projection = CassandraProjection
-        .atLeastOnce(
+    // #actorHandlerProjection
+    Projection<WordEnvelope> projection =
+        CassandraProjection.atLeastOnce(
             projectionId,
             new WordSource(),
-            () -> new WordCountActorHandler(WordCountProcessor.create(projectionId, repository), system));
-    //#actorHandlerProjection
+            () ->
+                new WordCountActorHandler(
+                    WordCountProcessor.create(projectionId, repository), system));
+    // #actorHandlerProjection
 
     runAndAssert(projection);
   }
@@ -129,13 +143,16 @@ public class WordCountDocExampleTest extends JUnitSuite {
     ProjectionId projectionId = genRandomProjectionId();
     ActorSystem<?> system = testKit.system();
 
-    Projection<WordEnvelope> projection = CassandraProjection
-        .atLeastOnce(
+    Projection<WordEnvelope> projection =
+        CassandraProjection.atLeastOnce(
             projectionId,
             new WordSource(),
-            () -> new IllstrateActorLoadingStateOnDemand.WordCountActorHandler(IllstrateActorLoadingStateOnDemand.WordCountProcessor.create(projectionId, repository), system));
+            () ->
+                new IllstrateActorLoadingStateOnDemand.WordCountActorHandler(
+                    IllstrateActorLoadingStateOnDemand.WordCountProcessor.create(
+                        projectionId, repository),
+                    system));
 
     runAndAssert(projection);
   }
-
 }
