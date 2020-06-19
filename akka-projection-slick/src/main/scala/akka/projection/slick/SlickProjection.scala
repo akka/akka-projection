@@ -117,7 +117,7 @@ object SlickProjection {
    *
    * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
    * This window can be defined with [[AtLeastOnceProjection.withSaveOffset]] of the returned
-   * `AtLeastOnceSlickProjection`. The default settings for the window is defined in configuration
+   * `AtLeastOnceProjection`. The default settings for the window is defined in configuration
    * section `akka.projection.at-least-once`.
    */
   def atLeastOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
@@ -159,7 +159,7 @@ object SlickProjection {
    * Create a [[akka.projection.Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
    * The envelopes are grouped within a time window, or limited by a number of envelopes,
    * whatever happens first. This window can be defined with [[GroupedProjection.withGroup]] of
-   * the returned `GroupedSlickProjection`. The default settings for the window is defined in configuration
+   * the returned `GroupedProjection`. The default settings for the window is defined in configuration
    * section `akka.projection.grouped`.
    *
    * It stores the offset in a relational database table using Slick in the same transaction

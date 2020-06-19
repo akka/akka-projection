@@ -694,17 +694,23 @@ class SlickProjectionSpec
         offsetOpt shouldBe empty
       }
 
+      val handlerCalled = "called"
+      val handlerProbe = testKit.createTestProbe[String]("calls-to-handler")
+
       val slickProjection =
-        SlickProjection.groupedWithin(
-          projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          databaseConfig = dbConfig,
-          // build event handler from simple lambda
-          handler = () =>
-            SlickHandler[immutable.Seq[Envelope]] { envelopes =>
-              val dbios = envelopes.map(env => repository.concatToText(env.id, env.message))
-              DBIOAction.sequence(dbios).map(_ => Done)
-            })
+        SlickProjection
+          .groupedWithin(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            // build event handler from simple lambda
+            handler = () =>
+              SlickHandler[immutable.Seq[Envelope]] { envelopes =>
+                handlerProbe.ref ! handlerCalled
+                val dbios = envelopes.map(env => repository.concatToText(env.id, env.message))
+                DBIOAction.sequence(dbios).map(_ => Done)
+              })
+          .withGroup(3, 3.seconds)
 
       projectionTestKit.run(slickProjection) {
         withClue("check - all values were concatenated") {
@@ -712,9 +718,16 @@ class SlickProjectionSpec
           concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
         }
       }
+
       withClue("check - all offsets were seen") {
         val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
         offset shouldBe 6L
+      }
+
+      withClue("check - handler was called only once with grouped envelopes") {
+        // handler probe is called twice
+        handlerProbe.expectMessage(handlerCalled)
+        handlerProbe.expectMessage(handlerCalled)
       }
     }
   }

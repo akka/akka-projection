@@ -6,6 +6,7 @@ package akka.projection.jdbc;
 
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
+import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.japi.function.Creator;
 import akka.japi.function.Function;
 import akka.projection.Projection;
@@ -28,6 +29,7 @@ import scala.concurrent.Future;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -185,22 +187,46 @@ public class JdbcProjectionTest extends JUnitSuite {
     return "fail on envelope with offset: [" + offset + "]";
   }
 
+  private JdbcHandler<Envelope, PureJdbcSession> concatHandler(StringBuffer str) {
+    return concatHandler(str, __ -> false);
+  }
+
   private JdbcHandler<Envelope, PureJdbcSession> concatHandler(
-      StringBuffer str, Predicate<Long> failPredicate) {
+      StringBuffer buffer, Predicate<Long> failPredicate) {
     return new JdbcHandler<Envelope, PureJdbcSession>() {
       @Override
       public void process(PureJdbcSession session, Envelope envelope) {
         if (failPredicate.test(envelope.offset)) {
           throw new RuntimeException(failMessage(envelope.offset));
         } else {
-          str.append(envelope.message).append("|");
+          buffer.append(envelope.message).append("|");
         }
       }
     };
   }
 
-  private JdbcHandler<Envelope, PureJdbcSession> concatHandler(StringBuffer str) {
-    return concatHandler(str, __ -> false);
+  GroupedConcatHandler groupedConcatHandler(StringBuffer buffer, TestProbe<String> handlerProbe) {
+    return new GroupedConcatHandler(buffer, handlerProbe);
+  }
+
+  static class GroupedConcatHandler extends JdbcHandler<List<Envelope>, PureJdbcSession> {
+
+    public static final String handlerCalled = "called";
+    private final StringBuffer buffer;
+    private final TestProbe<String> handlerProbe;
+
+    GroupedConcatHandler(StringBuffer buffer, TestProbe<String> handlerProbe) {
+      this.buffer = buffer;
+      this.handlerProbe = handlerProbe;
+    }
+
+    @Override
+    public void process(PureJdbcSession session, List<Envelope> envelopes) {
+      handlerProbe.ref().tell(GroupedConcatHandler.handlerCalled);
+      for (Envelope envelope : envelopes) {
+        buffer.append(envelope.message).append("|");
+      }
+    }
   }
 
   @Test
@@ -246,21 +272,33 @@ public class JdbcProjectionTest extends JUnitSuite {
     } catch (RuntimeException e) {
       assertEquals(failMessage(4), e.getMessage());
     }
+  }
 
-    assertStoredOffset(projectionId, 3L);
+  @Test
+  public void groupedShouldStoreOffset() {
 
-    // re-run projection without failing function
-    Projection<Envelope> projection2 =
-        JdbcProjection.exactlyOnce(
-            projectionId,
-            new TestSourceProvider(entityId),
-            jdbcSessionCreator,
-            // fail on forth offset
-            () -> concatHandler(str),
-            testKit.system());
+    String entityId = UUID.randomUUID().toString();
+    ProjectionId projectionId = genRandomProjectionId();
+
+    TestProbe<String> handlerProbe = testKit.createTestProbe("calls-to-handler");
+    StringBuffer str = new StringBuffer();
+
+    Projection<Envelope> projection =
+        JdbcProjection.groupedWithin(
+                projectionId,
+                new TestSourceProvider(entityId),
+                jdbcSessionCreator,
+                () -> groupedConcatHandler(str, handlerProbe),
+                testKit.system())
+            .withGroup(3, Duration.ofMinutes(1));
+
     projectionTestKit.run(
-        projection2, () -> assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
+        projection, () -> assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
 
     assertStoredOffset(projectionId, 6L);
+
+    // handler probe is called twice
+    handlerProbe.expectMessage(GroupedConcatHandler.handlerCalled);
+    handlerProbe.expectMessage(GroupedConcatHandler.handlerCalled);
   }
 }

@@ -30,3 +30,16 @@ trait JdbcHandler[Envelope, S <: JdbcSession] extends HandlerLifecycle {
   def process(session: S, envelope: Envelope): Unit
 
 }
+
+object JdbcHandler {
+
+  /** JdbcHandler that can be define from a simple function */
+  private class JdbcHandlerFunction[Envelope, S <: JdbcSession](handler: (S, Envelope) => Unit)
+      extends JdbcHandler[Envelope, S] {
+
+    override def process(session: S, envelope: Envelope): Unit = handler(session, envelope)
+  }
+
+  def apply[S <: JdbcSession, Envelope](handler: (S, Envelope) => Unit): JdbcHandler[Envelope, S] =
+    new JdbcHandlerFunction(handler)
+}

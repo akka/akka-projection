@@ -4,6 +4,7 @@
 
 package akka.projection.jdbc.internal
 
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
@@ -67,6 +68,38 @@ private[projection] object JdbcProjectionImpl {
             }
             // run users handler
             delegate.process(sess, envelope)
+          }
+          .map(_ => Done)
+
+      }
+
+      override def start(): Future[Done] = delegate.start()
+      override def stop(): Future[Done] = delegate.stop()
+    }
+  }
+
+  private[projection] def adaptedHandlerForGrouped[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionFactory: () => S,
+      handlerFactory: () => JdbcHandler[immutable.Seq[Envelope], S],
+      offsetStore: JdbcOffsetStore[S]): () => Handler[immutable.Seq[Envelope]] = { () =>
+
+    new Handler[immutable.Seq[Envelope]] {
+
+      private val delegate = handlerFactory()
+
+      override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
+        val offset = sourceProvider.extractOffset(envelopes.last)
+        // this scope ensures that the blocking DB dispatcher is used solely for DB operations
+        implicit val executionContext: ExecutionContext = offsetStore.executionContext
+        JdbcSessionUtil
+          .withSession(sessionFactory) { sess =>
+            sess.withConnection[Unit] { conn =>
+              offsetStore.saveOffsetBlocking(conn, projectionId, offset)
+            }
+            // run users handler
+            delegate.process(sess, envelopes)
           }
           .map(_ => Done)
 
