@@ -207,15 +207,23 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       sourceProvider match {
         case _: MergeableOffsetSourceProvider[_, Offset, Envelope] =>
           val batches = envelopesAndOffsets
-            .asInstanceOf[immutable.Seq[ProjectionContextImpl[MergeableOffset[MergeableKey, _], Envelope]]]
-            .flatMap { context => context.offset.entries.toSeq.map { case (key, _) => (key, context) } }
+            .flatMap {
+              case context @ ProjectionContextImpl(offset: MergeableOffset[MergeableKey, _] @unchecked, _) =>
+                offset.entries.toSeq.map {
+                  case (key, _) => (key, context)
+                }
+              case _ =>
+                // should never happen
+                throw new IllegalStateException("The offset should always be of type MergeableOffset")
+            }
             .groupBy { case (key, _) => key }
             .map {
               case (key, keyAndContexts) =>
-                val envs = keyAndContexts.map { case (_, context) => context }
+                val envs = keyAndContexts.map {
+                  case (_, context) => context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]]
+                }
                 key.surrogateKey -> envs
             }
-            .asInstanceOf[Map[String, immutable.Seq[ProjectionContextImpl[Offset, Envelope]]]]
 
           // process batches in sequence, but not concurrently, in order to provide singled threaded guarantees
           // to the user envelope handler
