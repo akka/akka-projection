@@ -24,7 +24,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report errors in flaky handlers" in {
-        val single = Handlers.singleWithFailure(0.2f)
+        val single = Handlers.singleWithFailure(0.1f)
         val tt = new TelemetryTester(
           AtLeastOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           SingleHandlerStrategy(single))
@@ -62,9 +62,8 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
           detectNoError(tt)
         }
       }
-      "report errors in flaky handlers" ignore {
-        // TODO: find a way to detect/report user failures
-        val flow = Handlers.flowWithFailureAndRetries(0.2f, maxRetries)
+      "report errors in flaky handlers" in {
+        val flow = Handlers.flowWithFailureAndRetries(0.2f)
         val tt = new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
           detectSomeErrors(tt)
@@ -113,7 +112,6 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
     }
-    " in `exactly-once` with flowHandler report nothing in happy scenarios (UNSUPPORTED)" ignore {}
 
     // at-most-once
     " in `at-most-once` with singleHandler" must {
@@ -135,14 +133,13 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
     }
-    " in `at-most-once` with groupedHandler report nothing in happy scenarios (UNSUPPORTED)" ignore {}
-    " in `at-most-once` with flowHandler report nothing in happy scenarios (UNSUPPORTED)" ignore {}
 
   }
 
   val instruments = InMemInstruments
 
   def detectNoError(tt: TelemetryTester) = {
+    instruments.offsetsSuccessfullyCommitted.get should be >= 6
     instruments.errorInvocations.get should be(0)
   }
 

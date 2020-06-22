@@ -104,10 +104,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report multiple measures per envelope in case of failure" in {
-        // disable the reties in the user flow so failures propagate and are counted. Then, it's
-        // the projection `RestartSource` that's handling the retry.
-        val retriesInUserFlow = 0
-        val flow = Handlers.flowWithFailureAndRetries(0.3f, retriesInUserFlow)
+        val flow = Handlers.flowWithFailureAndRetries(0.3f)
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
@@ -165,7 +162,6 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
     }
-    " in `exactly-once` with flowHandler count offsets (UNSUPPORTED)" ignore {}
 
     // at-most-once
     " in `at-most-once` with singleHandler" must {
@@ -190,8 +186,6 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
     }
-    " in `at-most-once` with groupedHandler count offsets (UNSUPPORTED)" ignore {}
-    " in `at-most-once` with flowHandler count offsets (UNSUPPORTED)" ignore {}
 
   }
 

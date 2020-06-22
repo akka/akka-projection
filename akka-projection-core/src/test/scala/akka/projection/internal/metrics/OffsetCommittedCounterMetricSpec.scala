@@ -73,7 +73,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
       "count offsets (without afterEnvelops optimization)" in {
         val tt = new TelemetryTester(
           AtLeastOnce(afterEnvelopes = Some(1)),
-          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
+          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)))
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
@@ -85,7 +85,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
       "count offsets (with afterEnvelops optimization)" in {
         val tt = new TelemetryTester(
           AtLeastOnce(afterEnvelopes = Some(3)),
-          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(500.millis)))
+          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)))
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
@@ -100,7 +100,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           AtLeastOnce(
             afterEnvelopes = Some(2),
             recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
-          GroupedHandlerStrategy(grouped, afterEnvelopes = Some(3), orAfterDuration = Some(500.millis)))
+          GroupedHandlerStrategy(grouped, afterEnvelopes = Some(3), orAfterDuration = Some(50.millis)))
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
@@ -123,7 +123,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
         }
       }
       "count offsets only once in case of failure" in {
-        val flow = Handlers.flowWithFailureAndRetries(0.8f, maxRetries)
+        val flow = Handlers.flowWithFailureAndRetries(0.8f)
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
@@ -189,7 +189,6 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
         }
       }
     }
-    " in `exactly-once` with flowHandler count offsets (UNSUPPORTED)" ignore {}
 
     // at-most-once
     " in `at-most-once` with singleHandler" must {
@@ -218,8 +217,6 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
         }
       }
     }
-    " in `at-most-once` with groupedHandler count offsets (UNSUPPORTED)" ignore {}
-    " in `at-most-once` with flowHandler count offsets (UNSUPPORTED)" ignore {}
 
   }
 

@@ -31,11 +31,12 @@ import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.Telemetry
+import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec.Envelope
+import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec.TelemetryException
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.FlowWithContext
-import akka.stream.scaladsl.RestartFlow
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -130,63 +131,6 @@ object InternalProjectionStateMetricsSpec {
 
   case object TelemetryException extends RuntimeException("Oh, no! Handler errored.") with NoStackTrace
 
-  object Handlers {
-    trait ConcatHandlers {
-      def concatStr = ""
-    }
-    // The projectionSettings will only be used as a fallback. The OffsetHandler and
-    // the HandlerStrategy arguments take precedence
-    val single = singleWithFailure()
-    def singleWithFailure(successRatio: Float = 1.0f) = new Handler[Envelope] with ConcatHandlers {
-      require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
-      override def concatStr = acc
-      var acc = ""
-      override def process(envelope: Envelope): Future[Done] = {
-        acc = accumulateWithFailures(acc, envelope.message, successRatio)
-        Future.successful(Done)
-      }
-    }
-
-    val grouped = groupedWithFailures()
-    def groupedWithFailures(successRatio: Float = 1.0f) = new Handler[Seq[Envelope]] with ConcatHandlers {
-      override def concatStr = acc
-      var acc = ""
-      override def process(envelopes: Seq[Envelope]): Future[Done] = {
-        val x = envelopes.map(_.message).mkString("|")
-        acc = accumulateWithFailures(acc, x, successRatio)
-        Future.successful(Done)
-      }
-    }
-
-    val flow = flowWithFailure()
-    def flowWithFailureAndRetries(successRatio: Float = 1.0f, maxRetries: Int) =
-      RestartFlow
-        .withBackoff(30.millis, 10.millis, 0.1, maxRetries) { () =>
-          Handlers.flowWithFailure(successRatio).asFlow
-        }
-        .asFlowWithContext[Envelope, ProjectionContext, ProjectionContext] { case (e, ctx) => (e, ctx) } {
-          case (_, ctx) => ctx
-        }
-        .map { case (done, _) => done }
-
-    def flowWithFailure(
-        successRatio: Float = 1.0f): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
-      require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
-      var acc = ""
-      FlowWithContext[Envelope, ProjectionContext]
-        .map { env =>
-          acc = accumulateWithFailures(acc, env.message, successRatio)
-          Done
-        }
-    }
-
-    private def accumulateWithFailures(acc: String, x: String, successRatio: Float): String = {
-      if (Random.between(0f, 1f) > successRatio)
-        throw TelemetryException
-      if (acc == "") x else s"${acc}|${x}"
-    }
-  }
-
   class TelemetryTester(
       offsetStrategy: OffsetStrategy,
       handlerStrategy: HandlerStrategy[Envelope],
@@ -250,6 +194,55 @@ object InternalProjectionStateMetricsSpec {
     }
   }
 
+}
+
+object Handlers {
+  trait ConcatHandlers {
+    def concatStr = ""
+  }
+  // The projectionSettings will only be used as a fallback. The OffsetHandler and
+  // the HandlerStrategy arguments take precedence
+  val single = singleWithFailure()
+  def singleWithFailure(successRatio: Float = 1.0f) = new Handler[Envelope] with ConcatHandlers {
+    require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
+    override def concatStr = acc
+    var acc = ""
+    override def process(envelope: Envelope): Future[Done] = {
+      acc = accumulateWithFailures(acc, envelope.message, successRatio)
+      Future.successful(Done)
+    }
+  }
+
+  val grouped = groupedWithFailures()
+  def groupedWithFailures(successRatio: Float = 1.0f) = new Handler[Seq[Envelope]] with ConcatHandlers {
+    override def concatStr = acc
+    var acc = ""
+    override def process(envelopes: Seq[Envelope]): Future[Done] = {
+      val x = envelopes.map(_.message).mkString("|")
+      acc = accumulateWithFailures(acc, x, successRatio)
+      Future.successful(Done)
+    }
+  }
+
+  val flow = flowWithFailure()
+  def flowWithFailureAndRetries(successRatio: Float = 1.0f) = Handlers.flowWithFailure(successRatio)
+
+  def flowWithFailure(
+      successRatio: Float = 1.0f): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
+    require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
+    var acc = ""
+    FlowWithContext[Envelope, ProjectionContext]
+      .map { env =>
+        acc = accumulateWithFailures(acc, env.message, successRatio)
+        Done
+      }
+  }
+
+  private def accumulateWithFailures(acc: String, x: String, successRatio: Float): String = {
+    if (Random.between(0f, 1f) > successRatio)
+      throw TelemetryException
+    if (acc == "") x else s"${acc}|${x}"
+  }
 }
 
 object InMemInstruments {
