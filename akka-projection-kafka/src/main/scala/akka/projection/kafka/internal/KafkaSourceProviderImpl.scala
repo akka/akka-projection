@@ -131,29 +131,4 @@ import org.apache.kafka.common.TopicPartition
     override def onStop(currentTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
       assignedPartitions = EmptyTps
   }
-
-//  /**
-//   * Java DSL
-//   */
-//  override def source(offset: Supplier[CompletionStage[Optional[GroupOffsets]]])
-//      : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], _]] = {
-//    val scalaOffset = offset.get().asScala.map(_.toScala)
-//    source(() => scalaOffset).map(_.asJava).asJava
-//  }
-//
-//  override private[projection] def groupByKey(envs: util.List[ProjectionContextImpl[_, ConsumerRecord[K, V]]]) =
-//    groupByKey(envs.asScala.toSeq).map { case (key, envs) => key -> envs.asJava }.asJava
-
-//  override private[projection] def groupByKey(envs: Seq[ProjectionContextImpl[_, ConsumerRecord[K, V]]]) = {
-//    val groups: Map[String, immutable.Seq[ProjectionContext]] = envs
-//      .asInstanceOf[immutable.Seq[ProjectionContextImpl[GroupOffsets, ConsumerRecord[K, V]]]]
-//      .flatMap { context => context.offset.entries.toSeq.map { case (key, _) => (key, context) } }
-//      .groupBy { case (key, _) => key }
-//      .map {
-//        case (key, keyAndContexts) =>
-//          val envs = keyAndContexts.map { case (_, context) => context }
-//          key.surrogateKey -> envs
-//      }
-//    groups
-//  }
 }
