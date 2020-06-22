@@ -19,33 +19,33 @@ import jdocs.eventsourced.ShoppingCart;
 
 public class JdbcProjectionWithHibernateDocExample {
 
-    static void  illustrateHibernate() {
+  static void illustrateHibernate() {
 
-        ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 
-        class HibernateHandler extends JdbcHandler<EventEnvelope<ShoppingCart.Event>, HibernateSessionProvider.HibernateJdbcSession> {
-            @Override
-            public void process(HibernateSessionProvider.HibernateJdbcSession session, EventEnvelope<ShoppingCart.Event> eventEventEnvelope) {
-                System.out.println("Hold my beer while I...");
-            }
-
-        }
-
-        //#sourceProvider
-        SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
-                EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), "carts-1");
-        //#sourceProvider
-
-
-        HibernateSessionProvider sessionProvider = new HibernateSessionProvider();
-        Projection<EventEnvelope<ShoppingCart.Event>> projection =
-                JdbcProjection.exactlyOnce(
-                        ProjectionId.of("shopping-carts", "carts-1"),
-                        sourceProvider,
-                        sessionProvider::newInstance,
-                        new HibernateHandler(),
-                        system
-                );
-
+    class HibernateHandler
+        extends JdbcHandler<
+            EventEnvelope<ShoppingCart.Event>, HibernateSessionProvider.HibernateJdbcSession> {
+      @Override
+      public void process(
+          HibernateSessionProvider.HibernateJdbcSession session,
+          EventEnvelope<ShoppingCart.Event> eventEventEnvelope) {
+        System.out.println("Hold my beer while I...");
+      }
     }
+
+    // #sourceProvider
+    SourceProvider<Offset, EventEnvelope<ShoppingCart.Event>> sourceProvider =
+        EventSourcedProvider.eventsByTag(system, CassandraReadJournal.Identifier(), "carts-1");
+    // #sourceProvider
+
+    HibernateSessionProvider sessionProvider = new HibernateSessionProvider();
+    Projection<EventEnvelope<ShoppingCart.Event>> projection =
+        JdbcProjection.exactlyOnce(
+            ProjectionId.of("shopping-carts", "carts-1"),
+            sourceProvider,
+            sessionProvider::newInstance,
+            () -> new HibernateHandler(),
+            system);
+  }
 }

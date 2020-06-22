@@ -50,42 +50,71 @@ private[projection] final case class AtLeastOnce(
  * INTERNAL API
  */
 @InternalApi
-private[projection] sealed trait HandlerStrategy[Envelope] {
+private[projection] sealed trait HandlerStrategy {
+  def recreateHandlerOnNextAccess(): Unit
+
   def lifecycle: HandlerLifecycle
 
   def actorHandlerInit[T]: Option[ActorHandlerInit[T]]
+}
+
+@InternalApi
+private[projection] sealed abstract class FunctionHandlerStrategy[Envelope](handlerFactory: () => Handler[Envelope])
+    extends HandlerStrategy {
+  @volatile private var _handler: Option[Handler[Envelope]] = None
+  @volatile private var _recreateHandlerOnNextAccess = true
+
+  def recreateHandlerOnNextAccess(): Unit =
+    _recreateHandlerOnNextAccess = true
+
+  /**
+   * Current handler instance, or lazy creation of it.
+   */
+  def handler(): Handler[Envelope] = {
+    _handler match {
+      case Some(h: Handler[Any] @unchecked) if !_recreateHandlerOnNextAccess => h
+      case _ =>
+        createHandler()
+        _recreateHandlerOnNextAccess = false
+        _handler.get
+    }
+  }
+
+  private def createHandler(): Unit = {
+    val newHandler = handlerFactory()
+    (_handler, newHandler) match {
+      case (Some(h1: ActorHandlerInit[Any] @unchecked), h2: ActorHandlerInit[Any] @unchecked) =>
+        // use same actor in new handler
+        h2.setActor(h1.getActor())
+      case _ =>
+    }
+    _handler = Some(newHandler)
+  }
+
+  override def lifecycle: HandlerLifecycle = handler()
+
+  override def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = handler() match {
+    case init: ActorHandlerInit[T] @unchecked => Some(init)
+    case _                                    => None
+  }
 }
 
 /**
  * INTERNAL API
  */
 @InternalApi
-private[projection] final case class SingleHandlerStrategy[Envelope](handler: Handler[Envelope])
-    extends HandlerStrategy[Envelope] {
-  override def lifecycle: HandlerLifecycle = handler
-
-  override def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = handler match {
-    case init: ActorHandlerInit[T] @unchecked => Some(init)
-    case _                                    => None
-  }
-}
+private[projection] final case class SingleHandlerStrategy[Envelope](handlerFactory: () => Handler[Envelope])
+    extends FunctionHandlerStrategy[Envelope](handlerFactory)
 
 /**
  * INTERNAL API
  */
 @InternalApi
 private[projection] final case class GroupedHandlerStrategy[Envelope](
-    handler: Handler[immutable.Seq[Envelope]],
+    handlerFactory: () => Handler[immutable.Seq[Envelope]],
     afterEnvelopes: Option[Int] = None,
     orAfterDuration: Option[FiniteDuration] = None)
-    extends HandlerStrategy[Envelope] {
-  override def lifecycle: HandlerLifecycle = handler
-
-  override def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = handler match {
-    case init: ActorHandlerInit[T] @unchecked => Some(init)
-    case _                                    => None
-  }
-}
+    extends FunctionHandlerStrategy[immutable.Seq[Envelope]](handlerFactory)
 
 /**
  * INTERNAL API
@@ -93,7 +122,10 @@ private[projection] final case class GroupedHandlerStrategy[Envelope](
 @InternalApi
 private[projection] final case class FlowHandlerStrategy[Envelope](
     flowCtx: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])
-    extends HandlerStrategy[Envelope] {
+    extends HandlerStrategy {
+
+  override def recreateHandlerOnNextAccess(): Unit = ()
+
   override val lifecycle: HandlerLifecycle = new HandlerLifecycle {}
 
   override def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None

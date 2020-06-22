@@ -28,6 +28,7 @@ import akka.annotation.ApiMayChange
    * If the previously returned `CompletionStage<State>` failed it will call `initialState`
    * again and use that value.
    */
+  @throws(classOf[Exception])
   def process(state: State, envelope: Envelope): CompletionStage[State]
 
   /**

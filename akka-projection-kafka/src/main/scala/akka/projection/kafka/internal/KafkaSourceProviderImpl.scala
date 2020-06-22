@@ -4,9 +4,14 @@
 
 package akka.projection.kafka.internal
 
-import scala.collection.immutable
+import java.util.Optional
+import java.util.concurrent.CompletionStage
+import java.util.function.Supplier
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -18,9 +23,8 @@ import akka.kafka.scaladsl.PartitionAssignmentHandler
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
-import akka.projection.ProjectionContext
-import akka.projection.internal.ProjectionContextImpl
 import akka.projection.kafka.GroupOffsets
+import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
@@ -43,9 +47,11 @@ import org.apache.kafka.common.TopicPartition
     settings: ConsumerSettings[K, V],
     topics: Set[String],
     metadataClient: MetadataClientAdapter)
-    extends scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    extends javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
     with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
+    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]] {
+
   import KafkaSourceProviderImpl._
 
   private implicit val executionContext: ExecutionContext = system.executionContext
@@ -79,6 +85,11 @@ import org.apache.kafka.common.TopicPartition
     }
   }
 
+  override def source(readOffsets: Supplier[CompletionStage[Optional[GroupOffsets]]])
+      : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], _]] = {
+    source(() => readOffsets.get().toScala.map(_.asScala)).map(_.asJava).toJava
+  }
+
   override def extractOffset(record: ConsumerRecord[K, V]): GroupOffsets = GroupOffsets(record)
 
   override def verifyOffset(offsets: GroupOffsets): OffsetVerification = {
@@ -94,12 +105,11 @@ import org.apache.kafka.common.TopicPartition
       readOffsets()
         .flatMap {
           case Some(groupOffsets) =>
-            Future.successful(groupOffsets.entries.flatMap {
-              case (topicPartitionKey, offset) =>
-                val tp = topicPartitionKey.tp
-                if (assignedTps.contains(tp)) Map(tp -> offset)
-                else Map.empty
-            })
+            val filteredMap = groupOffsets.entries.collect {
+              case (topicPartitionKey, offset) if assignedTps.contains(topicPartitionKey.tp) =>
+                (topicPartitionKey.tp -> offset)
+            }
+            Future.successful(filteredMap)
           case None => metadataClient.getBeginningOffsets(assignedTps)
         }
         .recover {
@@ -132,16 +142,16 @@ import org.apache.kafka.common.TopicPartition
 //  override private[projection] def groupByKey(envs: util.List[ProjectionContextImpl[_, ConsumerRecord[K, V]]]) =
 //    groupByKey(envs.asScala.toSeq).map { case (key, envs) => key -> envs.asJava }.asJava
 
-  override private[projection] def groupByKey(envs: Seq[ProjectionContextImpl[_, ConsumerRecord[K, V]]]) = {
-    val groups: Map[String, immutable.Seq[ProjectionContext]] = envs
-      .asInstanceOf[immutable.Seq[ProjectionContextImpl[GroupOffsets, ConsumerRecord[K, V]]]]
-      .flatMap { context => context.offset.entries.toSeq.map { case (key, _) => (key, context) } }
-      .groupBy { case (key, _) => key }
-      .map {
-        case (key, keyAndContexts) =>
-          val envs = keyAndContexts.map { case (_, context) => context }
-          key.surrogateKey -> envs
-      }
-    groups
-  }
+//  override private[projection] def groupByKey(envs: Seq[ProjectionContextImpl[_, ConsumerRecord[K, V]]]) = {
+//    val groups: Map[String, immutable.Seq[ProjectionContext]] = envs
+//      .asInstanceOf[immutable.Seq[ProjectionContextImpl[GroupOffsets, ConsumerRecord[K, V]]]]
+//      .flatMap { context => context.offset.entries.toSeq.map { case (key, _) => (key, context) } }
+//      .groupBy { case (key, _) => key }
+//      .map {
+//        case (key, keyAndContexts) =>
+//          val envs = keyAndContexts.map { case (_, context) => context }
+//          key.surrogateKey -> envs
+//      }
+//    groups
+//  }
 }

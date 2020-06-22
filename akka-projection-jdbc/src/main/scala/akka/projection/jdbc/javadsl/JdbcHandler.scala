@@ -31,6 +31,7 @@ abstract class JdbcHandler[Envelope, S <: JdbcSession] extends HandlerLifecycle 
    *
    * One envelope is processed at a time. It will not be invoked with the next envelope until after this method returns.
    */
+  @throws(classOf[Exception])
   def process(session: S, envelope: Envelope): Unit
 
   /**

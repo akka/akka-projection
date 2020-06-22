@@ -75,11 +75,14 @@ import akka.projection.StringKey
       case seq: query.Sequence      => SingleOffset(id, SequenceManifest, seq.value.toString, mergeable)
       case tbu: query.TimeBasedUUID => SingleOffset(id, TimeBasedUUIDManifest, tbu.value.toString, mergeable)
       case mrg: MergeableOffset[_, _] =>
-        MultipleOffsets(mrg.entries.map {
+        val list = mrg.entries.map {
           case (key: MergeableKey, innerOffset) =>
             toStorageRepresentation(ProjectionId(id.name, key.surrogateKey), innerOffset, mergeable = true)
               .asInstanceOf[SingleOffset]
-        }.toSeq)
+        }.toList
+
+        MultipleOffsets(list)
+
       case _ => throw new IllegalArgumentException(s"Unsupported offset type, found [${offset.getClass.getName}]")
     }
     reps

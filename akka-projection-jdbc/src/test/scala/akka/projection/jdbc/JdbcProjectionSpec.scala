@@ -278,7 +278,7 @@ class JdbcProjectionSpec
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           jdbcSessionFactory,
-          handler = new ConcatHandler)
+          handler = () => new ConcatHandler)
 
       projectionTestKit.run(projection) {
         withClue("check - all values were concatenated") {
@@ -310,7 +310,7 @@ class JdbcProjectionSpec
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = bogusEventHandler)
+            handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       projectionTestKit.run(projectionFailing) {
@@ -346,7 +346,7 @@ class JdbcProjectionSpec
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = bogusEventHandler)
+            handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
           .withStatusObserver(statusObserver)
 
@@ -388,7 +388,7 @@ class JdbcProjectionSpec
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = bogusEventHandler)
+            handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
       withClue("check - offset is empty") {
@@ -429,7 +429,7 @@ class JdbcProjectionSpec
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           jdbcSessionFactory,
-          handler = bogusEventHandler)
+          handler = () => bogusEventHandler)
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -457,7 +457,7 @@ class JdbcProjectionSpec
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           jdbcSessionFactory,
-          handler = new ConcatHandler())
+          handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -491,7 +491,7 @@ class JdbcProjectionSpec
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           jdbcSessionFactory,
-          handler = bogusEventHandler)
+          handler = () => bogusEventHandler)
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -518,7 +518,7 @@ class JdbcProjectionSpec
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           jdbcSessionFactory,
-          handler = new ConcatHandler())
+          handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -568,7 +568,7 @@ class JdbcProjectionSpec
           projectionId,
           sourceProvider = testSourceProvider,
           jdbcSessionFactory,
-          handler = handler)
+          handler = () => handler)
 
       projectionTestKit.runWithTestSink(projection) { testSink =>
         for (i <- 1 to 6) {
@@ -599,7 +599,7 @@ class JdbcProjectionSpec
           projectionId,
           sourceProvider = testSourceProvider,
           jdbcSessionFactory,
-          handler = new ConcatHandler())
+          handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
         withClue("checking: all values except skipped were concatenated") {
@@ -627,7 +627,7 @@ class JdbcProjectionSpec
           projectionId,
           sourceProvider = testSourceProvider,
           jdbcSessionFactory,
-          handler = new ConcatHandler())
+          handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
         withClue("checking: all values except skipped were concatenated") {
@@ -692,10 +692,13 @@ class JdbcProjectionSpec
 
   "JdbcProjection lifecycle" must {
 
-    class LifecycleHandler(probe: ActorRef[String], failOnceOnOffset: Int = -1, alwaysFailOnOffset: Int = -1)
+    class LifecycleHandler(
+        probe: ActorRef[String],
+        failOnceOnOffset: AtomicInteger = new AtomicInteger(-1),
+        alwaysFailOnOffset: Int = -1)
         extends JdbcHandler[Envelope, PureJdbcSession] {
 
-      private var failedOnce = false
+      val createdMessage = "created"
       val startMessage = "start"
       val completedMessage = "completed"
       val failedMessage = "failed"
@@ -703,6 +706,8 @@ class JdbcProjectionSpec
       // stop message can be 'completed' or 'failed'
       // that allows us to assert that the stopHandler is different execution paths were called in test
       private var stopMessage = completedMessage
+
+      probe ! createdMessage
 
       override def start(): Future[Done] = {
         // reset stop message to 'completed' on each new start
@@ -717,8 +722,8 @@ class JdbcProjectionSpec
       }
 
       override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
-        if (envelope.offset == failOnceOnOffset && !failedOnce) {
-          failedOnce = true
+        if (envelope.offset == failOnceOnOffset.get()) {
+          failOnceOnOffset.set(-1)
           stopMessage = failedMessage
           throw TestException(s"Fail $failOnceOnOffset")
         } else if (envelope.offset == alwaysFailOnOffset) {
@@ -736,7 +741,7 @@ class JdbcProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
-      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+      val handler = new LifecycleHandler(handlerProbe.ref)
 
       val statusProbe = createTestProbe[TestStatusObserver.Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
@@ -747,11 +752,13 @@ class JdbcProjectionSpec
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = handler)
+            handler = () => handler)
           .withStatusObserver(statusObserver)
 
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.createdMessage)
 
       statusProbe.expectMessage(TestStatusObserver.Started)
 
@@ -775,7 +782,7 @@ class JdbcProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
-      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = -1)
+      val handler = new LifecycleHandler(handlerProbe.ref)
 
       val projection =
         JdbcProjection
@@ -783,11 +790,13 @@ class JdbcProjectionSpec
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = handler)
+            handler = () => handler)
 
       // not using ProjectionTestKit because want to test restarts
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
         // request all 'strings' (abc to pqr)
+
+        handlerProbe.expectMessage(handler.createdMessage)
 
         // the start happens inside runWithTestSink
         handlerProbe.expectMessage(handler.startMessage)
@@ -815,7 +824,20 @@ class JdbcProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
-      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+      @volatile var _handler: Option[LifecycleHandler] = None
+      val failOnceOnOffset = new AtomicInteger(4)
+      val handlerFactory = () => {
+        val newHandler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset)
+        _handler = Some(newHandler)
+        newHandler
+      }
+      def handler: LifecycleHandler = _handler match {
+        case Some(h) => h
+        case None =>
+          handlerProbe.awaitAssert {
+            _handler.get
+          }
+      }
 
       val statusProbe = createTestProbe[TestStatusObserver.Status]()
       val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
@@ -827,12 +849,14 @@ class JdbcProjectionSpec
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = handler)
+            handlerFactory)
           .withRestartBackoff(1.second, 2.seconds, 0.0)
           .withStatusObserver(statusObserver)
 
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.createdMessage)
 
       statusProbe.expectMessage(TestStatusObserver.Started)
 
@@ -851,8 +875,9 @@ class JdbcProjectionSpec
       // backoff will restart
       statusProbe.expectMessage(TestStatusObserver.Stopped)
       statusProbe.expectMessage(TestStatusObserver.Failed)
-      statusProbe.expectMessage(TestStatusObserver.Started)
+      handlerProbe.expectMessage(handler.createdMessage)
       handlerProbe.expectMessage(handler.startMessage)
+      statusProbe.expectMessage(TestStatusObserver.Started)
       handlerProbe.expectMessage("jkl")
       progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))
       handlerProbe.expectMessage("mno")
@@ -872,7 +897,8 @@ class JdbcProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
-      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset = 4)
+      val failOnceOnOffset = new AtomicInteger(4)
+      val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset)
 
       val projection =
         JdbcProjection
@@ -880,12 +906,13 @@ class JdbcProjectionSpec
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = handler)
+            handler = () => handler)
           .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
 
       // not using ProjectionTestKit because want to test restarts
       spawn(ProjectionBehavior(projection))
 
+      handlerProbe.expectMessage(handler.createdMessage)
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
       handlerProbe.expectMessage("def")

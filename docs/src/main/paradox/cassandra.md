@@ -136,7 +136,9 @@ Java
 
 It is important that the `Handler` instance is not shared between several `Projection` instances,
 because then it would be invoked concurrently, which is not how it is intended to be used. Each `Projection`
-instance should use a new `Handler` instance.  
+instance should use a new `Handler` instance. This is the reason why the handler parameter is a factory
+@scala[(`() =>`)]@java[(`Supplier`)] of the handler. A new handler instance is also created when the projection
+is restarted. 
 
 @@@
 

@@ -5,6 +5,7 @@
 package akka.projection.slick
 
 import scala.collection.immutable
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 
@@ -56,22 +57,23 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[Envelope])(implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
+      handler: () => SlickHandler[Envelope])(
+      implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
     val offsetStore = createOffsetStore(databaseConfig)
 
-    val adaptedSlickHandler =
+    val adaptedSlickHandler: () => Handler[Envelope] = () =>
       new Handler[Envelope] {
 
-        implicit val ec = system.executionContext
-
+        private implicit val ec: ExecutionContext = system.executionContext
         private val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
+        private val delegate = handler()
 
         import databaseConfig.profile.api._
         override def process(envelope: Envelope): Future[Done] = {
 
           val offset = sourceProvider.extractOffset(envelope)
-          val handlerAction = handler.process(envelope)
+          val handlerAction = delegate.process(envelope)
 
           sourceProvider match {
             case vsp: VerifiableSourceProvider[Offset, Envelope] =>
@@ -94,8 +96,8 @@ object SlickProjection {
             case _ => Future.successful(Done)
           }
         }
-        override def start(): Future[Done] = handler.start()
-        override def stop(): Future[Done] = handler.stop()
+        override def start(): Future[Done] = delegate.start()
+        override def stop(): Future[Done] = delegate.stop()
       }
 
     new SlickProjectionImpl(
@@ -126,20 +128,24 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[Envelope])(implicit system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
+      handler: () => SlickHandler[Envelope])(
+      implicit system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
 
     import databaseConfig.profile.api._
 
-    val adaptedSlickHandler = new Handler[Envelope] {
-      implicit val ec = system.executionContext
-      override def process(envelope: Envelope): Future[Done] = {
-        // user function in one transaction (may be composed of several DBIOAction)
-        val dbio = handler.process(envelope).map(_ => Done).transactionally
-        databaseConfig.db.run(dbio)
+    val adaptedSlickHandler: () => Handler[Envelope] = () =>
+      new Handler[Envelope] {
+        private implicit val ec: ExecutionContext = system.executionContext
+        private val delegate = handler()
+
+        override def process(envelope: Envelope): Future[Done] = {
+          // user function in one transaction (may be composed of several DBIOAction)
+          val dbio = delegate.process(envelope).map(_ => Done).transactionally
+          databaseConfig.db.run(dbio)
+        }
+        override def start(): Future[Done] = delegate.start()
+        override def stop(): Future[Done] = delegate.stop()
       }
-      override def start(): Future[Done] = handler.start()
-      override def stop(): Future[Done] = handler.stop()
-    }
 
     new SlickProjectionImpl(
       projectionId,
@@ -167,46 +173,47 @@ object SlickProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       databaseConfig: DatabaseConfig[P],
-      handler: SlickHandler[immutable.Seq[Envelope]])(
+      handler: () => SlickHandler[immutable.Seq[Envelope]])(
       implicit system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
     val offsetStore = createOffsetStore(databaseConfig)
 
-    val adaptedSlickHandler = new Handler[immutable.Seq[Envelope]] {
+    val adaptedSlickHandler: () => Handler[immutable.Seq[Envelope]] = () =>
+      new Handler[immutable.Seq[Envelope]] {
 
-      implicit val ec = system.executionContext
-      import databaseConfig.profile.api._
+        import databaseConfig.profile.api._
+        private implicit val ec: ExecutionContext = system.executionContext
+        private val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
+        private val delegate = handler()
 
-      val logger = Logging(system.classicSystem, classOf[SlickProjectionImpl[_, _, _]])
+        override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
 
-      override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
+          val lastOffset = sourceProvider.extractOffset(envelopes.last)
+          val handlerAction = delegate.process(envelopes)
 
-        val lastOffset = sourceProvider.extractOffset(envelopes.last)
-        val handlerAction = handler.process(envelopes)
-
-        sourceProvider match {
-          case vsp: VerifiableSourceProvider[Offset, Envelope] =>
-            vsp.verifyOffset(lastOffset) match {
-              case VerificationSuccess =>
-                // run user function and offset storage on the same transaction
-                // any side-effect in user function is at-least-once
-                val txDBIO =
-                  offsetStore.saveOffset(projectionId, lastOffset).flatMap(_ => handlerAction).transactionally
-                databaseConfig.db.run(txDBIO).mapTo[Done]
-              case VerificationFailure(reason) =>
-                logger.warning(
-                  "The offset failed source provider verification after the envelope was processed. " +
-                  "The transaction will not be executed. Skipping envelope(s) with reason: {}",
-                  reason)
-                Future.successful(Done)
-            }
-          case _ => Future.successful(Done)
+          sourceProvider match {
+            case vsp: VerifiableSourceProvider[Offset, Envelope] =>
+              vsp.verifyOffset(lastOffset) match {
+                case VerificationSuccess =>
+                  // run user function and offset storage on the same transaction
+                  // any side-effect in user function is at-least-once
+                  val txDBIO =
+                    offsetStore.saveOffset(projectionId, lastOffset).flatMap(_ => handlerAction).transactionally
+                  databaseConfig.db.run(txDBIO).mapTo[Done]
+                case VerificationFailure(reason) =>
+                  logger.warning(
+                    "The offset failed source provider verification after the envelope was processed. " +
+                    "The transaction will not be executed. Skipping envelope(s) with reason: {}",
+                    reason)
+                  Future.successful(Done)
+              }
+            case _ => Future.successful(Done)
+          }
         }
 
+        override def start(): Future[Done] = delegate.start()
+        override def stop(): Future[Done] = delegate.stop()
       }
-      override def start(): Future[Done] = handler.start()
-      override def stop(): Future[Done] = handler.stop()
-    }
 
     new SlickProjectionImpl(
       projectionId,

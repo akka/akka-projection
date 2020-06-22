@@ -80,7 +80,7 @@ class WordCountDocExampleSpec
           .atLeastOnce[Long, WordEnvelope](
             projectionId,
             sourceProvider = new WordSource,
-            handler = new WordCountHandler(projectionId, repository))
+            handler = () => new WordCountHandler(projectionId, repository))
       //#projection
 
       runAndAssert(projection)
@@ -96,7 +96,7 @@ class WordCountDocExampleSpec
           .atLeastOnce[Long, WordEnvelope](
             projectionId,
             sourceProvider = new WordSource,
-            handler = new WordCountHandler(projectionId, repository))
+            handler = () => new WordCountHandler(projectionId, repository))
 
       runAndAssert(projection)
     }
@@ -112,7 +112,7 @@ class WordCountDocExampleSpec
           .atLeastOnce[Long, WordEnvelope](
             projectionId,
             sourceProvider = new WordSource,
-            handler = new WordCountActorHandler(WordCountProcessor(projectionId, repository)))
+            handler = () => new WordCountActorHandler(WordCountProcessor(projectionId, repository)))
       //#actorHandlerProjection
 
       runAndAssert(projection)
@@ -123,11 +123,12 @@ class WordCountDocExampleSpec
 
       val projectionId = genRandomProjectionId()
 
-      val handler = new WordCountActorHandler(WordCountProcessor(projectionId, repository))
-
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, WordEnvelope](projectionId, new WordSource, handler)
+          .atLeastOnce[Long, WordEnvelope](
+            projectionId,
+            new WordSource,
+            () => new WordCountActorHandler(WordCountProcessor(projectionId, repository)))
 
       runAndAssert(projection)
     }

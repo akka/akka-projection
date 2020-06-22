@@ -30,7 +30,8 @@ object JdbcProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       sessionFactory: () => S,
-      handler: JdbcHandler[Envelope, S])(implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
+      handler: () => JdbcHandler[Envelope, S])(
+      implicit system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)
 

@@ -9,7 +9,6 @@ import java.util.concurrent.CompletionStage
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
-import akka.projection.internal.ActorHandlerInit
 
 /**
  * This [[Handler]] gives support for spawning an actor of a given `Behavior` to delegate
@@ -19,7 +18,7 @@ import akka.projection.internal.ActorHandlerInit
  * `Projection` is started and the `ActorRef` is passed in as a parameter to the `process` method.
  * The Actor is stopped when the `Projection` is stopped.
  */
-abstract class ActorHandler[Envelope, T](val behavior: Behavior[T]) extends Handler[Envelope] with ActorHandlerInit[T] {
+abstract class ActorHandler[Envelope, T](val behavior: Behavior[T]) extends Handler[Envelope] {
 
   /**
    * The `process` method is invoked for each `Envelope`.
@@ -33,9 +32,12 @@ abstract class ActorHandler[Envelope, T](val behavior: Behavior[T]) extends Hand
    * You will typically use the `AskPattern.ask` to delegate the processing of the `envelope` to
    * the actor and the returned `CompletionStage` corresponds to the reply of the `ask`.
    */
+  @throws(classOf[Exception])
   def process(actor: ActorRef[T], envelope: Envelope): CompletionStage[Done]
 
-  override final def process(envelope: Envelope): CompletionStage[Done] =
-    process(getActor(), envelope)
+  override final def process(envelope: Envelope): CompletionStage[Done] = {
+    // The other process method is called via ActorHandlerAdapter
+    throw new IllegalStateException("Unexpected call to process.")
+  }
 
 }

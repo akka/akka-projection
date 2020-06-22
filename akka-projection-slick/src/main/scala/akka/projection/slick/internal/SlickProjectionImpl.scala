@@ -19,6 +19,7 @@ import akka.projection.ProjectionOffsetManagement
 import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
@@ -27,7 +28,6 @@ import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.OffsetStrategy
-import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
@@ -47,7 +47,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     settingsOpt: Option[ProjectionSettings],
     restartBackoffOpt: Option[RestartBackoffSettings],
     val offsetStrategy: OffsetStrategy,
-    handlerStrategy: HandlerStrategy[Envelope],
+    handlerStrategy: HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
     offsetStore: SlickOffsetStore[P])
     extends ExactlyOnceProjection[Offset, Envelope]
@@ -61,7 +61,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
       restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
-      handlerStrategy: HandlerStrategy[Envelope] = this.handlerStrategy,
+      handlerStrategy: HandlerStrategy = this.handlerStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): SlickProjectionImpl[Offset, Envelope, P] =
     new SlickProjectionImpl(
       projectionId,
@@ -154,7 +154,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
-  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
     new SlickInternalProjectionState(settingsOrDefaults).mappedSource()
 
   /*

@@ -5,6 +5,7 @@
 package akka.projection.jdbc.javadsl
 
 import java.util.concurrent.CompletionStage
+import java.util.function.Supplier
 
 import scala.compat.java8.FutureConverters._
 
@@ -35,7 +36,7 @@ object JdbcProjection {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       sessionCreator: Creator[S],
-      handler: JdbcHandler[Envelope, S],
+      handler: Supplier[JdbcHandler[Envelope, S]],
       system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
     val sessionFactory = () => sessionCreator.create()
@@ -47,7 +48,7 @@ object JdbcProjection {
         projectionId,
         javaSourceProvider,
         sessionFactory,
-        new JdbcHandlerAdapter(handler),
+        () => new JdbcHandlerAdapter(handler.get()),
         offsetStore)
 
     new JdbcProjectionImpl(

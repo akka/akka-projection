@@ -11,6 +11,7 @@ import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.Success
+import scala.util.Try
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -19,14 +20,16 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.MergeableKey
+import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
-import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
-import akka.projection.RunningProjection
+import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.MergeableOffsetSourceProvider
+import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.stream.KillSwitches
@@ -42,7 +45,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     offsetStrategy: OffsetStrategy,
-    handlerStrategy: HandlerStrategy[Envelope],
+    handlerStrategy: HandlerStrategy,
     statusObserver: StatusObserver[Envelope],
     settings: ProjectionSettings) {
 
@@ -69,14 +72,16 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   /**
    * A convenience method to serialize asynchronous operations to occur one after another is complete
    */
-  private def serialize(batches: Map[String, Seq[ProjectionContext]])(
-      op: (String, Seq[ProjectionContext]) => Future[Done]): Future[Done] = {
+  private def serialize(batches: Map[String, immutable.Seq[ProjectionContextImpl[Offset, Envelope]]])(
+      op: (String, immutable.Seq[ProjectionContextImpl[Offset, Envelope]]) => Future[Done]): Future[Done] = {
 
     val logProgressEvery: Int = 5
     val size = batches.size
     logger.debug("Processing [{}] partitioned batches serially", size)
 
-    def loop(remaining: List[(String, Seq[ProjectionContext])], n: Int): Future[Done] = {
+    def loop(
+        remaining: List[(String, immutable.Seq[ProjectionContextImpl[Offset, Envelope]])],
+        n: Int): Future[Done] = {
       remaining match {
         case Nil => Future.successful(Done)
         case (key, batch) :: tail =>
@@ -110,7 +115,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     val atLeastOnceHandlerFlow
         : Flow[ProjectionContextImpl[Offset, Envelope], ProjectionContextImpl[Offset, Envelope], NotUsed] =
       handlerStrategy match {
-        case SingleHandlerStrategy(handler) =>
+        case single: SingleHandlerStrategy[Envelope] =>
+          val handler = single.handler()
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
@@ -128,6 +134,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         case grouped: GroupedHandlerStrategy[Envelope] =>
           val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
           val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
+          val handler = grouped.handler()
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
@@ -144,7 +151,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   first.offset,
                   last.offset,
                   abort.future,
-                  () => grouped.handler.process(envelopes))
+                  () => handler.process(envelopes))
                 .map(_ => last)
             }
 
@@ -198,13 +205,22 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       }
 
       sourceProvider match {
-        case msp: MergeableOffsetSourceProvider[Offset, Envelope] =>
-          val batches = msp.groupByKey(envelopesAndOffsets)
+        case _: MergeableOffsetSourceProvider[_, Offset, Envelope] =>
+          val batches = envelopesAndOffsets
+            .asInstanceOf[immutable.Seq[ProjectionContextImpl[MergeableOffset[MergeableKey, _], Envelope]]]
+            .flatMap { context => context.offset.entries.toSeq.map { case (key, _) => (key, context) } }
+            .groupBy { case (key, _) => key }
+            .map {
+              case (key, keyAndContexts) =>
+                val envs = keyAndContexts.map { case (_, context) => context }
+                key.surrogateKey -> envs
+            }
+            .asInstanceOf[Map[String, immutable.Seq[ProjectionContextImpl[Offset, Envelope]]]]
 
           // process batches in sequence, but not concurrently, in order to provide singled threaded guarantees
           // to the user envelope handler
           serialize(batches) {
-            case (surrogateKey, partitionedEnvelopes: Seq[ProjectionContextImpl[Offset, Envelope]]) =>
+            case (surrogateKey, partitionedEnvelopes) =>
               logger.debug("Processing grouped envelopes for MergeableOffset with key [{}]", surrogateKey)
               processEnvelopes(partitionedEnvelopes)
           }
@@ -214,7 +230,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     }
 
     handlerStrategy match {
-      case SingleHandlerStrategy(handler) =>
+      case single: SingleHandlerStrategy[Envelope] =>
+        val handler = single.handler()
         source
           .mapAsync(1) { context =>
             logger.warning(" Processing {}", context.envelope)
@@ -234,13 +251,14 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       case grouped: GroupedHandlerStrategy[Envelope] =>
         val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
         val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
+        val handler = grouped.handler()
 
         source
           .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
           .filterNot(_.isEmpty)
           .mapAsync(parallelism = 1) { group =>
             val last = group.last
-            reportProgress(processGrouped(grouped.handler, handlerRecovery, group), last.envelope)
+            reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope)
           }
 
       case _: FlowHandlerStrategy[_] =>
@@ -257,7 +275,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver)
 
     handlerStrategy match {
-      case SingleHandlerStrategy(handler) =>
+      case single: SingleHandlerStrategy[Envelope] =>
+        val handler = single.handler()
         source
           .mapAsync(parallelism = 1) { context =>
             val processed =
@@ -280,16 +299,21 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
 
   }
 
-  def mappedSource(): Source[Done, _] = {
+  def mappedSource(): Source[Done, Future[Done]] = {
 
+    val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
 
     val source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed] =
       Source
         .futureSource(
-          handlerStrategy.lifecycle
+          handlerLifecycle
             .tryStart()
-            .flatMap(_ => sourceProvider.source(() => readOffsets())))
+            .flatMap { _ =>
+              sourceProvider
+                .source(() => readOffsets())
+                .map(_.mapMaterializedValue(_ => NotUsed))
+            })
         .via(killSwitch.flow)
         .map(env => ProjectionContextImpl(sourceProvider.extractOffset(env), env))
         .filter { context =>
@@ -325,7 +349,32 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           atMostOnceProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
       }
 
-    RunningProjection.stopHandlerOnTermination(composedSource, projectionId, handlerStrategy.lifecycle, statusObserver)
+    stopHandlerOnTermination(composedSource, handlerLifecycle)
 
+  }
+
+  /**
+   * Adds a `watchTermination` on the passed Source that will call the `stopHandler` on completion.
+   *
+   * The stopHandler function is called on success or failure. In case of failure, the original failure is preserved.
+   */
+  private def stopHandlerOnTermination(
+      src: Source[Done, NotUsed],
+      handlerLifecycle: HandlerLifecycle): Source[Done, Future[Done]] = {
+    src
+      .watchTermination() { (_, futDone) =>
+        handlerStrategy.recreateHandlerOnNextAccess()
+        futDone
+          .andThen { case _ => handlerLifecycle.tryStop() }
+          .andThen {
+            case Success(_) =>
+              statusObserver.stopped(projectionId)
+            case Failure(AbortProjectionException) =>
+              statusObserver.stopped(projectionId) // no restart
+            case Failure(exc) =>
+              Try(statusObserver.stopped(projectionId))
+              statusObserver.failed(projectionId, exc)
+          }
+      }
   }
 }

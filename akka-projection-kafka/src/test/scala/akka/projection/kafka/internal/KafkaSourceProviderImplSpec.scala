@@ -9,6 +9,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
@@ -22,7 +23,6 @@ import akka.projection.RunningProjection
 import akka.projection.StatusObserver
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
-import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.kafka.GroupOffsets
@@ -168,23 +168,29 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
-      def mappedSource(): Source[Done, _] = {
-        val futSource = sourceProvider.source(() => Future.successful(Option(groupOffsets)))
+      def mappedSource(): Source[Done, Future[Done]] = {
+
+        val futSource =
+          sourceProvider
+            .source(() => Future.successful(Option(groupOffsets)))
+            .map(_.mapMaterializedValue(_ => NotUsed))
+
         Source
           .futureSource(futSource)
           .map(env => (sourceProvider.extractOffset(env), env))
           .filter {
-            case (offset, _) =>
+            case ((offset: GroupOffsets, _)) =>
               sourceProvider.verifyOffset(offset) match {
                 case VerificationSuccess    => true
                 case VerificationFailure(_) => false
               }
           }
           .map {
-            case (_, record) =>
+            case (_, record: ConsumerRecord[String, String]) =>
               Await.result(processedQueue.offer(record), 10.millis)
               Done
           }
+          .mapMaterializedValue(_ => Future.successful(Done))
       }
 
       def newRunningInstance(): RunningProjection =

@@ -19,7 +19,6 @@ import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
@@ -28,6 +27,7 @@ import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.StringKey
 import akka.projection.kafka.GroupOffsets
+import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
 import com.typesafe.config.ConfigFactory
@@ -150,13 +150,14 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
           projectionId,
           sourceProvider = kafkaSourceProvider,
           dbConfig,
-          SlickHandler[ConsumerRecord[String, String]] { envelope =>
-            val userId = envelope.key()
-            val eventType = envelope.value()
-            val userEvent = UserEvent(userId, eventType)
-            // do something with the record, payload in record.value
-            repository.incrementCount(projectionId, userEvent.eventType)
-          })
+          () =>
+            SlickHandler[ConsumerRecord[String, String]] { envelope =>
+              val userId = envelope.key()
+              val eventType = envelope.value()
+              val userEvent = UserEvent(userId, eventType)
+              // do something with the record, payload in record.value
+              repository.incrementCount(projectionId, userEvent.eventType)
+            })
 
       projectionTestKit.run(slickProjection, remainingOrDefault) {
         assertEventTypeCount(projectionId)
@@ -190,13 +191,14 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
             projectionId,
             sourceProvider = kafkaSourceProvider,
             dbConfig,
-            (envelope: ConsumerRecord[String, String]) => {
-              val userId = envelope.key()
-              val eventType = envelope.value()
-              val userEvent = UserEvent(userId, eventType)
-              // do something with the record, payload in record.value
-              failingRepository.incrementCount(projectionId, userEvent.eventType)
-            })
+            () =>
+              SlickHandler[ConsumerRecord[String, String]] { envelope =>
+                val userId = envelope.key()
+                val eventType = envelope.value()
+                val userEvent = UserEvent(userId, eventType)
+                // do something with the record, payload in record.value
+                failingRepository.incrementCount(projectionId, userEvent.eventType)
+              })
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis))
 
       projectionTestKit.run(slickProjection, remainingOrDefault) {

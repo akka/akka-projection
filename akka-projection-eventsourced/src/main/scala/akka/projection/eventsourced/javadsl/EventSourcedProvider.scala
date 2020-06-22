@@ -8,9 +8,9 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
+import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.jdk.FutureConverters._
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -48,12 +48,12 @@ object EventSourcedProvider {
 
     override def source(
         offsetAsync: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[Source[EventEnvelope[Event], _]] = {
-      val source: Future[Source[EventEnvelope[Event], _]] = offsetAsync.get().asScala.map { offsetOpt =>
+      val source: Future[Source[EventEnvelope[Event], _]] = offsetAsync.get().toScala.map { offsetOpt =>
         eventsByTagQuery
           .eventsByTag(tag, offsetOpt.orElse(NoOffset))
           .map(env => EventEnvelope(env))
       }
-      source.asJava
+      source.toJava
     }
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset

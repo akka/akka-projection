@@ -9,11 +9,14 @@ import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
 
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 
 import akka.Done
 import akka.annotation.InternalApi
+import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.projection.internal.OffsetSerialization.fromStorageRepresentation
 import akka.projection.internal.OffsetSerialization.toStorageRepresentation
@@ -61,16 +64,31 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
       tryWithResource(conn.prepareStatement(settings.dialect.readOffsetQuery)) { stmt =>
 
         stmt.setString(1, projectionId.name)
-        stmt.setString(2, projectionId.key)
 
         // init ResultSet in try-with-resource
         tryWithResource(stmt.executeQuery()) { resultSet =>
-          // FIXME: need to iterate over all results to build MultipleOffsets
-          if (resultSet.first()) {
+
+          val buffer = ListBuffer.empty[SingleOffset]
+
+          while (resultSet.next()) {
             val offsetStr = resultSet.getString("OFFSET")
             val manifest = resultSet.getString("MANIFEST")
-            Some(fromStorageRepresentation(offsetStr, manifest))
-          } else None
+            val mergeable = resultSet.getBoolean("MERGEABLE")
+            val key = resultSet.getString("PROJECTION_KEY")
+
+            val adaptedProjectionId = ProjectionId(projectionId.name, key)
+            val single = SingleOffset(adaptedProjectionId, manifest, offsetStr, mergeable)
+            buffer.append(single)
+          }
+
+          if (buffer.isEmpty) None
+          else if (buffer.forall(_.mergeable)) {
+            Some(
+              fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(buffer.toList))
+                .asInstanceOf[Offset])
+          } else {
+            buffer.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
+          }
         }
       }
     }
@@ -91,22 +109,25 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
 
     tryWithResource(conn.prepareStatement(settings.dialect.insertOrUpdateStatement)) { stmt =>
 
-      toStorageRepresentation(projectionId, offset) match {
-        case SingleOffset(id, manifest, offsetStr, mergeable) =>
-          stmt.setString(InsertIndices.PROJECTION_NAME, id.name)
-          stmt.setString(InsertIndices.PROJECTION_KEY, id.key)
-          stmt.setString(InsertIndices.OFFSET, offsetStr)
-          stmt.setString(InsertIndices.MANIFEST, manifest)
-          stmt.setBoolean(InsertIndices.MERGEABLE, mergeable)
-          val now: Instant = Instant.now(clock)
-          stmt.setTimestamp(InsertIndices.LAST_UPDATED, new Timestamp(now.toEpochMilli))
+      val now = new Timestamp(Instant.now(clock).toEpochMilli)
 
-        case _ =>
-          // FIXME: add support for MultipleOffsets
-          throw new IllegalArgumentException("The JdbcOffsetStore does not currently support MergeableOffset")
+      def newRow(singleOffset: SingleOffset) = {
+        stmt.setString(InsertIndices.PROJECTION_NAME, singleOffset.id.name)
+        stmt.setString(InsertIndices.PROJECTION_KEY, singleOffset.id.key)
+        stmt.setString(InsertIndices.OFFSET, singleOffset.offsetStr)
+        stmt.setString(InsertIndices.MANIFEST, singleOffset.manifest)
+        stmt.setBoolean(InsertIndices.MERGEABLE, singleOffset.mergeable)
+        stmt.setTimestamp(InsertIndices.LAST_UPDATED, now)
+        stmt.addBatch()
       }
 
-      stmt.executeUpdate()
+      toStorageRepresentation(projectionId, offset) match {
+        case single: SingleOffset  => newRow(single)
+        case MultipleOffsets(many) => many.foreach(newRow)
+      }
+
+      stmt.executeBatch()
+
       Done
     }
   }
