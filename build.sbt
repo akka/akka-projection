@@ -115,10 +115,16 @@ lazy val root = Project(id = "akka-projection", base = file("."))
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {
+  javafmtCheckAll.all(ScopeFilter(inAnyProject)).result.value.toEither.left.foreach { _ =>
+    throw new MessageOnlyException(
+      "Unformatted Java code found. Please run 'javafmtAll' and commit the reformatted code")
+  }
+
   scalafmtCheckAll.all(ScopeFilter(inAnyProject)).result.value.toEither.left.foreach { _ =>
     throw new MessageOnlyException(
       "Unformatted Scala code found. Please run 'scalafmtAll' and commit the reformatted code")
   }
+
   (Compile / scalafmtSbtCheck).result.value.toEither.left.foreach { _ =>
     throw new MessageOnlyException(
       "Unformatted sbt code found. Please run 'scalafmtSbt' and commit the reformatted code")

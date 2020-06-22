@@ -36,24 +36,25 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-//#imports
+// #imports
 import akka.kafka.ConsumerSettings;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
-//#imports
+// #imports
 
 import static jdocs.jpa.HibernateSessionProvider.HibernateJdbcSession;
 
 public interface KafkaDocExample {
 
-  //#todo
+  // #todo
   // TODO
-  //#todo
+  // #todo
 
-  //#handler
-  public class WordCountHandler extends JdbcHandler<ConsumerRecord<String, String>, HibernateJdbcSession> {
+  // #handler
+  public class WordCountHandler
+      extends JdbcHandler<ConsumerRecord<String, String>, HibernateJdbcSession> {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final ProjectionId projectionId;
 
@@ -78,9 +79,9 @@ public interface KafkaDocExample {
       state.put(word, newCount);
     }
   }
-  //#handler
+  // #handler
 
-  //#wordSource
+  // #wordSource
   public class WordEnvelope {
     public final Long offset;
     public final String word;
@@ -93,28 +94,36 @@ public interface KafkaDocExample {
 
   class WordSource extends SourceProvider<Long, WordEnvelope> {
 
-    private final Source<WordEnvelope, NotUsed> src = Source.from(
-        Arrays.asList(new WordEnvelope(1L, "abc"), new WordEnvelope(2L, "def"), new WordEnvelope(3L, "ghi"), new WordEnvelope(4L, "abc")));
+    private final Source<WordEnvelope, NotUsed> src =
+        Source.from(
+            Arrays.asList(
+                new WordEnvelope(1L, "abc"),
+                new WordEnvelope(2L, "def"),
+                new WordEnvelope(3L, "ghi"),
+                new WordEnvelope(4L, "abc")));
 
     @Override
-    public CompletionStage<Source<WordEnvelope, ?>> source(Supplier<CompletionStage<Optional<Long>>> offset) {
-      return offset.get().thenApply(o -> {
-        if (o.isPresent())
-          return src.dropWhile(envelope -> envelope.offset <= o.get()).throttle(1, Duration.ofSeconds(1));
-        else
-          return src.throttle(1, Duration.ofSeconds(1));
-      });
+    public CompletionStage<Source<WordEnvelope, ?>> source(
+        Supplier<CompletionStage<Optional<Long>>> offset) {
+      return offset
+          .get()
+          .thenApply(
+              o -> {
+                if (o.isPresent())
+                  return src.dropWhile(envelope -> envelope.offset <= o.get())
+                      .throttle(1, Duration.ofSeconds(1));
+                else return src.throttle(1, Duration.ofSeconds(1));
+              });
     }
 
     @Override
     public Long extractOffset(WordEnvelope envelope) {
       return envelope.offset;
     }
-
   }
-  //#wordSource
+  // #wordSource
 
-  //#wordPublisher
+  // #wordPublisher
   class WordPublisher extends JdbcHandler<WordEnvelope, HibernateJdbcSession> {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final String topic;
@@ -133,20 +142,26 @@ public interface KafkaDocExample {
       String key = word;
       ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, key, word);
       CompletionStage<RecordMetadata> result = sendProducer.send(producerRecord);
-      CompletionStage<Done> done = result.thenApply(recordMetadata -> {
-        logger.info("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition());
-        return Done.getInstance();
-      });
+      CompletionStage<Done> done =
+          result.thenApply(
+              recordMetadata -> {
+                logger.info(
+                    "Published word [{}] to topic/partition {}/{}",
+                    word,
+                    topic,
+                    recordMetadata.partition());
+                return Done.getInstance();
+              });
       // FIXME support for async Handler, issue #23
       done.toCompletableFuture().get(5, TimeUnit.SECONDS);
     }
   }
-  //#wordPublisher
+  // #wordPublisher
 
   static SourceProvider<GroupOffsets, ConsumerRecord<String, String>> illustrateSourceProvider() {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 
-    //#sourceProvider
+    // #sourceProvider
     String bootstrapServers = "localhost:9092";
     String groupId = "group-wordcount";
     String topicName = "words";
@@ -158,16 +173,17 @@ public interface KafkaDocExample {
 
     SourceProvider<GroupOffsets, ConsumerRecord<String, String>> sourceProvider =
         KafkaSourceProvider.create(system, consumerSettings, Collections.singleton(topicName));
-    //#sourceProvider
+    // #sourceProvider
 
     return sourceProvider;
   }
 
   static void illustrateExactlyOnce() {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
-    SourceProvider<GroupOffsets, ConsumerRecord<String, String>> sourceProvider = illustrateSourceProvider();
+    SourceProvider<GroupOffsets, ConsumerRecord<String, String>> sourceProvider =
+        illustrateSourceProvider();
 
-    //#exactlyOnce
+    // #exactlyOnce
     final HibernateSessionProvider sessionProvider = new HibernateSessionProvider();
 
     ProjectionId projectionId = ProjectionId.of("WordCount", "wordcount-1");
@@ -178,39 +194,37 @@ public interface KafkaDocExample {
             sessionProvider::newInstance,
             () -> new WordCountHandler(projectionId),
             system);
-    //#exactlyOnce
+    // #exactlyOnce
   }
 
   static void IllustrateSendingToKafka() {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 
-    //#sendProducer
+    // #sendProducer
     String bootstrapServers = "localhost:9092";
     String topicName = "words";
     ProducerSettings<String, String> producerSettings =
         ProducerSettings.create(system, new StringSerializer(), new StringSerializer())
             .withBootstrapServers(bootstrapServers);
     // FIXME classicSystem might not be needed in later Alpakka Kafka version?
-    SendProducer<String, String> sendProducer = new SendProducer<>(producerSettings, system.classicSystem());
-    //#sendProducer
+    SendProducer<String, String> sendProducer =
+        new SendProducer<>(producerSettings, system.classicSystem());
+    // #sendProducer
 
-    //#sendToKafkaProjection
+    // #sendToKafkaProjection
     WordSource sourceProvider = new WordSource();
     HibernateSessionProvider sessionProvider = new HibernateSessionProvider();
 
     ProjectionId projectionId = ProjectionId.of("PublishWords", "words");
     Projection<WordEnvelope> projection =
-        JdbcProjection
-            .exactlyOnce(
-                projectionId,
-                sourceProvider,
-                sessionProvider::newInstance,
-                () -> new WordPublisher(topicName, sendProducer),
-                system);
-    //#sendToKafkaProjection
+        JdbcProjection.exactlyOnce(
+            projectionId,
+            sourceProvider,
+            sessionProvider::newInstance,
+            () -> new WordPublisher(topicName, sendProducer),
+            system);
+    // #sendToKafkaProjection
 
     // FIXME change above to atLeastOnce
   }
-
-
 }

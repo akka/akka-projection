@@ -4,7 +4,7 @@
 
 package jdocs.cassandra;
 
-//#StatefulHandler-imports
+// #StatefulHandler-imports
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.AskPattern;
@@ -12,9 +12,9 @@ import akka.actor.typed.javadsl.StashBuffer;
 import akka.projection.javadsl.ActorHandler;
 import akka.projection.javadsl.StatefulHandler;
 
-//#StatefulHandler-imports
+// #StatefulHandler-imports
 
-//#ActorHandler-imports
+// #ActorHandler-imports
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.AbstractBehavior;
@@ -22,7 +22,7 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 
-//#ActorHandler-imports
+// #ActorHandler-imports
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -45,11 +45,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public interface WordCountDocExample {
-  //#todo
+  // #todo
   // TDOO
-  //#todo
+  // #todo
 
-  //#envelope
+  // #envelope
   public class WordEnvelope {
     public final Long offset;
     public final String word;
@@ -60,9 +60,9 @@ public interface WordCountDocExample {
     }
   }
 
-  //#envelope
+  // #envelope
 
-  //#repository
+  // #repository
   public interface WordCountRepository {
     CompletionStage<Integer> load(String id, String word);
 
@@ -70,7 +70,7 @@ public interface WordCountDocExample {
 
     CompletionStage<Done> save(String id, String word, int count);
   }
-  //#repository
+  // #repository
 
   public class CassandraWordCountRepository implements WordCountRepository {
     private final CassandraSession session;
@@ -85,78 +85,87 @@ public interface WordCountDocExample {
 
     @Override
     public CompletionStage<Integer> load(String id, String word) {
-      return session.selectOne("SELECT count FROM " + keyspaceTable + " WHERE id = ? and word = ?", id, word)
-          .thenApply(maybeRow -> {
-            if (maybeRow.isPresent())
-              return maybeRow.get().getInt("count");
-            else
-              return 0;
-          });
+      return session
+          .selectOne("SELECT count FROM " + keyspaceTable + " WHERE id = ? and word = ?", id, word)
+          .thenApply(
+              maybeRow -> {
+                if (maybeRow.isPresent()) return maybeRow.get().getInt("count");
+                else return 0;
+              });
     }
 
     @Override
     public CompletionStage<Map<String, Integer>> loadAll(String id) {
-      return session.selectAll("SELECT word, count FROM " + keyspaceTable + " WHERE id = ?", id)
-          .thenApply(rows -> {
-            return rows
-                .stream()
-                .collect(Collectors.toMap(row -> row.getString("word"), row -> row.getInt("count")));
-          });
+      return session
+          .selectAll("SELECT word, count FROM " + keyspaceTable + " WHERE id = ?", id)
+          .thenApply(
+              rows -> {
+                return rows.stream()
+                    .collect(
+                        Collectors.toMap(row -> row.getString("word"), row -> row.getInt("count")));
+              });
     }
 
     @Override
     public CompletionStage<Done> save(String id, String word, int count) {
       return session.executeWrite(
-          "INSERT INTO " + keyspaceTable + " (id, word, count) VALUES (?, ?, ?)",
-          id,
-          word,
-          count);
+          "INSERT INTO " + keyspaceTable + " (id, word, count) VALUES (?, ?, ?)", id, word, count);
     }
 
     public CompletionStage<Done> createKeyspaceAndTable() {
       return session
           .executeDDL(
-              "CREATE KEYSPACE IF NOT EXISTS " + keyspace + " WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 }")
-          .thenCompose(done ->
-              session.executeDDL(
-                  "CREATE TABLE IF NOT EXISTS " + keyspaceTable + " (\n" +
-                      "  id text, \n" +
-                      "  word text, \n" +
-                      "  count int, \n" +
-                      "  PRIMARY KEY (id, word)) \n"));
+              "CREATE KEYSPACE IF NOT EXISTS "
+                  + keyspace
+                  + " WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 }")
+          .thenCompose(
+              done ->
+                  session.executeDDL(
+                      "CREATE TABLE IF NOT EXISTS "
+                          + keyspaceTable
+                          + " (\n"
+                          + "  id text, \n"
+                          + "  word text, \n"
+                          + "  count int, \n"
+                          + "  PRIMARY KEY (id, word)) \n"));
     }
   }
 
-  //#sourceProvider
+  // #sourceProvider
   class WordSource extends SourceProvider<Long, WordEnvelope> {
 
-    private final Source<WordEnvelope, NotUsed> src = Source.from(
-        Arrays.asList(new WordEnvelope(1L, "abc"), new WordEnvelope(2L, "def"), new WordEnvelope(3L, "ghi"), new WordEnvelope(4L, "abc")));
+    private final Source<WordEnvelope, NotUsed> src =
+        Source.from(
+            Arrays.asList(
+                new WordEnvelope(1L, "abc"),
+                new WordEnvelope(2L, "def"),
+                new WordEnvelope(3L, "ghi"),
+                new WordEnvelope(4L, "abc")));
 
     @Override
-    public CompletionStage<Source<WordEnvelope, ?>> source(Supplier<CompletionStage<Optional<Long>>> offset) {
-      return offset.get().thenApply(o -> {
-        if (o.isPresent())
-          return src.dropWhile(envelope -> envelope.offset <= o.get());
-        else
-          return src;
-      });
+    public CompletionStage<Source<WordEnvelope, ?>> source(
+        Supplier<CompletionStage<Optional<Long>>> offset) {
+      return offset
+          .get()
+          .thenApply(
+              o -> {
+                if (o.isPresent()) return src.dropWhile(envelope -> envelope.offset <= o.get());
+                else return src;
+              });
     }
 
     @Override
     public Long extractOffset(WordEnvelope envelope) {
       return envelope.offset;
     }
-
   }
-  //#sourceProvider
+  // #sourceProvider
 
   interface IllustrateVariables {
-    //#mutableState
+    // #mutableState
     public class WordCountHandler extends Handler<WordEnvelope> {
       private final Logger logger = LoggerFactory.getLogger(getClass());
       private final Map<String, Integer> state = new HashMap<>();
-
 
       @Override
       public CompletionStage<Done> process(WordEnvelope envelope) {
@@ -167,11 +176,11 @@ public interface WordCountDocExample {
         return CompletableFuture.completedFuture(Done.getInstance());
       }
     }
-    //#mutableState
+    // #mutableState
   }
 
   interface IllustrateStatefulHandlerLoadingInitialState {
-    //#loadingInitialState
+    // #loadingInitialState
     public class WordCountHandler extends StatefulHandler<Map<String, Integer>, WordEnvelope> {
       private final ProjectionId projectionId;
       private final WordCountRepository repository;
@@ -187,25 +196,27 @@ public interface WordCountDocExample {
       }
 
       @Override
-      public CompletionStage<Map<String, Integer>> process(Map<String, Integer> state, WordEnvelope envelope) {
+      public CompletionStage<Map<String, Integer>> process(
+          Map<String, Integer> state, WordEnvelope envelope) {
         String word = envelope.word;
         int newCount = state.getOrDefault(word, 0) + 1;
         CompletionStage<Map<String, Integer>> newState =
             repository
                 .save(projectionId.id(), word, newCount)
-                .thenApply(done -> {
-                  state.put(word, newCount);
-                  return state;
-                });
+                .thenApply(
+                    done -> {
+                      state.put(word, newCount);
+                      return state;
+                    });
 
         return newState;
       }
     }
-    //#loadingInitialState
+    // #loadingInitialState
   }
 
   interface IllustrateStatefulHandlerLoadingStateOnDemand {
-    //#loadingOnDemand
+    // #loadingOnDemand
     public class WordCountHandler extends StatefulHandler<Map<String, Integer>, WordEnvelope> {
       private final ProjectionId projectionId;
       private final WordCountRepository repository;
@@ -221,33 +232,36 @@ public interface WordCountDocExample {
       }
 
       @Override
-      public CompletionStage<Map<String, Integer>> process(Map<String, Integer> state, WordEnvelope envelope) {
+      public CompletionStage<Map<String, Integer>> process(
+          Map<String, Integer> state, WordEnvelope envelope) {
         String word = envelope.word;
 
         CompletionStage<Integer> currentCount;
         if (state.containsKey(word))
           currentCount = CompletableFuture.completedFuture(state.get(word));
-        else
-          currentCount = repository.load(projectionId.id(), word);
+        else currentCount = repository.load(projectionId.id(), word);
 
         CompletionStage<Map<String, Integer>> newState =
-            currentCount.thenCompose(n -> {
-              return repository.save(projectionId.id(), word, n + 1)
-                  .thenApply(done -> {
-                    state.put(word, n + 1);
-                    return state;
-                  });
-            });
+            currentCount.thenCompose(
+                n -> {
+                  return repository
+                      .save(projectionId.id(), word, n + 1)
+                      .thenApply(
+                          done -> {
+                            state.put(word, n + 1);
+                            return state;
+                          });
+                });
 
         return newState;
       }
     }
-    //#loadingOnDemand
+    // #loadingOnDemand
   }
 
   interface IllstrateActorLoadingInitialState {
 
-    //#actorHandler
+    // #actorHandler
     class WordCountActorHandler extends ActorHandler<WordEnvelope, WordCountProcessor.Command> {
       private final ActorSystem<?> system;
       private final Duration askTimeout = Duration.ofSeconds(5);
@@ -258,13 +272,18 @@ public interface WordCountDocExample {
       }
 
       @Override
-      public CompletionStage<Done> process(ActorRef<WordCountProcessor.Command> actor, WordEnvelope envelope) {
+      public CompletionStage<Done> process(
+          ActorRef<WordCountProcessor.Command> actor, WordEnvelope envelope) {
         CompletionStage<WordCountProcessor.Result> result =
-            AskPattern.ask(actor, (ActorRef<WordCountProcessor.Result> replyTo) -> new WordCountProcessor.Handle(envelope, replyTo),
-                askTimeout, system.scheduler());
+            AskPattern.ask(
+                actor,
+                (ActorRef<WordCountProcessor.Result> replyTo) ->
+                    new WordCountProcessor.Handle(envelope, replyTo),
+                askTimeout,
+                system.scheduler());
 
-        return result
-            .thenCompose(r -> {
+        return result.thenCompose(
+            r -> {
               if (r.error.isPresent()) {
                 CompletableFuture<Done> err = new CompletableFuture<>();
                 err.completeExceptionally(r.error.get());
@@ -275,12 +294,11 @@ public interface WordCountDocExample {
             });
       }
     }
-    //#actorHandler
+    // #actorHandler
 
-    //#behaviorLoadingInitialState
+    // #behaviorLoadingInitialState
     public class WordCountProcessor {
-      public interface Command {
-      }
+      public interface Command {}
 
       public static class Handle implements Command {
         public final WordEnvelope envelope;
@@ -320,11 +338,15 @@ public interface WordCountDocExample {
         }
       }
 
-      public static Behavior<Command> create(ProjectionId projectionId, WordCountRepository repository) {
+      public static Behavior<Command> create(
+          ProjectionId projectionId, WordCountRepository repository) {
         return Behaviors.supervise(
-            Behaviors.setup((ActorContext<Command> context) ->
-                new WordCountProcessor(projectionId, repository).init(context)))
-            .onFailure(SupervisorStrategy.restartWithBackoff(Duration.ofSeconds(1), Duration.ofSeconds(10), 0.1));
+                Behaviors.setup(
+                    (ActorContext<Command> context) ->
+                        new WordCountProcessor(projectionId, repository).init(context)))
+            .onFailure(
+                SupervisorStrategy.restartWithBackoff(
+                    Duration.ofSeconds(1), Duration.ofSeconds(10), 0.1));
       }
 
       private final ProjectionId projectionId;
@@ -336,9 +358,7 @@ public interface WordCountDocExample {
       }
 
       Behavior<Command> init(ActorContext<Command> context) {
-        return Behaviors.withStash(10, buffer ->
-            new Initializing(context, buffer)
-        );
+        return Behaviors.withStash(10, buffer -> new Initializing(context, buffer));
       }
 
       private class Initializing extends AbstractBehavior<Command> {
@@ -348,10 +368,13 @@ public interface WordCountDocExample {
           super(context);
           this.buffer = buffer;
 
-          getContext().pipeToSelf(repository.loadAll(projectionId.id()), (value, exc) -> {
-            if (value != null) return new InitialState(value);
-            else throw new RuntimeException("Load failed.", exc);
-          });
+          getContext()
+              .pipeToSelf(
+                  repository.loadAll(projectionId.id()),
+                  (value, exc) -> {
+                    if (value != null) return new InitialState(value);
+                    else throw new RuntimeException("Load failed.", exc);
+                  });
         }
 
         @Override
@@ -393,10 +416,12 @@ public interface WordCountDocExample {
         private Behavior<Command> onHandle(Handle command) {
           String word = command.envelope.word;
           int newCount = state.getOrDefault(word, 0) + 1;
-          getContext().pipeToSelf(repository.save(projectionId.id(), word, newCount), (done, exc) ->
-              // will reply from SaveCompleted
-              new SaveCompleted(word, Optional.ofNullable(exc), command.replyTo)
-          );
+          getContext()
+              .pipeToSelf(
+                  repository.save(projectionId.id(), word, newCount),
+                  (done, exc) ->
+                      // will reply from SaveCompleted
+                      new SaveCompleted(word, Optional.ofNullable(exc), command.replyTo));
           return this;
         }
 
@@ -414,7 +439,7 @@ public interface WordCountDocExample {
         }
       }
     }
-    //#behaviorLoadingInitialState
+    // #behaviorLoadingInitialState
 
   }
 
@@ -430,13 +455,18 @@ public interface WordCountDocExample {
       }
 
       @Override
-      public CompletionStage<Done> process(ActorRef<WordCountProcessor.Command> actor, WordEnvelope envelope) {
+      public CompletionStage<Done> process(
+          ActorRef<WordCountProcessor.Command> actor, WordEnvelope envelope) {
         CompletionStage<WordCountProcessor.Result> result =
-            AskPattern.ask(actor, (ActorRef<WordCountProcessor.Result> replyTo) -> new WordCountProcessor.Handle(envelope, replyTo),
-                askTimeout, system.scheduler());
+            AskPattern.ask(
+                actor,
+                (ActorRef<WordCountProcessor.Result> replyTo) ->
+                    new WordCountProcessor.Handle(envelope, replyTo),
+                askTimeout,
+                system.scheduler());
 
-        return result
-            .thenCompose(r -> {
+        return result.thenCompose(
+            r -> {
               if (r.error.isPresent()) {
                 CompletableFuture<Done> err = new CompletableFuture<>();
                 err.completeExceptionally(r.error.get());
@@ -448,10 +478,9 @@ public interface WordCountDocExample {
       }
     }
 
-    //#behaviorLoadingOnDemand
+    // #behaviorLoadingOnDemand
     public class WordCountProcessor extends AbstractBehavior<WordCountProcessor.Command> {
-      public interface Command {
-      }
+      public interface Command {}
 
       public static class Handle implements Command {
         public final WordEnvelope envelope;
@@ -495,18 +524,25 @@ public interface WordCountDocExample {
         }
       }
 
-      public static Behavior<Command> create(ProjectionId projectionId, WordCountRepository repository) {
+      public static Behavior<Command> create(
+          ProjectionId projectionId, WordCountRepository repository) {
         return Behaviors.supervise(
-            Behaviors.setup((ActorContext<Command> context) ->
-                new WordCountProcessor(context, projectionId, repository)))
-            .onFailure(SupervisorStrategy.restartWithBackoff(Duration.ofSeconds(1), Duration.ofSeconds(10), 0.1));
+                Behaviors.setup(
+                    (ActorContext<Command> context) ->
+                        new WordCountProcessor(context, projectionId, repository)))
+            .onFailure(
+                SupervisorStrategy.restartWithBackoff(
+                    Duration.ofSeconds(1), Duration.ofSeconds(10), 0.1));
       }
 
       private final ProjectionId projectionId;
       private final WordCountRepository repository;
       private final Map<String, Integer> state = new HashMap<>();
 
-      private WordCountProcessor(ActorContext<Command> context, ProjectionId projectionId, WordCountRepository repository) {
+      private WordCountProcessor(
+          ActorContext<Command> context,
+          ProjectionId projectionId,
+          WordCountRepository repository) {
         super(context);
         this.projectionId = projectionId;
         this.repository = repository;
@@ -525,15 +561,19 @@ public interface WordCountDocExample {
         String word = command.envelope.word;
         if (state.containsKey(word)) {
           int newCount = state.get(word) + 1;
-          getContext().pipeToSelf(repository.save(projectionId.id(), word, newCount), (done, exc) ->
-              // will reply from SaveCompleted
-              new SaveCompleted(word, Optional.ofNullable(exc), command.replyTo)
-          );
+          getContext()
+              .pipeToSelf(
+                  repository.save(projectionId.id(), word, newCount),
+                  (done, exc) ->
+                      // will reply from SaveCompleted
+                      new SaveCompleted(word, Optional.ofNullable(exc), command.replyTo));
         } else {
-          getContext().pipeToSelf(repository.load(projectionId.id(), word), (loadResult, exc) ->
-              // will reply from LoadCompleted
-              new LoadCompleted(word, Optional.ofNullable(exc), command.replyTo)
-          );
+          getContext()
+              .pipeToSelf(
+                  repository.load(projectionId.id(), word),
+                  (loadResult, exc) ->
+                      // will reply from LoadCompleted
+                      new LoadCompleted(word, Optional.ofNullable(exc), command.replyTo));
         }
         return this;
       }
@@ -544,10 +584,12 @@ public interface WordCountDocExample {
         } else {
           String word = completed.word;
           int newCount = state.getOrDefault(word, 0) + 1;
-          getContext().pipeToSelf(repository.save(projectionId.id(), word, newCount), (done, exc) ->
-              // will reply from SaveCompleted
-              new SaveCompleted(word, Optional.ofNullable(exc), completed.replyTo)
-          );
+          getContext()
+              .pipeToSelf(
+                  repository.save(projectionId.id(), word, newCount),
+                  (done, exc) ->
+                      // will reply from SaveCompleted
+                      new SaveCompleted(word, Optional.ofNullable(exc), completed.replyTo));
         }
         return this;
       }
@@ -567,7 +609,6 @@ public interface WordCountDocExample {
       }
     }
   }
-  //#behaviorLoadingOnDemand
-
+  // #behaviorLoadingOnDemand
 
 }

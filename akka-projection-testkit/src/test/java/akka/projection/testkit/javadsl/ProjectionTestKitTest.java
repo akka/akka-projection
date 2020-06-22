@@ -44,237 +44,250 @@ import static org.junit.Assert.assertEquals;
 
 public class ProjectionTestKitTest extends JUnitSuite {
 
-    private final List<Integer> elements = IntStream.rangeClosed(1, 20)
-            .boxed().collect(Collectors.toList());
+  private final List<Integer> elements =
+      IntStream.rangeClosed(1, 20).boxed().collect(Collectors.toList());
 
-    private final Source<Integer, NotUsed> src = Source.from(elements);
+  private final Source<Integer, NotUsed> src = Source.from(elements);
 
-    @ClassRule
-    public static final TestKitJunitResource testKitJunit = new TestKitJunitResource();
+  @ClassRule public static final TestKitJunitResource testKitJunit = new TestKitJunitResource();
 
+  private final ProjectionTestKit projectionTestKit =
+      ProjectionTestKit.create(testKitJunit.testKit());
 
-    private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKitJunit.testKit());
+  @Test
+  public void assertProgressOfAProjection() {
+    StringBuffer strBuffer = new StringBuffer();
+    TestProjection prj = new TestProjection(src, strBuffer, i -> i <= 6);
 
-    @Test
-    public void assertProgressOfAProjection() {
-        StringBuffer strBuffer = new StringBuffer();
-        TestProjection prj = new TestProjection(src, strBuffer, i -> i <= 6);
+    projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
+  }
 
-        projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
+  @Test
+  public void retryAssertionFunctionUntilItSucceedsWithinAMaxTimeout() {
+
+    StringBuffer strBuffer = new StringBuffer();
+
+    Source<Integer, NotUsed> delayedSrc =
+        src.delayWith(
+            () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(200), __ -> true),
+            DelayOverflowStrategy.backpressure());
+
+    TestProjection prj = new TestProjection(delayedSrc, strBuffer, i -> i <= 6);
+
+    projectionTestKit.run(
+        prj, Duration.ofSeconds(2), () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
+  }
+
+  @Test
+  public void retryAssertionFunctionAndFailWhenTimeoutExpires() {
+    StringBuffer strBuffer = new StringBuffer();
+
+    Source<Integer, NotUsed> delayedSrc =
+        src.delayWith(
+            () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(1000), __ -> true),
+            DelayOverflowStrategy.backpressure());
+
+    TestProjection prj = new TestProjection(delayedSrc, strBuffer, i -> i <= 2);
+
+    try {
+      projectionTestKit.run(
+          prj, Duration.ofSeconds(1), () -> assertEquals(strBuffer.toString(), "1-2"));
+      Assert.fail("should not reach that line");
+    } catch (ComparisonFailure failure) {
+      // that was expected
     }
+  }
 
-    @Test
-    public void retryAssertionFunctionUntilItSucceedsWithinAMaxTimeout() {
+  @Test
+  public void failureInsideProjectionPropagatesToTestkit() {
 
-        StringBuffer strBuffer = new StringBuffer();
+    String streamFailureMsg = "stream failure";
+    StringBuffer strBuffer = new StringBuffer();
 
-        Source<Integer, NotUsed> delayedSrc = src.delayWith(
-                () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(200), __ -> true),
-                DelayOverflowStrategy.backpressure());
+    TestProjection prj =
+        new TestProjection(
+            src,
+            strBuffer,
+            i -> {
+              if (i < 3) return true;
+              else throw new RuntimeException(streamFailureMsg);
+            });
 
-        TestProjection prj = new TestProjection(delayedSrc, strBuffer, i -> i <= 6);
-
-        projectionTestKit.run(prj, Duration.ofSeconds(2), () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
+    try {
+      projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
+      Assert.fail("should not reach that line");
+    } catch (RuntimeException ex) {
+      assertEquals(ex.getMessage(), streamFailureMsg);
     }
+  }
 
-    @Test
-    public void retryAssertionFunctionAndFailWhenTimeoutExpires() {
-        StringBuffer strBuffer = new StringBuffer();
+  @Test
+  public void failureInsideStreamPropagatesToTestkit() {
 
-        Source<Integer, NotUsed> delayedSrc = src.delayWith(
-                () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(1000), __ -> true),
-                DelayOverflowStrategy.backpressure());
+    String streamFailureMsg = "stream failure";
+    StringBuffer strBuffer = new StringBuffer();
 
-        TestProjection prj = new TestProjection(delayedSrc, strBuffer, i -> i <= 2);
+    Source<Integer, NotUsed> failingSource =
+        Source.single(1).concat(Source.failed(new RuntimeException(streamFailureMsg)));
 
-        try {
-            projectionTestKit.run(prj, Duration.ofSeconds(1), () -> assertEquals(strBuffer.toString(), "1-2"));
-            Assert.fail("should not reach that line");
-        } catch (ComparisonFailure failure) {
-            // that was expected
-        }
+    TestProjection prj = new TestProjection(failingSource, strBuffer, i -> i <= 4);
+
+    try {
+      projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
+      Assert.fail("should not reach that line");
+    } catch (RuntimeException ex) {
+      assertEquals(ex.getMessage(), streamFailureMsg);
     }
+  }
 
-    @Test
-    public void failureInsideProjectionPropagatesToTestkit() {
+  @Test
+  public void runAProjectionWithATestSink() {
 
-        String streamFailureMsg = "stream failure";
-        StringBuffer strBuffer = new StringBuffer();
+    StringBuffer strBuffer = new StringBuffer();
+    List<Integer> elements = IntStream.rangeClosed(1, 5).boxed().collect(Collectors.toList());
 
-        TestProjection prj = new TestProjection(src, strBuffer, i -> {
-         if (i < 3) return true;
-         else throw new RuntimeException(streamFailureMsg);
+    TestProjection prj = new TestProjection(Source.from(elements), strBuffer, i -> i <= 5);
+
+    projectionTestKit.runWithTestSink(
+        prj,
+        sinkProbe -> {
+          sinkProbe.request(5);
+          sinkProbe.expectNextN(5);
+          sinkProbe.expectComplete();
         });
 
-        try {
-            projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
-            Assert.fail("should not reach that line");
-        } catch (RuntimeException ex) {
-            assertEquals(ex.getMessage(), streamFailureMsg);
-        }
+    assertEquals(strBuffer.toString(), "1-2-3-4-5");
+  }
 
+  private class TestProjection implements Projection<Integer> {
+
+    private final Source<Integer, NotUsed> src;
+    private final StringBuffer strBuffer;
+    private final Predicate<Integer> predicate;
+
+    private TestProjection(
+        Source<Integer, NotUsed> src, StringBuffer strBuffer, Predicate<Integer> predicate) {
+      this.src = src;
+      this.strBuffer = strBuffer;
+      this.predicate = predicate;
     }
 
-    @Test
-    public void failureInsideStreamPropagatesToTestkit() {
-
-        String streamFailureMsg = "stream failure";
-        StringBuffer strBuffer = new StringBuffer();
-
-        Source<Integer, NotUsed> failingSource =
-                Source.single(1).concat(Source.failed(new RuntimeException(streamFailureMsg)));
-
-        TestProjection prj = new TestProjection(failingSource, strBuffer, i ->  i <= 4);
-
-        try {
-            projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
-            Assert.fail("should not reach that line");
-        } catch (RuntimeException ex) {
-            assertEquals(ex.getMessage(), streamFailureMsg);
-        }
+    @Override
+    public ProjectionId projectionId() {
+      return ProjectionId.of("test-projection", "00");
     }
 
-    @Test
-    public void runAProjectionWithATestSink() {
-
-        StringBuffer strBuffer = new StringBuffer();
-        List<Integer> elements = IntStream.rangeClosed(1, 5)
-                .boxed().collect(Collectors.toList());
-
-        TestProjection prj = new TestProjection(Source.from(elements), strBuffer, i -> i <= 5);
-
-        projectionTestKit.runWithTestSink(prj, sinkProbe -> {
-            sinkProbe.request(5);
-            sinkProbe.expectNextN(5);
-            sinkProbe.expectComplete();
-        });
-
-        assertEquals(strBuffer.toString(), "1-2-3-4-5");
-
+    @Override
+    public Projection<Integer> withRestartBackoff(
+        FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor) {
+      return this;
     }
 
-
-    private class TestProjection implements Projection<Integer> {
-
-        final private Source<Integer, NotUsed> src;
-        final private StringBuffer strBuffer;
-        final private Predicate<Integer> predicate;
-
-        private TestProjection(Source<Integer, NotUsed> src, StringBuffer strBuffer, Predicate<Integer> predicate) {
-            this.src = src;
-            this.strBuffer = strBuffer;
-            this.predicate = predicate;
-        }
-
-
-        @Override
-        public ProjectionId projectionId() {
-            return ProjectionId.of("test-projection", "00");
-        }
-
-        @Override
-        public Projection<Integer> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor) {
-            return this;
-        }
-
-        @Override
-        public Projection<Integer> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor, int maxRestarts) {
-            return this;
-        }
-
-        @Override
-        public Projection<Integer> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor) {
-            return this;
-        }
-
-        @Override
-        public Projection<Integer> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor, int maxRestarts) {
-            return this;
-        }
-
-        @Override
-        public akka.stream.scaladsl.Source<Done, NotUsed> mappedSource(ActorSystem<?> system) {
-            return new InternalProjectionState(strBuffer, predicate, system).mappedSource();
-        }
-
-        @Override
-        public <M> Option<ActorHandlerInit<M>> actorHandlerInit() {
-            return Option.empty();
-        }
-
-
-        @Override
-        public RunningProjection run(ActorSystem<?> system) {
-            return new InternalProjectionState(strBuffer, predicate, system).newRunningInstance();
-        }
-
-        @Override
-        public StatusObserver<Integer> statusObserver() {
-            return NoopStatusObserver.getInstance();
-        }
-
-        @Override
-        public Projection<Integer> withStatusObserver(StatusObserver<Integer> observer) {
-            // no need for StatusObserver in tests
-            return this;
-        }
-
-        /*
-         * INTERNAL API
-         * This internal class will hold the KillSwitch that is needed
-         * when building the mappedSource and when running the projection (to stop)
-         */
-        private class InternalProjectionState {
-
-            final private ActorSystem<?> system;
-            final private SharedKillSwitch killSwitch;
-            final private StringBuffer strBuffer;
-            final private Predicate<Integer> predicate;
-
-            private InternalProjectionState(StringBuffer strBuffer, Predicate<Integer> predicate, ActorSystem<?>  system) {
-                this.strBuffer = strBuffer;
-                this.predicate = predicate;
-                this.system = system;
-                this.killSwitch = KillSwitches.shared(TestProjection.this.projectionId().id());
-            }
-
-            private CompletionStage<Done> process(Integer i) {
-                if (predicate.test(i)) {
-                    if (strBuffer.toString().isEmpty())
-                        strBuffer.append(i);
-                    else
-                        strBuffer.append("-").append(i);
-                }
-                return CompletableFuture.completedFuture(Done.getInstance());
-            }
-
-
-            private akka.stream.scaladsl.Source<Done, NotUsed> mappedSource() {
-                return src.via(killSwitch.flow())
-                        .mapAsync(1, (Function<Integer, CompletionStage<Done>>) this::process).asScala();
-            }
-
-            private RunningProjection newRunningInstance() {
-                return new TestRunningProjection(mappedSource(), killSwitch, system);
-            }
-        }
-
-        private class TestRunningProjection implements RunningProjection {
-
-            final private SharedKillSwitch killSwitch;
-            final private Future<Done> futureDone;
-
-            private TestRunningProjection(akka.stream.scaladsl.Source<Done, NotUsed> source, SharedKillSwitch killSwitch, ActorSystem<?> system) {
-                this.killSwitch = killSwitch;
-                CompletionStage<Done> done = source.asJava().runWith(Sink.ignore(), system);
-                this.futureDone = FutureConverters.toScala(done);
-            }
-
-            @Override
-            public Future<Done> stop() {
-                killSwitch.shutdown();
-                return this.futureDone;
-            }
-        }
+    @Override
+    public Projection<Integer> withRestartBackoff(
+        FiniteDuration minBackoff,
+        FiniteDuration maxBackoff,
+        double randomFactor,
+        int maxRestarts) {
+      return this;
     }
+
+    @Override
+    public Projection<Integer> withRestartBackoff(
+        Duration minBackoff, Duration maxBackoff, double randomFactor) {
+      return this;
+    }
+
+    @Override
+    public Projection<Integer> withRestartBackoff(
+        Duration minBackoff, Duration maxBackoff, double randomFactor, int maxRestarts) {
+      return this;
+    }
+
+    @Override
+    public akka.stream.scaladsl.Source<Done, NotUsed> mappedSource(ActorSystem<?> system) {
+      return new InternalProjectionState(strBuffer, predicate, system).mappedSource();
+    }
+
+    @Override
+    public <M> Option<ActorHandlerInit<M>> actorHandlerInit() {
+      return Option.empty();
+    }
+
+    @Override
+    public RunningProjection run(ActorSystem<?> system) {
+      return new InternalProjectionState(strBuffer, predicate, system).newRunningInstance();
+    }
+
+    @Override
+    public StatusObserver<Integer> statusObserver() {
+      return NoopStatusObserver.getInstance();
+    }
+
+    @Override
+    public Projection<Integer> withStatusObserver(StatusObserver<Integer> observer) {
+      // no need for StatusObserver in tests
+      return this;
+    }
+
+    /*
+     * INTERNAL API
+     * This internal class will hold the KillSwitch that is needed
+     * when building the mappedSource and when running the projection (to stop)
+     */
+    private class InternalProjectionState {
+
+      private final ActorSystem<?> system;
+      private final SharedKillSwitch killSwitch;
+      private final StringBuffer strBuffer;
+      private final Predicate<Integer> predicate;
+
+      private InternalProjectionState(
+          StringBuffer strBuffer, Predicate<Integer> predicate, ActorSystem<?> system) {
+        this.strBuffer = strBuffer;
+        this.predicate = predicate;
+        this.system = system;
+        this.killSwitch = KillSwitches.shared(TestProjection.this.projectionId().id());
+      }
+
+      private CompletionStage<Done> process(Integer i) {
+        if (predicate.test(i)) {
+          if (strBuffer.toString().isEmpty()) strBuffer.append(i);
+          else strBuffer.append("-").append(i);
+        }
+        return CompletableFuture.completedFuture(Done.getInstance());
+      }
+
+      private akka.stream.scaladsl.Source<Done, NotUsed> mappedSource() {
+        return src.via(killSwitch.flow())
+            .mapAsync(1, (Function<Integer, CompletionStage<Done>>) this::process)
+            .asScala();
+      }
+
+      private RunningProjection newRunningInstance() {
+        return new TestRunningProjection(mappedSource(), killSwitch, system);
+      }
+    }
+
+    private class TestRunningProjection implements RunningProjection {
+
+      private final SharedKillSwitch killSwitch;
+      private final Future<Done> futureDone;
+
+      private TestRunningProjection(
+          akka.stream.scaladsl.Source<Done, NotUsed> source,
+          SharedKillSwitch killSwitch,
+          ActorSystem<?> system) {
+        this.killSwitch = killSwitch;
+        CompletionStage<Done> done = source.asJava().runWith(Sink.ignore(), system);
+        this.futureDone = FutureConverters.toScala(done);
+      }
+
+      @Override
+      public Future<Done> stop() {
+        killSwitch.shutdown();
+        return this.futureDone;
+      }
+    }
+  }
 }
