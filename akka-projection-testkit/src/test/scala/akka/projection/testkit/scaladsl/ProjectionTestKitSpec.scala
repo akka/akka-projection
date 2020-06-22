@@ -156,7 +156,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
     override def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(strBuffer, predicate).newRunningInstance()
 
-    private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
+    private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
       new InternalProjectionState(strBuffer, predicate).mappedSource()
 
     /*
@@ -169,8 +169,8 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
-      def mappedSource(): Source[Done, _] =
-        src.via(killSwitch.flow).mapAsync(1)(i => process(i))
+      def mappedSource(): Source[Done, Future[Done]] =
+        src.via(killSwitch.flow).mapAsync(1)(i => process(i)).mapMaterializedValue(_ => Future.successful(Done))
 
       private def process(elt: Int): Future[Done] = {
         if (predicate(elt)) concat(elt)

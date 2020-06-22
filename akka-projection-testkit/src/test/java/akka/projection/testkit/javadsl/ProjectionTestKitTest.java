@@ -205,7 +205,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
     }
 
     @Override
-    public akka.stream.scaladsl.Source<Done, NotUsed> mappedSource(ActorSystem<?> system) {
+    public akka.stream.scaladsl.Source<Done, Future<Done>> mappedSource(ActorSystem<?> system) {
       return new InternalProjectionState(strBuffer, predicate, system).mappedSource();
     }
 
@@ -258,9 +258,10 @@ public class ProjectionTestKitTest extends JUnitSuite {
         return CompletableFuture.completedFuture(Done.getInstance());
       }
 
-      private akka.stream.scaladsl.Source<Done, NotUsed> mappedSource() {
+      private akka.stream.scaladsl.Source<Done, Future<Done>> mappedSource() {
         return src.via(killSwitch.flow())
             .mapAsync(1, (Function<Integer, CompletionStage<Done>>) this::process)
+            .mapMaterializedValue(__ -> Future.successful(Done.getInstance()))
             .asScala();
       }
 
@@ -275,7 +276,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
       private final Future<Done> futureDone;
 
       private TestRunningProjection(
-          akka.stream.scaladsl.Source<Done, NotUsed> source,
+          akka.stream.scaladsl.Source<Done, Future<Done>> source,
           SharedKillSwitch killSwitch,
           ActorSystem<?> system) {
         this.killSwitch = killSwitch;

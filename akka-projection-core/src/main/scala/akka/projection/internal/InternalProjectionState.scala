@@ -298,7 +298,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
 
   }
 
-  def mappedSource(): Source[Done, _] = {
+  def mappedSource(): Source[Done, Future[Done]] = {
 
     val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
@@ -356,19 +356,20 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   private def stopHandlerOnTermination(
       src: Source[Done, NotUsed],
       handlerLifecycle: HandlerLifecycle): Source[Done, Future[Done]] = {
-    src.watchTermination() { (_, futDone) =>
-      handlerStrategy.recreateHandlerOnNextAccess()
-      futDone
-        .andThen { case _ => handlerLifecycle.tryStop() }
-        .andThen {
-          case Success(_) =>
-            statusObserver.stopped(projectionId)
-          case Failure(AbortProjectionException) =>
-            statusObserver.stopped(projectionId) // no restart
-          case Failure(exc) =>
-            Try(statusObserver.stopped(projectionId))
-            statusObserver.failed(projectionId, exc)
-        }
-    }
+    src
+      .watchTermination() { (_, futDone) =>
+        handlerStrategy.recreateHandlerOnNextAccess()
+        futDone
+          .andThen { case _ => handlerLifecycle.tryStop() }
+          .andThen {
+            case Success(_) =>
+              statusObserver.stopped(projectionId)
+            case Failure(AbortProjectionException) =>
+              statusObserver.stopped(projectionId) // no restart
+            case Failure(exc) =>
+              Try(statusObserver.stopped(projectionId))
+              statusObserver.failed(projectionId, exc)
+          }
+      }
   }
 }

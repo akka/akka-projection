@@ -56,7 +56,7 @@ object ProjectionBehaviorSpec {
     override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(testProbe, failToStop).newRunningInstance()
 
-    override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
+    override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
       new InternalProjectionState(testProbe, failToStop).mappedSource()
 
     override val statusObserver: StatusObserver[Int] = NoopStatusObserver
@@ -80,8 +80,8 @@ object ProjectionBehaviorSpec {
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
-      def mappedSource(): Source[Done, _] =
-        src.via(killSwitch.flow).mapAsync(1)(i => process(i))
+      def mappedSource(): Source[Done, Future[Done]] =
+        src.via(killSwitch.flow).mapAsync(1)(i => process(i)).mapMaterializedValue(_ => Future.successful(Done))
 
       private def process(i: Int): Future[Done] = {
 
@@ -99,7 +99,7 @@ object ProjectionBehaviorSpec {
     }
 
     private class TestRunningProjection(
-        source: Source[Done, _],
+        source: Source[Done, Future[Done]],
         testProbe: TestProbe[ProbeMessage],
         failToStop: Boolean = false,
         killSwitch: SharedKillSwitch)(implicit system: ActorSystem[_])

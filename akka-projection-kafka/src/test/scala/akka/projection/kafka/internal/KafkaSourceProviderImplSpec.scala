@@ -166,7 +166,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
-      def mappedSource(): Source[Done, _] = {
+      def mappedSource(): Source[Done, Future[Done]] = {
 
         val futSource =
           sourceProvider
@@ -188,6 +188,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
               Await.result(processedQueue.offer(record), 10.millis)
               Done
           }
+          .mapMaterializedValue(_ => Future.successful(Done))
       }
 
       def newRunningInstance(): RunningProjection =
