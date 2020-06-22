@@ -13,18 +13,18 @@ import akka.projection.ProjectionContext
 @InternalApi private[projection] case class ProjectionContextImpl[Offset, Envelope] private (
     offset: Offset,
     envelope: Envelope,
-    groupSize: Int = 1 // TODO: make it a volatile var in the case class ??
-) extends ProjectionContext
+    // TODO: make it a volatile var in the case class ??
+    groupSize: Int,
+    readyTimestampNanos: Long)
+    extends ProjectionContext {
+  def nanosSinceReady() =
+    System.nanoTime() - readyTimestampNanos
+}
 
 /**
  * INTERNAL API
  */
 @InternalApi private[projection] object ProjectionContextImpl {
   def apply[Offset, Envelope](offset: Offset, envelope: Envelope): ProjectionContextImpl[Offset, Envelope] =
-    new ProjectionContextImpl(offset, envelope)
-
-  def apply[Offset, Envelope](
-      envelope: Envelope,
-      offsetExtractor: Envelope => Offset): ProjectionContextImpl[Offset, Envelope] =
-    ProjectionContextImpl(offsetExtractor(envelope), envelope)
+    new ProjectionContextImpl(offset, envelope, groupSize = 1, readyTimestampNanos = System.nanoTime())
 }

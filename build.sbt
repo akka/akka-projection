@@ -3,6 +3,7 @@ import akka.projections.Dependencies
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
     .settings(Dependencies.core)
+    .settings(Test / parallelExecution := false)
     .settings(
       name := "akka-projection-core",
       Compile / packageBin / packageOptions += Package.ManifestAttributes(

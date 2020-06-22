@@ -140,14 +140,16 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
 
   }
 
+  val instruments = InMemInstruments
+
   def detectNoError(tt: TelemetryTester) = {
-    tt.inMemTelemetry.errorInvocations.get should be(0)
+    instruments.errorInvocations.get should be(0)
   }
 
   def detectSomeErrors(tt: TelemetryTester) = {
-    tt.inMemTelemetry.errorInvocations.get should be > (0)
-    if (tt.inMemTelemetry.lastErrorThrowable.get() != null)
-      tt.inMemTelemetry.lastErrorThrowable.get().getMessage should be("Oh, no! Handler errored.")
+    instruments.errorInvocations.get should be > (0)
+    if (instruments.lastErrorThrowable.get() != null)
+      instruments.lastErrorThrowable.get().getMessage should be("Oh, no! Handler errored.")
   }
 
 }

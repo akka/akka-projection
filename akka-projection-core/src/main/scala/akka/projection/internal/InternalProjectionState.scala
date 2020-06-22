@@ -73,17 +73,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
       .map { done =>
         // when grouping, invocations to reportProgress pass a
         // single `Envelope` and (wrongly) indicate a batchSize of 1
-        telemetry.onOffsetStored(projectionId, batchSize)
+        telemetry.onOffsetStored(batchSize)
         done
       }
-  }
-
-  private def measured[T](eventProcessing: () => Future[T]): () => Future[T] = { () =>
-    val telemetryContext = telemetry.beforeProcess(projectionId)
-    eventProcessing().map { t =>
-      telemetry.afterProcess(projectionId, telemetryContext)
-      t
-    }
   }
 
   /**
@@ -138,14 +130,18 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
           Flow[ProjectionContextImpl[Offset, Envelope]].mapAsync(parallelism = 1) { context =>
+            val measured: () => Future[Done] = { () =>
+              handler.process(context.envelope).map { d =>
+                telemetry.afterProcess(context.nanosSinceReady())
+                d
+              }
+            }
             handlerRecovery
-              .applyRecovery(
-                context.envelope,
-                context.offset,
-                context.offset,
-                abort.future,
-                measured(() => handler.process(context.envelope)))
-              .map(_ => context)
+              .applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
+              .map { _ =>
+                context
+              }
+
           }
 
         case grouped: GroupedHandlerStrategy[Envelope] =>
@@ -168,8 +164,11 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   first.offset,
                   last.offset,
                   abort.future,
-                  measured(() => handler.process(envelopes)))
+                  () => handler.process(envelopes))
                 .map { _ =>
+                  group.foreach { ctx =>
+                    telemetry.afterProcess(ctx.nanosSinceReady())
+                  }
                   last.copy(groupSize = envelopes.length)
                 }
             }
@@ -180,14 +179,19 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
               case (_, futDone) =>
                 futDone.recoverWith {
                   case t: Throwable =>
-                    telemetry.error(projectionId, t)
+                    telemetry.error(t)
                     futDone
                 }
             }
           Flow[ProjectionContextImpl[Offset, Envelope]]
             .map { context => context.envelope -> context }
             .via(flow)
-            .map { case (_, context) => context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]] }
+            .map {
+              case (_, context) =>
+                val ctx = context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]]
+                telemetry.afterProcess(ctx.nanosSinceReady())
+                ctx
+            }
       }
 
     if (afterEnvelopes == 1)
@@ -201,7 +205,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         .groupedWithin(afterEnvelopes, orAfterDuration)
         .filterNot(_.isEmpty)
         .mapAsync(parallelism = 1) { batch =>
-          // TODO: is grouped * afterEnvelopes supported?
           val totalNumberOfEnvelopes = batch.map { _.groupSize }.sum
           val last = batch.last
           reportProgress(saveOffset(projectionId, last.offset), last.envelope, totalNumberOfEnvelopes)
@@ -222,16 +225,17 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         envelopesAndOffsets: immutable.Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
 
       def processEnvelopes(partitioned: immutable.Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
-        val firstOffset = partitioned.head.offset
+        val first = partitioned.head
+        val firstOffset = first.offset
         val lastOffset = partitioned.last.offset
         val envelopes = partitioned.map { _.envelope }
 
         handlerRecovery.applyRecovery(
-          envelopes.head,
+          first.envelope,
           firstOffset,
           lastOffset,
           abort.future,
-          measured(() => handler.process(envelopes)))
+          () => handler.process(envelopes))
       }
 
       sourceProvider match {
@@ -279,8 +283,13 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 context.offset,
                 context.offset,
                 abort.future,
-                measured(() => handler.process(context.envelope)))
+                () => handler.process(context.envelope))
             reportProgress(processed, context.envelope, 1)
+              .map { t =>
+                // measure only once the offset is stored (and reported)
+                telemetry.afterProcess(context.nanosSinceReady())
+                t
+              }
           }
 
       case grouped: GroupedHandlerStrategy[Envelope] =>
@@ -294,6 +303,13 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           .mapAsync(parallelism = 1) { group =>
             val last = group.last
             reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope, group.length)
+              .map { t =>
+                // measure only once the offset is stored (and reported)
+                group.foreach { ctx =>
+                  telemetry.afterProcess(ctx.nanosSinceReady())
+                }
+                t
+              }
           }
 
       case _: FlowHandlerStrategy[_] =>
@@ -322,7 +338,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                     context.offset,
                     context.offset,
                     abort.future,
-                    measured(() => handler.process(context.envelope)))
+                    () => handler.process(context.envelope))
               }
             reportProgress(processed, context.envelope, 1)
           }

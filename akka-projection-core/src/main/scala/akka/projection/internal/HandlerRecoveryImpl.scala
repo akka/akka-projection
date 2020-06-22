@@ -75,7 +75,7 @@ import akka.projection.StatusObserver
           // using recoverWith instead of `.failed.foreach` to make sure that calls to statusObserver
           // are invoked in sequential order
           case err if !abort.isCompleted =>
-            telemetry.error(projectionId, err)
+            telemetry.error(err)
             statusObserver.error(projectionId, env, err, recoveryStrategy)
             Future.failed(err)
         }

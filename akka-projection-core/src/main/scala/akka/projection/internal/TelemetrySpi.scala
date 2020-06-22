@@ -6,9 +6,13 @@ package akka.projection.internal
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
+import akka.annotation.InternalStableApi
 import akka.projection.ProjectionId
 
-object TelemetryProvider {
+/**
+ * INTERNAL API
+ */
+@InternalStableApi private[projection] object TelemetryProvider {
   def start(projectionId: ProjectionId, system: ActorSystem[_]): Telemetry = {
     val dynamicAccess = system.dynamicAccess
     if (system.settings.config.hasPath("akka.projection.telemetry.fqcn")) {
@@ -25,37 +29,41 @@ object TelemetryProvider {
   }
 }
 
-abstract class Telemetry(projectionId: ProjectionId, system: ActorSystem[_]) {
+/**
+ * INTERNAL API
+ */
+@InternalStableApi private[projection] abstract class Telemetry(projectionId: ProjectionId, system: ActorSystem[_]) {
 
   // Per projection
-  def failed(projectionId: ProjectionId, cause: Throwable): Unit
-  def stopped(projectionId: ProjectionId): Unit
+  def failed(cause: Throwable): Unit
+  def stopped(): Unit
 
   // Per envelope
-  def beforeProcess(projectionId: ProjectionId): AnyRef
-  def afterProcess(projectionId: ProjectionId, telemetryContext: AnyRef): Unit
+  /** Invoked after processing an event such that it is visible by the read-side threads (data must be committed).*/
+  private[projection] def afterProcess(serviceTimeInNanos: => Long): Unit
 
   /** Only invoked when the offset is committed. Pass the number of envelopes committed */
-  def onOffsetStored(projectionId: ProjectionId, batchSize: Int): Unit
-  // Invoked when processing an envelope fails. If the operation is part of a batch
-  // or a group it will be invoked once anyway
-  def error(projectionId: ProjectionId, cause: Throwable): Unit
+  def onOffsetStored(batchSize: Int): Unit
+
+  /**
+   * Invoked when processing an envelope errors.  If the operation is part of a batch or
+   * a group it will be invoked once.
+   */
+  def error(cause: Throwable): Unit
 }
 
 /**
  * INTERNAL API
  */
 @InternalApi private[akka] object NoopTelemetry extends Telemetry(null, null) {
-  override def failed(projectionId: ProjectionId, cause: Throwable): Unit = {}
+  override def failed(cause: Throwable): Unit = {}
 
-  override def stopped(projectionId: ProjectionId): Unit = {}
+  override def stopped(): Unit = {}
 
-  override def beforeProcess(projectionId: ProjectionId): AnyRef = null
+  override private[projection] def afterProcess(serviceTimeInNanos: => Long): Unit = {}
 
-  override def afterProcess(projectionId: ProjectionId, telemetryContext: AnyRef): Unit = {}
+  override def onOffsetStored(batchSize: Int): Unit = {}
 
-  /** Only invoked when the offset is committed. Pass the number of envelopes committed */
-  override def onOffsetStored(projectionId: ProjectionId, batchSize: Int): Unit = {}
+  override def error(cause: Throwable): Unit = {}
 
-  override def error(projectionId: ProjectionId, cause: Throwable): Unit = {}
 }

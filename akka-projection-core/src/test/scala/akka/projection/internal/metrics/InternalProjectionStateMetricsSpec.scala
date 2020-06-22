@@ -2,6 +2,7 @@ package akka.projection.internal.metrics
 
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.Await
@@ -9,6 +10,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Random
+import scala.util.control.NoStackTrace
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -60,17 +62,19 @@ abstract class InternalProjectionStateMetricsSpec
   // inspired on ProjectionTestkit's runInternal
   protected def runInternal(
       projectionState: InMemInternalProjectionState[_, _],
-      max: FiniteDuration = 5.seconds,
+      max: FiniteDuration = 3.seconds,
       interval: FiniteDuration = 100.millis)(assertFunction: => Unit): Unit = {
 
+    InMemInstruments.reset()
     val probe = testKit.createTestProbe[Nothing]("internal-projection-state-probe")
 
-    val running =
+    val running: RunningProjection =
       projectionState.newRunningInstance()
     try {
       probe.awaitAssert(assertFunction, max.dilated, interval)
     } finally {
       Await.result(running.stop(), max)
+      InMemInstruments.reset()
     }
   }
 
@@ -82,28 +86,25 @@ object InternalProjectionStateMetricsSpec {
       akka {
         loglevel = "DEBUG"
       }
+      akka.projection.restart-backoff{
+        min-backoff = 30ms
+        max-backoff = 50ms
+        random-factor = 0.1
+      }
       akka.projection {
         telemetry.fqcn = "${classOf[InMemTelemetry].getName}"
       }
       """)
   case class Envelope(id: String, offset: Long, message: String)
 
-  def sourceProvider(
-      system: ActorSystem[_],
-      id: String,
-      complete: Boolean = true,
-      verifyOffsetF: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
-    val envelopes =
-      List(
-        Envelope(id, 1L, "abc"),
-        Envelope(id, 2L, "def"),
-        Envelope(id, 3L, "ghi"),
-        Envelope(id, 4L, "jkl"),
-        Envelope(id, 5L, "mno"),
-        Envelope(id, 6L, "pqr"))
+  def sourceProvider(system: ActorSystem[_], id: String, numberOfEnvelopes: Int): SourceProvider[Long, Envelope] = {
+    val chars = "abcdefghijklkmnopqrstuvwxyz"
+    val envelopes = (1 to numberOfEnvelopes).map { offset =>
+      Envelope(id, offset.toLong, chars.charAt(offset - 1).toString)
+    }
 
-    val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
-    TestSourceProvider(system, src, verifyOffsetF)
+    val src = Source(envelopes)
+    TestSourceProvider(system, src, _ => VerificationSuccess)
   }
 
   case class TestSourceProvider(
@@ -126,6 +127,8 @@ object InternalProjectionStateMetricsSpec {
   case class ConcatStr(id: String, text: String) {
     def concat(newMsg: String) = copy(text = text + "|" + newMsg)
   }
+
+  case object TelemetryException extends RuntimeException("Oh, no! Handler errored.") with NoStackTrace
 
   object Handlers {
     trait ConcatHandlers {
@@ -150,8 +153,6 @@ object InternalProjectionStateMetricsSpec {
       var acc = ""
       override def process(envelopes: Seq[Envelope]): Future[Done] = {
         val x = envelopes.map(_.message).mkString("|")
-        if (Random.between(0f, 1f) > successRatio)
-          Future.failed(throw new RuntimeException("Oh, no! Handler errored."))
         acc = accumulateWithFailures(acc, x, successRatio)
         Future.successful(Done)
       }
@@ -161,7 +162,7 @@ object InternalProjectionStateMetricsSpec {
     def flowWithFailureAndRetries(successRatio: Float = 1.0f, maxRetries: Int) =
       RestartFlow
         .withBackoff(30.millis, 10.millis, 0.1, maxRetries) { () =>
-          Handlers.flowWithFailure(0.9f).asFlow
+          Handlers.flowWithFailure(successRatio).asFlow
         }
         .asFlowWithContext[Envelope, ProjectionContext, ProjectionContext] { case (e, ctx) => (e, ctx) } {
           case (_, ctx) => ctx
@@ -181,13 +182,15 @@ object InternalProjectionStateMetricsSpec {
 
     private def accumulateWithFailures(acc: String, x: String, successRatio: Float): String = {
       if (Random.between(0f, 1f) > successRatio)
-        throw new RuntimeException("Oh, no! Handler errored.")
+        throw TelemetryException
       if (acc == "") x else s"${acc}|${x}"
     }
   }
 
-  class TelemetryTester(offsetStrategy: OffsetStrategy, handlerStrategy: HandlerStrategy[Envelope])(
-      implicit system: ActorSystem[_]) {
+  class TelemetryTester(
+      offsetStrategy: OffsetStrategy,
+      handlerStrategy: HandlerStrategy[Envelope],
+      numberOfEnvelopes: Int = 6)(implicit system: ActorSystem[_]) {
     private def genRandomProjectionId() =
       ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
 
@@ -199,7 +202,7 @@ object InternalProjectionStateMetricsSpec {
     val projectionState =
       new InMemInternalProjectionState[Long, Envelope](
         projectionId,
-        sourceProvider(system, entityId),
+        sourceProvider(system, entityId, numberOfEnvelopes),
         offsetStrategy,
         handlerStrategy,
         NoopStatusObserver,
@@ -231,11 +234,14 @@ object InternalProjectionStateMetricsSpec {
 
     override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = Future.successful(Done)
 
-    def newRunningInstance(): RunningProjection = new TestRunningProjection(mappedSource(), killSwitch)
+    def newRunningInstance(): RunningProjection =
+      new TestRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
 
     class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch) extends RunningProjection {
 
-      private val futureDone = source.run()
+      private val futureDone =
+        source
+          .run()
 
       override def stop(): Future[Done] = {
         killSwitch.shutdown()
@@ -243,32 +249,48 @@ object InternalProjectionStateMetricsSpec {
       }
     }
   }
-  class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry(projectionId, system) {
-    val afterProcessInvocations = new AtomicInteger(0)
-    val offsetsSuccessfullyCommitted = new AtomicInteger(0)
-    val onOffsetStoredInvocations = new AtomicInteger(0)
-    val errorInvocations = new AtomicInteger(0)
-    val lastErrorThrowable = new AtomicReference[Throwable]()
 
-    override def failed(projectionId: ProjectionId, cause: Throwable): Unit = ???
+}
 
-    override def stopped(projectionId: ProjectionId): Unit = ???
+object InMemInstruments {
+  // the instruments outlive the InMemTelemetry instances. Multiple instances of InMemTelemetry
+  // will share these instruments.
+  val afterProcessInvocations = new AtomicInteger(0)
+  val lastServiceTimeInNanos = new AtomicLong()
+  val offsetsSuccessfullyCommitted = new AtomicInteger(0)
+  val onOffsetStoredInvocations = new AtomicInteger(0)
+  val errorInvocations = new AtomicInteger(0)
+  val lastErrorThrowable = new AtomicReference[Throwable](null)
 
-    override def beforeProcess(projectionId: ProjectionId): AnyRef = { null }
+  def reset(): Unit = {
+    afterProcessInvocations.set(0)
+    lastServiceTimeInNanos.set(0L)
+    offsetsSuccessfullyCommitted.set(0)
+    onOffsetStoredInvocations.set(0)
+    errorInvocations.set(0)
+    lastErrorThrowable.set(null)
+  }
+}
 
-    override def afterProcess(projectionId: ProjectionId, telemetryContext: AnyRef): Unit = {
-      afterProcessInvocations.incrementAndGet()
-    }
+class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry(projectionId, system) {
+  import InMemInstruments._
+  override def failed(cause: Throwable): Unit = ???
 
-    override def onOffsetStored(projectionId: ProjectionId, successCount: Int): Unit = {
-      onOffsetStoredInvocations.incrementAndGet()
-      offsetsSuccessfullyCommitted.addAndGet(successCount)
-    }
+  override def stopped(): Unit = ???
 
-    override def error(projectionId: ProjectionId, cause: Throwable): Unit = {
-      lastErrorThrowable.set(cause)
-      errorInvocations.incrementAndGet()
-    }
+  override private[projection] def afterProcess(serviceTimeInNanos: => Long): Unit = {
+    afterProcessInvocations.incrementAndGet()
+    lastServiceTimeInNanos.set(serviceTimeInNanos)
+  }
+
+  override def onOffsetStored(successCount: Int): Unit = {
+    onOffsetStoredInvocations.incrementAndGet()
+    offsetsSuccessfullyCommitted.addAndGet(successCount)
+  }
+
+  override def error(cause: Throwable): Unit = {
+    lastErrorThrowable.set(cause)
+    errorInvocations.incrementAndGet()
   }
 
 }

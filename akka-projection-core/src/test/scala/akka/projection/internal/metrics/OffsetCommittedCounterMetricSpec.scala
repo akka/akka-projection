@@ -12,31 +12,43 @@ import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
 class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpec {
+
+  val instruments = InMemInstruments
+
   "A metric counting offsets committed" must {
     // at-least-once
     " in `at-least-once` with singleHandler" must {
       "count offsets (without afterEnvelops optimization)" in {
+        val numberOfEnvelopes = 6
         val single = Handlers.single
-        val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
+        val tt = new TelemetryTester(
+          AtLeastOnce(afterEnvelopes = Some(1)),
+          SingleHandlerStrategy(single),
+          numberOfEnvelopes = numberOfEnvelopes)
 
         runInternal(tt.projectionState) {
           withClue("check - all values were concatenated") {
-            single.concatStr shouldBe "abc|def|ghi|jkl|mno|pqr"
+            single.concatStr shouldBe "a|b|c|d|e|f"
           }
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+            instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
+            instruments.onOffsetStoredInvocations.get should be(numberOfEnvelopes)
           }
         }
       }
       "count offsets (with afterEnvelops optimization)" in {
+        val batchSize = 3
+        val numberOfEnvelopes = 6
         val tt =
-          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(Handlers.single))
+          new TelemetryTester(
+            AtLeastOnce(afterEnvelopes = Some(batchSize)),
+            SingleHandlerStrategy(Handlers.single),
+            numberOfEnvelopes = numberOfEnvelopes)
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
+            instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
+            instruments.onOffsetStoredInvocations.get should be(2)
           }
         }
       }
@@ -51,8 +63,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(6)
           }
         }
       }
@@ -65,8 +77,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(3)
           }
         }
       }
@@ -77,8 +89,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(1)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(1)
           }
         }
       }
@@ -92,8 +104,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(1)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(1)
           }
         }
       }
@@ -105,8 +117,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(2)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(2)
           }
         }
       }
@@ -116,8 +128,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(3)
           }
         }
       }
@@ -131,8 +143,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(6)
           }
         }
       }
@@ -145,7 +157,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
           }
         }
       }
@@ -159,8 +171,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(3)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(3)
           }
         }
       }
@@ -172,7 +184,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
           }
         }
       }
@@ -187,8 +199,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
-            tt.inMemTelemetry.onOffsetStoredInvocations.get should be(6)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.onOffsetStoredInvocations.get should be(6)
           }
         }
       }
@@ -201,7 +213,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
-            tt.inMemTelemetry.offsetsSuccessfullyCommitted.get should be(6)
+            instruments.offsetsSuccessfullyCommitted.get should be(6)
           }
         }
       }
