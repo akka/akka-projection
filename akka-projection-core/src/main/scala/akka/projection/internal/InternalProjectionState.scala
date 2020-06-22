@@ -28,8 +28,10 @@ import akka.projection.ProjectionId
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.scaladsl.Handler
+import akka.projection.scaladsl.MergeableOffsetSourceProvider
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
@@ -202,30 +204,37 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           () => handler.process(envelopes))
       }
 
-      // FIXME create a SourceProvider trait that implies mergeable offsets?
-      if (sourceProvider.isOffsetMergeable) {
-        val batches = envelopesAndOffsets.groupBy {
-          // FIXME matched source provider should always be MergeableOffset
-          case ProjectionContextImpl(offset: MergeableOffset[_, _], _) =>
-            // FIXME we can assume there's only one actual offset per envelope, but there should be a better way to represent this
-            val mergeableKey = offset.entries.head._1.asInstanceOf[MergeableKey]
-            mergeableKey.surrogateKey
-          case _ =>
-            // should never happen
-            throw new IllegalStateException("The offset should always be of type MergeableOffset")
-        }
+      sourceProvider match {
+        case _: MergeableOffsetSourceProvider[_, Offset, Envelope] =>
+          val batches = envelopesAndOffsets
+            .flatMap {
+              case context @ ProjectionContextImpl(offset: MergeableOffset[MergeableKey, _] @unchecked, _) =>
+                offset.entries.toSeq.map {
+                  case (key, _) => (key, context)
+                }
+              case _ =>
+                // should never happen
+                throw new IllegalStateException("The offset should always be of type MergeableOffset")
+            }
+            .groupBy { case (key, _) => key }
+            .map {
+              case (key, keyAndContexts) =>
+                val envs = keyAndContexts.map {
+                  case (_, context) => context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]]
+                }
+                key.surrogateKey -> envs
+            }
 
-        // process batches in sequence, but not concurrently, in order to provide singled threaded guarantees
-        // to the user envelope handler
-        serialize(batches) { (surrogateKey, partitionedEnvelopes) =>
-          logger.debug("Processing grouped envelopes for MergeableOffset with key [{}]", surrogateKey)
-          processEnvelopes(partitionedEnvelopes)
-        }
-
-      } else {
-        processEnvelopes(envelopesAndOffsets)
+          // process batches in sequence, but not concurrently, in order to provide singled threaded guarantees
+          // to the user envelope handler
+          serialize(batches) {
+            case (surrogateKey, partitionedEnvelopes) =>
+              logger.debug("Processing grouped envelopes for MergeableOffset with key [{}]", surrogateKey)
+              processEnvelopes(partitionedEnvelopes)
+          }
+        case _ =>
+          processEnvelopes(envelopesAndOffsets)
       }
-
     }
 
     handlerStrategy match {
@@ -316,14 +325,18 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         .via(killSwitch.flow)
         .map(env => ProjectionContextImpl(sourceProvider.extractOffset(env), env))
         .filter { context =>
-          sourceProvider.verifyOffset(context.offset) match {
-            case VerificationSuccess => true
-            case VerificationFailure(reason) =>
-              logger.warning(
-                "Source provider instructed projection to skip offset [{}] with reason: {}",
-                context.offset,
-                reason)
-              false
+          sourceProvider match {
+            case vsp: VerifiableSourceProvider[Offset, Envelope] =>
+              vsp.verifyOffset(context.offset) match {
+                case VerificationSuccess => true
+                case VerificationFailure(reason) =>
+                  logger.warning(
+                    "Source provider instructed projection to skip offset [{}] with reason: {}",
+                    context.offset,
+                    reason)
+                  false
+              }
+            case _ => true
           }
         }
         .mapMaterializedValue(_ => NotUsed)

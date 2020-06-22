@@ -34,6 +34,7 @@ import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
 import akka.projection.testkit.scaladsl.ProjectionTestKit
@@ -104,7 +105,8 @@ object SlickProjectionSpec {
       system: ActorSystem[_],
       src: Source[Envelope, _],
       offsetVerificationF: Long => OffsetVerification)
-      extends SourceProvider[Long, Envelope] {
+      extends SourceProvider[Long, Envelope]
+      with VerifiableSourceProvider[Long, Envelope] {
     implicit val executionContext: ExecutionContext = system.executionContext
     override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
       offset().map {

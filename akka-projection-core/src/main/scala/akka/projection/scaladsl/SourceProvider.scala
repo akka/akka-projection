@@ -6,10 +6,10 @@ package akka.projection.scaladsl
 
 import scala.concurrent.Future
 
+import akka.projection.MergeableKey
+import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
-import akka.projection.OffsetVerification.VerificationSuccess
 import akka.stream.scaladsl.Source
-import com.github.ghik.silencer.silent
 
 trait SourceProvider[Offset, Envelope] {
 
@@ -17,9 +17,13 @@ trait SourceProvider[Offset, Envelope] {
 
   def extractOffset(envelope: Envelope): Offset
 
-  @silent("never used")
-  def verifyOffset(offset: Offset): OffsetVerification = VerificationSuccess
+}
 
-  def isOffsetMergeable: Boolean = false
+trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
+
+  def verifyOffset(offset: Offset): OffsetVerification
 
 }
+
+trait MergeableOffsetSourceProvider[MKey <: MergeableKey, Offset <: MergeableOffset[MKey, _], Envelope]
+    extends SourceProvider[Offset, Envelope]

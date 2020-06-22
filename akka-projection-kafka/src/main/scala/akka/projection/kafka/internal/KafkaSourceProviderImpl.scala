@@ -48,7 +48,12 @@ import org.apache.kafka.common.TopicPartition
     topics: Set[String],
     metadataClient: MetadataClientAdapter)
     extends javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
+    with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with javadsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with javadsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]] {
+
   import KafkaSourceProviderImpl._
 
   private implicit val executionContext: ExecutionContext = system.executionContext
@@ -96,8 +101,6 @@ import org.apache.kafka.common.TopicPartition
       VerificationFailure(
         "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
   }
-
-  override def isOffsetMergeable: Boolean = true
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) =>

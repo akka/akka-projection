@@ -30,6 +30,7 @@ import akka.projection.scaladsl.GroupedProjection
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickProjectionImpl
 import akka.projection.slick.internal.SlickSettings
@@ -74,23 +75,26 @@ object SlickProjection {
           val offset = sourceProvider.extractOffset(envelope)
           val handlerAction = delegate.process(envelope)
 
-          sourceProvider.verifyOffset(offset) match {
-            case VerificationSuccess =>
-              // run user function and offset storage on the same transaction
-              // any side-effect in user function is at-least-once
-              val txDBIO = offsetStore
-                .saveOffset(projectionId, offset)
-                .flatMap(_ => handlerAction)
-                .transactionally
-              databaseConfig.db.run(txDBIO).map(_ => Done)
-            case VerificationFailure(reason) =>
-              logger.warning(
-                "The offset failed source provider verification after the envelope was processed. " +
-                "The transaction will not be executed. Skipping envelope with reason: {}",
-                reason)
-              Future.successful(Done)
+          sourceProvider match {
+            case vsp: VerifiableSourceProvider[Offset, Envelope] =>
+              vsp.verifyOffset(offset) match {
+                case VerificationSuccess =>
+                  // run user function and offset storage on the same transaction
+                  // any side-effect in user function is at-least-once
+                  val txDBIO = offsetStore
+                    .saveOffset(projectionId, offset)
+                    .flatMap(_ => handlerAction)
+                    .transactionally
+                  databaseConfig.db.run(txDBIO).map(_ => Done)
+                case VerificationFailure(reason) =>
+                  logger.warning(
+                    "The offset failed source provider verification after the envelope was processed. " +
+                    "The transaction will not be executed. Skipping envelope with reason: {}",
+                    reason)
+                  Future.successful(Done)
+              }
+            case _ => Future.successful(Done)
           }
-
         }
         override def start(): Future[Done] = delegate.start()
         override def stop(): Future[Done] = delegate.stop()
@@ -187,21 +191,26 @@ object SlickProjection {
           val lastOffset = sourceProvider.extractOffset(envelopes.last)
           val handlerAction = delegate.process(envelopes)
 
-          sourceProvider.verifyOffset(lastOffset) match {
-            case VerificationSuccess =>
-              // run user function and offset storage on the same transaction
-              // any side-effect in user function is at-least-once
-              val txDBIO =
-                offsetStore.saveOffset(projectionId, lastOffset).flatMap(_ => handlerAction).transactionally
-              databaseConfig.db.run(txDBIO).mapTo[Done]
-            case VerificationFailure(reason) =>
-              logger.warning(
-                "The offset failed source provider verification after the envelope was processed. " +
-                "The transaction will not be executed. Skipping envelope(s) with reason: {}",
-                reason)
-              Future.successful(Done)
+          sourceProvider match {
+            case vsp: VerifiableSourceProvider[Offset, Envelope] =>
+              vsp.verifyOffset(lastOffset) match {
+                case VerificationSuccess =>
+                  // run user function and offset storage on the same transaction
+                  // any side-effect in user function is at-least-once
+                  val txDBIO =
+                    offsetStore.saveOffset(projectionId, lastOffset).flatMap(_ => handlerAction).transactionally
+                  databaseConfig.db.run(txDBIO).mapTo[Done]
+                case VerificationFailure(reason) =>
+                  logger.warning(
+                    "The offset failed source provider verification after the envelope was processed. " +
+                    "The transaction will not be executed. Skipping envelope(s) with reason: {}",
+                    reason)
+                  Future.successful(Done)
+              }
+            case _ => Future.successful(Done)
           }
         }
+
         override def start(): Future[Done] = delegate.start()
         override def stop(): Future[Done] = delegate.stop()
       }

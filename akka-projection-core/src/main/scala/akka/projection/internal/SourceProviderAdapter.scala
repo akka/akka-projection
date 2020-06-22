@@ -13,7 +13,6 @@ import scala.compat.java8.OptionConverters._
 import scala.concurrent.Future
 
 import akka.annotation.InternalApi
-import akka.projection.OffsetVerification
 import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.stream.scaladsl.Source
@@ -26,8 +25,8 @@ import akka.stream.scaladsl.Source
     extends scaladsl.SourceProvider[Offset, Envelope] {
 
   def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, _]] = {
-    // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,
-    // it _should_ not be used for the blocking operation of getting offsets themselves
+    // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,	
+    // it _should_ not be used for the blocking operation of getting offsets themselves	
     val ec = akka.dispatch.ExecutionContexts.parasitic
     val offsetAdapter = new Supplier[CompletionStage[Optional[Offset]]] {
       override def get(): CompletionStage[Optional[Offset]] = offset().map(_.asJava)(ec).toJava
@@ -36,6 +35,4 @@ import akka.stream.scaladsl.Source
   }
 
   def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
-
-  override def verifyOffset(offset: Offset): OffsetVerification = delegate.verifyOffset(offset)
 }

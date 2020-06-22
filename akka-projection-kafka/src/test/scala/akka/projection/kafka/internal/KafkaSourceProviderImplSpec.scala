@@ -29,6 +29,7 @@ import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.GroupOffsets.TopicPartitionKey
 import akka.projection.kafka.internal.KafkaSourceProviderImpl.ReadOffsets
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.KillSwitches
 import akka.stream.OverflowStrategy
@@ -115,7 +116,8 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
   // FIXME: Copied mostly from ProjectionTestKitSpec.
   // Maybe a `TestProjection` could be abstracted out and reused to reduce test boilerplate
   private[akka] case class TestProjection(
-      sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]],
+      sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]]
+        with VerifiableSourceProvider[GroupOffsets, ConsumerRecord[String, String]],
       topic: String,
       partitions: Int)
       extends Projection[ConsumerRecord[Int, Int]]
