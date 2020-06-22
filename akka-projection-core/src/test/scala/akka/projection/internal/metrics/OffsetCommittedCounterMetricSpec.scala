@@ -83,12 +83,12 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
         }
       }
       "count envelopes only once in case of failure" in {
-        val single = Handlers.groupedWithFailures(0.5f)
+        val grouped = Handlers.groupedWithFailures(0.5f)
         val tt = new TelemetryTester(
           AtLeastOnce(
             afterEnvelopes = Some(2),
             recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
-          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(3), orAfterDuration = Some(500.millis)))
+          GroupedHandlerStrategy(grouped, afterEnvelopes = Some(3), orAfterDuration = Some(500.millis)))
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
@@ -153,9 +153,9 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
     " in `exactly-once` with groupedHandler" must {
       "count offsets" in {
         val grouped = Handlers.grouped
-        val grouHandler = GroupedHandlerStrategy(grouped, afterEnvelopes = Some(2))
+        val groupHandler = GroupedHandlerStrategy(grouped, afterEnvelopes = Some(2))
         val tt =
-          new TelemetryTester(ExactlyOnce(), grouHandler)
+          new TelemetryTester(ExactlyOnce(), groupHandler)
 
         runInternal(tt.projectionState) {
           withClue("the success counter reflects all events as processed") {
