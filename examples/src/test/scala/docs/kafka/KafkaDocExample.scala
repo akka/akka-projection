@@ -4,10 +4,10 @@
 
 package docs.kafka
 
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.Random
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -18,23 +18,22 @@ import akka.kafka.scaladsl.SendProducer
 import akka.projection.Projection
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
+import akka.projection.jdbc.scaladsl.JdbcHandler
+import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.kafka.GroupOffsets
+import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.slick.SlickHandler
-import akka.projection.slick.SlickProjection
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import jdocs.jpa.HibernateSessionProvider
+import jdocs.jpa.HibernateSessionProvider.HibernateJdbcSession
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringSerializer
 import org.slf4j.LoggerFactory
-import slick.basic.DatabaseConfig
-import slick.dbio.DBIO
-import slick.jdbc.H2Profile
 
 //#imports
 import akka.kafka.ConsumerSettings
-import akka.projection.kafka.KafkaSourceProvider
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -47,11 +46,12 @@ object KafkaDocExample {
   type Word = String
   type Count = Int
 
-  class WordCountHandler(projectionId: ProjectionId) extends SlickHandler[ConsumerRecord[String, String]] {
+  class WordCountHandler(projectionId: ProjectionId)
+      extends JdbcHandler[ConsumerRecord[String, String], HibernateJdbcSession] {
     private val logger = LoggerFactory.getLogger(getClass)
     private var state: Map[Word, Count] = Map.empty
 
-    override def process(envelope: ConsumerRecord[String, String]): DBIO[Done] = {
+    override def process(session: HibernateJdbcSession, envelope: ConsumerRecord[String, String]): Unit = {
       val word = envelope.value
       val newCount = state.getOrElse(word, 0) + 1
       logger.info(
@@ -62,7 +62,6 @@ object KafkaDocExample {
         word,
         newCount)
       state = state.updated(word, newCount)
-      DBIO.successful(Done)
     }
   }
   //#handler
@@ -72,27 +71,16 @@ object KafkaDocExample {
 
   class WordSource(implicit ec: ExecutionContext) extends SourceProvider[Long, WordEnvelope] {
 
-    private val words = Vector("aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg")
-    private val rnd = new Random(17) // same sequence each time
-    private val src = Source
-      .fromIterator(() =>
-        new Iterator[WordEnvelope] {
-          private var offset = 0L
-          override def hasNext: Boolean = true
-
-          override def next(): WordEnvelope = {
-            val i = rnd.nextInt(words.size)
-            offset += 1
-            WordEnvelope(offset, words(i))
-          }
-        })
-      .throttle(1, 1.second)
+    private val src = Source(
+      List(WordEnvelope(1L, "abc"), WordEnvelope(2L, "def"), WordEnvelope(3L, "ghi"), WordEnvelope(4L, "abc")))
 
     override def source(offset: () => Future[Option[Long]]): Future[Source[WordEnvelope, _]] = {
-      offset().map {
-        case Some(o) => src.dropWhile(_.offset <= o)
-        case _       => src
-      }
+      offset()
+        .map {
+          case Some(o) => src.dropWhile(_.offset <= o)
+          case _       => src
+        }
+        .map(_.throttle(1, 1.second))
     }
 
     override def extractOffset(env: WordEnvelope): Long = env.offset
@@ -101,10 +89,10 @@ object KafkaDocExample {
 
   //#wordPublisher
   class WordPublisher(topic: String, sendProducer: SendProducer[String, String])(implicit ec: ExecutionContext)
-      extends SlickHandler[WordEnvelope] {
+      extends JdbcHandler[WordEnvelope, HibernateJdbcSession] {
     private val logger = LoggerFactory.getLogger(getClass)
 
-    override def process(envelope: WordEnvelope): DBIO[Done] = {
+    override def process(session: HibernateJdbcSession, envelope: WordEnvelope): Unit = {
       val word = envelope.word
       // using the word as the key and `DefaultPartitioner` will select partition based on the key
       // so that same word always ends up in same partition
@@ -114,7 +102,8 @@ object KafkaDocExample {
         logger.info("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition)
         Done
       }
-      DBIO.from(result)
+      // FIXME support for async Handler, issue #23
+      Await.result(result, 5.seconds)
     }
   }
   //#wordPublisher
@@ -156,18 +145,16 @@ object KafkaDocExample {
     import IllustrateSourceProvider._
 
     //#exactlyOnce
-    val databaseConfig: DatabaseConfig[H2Profile] =
-      DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
+    val sessionProvider = new HibernateSessionProvider
+
     val projectionId = ProjectionId("WordCount", "wordcount-1")
     val projection =
-      SlickProjection.exactlyOnce(
+      JdbcProjection.exactlyOnce(
         projectionId,
         sourceProvider,
-        databaseConfig,
+        () => sessionProvider.newInstance(),
         handler = new WordCountHandler(projectionId))
     //#exactlyOnce
-
-    SlickProjection.createOffsetTableIfNotExists(databaseConfig)
   }
 
   object IllustrateSendingToKafka {
@@ -186,27 +173,31 @@ object KafkaDocExample {
 
     //#sendToKafkaProjection
     val sourceProvider = new WordSource
+    val sessionProvider = new HibernateSessionProvider
 
-    val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
     val projectionId = ProjectionId("PublishWords", "words")
     val projection =
-      SlickProjection
-        .atLeastOnce(projectionId, sourceProvider, dbConfig, handler = new WordPublisher(topicName, sendProducer))
+      JdbcProjection
+        .exactlyOnce(
+          projectionId,
+          sourceProvider,
+          () => sessionProvider.newInstance(),
+          handler = new WordPublisher(topicName, sendProducer))
 
     //#sendToKafkaProjection
 
-    SlickProjection.createOffsetTableIfNotExists(dbConfig)
+    // FIXME change above to atLeastOnce
   }
 
   def consumerProjection(n: Int): Projection[ConsumerRecord[String, String]] = {
-    import IllustrateExactlyOnce.databaseConfig
     import IllustrateSourceProvider.sourceProvider
+    val sessionProvider = new HibernateSessionProvider
 
     val projectionId = ProjectionId("WordCount", s"wordcount-$n")
-    SlickProjection.exactlyOnce(
+    JdbcProjection.exactlyOnce(
       projectionId,
       sourceProvider,
-      databaseConfig,
+      () => sessionProvider.newInstance(),
       handler = new WordCountHandler(projectionId))
   }
 

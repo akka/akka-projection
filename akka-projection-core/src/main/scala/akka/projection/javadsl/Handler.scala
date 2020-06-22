@@ -44,6 +44,7 @@ abstract class Handler[Envelope] extends HandlerLifecycle {
    * of the `envelope` has finished. It will not be invoked with the next envelope until after the returned
    * `CompletionStage` has been completed.
    */
+  @throws(classOf[Exception])
   def process(envelope: Envelope): CompletionStage[Done]
 
   /**

@@ -15,8 +15,8 @@ As the source you can select from:
 For the offset storage you can select from:
 
 * @ref:[Offset in Cassandra](cassandra.md)
+* @ref:[Offset in relational DB with JDBC](jdbc.md)
 * @ref:[Offset in relational DB with Slick](slick.md)
-* @ref:[Offset in relational DB with JPA](jpa.md)
 
 Those building blocks are assembled into a `Projection`. You can have many instances of it
 @ref:[automatically distributed and run](running.md) in an Akka Cluster. 

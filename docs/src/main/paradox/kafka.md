@@ -6,11 +6,12 @@ A typical source for Projections is messages from Kafka. Akka Projections has in
 The @apiddoc[KafkaSourceProvider] uses consumer group assignments from Kafka and can resume from offsets stored in
 a database.
 
-Akka Projections can store the offsets from Kafka in a @ref:[relational DB with Slick](slick.md).
+Akka Projections can store the offsets from Kafka in a @ref:[relational DB with JDBC](jdbc.md)
+or in @ref:[relational DB with Slick](slick.md).
 
-The `SlickProjection` envelope handler returns a `DBIO` that will be run by the projection. This means that the target database
-operations can be run in the same transaction as the storage of the offset, which means that @ref:[exactly-once](slick.md#exactly-once)
-processing semantics is supported. It also offers @ref:[at-least-once](slick.md#at-least-once) semantics.
+The `JdbcProjection` @scala[or `SlickProjection`] envelope handler will be run by the projection. This means that the target database
+operations can be run in the same transaction as the storage of the offset, which means that @ref:[exactly-once](jdbc.md#exactly-once)
+processing semantics is supported. It also offers @ref:[at-least-once](jdbc.md#at-least-once) semantics.
 
 @@@ note
 
@@ -49,7 +50,7 @@ Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #imports #sourceProvider }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #todo }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #imports #sourceProvider }
 
 Please consult the [Alpakka Kafka documentation](https://doc.akka.io/docs/alpakka-kafka/current/consumer.html) for
 specifics around the `ConsumerSettings`. The `KafkaSourceProvider` is using `Consumer.plainPartitionedManualOffsetSource`.
@@ -60,7 +61,7 @@ Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #exactlyOnce }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #todo }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #exactlyOnce }
 
 and the `WordCountHandler`:
 
@@ -68,7 +69,7 @@ Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #handler }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #todo }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #handler }
 
 ## Committing offset in Kafka
 
@@ -84,13 +85,13 @@ can be used, and Akka Projections is not needed for that usage.
 
 The @apidoc[SendProducer] in Alpakka Kafka can be used for sending messages to Kafka from a Projection.
 
-A `SlickHandler` that is sending to Kafka may look like this:
+A `JdbHandler` that is sending to Kafka may look like this:
 
 Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #wordPublisher }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #todo }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #wordPublisher }
 
 The `SendProducer` is constructed with:
 
@@ -98,7 +99,7 @@ Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #sendProducer }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #todo }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #sendProducer }
 
 Please consult the [Alpakka Kafka documentation](https://doc.akka.io/docs/alpakka-kafka/current/producer.html) for
 specifics around the `ProducerSettings` and `SendProducer`.
@@ -109,7 +110,7 @@ Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #sendToKafkaProjection }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #todo }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #sendToKafkaProjection }
 
 where the `SourceProvider` in this example is:
 
@@ -117,7 +118,7 @@ Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #wordSource }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #todo }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #wordSource }
 
 
 

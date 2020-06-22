@@ -19,7 +19,6 @@ import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
@@ -28,6 +27,7 @@ import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.StringKey
 import akka.projection.kafka.GroupOffsets
+import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
 import com.typesafe.config.ConfigFactory
