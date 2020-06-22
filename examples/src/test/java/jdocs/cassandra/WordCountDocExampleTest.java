@@ -89,7 +89,7 @@ public class WordCountDocExampleTest extends JUnitSuite {
       .atLeastOnce(
         projectionId,
         new WordSource(),
-        new WordCountHandler(projectionId, repository));
+          () -> new WordCountHandler(projectionId, repository));
     //#projection
 
     runAndAssert(projection);
@@ -103,7 +103,7 @@ public class WordCountDocExampleTest extends JUnitSuite {
         .atLeastOnce(
             projectionId,
             new WordSource(),
-            new IllustrateStatefulHandlerLoadingStateOnDemand.WordCountHandler(projectionId, repository));
+            () -> new IllustrateStatefulHandlerLoadingStateOnDemand.WordCountHandler(projectionId, repository));
 
     runAndAssert(projection);
   }
@@ -118,7 +118,7 @@ public class WordCountDocExampleTest extends JUnitSuite {
         .atLeastOnce(
             projectionId,
             new WordSource(),
-            new WordCountActorHandler(WordCountProcessor.create(projectionId, repository), system));
+            () -> new WordCountActorHandler(WordCountProcessor.create(projectionId, repository), system));
     //#actorHandlerProjection
 
     runAndAssert(projection);
@@ -133,7 +133,7 @@ public class WordCountDocExampleTest extends JUnitSuite {
         .atLeastOnce(
             projectionId,
             new WordSource(),
-            new IllstrateActorLoadingStateOnDemand.WordCountActorHandler(IllstrateActorLoadingStateOnDemand.WordCountProcessor.create(projectionId, repository), system));
+            () -> new IllstrateActorLoadingStateOnDemand.WordCountActorHandler(IllstrateActorLoadingStateOnDemand.WordCountProcessor.create(projectionId, repository), system));
 
     runAndAssert(projection);
   }

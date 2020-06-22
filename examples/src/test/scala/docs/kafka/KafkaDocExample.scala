@@ -153,7 +153,7 @@ object KafkaDocExample {
         projectionId,
         sourceProvider,
         () => sessionProvider.newInstance(),
-        handler = new WordCountHandler(projectionId))
+        handler = () => new WordCountHandler(projectionId))
     //#exactlyOnce
   }
 
@@ -182,7 +182,7 @@ object KafkaDocExample {
           projectionId,
           sourceProvider,
           () => sessionProvider.newInstance(),
-          handler = new WordPublisher(topicName, sendProducer))
+          handler = () => new WordPublisher(topicName, sendProducer))
 
     //#sendToKafkaProjection
 
@@ -198,7 +198,7 @@ object KafkaDocExample {
       projectionId,
       sourceProvider,
       () => sessionProvider.newInstance(),
-      handler = new WordCountHandler(projectionId))
+      handler = () => new WordCountHandler(projectionId))
   }
 
   def producerProjection(): Projection[WordEnvelope] = {

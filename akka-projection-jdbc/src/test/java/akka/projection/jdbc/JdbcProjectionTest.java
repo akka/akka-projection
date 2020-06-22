@@ -218,7 +218,7 @@ public class JdbcProjectionTest extends JUnitSuite {
                   projectionId,
                   new TestSourceProvider(entityId),
                   jdbcSessionCreator,
-                  concatHandler(str),
+                  () -> concatHandler(str),
                   testKit.system()
               );
 
@@ -241,7 +241,7 @@ public class JdbcProjectionTest extends JUnitSuite {
                     new TestSourceProvider(entityId),
                     jdbcSessionCreator,
                     // fail on forth offset
-                    concatHandler(str, offset -> offset == 4),
+                    () -> concatHandler(str, offset -> offset == 4),
                     testKit.system()
                 );
 
@@ -262,7 +262,7 @@ public class JdbcProjectionTest extends JUnitSuite {
                     new TestSourceProvider(entityId),
                     jdbcSessionCreator,
                     // fail on forth offset
-                    concatHandler(str),
+                    () -> concatHandler(str),
                     testKit.system()
                 );
         projectionTestKit.run(projection2, () -> assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));

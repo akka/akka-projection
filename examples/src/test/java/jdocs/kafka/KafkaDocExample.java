@@ -176,7 +176,7 @@ public interface KafkaDocExample {
             projectionId,
             sourceProvider,
             sessionProvider::newInstance,
-            new WordCountHandler(projectionId),
+            () -> new WordCountHandler(projectionId),
             system);
     //#exactlyOnce
   }
@@ -205,7 +205,7 @@ public interface KafkaDocExample {
                 projectionId,
                 sourceProvider,
                 sessionProvider::newInstance,
-                new WordPublisher(topicName, sendProducer),
+                () -> new WordPublisher(topicName, sendProducer),
                 system);
     //#sendToKafkaProjection
 

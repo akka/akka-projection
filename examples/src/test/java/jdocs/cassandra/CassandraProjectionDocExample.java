@@ -129,7 +129,7 @@ public interface CassandraProjectionDocExample {
         CassandraProjection.atLeastOnce(
             ProjectionId.of("shopping-carts", "carts-1"),
             sourceProvider,
-            new ShoppingCartHandler()
+            () -> new ShoppingCartHandler()
         )
             .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     //#atLeastOnce
@@ -147,7 +147,7 @@ public interface CassandraProjectionDocExample {
         CassandraProjection.atMostOnce(
             ProjectionId.of("shopping-carts", "carts-1"),
             sourceProvider,
-            new ShoppingCartHandler());
+            ShoppingCartHandler::new);
     //#atMostOnce
 
   }
@@ -166,7 +166,7 @@ public interface CassandraProjectionDocExample {
         CassandraProjection.groupedWithin(
             ProjectionId.of("shopping-carts", "carts-1"),
             sourceProvider,
-            new GroupedShoppingCartHandler()
+            GroupedShoppingCartHandler::new
         )
             .withGroup(groupAfterEnvelopes, groupAfterDuration);
     //#grouped
@@ -221,7 +221,7 @@ public interface CassandraProjectionDocExample {
         CassandraProjection.atLeastOnce(
             ProjectionId.of("shopping-carts", "carts-1"),
             sourceProvider,
-            new ShoppingCartHandler()
+            ShoppingCartHandler::new
         )
         .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(10, Duration.ofSeconds(1)));
     //#withRecoveryStrategy
@@ -242,7 +242,7 @@ public interface CassandraProjectionDocExample {
         CassandraProjection.atLeastOnce(
             ProjectionId.of("shopping-carts", "carts-1"),
             sourceProvider,
-            new ShoppingCartHandler()
+            ShoppingCartHandler::new
         )
         .withRestartBackoff(minBackoff, maxBackoff, randomFactor);
     //#withRestartBackoff
@@ -268,7 +268,7 @@ public interface CassandraProjectionDocExample {
       return CassandraProjection.atLeastOnce(
           ProjectionId.of("shopping-carts", tag),
           sourceProvider(tag),
-          new ShoppingCartHandler()
+          ShoppingCartHandler::new
       )
           .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     }
@@ -303,7 +303,7 @@ public interface CassandraProjectionDocExample {
       return CassandraProjection.atLeastOnce(
           ProjectionId.of("shopping-carts", tag),
           sourceProvider(tag),
-          new ShoppingCartHandler()
+          ShoppingCartHandler::new
       );
     }
 
@@ -327,7 +327,7 @@ public interface CassandraProjectionDocExample {
       return CassandraProjection.atLeastOnce(
           ProjectionId.of("shopping-carts", tag),
           sourceProvider(tag),
-          new ShoppingCartHandler()
+          ShoppingCartHandler::new
       );
     }
 
@@ -355,7 +355,7 @@ public interface CassandraProjectionDocExample {
         CassandraProjection.atLeastOnce(
             ProjectionId.of("shopping-carts", "carts-1"),
             sourceProvider,
-            new ShoppingCartHandler()
+            ShoppingCartHandler::new
         ).withRestartBackoff(
             Duration.ofSeconds(10), /*minBackoff*/
             Duration.ofSeconds(60), /*maxBackoff*/

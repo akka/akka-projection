@@ -130,7 +130,7 @@ class SlickProjectionDocExample {
         projectionId = ProjectionId("ShoppingCarts", "carts-1"),
         sourceProvider,
         dbConfig,
-        handler = new ShoppingCartHandler(repository))
+        handler = () => new ShoppingCartHandler(repository))
     //#exactlyOnce
   }
 
@@ -144,7 +144,7 @@ class SlickProjectionDocExample {
           projectionId = ProjectionId("ShoppingCarts", "carts-1"),
           sourceProvider,
           dbConfig,
-          handler = new ShoppingCartHandler(repository))
+          handler = () => new ShoppingCartHandler(repository))
         .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
     //#atLeastOnce
   }
@@ -159,7 +159,7 @@ class SlickProjectionDocExample {
           projectionId = ProjectionId("ShoppingCarts", "carts-1"),
           sourceProvider,
           dbConfig,
-          handler = new GroupedShoppingCartHandler(repository))
+          handler = () => new GroupedShoppingCartHandler(repository))
         .withGroup(groupAfterEnvelopes = 20, groupAfterDuration = 500.millis)
     //#grouped
   }
