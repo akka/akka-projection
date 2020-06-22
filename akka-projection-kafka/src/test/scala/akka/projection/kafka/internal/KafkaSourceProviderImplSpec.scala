@@ -9,7 +9,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
-import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
@@ -173,11 +172,11 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
         val futSource =
           sourceProvider
             .source(() => Future.successful(Option(groupOffsets)))
-            .map(_.mapMaterializedValue(_ => NotUsed))
 
         Source
           .futureSource(futSource)
           .map(env => (sourceProvider.extractOffset(env), env))
+          .mapMaterializedValue(fut => fut.map(_ => Done))
           .filter {
             case ((offset: GroupOffsets, _)) =>
               sourceProvider.verifyOffset(offset) match {
@@ -190,7 +189,6 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
               Await.result(processedQueue.offer(record), 10.millis)
               Done
           }
-          .mapMaterializedValue(_ => Future.successful(Done))
       }
 
       def newRunningInstance(): RunningProjection =

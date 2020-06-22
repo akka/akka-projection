@@ -320,7 +320,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             .flatMap { _ =>
               sourceProvider
                 .source(() => readOffsets())
-                .map(_.mapMaterializedValue(_ => NotUsed))
             })
         .via(killSwitch.flow)
         .map(env => ProjectionContextImpl(sourceProvider.extractOffset(env), env))

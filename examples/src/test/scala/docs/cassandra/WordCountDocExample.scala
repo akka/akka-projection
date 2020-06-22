@@ -12,6 +12,7 @@ import scala.util.Success
 import scala.util.Try
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.Handler
@@ -85,7 +86,7 @@ object WordCountDocExample {
     private val src = Source(
       List(WordEnvelope(1L, "abc"), WordEnvelope(2L, "def"), WordEnvelope(3L, "ghi"), WordEnvelope(4L, "abc")))
 
-    override def source(offset: () => Future[Option[Long]]): Future[Source[WordEnvelope, _]] = {
+    override def source(offset: () => Future[Option[Long]]): Future[Source[WordEnvelope, NotUsed]] = {
       offset().map {
         case Some(o) => src.dropWhile(_.offset <= o)
         case _       => src

@@ -5,12 +5,14 @@
 package docs.kafka
 
 import scala.concurrent.Await
+
 import akka.actor.typed.scaladsl.LoggerOps
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
@@ -75,7 +77,7 @@ object KafkaDocExample {
     private val src = Source(
       List(WordEnvelope(1L, "abc"), WordEnvelope(2L, "def"), WordEnvelope(3L, "ghi"), WordEnvelope(4L, "abc")))
 
-    override def source(offset: () => Future[Option[Long]]): Future[Source[WordEnvelope, _]] = {
+    override def source(offset: () => Future[Option[Long]]): Future[Source[WordEnvelope, NotUsed]] = {
       offset()
         .map {
           case Some(o) => src.dropWhile(_.offset <= o)

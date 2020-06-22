@@ -12,6 +12,7 @@ import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.Future
 
+import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.projection.javadsl
 import akka.projection.scaladsl
@@ -24,7 +25,7 @@ import akka.stream.scaladsl.Source
     delegate: javadsl.SourceProvider[Offset, Envelope])
     extends scaladsl.SourceProvider[Offset, Envelope] {
 
-  def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, _]] = {
+  def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
     // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,	
     // it _should_ not be used for the blocking operation of getting offsets themselves	
     val ec = akka.dispatch.ExecutionContexts.parasitic

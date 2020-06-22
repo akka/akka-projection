@@ -12,6 +12,7 @@ import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
+import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
@@ -46,9 +47,9 @@ object EventSourcedProvider {
       extends SourceProvider[Offset, EventEnvelope[Event]] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
-    override def source(
-        offsetAsync: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[Source[EventEnvelope[Event], _]] = {
-      val source: Future[Source[EventEnvelope[Event], _]] = offsetAsync.get().toScala.map { offsetOpt =>
+    override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
+        : CompletionStage[Source[EventEnvelope[Event], NotUsed]] = {
+      val source: Future[Source[EventEnvelope[Event], NotUsed]] = offsetAsync.get().toScala.map { offsetOpt =>
         eventsByTagQuery
           .eventsByTag(tag, offsetOpt.orElse(NoOffset))
           .map(env => EventEnvelope(env))
