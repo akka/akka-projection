@@ -29,6 +29,7 @@ import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionBehavior
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.jdbc.internal.JdbcOffsetStore
@@ -39,6 +40,7 @@ import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestSubscriber
 import com.typesafe.config.Config
@@ -731,7 +733,40 @@ class JdbcProjectionSpec
   "A JDBC flow projection" must {
 
     "persist projection and offset" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val flowHandler =
+        FlowWithContext[Envelope, ProjectionContext]
+          .mapAsync(1) { env =>
+            withRepo(_.concatToText(env.id, env.message))
+          }
+
+      val projection =
+        JdbcProjection
+          .atLeastOnceFlow(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = flowHandler)
+          .withSaveOffset(1, 1.minute)
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          val concatStr = withRepo(_.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+
     }
   }
 
