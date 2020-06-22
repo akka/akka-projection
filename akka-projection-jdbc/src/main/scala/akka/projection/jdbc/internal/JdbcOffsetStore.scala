@@ -82,17 +82,13 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
           }
 
           if (buffer.isEmpty) None
-          else if (buffer.size == 1) Some(fromStorageRepresentation[Offset, Offset](buffer.head))
           else if (buffer.forall(_.mergeable)) {
             Some(
               fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(buffer.toList))
                 .asInstanceOf[Offset])
           } else {
-            // if this happen it's a bug, can be a offset store that got corrupt
-            throw new RuntimeException(
-              s"Found more then one offset for [$projectionId], but not all of them are mergeable!")
+            buffer.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
           }
-
         }
       }
     }

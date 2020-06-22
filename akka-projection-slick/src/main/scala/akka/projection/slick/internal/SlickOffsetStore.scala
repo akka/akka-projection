@@ -48,10 +48,7 @@ import slick.jdbc.JdbcProfile
       case reps if reps.forall(_.mergeable) =>
         Some(fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(reps)).asInstanceOf[Offset])
       case reps =>
-        reps.find(_.id == projectionId) match {
-          case Some(rep) => Some(fromStorageRepresentation[Offset, Offset](rep))
-          case _         => None
-        }
+        reps.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
     }
   }
 
