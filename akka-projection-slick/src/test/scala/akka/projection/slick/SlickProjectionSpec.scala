@@ -38,13 +38,10 @@ import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
 import akka.projection.testkit.scaladsl.ProjectionTestKit
-import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.FlowWithContext
-import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
-import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.testkit.scaladsl.TestSource
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -570,25 +567,15 @@ class SlickProjectionSpec
     "verify offsets before and after processing an envelope" in {
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      val (verifiedQueue, verifiedProbe) = Source
-        .queue[Long](1, OverflowStrategy.backpressure)
-        .toMat(TestSink.probe(actorSystem.classicSystem))(Keep.both)
-        .run()
-      val (envelopeQueue, envelopeProbe) = Source
-        .queue[Envelope](1, OverflowStrategy.backpressure)
-        .toMat(TestSink.probe(actorSystem.classicSystem))(Keep.both)
-        .run()
+      val probe = createTestProbe[Any]("verify-and-envelope-msgs")
 
       val testVerification = (offset: Long) => {
-        Await.ready(verifiedQueue.offer(offset), 10.millis)
+        probe.ref ! offset
         VerificationSuccess
       }
 
-      def slickHandler() = SlickHandler[Envelope] { envelope =>
-        withClue("checking: offset verified before handler function was run") {
-          verifiedProbe.requestNext() shouldEqual envelope.offset
-        }
-        Await.ready(envelopeQueue.offer(envelope), 10.millis)
+      val slickHandler = SlickHandler[Envelope] { envelope =>
+        probe.ref ! envelope
         repository.concatToText(envelope.id, envelope.message)
       }
 
@@ -599,21 +586,40 @@ class SlickProjectionSpec
           projectionId,
           sourceProvider = testSourceProvider,
           databaseConfig = dbConfig,
-          handler = () => slickHandler())
+          handler = () => slickHandler)
+
+      val numMessages = 6
+      case class VerifyState(verifyCount: Int, envReceived: Boolean)
 
       projectionTestKit.runWithTestSink(slickProjection) { testSink =>
-        for (_ <- 1 to 6) {
-          testSink.request(1)
-          withClue("checking: offset verified after handler function was run") {
-            val nextEnvelopeOffset = envelopeProbe.requestNext().offset
-            val nextOffset = verifiedProbe.requestNext()
-            nextEnvelopeOffset shouldEqual nextOffset
+        for (_ <- 1 to numMessages) testSink.request(1)
+        withClue("checking: offset verified once before and once after envelope arrival") {
+          val msgs = probe.receiveMessages(numMessages * 3)
+          msgs.foldLeft(Map[Long, VerifyState]()) {
+            case (acc, msg) =>
+              msg match {
+                case o: Long =>
+                  acc.get(o) match {
+                    case Some(state) if !state.envReceived && state.verifyCount >= 1 =>
+                      fail(s"Envelope has already been verified at least twice for offset $o")
+                    case Some(state) if state.envReceived =>
+                      acc + (o -> state.copy(verifyCount = state.verifyCount + 1))
+                    case None => acc + (o -> VerifyState(1, false))
+                  }
+                case e: Envelope =>
+                  val o = e.offset
+                  acc.get(e.offset) match {
+                    case Some(state) if state.envReceived => fail(s"Envelope was already received for offset $o")
+                    case Some(state) if state.verifyCount >= 2 =>
+                      fail(s"Envelope has already been verified at least twice for offset $o")
+                    case None        => fail(s"Envelope has not been verified yet for offset $o")
+                    case Some(state) => acc + (o -> state.copy(envReceived = true))
+                  }
+              }
           }
+          probe.expectNoMessage(10.millis)
         }
       }
-
-      verifiedProbe.cancel()
-      envelopeProbe.cancel()
     }
 
     "skip record if offset verification fails before processing envelope" in {
