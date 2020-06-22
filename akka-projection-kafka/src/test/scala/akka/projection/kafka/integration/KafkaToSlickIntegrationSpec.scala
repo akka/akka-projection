@@ -27,6 +27,7 @@ import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.StringKey
 import akka.projection.kafka.GroupOffsets
+import akka.projection.kafka.Repeated
 import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
@@ -114,7 +115,9 @@ object KafkaToSlickIntegrationSpec {
   }
 }
 
-class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config)) {
+class KafkaToSlickIntegrationSpec
+    extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config))
+    with Repeated {
   import KafkaToSlickIntegrationSpec._
 
   override implicit def patienceConfig: PatienceConfig =
@@ -135,10 +138,9 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
   "KafkaSourceProvider with Slick" must {
     "project a model and Kafka offset map to a slick db exactly once" in {
-      val projectionId = ProjectionId("HappyPath", "UserEventCountProjection-1")
-
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()
+      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
       produceEvents(topicName)
 
@@ -166,10 +168,9 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     }
 
     "project a model and Kafka offset map to a slick db exactly once with a retriable DBIO.failed" in {
-      val projectionId = ProjectionId("OneFailure", "UserEventCountProjection-1")
-
       val topicName = createTopic(suffix = 1, partitions = 3, replication = 1)
       val groupId = createGroupId()
+      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
       produceEvents(topicName)
 
