@@ -13,10 +13,9 @@ import scala.compat.java8.OptionConverters._
 import scala.concurrent.Future
 
 import akka.annotation.InternalApi
+import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
-import akka.projection.ProjectionContext
-import akka.projection.internal.ProjectionContextImpl
 
 abstract class SourceProvider[Offset, Envelope] {
 
@@ -44,9 +43,5 @@ trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, 
 
 }
 
-trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_, _], Envelope] {
-
-  private[projection] def groupByKey(envs: java.util.List[ProjectionContextImpl[_, Envelope]])
-      : java.util.Map[String, java.util.List[ProjectionContext]]
-
-}
+trait MergeableOffsetSourceProvider[MKey <: MergeableKey, Offset <: MergeableOffset[MKey, _], Envelope]
+    extends SourceProvider[Offset, Envelope]
