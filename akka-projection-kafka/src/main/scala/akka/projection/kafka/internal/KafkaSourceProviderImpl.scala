@@ -104,12 +104,11 @@ import org.apache.kafka.common.TopicPartition
       readOffsets()
         .flatMap {
           case Some(groupOffsets) =>
-            Future.successful(groupOffsets.entries.flatMap {
-              case (topicPartitionKey, offset) =>
-                val tp = topicPartitionKey.tp
-                if (assignedTps.contains(tp)) Map(tp -> offset)
-                else Map.empty
-            })
+            val filteredMap = groupOffsets.entries.collect {
+              case (topicPartitionKey, offset) if assignedTps.contains(topicPartitionKey.tp) =>
+                (topicPartitionKey.tp -> offset)
+            }
+            Future.successful(filteredMap)
           case None => metadataClient.getBeginningOffsets(assignedTps)
         }
         .recover {

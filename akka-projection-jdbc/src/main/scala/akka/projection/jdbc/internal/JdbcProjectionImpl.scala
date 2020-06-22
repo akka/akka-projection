@@ -188,7 +188,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
-  override private[projection] def mappedSource()(implicit system: ActorSystem[_]) =
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
     new JdbcInternalProjectionState(settingsOrDefaults).mappedSource()
 
   private class JdbcInternalProjectionState(settings: ProjectionSettings)(implicit val system: ActorSystem[_])

@@ -78,7 +78,7 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
 
             val adaptedProjectionId = ProjectionId(projectionId.name, key)
             val single = SingleOffset(adaptedProjectionId, manifest, offsetStr, mergeable)
-            buffer.addOne(single)
+            buffer.append(single)
           }
 
           if (buffer.isEmpty) None

@@ -5,6 +5,7 @@
 package akka.projection;
 
 import akka.Done;
+import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
@@ -13,6 +14,7 @@ import akka.projection.internal.NoopStatusObserver;
 import akka.projection.internal.ProjectionSettings;
 import akka.stream.scaladsl.Source;
 import scala.Option;
+import scala.concurrent.Future;
 import scala.concurrent.duration.FiniteDuration;
 
 import java.time.Duration;
@@ -38,7 +40,7 @@ public class ProjectionBehaviorCompileTest {
     }
 
     @Override
-    public Source<Done, ?> mappedSource(ActorSystem<?> system) {
+    public Source<Done, Future<Done>> mappedSource(ActorSystem<?> system) {
       return null;
     }
 

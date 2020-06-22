@@ -5,6 +5,7 @@
 package jdocs.testkit;
 
 import akka.Done;
+import akka.NotUsed;
 import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
@@ -22,6 +23,7 @@ import org.junit.ClassRule;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
 import scala.Option;
+import scala.concurrent.Future;
 import scala.concurrent.duration.FiniteDuration;
 
 // #testkit-import
@@ -103,7 +105,7 @@ public class TestKitDocExample {
         }
 
         @Override
-        public Source<Done, ?> mappedSource(ActorSystem<?> system) {
+        public Source<Done, Future<Done>> mappedSource(ActorSystem<?> system) {
           return null;
         }
 

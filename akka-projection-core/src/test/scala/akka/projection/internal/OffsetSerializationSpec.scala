@@ -6,6 +6,8 @@ package akka.projection.internal
 
 import java.util.UUID
 
+import scala.collection.immutable
+
 import akka.persistence.query
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
@@ -80,7 +82,7 @@ class OffsetSerializationSpec extends TestSuite with Matchers with AnyWordSpecLi
       }
 
       val storageRepresentation = MultipleOffsets(
-        Seq(SingleOffset(ProjectionId(id.name, surrogateProjectionKey), LongManifest, "1", mergeable = true)))
+        immutable.Seq(SingleOffset(ProjectionId(id.name, surrogateProjectionKey), LongManifest, "1", mergeable = true)))
 
       actualRep shouldBe storageRepresentation
 
@@ -95,7 +97,7 @@ class OffsetSerializationSpec extends TestSuite with Matchers with AnyWordSpecLi
       val mergeableOffset =
         MergeableOffset(Map(StringKey(surrogateProjectionKey1) -> 1L, StringKey(surrogateProjectionKey2) -> 2L))
       val storageRepresentation = MultipleOffsets(
-        Seq(
+        immutable.Seq(
           SingleOffset(ProjectionId(projectionName, surrogateProjectionKey1), LongManifest, "1", mergeable = true),
           SingleOffset(ProjectionId(projectionName, surrogateProjectionKey2), LongManifest, "2", mergeable = true)))
 

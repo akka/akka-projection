@@ -159,7 +159,7 @@ import akka.stream.scaladsl.Source
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi
-  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] = {
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] = {
     new CassandraInternalProjectionState(settingsOrDefaults).mappedSource()
   }
 

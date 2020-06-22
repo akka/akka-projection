@@ -171,7 +171,7 @@ import akka.projection.StatusObserver
                 retries + 1,
                 exception)
             }
-            retried.recoverWith(_ => futDone)
+            retried.recoverWith { case _ => futDone }
         }
     }
   }

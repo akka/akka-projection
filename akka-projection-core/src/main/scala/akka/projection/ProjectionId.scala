@@ -4,9 +4,9 @@
 
 package akka.projection
 
-import java.util.stream.Collectors
-
 import scala.collection.immutable
+
+import akka.util.ccompat.JavaConverters._
 
 object ProjectionId {
 
@@ -82,10 +82,7 @@ object ProjectionId {
    * @return an [[java.util.Set]] of [[ProjectionId]]s
    */
   def of(name: String, keys: java.util.Set[String]): java.util.Set[ProjectionId] =
-    keys
-      .stream()
-      .map(key => new ProjectionId(name, key))
-      .collect(Collectors.toSet())
+    keys.asScala.map { key: String => new ProjectionId(name, key) }.asJava
 }
 
 final class ProjectionId private (val name: String, val key: String) {

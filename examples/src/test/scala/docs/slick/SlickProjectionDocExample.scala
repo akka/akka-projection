@@ -4,6 +4,7 @@
 
 package docs.slick
 
+import akka.actor.typed.scaladsl.LoggerOps
 import java.time.Instant
 
 import scala.concurrent.duration._
@@ -72,11 +73,11 @@ class SlickProjectionDocExample {
     override def process(envelope: EventEnvelope[ShoppingCart.Event]): DBIO[Done] = {
       envelope.event match {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
           repository.save(Order(cartId, time))
 
         case otherEvent =>
-          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
           DBIO.successful(Done)
       }
     }
@@ -93,11 +94,11 @@ class SlickProjectionDocExample {
     override def process(envelopes: immutable.Seq[EventEnvelope[ShoppingCart.Event]]): DBIO[Done] = {
       val dbios = envelopes.map(_.event).map {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
           repository.save(Order(cartId, time))
 
         case otherEvent =>
-          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
           DBIO.successful(Done)
       }
       DBIO.sequence(dbios).map(_ => Done)
@@ -172,11 +173,11 @@ class SlickProjectionDocExample {
       .map(envelope => envelope.event)
       .map {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
           Done
 
         case otherEvent =>
-          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
           Done
       }
 

@@ -72,7 +72,7 @@ trait Projection[Envelope] {
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi
-  private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _]
+  private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]]
 
   /**
    * INTERNAL API
