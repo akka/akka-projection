@@ -40,6 +40,7 @@ import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
+import akka.projection.OffsetVerification.VerificationFailureException
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
@@ -212,26 +213,35 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           handlerRecovery: HandlerRecoveryImpl[Offset, Envelope],
           offset: Offset,
           env: Envelope): Future[Done] = {
-        handlerRecovery.applyRecovery(env, offset, offset, abort.future, {
-          () =>
-            val handlerAction = handler.process(env)
-            sourceProvider.verifyOffset(offset) match {
-              case VerificationSuccess =>
-                // run user function and offset storage on the same transaction
-                // any side-effect in user function is at-least-once
-                val txDBIO = offsetStore
-                  .saveOffset(projectionId, offset)
-                  .flatMap(_ => handlerAction)
-                  .transactionally
-                databaseConfig.db.run(txDBIO).map(_ => Done)
-              case VerificationFailure(reason) =>
-                logger.warning(
-                  "The offset failed source provider verification after the envelope was processed. " +
-                  "The transaction will not be executed. Skipping envelope with reason: {}",
-                  reason)
-                Future.successful(Done)
-            }
-        })
+        handlerRecovery.applyRecovery(
+          env,
+          offset,
+          offset,
+          abort.future, { () =>
+            // run user function and offset storage on the same transaction
+            // any side-effect in user function is at-least-once
+            val txDBIO = offsetStore
+              .saveOffset(projectionId, offset)
+              .flatMap(_ => handler.process(env))
+              .flatMap { action =>
+                sourceProvider.verifyOffset(offset) match {
+                  case VerificationSuccess => DBIO.successful(action)
+                  case VerificationFailure(reason) =>
+                    logger.warning(
+                      "The offset failed source provider verification after the envelope was processed. " +
+                      "The transaction will not be executed. Skipping envelope with reason: {}",
+                      reason)
+                    DBIO.failed(VerificationFailureException)
+                }
+              }
+              .transactionally
+            databaseConfig.db
+              .run(txDBIO)
+              .recover {
+                case VerificationFailureException => Done
+              }
+              .map(_ => Done)
+          })
       }
 
       def processEnvelopesAndStoreOffsetInSameTransaction(
@@ -244,24 +254,35 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           val (lastOffset, _) = partitioned.last
           val envelopes = partitioned.map { case (_, env) => env }
 
-          handlerRecovery.applyRecovery(envelopes.head, firstOffset, lastOffset, abort.future, {
-            () =>
-              val handlerAction = handler.process(envelopes)
-              sourceProvider.verifyOffset(lastOffset) match {
-                case VerificationSuccess =>
-                  // run user function and offset storage on the same transaction
-                  // any side-effect in user function is at-least-once
-                  val txDBIO =
-                    offsetStore.saveOffset(projectionId, lastOffset).flatMap(_ => handlerAction).transactionally
-                  databaseConfig.db.run(txDBIO).mapTo[Done]
-                case VerificationFailure(reason) =>
-                  logger.warning(
-                    "The offset failed source provider verification after the envelope was processed. " +
-                    "The transaction will not be executed. Skipping envelope(s) with reason: {}",
-                    reason)
-                  Future.successful(Done)
-              }
-          })
+          handlerRecovery.applyRecovery(
+            envelopes.head,
+            firstOffset,
+            lastOffset,
+            abort.future, { () =>
+              // run user function and offset storage on the same transaction
+              // any side-effect in user function is at-least-once
+              val txDBIO = offsetStore
+                .saveOffset(projectionId, lastOffset)
+                .flatMap(_ => handler.process(envelopes))
+                .flatMap { action =>
+                  sourceProvider.verifyOffset(lastOffset) match {
+                    case VerificationSuccess => DBIO.successful(action)
+                    case VerificationFailure(reason) =>
+                      logger.warning(
+                        "The offset failed source provider verification after the envelope was processed. " +
+                        "The transaction will not be executed. Skipping envelope with reason: {}",
+                        reason)
+                      DBIO.failed(VerificationFailureException)
+                  }
+                }
+                .transactionally
+              databaseConfig.db
+                .run(txDBIO)
+                .recover {
+                  case VerificationFailureException => Done
+                }
+                .map(_ => Done)
+            })
         }
 
         // FIXME create a SourceProvider trait that implies mergeable offsets?

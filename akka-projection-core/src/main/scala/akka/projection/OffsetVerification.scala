@@ -4,6 +4,10 @@
 
 package akka.projection
 
+import scala.util.control.NoStackTrace
+
+import akka.annotation.InternalApi
+
 sealed trait OffsetVerification
 
 object OffsetVerification {
@@ -16,4 +20,13 @@ object OffsetVerification {
 
   /** Java API */
   def verificationFailure(reason: String): OffsetVerification = VerificationFailure(reason)
+
+  /**
+   * Internal API
+   *
+   * Used when verifying offsets as part of transaction.
+   */
+  @InternalApi private[projection] case object VerificationFailureException
+      extends RuntimeException("Offset verification failed")
+      with NoStackTrace
 }
