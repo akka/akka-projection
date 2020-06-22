@@ -104,11 +104,11 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report multiple measures per envelope in case of failure" in {
-        val flow = Handlers.flowWithFailureAndRetries(0.3f)
+        val flow = Handlers.flowWithFailure(0.3f)
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
-          instruments.afterProcessInvocations.get should be > 6
+          instruments.afterProcessInvocations.get should be > defaultNumberOfEnvelopes
         }
       }
     }
@@ -169,7 +169,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         val tt =
           new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
         runInternal(tt.projectionState) {
-          instruments.afterProcessInvocations.get should be(6)
+          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
       }
       "report measures if envelopes were processed in case of failure" in {

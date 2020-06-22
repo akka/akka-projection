@@ -63,7 +63,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report errors in flaky handlers" in {
-        val flow = Handlers.flowWithFailureAndRetries(0.2f)
+        val flow = Handlers.flowWithFailure(0.2f)
         val tt = new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
           detectSomeErrors(tt)

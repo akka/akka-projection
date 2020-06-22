@@ -200,13 +200,10 @@ object Handlers {
   trait ConcatHandlers {
     def concatStr = ""
   }
-  // The projectionSettings will only be used as a fallback. The OffsetHandler and
-  // the HandlerStrategy arguments take precedence
   val single = singleWithFailure()
   def singleWithFailure(successRatio: Float = 1.0f) = new Handler[Envelope] with ConcatHandlers {
-    require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
     override def concatStr = acc
-    var acc = ""
+    private var acc = ""
     override def process(envelope: Envelope): Future[Done] = {
       acc = accumulateWithFailures(acc, envelope.message, successRatio)
       Future.successful(Done)
@@ -216,7 +213,7 @@ object Handlers {
   val grouped = groupedWithFailures()
   def groupedWithFailures(successRatio: Float = 1.0f) = new Handler[Seq[Envelope]] with ConcatHandlers {
     override def concatStr = acc
-    var acc = ""
+    private var acc = ""
     override def process(envelopes: Seq[Envelope]): Future[Done] = {
       val x = envelopes.map(_.message).mkString("|")
       acc = accumulateWithFailures(acc, x, successRatio)
@@ -225,11 +222,7 @@ object Handlers {
   }
 
   val flow = flowWithFailure()
-  def flowWithFailureAndRetries(successRatio: Float = 1.0f) = Handlers.flowWithFailure(successRatio)
-
-  def flowWithFailure(
-      successRatio: Float = 1.0f): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
-    require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
+  def flowWithFailure(successRatio: Float = 1.0f) = {
     var acc = ""
     FlowWithContext[Envelope, ProjectionContext]
       .map { env =>
@@ -239,6 +232,7 @@ object Handlers {
   }
 
   private def accumulateWithFailures(acc: String, x: String, successRatio: Float): String = {
+    require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
     if (Random.between(0f, 1f) > successRatio)
       throw TelemetryException
     if (acc == "") x else s"${acc}|${x}"

@@ -123,7 +123,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
         }
       }
       "count offsets only once in case of failure" in {
-        val flow = Handlers.flowWithFailureAndRetries(0.8f)
+        val flow = Handlers.flowWithFailure(0.8f)
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
