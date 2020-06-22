@@ -20,7 +20,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         val tt: TelemetryTester =
           new TelemetryTester(AtLeastOnce(), SingleHandlerStrategy(Handlers.single))
         runInternal(tt.projectionState) {
-          detectNoError(tt)
+          detectNoError()
         }
       }
       "report errors in flaky handlers" in {
@@ -30,7 +30,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors(tt)
+          detectSomeErrors()
         }
       }
     }
@@ -39,7 +39,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         val tt = new TelemetryTester(AtLeastOnce(), GroupedHandlerStrategy(Handlers.grouped))
 
         runInternal(tt.projectionState) {
-          detectNoError(tt)
+          detectNoError()
         }
       }
       "report errors in flaky handlers" in {
@@ -49,7 +49,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
           GroupedHandlerStrategy(grouped))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors(tt)
+          detectSomeErrors()
         }
       }
     }
@@ -59,14 +59,14 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
           new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](Handlers.flow))
 
         runInternal(tt.projectionState) {
-          detectNoError(tt)
+          detectNoError()
         }
       }
       "report errors in flaky handlers" in {
         val flow = Handlers.flowWithFailure(0.2f)
         val tt = new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
-          detectSomeErrors(tt)
+          detectSomeErrors()
         }
       }
     }
@@ -77,7 +77,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         val tt = new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
 
         runInternal(tt.projectionState) {
-          detectNoError(tt)
+          detectNoError()
         }
       }
       "report errors in flaky handlers" in {
@@ -87,7 +87,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors(tt)
+          detectSomeErrors()
         }
       }
     }
@@ -98,7 +98,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         val tt = new TelemetryTester(ExactlyOnce(), groupHandler)
 
         runInternal(tt.projectionState) {
-          detectNoError(tt)
+          detectNoError()
         }
       }
       "report errors in flaky handlers" in {
@@ -108,7 +108,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
           GroupedHandlerStrategy(groupedWithFailures))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors(tt)
+          detectSomeErrors()
         }
       }
     }
@@ -119,7 +119,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         val tt = new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
 
         runInternal(tt.projectionState) {
-          detectNoError(tt)
+          detectNoError()
         }
       }
       "report nothing in happy scenarios once in case of failure" in {
@@ -129,7 +129,7 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors(tt)
+          detectSomeErrors()
         }
       }
     }
@@ -138,12 +138,12 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
 
   val instruments = InMemInstruments
 
-  def detectNoError(tt: TelemetryTester) = {
+  def detectNoError(): Any = {
     instruments.offsetsSuccessfullyCommitted.get should be >= 6
     instruments.errorInvocations.get should be(0)
   }
 
-  def detectSomeErrors(tt: TelemetryTester) = {
+  def detectSomeErrors(): Any = {
     instruments.errorInvocations.get should be > (0)
     if (instruments.lastErrorThrowable.get() != null)
       instruments.lastErrorThrowable.get().getMessage should be("Oh, no! Handler errored.")

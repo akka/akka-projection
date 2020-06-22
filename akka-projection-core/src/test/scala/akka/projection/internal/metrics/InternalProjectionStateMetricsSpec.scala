@@ -87,6 +87,7 @@ object InternalProjectionStateMetricsSpec {
       akka {
         loglevel = "DEBUG"
       }
+      // Recover fast to speed up tests.
       akka.projection.restart-backoff{
         min-backoff = 30ms
         max-backoff = 50ms
@@ -103,9 +104,7 @@ object InternalProjectionStateMetricsSpec {
     val envelopes = (1 to numberOfEnvelopes).map { offset =>
       Envelope(id, offset.toLong, chars.charAt(offset - 1).toString)
     }
-
-    val src = Source(envelopes)
-    TestSourceProvider(system, src, _ => VerificationSuccess)
+    TestSourceProvider(system, Source(envelopes), _ => VerificationSuccess)
   }
 
   case class TestSourceProvider(
@@ -123,10 +122,6 @@ object InternalProjectionStateMetricsSpec {
     override def extractOffset(env: Envelope): Long = env.offset
 
     override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
-  }
-  // test model is as simple as a text that gets other string concatenated to it
-  case class ConcatStr(id: String, text: String) {
-    def concat(newMsg: String) = copy(text = text + "|" + newMsg)
   }
 
   case object TelemetryException extends RuntimeException("Oh, no! Handler errored.") with NoStackTrace
@@ -183,9 +178,7 @@ object InternalProjectionStateMetricsSpec {
 
     class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch) extends RunningProjection {
 
-      private val futureDone =
-        source
-          .run()
+      private val futureDone = source.run()
 
       override def stop(): Future[Done] = {
         killSwitch.shutdown()
@@ -197,45 +190,34 @@ object InternalProjectionStateMetricsSpec {
 }
 
 object Handlers {
-  trait ConcatHandlers {
-    def concatStr = ""
-  }
   val single = singleWithFailure()
-  def singleWithFailure(successRatio: Float = 1.0f) = new Handler[Envelope] with ConcatHandlers {
-    override def concatStr = acc
-    private var acc = ""
+  def singleWithFailure(successRatio: Float = 1.0f) = new Handler[Envelope] {
     override def process(envelope: Envelope): Future[Done] = {
-      acc = accumulateWithFailures(acc, envelope.message, successRatio)
+      flakyProcessor(successRatio)
       Future.successful(Done)
     }
   }
 
   val grouped = groupedWithFailures()
-  def groupedWithFailures(successRatio: Float = 1.0f) = new Handler[Seq[Envelope]] with ConcatHandlers {
-    override def concatStr = acc
-    private var acc = ""
+  def groupedWithFailures(successRatio: Float = 1.0f) = new Handler[Seq[Envelope]] {
     override def process(envelopes: Seq[Envelope]): Future[Done] = {
-      val x = envelopes.map(_.message).mkString("|")
-      acc = accumulateWithFailures(acc, x, successRatio)
+      flakyProcessor(successRatio)
       Future.successful(Done)
     }
   }
 
   val flow = flowWithFailure()
-  def flowWithFailure(successRatio: Float = 1.0f) = {
-    var acc = ""
+  def flowWithFailure(successRatio: Float = 1.0f) =
     FlowWithContext[Envelope, ProjectionContext]
-      .map { env =>
-        acc = accumulateWithFailures(acc, env.message, successRatio)
+      .map { _ =>
+        flakyProcessor(successRatio)
         Done
       }
-  }
 
-  private def accumulateWithFailures(acc: String, x: String, successRatio: Float): String = {
+  private def flakyProcessor(successRatio: Float): Unit = {
     require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
     if (Random.between(0f, 1f) > successRatio)
       throw TelemetryException
-    if (acc == "") x else s"${acc}|${x}"
   }
 }
 

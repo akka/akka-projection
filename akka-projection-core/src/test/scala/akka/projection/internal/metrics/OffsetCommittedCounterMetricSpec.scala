@@ -27,9 +27,6 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           numberOfEnvelopes = numberOfEnvelopes)
 
         runInternal(tt.projectionState) {
-          withClue("check - all values were concatenated") {
-            single.concatStr shouldBe "a|b|c|d|e|f"
-          }
           withClue("the success counter reflects all events as processed") {
             instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
             instruments.onOffsetStoredInvocations.get should be(numberOfEnvelopes)
