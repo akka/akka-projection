@@ -5,7 +5,7 @@
 package docs.kafka
 
 import scala.concurrent.Await
-import akka.actor.typed.scaladsl._
+import akka.actor.typed.scaladsl.LoggerOps
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._

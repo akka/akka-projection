@@ -3,7 +3,7 @@
  */
 
 package akka.projection
-import akka.actor.typed.scaladsl._
+import akka.actor.typed.scaladsl.LoggerOps
 import scala.util.Failure
 import scala.util.Success
 

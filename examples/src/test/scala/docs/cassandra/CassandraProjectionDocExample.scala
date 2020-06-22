@@ -4,7 +4,7 @@
 
 package docs.cassandra
 
-import akka.actor.typed.scaladsl._
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.ProjectionContext

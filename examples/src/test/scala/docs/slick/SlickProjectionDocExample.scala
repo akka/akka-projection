@@ -4,7 +4,7 @@
 
 package docs.slick
 
-import akka.actor.typed.scaladsl._
+import akka.actor.typed.scaladsl.LoggerOps
 import java.time.Instant
 
 import scala.concurrent.duration._
