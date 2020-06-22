@@ -23,8 +23,6 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
 
   val table: String = config.getString("offset-store.table")
 
-  val fetchSize: Int = config.getInt("fetch-size")
-
   val dialect = {
     val dialectToLoad = config.getString("dialect")
     if (dialectToLoad.trim.isEmpty)

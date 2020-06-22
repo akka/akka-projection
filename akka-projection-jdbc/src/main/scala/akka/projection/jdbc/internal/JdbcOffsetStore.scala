@@ -63,7 +63,6 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
       // init Statement in try-with-resource
       tryWithResource(conn.prepareStatement(settings.dialect.readOffsetQuery)) { stmt =>
 
-        stmt.setFetchSize(settings.fetchSize)
         stmt.setString(1, projectionId.name)
 
         // init ResultSet in try-with-resource
