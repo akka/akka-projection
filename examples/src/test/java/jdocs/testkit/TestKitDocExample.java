@@ -3,7 +3,9 @@
  */
 
 package jdocs.testkit;
+
 import akka.Done;
+import akka.NotUsed;
 import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
@@ -16,26 +18,26 @@ import akka.stream.scaladsl.Source;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-
-//#testkit-import
+// #testkit-import
 import org.junit.ClassRule;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
 import scala.Option;
+import scala.concurrent.Future;
 import scala.concurrent.duration.FiniteDuration;
 
-//#testkit-import
+// #testkit-import
 
-//#testkit-duration
+// #testkit-duration
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
-//#testkit-duration
+// #testkit-duration
 
-//#testkit-assertion-import
+// #testkit-assertion-import
 import static org.junit.Assert.assertEquals;
 
-//#testkit-assertion-import
+// #testkit-assertion-import
 
 public class TestKitDocExample {
 
@@ -46,113 +48,121 @@ public class TestKitDocExample {
       this.id = id;
     }
   }
+
   static class CartCheckoutRepository {
     public CompletionStage<CartView> findById(String id) {
       return CompletableFuture.completedFuture(new CartView(id));
     }
   }
 
-  //#testkit
-  @ClassRule
-  static final TestKitJunitResource testKit = new TestKitJunitResource();
+  // #testkit
+  @ClassRule static final TestKitJunitResource testKit = new TestKitJunitResource();
   ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
-  //#testkit
+  // #testkit
 
+  Projection<String> projection =
+      new Projection<String>() {
+        @Override
+        public ProjectionId projectionId() {
+          return null;
+        }
 
+        @Override
+        public StatusObserver<String> statusObserver() {
+          return null;
+        }
 
-  Projection<String> projection = new Projection<String>() {
-    @Override
-    public ProjectionId projectionId() {
-      return null;
-    }
+        @Override
+        public Projection<String> withStatusObserver(StatusObserver<String> observer) {
+          return null;
+        }
 
-    @Override
-    public Projection<String> withSettings(ProjectionSettings settings) {
-      return null;
-    }
+        @Override
+        public Projection<String> withRestartBackoff(
+            FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor) {
+          return this;
+        }
 
-    @Override
-    public StatusObserver<String> statusObserver() {
-      return null;
-    }
+        @Override
+        public Projection<String> withRestartBackoff(
+            FiniteDuration minBackoff,
+            FiniteDuration maxBackoff,
+            double randomFactor,
+            int maxRestarts) {
+          return this;
+        }
 
-    @Override
-    public Projection<String> withStatusObserver(StatusObserver<String> observer) {
-      return null;
-    }
+        @Override
+        public Projection<String> withRestartBackoff(
+            Duration minBackoff, Duration maxBackoff, double randomFactor) {
+          return this;
+        }
 
-    @Override
-    public Projection<String> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor) {
-      return this;
-    }
+        @Override
+        public Projection<String> withRestartBackoff(
+            Duration minBackoff, Duration maxBackoff, double randomFactor, int maxRestarts) {
+          return this;
+        }
 
-    @Override
-    public Projection<String> withRestartBackoff(FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor, int maxRestarts) {
-      return this;
-    }
+        @Override
+        public Source<Done, Future<Done>> mappedSource(ActorSystem<?> system) {
+          return null;
+        }
 
-    @Override
-    public Projection<String> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor) {
-      return this;
-    }
+        @Override
+        public <M> Option<ActorHandlerInit<M>> actorHandlerInit() {
+          return Option.empty();
+        }
 
-    @Override
-    public Projection<String> withRestartBackoff(Duration minBackoff, Duration maxBackoff, double randomFactor, int maxRestarts) {
-      return this;
-    }
-
-    @Override
-    public Source<Done, ?> mappedSource(ActorSystem<?> system) {
-      return null;
-    }
-
-    @Override
-    public <M> Option<ActorHandlerInit<M>> actorHandlerInit() {
-      return Option.empty();
-    }
-
-    @Override
-    public RunningProjection run(ActorSystem<?> system) {
-      return null;
-    }
-  };
+        @Override
+        public RunningProjection run(ActorSystem<?> system) {
+          return null;
+        }
+      };
 
   CartCheckoutRepository cartCheckoutRepository = new CartCheckoutRepository();
 
   void illustrateTestKitRun() {
-    //#testkit-run
-    projectionTestKit.run(projection, () ->
-      cartCheckoutRepository
-        .findById("abc-def")
-        .toCompletableFuture().get(1, TimeUnit.SECONDS));
-    //#testkit-run
+    // #testkit-run
+    projectionTestKit.run(
+        projection,
+        () ->
+            cartCheckoutRepository
+                .findById("abc-def")
+                .toCompletableFuture()
+                .get(1, TimeUnit.SECONDS));
+    // #testkit-run
   }
 
   void illustrateTestKitRunWithMaxAndInterval() {
-    //#testkit-run-max-interval
-    projectionTestKit.run(projection, Duration.ofSeconds(5), Duration.ofMillis(300), () ->
-      cartCheckoutRepository
-        .findById("abc-def")
-        .toCompletableFuture().get(1, TimeUnit.SECONDS));
-    //#testkit-run-max-interval
+    // #testkit-run-max-interval
+    projectionTestKit.run(
+        projection,
+        Duration.ofSeconds(5),
+        Duration.ofMillis(300),
+        () ->
+            cartCheckoutRepository
+                .findById("abc-def")
+                .toCompletableFuture()
+                .get(1, TimeUnit.SECONDS));
+    // #testkit-run-max-interval
   }
-
 
   void illustrateTestKitRunWithTestSink() {
 
-    //#testkit-sink-probe
-    projectionTestKit.runWithTestSink(projection, sinkProbe -> {
-      sinkProbe.request(1);
-      sinkProbe.expectNext(Done.getInstance());
-      cartCheckoutRepository
-        .findById("abc-def")
-        .toCompletableFuture().get(1, TimeUnit.SECONDS);
-    });
+    // #testkit-sink-probe
+    projectionTestKit.runWithTestSink(
+        projection,
+        sinkProbe -> {
+          sinkProbe.request(1);
+          sinkProbe.expectNext(Done.getInstance());
+          cartCheckoutRepository.findById("abc-def").toCompletableFuture().get(1, TimeUnit.SECONDS);
+        });
 
-    //#testkit-sink-probe
+    // #testkit-sink-probe
   }
 
-  //#fixme
-  //FIXME: Java example
-  //#fixme
+  // #fixme
+  // FIXME: Java example
+  // #fixme
 }

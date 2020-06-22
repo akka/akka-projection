@@ -11,6 +11,7 @@ import scala.concurrent.duration.Duration
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.internal.CassandraProjectionImpl
@@ -53,7 +54,7 @@ object CassandraProjection {
   def atLeastOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): AtLeastOnceProjection[Offset, Envelope] =
+      handler: () => Handler[Envelope]): AtLeastOnceProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
@@ -77,7 +78,7 @@ object CassandraProjection {
   def groupedWithin[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[immutable.Seq[Envelope]]): GroupedProjection[Offset, Envelope] =
+      handler: () => Handler[immutable.Seq[Envelope]]): GroupedProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
@@ -111,7 +112,8 @@ object CassandraProjection {
   def atLeastOnceFlow[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _]): AtLeastOnceFlowProjection[Offset, Envelope] =
+      handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])
+      : AtLeastOnceFlowProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
@@ -129,7 +131,7 @@ object CassandraProjection {
   def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): AtMostOnceProjection[Offset, Envelope] =
+      handler: () => Handler[Envelope]): AtMostOnceProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,

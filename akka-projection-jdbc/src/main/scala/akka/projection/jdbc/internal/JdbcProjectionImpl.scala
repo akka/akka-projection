@@ -30,9 +30,53 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
-import akka.projection.jdbc.javadsl.JdbcSession
+import akka.projection.jdbc.JdbcSession
+import akka.projection.jdbc.scaladsl.JdbcHandler
+import akka.projection.scaladsl
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] object JdbcProjectionImpl {
+
+  private[projection] def createOffsetStore[S <: JdbcSession](sessionFactory: () => S)(
+      implicit system: ActorSystem[_]) =
+    new JdbcOffsetStore[S](JdbcSettings(system), sessionFactory)
+
+  private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionFactory: () => S,
+      handlerFactory: () => JdbcHandler[Envelope, S],
+      offsetStore: JdbcOffsetStore[S]): () => Handler[Envelope] = { () =>
+    new Handler[Envelope] {
+      private val delegate = handlerFactory()
+
+      override def process(envelope: Envelope): Future[Done] = {
+        val offset = sourceProvider.extractOffset(envelope)
+        // this scope ensures that the blocking DB dispatcher is used solely for DB operations
+        implicit val executionContext: ExecutionContext = offsetStore.executionContext
+        JdbcSessionUtil
+          .withSession(sessionFactory) { sess =>
+            sess.withConnection[Unit] { conn =>
+              offsetStore.saveOffsetBlocking(conn, projectionId, offset)
+            }
+            // run users handler
+            delegate.process(sess, envelope)
+          }
+          .map(_ => Done)
+
+      }
+
+      override def start(): Future[Done] = delegate.start()
+      override def stop(): Future[Done] = delegate.stop()
+    }
+  }
+}
 
 /**
  * INTERNAL API
@@ -45,12 +89,16 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     settingsOpt: Option[ProjectionSettings],
     restartBackoffOpt: Option[RestartBackoffSettings],
     val offsetStrategy: OffsetStrategy,
-    handlerStrategy: HandlerStrategy[Envelope],
+    handlerStrategy: HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
     offsetStore: JdbcOffsetStore[S])
-    extends javadsl.ExactlyOnceProjection[Offset, Envelope]
+    extends scaladsl.ExactlyOnceProjection[Offset, Envelope]
+    with javadsl.ExactlyOnceProjection[Offset, Envelope]
+    with scaladsl.GroupedProjection[Offset, Envelope]
     with javadsl.GroupedProjection[Offset, Envelope]
+    with scaladsl.AtLeastOnceProjection[Offset, Envelope]
     with javadsl.AtLeastOnceProjection[Offset, Envelope]
+    with scaladsl.AtLeastOnceFlowProjection[Offset, Envelope]
     with javadsl.AtLeastOnceFlowProjection[Offset, Envelope]
     with SettingsImpl[JdbcProjectionImpl[Offset, Envelope, S]]
     with InternalProjection {
@@ -59,7 +107,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
       restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
-      handlerStrategy: HandlerStrategy[Envelope] = this.handlerStrategy,
+      handlerStrategy: HandlerStrategy = this.handlerStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): JdbcProjectionImpl[Offset, Envelope, S] =
     new JdbcProjectionImpl(
       projectionId,
@@ -84,9 +132,6 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       case Some(r) => settings.copy(restartBackoff = r)
     }
   }
-
-  override def withSettings(settings: ProjectionSettings) =
-    copy(settingsOpt = Option(settings))
 
   override def withRestartBackoffSettings(
       restartBackoff: RestartBackoffSettings): JdbcProjectionImpl[Offset, Envelope, S] =
@@ -143,7 +188,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
-  override private[projection] def mappedSource()(implicit system: ActorSystem[_]) =
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
     new JdbcInternalProjectionState(settingsOrDefaults).mappedSource()
 
   private class JdbcInternalProjectionState(settings: ProjectionSettings)(implicit val system: ActorSystem[_])

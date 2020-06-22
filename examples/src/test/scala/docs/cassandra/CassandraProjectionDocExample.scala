@@ -4,11 +4,12 @@
 
 package docs.cassandra
 
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
+import akka.projection.ProjectionContext
 import akka.stream.scaladsl.FlowWithContext
 //#daemon-imports
-import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.projection.ProjectionBehavior
 
@@ -49,11 +50,11 @@ object CassandraProjectionDocExample {
     override def process(envelope: EventEnvelope[ShoppingCart.Event]): Future[Done] = {
       envelope.event match {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
           Future.successful(Done)
 
         case otherEvent =>
-          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
           Future.successful(Done)
       }
     }
@@ -69,10 +70,10 @@ object CassandraProjectionDocExample {
     override def process(envelopes: immutable.Seq[EventEnvelope[ShoppingCart.Event]]): Future[Done] = {
       envelopes.map(_.event).foreach {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
 
         case otherEvent =>
-          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
       }
       Future.successful(Done)
     }
@@ -92,7 +93,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
         .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
     //#atLeastOnce
   }
@@ -103,7 +104,7 @@ object CassandraProjectionDocExample {
       CassandraProjection.atMostOnce(
         projectionId = ProjectionId("shopping-carts", "carts-1"),
         sourceProvider,
-        handler = new ShoppingCartHandler)
+        handler = () => new ShoppingCartHandler)
     //#atMostOnce
   }
 
@@ -114,7 +115,7 @@ object CassandraProjectionDocExample {
         .groupedWithin(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          handler = new GroupedShoppingCartHandler)
+          handler = () => new GroupedShoppingCartHandler)
         .withGroup(groupAfterEnvelopes = 20, groupAfterDuration = 500.millis)
     //#grouped
   }
@@ -123,15 +124,15 @@ object CassandraProjectionDocExample {
     //#atLeastOnceFlow
     val logger = LoggerFactory.getLogger(getClass)
 
-    val flow = FlowWithContext[EventEnvelope[ShoppingCart.Event], EventEnvelope[ShoppingCart.Event]]
+    val flow = FlowWithContext[EventEnvelope[ShoppingCart.Event], ProjectionContext]
       .map(envelope => envelope.event)
       .map {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
           Done
 
         case otherEvent =>
-          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
           Done
       }
 
@@ -140,6 +141,32 @@ object CassandraProjectionDocExample {
         .atLeastOnceFlow(projectionId = ProjectionId("shopping-carts", "carts-1"), sourceProvider, handler = flow)
         .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
     //#atLeastOnceFlow
+  }
+
+  object IllustrateRecoveryStrategy {
+    //#withRecoveryStrategy
+    import akka.projection.HandlerRecoveryStrategy
+
+    val projection =
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider,
+          handler = () => new ShoppingCartHandler)
+        .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 10, delay = 1.second))
+    //#withRecoveryStrategy
+  }
+
+  object IllustrateRestart {
+    //#withRestartBackoff
+    val projection =
+      CassandraProjection
+        .atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", "carts-1"),
+          sourceProvider,
+          handler = () => new ShoppingCartHandler)
+        .withRestartBackoff(minBackoff = 200.millis, maxBackoff = 5.seconds, randomFactor = 0.1)
+    //#withRestartBackoff
   }
 
   object IllustrateRunningWithShardedDaemon {
@@ -159,7 +186,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", tag),
           sourceProvider(tag),
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
         .withSaveOffset(100, 500.millis)
     //#running-projection
 
@@ -167,9 +194,8 @@ object CassandraProjectionDocExample {
     ShardedDaemonProcess(system).init[ProjectionBehavior.Command](
       name = "shopping-carts",
       numberOfInstances = ShoppingCart.tags.size,
-      behaviorFactory = n => ProjectionBehavior(projection(ShoppingCart.tags(n))),
-      settings = ShardedDaemonProcessSettings(system),
-      stopMessage = Some(ProjectionBehavior.Stop))
+      behaviorFactory = (n: Int) => ProjectionBehavior(projection(ShoppingCart.tags(n))),
+      stopMessage = ProjectionBehavior.Stop)
     //#running-with-daemon-process
   }
 
@@ -189,7 +215,7 @@ object CassandraProjectionDocExample {
           .atLeastOnce(
             projectionId = ProjectionId("shopping-carts", tag),
             sourceProvider(tag),
-            handler = new ShoppingCartHandler)
+            handler = () => new ShoppingCartHandler)
 
       val projection1 = projection("carts-1")
 
@@ -218,7 +244,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", tag),
           sourceProvider(tag),
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
 
     val projection1 = projection("carts-1")
 
@@ -235,7 +261,7 @@ object CassandraProjectionDocExample {
         .atLeastOnce(
           projectionId = ProjectionId("shopping-carts", "carts-1"),
           sourceProvider,
-          handler = new ShoppingCartHandler)
+          handler = () => new ShoppingCartHandler)
         .withRestartBackoff(minBackoff = 10.seconds, maxBackoff = 60.seconds, randomFactor = 0.5)
         .withSaveOffset(100, 500.millis)
     //#projection-settings

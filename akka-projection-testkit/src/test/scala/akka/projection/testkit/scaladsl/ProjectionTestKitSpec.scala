@@ -17,7 +17,6 @@ import akka.projection.RunningProjection
 import akka.projection.StatusObserver
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
-import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.stream.DelayOverflowStrategy
@@ -141,9 +140,6 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
       extends Projection[Int]
       with SettingsImpl[TestProjection] {
 
-    override def withSettings(settings: ProjectionSettings): Projection[Int] =
-      this // no need for ProjectionSettings in tests
-
     override val statusObserver: StatusObserver[Int] = NoopStatusObserver
 
     override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =
@@ -160,7 +156,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
     override def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(strBuffer, predicate).newRunningInstance()
 
-    private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
+    private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
       new InternalProjectionState(strBuffer, predicate).mappedSource()
 
     /*
@@ -173,8 +169,8 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
-      def mappedSource(): Source[Done, _] =
-        src.via(killSwitch.flow).mapAsync(1)(i => process(i))
+      def mappedSource(): Source[Done, Future[Done]] =
+        src.via(killSwitch.flow).mapAsync(1)(i => process(i)).mapMaterializedValue(_ => Future.successful(Done))
 
       private def process(elt: Int): Future[Done] = {
         if (predicate(elt)) concat(elt)

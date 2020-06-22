@@ -9,6 +9,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
@@ -22,13 +23,13 @@ import akka.projection.RunningProjection
 import akka.projection.StatusObserver
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
-import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.GroupOffsets.TopicPartitionKey
 import akka.projection.kafka.internal.KafkaSourceProviderImpl.ReadOffsets
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.KillSwitches
 import akka.stream.OverflowStrategy
@@ -115,7 +116,8 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
   // FIXME: Copied mostly from ProjectionTestKitSpec.
   // Maybe a `TestProjection` could be abstracted out and reused to reduce test boilerplate
   private[akka] case class TestProjection(
-      sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]],
+      sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]]
+        with VerifiableSourceProvider[GroupOffsets, ConsumerRecord[String, String]],
       topic: String,
       partitions: Int)
       extends Projection[ConsumerRecord[Int, Int]]
@@ -139,7 +141,6 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
     private lazy val internalState = new InternalProjectionState()
 
     override def projectionId: ProjectionId = ProjectionId("name", "key")
-    override def withSettings(settings: ProjectionSettings): TestProjection = this
     override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
     override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
     override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
@@ -167,23 +168,29 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
-      def mappedSource(): Source[Done, _] = {
-        val futSource = sourceProvider.source(() => Future.successful(Option(groupOffsets)))
+      def mappedSource(): Source[Done, Future[Done]] = {
+
+        val futSource =
+          sourceProvider
+            .source(() => Future.successful(Option(groupOffsets)))
+            .map(_.mapMaterializedValue(_ => NotUsed))
+
         Source
           .futureSource(futSource)
           .map(env => (sourceProvider.extractOffset(env), env))
           .filter {
-            case (offset, _) =>
+            case ((offset: GroupOffsets, _)) =>
               sourceProvider.verifyOffset(offset) match {
                 case VerificationSuccess    => true
                 case VerificationFailure(_) => false
               }
           }
           .map {
-            case (_, record) =>
+            case (_, record: ConsumerRecord[String, String]) =>
               Await.result(processedQueue.offer(record), 10.millis)
               Done
           }
+          .mapMaterializedValue(_ => Future.successful(Done))
       }
 
       def newRunningInstance(): RunningProjection =

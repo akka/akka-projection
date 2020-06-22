@@ -5,19 +5,21 @@
 package akka.projection.cassandra.javadsl
 
 import java.util.concurrent.CompletionStage
+import java.util.function.Supplier
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
 import akka.projection.cassandra.internal.CassandraProjectionImpl
-import akka.projection.cassandra.internal.GroupedHandlerAdapter
-import akka.projection.cassandra.internal.HandlerAdapter
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.FlowHandlerStrategy
+import akka.projection.internal.GroupedHandlerAdapter
 import akka.projection.internal.GroupedHandlerStrategy
+import akka.projection.internal.HandlerAdapter
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.SourceProviderAdapter
@@ -49,14 +51,14 @@ object CassandraProjection {
   def atLeastOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): AtLeastOnceProjection[Offset, Envelope] =
+      handler: Supplier[Handler[Envelope]]): AtLeastOnceProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = SingleHandlerStrategy(new HandlerAdapter(handler)),
+      handlerStrategy = SingleHandlerStrategy(() => HandlerAdapter(handler.get())),
       statusObserver = NoopStatusObserver)
 
   /**
@@ -73,15 +75,15 @@ object CassandraProjection {
   def groupedWithin[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[java.util.List[Envelope]]): GroupedProjection[Offset, Envelope] =
-    new CassandraProjectionImpl(
+      handler: Supplier[Handler[java.util.List[Envelope]]]): GroupedProjection[Offset, Envelope] =
+    new CassandraProjectionImpl[Offset, Envelope](
       projectionId,
       new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy =
         AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(scala.concurrent.duration.Duration.Zero)),
-      handlerStrategy = GroupedHandlerStrategy(new GroupedHandlerAdapter(handler)),
+      handlerStrategy = GroupedHandlerStrategy(() => new GroupedHandlerAdapter(handler.get())),
       statusObserver = NoopStatusObserver)
 
   /**
@@ -108,7 +110,8 @@ object CassandraProjection {
   def atLeastOnceFlow[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: FlowWithContext[Envelope, Envelope, Done, Envelope, _]): AtLeastOnceFlowProjection[Offset, Envelope] =
+      handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])
+      : AtLeastOnceFlowProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
@@ -126,14 +129,14 @@ object CassandraProjection {
   def atMostOnce[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: Handler[Envelope]): AtMostOnceProjection[Offset, Envelope] =
+      handler: Supplier[Handler[Envelope]]): AtMostOnceProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy = AtMostOnce(),
-      handlerStrategy = SingleHandlerStrategy(new HandlerAdapter(handler)),
+      handlerStrategy = SingleHandlerStrategy(() => HandlerAdapter(handler.get())),
       statusObserver = NoopStatusObserver)
 
   def createOffsetTableIfNotExists(system: ActorSystem[_]): CompletionStage[Done] = {

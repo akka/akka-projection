@@ -27,7 +27,7 @@ private[jdbc] trait Dialect {
 @InternalApi
 private[jdbc] object DialectDefaults {
   def readOffsetQuery(table: String) =
-    s"SELECT * FROM $table WHERE PROJECTION_NAME = ? AND PROJECTION_KEY = ?"
+    s"SELECT * FROM $table WHERE PROJECTION_NAME = ?"
 
   def clearOffsetStatement(table: String) =
     s"DELETE FROM $table WHERE PROJECTION_NAME = ? AND PROJECTION_KEY = ?"

@@ -2,7 +2,7 @@
 
 The @apidoc[SlickProjection] has support for storing the offset in a relational database with
 [Slick](http://scala-slick.org) (JDBC). This is only an option for Scala and for Java the
-@ref:[offset can be stored in relational DB with JPA](jpa.md).
+@ref:[offset can be stored in relational DB with JDBC](jdbc.md).
 
 The source of the envelopes can be @ref:[events from Akka Persistence](eventsourced.md) or any other `SourceProvider`
 with supported @ref:[offset types](#offset-types).
@@ -122,6 +122,8 @@ instance should use a new `Handler` instance.
 You can override the `start` and `stop` methods of the @apidoc[SlickHandler] to implement initialization
 before first envelope is processed and resource cleanup when the projection is stopped.
 Those methods are also called when the `Projection` is restarted after failure.
+
+See also @ref:[error handling](error.md).
 
 ## Processing with Akka Streams
 

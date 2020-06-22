@@ -15,21 +15,19 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.typed.scaladsl.adapter._
-import akka.event.Logging
 import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.StringKey
-import akka.projection.kafka.GroupOffsets
-import akka.projection.kafka.KafkaSourceProvider
 import akka.projection.kafka.KafkaSpecBase
-import akka.projection.kafka.Repeated
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
+import akka.projection.StringKey
+import akka.projection.kafka.GroupOffsets
+import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
 import com.typesafe.config.ConfigFactory
@@ -116,12 +114,8 @@ object KafkaToSlickIntegrationSpec {
   }
 }
 
-class KafkaToSlickIntegrationSpec
-    extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config))
-    with Repeated {
+class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config)) {
   import KafkaToSlickIntegrationSpec._
-
-  private val logger = Logging(system, getClass)
 
   override implicit def patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(30, Seconds), interval = Span(500, Milliseconds))
@@ -141,9 +135,10 @@ class KafkaToSlickIntegrationSpec
 
   "KafkaSourceProvider with Slick" must {
     "project a model and Kafka offset map to a slick db exactly once" in {
+      val projectionId = ProjectionId("HappyPath", "UserEventCountProjection-1")
+
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()
-      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
       produceEvents(topicName)
 
@@ -155,29 +150,26 @@ class KafkaToSlickIntegrationSpec
           projectionId,
           sourceProvider = kafkaSourceProvider,
           dbConfig,
-          SlickHandler[ConsumerRecord[String, String]] { envelope =>
-            val userId = envelope.key()
-            val eventType = envelope.value()
-            val userEvent = UserEvent(userId, eventType)
-            // do something with the record, payload in record.value
-            repository.incrementCount(projectionId, userEvent.eventType)
-          })
+          () =>
+            SlickHandler[ConsumerRecord[String, String]] { envelope =>
+              val userId = envelope.key()
+              val eventType = envelope.value()
+              val userEvent = UserEvent(userId, eventType)
+              // do something with the record, payload in record.value
+              repository.incrementCount(projectionId, userEvent.eventType)
+            })
 
-      try {
-        logger.info("Assert begin")
-        projectionTestKit.run(slickProjection) {
-          assertEventTypeCount(projectionId)
-          assertAllOffsetsObserved(projectionId, topicName)
-        }
-      } finally {
-        logger.info("Assert end")
+      projectionTestKit.run(slickProjection, remainingOrDefault) {
+        assertEventTypeCount(projectionId)
+        assertAllOffsetsObserved(projectionId, topicName)
       }
     }
 
     "project a model and Kafka offset map to a slick db exactly once with a retriable DBIO.failed" in {
+      val projectionId = ProjectionId("OneFailure", "UserEventCountProjection-1")
+
       val topicName = createTopic(suffix = 1, partitions = 3, replication = 1)
       val groupId = createGroupId()
-      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
       produceEvents(topicName)
 
@@ -199,23 +191,19 @@ class KafkaToSlickIntegrationSpec
             projectionId,
             sourceProvider = kafkaSourceProvider,
             dbConfig,
-            (envelope: ConsumerRecord[String, String]) => {
-              val userId = envelope.key()
-              val eventType = envelope.value()
-              val userEvent = UserEvent(userId, eventType)
-              // do something with the record, payload in record.value
-              failingRepository.incrementCount(projectionId, userEvent.eventType)
-            })
+            () =>
+              SlickHandler[ConsumerRecord[String, String]] { envelope =>
+                val userId = envelope.key()
+                val eventType = envelope.value()
+                val userEvent = UserEvent(userId, eventType)
+                // do something with the record, payload in record.value
+                failingRepository.incrementCount(projectionId, userEvent.eventType)
+              })
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(retries = 1, delay = 0.millis))
 
-      try {
-        logger.info("Assert begin")
-        projectionTestKit.run(slickProjection) {
-          assertEventTypeCount(projectionId)
-          assertAllOffsetsObserved(projectionId, topicName)
-        }
-      } finally {
-        logger.info("Assert end")
+      projectionTestKit.run(slickProjection, remainingOrDefault) {
+        assertEventTypeCount(projectionId)
+        assertAllOffsetsObserved(projectionId, topicName)
       }
     }
   }

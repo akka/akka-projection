@@ -4,8 +4,14 @@
 
 package akka.projection.kafka.internal
 
+import java.util.Optional
+import java.util.concurrent.CompletionStage
+import java.util.function.Supplier
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -18,7 +24,8 @@ import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.kafka.GroupOffsets
-import akka.projection.scaladsl.SourceProvider
+import akka.projection.javadsl
+import akka.projection.scaladsl
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -40,7 +47,13 @@ import org.apache.kafka.common.TopicPartition
     settings: ConsumerSettings[K, V],
     topics: Set[String],
     metadataClient: MetadataClientAdapter)
-    extends SourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
+    extends javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with javadsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with javadsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]] {
+
   import KafkaSourceProviderImpl._
 
   private implicit val executionContext: ExecutionContext = system.executionContext
@@ -74,6 +87,11 @@ import org.apache.kafka.common.TopicPartition
     }
   }
 
+  override def source(readOffsets: Supplier[CompletionStage[Optional[GroupOffsets]]])
+      : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], _]] = {
+    source(() => readOffsets.get().toScala.map(_.asScala)).map(_.asJava).toJava
+  }
+
   override def extractOffset(record: ConsumerRecord[K, V]): GroupOffsets = GroupOffsets(record)
 
   override def verifyOffset(offsets: GroupOffsets): OffsetVerification = {
@@ -84,19 +102,16 @@ import org.apache.kafka.common.TopicPartition
         "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
   }
 
-  override def isOffsetMergeable: Boolean = true
-
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) =>
       readOffsets()
         .flatMap {
           case Some(groupOffsets) =>
-            Future.successful(groupOffsets.entries.flatMap {
-              case (topicPartitionKey, offset) =>
-                val tp = topicPartitionKey.tp
-                if (assignedTps.contains(tp)) Map(tp -> offset)
-                else Map.empty
-            })
+            val filteredMap = groupOffsets.entries.collect {
+              case (topicPartitionKey, offset) if assignedTps.contains(topicPartitionKey.tp) =>
+                (topicPartitionKey.tp -> offset)
+            }
+            Future.successful(filteredMap)
           case None => metadataClient.getBeginningOffsets(assignedTps)
         }
         .recover {

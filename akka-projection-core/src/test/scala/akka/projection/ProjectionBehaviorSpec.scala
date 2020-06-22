@@ -19,7 +19,6 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
-import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.scaladsl.ProjectionManagement
@@ -57,11 +56,8 @@ object ProjectionBehaviorSpec {
     override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(testProbe, failToStop).newRunningInstance()
 
-    override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _] =
+    override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
       new InternalProjectionState(testProbe, failToStop).mappedSource()
-
-    override def withSettings(settings: ProjectionSettings): Projection[Int] =
-      this // no need for ProjectionSettings in tests
 
     override val statusObserver: StatusObserver[Int] = NoopStatusObserver
 
@@ -84,8 +80,8 @@ object ProjectionBehaviorSpec {
 
       private val killSwitch = KillSwitches.shared(projectionId.id)
 
-      def mappedSource(): Source[Done, _] =
-        src.via(killSwitch.flow).mapAsync(1)(i => process(i))
+      def mappedSource(): Source[Done, Future[Done]] =
+        src.via(killSwitch.flow).mapAsync(1)(i => process(i)).mapMaterializedValue(_ => Future.successful(Done))
 
       private def process(i: Int): Future[Done] = {
 
@@ -103,7 +99,7 @@ object ProjectionBehaviorSpec {
     }
 
     private class TestRunningProjection(
-        source: Source[Done, _],
+        source: Source[Done, Future[Done]],
         testProbe: TestProbe[ProbeMessage],
         failToStop: Boolean = false,
         killSwitch: SharedKillSwitch)(implicit system: ActorSystem[_])
@@ -126,8 +122,9 @@ object ProjectionBehaviorSpec {
           }
         // make sure the StopObserved is sent to testProbe before returned Future is completed
         stopFut
-          .andThen { _ =>
-            testProbe.ref ! StopObserved
+          .andThen {
+            case _ =>
+              testProbe.ref ! StopObserved
           }
       }
 

@@ -3,7 +3,7 @@
  */
 
 package akka.projection
-
+import akka.actor.typed.scaladsl.LoggerOps
 import scala.util.Failure
 import scala.util.Success
 
@@ -20,7 +20,11 @@ import akka.projection.scaladsl.ProjectionManagement
 object ProjectionBehavior {
 
   sealed trait Command
-  object Stop extends Command // FIXME replyTo Done
+
+  /**
+   * The `ProjectionBehavior` and its `Projection` can be stopped with this message.
+   */
+  object Stop extends Command
 
   /**
    * INTERNAL API
@@ -49,7 +53,7 @@ object ProjectionBehavior {
     apply(projectionFactory)
 
   /**
-   * Java API: The top message used to stop the projection.
+   * Java API: The `ProjectionBehavior` and its `Projection` can be stopped with this message.
    */
   def stopMessage(): Command = Stop
 
@@ -63,7 +67,7 @@ object ProjectionBehavior {
         projection.actorHandlerInit[Any].foreach { init =>
           val ref = ctx.spawnAnonymous(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart))
           init.setActor(ref)
-          ctx.log.debug("Started actor handler [{}] for projection [{}]", ref, projection.projectionId)
+          ctx.log.debug2("Started actor handler [{}] for projection [{}]", ref, projection.projectionId)
         }
         val running = projection.run()(ctx.system)
         if (running.isInstanceOf[ProjectionOffsetManagement[_]])
@@ -117,7 +121,7 @@ object ProjectionBehavior {
         running match {
           case mgmt: ProjectionOffsetManagement[Offset] =>
             if (setOffset.projectionId == projectionId) {
-              context.log.debug(
+              context.log.debug2(
                 "Offset will be changed to [{}] for projection [{}]. The Projection will be restarted.",
                 setOffset.offset,
                 projectionId)
@@ -130,7 +134,7 @@ object ProjectionBehavior {
         }
 
       case OffsetOperationException(op, exc) =>
-        context.log.warn("Operation [{}] failed with: {}", op, exc)
+        context.log.warn2("Operation [{}] failed with: {}", op, exc)
         Behaviors.same
 
     }
@@ -148,7 +152,7 @@ object ProjectionBehavior {
         Behaviors.same
 
       case SetOffsetResult(replyTo) =>
-        context.log.info(
+        context.log.info2(
           "Starting projection [{}] after setting offset to [{}]",
           projection.projectionId,
           setOffset.offset)
@@ -157,7 +161,7 @@ object ProjectionBehavior {
         stashBuffer.unstashAll(started(running))
 
       case OffsetOperationException(op, exc) =>
-        context.log.warn("Operation [{}] failed.", op, exc)
+        context.log.warn2("Operation [{}] failed.", op, exc)
         // start anyway, but no reply
         val running = projection.run()(context.system)
         stashBuffer.unstashAll(started(running))
@@ -174,7 +178,7 @@ object ProjectionBehavior {
         Behaviors.stopped
 
       case other =>
-        context.log.debug("Projection [{}] is being stopped. Discarding [{}].", projectionId, other)
+        context.log.debug2("Projection [{}] is being stopped. Discarding [{}].", projectionId, other)
         Behaviors.unhandled
     }
 

@@ -4,22 +4,16 @@
 
 package akka.projection
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-import scala.util.Failure
-import scala.util.Success
-import scala.util.Try
 import scala.util.control.NoStackTrace
 
 import akka.Done
-import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.ProjectionSettings
-import akka.projection.scaladsl.HandlerLifecycle
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
@@ -73,17 +67,12 @@ trait Projection[Envelope] {
 
   /**
    * INTERNAL API
-   */
-  @InternalApi private[akka] def withSettings(settings: ProjectionSettings): Projection[Envelope]
-
-  /**
-   * INTERNAL API
    *
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached.
    * This is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
   @InternalApi
-  private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, _]
+  private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]]
 
   /**
    * INTERNAL API
@@ -121,31 +110,6 @@ private[projection] object RunningProjection {
             case AbortProjectionException => Source.empty // don't restart
           })
       }
-  }
-
-  /**
-   * Adds a `watchTermination` on the passed Source that will call the `stopHandler` on completion.
-   *
-   * The stopHandler function is called on success or failure. In case of failure, the original failure is preserved.
-   */
-  def stopHandlerOnTermination(
-      src: Source[Done, NotUsed],
-      projectionId: ProjectionId,
-      handlerLifecycle: HandlerLifecycle,
-      statusObserver: StatusObserver[_])(implicit ec: ExecutionContext): Source[Done, Future[Done]] = {
-    src.watchTermination() { (_, futDone) =>
-      futDone
-        .andThen(_ => handlerLifecycle.tryStop())
-        .andThen {
-          case Success(_) =>
-            statusObserver.stopped(projectionId)
-          case Failure(AbortProjectionException) =>
-            statusObserver.stopped(projectionId) // no restart
-          case Failure(exc) =>
-            Try(statusObserver.stopped(projectionId))
-            statusObserver.failed(projectionId, exc)
-        }
-    }
   }
 
 }

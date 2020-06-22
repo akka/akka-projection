@@ -16,14 +16,14 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.japi.function
 import akka.persistence.query.Sequence
-import akka.persistence.query.TimeBasedUUID
+import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.StringKey
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
 import akka.projection.jdbc.internal.JdbcOffsetStore
+import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
+import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
 import akka.projection.jdbc.internal.JdbcSettings
-import akka.projection.jdbc.javadsl.JdbcSession
-import akka.projection.jdbc.javadsl.JdbcSession.tryWithResource
-import akka.projection.jdbc.javadsl.JdbcSession.withConnection
 import akka.projection.testkit.internal.TestClock
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -59,6 +59,7 @@ object JdbcOffsetStoreSpec {
     val config: Config = ConfigFactory.parseString("""
     akka.projection.jdbc = {
       dialect = "h2-dialect"
+      fetch-size = 10
       offset-store {
         schema = ""
         table = "AKKA_PROJECTION_OFFSET_STORE"
@@ -240,16 +241,30 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve offsets of type akka.persistence.query.TimeBasedUUID" in {
 
-      val projectionId = ProjectionId("projection-with-akka-seq", "00")
+      val projectionId = ProjectionId("projection-with-timebased-uuid", "00")
 
-      val timeOffset = TimeBasedUUID(UUID.fromString("49225740-2019-11ea-a752-ffae2393b6e4")) //2019-12-16T15:32:36.148Z[UTC]
       withClue("check - save offset") {
-        offsetStore.saveOffset(projectionId, timeOffset).futureValue
+        offsetStore.saveOffset(projectionId, 1L).futureValue
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore.readOffset[TimeBasedUUID](projectionId).futureValue.value
-        offset shouldBe timeOffset
+        val offset = offsetStore.readOffset[Long](projectionId)
+        offset.futureValue.value shouldBe 1L
+      }
+    }
+
+    "save and retrieve MergeableOffset" in {
+
+      val projectionId = ProjectionId("projection-with-mergeable-offsets", "00")
+
+      val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 2L, StringKey("ghi") -> 3L))
+      withClue("check - save offset") {
+        offsetStore.saveOffset(projectionId, origOffset).futureValue
+      }
+
+      withClue("check - read offset") {
+        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        offset.futureValue.value shouldBe origOffset
       }
     }
 
