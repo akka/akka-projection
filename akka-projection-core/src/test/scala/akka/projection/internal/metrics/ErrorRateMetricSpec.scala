@@ -24,13 +24,13 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report errors in flaky handlers" in {
-        val single = Handlers.singleWithFailure(0.1f)
+        val single = Handlers.singleWithErrors(1, 1, 1, 1, 2, 2, 3, 4, 5)
         val tt = new TelemetryTester(
           AtLeastOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors()
+          detectSomeErrors(9)
         }
       }
     }
@@ -43,13 +43,13 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report errors in flaky handlers" in {
-        val grouped = Handlers.groupedWithFailures(0.2f)
+        val grouped = Handlers.groupedWithErrors(2, 3, 3, 5)
         val tt = new TelemetryTester(
           AtLeastOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           GroupedHandlerStrategy(grouped))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors()
+          detectSomeErrors(4)
         }
       }
     }
@@ -63,10 +63,10 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report errors in flaky handlers" in {
-        val flow = Handlers.flowWithFailure(0.2f)
+        val flow = Handlers.flowWithErrors(2, 3, 6)
         val tt = new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
-          detectSomeErrors()
+          detectSomeErrors(3)
         }
       }
     }
@@ -81,13 +81,13 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report errors in flaky handlers" in {
-        val single = Handlers.singleWithFailure(0.2f)
+        val single = Handlers.singleWithErrors(2, 3, 4, 4, 4, 4, 4, 4, 4, 5, 6, 6)
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors()
+          detectSomeErrors(12)
         }
       }
     }
@@ -102,13 +102,13 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report errors in flaky handlers" in {
-        val groupedWithFailures = Handlers.groupedWithFailures(0.2f)
+        val groupedWithFailures = Handlers.groupedWithErrors(1, 2, 5)
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           GroupedHandlerStrategy(groupedWithFailures))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors()
+          detectSomeErrors(3)
         }
       }
     }
@@ -122,14 +122,14 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
           detectNoError()
         }
       }
-      "report nothing in happy scenarios once in case of failure" in {
-        val single = Handlers.singleWithFailure(0.2f)
+      "report nothing in case of failure" in {
+        val single = Handlers.singleWithErrors(1, 2, 4, 6)
         val tt = new TelemetryTester(
           AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.skip)),
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          detectSomeErrors()
+          detectSomeErrors(4)
         }
       }
     }
@@ -143,8 +143,8 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
     instruments.errorInvocations.get should be(0)
   }
 
-  def detectSomeErrors(): Any = {
-    instruments.errorInvocations.get should be > (0)
+  def detectSomeErrors(expectedErrorCount: Int): Any = {
+    instruments.errorInvocations.get should be(expectedErrorCount)
     if (instruments.lastErrorThrowable.get() != null)
       instruments.lastErrorThrowable.get().getMessage should be("Oh, no! Handler errored.")
   }

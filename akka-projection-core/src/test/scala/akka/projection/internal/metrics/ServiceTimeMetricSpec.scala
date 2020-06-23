@@ -44,7 +44,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "reports measures for all envelopes (multiple times when there are failures) " in {
-        val single = Handlers.singleWithFailure(0.5f)
+        val single = Handlers.singleWithErrors(3)
         val numberOfEnvelopes = 6
         val tt = new TelemetryTester(
           AtLeastOnce(
@@ -54,7 +54,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
           SingleHandlerStrategy(single))
         runInternal(tt.projectionState) {
           instruments.errorInvocations.get should be > 0
-          instruments.afterProcessInvocations.get should be > (numberOfEnvelopes)
+          instruments.afterProcessInvocations.get should be(8)
         }
       }
     }
@@ -80,7 +80,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
       }
 
       "report measures per envelope in case of failure" in {
-        val grouped = Handlers.groupedWithFailures(0.6f)
+        val grouped = Handlers.groupedWithErrors(3, 5, 6)
         // 13 = 12+1 = (4*3)+1 // cooked numbers to quickly fail bigger batches speeding up the test
         val numberOfEnvelopes = 13
         val tt = new TelemetryTester(
@@ -104,7 +104,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report multiple measures per envelope in case of failure" in {
-        val flow = Handlers.flowWithFailure(0.3f)
+        val flow = Handlers.flowWithErrors(2, 5, 6)
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
@@ -124,7 +124,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report only one measure per envelope even in case of failure" in {
-        val single = Handlers.singleWithFailure(0.5f)
+        val single = Handlers.singleWithErrors(2, 2, 2, 3, 3, 3, 5)
         val tt = new TelemetryTester(
           // using retryAndFail to try to get all message through
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
@@ -133,6 +133,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         runInternal(tt.projectionState) {
           // even in case of failures, the number of reported time measures is equal to the number of successes
           instruments.lastErrorThrowable.get should not be null
+          instruments.errorInvocations.get should be(7)
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
       }
@@ -150,7 +151,7 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report only one measure per envelope even in case of failure" in {
-        val groupedWithFailures = Handlers.groupedWithFailures(0.5f)
+        val groupedWithFailures = Handlers.groupedWithErrors(5)
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
           GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2), orAfterDuration = Some(30.millis)))
@@ -173,12 +174,13 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report measures if envelopes were processed in case of failure" in {
-        val single = Handlers.singleWithFailure(0.2f)
+        val single = Handlers.singleWithErrors(4, 5, 5, 6)
         val tt = new TelemetryTester(
           // using retryAndFail to try to get all message through
           AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
           SingleHandlerStrategy(single))
 
+        instruments.offsetsSuccessfullyCommitted.get should be(0)
         runInternal(tt.projectionState) {
           instruments.lastErrorThrowable.get should not be null
           instruments.afterProcessInvocations.get should be < defaultNumberOfEnvelopes

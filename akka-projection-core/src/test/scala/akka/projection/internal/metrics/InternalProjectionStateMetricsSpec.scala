@@ -138,6 +138,8 @@ object InternalProjectionStateMetricsSpec {
 
     private val projectionSettings = ProjectionSettings(system)
 
+    val offsetStore = new OffsetStore[Long]()
+
     val projectionState =
       new InMemInternalProjectionState[Long, Envelope](
         projectionId,
@@ -145,20 +147,32 @@ object InternalProjectionStateMetricsSpec {
         offsetStrategy,
         handlerStrategy,
         NoopStatusObserver,
-        projectionSettings)
+        projectionSettings,
+        offsetStore)
 
     lazy val inMemTelemetry = projectionState.telemetry.asInstanceOf[InMemTelemetry]
 
   }
 
-  class InMemInternalProjectionState[Offset, Envelope](
+  class OffsetStore[Offset]() {
+    val _offset = new AtomicReference[Option[Offset]](None)
+    def readOffsets(): Future[Option[Offset]] = Future.successful(_offset.get)
+
+    def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = {
+      _offset.set(Some(offset))
+      Future.successful(Done)
+    }
+  }
+
+  class InMemInternalProjectionState[Offset, Env](
       projectionId: ProjectionId,
-      sourceProvider: SourceProvider[Offset, Envelope],
+      sourceProvider: SourceProvider[Offset, Env],
       offsetStrategy: OffsetStrategy,
-      handlerStrategy: HandlerStrategy[Envelope],
-      statusObserver: StatusObserver[Envelope],
-      settings: ProjectionSettings)(implicit val system: ActorSystem[_])
-      extends InternalProjectionState[Offset, Envelope](
+      handlerStrategy: HandlerStrategy[Env],
+      statusObserver: StatusObserver[Env],
+      settings: ProjectionSettings,
+      offsetStore: OffsetStore[Offset])(implicit val system: ActorSystem[_])
+      extends InternalProjectionState[Offset, Env](
         projectionId,
         sourceProvider,
         offsetStrategy,
@@ -169,9 +183,10 @@ object InternalProjectionStateMetricsSpec {
 
     override implicit def executionContext: ExecutionContext = system.executionContext
 
-    override def readOffsets(): Future[Option[Offset]] = Future.successful(None)
+    override def readOffsets(): Future[Option[Offset]] = offsetStore.readOffsets()
 
-    override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = Future.successful(Done)
+    override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] =
+      offsetStore.saveOffset(projectionId, offset)
 
     def newRunningInstance(): RunningProjection =
       new TestRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
@@ -190,35 +205,59 @@ object InternalProjectionStateMetricsSpec {
 }
 
 object Handlers {
-  val single = singleWithFailure()
-  def singleWithFailure(successRatio: Float = 1.0f) = new Handler[Envelope] {
+
+  trait ProcessStrategy
+  case object AlwaysSucceed extends ProcessStrategy
+  case class SomeFailures(erroredOffsets: List[Long]) extends ProcessStrategy {
+    require(erroredOffsets.sorted == erroredOffsets)
+  }
+  object ProcessStrategy {
+    def apply(erroredOffsets: List[Long]): ProcessStrategy =
+      if (erroredOffsets.length == 0) AlwaysSucceed else new SomeFailures(erroredOffsets)
+  }
+
+  val single = singleWithErrors()
+  def singleWithErrors(erroredOffsets: Int*) = new Handler[Envelope] {
+    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
     override def process(envelope: Envelope): Future[Done] = {
-      flakyProcessor(successRatio)
-      Future.successful(Done)
-    }
-  }
-
-  val grouped = groupedWithFailures()
-  def groupedWithFailures(successRatio: Float = 1.0f) = new Handler[Seq[Envelope]] {
-    override def process(envelopes: Seq[Envelope]): Future[Done] = {
-      flakyProcessor(successRatio)
-      Future.successful(Done)
-    }
-  }
-
-  val flow = flowWithFailure()
-  def flowWithFailure(successRatio: Float = 1.0f) =
-    FlowWithContext[Envelope, ProjectionContext]
-      .map { _ =>
-        flakyProcessor(successRatio)
-        Done
+      nextProcessStrategy match {
+        case SomeFailures(nextFail :: tail) if (nextFail == envelope.offset) =>
+          nextProcessStrategy = SomeFailures(tail)
+          throw TelemetryException
+        case _ => Future.successful(Done)
       }
-
-  private def flakyProcessor(successRatio: Float): Unit = {
-    require(successRatio >= 0f && successRatio <= 1.0f, s"successRatio must be [0.0f, 1.0f].")
-    if (Random.between(0f, 1f) > successRatio)
-      throw TelemetryException
+    }
   }
+
+  val grouped = groupedWithErrors()
+  def groupedWithErrors(erroredOffsets: Int*) = new Handler[Seq[Envelope]] {
+    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
+    override def process(envelopes: Seq[Envelope]): Future[Done] = {
+      nextProcessStrategy match {
+        case SomeFailures(nextFail :: tail) if (envelopes.map { _.offset }.contains(nextFail)) =>
+          nextProcessStrategy = SomeFailures(tail)
+          Future.failed(TelemetryException)
+        case _ =>
+          Future.successful(Done)
+      }
+    }
+  }
+
+  val flow = flowWithErrors()
+  def flowWithErrors(erroredOffsets: Int*) = {
+    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
+    FlowWithContext[Envelope, ProjectionContext]
+      .map { envelope =>
+        nextProcessStrategy match {
+          case SomeFailures(nextFail :: tail) if (envelope.offset == nextFail) =>
+            nextProcessStrategy = SomeFailures(tail)
+            throw TelemetryException
+          case _ =>
+            Done
+        }
+      }
+  }
+
 }
 
 object InMemInstruments {
