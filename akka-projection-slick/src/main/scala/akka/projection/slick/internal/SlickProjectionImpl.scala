@@ -49,8 +49,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     val offsetStrategy: OffsetStrategy,
     handlerStrategy: HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
-    offsetStore: SlickOffsetStore[P],
-    readOffsetDelay: Option[FiniteDuration])
+    offsetStore: SlickOffsetStore[P])
     extends ExactlyOnceProjection[Offset, Envelope]
     with GroupedProjection[Offset, Envelope]
     with AtLeastOnceProjection[Offset, Envelope]
@@ -63,8 +62,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
       handlerStrategy: HandlerStrategy = this.handlerStrategy,
-      statusObserver: StatusObserver[Envelope] = this.statusObserver,
-      readOffsetDelay: Option[FiniteDuration] = this.readOffsetDelay): SlickProjectionImpl[Offset, Envelope, P] =
+      statusObserver: StatusObserver[Envelope] = this.statusObserver): SlickProjectionImpl[Offset, Envelope, P] =
     new SlickProjectionImpl(
       projectionId,
       sourceProvider,
@@ -74,10 +72,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       offsetStrategy,
       handlerStrategy,
       statusObserver,
-      offsetStore,
-      readOffsetDelay)
+      offsetStore)
 
-  /**
+  /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
    */
   private def settingsOrDefaults(implicit system: ActorSystem[_]): ProjectionSettings = {
@@ -138,9 +135,6 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): SlickProjectionImpl[Offset, Envelope, P] =
     copy(statusObserver = observer)
-
-  override def withReadOffsetDelay(delay: FiniteDuration): SlickProjectionImpl[Offset, Envelope, P] =
-    copy(readOffsetDelay = Some(delay))
 
   private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
     handlerStrategy.actorHandlerInit

@@ -8,10 +8,11 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -24,8 +25,8 @@ import akka.kafka.scaladsl.PartitionAssignmentHandler
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
-import akka.projection.kafka.GroupOffsets
 import akka.projection.javadsl
+import akka.projection.kafka.GroupOffsets
 import akka.projection.scaladsl
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
@@ -47,19 +48,23 @@ import org.apache.kafka.common.TopicPartition
     system: ActorSystem[_],
     settings: ConsumerSettings[K, V],
     topics: Set[String],
-    metadataClient: MetadataClientAdapter)
+    metadataClient: MetadataClientAdapter,
+    sourceProviderSettings: KafkaSourceProviderSettings,
+    readOffsetDelay: Option[FiniteDuration])
     extends javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
     with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
     with javadsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
     with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
     with javadsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]] {
+    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
+    with KafkaSettingsImpl {
 
   import KafkaSourceProviderImpl._
 
   private implicit val executionContext: ExecutionContext = system.executionContext
 
   private[kafka] val partitionHandler = new ProjectionPartitionHandler
+  private val scheduler = system.classicSystem.scheduler
   private val subscription = Subscriptions.topics(topics).withPartitionAssignmentHandler(partitionHandler)
   // assigned partitions is only ever mutated by consumer rebalance partition handler executed in the Kafka consumer
   // poll thread in the Alpakka Kafka `KafkaConsumerActor`
@@ -105,20 +110,24 @@ import org.apache.kafka.common.TopicPartition
   }
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
-    (assignedTps: Set[TopicPartition]) =>
-      readOffsets()
-        .flatMap {
-          case Some(groupOffsets) =>
-            val filteredMap = groupOffsets.entries.collect {
-              case (topicPartitionKey, offset) if assignedTps.contains(topicPartitionKey.tp) =>
-                (topicPartitionKey.tp -> offset)
-            }
-            Future.successful(filteredMap)
-          case None => metadataClient.getBeginningOffsets(assignedTps)
-        }
-        .recover {
-          case ex => throw new RuntimeException("External offsets could not be retrieved", ex)
-        }
+    (assignedTps: Set[TopicPartition]) => {
+      val delay = readOffsetDelay.getOrElse(sourceProviderSettings.readOffsetDelay)
+      akka.pattern.after(delay, scheduler) {
+        readOffsets()
+          .flatMap {
+            case Some(groupOffsets) =>
+              val filteredMap = groupOffsets.entries.collect {
+                case (topicPartitionKey, offset) if assignedTps.contains(topicPartitionKey.tp) =>
+                  (topicPartitionKey.tp -> offset)
+              }
+              Future.successful(filteredMap)
+            case None => metadataClient.getBeginningOffsets(assignedTps)
+          }
+          .recover {
+            case ex => throw new RuntimeException("External offsets could not be retrieved", ex)
+          }
+      }
+    }
 
   private[kafka] class ProjectionPartitionHandler extends PartitionAssignmentHandler {
     override def onRevoke(revokedTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
@@ -133,4 +142,7 @@ import org.apache.kafka.common.TopicPartition
     override def onStop(currentTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
       assignedPartitions = EmptyTps
   }
+
+  override def withReadOffsetDelay(delay: FiniteDuration): KafkaSourceProviderImpl[K, V] =
+    new KafkaSourceProviderImpl(system, settings, topics, metadataClient, sourceProviderSettings, Some(delay))
 }

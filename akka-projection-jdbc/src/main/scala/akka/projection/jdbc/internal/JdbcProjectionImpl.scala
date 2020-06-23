@@ -150,8 +150,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     val offsetStrategy: OffsetStrategy,
     handlerStrategy: HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
-    offsetStore: JdbcOffsetStore[S],
-    readOffsetDelay: Option[FiniteDuration])
+    offsetStore: JdbcOffsetStore[S])
     extends scaladsl.ExactlyOnceProjection[Offset, Envelope]
     with javadsl.ExactlyOnceProjection[Offset, Envelope]
     with scaladsl.GroupedProjection[Offset, Envelope]
@@ -168,8 +167,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
       handlerStrategy: HandlerStrategy = this.handlerStrategy,
-      statusObserver: StatusObserver[Envelope] = this.statusObserver,
-      readOffsetDelay: Option[FiniteDuration] = this.readOffsetDelay): JdbcProjectionImpl[Offset, Envelope, S] =
+      statusObserver: StatusObserver[Envelope] = this.statusObserver): JdbcProjectionImpl[Offset, Envelope, S] =
     new JdbcProjectionImpl(
       projectionId,
       sourceProvider,
@@ -179,8 +177,9 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       offsetStrategy,
       handlerStrategy,
       statusObserver,
-      offsetStore,
-      readOffsetDelay)
+      offsetStore)
+
+  type ReadOffset = () => Future[Option[Offset]]
 
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
@@ -231,9 +230,6 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): JdbcProjectionImpl[Offset, Envelope, S] =
     copy(statusObserver = observer)
-
-  override def withReadOffsetDelay(delay: FiniteDuration): JdbcProjectionImpl[Offset, Envelope, S] =
-    copy(readOffsetDelay = Some(delay))
 
   private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
     handlerStrategy.actorHandlerInit

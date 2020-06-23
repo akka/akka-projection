@@ -16,7 +16,6 @@ import scala.util.control.NonFatal
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.Scheduler
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
@@ -58,7 +57,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done]
   val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
   val abort: Promise[Done] = Promise()
-  private val scheduler: Scheduler = system.classicSystem.scheduler
 
   private def reportProgress[T](after: Future[T], env: Envelope): Future[T] = {
     after.map { done =>
@@ -320,7 +318,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           handlerLifecycle
             .tryStart()
             .flatMap { _ =>
-              akka.pattern.after(settings.readOffsetDelay, scheduler)(sourceProvider.source(() => readOffsets()))
+              sourceProvider
+                .source(() => readOffsets())
             })
         .via(killSwitch.flow)
         .map(env => ProjectionContextImpl(sourceProvider.extractOffset(env), env))

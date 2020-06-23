@@ -24,8 +24,7 @@ final case class ProjectionSettings(
     saveOffsetAfterDuration: FiniteDuration,
     groupAfterEnvelopes: Int,
     groupAfterDuration: FiniteDuration,
-    recoveryStrategy: HandlerRecoveryStrategy,
-    readOffsetDelay: FiniteDuration)
+    recoveryStrategy: HandlerRecoveryStrategy)
 
 /**
  * INTERNAL API
@@ -42,7 +41,6 @@ object ProjectionSettings {
     val atLeastOnceConfig = config.getConfig("at-least-once")
     val groupedConfig = config.getConfig("grouped")
     val recoveryStrategyConfig = config.getConfig("recovery-strategy")
-    val sourceProviderConfig = config.getConfig("source-provider")
     new ProjectionSettings(
       RestartBackoffSettings(
         minBackoff = restartBackoffConfig.getDuration("min-backoff", MILLISECONDS).millis,
@@ -53,8 +51,7 @@ object ProjectionSettings {
       atLeastOnceConfig.getDuration("save-offset-after-duration", MILLISECONDS).millis,
       groupedConfig.getInt("group-after-envelopes"),
       groupedConfig.getDuration("group-after-duration", MILLISECONDS).millis,
-      RecoveryStrategyConfig.fromConfig(recoveryStrategyConfig),
-      sourceProviderConfig.getDuration("read-offset-delay", MILLISECONDS).millis)
+      RecoveryStrategyConfig.fromConfig(recoveryStrategyConfig))
   }
 }
 
@@ -124,9 +121,5 @@ private object RecoveryStrategyConfig {
 
   def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: java.time.Duration): ProjectionImpl =
     withGroup(groupAfterEnvelopes, groupAfterDuration.asScala)
-
-  def withReadOffsetDelay(delay: FiniteDuration): ProjectionImpl
-
-  def withReadOffsetDelay(delay: java.time.Duration): ProjectionImpl = withReadOffsetDelay(delay.asScala)
 
 }

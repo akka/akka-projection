@@ -45,8 +45,7 @@ import akka.stream.scaladsl.Source
     restartBackoffOpt: Option[RestartBackoffSettings],
     val offsetStrategy: OffsetStrategy,
     handlerStrategy: HandlerStrategy,
-    override val statusObserver: StatusObserver[Envelope],
-    readOffsetDelay: Option[FiniteDuration])
+    override val statusObserver: StatusObserver[Envelope])
     extends scaladsl.AtLeastOnceProjection[Offset, Envelope]
     with javadsl.AtLeastOnceProjection[Offset, Envelope]
     with scaladsl.GroupedProjection[Offset, Envelope]
@@ -63,8 +62,7 @@ import akka.stream.scaladsl.Source
       restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
       handlerStrategy: HandlerStrategy = this.handlerStrategy,
-      statusObserver: StatusObserver[Envelope] = this.statusObserver,
-      readOffsetDelay: Option[FiniteDuration] = this.readOffsetDelay): CassandraProjectionImpl[Offset, Envelope] =
+      statusObserver: StatusObserver[Envelope] = this.statusObserver): CassandraProjectionImpl[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
       sourceProvider,
@@ -72,8 +70,7 @@ import akka.stream.scaladsl.Source
       restartBackoffOpt,
       offsetStrategy,
       handlerStrategy,
-      statusObserver,
-      readOffsetDelay)
+      statusObserver)
 
   /*
    * Build the final ProjectionSettings to use, if currently set to None fallback to values in config file
@@ -141,9 +138,6 @@ import akka.stream.scaladsl.Source
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjectionImpl[Offset, Envelope] =
     copy(statusObserver = observer)
-
-  override def withReadOffsetDelay(delay: FiniteDuration): CassandraProjectionImpl[Offset, Envelope] =
-    copy(readOffsetDelay = Some(delay))
 
   private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
     handlerStrategy.actorHandlerInit

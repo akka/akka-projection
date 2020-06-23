@@ -62,8 +62,7 @@ object CassandraProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = SingleHandlerStrategy(handler),
-      statusObserver = NoopStatusObserver,
-      readOffsetDelay = None)
+      statusObserver = NoopStatusObserver)
 
   /**
    * Create a [[akka.projection.Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
@@ -87,8 +86,7 @@ object CassandraProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(Duration.Zero)),
       handlerStrategy = GroupedHandlerStrategy(handler),
-      statusObserver = NoopStatusObserver,
-      readOffsetDelay = None)
+      statusObserver = NoopStatusObserver)
 
   /**
    * Create a [[akka.projection.Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
@@ -123,8 +121,7 @@ object CassandraProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = FlowHandlerStrategy(handler),
-      statusObserver = NoopStatusObserver,
-      readOffsetDelay = None)
+      statusObserver = NoopStatusObserver)
 
   /**
    * Create a [[akka.projection.Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
@@ -142,8 +139,7 @@ object CassandraProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtMostOnce(),
       handlerStrategy = SingleHandlerStrategy(handler),
-      statusObserver = NoopStatusObserver,
-      readOffsetDelay = None)
+      statusObserver = NoopStatusObserver)
 
   /**
    * For testing purposes the offset table can be created programmatically.

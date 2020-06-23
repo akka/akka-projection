@@ -62,7 +62,13 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
       val consumerSource = Source(consumerRecords)
         .mapMaterializedValue(_ => Consumer.NoopControl)
 
-      val provider = new KafkaSourceProviderImpl(system, settings, Set(topic), metadataClient) {
+      val provider = new KafkaSourceProviderImpl(
+        system,
+        settings,
+        Set(topic),
+        metadataClient,
+        KafkaSourceProviderSettings(system),
+        readOffsetDelay = Some(0.seconds)) {
         override protected[internal] def _source(
             readOffsets: () => Future[Option[GroupOffsets]],
             numPartitions: Int): Source[ConsumerRecord[String, String], Consumer.Control] =
@@ -142,7 +148,6 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
     override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
     override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
     override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
-    override def withReadOffsetDelay(delay: FiniteDuration): TestProjection = this
 
     override private[projection] def mappedSource()(implicit system: ActorSystem[_]) =
       internalState.mappedSource()

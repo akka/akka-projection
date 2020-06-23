@@ -67,7 +67,6 @@ object ProjectionBehaviorSpec {
     override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
     override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
     override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
-    override def withReadOffsetDelay(delay: FiniteDuration): TestProjection = this
 
     /*
      * INTERNAL API
