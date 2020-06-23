@@ -11,7 +11,23 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
-class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
+abstract class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
+  val instruments = InMemInstruments
+
+  def detectNoError(): Any = {
+    instruments.offsetsSuccessfullyCommitted.get should be >= 6
+    instruments.errorInvocations.get should be(0)
+  }
+
+  def detectSomeErrors(expectedErrorCount: Int): Any = {
+    instruments.errorInvocations.get should be(expectedErrorCount)
+    if (instruments.lastErrorThrowable.get() != null)
+      instruments.lastErrorThrowable.get().getMessage should be("Oh, no! Handler errored.")
+  }
+
+}
+
+class ErrorRateMetricAtLeastOnceSpec extends ErrorRateMetricSpec {
 
   "A metric reporting event handler errors" must {
     // at-least-once
@@ -71,6 +87,13 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
       }
     }
 
+  }
+}
+
+class ErrorRateMetricExactlyOnceSpec extends ErrorRateMetricSpec {
+
+  "A metric reporting event handler errors" must {
+
     // exactly-once
     " in `exactly-once` with singleHandler" must {
       "report nothing in happy scenarios" in {
@@ -113,6 +136,13 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
       }
     }
 
+  }
+}
+
+class ErrorRateMetricAtMostOnceSpec extends ErrorRateMetricSpec {
+
+  "A metric reporting event handler errors" must {
+
     // at-most-once
     " in `at-most-once` with singleHandler" must {
       "report nothing in happy scenarios" in {
@@ -134,19 +164,6 @@ class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
       }
     }
 
-  }
-
-  val instruments = InMemInstruments
-
-  def detectNoError(): Any = {
-    instruments.offsetsSuccessfullyCommitted.get should be >= 6
-    instruments.errorInvocations.get should be(0)
-  }
-
-  def detectSomeErrors(expectedErrorCount: Int): Any = {
-    instruments.errorInvocations.get should be(expectedErrorCount)
-    if (instruments.lastErrorThrowable.get() != null)
-      instruments.lastErrorThrowable.get().getMessage should be("Oh, no! Handler errored.")
   }
 
 }

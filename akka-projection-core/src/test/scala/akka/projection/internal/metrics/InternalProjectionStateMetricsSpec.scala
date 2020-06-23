@@ -9,7 +9,6 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.Random
 import scala.util.control.NoStackTrace
 
 import akka.Done
@@ -25,11 +24,15 @@ import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.internal.ExactlyOnce
+import akka.projection.internal.FlowHandlerStrategy
+import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
+import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.Telemetry
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec.Envelope
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec.TelemetryException
@@ -133,6 +136,7 @@ object InternalProjectionStateMetricsSpec {
     private def genRandomProjectionId() =
       ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
 
+    private implicit val exCtx = system.executionContext
     private val entityId = UUID.randomUUID().toString
     private val projectionId = genRandomProjectionId()
 
@@ -140,12 +144,36 @@ object InternalProjectionStateMetricsSpec {
 
     val offsetStore = new OffsetStore[Long]()
 
+    val adaptedHandlerStrategy = offsetStrategy match {
+      case ExactlyOnce(_) =>
+        handlerStrategy match {
+          case SingleHandlerStrategy(handler) => {
+            val adaptedHandler = new Handler[Envelope] {
+              override def process(envelope: Envelope): Future[Done] = handler.process(envelope).flatMap { _ =>
+                offsetStore.saveOffset(projectionId, envelope.offset)
+              }
+            }
+            SingleHandlerStrategy(adaptedHandler)
+          }
+          case GroupedHandlerStrategy(handler, afterEnvelopes, orAfterDuration) => {
+            val adaptedHandler = new Handler[Seq[Envelope]] {
+              override def process(envelopes: Seq[Envelope]): Future[Done] = handler.process(envelopes).flatMap { _ =>
+                offsetStore.saveOffset(projectionId, envelopes.last.offset)
+              }
+            }
+            GroupedHandlerStrategy(adaptedHandler, afterEnvelopes, orAfterDuration)
+          }
+          case FlowHandlerStrategy(_) => handlerStrategy
+        }
+      case _ => handlerStrategy
+    }
+
     val projectionState =
       new InMemInternalProjectionState[Long, Envelope](
         projectionId,
         sourceProvider(system, entityId, numberOfEnvelopes),
         offsetStrategy,
-        handlerStrategy,
+        adaptedHandlerStrategy,
         NoopStatusObserver,
         projectionSettings,
         offsetStore)

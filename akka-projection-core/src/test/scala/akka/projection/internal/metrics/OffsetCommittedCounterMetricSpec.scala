@@ -11,7 +11,7 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
-class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpec {
+class OffsetCommittedCounterMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpec {
 
   val instruments = InMemInstruments
 
@@ -27,10 +27,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           numberOfEnvelopes = numberOfEnvelopes)
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
-            instruments.onOffsetStoredInvocations.get should be(numberOfEnvelopes)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
+          instruments.onOffsetStoredInvocations.get should be(numberOfEnvelopes)
         }
       }
       "count offsets (with afterEnvelops optimization)" in {
@@ -43,10 +41,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
             numberOfEnvelopes = numberOfEnvelopes)
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
-            instruments.onOffsetStoredInvocations.get should be(2)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
+          instruments.onOffsetStoredInvocations.get should be(2)
         }
       }
       "count offsets only once in case of failure" in {
@@ -59,10 +55,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-            instruments.onOffsetStoredInvocations.get should be(6)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+          instruments.onOffsetStoredInvocations.get should be(6)
         }
       }
     }
@@ -73,10 +67,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-            instruments.onOffsetStoredInvocations.get should be(3)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+          instruments.onOffsetStoredInvocations.get should be(3)
         }
       }
       "count offsets (with afterEnvelops optimization)" in {
@@ -85,10 +77,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-            instruments.onOffsetStoredInvocations.get should be(1)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+          instruments.onOffsetStoredInvocations.get should be(1)
         }
       }
       "count envelopes only once in case of failure" in {
@@ -100,10 +90,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           GroupedHandlerStrategy(grouped, afterEnvelopes = Some(3), orAfterDuration = Some(50.millis)))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-            instruments.onOffsetStoredInvocations.get should be(1)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+          instruments.onOffsetStoredInvocations.get should be(1)
         }
       }
     }
@@ -113,10 +101,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](Handlers.flow))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-            instruments.onOffsetStoredInvocations.get should be(2)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+          instruments.onOffsetStoredInvocations.get should be(2)
         }
       }
       "count offsets only once in case of failure" in {
@@ -124,13 +110,21 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.onOffsetStoredInvocations.get should be(3)
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-          }
+          instruments.onOffsetStoredInvocations.get should be(3)
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
         }
       }
     }
+
+  }
+
+}
+
+class OffsetCommittedCounterMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpec {
+
+  val instruments = InMemInstruments
+
+  "A metric counting offsets committed" must {
 
     // exactly-once
     " in `exactly-once` with singleHandler" must {
@@ -139,10 +133,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-            instruments.onOffsetStoredInvocations.get should be(6)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+          instruments.onOffsetStoredInvocations.get should be(6)
         }
       }
       "count offsets only once in case of failure" in {
@@ -153,9 +145,7 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
         }
       }
     }
@@ -167,10 +157,8 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           new TelemetryTester(ExactlyOnce(), groupHandler)
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-            instruments.onOffsetStoredInvocations.get should be(3)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+          instruments.onOffsetStoredInvocations.get should be(3)
         }
       }
       "count offsets only once in case of failure" in {
@@ -180,12 +168,20 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2)))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
         }
       }
     }
+
+  }
+
+}
+
+class OffsetCommittedCounterMetricAtMostOnceSpec extends InternalProjectionStateMetricsSpec {
+
+  val instruments = InMemInstruments
+
+  "A metric counting offsets committed" must {
 
     // at-most-once
     " in `at-most-once` with singleHandler" must {
@@ -194,25 +190,31 @@ class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpe
           new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-            instruments.onOffsetStoredInvocations.get should be(6)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+          instruments.onOffsetStoredInvocations.get should be(6)
         }
       }
-      "count offsets once in case of failure" in {
+      "count offsets once in case of failure (skip)" in {
         val single = Handlers.singleWithErrors(2, 3, 4)
         val tt = new TelemetryTester(
-          // using retryAndFail to try to get all message through
           AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.skip)),
           SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.offsetsSuccessfullyCommitted.get should be(6)
-          }
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
         }
       }
+      "count offsets once in case of failure (fail)" in {
+        val single = Handlers.singleWithErrors(4, 5, 6)
+        val tt = new TelemetryTester(
+          AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
+          SingleHandlerStrategy(single))
+
+        runInternal(tt.projectionState) {
+          instruments.offsetsSuccessfullyCommitted.get should be(6)
+        }
+      }
+
     }
 
   }

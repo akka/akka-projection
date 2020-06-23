@@ -11,7 +11,7 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
-class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
+class ServiceTimeMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpec {
 
   val instruments = InMemInstruments
 
@@ -113,6 +113,17 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
       }
     }
 
+  }
+
+}
+
+class ServiceTimeMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpec {
+
+  val instruments = InMemInstruments
+
+  val defaultNumberOfEnvelopes = 6
+  "A metric reporting ServiceTime committed" must {
+
     // exactly-once
     " in `exactly-once` with singleHandler" must {
       "report only one measure per envelope" in {
@@ -164,6 +175,17 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
       }
     }
 
+  }
+
+}
+
+class ServiceTimeMetricAtMostOnceSpec extends InternalProjectionStateMetricsSpec {
+
+  val instruments = InMemInstruments
+
+  val defaultNumberOfEnvelopes = 6
+  "A metric reporting ServiceTime committed" must {
+
     // at-most-once
     " in `at-most-once` with singleHandler" must {
       "report measures" in {
@@ -174,17 +196,14 @@ class ServiceTimeMetricSpec extends InternalProjectionStateMetricsSpec {
         }
       }
       "report measures if envelopes were processed in case of failure" in {
-        val single = Handlers.singleWithErrors(4, 5, 5, 6)
+        val single = Handlers.singleWithErrors(4, 5, 6)
         val tt = new TelemetryTester(
-          // using retryAndFail to try to get all message through
           AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
           SingleHandlerStrategy(single))
 
-        instruments.offsetsSuccessfullyCommitted.get should be(0)
         runInternal(tt.projectionState) {
           instruments.lastErrorThrowable.get should not be null
           instruments.afterProcessInvocations.get should be < defaultNumberOfEnvelopes
-          instruments.offsetsSuccessfullyCommitted.get should be(defaultNumberOfEnvelopes)
         }
       }
     }
