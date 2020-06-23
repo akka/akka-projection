@@ -10,6 +10,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.annotation.tailrec
+import scala.collection.immutable
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -640,7 +641,50 @@ class JdbcProjectionSpec
 
   "A JDBC grouped projection" must {
     "persist projection and offset in the same write operation (transactional)" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      val handlerCalled = "called"
+      val handlerProbe = testKit.createTestProbe[String]("calls-to-handler")
+
+      val projection =
+        JdbcProjection
+          .groupedWithin(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = () =>
+              JdbcHandler[PureJdbcSession, immutable.Seq[Envelope]] { (sess, envelopes) =>
+                handlerProbe.ref ! handlerCalled
+                sess.withConnection { conn =>
+                  envelopes.foreach { envelope =>
+                    TestRepository(conn).concatToText(envelope.id, envelope.message)
+                  }
+                }
+              })
+          .withGroup(3, 3.seconds)
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          val concatStr = withRepo(_.findById(entityId)).futureValue.value
+          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+
+      withClue("check - handler was called only once with grouped envelopes") {
+        // handler probe is called twice
+        handlerProbe.expectMessage(handlerCalled)
+        handlerProbe.expectMessage(handlerCalled)
+      }
     }
   }
 

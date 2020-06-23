@@ -38,6 +38,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
@@ -217,14 +218,19 @@ public class CassandraProjectionTest extends JUnitSuite {
   }
 
   static class GroupedConcatHandler extends Handler<List<Envelope>> {
-    private final StringBuffer str;
 
-    GroupedConcatHandler(StringBuffer str) {
-      this.str = str;
+    public static final String handlerCalled = "called";
+    private final StringBuffer str;
+    private final TestProbe<String> handlerProbe;
+
+    GroupedConcatHandler(StringBuffer buffer, TestProbe<String> handlerProbe) {
+      this.str = buffer;
+      this.handlerProbe = handlerProbe;
     }
 
     @Override
     public CompletionStage<Done> process(List<Envelope> envelopes) {
+      handlerProbe.ref().tell(GroupedConcatHandler.handlerCalled);
       for (Envelope env : envelopes) {
         str.append(env.message).append("|");
       }
@@ -298,15 +304,22 @@ public class CassandraProjectionTest extends JUnitSuite {
 
     StringBuffer str = new StringBuffer();
 
+    TestProbe<String> handlerProbe = testKit.createTestProbe("calls-to-handler");
     Projection<Envelope> projection =
         CassandraProjection.groupedWithin(
-                projectionId, new TestSourceProvider(entityId), () -> new GroupedConcatHandler(str))
+                projectionId,
+                new TestSourceProvider(entityId),
+                () -> new GroupedConcatHandler(str, handlerProbe))
             .withGroup(3, Duration.ofMinutes(1));
 
     projectionTestKit.run(
         projection, () -> assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
 
     assertStoredOffset(projectionId, 6L);
+
+    // handler probe is called twice
+    handlerProbe.expectMessage(GroupedConcatHandler.handlerCalled);
+    handlerProbe.expectMessage(GroupedConcatHandler.handlerCalled);
   }
 
   @Test

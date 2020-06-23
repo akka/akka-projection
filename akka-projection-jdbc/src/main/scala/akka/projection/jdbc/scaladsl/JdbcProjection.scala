@@ -4,17 +4,20 @@
 
 package akka.projection.jdbc.scaladsl
 
+import scala.collection.immutable
 import scala.concurrent.Future
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.projection.ProjectionId
 import akka.projection.internal.ExactlyOnce
+import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.internal.JdbcProjectionImpl
 import akka.projection.scaladsl.ExactlyOnceProjection
+import akka.projection.scaladsl.GroupedProjection
 import akka.projection.scaladsl.SourceProvider
 
 object JdbcProjection {
@@ -51,6 +54,40 @@ object JdbcProjection {
       restartBackoffOpt = None,
       ExactlyOnce(),
       SingleHandlerStrategy(adaptedHandler),
+      NoopStatusObserver,
+      offsetStore)
+  }
+
+  /**
+   * Create a [[akka.projection.Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
+   * The envelopes are grouped within a time window, or limited by a number of envelopes,
+   * whatever happens first. This window can be defined with [[GroupedProjection.withGroup]] of
+   * the returned `GroupedProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.grouped`.
+   *
+   * It stores the offset in a relational database table using JDBC in the same transaction
+   * as the user defined `handler`.
+   */
+  def groupedWithin[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionFactory: () => S,
+      handler: () => JdbcHandler[immutable.Seq[Envelope], S])(
+      implicit system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
+
+    val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)
+
+    val adaptedHandler =
+      JdbcProjectionImpl.adaptedHandlerForGrouped(projectionId, sourceProvider, sessionFactory, handler, offsetStore)
+
+    new JdbcProjectionImpl(
+      projectionId,
+      sourceProvider,
+      sessionFactory,
+      settingsOpt = None,
+      restartBackoffOpt = None,
+      ExactlyOnce(),
+      GroupedHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)
   }
