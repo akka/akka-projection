@@ -247,10 +247,10 @@ object Handlers {
    *                       trigger an error and then be removed from the stack. To fail an item multiple times
    *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
    */
-  def singleWithErrors(erroredOffsets: Int*): () => Handler[Envelope] =
+  def singleWithErrors(erroredOffsets: Int*): () => Handler[Envelope] = {
+    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
     () =>
       new Handler[Envelope] {
-        var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
         override def process(envelope: Envelope): Future[Done] = {
           nextProcessStrategy match {
             case SomeFailures(nextFail :: tail) if (nextFail == envelope.offset) =>
@@ -260,6 +260,7 @@ object Handlers {
           }
         }
       }
+  }
 
   val grouped = groupedWithErrors()
 
@@ -268,10 +269,10 @@ object Handlers {
    *                       trigger an error and then be removed from the stack. To fail an item multiple times
    *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
    */
-  def groupedWithErrors(erroredOffsets: Int*): () => Handler[immutable.Seq[Envelope]] =
+  def groupedWithErrors(erroredOffsets: Int*): () => Handler[immutable.Seq[Envelope]] = {
+    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
     () =>
       new Handler[immutable.Seq[Envelope]] {
-        var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
         override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
           nextProcessStrategy match {
             case SomeFailures(nextFail :: tail) if (envelopes.map { _.offset }.contains(nextFail)) =>
@@ -282,6 +283,7 @@ object Handlers {
           }
         }
       }
+  }
 
   val flow = flowWithErrors()
 
