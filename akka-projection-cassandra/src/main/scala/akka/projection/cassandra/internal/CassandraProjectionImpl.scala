@@ -7,7 +7,6 @@ package akka.projection.cassandra.internal
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
