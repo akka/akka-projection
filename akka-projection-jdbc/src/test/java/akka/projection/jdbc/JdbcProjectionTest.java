@@ -4,6 +4,7 @@
 
 package akka.projection.jdbc;
 
+import akka.Done;
 import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
@@ -11,6 +12,7 @@ import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.japi.function.Creator;
 import akka.japi.function.Function;
 import akka.projection.Projection;
+import akka.projection.ProjectionContext;
 import akka.projection.ProjectionId;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.jdbc.internal.JdbcOffsetStore;
@@ -18,6 +20,7 @@ import akka.projection.jdbc.internal.JdbcSettings;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
+import akka.stream.javadsl.FlowWithContext;
 import akka.stream.javadsl.Source;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -301,5 +304,36 @@ public class JdbcProjectionTest extends JUnitSuite {
     // handler probe is called twice
     handlerProbe.expectMessage(GroupedConcatHandler.handlerCalled);
     handlerProbe.expectMessage(GroupedConcatHandler.handlerCalled);
+  }
+
+  @Test
+  public void atLeastOnceFlowShouldStoreOffset() {
+
+    String entityId = UUID.randomUUID().toString();
+    ProjectionId projectionId = genRandomProjectionId();
+
+    StringBuffer str = new StringBuffer();
+
+    FlowWithContext<Envelope, ProjectionContext, Done, ProjectionContext, NotUsed> flow =
+        FlowWithContext.<Envelope, ProjectionContext>create()
+            .map(
+                envelope -> {
+                  str.append(envelope.message).append("|");
+                  return Done.getInstance();
+                });
+
+    Projection<Envelope> projection =
+        JdbcProjection.atLeastOnceFlow(
+                projectionId,
+                new TestSourceProvider(entityId),
+                jdbcSessionCreator,
+                flow,
+                testKit.system())
+            .withSaveOffset(1, Duration.ofMinutes(1));
+
+    projectionTestKit.run(
+        projection, () -> assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString()));
+
+    assertStoredOffset(projectionId, 6L);
   }
 }

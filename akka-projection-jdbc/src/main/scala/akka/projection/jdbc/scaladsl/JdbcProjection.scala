@@ -9,16 +9,21 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.actor.typed.ActorSystem
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
+import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.ExactlyOnce
+import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.internal.JdbcProjectionImpl
+import akka.projection.scaladsl.AtLeastOnceFlowProjection
 import akka.projection.scaladsl.ExactlyOnceProjection
 import akka.projection.scaladsl.GroupedProjection
 import akka.projection.scaladsl.SourceProvider
+import akka.stream.scaladsl.FlowWithContext
 
 object JdbcProjection {
 
@@ -52,8 +57,8 @@ object JdbcProjection {
       sessionFactory,
       settingsOpt = None,
       restartBackoffOpt = None,
-      ExactlyOnce(),
-      SingleHandlerStrategy(adaptedHandler),
+      offsetStrategy = ExactlyOnce(),
+      handlerStrategy = SingleHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)
   }
@@ -86,8 +91,49 @@ object JdbcProjection {
       sessionFactory,
       settingsOpt = None,
       restartBackoffOpt = None,
-      ExactlyOnce(),
-      GroupedHandlerStrategy(adaptedHandler),
+      offsetStrategy = ExactlyOnce(),
+      handlerStrategy = GroupedHandlerStrategy(adaptedHandler),
+      NoopStatusObserver,
+      offsetStore)
+  }
+
+  /**
+   * Create a [[akka.projection.Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
+   * semantics.
+   *
+   * The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
+   * in the context of the `FlowWithContext` and is stored in Cassandra when corresponding `Done` is emitted.
+   * Since the offset is stored after processing the envelope it means that if the
+   * projection is restarted from previously stored offset then some envelopes may be processed more than once.
+   *
+   * If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
+   * will be processed again if the projection is restarted and no later offset was stored.
+   *
+   * The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
+   * that the first offset is stored and when the projection is restarted that offset is considered completed even
+   * though more of the duplicated enveloped were never processed.
+   *
+   * The flow must not reorder elements, because the offsets may be stored in the wrong order and
+   * and when the projection is restarted all envelopes up to the latest stored offset are considered
+   * completed even though some of them may not have been processed. This is the reason the flow is
+   * restricted to `FlowWithContext` rather than ordinary `Flow`.
+   */
+  def atLeastOnceFlow[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionFactory: () => S,
+      handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])(
+      implicit system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
+
+    val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)
+    new JdbcProjectionImpl(
+      projectionId,
+      sourceProvider,
+      sessionFactory,
+      settingsOpt = None,
+      restartBackoffOpt = None,
+      offsetStrategy = AtLeastOnce(),
+      handlerStrategy = FlowHandlerStrategy(handler),
       NoopStatusObserver,
       offsetStore)
   }
