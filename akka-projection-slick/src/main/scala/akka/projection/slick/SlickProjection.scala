@@ -77,7 +77,7 @@ object SlickProjection {
           val processedDBIO = offsetStore
             .saveOffset(projectionId, offset)
             .flatMap(_ => delegate.process(envelope))
-          val txDBIO =
+          val verifiedDBIO =
             sourceProvider match {
               case vsp: VerifiableSourceProvider[Offset, Envelope] =>
                 processedDBIO.flatMap { action =>
@@ -90,12 +90,14 @@ object SlickProjection {
                         reason)
                       slick.dbio.DBIO.failed(VerificationFailureException)
                   }
-                }.transactionally
-              case _ =>
-                processedDBIO.transactionally
+                }
+              case _ => processedDBIO
             }
+
+          // run user function and offset storage on the same transaction
+          // any side-effect in user function is at-least-once
           databaseConfig.db
-            .run(txDBIO)
+            .run(verifiedDBIO.transactionally)
             .recover {
               case VerificationFailureException => Done
             }
@@ -198,9 +200,7 @@ object SlickProjection {
           val processedDBIO = offsetStore
             .saveOffset(projectionId, lastOffset)
             .flatMap(_ => delegate.process(envelopes))
-          // run user function and offset storage on the same transaction
-          // any side-effect in user function is at-least-once
-          val txDBIO =
+          val verifiedDBIO =
             sourceProvider match {
               case vsp: VerifiableSourceProvider[Offset, Envelope] =>
                 processedDBIO.flatMap { action =>
@@ -213,12 +213,14 @@ object SlickProjection {
                         reason)
                       slick.dbio.DBIO.failed(VerificationFailureException)
                   }
-                }.transactionally
-              case _ =>
-                processedDBIO.transactionally
+                }
+              case _ => processedDBIO
             }
+
+          // run user function and offset storage on the same transaction
+          // any side-effect in user function is at-least-once
           databaseConfig.db
-            .run(txDBIO)
+            .run(verifiedDBIO.transactionally)
             .recover {
               case VerificationFailureException => Done
             }
