@@ -135,10 +135,9 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
   "KafkaSourceProvider with Slick" must {
     "project a model and Kafka offset map to a slick db exactly once" in {
-      val projectionId = ProjectionId("HappyPath", "UserEventCountProjection-1")
-
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()
+      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
       produceEvents(topicName)
 
@@ -166,10 +165,9 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     }
 
     "project a model and Kafka offset map to a slick db exactly once with a retriable DBIO.failed" in {
-      val projectionId = ProjectionId("OneFailure", "UserEventCountProjection-1")
-
       val topicName = createTopic(suffix = 1, partitions = 3, replication = 1)
       val groupId = createGroupId()
+      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
       produceEvents(topicName)
 
