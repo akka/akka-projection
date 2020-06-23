@@ -20,6 +20,7 @@ import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.internal.JdbcProjectionImpl
 import akka.projection.scaladsl.AtLeastOnceFlowProjection
+import akka.projection.scaladsl.AtLeastOnceProjection
 import akka.projection.scaladsl.ExactlyOnceProjection
 import akka.projection.scaladsl.GroupedProjection
 import akka.projection.scaladsl.SourceProvider
@@ -58,6 +59,42 @@ object JdbcProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy = ExactlyOnce(),
+      handlerStrategy = SingleHandlerStrategy(adaptedHandler),
+      NoopStatusObserver,
+      offsetStore)
+  }
+
+  /**
+   * Create a [[akka.projection.Projection]] with at-least-once processing semantics.
+   *
+   * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
+   * This means that if the projection is restarted from previously stored offset then some elements may be processed
+   * more than once.
+   *
+   * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
+   * This window can be defined with [[AtLeastOnceProjection.withSaveOffset]] of the returned
+   * `AtLeastOnceProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.at-least-once`.
+   */
+  def atLeastOnce[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionFactory: () => S,
+      handler: () => JdbcHandler[Envelope, S])(
+      implicit system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
+
+    val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)
+
+    val adaptedHandler =
+      JdbcProjectionImpl.adaptedHandlerForAtLeastOnce(sessionFactory, handler, offsetStore)
+
+    new JdbcProjectionImpl(
+      projectionId,
+      sourceProvider,
+      sessionFactory,
+      settingsOpt = None,
+      restartBackoffOpt = None,
+      offsetStrategy = AtLeastOnce(),
       handlerStrategy = SingleHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)

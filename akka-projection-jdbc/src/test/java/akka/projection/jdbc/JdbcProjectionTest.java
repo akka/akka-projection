@@ -279,6 +279,78 @@ public class JdbcProjectionTest extends JUnitSuite {
   }
 
   @Test
+  public void atLeastOnceShouldStoreOffset() {
+    String entityId = UUID.randomUUID().toString();
+    ProjectionId projectionId = genRandomProjectionId();
+
+    StringBuffer str = new StringBuffer();
+
+    Projection<Envelope> projection =
+        JdbcProjection.atLeastOnce(
+                projectionId,
+                new TestSourceProvider(entityId),
+                jdbcSessionCreator,
+                () -> concatHandler(str),
+                testKit.system())
+            .withSaveOffset(1, Duration.ZERO);
+
+    projectionTestKit.run(
+        projection,
+        () -> {
+          assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString());
+        });
+
+    assertStoredOffset(projectionId, 6L);
+  }
+
+  @Test
+  public void atLeastOnceShouldRestartFromPreviousOffset() {
+    String entityId = UUID.randomUUID().toString();
+    ProjectionId projectionId = genRandomProjectionId();
+
+    StringBuffer str = new StringBuffer();
+
+    Projection<Envelope> projection =
+        JdbcProjection.atLeastOnce(
+                projectionId,
+                new TestSourceProvider(entityId),
+                jdbcSessionCreator,
+                // fail on forth offset
+                () -> concatHandler(str, offset -> offset == 4),
+                testKit.system())
+            .withSaveOffset(1, Duration.ZERO);
+
+    try {
+      projectionTestKit.run(
+          projection,
+          () -> {
+            assertEquals("abc|def|ghi|", str.toString());
+          });
+      Assert.fail("Expected exception");
+    } catch (RuntimeException e) {
+      assertEquals(failMessage(4), e.getMessage());
+    }
+
+    assertStoredOffset(projectionId, 3L);
+
+    // re-run projection without failing function
+    Projection<Envelope> projection2 =
+        JdbcProjection.atLeastOnce(
+                projectionId,
+                new TestSourceProvider(entityId),
+                jdbcSessionCreator,
+                () -> concatHandler(str),
+                testKit.system())
+            .withSaveOffset(1, Duration.ZERO);
+
+    projectionTestKit.run(
+        projection2,
+        () -> {
+          assertEquals("abc|def|ghi|jkl|mno|pqr|", str.toString());
+        });
+  }
+
+  @Test
   public void groupedShouldStoreOffset() {
 
     String entityId = UUID.randomUUID().toString();
