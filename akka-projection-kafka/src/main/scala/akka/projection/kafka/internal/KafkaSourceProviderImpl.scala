@@ -109,15 +109,12 @@ import org.apache.kafka.common.record.TimestampType
         "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
   }
 
-  override def extractCreationTime(record: ConsumerRecord[K, V]): Option[Long] = {
+  override def extractCreationTime(record: ConsumerRecord[K, V]): Long = {
     if (record.timestampType() == TimestampType.CREATE_TIME)
-      Some(record.timestamp())
+      record.timestamp()
     else
-      None
+      0L
   }
-
-  override def extractCreationTimeJava(envelope: ConsumerRecord[K, V]): Optional[Long] =
-    extractCreationTime(envelope).asJava
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) => {

@@ -31,6 +31,6 @@ trait MergeableOffsetSourceProvider[MKey <: MergeableKey, Offset <: MergeableOff
 
 trait CreationTimeSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
 
-  def extractCreationTime(envelope: Envelope): Option[Long]
+  def extractCreationTime(envelope: Envelope): Long
 
 }

@@ -33,6 +33,6 @@ trait MergeableOffsetSourceProvider[MKey <: MergeableKey, Offset <: MergeableOff
 
 trait CreationTimeSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
 
-  def extractCreationTimeJava(envelope: Envelope): Optional[Long]
+  def extractCreationTime(envelope: Envelope): Long
 
 }
