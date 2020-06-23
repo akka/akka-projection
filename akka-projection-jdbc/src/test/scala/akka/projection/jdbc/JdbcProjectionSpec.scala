@@ -37,6 +37,7 @@ import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.jdbc.scaladsl.JdbcProjection
+import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
@@ -1004,18 +1005,118 @@ class JdbcProjectionSpec
     }
 
     "be able to stop when retrying" in {
-      pending // needs support for retrying strategy
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val handlerProbe = createTestProbe[String]()
+      val handler = new LifecycleHandler(handlerProbe.ref, alwaysFailOnOffset = 4)
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = () => handler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
+
+      val ref = spawn(ProjectionBehavior(projection))
+
+      handlerProbe.expectMessage(handler.createdMessage)
+      handlerProbe.expectMessage(handler.startMessage)
+      handlerProbe.expectMessage("abc")
+      handlerProbe.expectMessage("def")
+      handlerProbe.expectMessage("ghi")
+      // fail 4
+
+      // let it retry for a while
+      Thread.sleep(300)
+
+      ref ! ProjectionBehavior.Stop
+      createTestProbe().expectTerminated(ref)
     }
   }
 
   "JdbcProjection management" must {
 
     "restart from beginning when offset is cleared" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = () =>
+              JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
+                sess.withConnection { conn =>
+                  TestRepository(conn).concatToText(envelope.id, envelope.message)
+                }
+              })
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      val concatStr1 = withRepo(_.findById(entityId)).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
+      eventually {
+        val concatStr = withRepo(_.findById(entityId)).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr"
+      }
     }
 
     "restart from updated offset" in {
-      pending
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = () =>
+              JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
+                sess.withConnection { conn =>
+                  TestRepository(conn).concatToText(envelope.id, envelope.message)
+                }
+              })
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      val concatStr1 = withRepo(_.findById(entityId)).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).updateOffset(projectionId, 3L).futureValue shouldBe Done
+      eventually {
+        val concatStr = withRepo(_.findById(entityId)).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr"
+      }
     }
   }
 }

@@ -16,7 +16,9 @@ import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
+import akka.projection.ProjectionOffsetManagement
 import akka.projection.RunningProjection
+import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
@@ -248,15 +250,31 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
 
   private class JdbcRunningProjection(source: Source[Done, _], projectionState: JdbcInternalProjectionState)(
       implicit system: ActorSystem[_])
-      extends RunningProjection {
+      extends RunningProjection
+      with ProjectionOffsetManagement[Offset] {
 
     private val streamDone = source.run()
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()
+      // if the handler is retrying it will be aborted by this,
+      // otherwise the stream would not be completed by the killSwitch until after all retries
+      projectionState.abort.failure(AbortProjectionException)
       streamDone
     }
 
+    // ProjectionOffsetManagement
+    override def getOffset(): Future[Option[Offset]] = {
+      offsetStore.readOffset(projectionId)
+    }
+
+    // ProjectionOffsetManagement
+    override def setOffset(offset: Option[Offset]): Future[Done] = {
+      offset match {
+        case Some(o) => offsetStore.saveOffset(projectionId, o)
+        case None    => offsetStore.clearOffset(projectionId)
+      }
+    }
   }
 
 }
