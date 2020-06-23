@@ -136,7 +136,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           Flow[ProjectionContextImpl[Offset, Envelope]].mapAsync(parallelism = 1) { context =>
             val measured: () => Future[Done] = { () =>
               handler.process(context.envelope).map { done =>
-                telemetry.afterProcess(context.nanosSinceReady())
+                telemetry.afterProcess(context.readyTimestampNanos)
                 done
               }
             }
@@ -171,7 +171,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   () => handler.process(envelopes))
                 .map { _ =>
                   group.foreach { ctx =>
-                    telemetry.afterProcess(ctx.nanosSinceReady())
+                    telemetry.afterProcess(ctx.readyTimestampNanos)
                   }
                   last.copy(groupSize = envelopes.length)
                 }
@@ -193,7 +193,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             .map {
               case (_, context) =>
                 val ctx = context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]]
-                telemetry.afterProcess(ctx.nanosSinceReady())
+                telemetry.afterProcess(ctx.readyTimestampNanos)
                 ctx
             }
       }
@@ -209,6 +209,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         .groupedWithin(afterEnvelopes, orAfterDuration)
         .filterNot(_.isEmpty)
         .mapAsync(parallelism = 1) { batch =>
+          // The batch contains multiple projections contexts. Each of these contexts may represent
+          // a single envelope or a group of envelopes. The size of the batch and the size of the
+          // group may differ.
           val totalNumberOfEnvelopes = batch.map { _.groupSize }.sum
           val last = batch.last
           reportProgress(saveOffsetWithMetrics(projectionId, last.offset, totalNumberOfEnvelopes), last.envelope)
@@ -284,7 +287,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             val measured: () => Future[Done] = () => {
               handler.process(context.envelope).map { done =>
                 telemetry.onOffsetStored(1)
-                telemetry.afterProcess(context.nanosSinceReady())
+                telemetry.afterProcess(context.readyTimestampNanos)
                 done
               }
             }
@@ -307,7 +310,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
               .map { t =>
                 telemetry.onOffsetStored(group.length)
                 group.foreach { ctx =>
-                  telemetry.afterProcess(ctx.nanosSinceReady())
+                  telemetry.afterProcess(ctx.readyTimestampNanos)
                 }
                 t
               }
@@ -335,7 +338,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
               saveOffsetWithMetrics(projectionId, context.offset, 1).flatMap { _ =>
                 val measured: () => Future[Done] = { () =>
                   handler.process(context.envelope).map { done =>
-                    telemetry.afterProcess(context.nanosSinceReady())
+                    telemetry.afterProcess(context.readyTimestampNanos)
                     done
                   }
                 }

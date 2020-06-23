@@ -359,14 +359,14 @@ class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends
   override def stopped(): Unit =
     stoppedInvocations.incrementAndGet()
 
-  override def afterProcess(serviceTimeInNanos: => Long): Unit = {
+  override def afterProcess(readyTimestampNanos: Long): Unit = {
     afterProcessInvocations.incrementAndGet()
-    lastServiceTimeInNanos.set(serviceTimeInNanos)
+    lastServiceTimeInNanos.set(System.nanoTime() - readyTimestampNanos)
   }
 
-  override def onOffsetStored(successCount: Int): Unit = {
+  override def onOffsetStored(numberOfEnvelopes: Int): Unit = {
     onOffsetStoredInvocations.incrementAndGet()
-    offsetsSuccessfullyCommitted.addAndGet(successCount)
+    offsetsSuccessfullyCommitted.addAndGet(numberOfEnvelopes)
   }
 
   override def error(cause: Throwable): Unit = {

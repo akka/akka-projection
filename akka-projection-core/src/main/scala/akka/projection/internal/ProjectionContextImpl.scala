@@ -9,6 +9,8 @@ import akka.projection.ProjectionContext
 
 /**
  * INTERNAL API
+ * @param groupSize is used only in GroupHandlerStrategies so a single context instance
+ *                  can report that multiple envelopes were processed.
  */
 @InternalApi private[projection] case class ProjectionContextImpl[Offset, Envelope] private (
     offset: Offset,
@@ -16,10 +18,7 @@ import akka.projection.ProjectionContext
     // TODO: make it a volatile var in the case class ??
     groupSize: Int,
     readyTimestampNanos: Long)
-    extends ProjectionContext {
-  def nanosSinceReady() =
-    System.nanoTime() - readyTimestampNanos
-}
+    extends ProjectionContext
 
 /**
  * INTERNAL API

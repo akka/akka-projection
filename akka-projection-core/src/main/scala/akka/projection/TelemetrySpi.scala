@@ -33,24 +33,25 @@ trait Telemetry {
   def failed(cause: Throwable): Unit
 
   /**
-   * Invoked after processing an event such that it is visible by the read-side threads (data is committed).
+   * Invoked after processing an event such that it is visible by the read-side threads (data is
+   * committed).  This method is granted to be invoked after the envelope handler has committed but
+   * may or may not happen after the offset was committed (depending on the projection semantics).
    *
-   * @param serviceTimeInNanos time in nanoseconds since the envelope arrived at the projection.  Doesn't
-   *                           include the time to deserialize the envelope from the wire.  May or may not
-   *                           include the time to also commit the offset (depending on the projection
-   *                           semantics)
+   * @param readyTimestampNanos timestamp indicating when this envelope arrived at the projection.  That
+   *                            timestamp happens in the projection code so it happens outside the source
+   *                            provider (e.g. doesn't include deserializing the envelope from the wire).
    */
-  def afterProcess(serviceTimeInNanos: => Long): Unit
+  def afterProcess(readyTimestampNanos: Long): Unit
 
   /**
    * Invoked when the offset is committed.
    *
-   * @param batchSize number of envelopes marked as committed when committing this offset.  This takes
+   * @param numberOfEnvelopes number of envelopes marked as committed when committing this offset.  This takes
    *                  into consideration both batched processing (only commit one offset every N
    *                  envelopes) and grouped handling (user code processes multiple envelopes at
    *                  once).
    */
-  def onOffsetStored(batchSize: Int): Unit
+  def onOffsetStored(numberOfEnvelopes: Int): Unit
 
   /**
    * Invoked when processing an envelope errors.  When using a [[HandlerRecoveryStrategy]] that
@@ -89,9 +90,9 @@ trait Telemetry {
 
   override def stopped(): Unit = {}
 
-  override def afterProcess(serviceTimeInNanos: => Long): Unit = {}
+  override def afterProcess(readyTimestampNanos: Long): Unit = {}
 
-  override def onOffsetStored(batchSize: Int): Unit = {}
+  override def onOffsetStored(numberOfEnvelopes: Int): Unit = {}
 
   override def error(cause: Throwable): Unit = {}
 
