@@ -7,6 +7,7 @@ package akka.projection.internal.metrics
 import scala.concurrent.duration._
 
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionId
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
@@ -15,11 +16,19 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
-class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpec {
+sealed abstract class ServiceTimeAndProcessingCountMetricSpec extends InternalProjectionStateMetricsSpec {
+  implicit var projectionId: ProjectionId = null
 
-  val instruments = InMemInstruments
+  before {
+    projectionId = genRandomProjectionId()
+  }
 
+  def instruments(implicit projectionId: ProjectionId) = InMemInstruments.forId(projectionId)
   val defaultNumberOfEnvelopes = 6
+
+}
+
+class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndProcessingCountMetricSpec {
 
   "A metric reporting ServiceTime" must {
     // at-least-once
@@ -139,11 +148,8 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends InternalProject
 
 }
 
-class ServiceTimeAndProcessingCountMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpec {
+class ServiceTimeAndProcessingCountMetricExactlyOnceSpec extends ServiceTimeAndProcessingCountMetricSpec {
 
-  val instruments = InMemInstruments
-
-  val defaultNumberOfEnvelopes = 6
   "A metric reporting ServiceTime" must {
 
     // exactly-once
@@ -198,11 +204,7 @@ class ServiceTimeAndProcessingCountMetricExactlyOnceSpec extends InternalProject
 
 }
 
-class ServiceTimeAndProcessingCountMetricAtMostOnceSpec extends InternalProjectionStateMetricsSpec {
-
-  val instruments = InMemInstruments
-
-  val defaultNumberOfEnvelopes = 6
+class ServiceTimeAndProcessingCountMetricAtMostOnceSpec extends ServiceTimeAndProcessingCountMetricSpec {
 
   "A metric reporting ServiceTime" must {
 

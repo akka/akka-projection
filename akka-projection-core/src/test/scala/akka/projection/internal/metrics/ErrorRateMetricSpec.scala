@@ -7,6 +7,7 @@ package akka.projection.internal.metrics
 import scala.concurrent.duration._
 
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionId
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
@@ -16,7 +17,13 @@ import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
 abstract class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
-  val instruments = InMemInstruments
+  implicit var projectionId: ProjectionId = null
+
+  before {
+    projectionId = genRandomProjectionId()
+  }
+
+  def instruments(implicit projectionId: ProjectionId) = InMemInstruments.forId(projectionId)
   val defaultNumberOfEnvelopes = 6
 
   def detectNoError(numberOfEnvelopes: Int = defaultNumberOfEnvelopes): Any = {

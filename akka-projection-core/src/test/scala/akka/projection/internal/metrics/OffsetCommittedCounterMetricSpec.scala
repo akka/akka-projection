@@ -7,6 +7,7 @@ package akka.projection.internal.metrics
 import scala.concurrent.duration._
 
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionId
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
@@ -15,9 +16,20 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
-class OffsetCommittedCounterMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpec {
+sealed abstract class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpec {
 
-  val instruments = InMemInstruments
+  implicit var projectionId: ProjectionId = null
+
+  before {
+    projectionId = genRandomProjectionId()
+  }
+
+  def instruments(implicit projectionId: ProjectionId) = InMemInstruments.forId(projectionId)
+  val defaultNumberOfEnvelopes = 6
+
+}
+
+class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounterMetricSpec {
 
   "A metric counting offsets committed" must {
     // at-least-once
@@ -124,9 +136,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends InternalProjectionStat
 
 }
 
-class OffsetCommittedCounterMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpec {
-
-  val instruments = InMemInstruments
+class OffsetCommittedCounterMetricExactlyOnceSpec extends OffsetCommittedCounterMetricSpec {
 
   "A metric counting offsets committed" must {
 
@@ -181,9 +191,7 @@ class OffsetCommittedCounterMetricExactlyOnceSpec extends InternalProjectionStat
 
 }
 
-class OffsetCommittedCounterMetricAtMostOnceSpec extends InternalProjectionStateMetricsSpec {
-
-  val instruments = InMemInstruments
+class OffsetCommittedCounterMetricAtMostOnceSpec extends OffsetCommittedCounterMetricSpec {
 
   "A metric counting offsets committed" must {
 

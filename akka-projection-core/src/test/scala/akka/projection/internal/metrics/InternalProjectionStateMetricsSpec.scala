@@ -5,9 +5,11 @@
 package akka.projection.internal.metrics
 
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import java.util.function
 
 import scala.collection.immutable
 import scala.concurrent.Await
@@ -47,6 +49,7 @@ import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import org.scalatest.BeforeAndAfter
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -54,6 +57,7 @@ import org.slf4j.LoggerFactory
 abstract class InternalProjectionStateMetricsSpec
     extends ScalaTestWithActorTestKit(InternalProjectionStateMetricsSpec.config)
     with AnyWordSpecLike
+    with BeforeAndAfter
     with LogCapturing {
 
   import InternalProjectionStateMetricsSpec._
@@ -64,6 +68,9 @@ abstract class InternalProjectionStateMetricsSpec
   implicit val executionContext: ExecutionContext = testKit.system.executionContext
   val zero = scala.concurrent.duration.Duration.Zero
 
+  protected def genRandomProjectionId() =
+    ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
+
   val maxRetries = 100
 
   // inspired on ProjectionTestkit's runInternal
@@ -72,7 +79,6 @@ abstract class InternalProjectionStateMetricsSpec
       max: FiniteDuration = 3.seconds,
       interval: FiniteDuration = 100.millis)(assertFunction: => Unit): Unit = {
 
-    InMemInstruments.reset()
     val probe = testKit.createTestProbe[Nothing]("internal-projection-state-probe")
 
     val running: RunningProjection =
@@ -127,13 +133,11 @@ object InternalProjectionStateMetricsSpec {
   case object TelemetryException extends RuntimeException("Oh, no! Handler errored.") with NoStackTrace
 
   class TelemetryTester(offsetStrategy: OffsetStrategy, handlerStrategy: HandlerStrategy, numberOfEnvelopes: Int = 6)(
-      implicit system: ActorSystem[_]) {
-    private def genRandomProjectionId() =
-      ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
+      implicit system: ActorSystem[_],
+      projectionId: ProjectionId) {
 
     private implicit val exCtx = system.executionContext
     private val entityId = UUID.randomUUID().toString
-    private val projectionId = genRandomProjectionId()
 
     private val projectionSettings = ProjectionSettings(system)
 
@@ -312,6 +316,14 @@ object Handlers {
 }
 
 object InMemInstruments {
+  private val instrumentMap = new ConcurrentHashMap[ProjectionId, InMemInstruments]()
+  def forId(projectionId: ProjectionId): InMemInstruments = {
+    instrumentMap.computeIfAbsent(projectionId, new function.Function[ProjectionId, InMemInstruments] {
+      override def apply(t: ProjectionId): InMemInstruments = new InMemInstruments
+    })
+  }
+}
+class InMemInstruments() {
   // the instruments outlive the InMemTelemetry instances. Multiple instances of InMemTelemetry
   // will share these instruments.
   val afterProcessInvocations = new AtomicInteger(0)
@@ -321,7 +333,6 @@ object InMemInstruments {
   val errorInvocations = new AtomicInteger(0)
   val lastErrorThrowable = new AtomicReference[Throwable](null)
 
-  val observedProjectionId = new AtomicReference[ProjectionId](null)
   val observedActorSystem = new AtomicReference[ActorSystem[_]](null)
 
   val startedInvocations = new AtomicInteger(0)
@@ -330,29 +341,13 @@ object InMemInstruments {
   val failureInvocations = new AtomicInteger(0)
   val lastFailureThrowable = new AtomicReference[Throwable](null)
 
-  def reset(): Unit = {
-    afterProcessInvocations.set(0)
-    lastServiceTimeInNanos.set(0L)
-    offsetsSuccessfullyCommitted.set(0)
-    onOffsetStoredInvocations.set(0)
-    errorInvocations.set(0)
-    lastErrorThrowable.set(null)
-
-    observedProjectionId.set(null)
-    observedActorSystem.set(null)
-
-    startedInvocations.set(0)
-    stoppedInvocations.set(0)
-    failureInvocations.set(0)
-    lastFailureThrowable.set(null)
-  }
 }
 
 class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry {
-  import InMemInstruments._
-  // these two are added to use the constructor arguments and keep the AkkaDisciplinePlugin happy
+  private val instruments: InMemInstruments = InMemInstruments.forId(projectionId)
+  import instruments._
+  // these is added to use the constructor argument and keep the AkkaDisciplinePlugin happy
   observedActorSystem.set(system)
-  observedProjectionId.set(projectionId)
 
   startedInvocations.incrementAndGet()
 

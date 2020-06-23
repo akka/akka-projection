@@ -5,6 +5,7 @@
 package akka.projection.internal.metrics
 
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionId
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
@@ -12,8 +13,18 @@ import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
 class LifecycleMetricSpec extends InternalProjectionStateMetricsSpec {
-  val instruments = InMemInstruments
+
+  implicit var projectionId: ProjectionId = null
+  before {
+    projectionId = genRandomProjectionId()
+  }
+
+  def instruments(implicit projectionId: ProjectionId) = InMemInstruments.forId(projectionId)
+
   val defaultNumberOfEnvelopes = 6
+
+}
+class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
 
   "A metric reporting projection lifecycle metrics" must {
     // at-least-once
