@@ -81,7 +81,6 @@ abstract class InternalProjectionStateMetricsSpec
       probe.awaitAssert(assertFunction, max.dilated, interval)
     } finally {
       Await.result(running.stop(), max)
-      InMemInstruments.reset()
     }
   }
 
@@ -325,6 +324,12 @@ object InMemInstruments {
   val observedProjectionId = new AtomicReference[ProjectionId](null)
   val observedActorSystem = new AtomicReference[ActorSystem[_]](null)
 
+  val startedInvocations = new AtomicInteger(0)
+
+  val stoppedInvocations = new AtomicInteger(0)
+  val failureInvocations = new AtomicInteger(0)
+  val lastFailureThrowable = new AtomicReference[Throwable](null)
+
   def reset(): Unit = {
     afterProcessInvocations.set(0)
     lastServiceTimeInNanos.set(0L)
@@ -332,17 +337,32 @@ object InMemInstruments {
     onOffsetStoredInvocations.set(0)
     errorInvocations.set(0)
     lastErrorThrowable.set(null)
+
+    observedProjectionId.set(null)
+    observedActorSystem.set(null)
+
+    startedInvocations.set(0)
+    stoppedInvocations.set(0)
+    failureInvocations.set(0)
+    lastFailureThrowable.set(null)
   }
 }
 
 class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry {
   import InMemInstruments._
+  // these two are added to use the constructor arguments and keep the AkkaDisciplinePlugin happy
   observedActorSystem.set(system)
   observedProjectionId.set(projectionId)
 
-  override def failed(cause: Throwable): Unit = ???
+  startedInvocations.incrementAndGet()
 
-  override def stopped(): Unit = ???
+  override def failed(cause: Throwable): Unit = {
+    failureInvocations.incrementAndGet()
+    lastFailureThrowable.set(cause)
+  }
+
+  override def stopped(): Unit =
+    stoppedInvocations.incrementAndGet()
 
   override private[projection] def afterProcess(serviceTimeInNanos: => Long): Unit = {
     afterProcessInvocations.incrementAndGet()

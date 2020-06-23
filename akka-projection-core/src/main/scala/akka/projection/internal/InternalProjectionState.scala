@@ -419,11 +419,14 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           .andThen { case _ => handlerLifecycle.tryStop() }
           .andThen {
             case Success(_) =>
+              telemetry.stopped()
               statusObserver.stopped(projectionId)
             case Failure(AbortProjectionException) =>
+              telemetry.stopped()
               statusObserver.stopped(projectionId) // no restart
             case Failure(exc) =>
               Try(statusObserver.stopped(projectionId))
+              telemetry.failed(exc)
               statusObserver.failed(projectionId, exc)
           }
       }
