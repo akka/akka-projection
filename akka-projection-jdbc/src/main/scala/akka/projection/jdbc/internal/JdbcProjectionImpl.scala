@@ -80,6 +80,30 @@ private[projection] object JdbcProjectionImpl {
     }
   }
 
+  private[projection] def adaptedHandlerForAtLeastOnce[Offset, Envelope, S <: JdbcSession](
+      sessionFactory: () => S,
+      handlerFactory: () => JdbcHandler[Envelope, S],
+      offsetStore: JdbcOffsetStore[S]): () => Handler[Envelope] = { () =>
+    new Handler[Envelope] {
+      private val delegate = handlerFactory()
+
+      override def process(envelope: Envelope): Future[Done] = {
+        // this scope ensures that the blocking DB dispatcher is used solely for DB operations
+        implicit val executionContext: ExecutionContext = offsetStore.executionContext
+        JdbcSessionUtil
+          .withSession(sessionFactory) { sess =>
+            // run users handler
+            delegate.process(sess, envelope)
+          }
+          .map(_ => Done)
+
+      }
+
+      override def start(): Future[Done] = delegate.start()
+      override def stop(): Future[Done] = delegate.stop()
+    }
+  }
+
   private[projection] def adaptedHandlerForGrouped[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],

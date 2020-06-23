@@ -22,6 +22,7 @@ import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.SourceProviderAdapter
 import akka.projection.javadsl.AtLeastOnceFlowProjection
+import akka.projection.javadsl.AtLeastOnceProjection
 import akka.projection.javadsl.ExactlyOnceProjection
 import akka.projection.javadsl.GroupedProjection
 import akka.projection.javadsl.SourceProvider
@@ -66,6 +67,46 @@ object JdbcProjection {
       settingsOpt = None,
       restartBackoffOpt = None,
       ExactlyOnce(),
+      SingleHandlerStrategy(adaptedHandler),
+      NoopStatusObserver,
+      offsetStore)
+  }
+
+  /**
+   * Create a [[akka.projection.Projection]] with at-least-once processing semantics.
+   *
+   * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
+   * This means that if the projection is restarted from previously stored offset then some elements may be processed
+   * more than once.
+   *
+   * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
+   * This window can be defined with [[AtLeastOnceProjection.withSaveOffset]] of the returned
+   * `AtLeastOnceProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.at-least-once`.
+   */
+  def atLeastOnce[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionCreator: Creator[S],
+      handler: Supplier[JdbcHandler[Envelope, S]],
+      system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
+
+    val sessionFactory = () => sessionCreator.create()
+    val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
+
+    val adaptedHandler =
+      JdbcProjectionImpl.adaptedHandlerForAtLeastOnce(
+        sessionFactory,
+        () => new JdbcHandlerAdapter(handler.get()),
+        offsetStore)
+
+    new JdbcProjectionImpl(
+      projectionId,
+      new SourceProviderAdapter(sourceProvider),
+      sessionFactory = sessionFactory,
+      settingsOpt = None,
+      restartBackoffOpt = None,
+      AtLeastOnce(),
       SingleHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)

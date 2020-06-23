@@ -1078,7 +1078,7 @@ class SlickProjectionSpec
           projectionId,
           sourceProvider = testSourceProvider,
           databaseConfig = dbConfig,
-          handler = () => slickHandler)
+          handler = () => slickHandler())
 
       projectionTestKit.run(slickProjection) {
         withClue("checking: all values were concatenated") {
