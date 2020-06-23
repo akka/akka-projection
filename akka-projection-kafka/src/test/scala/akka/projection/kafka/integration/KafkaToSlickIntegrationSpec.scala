@@ -27,7 +27,6 @@ import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.StringKey
 import akka.projection.kafka.GroupOffsets
-import akka.projection.kafka.Repeated
 import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
@@ -115,9 +114,7 @@ object KafkaToSlickIntegrationSpec {
   }
 }
 
-class KafkaToSlickIntegrationSpec
-    extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config))
-    with Repeated {
+class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config)) {
   import KafkaToSlickIntegrationSpec._
 
   override implicit def patienceConfig: PatienceConfig =

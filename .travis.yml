@@ -16,27 +16,29 @@ script:
   - jabba install ${JDK:=adopt@~1.8-0}
   - jabba use ${JDK:=adopt@~1.8-0}
   - java -version
-  - sbt -jvm-opts .jvmopts-travis "$AKKA_SNAPSHOT" "$CMD"
+  - sbt -jvm-opts .jvmopts-travis "$AKKA_SNAPSHOT" "$ALPAKKA_KAFKA_SNAPSHOT" "$CMD"
 
 jobs:
   include:
-#    - stage: check
-#      env: CMD="verifyCodeStyle"
-#      name: "Code style check. Run locally with: sbt verifyCodeStyle"
-#    - env: CMD="Test/compile"
-#      name: "Compile all code with 2.13"
-#    - env: CMD="unidoc; docs/paradox"
-#      name: "Create API and reference documentation"
+    - stage: check
+      env: CMD="verifyCodeStyle"
+      name: "Code style check. Run locally with: sbt verifyCodeStyle"
+    - env: CMD="Test/compile"
+      name: "Compile all code with 2.13"
+    - env: CMD="unidoc; docs/paradox"
+      name: "Create API and reference documentation"
 
     - stage: test
       env:
-        - CMD="akka-projection-kafka/testOnly *.KafkaToSlickIntegrationSpec -- -DtimesToRepeat=100"
+        - ALPAKKA_KAFKA_SNAPSHOT="-Dbuild.alpakka.kafka.version=2.0.3+7-edfcbb02" # Remove when Alpakka Kafka 2.0.4 released
+        - CMD="test"
       name: "Run tests with Scala 2.13 and AdoptOpenJDK 8"
-#    - env:
-#        - JDK="adopt@~1.11-0"
-#        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-#        - CMD="test"
-#      name: "Run tests with Scala 2.13 and AdoptOpenJDK 11"
+    - env:
+        - ALPAKKA_KAFKA_SNAPSHOT="-Dbuild.alpakka.kafka.version=2.0.3+7-edfcbb02" # Remove when Alpakka Kafka 2.0.4 released
+        - JDK="adopt@~1.11-0"
+        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
+        - CMD="test"
+      name: "Run tests with Scala 2.13 and AdoptOpenJDK 11"
 
     - stage: whitesource
       name: WhiteSource
