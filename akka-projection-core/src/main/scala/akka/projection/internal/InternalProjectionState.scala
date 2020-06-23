@@ -149,6 +149,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         case grouped: GroupedHandlerStrategy[Envelope] =>
           val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
           val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
+          val handler = grouped.handler()
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
@@ -165,7 +166,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   first.offset,
                   last.offset,
                   abort.future,
-                  () => grouped.handler.process(envelopes))
+                  () => handler.process(envelopes))
                 .map { _ =>
                   group.foreach { ctx =>
                     telemetry.afterProcess(ctx.nanosSinceReady())
