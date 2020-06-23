@@ -10,6 +10,7 @@ import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.Await
+import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -20,11 +21,17 @@ import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.StringKey
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
+import akka.projection.jdbc.JdbcOffsetStoreSpec.MySQLSpecConfig
+import akka.projection.jdbc.internal.Dialect
 import akka.projection.jdbc.internal.JdbcOffsetStore
 import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
 import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.testkit.internal.TestClock
+import com.dimafeng.testcontainers.JdbcDatabaseContainer
+import com.dimafeng.testcontainers.MySQLContainer
+import com.dimafeng.testcontainers.PostgreSQLContainer
+import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
@@ -37,11 +44,27 @@ object JdbcOffsetStoreSpec {
 
   trait JdbcSpecConfig {
     val name: String
-    val config: Config
-    val jdbcSessionFactory: () => JdbcSession
+
+    val config: Config = ConfigFactory.parseString("""
+    
+    akka.projection.jdbc = {
+      offset-store {
+        schema = ""
+        table = "AKKA_PROJECTION_OFFSET_STORE"
+      }
+      
+      # TODO: configure a connection pool for the tests
+      blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
+    }
+    """)
+    def jdbcSessionFactory(): JdbcSession
+
+    def initContainer(): Unit
+    def stopContainer(): Unit
   }
 
-  private[akka] class PureJdbcSession(connFunc: () => Connection) extends JdbcSession {
+  private[projection] class PureJdbcSession(connFunc: () => Connection) extends JdbcSession {
+
     lazy val conn = connFunc()
     override def withConnection[Result](func: function.Function[Connection, Result]): Result =
       func(conn)
@@ -56,29 +79,94 @@ object JdbcOffsetStoreSpec {
   object H2SpecConfig extends JdbcSpecConfig {
 
     val name = "H2 Database"
-    val config: Config = ConfigFactory.parseString("""
-    akka.projection.jdbc = {
-      dialect = "h2-dialect"
-      fetch-size = 10
-      offset-store {
-        schema = ""
-        table = "AKKA_PROJECTION_OFFSET_STORE"
-      }
-      
-      # TODO: configure a connection pool for the tests
-      blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
-    }
-    """)
+    override val config: Config =
+      ConfigFactory.parseString("""
+        akka.projection.jdbc = {
+          dialect = "h2-dialect"
+          offset-store {
+            schema = ""
+            table = "AKKA_PROJECTION_OFFSET_STORE"
+          }
+          
+          blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
+        }
+        """)
 
-    val jdbcSessionFactory = () =>
+    def jdbcSessionFactory(): PureJdbcSession =
       new PureJdbcSession(() => {
         Class.forName("org.h2.Driver")
-        val c = DriverManager.getConnection("jdbc:h2:mem:offset-store-test;DB_CLOSE_DELAY=-1")
-        c.setAutoCommit(false)
-        c
+        val conn = DriverManager.getConnection("jdbc:h2:mem:offset-store-test;DB_CLOSE_DELAY=-1")
+        conn.setAutoCommit(false)
+        conn
       })
+
+    override def initContainer() = ()
+
+    override def stopContainer() = ()
   }
+
+  abstract class ContainerJdbcSpecConfig(dialect: String) extends JdbcSpecConfig {
+
+    override val config: Config =
+      ConfigFactory.parseString(s"""
+        akka.projection.jdbc = {
+          dialect = $dialect
+          offset-store {
+            schema = ""
+            table = "AKKA_PROJECTION_OFFSET_STORE"
+          }
+          
+          blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
+        }
+        """)
+
+    def jdbcSessionFactory(): PureJdbcSession = {
+
+      // this is safe as tests only start after the container is init
+      val container = _container.get
+
+      new PureJdbcSession(() => {
+        Class.forName(container.driverClassName)
+        val conn =
+          DriverManager.getConnection(container.jdbcUrl, container.username, container.password)
+        conn.setAutoCommit(false)
+        conn
+      })
+    }
+
+    protected var _container: Option[JdbcDatabaseContainer] = None
+
+    override def stopContainer(): Unit =
+      _container.get.asInstanceOf[SingleContainer[_]].stop()
+  }
+
+  object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
+
+    val name = "Postgres Database"
+
+    override def initContainer(): Unit = {
+      val container = new PostgreSQLContainer
+      _container = Some(container)
+      container.start()
+    }
+  }
+
+  object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
+
+    val name = "MySQL Database"
+
+    override def initContainer(): Unit = {
+      val container = new MySQLContainer
+      _container = Some(container)
+      container.start()
+    }
+  }
+
 }
+
+class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
+class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.PostgresSpecConfig)
+class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MySQLSpecConfig)
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)
@@ -89,7 +177,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override implicit val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
 
-  implicit val executionContext = testKit.system.executionContext
+  implicit val executionContext: ExecutionContextExecutor = testKit.system.executionContext
 
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
@@ -99,16 +187,27 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   private val dialectLabel = specConfig.name
 
   override protected def beforeAll(): Unit = {
+    // start test container if needed
+    // Note, the H2 test don't run in container and are therefore will run must faster
+    specConfig.initContainer
+
     // create offset table
     Await.result(offsetStore.createIfNotExists(), 3.seconds)
   }
 
-  override protected def afterAll(): Unit = {}
+  override protected def afterAll(): Unit =
+    specConfig.stopContainer
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     withConnection(specConfig.jdbcSessionFactory) { conn =>
 
-      val statement = s"SELECT * FROM ${settings.table} WHERE projection_name = ? AND projection_key = ?"
+      val statement = {
+        val stmt = s"""SELECT * FROM "${settings.table}" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+        specConfig match {
+          case MySQLSpecConfig => Dialect.removeQuotes(stmt)
+          case _               => stmt
+        }
+      }
 
       // init statement in try-with-resource
       tryWithResource(conn.prepareStatement(statement)) { stmt =>
@@ -118,7 +217,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
         // init ResultSet in try-with-resource
         tryWithResource(stmt.executeQuery()) { resultSet =>
 
-          if (resultSet.first()) {
+          if (resultSet.next()) {
             val t = resultSet.getTimestamp(6)
             Instant.ofEpochMilli(t.getTime)
           } else throw new RuntimeException(s"no records found for $projectionId")
@@ -257,7 +356,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       val projectionId = ProjectionId("projection-with-mergeable-offsets", "00")
 
-      val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 2L, StringKey("ghi") -> 3L))
+      val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 1L, StringKey("ghi") -> 1L))
       withClue("check - save offset") {
         offsetStore.saveOffset(projectionId, origOffset).futureValue
       }
@@ -265,6 +364,31 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
         offset.futureValue.value shouldBe origOffset
+      }
+    }
+
+    "add new offsets to MergeableOffset" in {
+      val projectionId = ProjectionId("projection-with-mergeable-offsets-mixed", "00")
+
+      val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 1L))
+      withClue("check - save offset") {
+        offsetStore.saveOffset(projectionId, origOffset).futureValue
+      }
+
+      withClue("check - read offset") {
+        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        offset.futureValue.value shouldBe origOffset
+      }
+
+      // mix updates and inserts
+      val updatedOffset = MergeableOffset(Map(StringKey("abc") -> 2L, StringKey("def") -> 2L, StringKey("ghi") -> 1L))
+      withClue("check - save offset") {
+        offsetStore.saveOffset(projectionId, updatedOffset).futureValue
+      }
+
+      withClue("check - read offset") {
+        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        offset.futureValue.value shouldBe updatedOffset
       }
     }
 
@@ -305,5 +429,3 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     }
   }
 }
-
-class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
