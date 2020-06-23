@@ -59,6 +59,7 @@ import org.slf4j.LoggerFactory
 object JdbcProjectionSpec {
   val config: Config = ConfigFactory.parseString("""
     akka.projection.jdbc = {
+      # FIXME: remove this override when dialect is gone
       dialect = "h2-dialect"
       offset-store {
         schema = ""

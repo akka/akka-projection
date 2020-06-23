@@ -22,6 +22,7 @@ import akka.projection.internal.OffsetSerialization.fromStorageRepresentation
 import akka.projection.internal.OffsetSerialization.toStorageRepresentation
 import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.internal.DialectDefaults.InsertIndices
+import akka.projection.jdbc.internal.DialectDefaults.UpdateIndices
 import akka.projection.jdbc.internal.JdbcSessionUtil._
 
 /**
@@ -71,6 +72,7 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
           val buffer = ListBuffer.empty[SingleOffset]
 
           while (resultSet.next()) {
+
             val offsetStr = resultSet.getString("OFFSET")
             val manifest = resultSet.getString("MANIFEST")
             val mergeable = resultSet.getBoolean("MERGEABLE")
@@ -107,27 +109,68 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
    */
   def saveOffsetBlocking[Offset](conn: Connection, projectionId: ProjectionId, offset: Offset): Done = {
 
-    tryWithResource(conn.prepareStatement(settings.dialect.insertOrUpdateStatement)) { stmt =>
+    val now = new Timestamp(Instant.now(clock).toEpochMilli)
 
-      val now = new Timestamp(Instant.now(clock).toEpochMilli)
+    val storageReps = toStorageRepresentation(projectionId, offset)
 
-      def newRow(singleOffset: SingleOffset) = {
-        stmt.setString(InsertIndices.PROJECTION_NAME, singleOffset.id.name)
-        stmt.setString(InsertIndices.PROJECTION_KEY, singleOffset.id.key)
-        stmt.setString(InsertIndices.OFFSET, singleOffset.offsetStr)
-        stmt.setString(InsertIndices.MANIFEST, singleOffset.manifest)
-        stmt.setBoolean(InsertIndices.MERGEABLE, singleOffset.mergeable)
-        stmt.setTimestamp(InsertIndices.LAST_UPDATED, now)
-        stmt.addBatch()
+    val tryUpdates =
+      tryWithResource(conn.prepareStatement(settings.dialect.updateStatement())) { stmt =>
+
+        def updateRow(singleOffset: SingleOffset): Unit = {
+          // SET
+          stmt.setString(UpdateIndices.OFFSET, singleOffset.offsetStr)
+          stmt.setString(UpdateIndices.MANIFEST, singleOffset.manifest)
+          stmt.setBoolean(UpdateIndices.MERGEABLE, singleOffset.mergeable)
+          stmt.setTimestamp(UpdateIndices.LAST_UPDATED, now)
+          // WHERE
+          stmt.setString(UpdateIndices.PROJECTION_NAME, singleOffset.id.name)
+          stmt.setString(UpdateIndices.PROJECTION_KEY, singleOffset.id.key)
+
+          stmt.addBatch()
+        }
+
+        storageReps match {
+          case single: SingleOffset  => updateRow(single)
+          case MultipleOffsets(many) => many.foreach(updateRow)
+        }
+
+        stmt.executeBatch()
+
       }
 
-      toStorageRepresentation(projectionId, offset) match {
-        case single: SingleOffset  => newRow(single)
-        case MultipleOffsets(many) => many.foreach(newRow)
+    // if something didn't get updated, insert it!!
+    if (tryUpdates.contains(0)) {
+      tryWithResource(conn.prepareStatement(settings.dialect.insertStatement())) { stmt =>
+
+        def insertRow(singleOffset: SingleOffset): Unit = {
+
+          // VALUES
+          stmt.setString(InsertIndices.PROJECTION_NAME, singleOffset.id.name)
+          stmt.setString(InsertIndices.PROJECTION_KEY, singleOffset.id.key)
+          stmt.setString(InsertIndices.OFFSET, singleOffset.offsetStr)
+          stmt.setString(InsertIndices.MANIFEST, singleOffset.manifest)
+          stmt.setBoolean(InsertIndices.MERGEABLE, singleOffset.mergeable)
+          stmt.setTimestamp(InsertIndices.LAST_UPDATED, now)
+
+          stmt.addBatch()
+        }
+
+        storageReps match {
+          case single: SingleOffset => insertRow(single)
+          case MultipleOffsets(many) =>
+            many.zipWithIndex.foreach {
+              case (offset, index) =>
+                if (tryUpdates(index) == 0) insertRow(offset)
+            }
+        }
+
+        // FIXME: we may want to let it crash if something is not inserted
+        // but this only make sense for exactly-once projections
+        stmt.executeBatch()
+
+        Done
       }
-
-      stmt.executeBatch()
-
+    } else {
       Done
     }
   }
