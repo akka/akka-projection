@@ -5,6 +5,7 @@
 package akka.projection.cassandra;
 
 import akka.Done;
+import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
@@ -106,7 +107,7 @@ public class CassandraProjectionTest extends JUnitSuite {
     }
 
     @Override
-    public CompletionStage<Source<Envelope, ?>> source(
+    public CompletionStage<Source<Envelope, NotUsed>> source(
         Supplier<CompletionStage<Optional<Long>>> offsetF) {
       return offsetF
           .get()

@@ -103,12 +103,12 @@ object SlickProjectionSpec {
 
   case class TestSourceProvider(
       system: ActorSystem[_],
-      src: Source[Envelope, _],
+      src: Source[Envelope, NotUsed],
       offsetVerificationF: Long => OffsetVerification)
       extends SourceProvider[Long, Envelope]
       with VerifiableSourceProvider[Long, Envelope] {
     implicit val executionContext: ExecutionContext = system.executionContext
-    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
+    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, NotUsed]] =
       offset().map {
         case Some(o) => src.dropWhile(_.offset <= o)
         case _       => src

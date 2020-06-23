@@ -143,7 +143,7 @@ public interface WordCountDocExample {
                 new WordEnvelope(4L, "abc")));
 
     @Override
-    public CompletionStage<Source<WordEnvelope, ?>> source(
+    public CompletionStage<Source<WordEnvelope, NotUsed>> source(
         Supplier<CompletionStage<Optional<Long>>> offset) {
       return offset
           .get()

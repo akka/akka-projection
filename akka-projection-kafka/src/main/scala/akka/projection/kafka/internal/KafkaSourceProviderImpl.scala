@@ -13,6 +13,7 @@ import scala.concurrent.Future
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 
+import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.kafka.ConsumerSettings
@@ -73,7 +74,7 @@ import org.apache.kafka.common.TopicPartition
         case (_, partitionedSource) => partitionedSource
       })
 
-  override def source(readOffsets: ReadOffsets): Future[Source[ConsumerRecord[K, V], _]] = {
+  override def source(readOffsets: ReadOffsets): Future[Source[ConsumerRecord[K, V], NotUsed]] = {
     // get the total number of partitions to configure the `breadth` parameter, or we could just use a really large
     // number.  i don't think using a large number would present a problem.
     val numPartitionsF = metadataClient.numPartitions(topics)
@@ -83,12 +84,13 @@ import org.apache.kafka.common.TopicPartition
         .watchTermination()(Keep.right)
         .mapMaterializedValue { terminated =>
           terminated.onComplete(_ => metadataClient.stop())
+          NotUsed
         }
     }
   }
 
   override def source(readOffsets: Supplier[CompletionStage[Optional[GroupOffsets]]])
-      : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], _]] = {
+      : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], NotUsed]] = {
     source(() => readOffsets.get().toScala.map(_.asScala)).map(_.asJava).toJava
   }
 

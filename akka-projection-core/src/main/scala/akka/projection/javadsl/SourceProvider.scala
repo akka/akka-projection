@@ -10,12 +10,13 @@ import java.util.function.Supplier
 
 import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
+import akka.NotUsed
 import akka.projection.OffsetVerification
 
 abstract class SourceProvider[Offset, Envelope] {
 
-  def source(
-      offset: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[akka.stream.javadsl.Source[Envelope, _]]
+  def source(offset: Supplier[CompletionStage[Optional[Offset]]])
+      : CompletionStage[akka.stream.javadsl.Source[Envelope, NotUsed]]
 
   def extractOffset(envelope: Envelope): Offset
 
