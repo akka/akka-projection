@@ -13,9 +13,10 @@ import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
 abstract class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
   val instruments = InMemInstruments
+  val defaultNumberOfEnvelopes = 6
 
-  def detectNoError(): Any = {
-    instruments.offsetsSuccessfullyCommitted.get should be >= 6
+  def detectNoError(numberOfEnvelopes: Int = defaultNumberOfEnvelopes): Any = {
+    instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
     instruments.errorInvocations.get should be(0)
   }
 
@@ -33,10 +34,11 @@ class ErrorRateMetricAtLeastOnceSpec extends ErrorRateMetricSpec {
     // at-least-once
     " in `at-least-once` with singleHandler" must {
       "report nothing in happy scenarios" in {
+        val numOfEnvelopes = 20
         val tt: TelemetryTester =
-          new TelemetryTester(AtLeastOnce(), SingleHandlerStrategy(Handlers.single))
+          new TelemetryTester(AtLeastOnce(), SingleHandlerStrategy(Handlers.single), numOfEnvelopes)
         runInternal(tt.projectionState) {
-          detectNoError()
+          detectNoError(numOfEnvelopes)
         }
       }
       "report errors in flaky handlers" in {

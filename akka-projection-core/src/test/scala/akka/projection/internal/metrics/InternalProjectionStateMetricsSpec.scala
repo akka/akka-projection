@@ -47,7 +47,6 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-// TODO: use ProjectionTest's sink to control the pace and have more fine grained assertions
 abstract class InternalProjectionStateMetricsSpec
     extends ScalaTestWithActorTestKit(InternalProjectionStateMetricsSpec.config)
     with AnyWordSpecLike
@@ -105,7 +104,7 @@ object InternalProjectionStateMetricsSpec {
   def sourceProvider(system: ActorSystem[_], id: String, numberOfEnvelopes: Int): SourceProvider[Long, Envelope] = {
     val chars = "abcdefghijklkmnopqrstuvwxyz"
     val envelopes = (1 to numberOfEnvelopes).map { offset =>
-      Envelope(id, offset.toLong, chars.charAt(offset - 1).toString)
+      Envelope(id, offset.toLong, chars.charAt((offset - 1) % chars.length).toString)
     }
     TestSourceProvider(system, Source(envelopes), _ => VerificationSuccess)
   }
@@ -245,6 +244,12 @@ object Handlers {
   }
 
   val single = singleWithErrors()
+
+  /**
+   * @param erroredOffsets a stack of errors. Must be ordered. Each item is an offset which, when observed will
+   *                       trigger an error and then be removed from the stack. To fail an item multiple times
+   *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
+   */
   def singleWithErrors(erroredOffsets: Int*) = new Handler[Envelope] {
     var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
     override def process(envelope: Envelope): Future[Done] = {
@@ -258,6 +263,12 @@ object Handlers {
   }
 
   val grouped = groupedWithErrors()
+
+  /**
+   * @param erroredOffsets a stack of errors. Must be ordered. Each item is an offset which, when observed will
+   *                       trigger an error and then be removed from the stack. To fail an item multiple times
+   *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
+   */
   def groupedWithErrors(erroredOffsets: Int*) = new Handler[Seq[Envelope]] {
     var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
     override def process(envelopes: Seq[Envelope]): Future[Done] = {
@@ -272,6 +283,12 @@ object Handlers {
   }
 
   val flow = flowWithErrors()
+
+  /**
+   * @param erroredOffsets a stack of errors. Must be ordered. Each item is an offset which, when observed will
+   *                       trigger an error and then be removed from the stack. To fail an item multiple times
+   *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
+   */
   def flowWithErrors(erroredOffsets: Int*) = {
     var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
     FlowWithContext[Envelope, ProjectionContext]

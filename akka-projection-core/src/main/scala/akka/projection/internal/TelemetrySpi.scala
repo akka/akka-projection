@@ -32,7 +32,7 @@ import akka.projection.ProjectionId
 /**
  * INTERNAL API
  */
-@InternalStableApi private[projection] abstract class Telemetry(projectionId: ProjectionId, system: ActorSystem[_]) {
+@InternalStableApi private[akka] abstract class Telemetry(projectionId: ProjectionId, system: ActorSystem[_]) {
 
   // Per projection
   def failed(cause: Throwable): Unit

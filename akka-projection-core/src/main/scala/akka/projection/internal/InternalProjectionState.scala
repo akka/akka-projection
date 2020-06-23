@@ -60,7 +60,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
   val abort: Promise[Done] = Promise()
 
-  private def reportProgress[T](after: Future[T], envelope: Envelope, batchSize: Int): Future[T] = {
+  private def reportProgress[T](after: Future[T], envelope: Envelope): Future[T] = {
     after
       .map { done =>
         try {
@@ -70,9 +70,11 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         }
         done
       }
+  }
+
+  private def saveOffsetWithMetrics(projectionId: ProjectionId, offset: Offset, batchSize: Int): Future[Done] = {
+    saveOffset(projectionId, offset)
       .map { done =>
-        // when grouping, invocations to reportProgress pass a
-        // single `Envelope` and (wrongly) indicate a batchSize of 1
         telemetry.onOffsetStored(batchSize)
         done
       }
@@ -131,9 +133,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
 
           Flow[ProjectionContextImpl[Offset, Envelope]].mapAsync(parallelism = 1) { context =>
             val measured: () => Future[Done] = { () =>
-              handler.process(context.envelope).map { d =>
+              handler.process(context.envelope).map { done =>
                 telemetry.afterProcess(context.nanosSinceReady())
-                d
+                done
               }
             }
             handlerRecovery
@@ -197,7 +199,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
     if (afterEnvelopes == 1)
       // optimization of general AtLeastOnce case
       source.via(atLeastOnceHandlerFlow).mapAsync(1) { context =>
-        reportProgress(saveOffset(projectionId, context.offset), context.envelope, context.groupSize)
+        reportProgress(saveOffsetWithMetrics(projectionId, context.offset, context.groupSize), context.envelope)
       }
     else {
       source
@@ -207,7 +209,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         .mapAsync(parallelism = 1) { batch =>
           val totalNumberOfEnvelopes = batch.map { _.groupSize }.sum
           val last = batch.last
-          reportProgress(saveOffset(projectionId, last.offset), last.envelope, totalNumberOfEnvelopes)
+          reportProgress(saveOffsetWithMetrics(projectionId, last.offset, totalNumberOfEnvelopes), last.envelope)
         }
     }
   }
@@ -242,7 +244,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         case _: MergeableOffsetSourceProvider[_, Offset, Envelope] =>
           val batches = envelopesAndOffsets
             .flatMap {
-              case context @ ProjectionContextImpl(offset: MergeableOffset[MergeableKey, _] @unchecked, _) =>
+              case context @ ProjectionContextImpl(offset: MergeableOffset[MergeableKey, _] @unchecked, _, _, _) =>
                 offset.entries.toSeq.map {
                   case (key, _) => (key, context)
                 }
@@ -277,19 +279,16 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         source
           .mapAsync(1) { context =>
             logger.warning(" Processing {}", context.envelope)
-            val processed =
-              handlerRecovery.applyRecovery(
-                context.envelope,
-                context.offset,
-                context.offset,
-                abort.future,
-                () => handler.process(context.envelope))
-            reportProgress(processed, context.envelope, 1)
-              .map { t =>
-                // measure only once the offset is stored (and reported)
+            val measured: () => Future[Done] = { () =>
+              handler.process(context.envelope).map { done =>
+                telemetry.onOffsetStored(1)
                 telemetry.afterProcess(context.nanosSinceReady())
-                t
+                done
               }
+            }
+            val processed =
+              handlerRecovery.applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
+            reportProgress(processed, context.envelope)
           }
 
       case grouped: GroupedHandlerStrategy[Envelope] =>
@@ -302,9 +301,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           .filterNot(_.isEmpty)
           .mapAsync(parallelism = 1) { group =>
             val last = group.last
-            reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope, group.length)
+            reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope)
               .map { t =>
-                // measure only once the offset is stored (and reported)
+                telemetry.onOffsetStored(group.length)
                 group.foreach { ctx =>
                   telemetry.afterProcess(ctx.nanosSinceReady())
                 }
@@ -331,16 +330,18 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         source
           .mapAsync(parallelism = 1) { context =>
             val processed =
-              saveOffset(projectionId, context.offset).flatMap { _ =>
+              saveOffsetWithMetrics(projectionId, context.offset, 1).flatMap { _ =>
+                val measured: () => Future[Done] = { () =>
+                  handler.process(context.envelope).map { done =>
+                    telemetry.afterProcess(context.nanosSinceReady())
+                    done
+                  }
+                }
+
                 handlerRecovery
-                  .applyRecovery(
-                    context.envelope,
-                    context.offset,
-                    context.offset,
-                    abort.future,
-                    () => handler.process(context.envelope))
+                  .applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
               }
-            reportProgress(processed, context.envelope, 1)
+            reportProgress(processed, context.envelope)
           }
           .map(_ => Done)
       case _ =>

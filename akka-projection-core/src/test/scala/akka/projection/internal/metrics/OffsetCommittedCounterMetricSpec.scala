@@ -214,7 +214,6 @@ class OffsetCommittedCounterMetricAtMostOnceSpec extends InternalProjectionState
           instruments.offsetsSuccessfullyCommitted.get should be(6)
         }
       }
-
     }
 
   }
