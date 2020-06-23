@@ -15,7 +15,7 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
 
-class ServiceTimeMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpec {
+class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpec {
 
   val instruments = InMemInstruments
 
@@ -29,10 +29,8 @@ class ServiceTimeMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpe
         val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-            instruments.lastServiceTimeInNanos.get() should be > (0L)
-          }
+          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
+          instruments.lastServiceTimeInNanos.get() should be > (0L)
         }
       }
       "reports measures for all envelopes (with afterEnvelops optimization)" in {
@@ -40,11 +38,9 @@ class ServiceTimeMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpe
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(Handlers.single))
 
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            // afterProcess invocations happen per envelope (not in a groupWithin!)
-            instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-            instruments.lastServiceTimeInNanos.get() should be > (0L)
-          }
+          // afterProcess invocations happen per envelope (not in a groupWithin!)
+          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
+          instruments.lastServiceTimeInNanos.get() should be > (0L)
         }
       }
       "reports measures for all envelopes (multiple times when there are failures) " in {
@@ -143,7 +139,7 @@ class ServiceTimeMetricAtLeastOnceSpec extends InternalProjectionStateMetricsSpe
 
 }
 
-class ServiceTimeMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpec {
+class ServiceTimeAndProcessingCountMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpec {
 
   val instruments = InMemInstruments
 
@@ -172,6 +168,7 @@ class ServiceTimeMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpe
           instruments.lastErrorThrowable.get should not be null
           instruments.errorInvocations.get should be(7)
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
+          instruments.lastServiceTimeInNanos.get should be > 0L
         }
       }
     }
@@ -182,9 +179,7 @@ class ServiceTimeMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpe
         val tt =
           new TelemetryTester(ExactlyOnce(), groupHandler)
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-          }
+          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
       }
       "report only one measure per envelope even in case of failure" in {
@@ -193,10 +188,8 @@ class ServiceTimeMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpe
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
           GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2), orAfterDuration = Some(30.millis)))
         runInternal(tt.projectionState) {
-          withClue("the success counter reflects all events as processed") {
-            instruments.lastErrorThrowable.get should not be null
-            instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-          }
+          instruments.lastErrorThrowable.get should not be null
+          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
       }
     }
@@ -205,7 +198,7 @@ class ServiceTimeMetricExactlyOnceSpec extends InternalProjectionStateMetricsSpe
 
 }
 
-class ServiceTimeMetricAtMostOnceSpec extends InternalProjectionStateMetricsSpec {
+class ServiceTimeAndProcessingCountMetricAtMostOnceSpec extends InternalProjectionStateMetricsSpec {
 
   val instruments = InMemInstruments
 
@@ -220,6 +213,7 @@ class ServiceTimeMetricAtMostOnceSpec extends InternalProjectionStateMetricsSpec
           new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
         runInternal(tt.projectionState) {
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
+          instruments.lastServiceTimeInNanos.get should be > 0L
         }
       }
       "report measures if envelopes were processed in case of failure" in {
@@ -232,8 +226,8 @@ class ServiceTimeMetricAtMostOnceSpec extends InternalProjectionStateMetricsSpec
 
         runInternal(tt.projectionState) {
           instruments.lastErrorThrowable.get should not be null
-          instruments.offsetsSuccessfullyCommitted.get should be(numberOfEnvelopes)
           instruments.afterProcessInvocations.get should be(97)
+          instruments.lastServiceTimeInNanos.get should be > 0L
         }
       }
     }
