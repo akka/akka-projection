@@ -25,11 +25,10 @@ import akka.kafka.scaladsl.PartitionAssignmentHandler
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
-import akka.projection.javadsl
 import akka.projection.kafka.GroupOffsets
-import akka.projection.scaladsl
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
+import akka.util.JavaDurationConverters._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 
@@ -51,12 +50,8 @@ import org.apache.kafka.common.TopicPartition
     metadataClient: MetadataClientAdapter,
     sourceProviderSettings: KafkaSourceProviderSettings,
     readOffsetDelay: Option[FiniteDuration])
-    extends javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with javadsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with javadsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
+    extends akka.projection.kafka.javadsl.KafkaSourceProvider[K, V]
+    with akka.projection.kafka.scaladsl.KafkaSourceProvider[K, V]
     with KafkaSettingsImpl {
 
   import KafkaSourceProviderImpl._
@@ -145,4 +140,7 @@ import org.apache.kafka.common.TopicPartition
 
   override def withReadOffsetDelay(delay: FiniteDuration): KafkaSourceProviderImpl[K, V] =
     new KafkaSourceProviderImpl(system, settings, topics, metadataClient, sourceProviderSettings, Some(delay))
+
+  override def withReadOffsetDelay(delay: java.time.Duration): KafkaSourceProviderImpl[K, V] =
+    withReadOffsetDelay(delay.asScala)
 }

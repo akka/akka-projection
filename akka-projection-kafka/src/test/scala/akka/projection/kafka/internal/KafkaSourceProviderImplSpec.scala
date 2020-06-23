@@ -68,12 +68,12 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
         Set(topic),
         metadataClient,
         KafkaSourceProviderSettings(system),
-        readOffsetDelay = Some(0.seconds)) {
+        readOffsetDelay = None) {
         override protected[internal] def _source(
             readOffsets: () => Future[Option[GroupOffsets]],
             numPartitions: Int): Source[ConsumerRecord[String, String], Consumer.Control] =
           consumerSource
-      }
+      }.withReadOffsetDelay(0.seconds)
 
       val projection = TestProjection(provider, topic, partitions)
 
@@ -100,9 +100,11 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
         records = projection.processNextN(5)
         sinkProbe.expectNextN(5)
 
-        withClue("checking: after rebalance processed records should only have records from partition 0") {
-          records.count(_.partition() == tp0.partition()) shouldBe 5
-          records.count(_.partition() == tp1.partition()) shouldBe 0
+        eventually {
+          withClue("checking: after rebalance processed records should only have records from partition 0") {
+            records.count(_.partition() == tp0.partition()) shouldBe 5
+            records.count(_.partition() == tp1.partition()) shouldBe 0
+          }
         }
       }
 
