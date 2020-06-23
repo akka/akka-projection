@@ -22,6 +22,7 @@ import akka.pattern.retry
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.StatusObserver
+import akka.projection.Telemetry
 
 /**
  * INTERNAL API

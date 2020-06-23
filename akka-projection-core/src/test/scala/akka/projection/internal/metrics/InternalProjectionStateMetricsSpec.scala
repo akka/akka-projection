@@ -30,6 +30,7 @@ import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.Telemetry
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
@@ -39,7 +40,6 @@ import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.Telemetry
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec.Envelope
 import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec.TelemetryException
 import akka.projection.scaladsl.Handler
@@ -359,7 +359,7 @@ class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends
   override def stopped(): Unit =
     stoppedInvocations.incrementAndGet()
 
-  override private[projection] def afterProcess(serviceTimeInNanos: => Long): Unit = {
+  override def afterProcess(serviceTimeInNanos: => Long): Unit = {
     afterProcessInvocations.incrementAndGet()
     lastServiceTimeInNanos.set(serviceTimeInNanos)
   }

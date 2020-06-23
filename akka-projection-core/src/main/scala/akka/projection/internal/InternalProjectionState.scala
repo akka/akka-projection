@@ -27,6 +27,8 @@ import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
+import akka.projection.Telemetry
+import akka.projection.TelemetryProvider
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.MergeableOffsetSourceProvider
