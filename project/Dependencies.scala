@@ -22,8 +22,6 @@ object Dependencies {
     val testContainersScala = "0.37.0"
     val junit = "4.12"
     val h2Driver = "1.4.200"
-
-    println(s"Using alpakka-kafka $alpakkaKafka")
   }
 
   object Compile {
