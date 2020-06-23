@@ -44,7 +44,6 @@ object JdbcOffsetStoreSpec {
     val name: String
     val config: Config = ConfigFactory.parseString("""
     akka.projection.jdbc = {
-      fetch-size = 10
       offset-store {
         schema = ""
         table = "AKKA_PROJECTION_OFFSET_STORE"
