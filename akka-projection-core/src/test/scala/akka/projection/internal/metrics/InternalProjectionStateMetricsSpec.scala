@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.collection.immutable
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -12,14 +13,13 @@ import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.ActorSystem
 import akka.event.Logging
 import akka.event.LoggingAdapter
-import akka.projection.OffsetVerification
-import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
@@ -106,32 +106,25 @@ object InternalProjectionStateMetricsSpec {
     val envelopes = (1 to numberOfEnvelopes).map { offset =>
       Envelope(id, offset.toLong, chars.charAt((offset - 1) % chars.length).toString)
     }
-    TestSourceProvider(system, Source(envelopes), _ => VerificationSuccess)
+    TestSourceProvider(system, Source(envelopes))
   }
 
-  case class TestSourceProvider(
-      system: ActorSystem[_],
-      src: Source[Envelope, _],
-      offsetVerificationF: Long => OffsetVerification)
+  case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, NotUsed])
       extends SourceProvider[Long, Envelope] {
     implicit val executionContext: ExecutionContext = system.executionContext
-    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, _]] =
+    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, NotUsed]] =
       offset().map {
         case Some(o) => src.dropWhile(_.offset <= o)
         case _       => src
       }
 
     override def extractOffset(env: Envelope): Long = env.offset
-
-    override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
   }
 
   case object TelemetryException extends RuntimeException("Oh, no! Handler errored.") with NoStackTrace
 
-  class TelemetryTester(
-      offsetStrategy: OffsetStrategy,
-      handlerStrategy: HandlerStrategy[Envelope],
-      numberOfEnvelopes: Int = 6)(implicit system: ActorSystem[_]) {
+  class TelemetryTester(offsetStrategy: OffsetStrategy, handlerStrategy: HandlerStrategy, numberOfEnvelopes: Int = 6)(
+      implicit system: ActorSystem[_]) {
     private def genRandomProjectionId() =
       ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
 
@@ -143,23 +136,27 @@ object InternalProjectionStateMetricsSpec {
 
     val offsetStore = new OffsetStore[Long]()
 
-    val adaptedHandlerStrategy = offsetStrategy match {
+    val adaptedHandlerStrategy: HandlerStrategy = offsetStrategy match {
       case ExactlyOnce(_) =>
         handlerStrategy match {
-          case SingleHandlerStrategy(handler) => {
-            val adaptedHandler = new Handler[Envelope] {
-              override def process(envelope: Envelope): Future[Done] = handler.process(envelope).flatMap { _ =>
-                offsetStore.saveOffset(projectionId, envelope.offset)
+          case SingleHandlerStrategy(handlerFactory) => {
+            val adaptedHandler = () =>
+              new Handler[Envelope] {
+                override def process(envelope: Envelope): Future[Done] = handlerFactory().process(envelope).flatMap {
+                  _ =>
+                    offsetStore.saveOffset(envelope.offset)
+                }
               }
-            }
             SingleHandlerStrategy(adaptedHandler)
           }
-          case GroupedHandlerStrategy(handler, afterEnvelopes, orAfterDuration) => {
-            val adaptedHandler = new Handler[Seq[Envelope]] {
-              override def process(envelopes: Seq[Envelope]): Future[Done] = handler.process(envelopes).flatMap { _ =>
-                offsetStore.saveOffset(projectionId, envelopes.last.offset)
+          case GroupedHandlerStrategy(handlerFactory, afterEnvelopes, orAfterDuration) => {
+            val adaptedHandler = () =>
+              new Handler[immutable.Seq[Envelope]] {
+                override def process(envelopes: immutable.Seq[Envelope]): Future[Done] =
+                  handlerFactory().process(envelopes).flatMap { _ =>
+                    offsetStore.saveOffset(envelopes.last.offset)
+                  }
               }
-            }
             GroupedHandlerStrategy(adaptedHandler, afterEnvelopes, orAfterDuration)
           }
           case FlowHandlerStrategy(_) => handlerStrategy
@@ -185,7 +182,7 @@ object InternalProjectionStateMetricsSpec {
     val _offset = new AtomicReference[Option[Offset]](None)
     def readOffsets(): Future[Option[Offset]] = Future.successful(_offset.get)
 
-    def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = {
+    def saveOffset(offset: Offset): Future[Done] = {
       _offset.set(Some(offset))
       Future.successful(Done)
     }
@@ -195,7 +192,7 @@ object InternalProjectionStateMetricsSpec {
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Env],
       offsetStrategy: OffsetStrategy,
-      handlerStrategy: HandlerStrategy[Env],
+      handlerStrategy: HandlerStrategy,
       statusObserver: StatusObserver[Env],
       settings: ProjectionSettings,
       offsetStore: OffsetStore[Offset])(implicit val system: ActorSystem[_])
@@ -213,7 +210,7 @@ object InternalProjectionStateMetricsSpec {
     override def readOffsets(): Future[Option[Offset]] = offsetStore.readOffsets()
 
     override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] =
-      offsetStore.saveOffset(projectionId, offset)
+      offsetStore.saveOffset(offset)
 
     def newRunningInstance(): RunningProjection =
       new TestRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
@@ -243,24 +240,26 @@ object Handlers {
       if (erroredOffsets.length == 0) AlwaysSucceed else new SomeFailures(erroredOffsets)
   }
 
-  val single = singleWithErrors()
+  val single: () => Handler[Envelope] = singleWithErrors()
 
   /**
    * @param erroredOffsets a stack of errors. Must be ordered. Each item is an offset which, when observed will
    *                       trigger an error and then be removed from the stack. To fail an item multiple times
    *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
    */
-  def singleWithErrors(erroredOffsets: Int*) = new Handler[Envelope] {
-    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
-    override def process(envelope: Envelope): Future[Done] = {
-      nextProcessStrategy match {
-        case SomeFailures(nextFail :: tail) if (nextFail == envelope.offset) =>
-          nextProcessStrategy = SomeFailures(tail)
-          throw TelemetryException
-        case _ => Future.successful(Done)
+  def singleWithErrors(erroredOffsets: Int*): () => Handler[Envelope] =
+    () =>
+      new Handler[Envelope] {
+        var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
+        override def process(envelope: Envelope): Future[Done] = {
+          nextProcessStrategy match {
+            case SomeFailures(nextFail :: tail) if (nextFail == envelope.offset) =>
+              nextProcessStrategy = SomeFailures(tail)
+              throw TelemetryException
+            case _ => Future.successful(Done)
+          }
+        }
       }
-    }
-  }
 
   val grouped = groupedWithErrors()
 
@@ -269,18 +268,20 @@ object Handlers {
    *                       trigger an error and then be removed from the stack. To fail an item multiple times
    *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
    */
-  def groupedWithErrors(erroredOffsets: Int*) = new Handler[Seq[Envelope]] {
-    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
-    override def process(envelopes: Seq[Envelope]): Future[Done] = {
-      nextProcessStrategy match {
-        case SomeFailures(nextFail :: tail) if (envelopes.map { _.offset }.contains(nextFail)) =>
-          nextProcessStrategy = SomeFailures(tail)
-          Future.failed(TelemetryException)
-        case _ =>
-          Future.successful(Done)
+  def groupedWithErrors(erroredOffsets: Int*): () => Handler[immutable.Seq[Envelope]] =
+    () =>
+      new Handler[immutable.Seq[Envelope]] {
+        var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
+        override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
+          nextProcessStrategy match {
+            case SomeFailures(nextFail :: tail) if (envelopes.map { _.offset }.contains(nextFail)) =>
+              nextProcessStrategy = SomeFailures(tail)
+              Future.failed(TelemetryException)
+            case _ =>
+              Future.successful(Done)
+          }
+        }
       }
-    }
-  }
 
   val flow = flowWithErrors()
 
@@ -315,6 +316,9 @@ object InMemInstruments {
   val errorInvocations = new AtomicInteger(0)
   val lastErrorThrowable = new AtomicReference[Throwable](null)
 
+  val observedProjectionId = new AtomicReference[ProjectionId](null)
+  val observedActorSystem = new AtomicReference[ActorSystem[_]](null)
+
   def reset(): Unit = {
     afterProcessInvocations.set(0)
     lastServiceTimeInNanos.set(0L)
@@ -325,8 +329,11 @@ object InMemInstruments {
   }
 }
 
-class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry(projectionId, system) {
+class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry {
   import InMemInstruments._
+  observedActorSystem.set(system)
+  observedProjectionId.set(projectionId)
+
   override def failed(cause: Throwable): Unit = ???
 
   override def stopped(): Unit = ???

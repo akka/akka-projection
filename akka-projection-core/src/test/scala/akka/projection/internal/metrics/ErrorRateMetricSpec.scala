@@ -119,7 +119,7 @@ class ErrorRateMetricExactlyOnceSpec extends ErrorRateMetricSpec {
     " in `exactly-once` with groupedHandler" must {
       "report nothing in happy scenarios" in {
         val grouped = Handlers.grouped
-        val groupHandler = GroupedHandlerStrategy(grouped)
+        val groupHandler: GroupedHandlerStrategy[Envelope] = GroupedHandlerStrategy(grouped)
         val tt = new TelemetryTester(ExactlyOnce(), groupHandler)
 
         runInternal(tt.projectionState) {

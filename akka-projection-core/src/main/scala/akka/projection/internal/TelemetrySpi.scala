@@ -4,6 +4,8 @@
 
 package akka.projection.internal
 
+import scala.collection.immutable
+
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.annotation.InternalStableApi
@@ -16,11 +18,11 @@ import akka.projection.ProjectionId
   def start(projectionId: ProjectionId, system: ActorSystem[_]): Telemetry = {
     val dynamicAccess = system.dynamicAccess
     if (system.settings.config.hasPath("akka.projection.telemetry.fqcn")) {
-      val telemetryFqcn = system.settings.config.getString("akka.projection.telemetry.fqcn")
+      val telemetryFqcn: String = system.settings.config.getString("akka.projection.telemetry.fqcn")
       dynamicAccess
         .createInstanceFor[Telemetry](
           telemetryFqcn,
-          Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
+          immutable.Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
         .get
     } else {
       // TODO: review this default: should use a default value in reference.conf instead?
@@ -32,7 +34,7 @@ import akka.projection.ProjectionId
 /**
  * INTERNAL API
  */
-@InternalStableApi private[akka] abstract class Telemetry(projectionId: ProjectionId, system: ActorSystem[_]) {
+@InternalStableApi private[akka] trait Telemetry {
 
   // Per projection
   def failed(cause: Throwable): Unit
@@ -55,7 +57,7 @@ import akka.projection.ProjectionId
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object NoopTelemetry extends Telemetry(null, null) {
+@InternalApi private[akka] object NoopTelemetry extends Telemetry {
   override def failed(cause: Throwable): Unit = {}
 
   override def stopped(): Unit = {}
