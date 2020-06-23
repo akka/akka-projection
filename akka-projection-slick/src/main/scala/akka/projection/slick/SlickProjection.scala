@@ -109,7 +109,8 @@ object SlickProjection {
       ExactlyOnce(),
       SingleHandlerStrategy(adaptedSlickHandler),
       NoopStatusObserver,
-      offsetStore)
+      offsetStore,
+      readOffsetDelay = None)
   }
 
   /**
@@ -156,7 +157,8 @@ object SlickProjection {
       AtLeastOnce(),
       SingleHandlerStrategy(adaptedSlickHandler),
       NoopStatusObserver,
-      createOffsetStore(databaseConfig))
+      createOffsetStore(databaseConfig),
+      readOffsetDelay = None)
   }
 
   /**
@@ -224,7 +226,8 @@ object SlickProjection {
       ExactlyOnce(),
       GroupedHandlerStrategy(adaptedSlickHandler),
       NoopStatusObserver,
-      offsetStore)
+      offsetStore,
+      readOffsetDelay = None)
   }
 
   /**
@@ -264,7 +267,8 @@ object SlickProjection {
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = FlowHandlerStrategy(handler),
       NoopStatusObserver,
-      createOffsetStore(databaseConfig))
+      createOffsetStore(databaseConfig),
+      readOffsetDelay = None)
   }
 
   def createOffsetTableIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(

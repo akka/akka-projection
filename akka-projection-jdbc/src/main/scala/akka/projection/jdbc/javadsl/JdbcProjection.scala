@@ -69,7 +69,8 @@ object JdbcProjection {
       ExactlyOnce(),
       SingleHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
-      offsetStore)
+      offsetStore,
+      readOffsetDelay = None)
   }
 
   /**
@@ -109,7 +110,8 @@ object JdbcProjection {
       AtLeastOnce(),
       SingleHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
-      offsetStore)
+      offsetStore,
+      readOffsetDelay = None)
   }
 
   /**
@@ -150,7 +152,8 @@ object JdbcProjection {
       ExactlyOnce(),
       GroupedHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
-      offsetStore)
+      offsetStore,
+      readOffsetDelay = None)
   }
 
   /**
@@ -194,7 +197,8 @@ object JdbcProjection {
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = FlowHandlerStrategy(handler.asScala),
       NoopStatusObserver,
-      offsetStore)
+      offsetStore,
+      readOffsetDelay = None)
   }
 
   /**

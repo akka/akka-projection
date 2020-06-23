@@ -59,7 +59,8 @@ object CassandraProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = SingleHandlerStrategy(() => HandlerAdapter(handler.get())),
-      statusObserver = NoopStatusObserver)
+      statusObserver = NoopStatusObserver,
+      readOffsetDelay = None)
 
   /**
    * Create a [[akka.projection.Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
@@ -84,7 +85,8 @@ object CassandraProjection {
       offsetStrategy =
         AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(scala.concurrent.duration.Duration.Zero)),
       handlerStrategy = GroupedHandlerStrategy(() => new GroupedHandlerAdapter(handler.get())),
-      statusObserver = NoopStatusObserver)
+      statusObserver = NoopStatusObserver,
+      readOffsetDelay = None)
 
   /**
    * Create a [[akka.projection.Projection]] with a [[FlowWithContext]] as the envelope handler. It has at-least-once processing
@@ -119,7 +121,8 @@ object CassandraProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = FlowHandlerStrategy(handler.asScala),
-      statusObserver = NoopStatusObserver)
+      statusObserver = NoopStatusObserver,
+      readOffsetDelay = None)
 
   /**
    * Create a [[akka.projection.Projection]] with at-most-once processing semantics. It stores the offset in Cassandra
@@ -137,7 +140,8 @@ object CassandraProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtMostOnce(),
       handlerStrategy = SingleHandlerStrategy(() => HandlerAdapter(handler.get())),
-      statusObserver = NoopStatusObserver)
+      statusObserver = NoopStatusObserver,
+      readOffsetDelay = None)
 
   def createOffsetTableIfNotExists(system: ActorSystem[_]): CompletionStage[Done] = {
     import scala.compat.java8.FutureConverters._

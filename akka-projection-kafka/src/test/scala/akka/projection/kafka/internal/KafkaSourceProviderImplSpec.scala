@@ -26,7 +26,6 @@ import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.GroupOffsets.TopicPartitionKey
-import akka.projection.kafka.internal.KafkaSourceProviderImpl.ReadOffsets
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
@@ -65,7 +64,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
       val provider = new KafkaSourceProviderImpl(system, settings, Set(topic), metadataClient) {
         override protected[internal] def _source(
-            readOffsets: ReadOffsets,
+            readOffsets: () => Future[Option[GroupOffsets]],
             numPartitions: Int): Source[ConsumerRecord[String, String], Consumer.Control] =
           consumerSource
       }
@@ -143,6 +142,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
     override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
     override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
     override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
+    override def withReadOffsetDelay(delay: FiniteDuration): TestProjection = this
 
     override private[projection] def mappedSource()(implicit system: ActorSystem[_]) =
       internalState.mappedSource()

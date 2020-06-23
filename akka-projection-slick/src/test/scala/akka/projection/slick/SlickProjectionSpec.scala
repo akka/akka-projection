@@ -60,10 +60,10 @@ import slick.jdbc.H2Profile
 object SlickProjectionSpec {
   def config: Config = ConfigFactory.parseString("""
       akka {
-       loglevel = "DEBUG"
-       projection.slick = {
+        loglevel = "DEBUG"
+        projection.slick = {
 
-         profile = "slick.jdbc.H2Profile$"
+          profile = "slick.jdbc.H2Profile$"
 
           # TODO: configure connection pool and slick async executor
           db = {
@@ -77,7 +77,7 @@ object SlickProjectionSpec {
             schema = ""
             table = "AKKA_PROJECTION_OFFSET_STORE"
           }
-       }
+        }
       }
       """)
 
