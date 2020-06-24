@@ -21,6 +21,8 @@ For the offset storage you can select from:
 Those building blocks are assembled into a `Projection`. You can have many instances of it
 @ref:[automatically distributed and run](running.md) in an Akka Cluster. 
 
+To see a complete example of an Akka Projections implementation review the @ref:[Getting Started Guide](getting-started.md).
+
 ## Dependencies
 
 Akka Projections consists of several modules for specific technologies. The dependency section for
