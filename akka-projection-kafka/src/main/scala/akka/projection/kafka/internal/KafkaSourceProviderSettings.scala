@@ -11,14 +11,17 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import com.typesafe.config.Config
 
+/**
+ * INTERNAL API
+ */
 @InternalApi
-final case class KafkaSourceProviderSettings(readOffsetDelay: FiniteDuration)
+private[projection] final case class KafkaSourceProviderSettings(readOffsetDelay: FiniteDuration)
 
 /**
  * INTERNAL API
  */
 @InternalApi
-object KafkaSourceProviderSettings {
+private[projection] object KafkaSourceProviderSettings {
   def apply(system: ActorSystem[_]): KafkaSourceProviderSettings = {
     fromConfig(system.classicSystem.settings.config.getConfig("akka.projection.kafka"))
   }
