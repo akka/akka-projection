@@ -72,12 +72,13 @@ import slick.jdbc.JdbcProfile
 
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
 
-    def projectionName = column[String]("PROJECTION_NAME", O.Length(255, varying = false))
-    def projectionKey = column[String]("PROJECTION_KEY", O.Length(255, varying = false))
-    def offset = column[String]("OFFSET", O.Length(255, varying = false))
+    def projectionName = column[String]("PROJECTION_NAME", O.Length(255))
+    def projectionKey = column[String]("PROJECTION_KEY", O.Length(255))
+    def offset = column[String]("OFFSET", O.Length(255))
     def manifest = column[String]("MANIFEST", O.Length(4))
     def mergeable = column[Boolean]("MERGEABLE")
     def lastUpdated = column[Instant]("LAST_UPDATED")
+
     def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
 
     def * = (projectionName, projectionKey, offset, manifest, mergeable, lastUpdated).mapTo[OffsetRow]
