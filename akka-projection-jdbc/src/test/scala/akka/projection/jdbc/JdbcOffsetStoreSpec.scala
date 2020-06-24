@@ -10,9 +10,7 @@ import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContextExecutor
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -61,8 +59,8 @@ object JdbcOffsetStoreSpec {
     """)
     def jdbcSessionFactory(): JdbcSession
 
-    def initContainer(implicit ec: ExecutionContext): Future[Unit]
-    def stopContainer(implicit ec: ExecutionContext): Future[Unit]
+    def initContainer(): Unit
+    def stopContainer(): Unit
   }
 
   private[projection] class PureJdbcSession(connFunc: () => Connection) extends JdbcSession {
@@ -97,14 +95,14 @@ object JdbcOffsetStoreSpec {
     def jdbcSessionFactory(): PureJdbcSession =
       new PureJdbcSession(() => {
         Class.forName("org.h2.Driver")
-        val c = DriverManager.getConnection("jdbc:h2:mem:offset-store-test;DB_CLOSE_DELAY=-1")
-        c.setAutoCommit(false)
-        c
+        val conn = DriverManager.getConnection("jdbc:h2:mem:offset-store-test;DB_CLOSE_DELAY=-1")
+        conn.setAutoCommit(false)
+        conn
       })
 
-    override def initContainer(implicit ec: ExecutionContext): Future[Unit] = Future.successful(())
+    override def initContainer() = ()
 
-    override def stopContainer(implicit ec: ExecutionContext): Future[Unit] = Future.successful(())
+    override def stopContainer() = ()
   }
 
   abstract class ContainerJdbcSpecConfig(dialect: String) extends JdbcSpecConfig {
@@ -122,51 +120,53 @@ object JdbcOffsetStoreSpec {
         }
         """)
 
-    def jdbcSessionFactory(): PureJdbcSession =
+    def jdbcSessionFactory(): PureJdbcSession = {
+
+      // this is safe as tests only start after the container is init
+      val container = _container.get
+
       new PureJdbcSession(() => {
-        // this is safe as tests only start after the container is init
-        val container = _container.get
         Class.forName(container.driverClassName)
-        val c =
+        val conn =
           DriverManager.getConnection(container.jdbcUrl, container.username, container.password)
-        c.setAutoCommit(false)
-        c
+        conn.setAutoCommit(false)
+        conn
       })
+    }
 
     protected var _container: Option[JdbcDatabaseContainer] = None
 
-    override def stopContainer(implicit ec: ExecutionContext): Future[Unit] = {
-      Future {
-        _container.get.asInstanceOf[SingleContainer[_]].stop()
-      }
-    }
+    override def stopContainer(): Unit =
+      _container.get.asInstanceOf[SingleContainer[_]].stop()
   }
 
   object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
 
     val name = "Postgres Database"
 
-    override def initContainer(implicit ec: ExecutionContext): Future[Unit] =
-      Future.successful {
-        val container = new PostgreSQLContainer
-        _container = Some(container)
-        container.start()
-      }
+    override def initContainer(): Unit = {
+      val container = new PostgreSQLContainer
+      _container = Some(container)
+      container.start()
+    }
   }
 
   object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
 
     val name = "MySQL Database"
 
-    override def initContainer(implicit ec: ExecutionContext): Future[Unit] =
-      Future.successful {
-        val container = new MySQLContainer
-        _container = Some(container)
-        container.start()
-      }
+    override def initContainer(): Unit = {
+      val container = new MySQLContainer
+      _container = Some(container)
+      container.start()
+    }
   }
 
 }
+
+class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
+class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.PostgresSpecConfig)
+class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MySQLSpecConfig)
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)
@@ -189,14 +189,14 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override protected def beforeAll(): Unit = {
     // start test container if needed
     // Note, the H2 test don't run in container and are therefore will run must faster
-    Await.result(specConfig.initContainer, 30.seconds)
+    specConfig.initContainer
 
     // create offset table
     Await.result(offsetStore.createIfNotExists(), 3.seconds)
   }
 
   override protected def afterAll(): Unit =
-    Await.result(specConfig.stopContainer, 30.seconds)
+    specConfig.stopContainer
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     withConnection(specConfig.jdbcSessionFactory) { conn =>
@@ -429,7 +429,3 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     }
   }
 }
-
-class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
-class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.PostgresSpecConfig)
-class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MySQLSpecConfig)
