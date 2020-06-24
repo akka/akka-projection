@@ -80,6 +80,7 @@ import slick.jdbc.JdbcProfile
     def lastUpdated = column[Instant]("LAST_UPDATED")
 
     def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
+    def idx = index("PROJECTION_NAME_INDEX", projectionName)
 
     def * = (projectionName, projectionKey, offset, manifest, mergeable, lastUpdated).mapTo[OffsetRow]
   }

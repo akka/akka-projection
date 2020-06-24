@@ -4,15 +4,17 @@
 
 package akka.projection.jdbc.internal
 
+import scala.collection.immutable
+
 import akka.annotation.InternalApi
+import akka.projection.jdbc.internal.Dialect.removeQuotes
 
 /**
  * INTERNAL API
  */
 @InternalApi
 private[jdbc] trait Dialect {
-  def createTableStatement: String
-  def alterTableStatement: String
+  def createTableStatements: immutable.Seq[String]
 
   def readOffsetQuery: String
   def clearOffsetStatement: String
@@ -21,12 +23,36 @@ private[jdbc] trait Dialect {
 
 }
 
+object Dialect {
+  def removeQuotes(stmt: String): String =
+    stmt.replace("\"", "")
+}
+
 /**
  * INTERNAL API
  * Defines the basic statements. Dialects may use it or define their own.
  */
 @InternalApi
 private[jdbc] object DialectDefaults {
+
+  def createTableStatement(table: String): immutable.Seq[String] =
+    immutable.Seq(
+      s"""
+     CREATE TABLE IF NOT EXISTS "$table" (
+      "PROJECTION_NAME" VARCHAR(255) NOT NULL,
+      "PROJECTION_KEY" VARCHAR(255) NOT NULL,
+      "OFFSET" VARCHAR(255) NOT NULL,
+      "MANIFEST" VARCHAR(4) NOT NULL,
+      "MERGEABLE" BOOLEAN NOT NULL,
+      "LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL
+     );""",
+      // create index
+      s"""CREATE INDEX "PROJECTION_NAME_INDEX" on "$table" ("PROJECTION_NAME");""",
+      // add primary key
+      s"""ALTER TABLE "$table" 
+       ADD CONSTRAINT "PK_PROJECTION_ID" PRIMARY KEY("PROJECTION_NAME","PROJECTION_KEY");
+    """)
+
   def readOffsetQuery(table: String) =
     s"""SELECT * FROM "$table" WHERE "PROJECTION_NAME" = ?"""
 
@@ -34,17 +60,24 @@ private[jdbc] object DialectDefaults {
     s"""DELETE FROM "$table" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
 
   def insertStatement(table: String): String =
-    s"""INSERT INTO "$table" ("PROJECTION_NAME","PROJECTION_KEY","OFFSET","MANIFEST","MERGEABLE","LAST_UPDATED")  VALUES (?,?,?,?,?,?)"""
+    s"""INSERT INTO "$table" (
+      "PROJECTION_NAME",
+      "PROJECTION_KEY",
+      "OFFSET",
+      "MANIFEST",
+      "MERGEABLE",
+      "LAST_UPDATED"
+    )  VALUES (?,?,?,?,?,?)"""
 
   def updateStatement(table: String): String =
     s"""UPDATE "$table" 
-       | SET 
-       |  "OFFSET" = ?,
-       |  "MANIFEST" = ?,
-       |  "MERGEABLE" = ?,
-       |  "LAST_UPDATED" = ?
-       | WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?
-       |""".stripMargin
+        SET
+         "OFFSET" = ?,
+         "MANIFEST" = ?,
+         "MERGEABLE" = ?,
+         "LAST_UPDATED" = ?
+        WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?
+        """
 
   object InsertIndices {
     val PROJECTION_NAME = 1
@@ -72,28 +105,13 @@ private[jdbc] object DialectDefaults {
  * INTERNAL API
  */
 @InternalApi
-private[jdbc] case class H2Dialect(schema: Option[String], tableName: String) extends Dialect {
+private[jdbc] case class DefaultDialect(schema: Option[String], tableName: String) extends Dialect {
 
   def this(tableName: String) = this(None, tableName)
 
   private val table = schema.map(s => s"$s.$tableName").getOrElse(tableName)
 
-  override val createTableStatement = s"""
-     CREATE TABLE IF NOT EXISTS "$table" (
-      "PROJECTION_NAME" VARCHAR(255) NOT NULL,
-      "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-      "OFFSET" VARCHAR(255) NOT NULL,
-      "MANIFEST" VARCHAR(4) NOT NULL,
-      "MERGEABLE" BOOLEAN NOT NULL,
-      "LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL
-     );
-     """
-
-  override val alterTableStatement =
-    s"""
-       ALTER TABLE "$table" 
-       ADD CONSTRAINT "PK_PROJECTION_ID" PRIMARY KEY("PROJECTION_NAME","PROJECTION_KEY");
-    """
+  override val createTableStatements: immutable.Seq[String] = DialectDefaults.createTableStatement(table)
 
   override val readOffsetQuery: String = DialectDefaults.readOffsetQuery(table)
 
@@ -102,4 +120,45 @@ private[jdbc] case class H2Dialect(schema: Option[String], tableName: String) ex
   override def insertStatement(): String = DialectDefaults.insertStatement(table)
 
   override def updateStatement(): String = DialectDefaults.updateStatement(table)
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[jdbc] case class MySQLDialect(schema: Option[String], tableName: String) extends Dialect {
+
+  def this(tableName: String) = this(None, tableName)
+
+  private val table = schema.map(s => s"$s.$tableName").getOrElse(tableName)
+  override val createTableStatements =
+    immutable.Seq(
+      s"""
+     CREATE TABLE IF NOT EXISTS $table (
+      PROJECTION_NAME VARCHAR(255) NOT NULL,
+      PROJECTION_KEY VARCHAR(255) NOT NULL,
+      OFFSET VARCHAR(255) NOT NULL,
+      MANIFEST VARCHAR(4) NOT NULL,
+      MERGEABLE BOOLEAN NOT NULL,
+      LAST_UPDATED TEXT NOT NULL
+     );
+    """,
+      // create index
+      s"""CREATE INDEX PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""",
+      // add primary key
+      s"""ALTER TABLE $table
+       ADD CONSTRAINT PK_PROJECTION_ID PRIMARY KEY(PROJECTION_NAME,PROJECTION_KEY);
+       """)
+
+  override val readOffsetQuery: String =
+    removeQuotes(DialectDefaults.readOffsetQuery(table))
+
+  override val clearOffsetStatement: String =
+    removeQuotes(DialectDefaults.clearOffsetStatement(table))
+
+  override def insertStatement(): String =
+    removeQuotes(DialectDefaults.insertStatement(table))
+
+  override def updateStatement(): String =
+    removeQuotes(DialectDefaults.updateStatement(table))
 }

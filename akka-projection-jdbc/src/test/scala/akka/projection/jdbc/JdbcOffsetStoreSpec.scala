@@ -23,13 +23,17 @@ import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.StringKey
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
+import akka.projection.jdbc.JdbcOffsetStoreSpec.MySQLSpecConfig
+import akka.projection.jdbc.internal.Dialect
 import akka.projection.jdbc.internal.JdbcOffsetStore
 import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
 import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.testkit.internal.TestClock
 import com.dimafeng.testcontainers.JdbcDatabaseContainer
+import com.dimafeng.testcontainers.MySQLContainer
 import com.dimafeng.testcontainers.PostgreSQLContainer
+import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
@@ -42,7 +46,9 @@ object JdbcOffsetStoreSpec {
 
   trait JdbcSpecConfig {
     val name: String
+
     val config: Config = ConfigFactory.parseString("""
+    
     akka.projection.jdbc = {
       offset-store {
         schema = ""
@@ -56,6 +62,7 @@ object JdbcOffsetStoreSpec {
     def jdbcSessionFactory(): JdbcSession
 
     def initContainer(implicit ec: ExecutionContext): Future[Unit]
+    def stopContainer(implicit ec: ExecutionContext): Future[Unit]
   }
 
   private[projection] class PureJdbcSession(connFunc: () => Connection) extends JdbcSession {
@@ -76,18 +83,16 @@ object JdbcOffsetStoreSpec {
     val name = "H2 Database"
     override val config: Config =
       ConfigFactory.parseString("""
-    akka.projection.jdbc = {
-      # FIXME: remove this override when dialect is gone
-      dialect = "h2-dialect"
-      offset-store {
-        schema = ""
-        table = "AKKA_PROJECTION_OFFSET_STORE"
-      }
-      
-      # TODO: configure a connection pool for the tests
-      blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
-    }
-    """)
+        akka.projection.jdbc = {
+          dialect = "h2-dialect"
+          offset-store {
+            schema = ""
+            table = "AKKA_PROJECTION_OFFSET_STORE"
+          }
+          
+          blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
+        }
+        """)
 
     def jdbcSessionFactory(): PureJdbcSession =
       new PureJdbcSession(() => {
@@ -98,25 +103,24 @@ object JdbcOffsetStoreSpec {
       })
 
     override def initContainer(implicit ec: ExecutionContext): Future[Unit] = Future.successful(())
+
+    override def stopContainer(implicit ec: ExecutionContext): Future[Unit] = Future.successful(())
   }
 
-  trait ContainerJdbcSpecConfig extends JdbcSpecConfig {
+  abstract class ContainerJdbcSpecConfig(dialect: String) extends JdbcSpecConfig {
 
     override val config: Config =
-      ConfigFactory.parseString("""
-    akka.projection.jdbc = {
-      # FIXME: remove this override when dialect is gone
-      dialect = "h2-dialect" 
-      
-      offset-store {
-        schema = ""
-        table = "AKKA_PROJECTION_OFFSET_STORE"
-      }
-      
-      # TODO: configure a connection pool for the tests
-      blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
-    }
-    """)
+      ConfigFactory.parseString(s"""
+        akka.projection.jdbc = {
+          dialect = $dialect
+          offset-store {
+            schema = ""
+            table = "AKKA_PROJECTION_OFFSET_STORE"
+          }
+          
+          blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
+        }
+        """)
 
     def jdbcSessionFactory(): PureJdbcSession =
       new PureJdbcSession(() => {
@@ -131,9 +135,14 @@ object JdbcOffsetStoreSpec {
 
     protected var _container: Option[JdbcDatabaseContainer] = None
 
+    override def stopContainer(implicit ec: ExecutionContext): Future[Unit] = {
+      Future {
+        _container.get.asInstanceOf[SingleContainer[_]].stop()
+      }
+    }
   }
 
-  object PostgresSpecConfig extends ContainerJdbcSpecConfig {
+  object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
 
     val name = "Postgres Database"
 
@@ -144,6 +153,19 @@ object JdbcOffsetStoreSpec {
         container.start()
       }
   }
+
+  object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
+
+    val name = "MySQL Database"
+
+    override def initContainer(implicit ec: ExecutionContext): Future[Unit] =
+      Future.successful {
+        val container = new MySQLContainer
+        _container = Some(container)
+        container.start()
+      }
+  }
+
 }
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
@@ -173,10 +195,19 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     Await.result(offsetStore.createIfNotExists(), 3.seconds)
   }
 
+  override protected def afterAll(): Unit =
+    Await.result(specConfig.stopContainer, 30.seconds)
+
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     withConnection(specConfig.jdbcSessionFactory) { conn =>
 
-      val statement = s"""SELECT * FROM "${settings.table}" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+      val statement = {
+        val stmt = s"""SELECT * FROM "${settings.table}" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+        specConfig match {
+          case MySQLSpecConfig => Dialect.removeQuotes(stmt)
+          case _               => stmt
+        }
+      }
 
       // init statement in try-with-resource
       tryWithResource(conn.prepareStatement(statement)) { stmt =>
@@ -401,3 +432,4 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
 class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
 class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.PostgresSpecConfig)
+class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MySQLSpecConfig)

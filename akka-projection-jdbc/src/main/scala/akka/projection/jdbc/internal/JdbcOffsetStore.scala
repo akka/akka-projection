@@ -42,8 +42,9 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
   def createIfNotExists(): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>
       tryWithResource(conn.createStatement()) { stmt =>
-        stmt.execute(settings.dialect.createTableStatement)
-        stmt.execute(settings.dialect.alterTableStatement)
+        settings.dialect.createTableStatements.foreach { stmtStr =>
+          stmt.execute(stmtStr)
+        }
         Done
       }
     }

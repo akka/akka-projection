@@ -30,10 +30,9 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
         s"Dialect type not set. Settings 'akka.projection.jdbc.dialect' currently set to [$dialectToLoad]")
 
     dialectToLoad match {
-      case "h2-dialect" => H2Dialect(schema, table)
-      case unknown =>
-        throw new IllegalArgumentException(
-          s"Unknown dialect type: [$unknown]. Check settings 'akka.projection.jdbc.dialect'")
+      case "mysql-dialect"   => MySQLDialect(schema, table)
+      case "default-dialect" => DefaultDialect(schema, table)
+      case _                 => DefaultDialect(schema, table)
     }
   }
 
