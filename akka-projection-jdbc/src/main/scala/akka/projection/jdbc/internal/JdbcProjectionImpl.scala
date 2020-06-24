@@ -48,7 +48,7 @@ private[projection] object JdbcProjectionImpl {
 
   private[projection] def createOffsetStore[S <: JdbcSession](sessionFactory: () => S)(
       implicit system: ActorSystem[_]) =
-    new JdbcOffsetStore[S](JdbcSettings(system), sessionFactory)
+    new JdbcOffsetStore[S](system, JdbcSettings(system), sessionFactory)
 
   private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,

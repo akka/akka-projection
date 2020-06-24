@@ -29,6 +29,10 @@ import akka.serialization.SerializerWithStringManifest
   // lazy because Serializers are initialized early on. `toTyped` might then try to
   // initialize the classic ActorSystemAdapter extension.
   private lazy val resolver = ActorRefResolver(system.toTyped)
+  private lazy val offsetSerialization = {
+    import akka.actor.typed.scaladsl.adapter._
+    new OffsetSerialization(system.toTyped)
+  }
 
   private val GetOffsetManifest = "a"
   private val CurrentOffsetManifest = "b"
@@ -77,7 +81,7 @@ import akka.serialization.SerializerWithStringManifest
   }
 
   private def offsetToProto(projectionId: ProjectionId, offset: Any): ProjectionMessages.Offset = {
-    val storageRepresentation = OffsetSerialization.toStorageRepresentation(projectionId, offset) match {
+    val storageRepresentation = offsetSerialization.toStorageRepresentation(projectionId, offset) match {
       case s: OffsetSerialization.SingleOffset => s
       case _: MultipleOffsets                  => throw new IllegalArgumentException("MultipleOffsets not supported yet.") // TODO
     }
@@ -127,6 +131,6 @@ import akka.serialization.SerializerWithStringManifest
     ProjectionId(p.getName, p.getKey)
 
   private def offsetFromProto(o: ProjectionMessages.Offset): Any =
-    OffsetSerialization.fromStorageRepresentation(o.getValue, o.getManifest)
+    offsetSerialization.fromStorageRepresentation(o.getValue, o.getManifest)
 
 }

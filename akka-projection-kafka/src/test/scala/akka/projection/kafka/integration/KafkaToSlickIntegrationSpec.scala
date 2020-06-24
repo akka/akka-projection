@@ -121,13 +121,13 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     PatienceConfig(timeout = Span(30, Seconds), interval = Span(500, Milliseconds))
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig(SlickSettings.configPath, config)
-  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, SlickSettings(system.toTyped))
+  val offsetStore = new SlickOffsetStore(system.toTyped, dbConfig.db, dbConfig.profile, SlickSettings(system.toTyped))
   val repository = new EventTypeCountRepository(dbConfig)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     val done = for {
-      _ <- offsetStore.createIfNotExists
+      _ <- SlickProjection.createOffsetTableIfNotExists(dbConfig)
       _ <- repository.createIfNotExists
     } yield ()
     Await.result(done, 5.seconds)

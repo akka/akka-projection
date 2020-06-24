@@ -13,13 +13,13 @@ import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 
 import akka.Done
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.internal.OffsetSerialization.SingleOffset
-import akka.projection.internal.OffsetSerialization.fromStorageRepresentation
-import akka.projection.internal.OffsetSerialization.toStorageRepresentation
 import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.internal.DialectDefaults.InsertIndices
 import akka.projection.jdbc.internal.JdbcSessionUtil._
@@ -29,12 +29,17 @@ import akka.projection.jdbc.internal.JdbcSessionUtil._
  */
 @InternalApi
 private[akka] class JdbcOffsetStore[S <: JdbcSession](
+    system: ActorSystem[_],
     settings: JdbcSettings,
     jdbcSessionFactory: () => S,
     clock: Clock) {
 
-  def this(settings: JdbcSettings, jdbcSessionFactory: () => S) =
-    this(settings, jdbcSessionFactory, Clock.systemUTC())
+  def this(system: ActorSystem[_], settings: JdbcSettings, jdbcSessionFactory: () => S) =
+    this(system, settings, jdbcSessionFactory, Clock.systemUTC())
+
+  private val offsetSerialization = new OffsetSerialization(system)
+  import offsetSerialization.fromStorageRepresentation
+  import offsetSerialization.toStorageRepresentation
 
   private[akka] implicit val executionContext = settings.executionContext
 

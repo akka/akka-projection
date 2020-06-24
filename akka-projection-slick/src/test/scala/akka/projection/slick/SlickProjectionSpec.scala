@@ -184,7 +184,7 @@ class SlickProjectionSpec
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig(SlickSettings.configPath, config)
 
-  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, SlickSettings(system))
+  val offsetStore = new SlickOffsetStore(system, dbConfig.db, dbConfig.profile, SlickSettings(system))
 
   val projectionTestKit = ProjectionTestKit(testKit)
 

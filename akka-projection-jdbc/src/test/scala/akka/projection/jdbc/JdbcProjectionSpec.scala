@@ -218,7 +218,7 @@ class JdbcProjectionSpec
   implicit val executionContext: ExecutionContext = testKit.system.executionContext
 
   val jdbcSettings = JdbcSettings(testKit.system)
-  val offsetStore = new JdbcOffsetStore(jdbcSettings, jdbcSessionFactory)
+  val offsetStore = new JdbcOffsetStore(system, jdbcSettings, jdbcSessionFactory)
 
   val projectionTestKit = ProjectionTestKit(testKit)
 

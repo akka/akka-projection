@@ -26,8 +26,9 @@ import com.datastax.oss.driver.api.core.cql.Statement
  * INTERNAL API
  */
 @InternalApi private[akka] class CassandraOffsetStore(system: ActorSystem[_], clock: Clock) {
-  import OffsetSerialization.fromStorageRepresentation
-  import OffsetSerialization.toStorageRepresentation
+  private val offsetSerialization = new OffsetSerialization(system)
+  import offsetSerialization.fromStorageRepresentation
+  import offsetSerialization.toStorageRepresentation
 
   private implicit val executionContext: ExecutionContext = system.executionContext
   private val cassandraSettings = CassandraSettings(system)

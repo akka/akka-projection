@@ -95,7 +95,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   private val clock = new TestClock
 
   private val settings = JdbcSettings(testKit.system)
-  private val offsetStore = new JdbcOffsetStore(settings, specConfig.jdbcSessionFactory, clock)
+  private val offsetStore = new JdbcOffsetStore(system, settings, specConfig.jdbcSessionFactory, clock)
   private val dialectLabel = specConfig.name
 
   override protected def beforeAll(): Unit = {
