@@ -12,7 +12,6 @@ import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -25,10 +24,11 @@ import akka.kafka.scaladsl.PartitionAssignmentHandler
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
+import akka.projection.javadsl
 import akka.projection.kafka.GroupOffsets
+import akka.projection.scaladsl
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
-import akka.util.JavaDurationConverters._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 
@@ -48,11 +48,13 @@ import org.apache.kafka.common.TopicPartition
     settings: ConsumerSettings[K, V],
     topics: Set[String],
     metadataClient: MetadataClientAdapter,
-    sourceProviderSettings: KafkaSourceProviderSettings,
-    readOffsetDelay: Option[FiniteDuration])
-    extends akka.projection.kafka.javadsl.KafkaSourceProvider[K, V]
-    with akka.projection.kafka.scaladsl.KafkaSourceProvider[K, V]
-    with KafkaSettingsImpl {
+    sourceProviderSettings: KafkaSourceProviderSettings)
+    extends javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with javadsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
+    with javadsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
+    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]] {
 
   import KafkaSourceProviderImpl._
 
@@ -106,7 +108,7 @@ import org.apache.kafka.common.TopicPartition
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) => {
-      val delay = readOffsetDelay.getOrElse(sourceProviderSettings.readOffsetDelay)
+      val delay = sourceProviderSettings.readOffsetDelay
       akka.pattern.after(delay, scheduler) {
         readOffsets()
           .flatMap {
@@ -137,10 +139,4 @@ import org.apache.kafka.common.TopicPartition
     override def onStop(currentTps: Set[TopicPartition], consumer: RestrictedConsumer): Unit =
       assignedPartitions = EmptyTps
   }
-
-  override def withReadOffsetDelay(delay: FiniteDuration): KafkaSourceProviderImpl[K, V] =
-    new KafkaSourceProviderImpl(system, settings, topics, metadataClient, sourceProviderSettings, Some(delay))
-
-  override def withReadOffsetDelay(delay: java.time.Duration): KafkaSourceProviderImpl[K, V] =
-    withReadOffsetDelay(delay.asScala)
 }
