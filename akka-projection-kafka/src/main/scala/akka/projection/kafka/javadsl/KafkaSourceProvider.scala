@@ -16,7 +16,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 object KafkaSourceProvider {
 
   /**
-   * Create a [[KafkaSourceProvider]] that resumes from externally managed offsets
+   * Create a [[SourceProvider]] that resumes from externally managed offsets
    */
   def create[K, V](
       system: ActorSystem[_],
