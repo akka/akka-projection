@@ -56,6 +56,7 @@ object Dependencies {
     val h2Driver = Compile.h2Driver % sbt.Test
     val postgresDriver = "org.postgresql" % "postgresql" % "42.2.12" % sbt.Test
     val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.20" % sbt.Test
+    val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % sbt.Test
 
     val logback = "ch.qos.logback" % "logback-classic" % "1.2.3" % sbt.Test
 
@@ -67,6 +68,11 @@ object Dependencies {
       "com.dimafeng" %% "testcontainers-scala-postgresql" % Versions.testContainersScala % sbt.Test
     val mysqlContainer =
       "com.dimafeng" %% "testcontainers-scala-mysql" % Versions.testContainersScala % sbt.Test
+    val msSQLServerContainer =
+    "com.dimafeng" %% "testcontainers-scala-mssqlserver" % Versions.testContainersScala % sbt.Test
+
+    val oracleDbContainer =
+      "com.dimafeng" %% "testcontainers-scala-oracle-xe" % Versions.testContainersScala % sbt.Test
 
     val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
   }
@@ -110,6 +116,9 @@ object Dependencies {
         Test.postgresContainer,
         Test.mysqlDriver,
         Test.mysqlContainer,
+        Test.msSQLServerDriver,
+        Test.msSQLServerContainer,
+        Test.oracleDbContainer,
         Test.logback)
 
   val slick =

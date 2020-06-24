@@ -29,7 +29,9 @@ import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.testkit.internal.TestClock
 import com.dimafeng.testcontainers.JdbcDatabaseContainer
+import com.dimafeng.testcontainers.MSSQLServerContainer
 import com.dimafeng.testcontainers.MySQLContainer
+import com.dimafeng.testcontainers.OracleContainer
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
@@ -162,11 +164,48 @@ object JdbcOffsetStoreSpec {
     }
   }
 
+  object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
+
+    val name = "MS SQL Server Database"
+
+    override def initContainer(): Unit = {
+      val container = new MSSQLServerContainer
+      _container = Some(container)
+      container.start()
+    }
+  }
+
+  object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
+
+    val name = "Oracle Database"
+
+    override def initContainer(): Unit = {
+      val container =
+        // little hack to workaround that not all JDBC containers impl the same
+        // interface (Oracle doesn't impl JdbcDatabaseContainer)
+        new OracleContainer("oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
+          override def jdbcUrl: String = super.jdbcUrl
+
+          override def username: String = super.username
+
+          override def password: String = super.password
+
+          override def driverClassName: String = super.driverClassName
+        }
+
+      _container = Some(container)
+      container.start()
+    }
+
+  }
+
 }
 
 class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
 class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.PostgresSpecConfig)
 class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MySQLSpecConfig)
+class MSSQLServerJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MSSQLServerSpecConfig)
+class OracleJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.OracleSpecConfig)
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)
