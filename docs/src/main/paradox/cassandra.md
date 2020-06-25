@@ -1,6 +1,6 @@
 # Offset in Cassandra
 
-The @apidoc[CassandraProjection] has support for storing the offset in Cassandra. 
+The @apidoc[CassandraProjection] has support for storing the offset in Cassandra.
 
 The source of the envelopes can be @ref:[events from Akka Persistence](eventsourced.md) or any other `SourceProvider`
 with supported @ref:[offset types](#offset-types).
@@ -44,9 +44,9 @@ Java
 :  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #projection-imports #atLeastOnce }
 
 The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
-This window can be defined with `withSaveOffset` of the returned `AtLeastOnceCassandraProjection`.
+This window can be defined with `withSaveOffset` of the returned `AtLeastOnceProjection`.
 The default settings for the window is defined in configuration section `akka.projection.at-least-once`.
-There is a performance benefit of not storing the offset too often but the drawback is that there can be more
+There is a performance benefit of not storing the offset too often, but the drawback is that there can be more
 duplicates when the projection that will be processed again when the projection is restarted.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
@@ -79,7 +79,7 @@ Java
 :  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #grouped }
 
 The envelopes are grouped within a time window, or limited by a number of envelopes, whatever happens first.
-This window can be defined with `withGroup` of the returned `GroupedCassandraProjection`. The default settings for
+This window can be defined with `withGroup` of the returned `GroupedProjection`. The default settings for
 the window is defined in configuration section `akka.projection.grouped`.
 
 When using `groupedWithin` the handler is a @scala[`Handler[immutable.Seq[EventEnvelope[ShoppingCart.Event]]]`]@java[`Handler<List<EventEnvelope<ShoppingCart.Event>>>`].
@@ -108,7 +108,7 @@ Such simple handlers can also be defined as plain @scala[functions]@java[lambdas
 
 ### Grouped handler
 
-When using @ref:[`CassandraProjection.groupedWithin`](#groupedwithin) the handler is processing a @scala[`Seq`]@java[`List`] of envolopes.
+When using @ref:[`CassandraProjection.groupedWithin`](#groupedwithin) the handler is processing a @scala[`Seq`]@java[`List`] of envelopes.
 
 Scala
 :  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #grouped-handler }
@@ -325,4 +325,3 @@ Alternatively, Akka Discovery can be used for finding the Cassandra server conta
 in the [Alpakka Cassandra documentation](https://doc.akka.io/docs/alpakka/2.0/cassandra.html#using-akka-discovery).
 
 Without any configuration it will use `localhost:9042` as default.
-

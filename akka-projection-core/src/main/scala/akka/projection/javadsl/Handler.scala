@@ -13,7 +13,7 @@ import akka.annotation.ApiMayChange
 @ApiMayChange
 object Handler {
 
-  /** Handler that can be define from a simple function */
+  /** Handler that can be defined from a simple function */
   private class HandlerFunction[Envelope](handler: Envelope => CompletionStage[Done]) extends Handler[Envelope] {
     override def process(envelope: Envelope): CompletionStage[Done] = handler(envelope)
   }
