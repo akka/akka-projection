@@ -177,7 +177,7 @@ object InternalProjectionStateMetricsSpec {
         projectionSettings,
         offsetStore)
 
-    lazy val inMemTelemetry = projectionState.telemetry.asInstanceOf[InMemTelemetry]
+    lazy val inMemTelemetry = projectionState.getTelemetry().asInstanceOf[InMemTelemetry]
 
   }
 

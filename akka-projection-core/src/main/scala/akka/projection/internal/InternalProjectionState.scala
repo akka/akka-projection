@@ -22,6 +22,7 @@ import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
+import akka.projection.NoopTelemetry
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
@@ -55,7 +56,8 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
   implicit def system: ActorSystem[_]
   implicit def executionContext: ExecutionContext
 
-  var telemetry: Telemetry = _
+  private var telemetry: Telemetry = NoopTelemetry
+  private[projection] def getTelemetry() = telemetry
 
   def readOffsets(): Future[Option[Offset]]
   def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done]
