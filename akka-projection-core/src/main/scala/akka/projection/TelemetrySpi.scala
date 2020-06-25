@@ -7,6 +7,7 @@ package akka.projection
 import scala.collection.immutable
 
 import akka.actor.typed.ActorSystem
+import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.annotation.InternalStableApi
 
@@ -20,7 +21,7 @@ import akka.annotation.InternalStableApi
  * akka.projection.telemetry.implementation-class = "com.example.MyMetrics"
  * }}}
  */
-trait Telemetry {
+@ApiMayChange trait Telemetry {
 
   /** Invoked when a projection is stopped. The reason for stopping is unspecified, can be a
    * graceful stop or a failure (see [[failed()]]).
