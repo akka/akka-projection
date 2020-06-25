@@ -54,10 +54,19 @@ object Dependencies {
     val junit = "junit" % "junit" % Versions.junit % sbt.Test
 
     val h2Driver = Compile.h2Driver % sbt.Test
+    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.12" % sbt.Test
+    val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.20" % sbt.Test
+
     val logback = "ch.qos.logback" % "logback-classic" % "1.2.3" % sbt.Test
-    val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
+
+    val testContainersScalatest =
+      "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
     val cassandraContainer =
       "com.dimafeng" %% "testcontainers-scala-cassandra" % Versions.testContainersScala % sbt.Test
+    val postgresContainer =
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % Versions.testContainersScala % sbt.Test
+    val mysqlContainer =
+      "com.dimafeng" %% "testcontainers-scala-mysql" % Versions.testContainersScala % sbt.Test
 
     val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
   }
@@ -93,7 +102,15 @@ object Dependencies {
     deps ++= Seq(Compile.akkaPersistenceQuery)
 
   val jdbc =
-    deps ++= Seq(Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+    deps ++= Seq(
+        Compile.akkaPersistenceQuery,
+        Test.akkaTypedTestkit,
+        Test.h2Driver,
+        Test.postgresDriver,
+        Test.postgresContainer,
+        Test.mysqlDriver,
+        Test.mysqlContainer,
+        Test.logback)
 
   val slick =
     deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
@@ -104,7 +121,7 @@ object Dependencies {
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.logback,
-        Test.testContainers,
+        Test.testContainersScalatest,
         Test.cassandraContainer,
         Test.scalatestJUnit)
 
@@ -116,7 +133,7 @@ object Dependencies {
         Test.akkaStreamTestkit,
         Test.alpakkaKafkaTestkit,
         Test.logback,
-        Test.testContainers,
+        Test.testContainersScalatest,
         Test.scalatestJUnit)
 
   val examples =
@@ -129,6 +146,6 @@ object Dependencies {
         Test.h2Driver,
         Test.akkaTypedTestkit,
         Test.logback,
-        Test.testContainers,
+        Test.testContainersScalatest,
         Test.cassandraContainer)
 }

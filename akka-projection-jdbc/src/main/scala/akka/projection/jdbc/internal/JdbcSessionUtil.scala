@@ -48,6 +48,10 @@ object JdbcSessionUtil {
     }
   }
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private[akka] def withConnection[S <: JdbcSession, Result](jdbcSessionFactory: () => S)(func: Connection => Result)(
       implicit ec: ExecutionContext): Future[Result] = {
     withSession(jdbcSessionFactory) { sess =>
