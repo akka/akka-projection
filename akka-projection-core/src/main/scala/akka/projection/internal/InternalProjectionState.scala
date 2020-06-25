@@ -184,7 +184,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             f.flowCtx.asFlow.watchTermination() {
               case (_, futDone) =>
                 futDone.recoverWith {
-                  case t: Throwable =>
+                  case t =>
                     telemetry.error(t)
                     futDone
                 }
