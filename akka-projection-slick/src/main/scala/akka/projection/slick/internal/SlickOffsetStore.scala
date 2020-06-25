@@ -11,6 +11,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.Done
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.projection.MergeableOffset
@@ -22,18 +23,21 @@ import slick.jdbc.JdbcProfile
  * INTERNAL API
  */
 @InternalApi private[akka] class SlickOffsetStore[P <: JdbcProfile](
+    system: ActorSystem[_],
     val db: P#Backend#Database,
     val profile: P,
     slickSettings: SlickSettings,
     clock: Clock) {
   import OffsetSerialization.MultipleOffsets
   import OffsetSerialization.SingleOffset
-  import OffsetSerialization.fromStorageRepresentation
-  import OffsetSerialization.toStorageRepresentation
   import profile.api._
 
-  def this(db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
-    this(db, profile, slickSettings, Clock.systemUTC())
+  def this(system: ActorSystem[_], db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
+    this(system, db, profile, slickSettings, Clock.systemUTC())
+
+  private val offsetSerialization = new OffsetSerialization(system)
+  import offsetSerialization.fromStorageRepresentation
+  import offsetSerialization.toStorageRepresentation
 
   def readOffset[Offset](projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
     val action = offsetTable.filter(_.projectionName === projectionId.name).result.map { maybeRow =>

@@ -290,7 +290,7 @@ object SlickProjection {
 
   private def createOffsetStore[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]) =
-    new SlickOffsetStore(databaseConfig.db, databaseConfig.profile, SlickSettings(system))
+    new SlickOffsetStore(system, databaseConfig.db, databaseConfig.profile, SlickSettings(system))
 }
 
 object SlickHandler {

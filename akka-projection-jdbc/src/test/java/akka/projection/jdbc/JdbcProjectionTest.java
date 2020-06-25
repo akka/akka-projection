@@ -108,7 +108,7 @@ public class JdbcProjectionTest extends JUnitSuite {
 
   private static final JdbcSettings jdbcSettings = JdbcSettings.apply(testKit.system());
   private static final JdbcOffsetStore<PureJdbcSession> offsetStore =
-      new JdbcOffsetStore<>(jdbcSettings, jdbcSessionCreator::create);
+      new JdbcOffsetStore<>(testKit.system(), jdbcSettings, jdbcSessionCreator::create);
 
   private static final scala.concurrent.duration.Duration awaitTimeout =
       scala.concurrent.duration.Duration.create(3, TimeUnit.SECONDS);
