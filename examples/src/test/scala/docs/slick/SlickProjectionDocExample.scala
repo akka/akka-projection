@@ -14,8 +14,8 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
 import akka.projection.ProjectionContext
-import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.EventEnvelope
 import akka.stream.scaladsl.FlowWithContext
 import docs.eventsourced.ShoppingCart
 

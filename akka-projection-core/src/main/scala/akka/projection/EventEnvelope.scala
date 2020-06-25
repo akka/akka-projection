@@ -1,8 +1,4 @@
-/*
- * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
- */
-
-package akka.projection.eventsourced
+package akka.projection
 
 import akka.annotation.InternalApi
 import akka.persistence.query.Offset

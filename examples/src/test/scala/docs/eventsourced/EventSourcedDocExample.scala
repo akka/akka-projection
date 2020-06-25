@@ -10,7 +10,7 @@ import akka.actor.typed.scaladsl.Behaviors
 //#imports
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.Offset
-import akka.projection.eventsourced.EventEnvelope
+import akka.projection.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.scaladsl.SourceProvider
 

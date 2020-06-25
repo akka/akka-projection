@@ -14,7 +14,7 @@ import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.EventsByTagQuery
-import akka.projection.eventsourced.EventEnvelope
+import akka.projection.EventEnvelope
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 

@@ -60,7 +60,7 @@ lazy val examples = project
   .dependsOn(eventsourced)
   .dependsOn(kafka % "test->test")
   .dependsOn(testkit % "test->test")
-  .settings(Test / parallelExecution := false, publish / skip := true)
+  .settings(Test / parallelExecution := false, publish / skip := true, scalacOptions += "-feature")
 
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)

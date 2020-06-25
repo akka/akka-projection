@@ -17,7 +17,7 @@ import akka.projection.ProjectionBehavior
 
 //#source-provider-imports
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.projection.eventsourced.EventEnvelope
+import akka.projection.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import docs.eventsourced.ShoppingCart
 

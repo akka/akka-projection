@@ -78,10 +78,9 @@ object Dependencies {
         Compile.akkaStream,
         Compile.akkaActorTyped,
         Compile.akkaProtobufV3,
-        // akka-persistence-query is only needed for OffsetSerialization, but that is always used together
-        // with more specific modules, such as akka-projection-cassandra, which defines the required
-        // dependency on akka-persistence-query
-        Compile.akkaPersistenceQuery % "optional;provided",
+        // akka-persistence-query is only needed for OffsetSerialization and to provide a typed EventEnvelope that
+        // references the Offset type from akka-persistence.
+        Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.logback,
         Test.scalatest)

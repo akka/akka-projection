@@ -16,7 +16,7 @@ import akka.actor.typed.scaladsl.Behaviors
 
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.Offset
-import akka.projection.eventsourced.EventEnvelope
+import akka.projection.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.scaladsl.SourceProvider
 
@@ -29,6 +29,7 @@ import java.time.temporal.ChronoUnit
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Success
+import scala.util.Failure
 
 import akka.Done
 import akka.projection.ProjectionId
@@ -75,11 +76,11 @@ object ShoppingCartApp extends App {
   // FIXME: use a custom dispatcher for repo?
   implicit val ec = system.classicSystem.dispatcher
   val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
-  val repo = new DailyCheckoutProjectionRepository(session)
+  val repo = new DailyCheckoutProjectionRepositoryImpl(session)
   val projection = CassandraProjection.atLeastOnce(
     projectionId = ProjectionId("shopping-carts", europeanShoppingCartsTag),
     sourceProvider,
-    handler = () => new ShoppingCartProjectionHandler(europeanShoppingCartsTag, system, repo))
+    handler = () => new DailyCheckoutProjectionHandler(europeanShoppingCartsTag, system, repo))
 
   Behaviors.setup[Nothing] { context =>
     context.spawn(ProjectionBehavior(projection), "daily-count-projection")
@@ -90,7 +91,13 @@ object ShoppingCartApp extends App {
 //#guideSetup
 
 //#guideProjectionRepo
-class DailyCheckoutProjectionRepository(session: CassandraSession)(implicit val ec: ExecutionContext) {
+trait DailyCheckoutProjectionRepository {
+  def save(cartId: String, date: Instant): Future[Done]
+  def countForDate(date: Instant): Future[Option[Int]]
+}
+
+class DailyCheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit val ec: ExecutionContext)
+    extends DailyCheckoutProjectionRepository {
   val keyspace = "projections"
   val table = "daily_checkouts"
 
@@ -122,7 +129,7 @@ class DailyCheckoutProjectionRepository(session: CassandraSession)(implicit val 
 //#guideProjectionRepo
 
 //#guideProjectionHandler
-class ShoppingCartProjectionHandler(tag: String, system: ActorSystem[_], repo: DailyCheckoutProjectionRepository)
+class DailyCheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: DailyCheckoutProjectionRepository)
     extends Handler[EventEnvelope[ShoppingCartEvents.Event]] {
   @volatile var currentDayLogCounter = 0
   val log = LoggerFactory.getLogger(getClass)
@@ -132,7 +139,9 @@ class ShoppingCartProjectionHandler(tag: String, system: ActorSystem[_], repo: D
     envelope.event match {
       case ShoppingCartEvents.CheckedOut(cartId, eventTime) =>
         val dateOnly = eventTime.truncatedTo(ChronoUnit.DAYS)
+
         val save = repo.save(cartId, dateOnly)
+
         currentDayLogCounter += 1
         if (currentDayLogCounter % 10 == 0) {
           save.flatMap { _ =>
@@ -144,8 +153,10 @@ class ShoppingCartProjectionHandler(tag: String, system: ActorSystem[_], repo: D
                   tag,
                   dateOnly,
                   count)
+              case Failure(ex) =>
+                log.error(s"ShoppingCartProjectionHandler($tag) an error occurred when connecting to the repo", ex)
             }
-            countQuery.mapTo[Done]
+            countQuery.map(_ => Done)
           }
         } else save
 
