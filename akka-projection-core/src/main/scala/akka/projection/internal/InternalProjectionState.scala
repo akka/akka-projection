@@ -433,8 +433,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
               telemetry.stopped()
               statusObserver.stopped(projectionId) // no restart
             case Failure(exc) =>
+              Try(telemetry.stopped())
               Try(statusObserver.stopped(projectionId))
-              telemetry.failed(exc)
+              Try(telemetry.failed(exc))
               statusObserver.failed(projectionId, exc)
           }
       }

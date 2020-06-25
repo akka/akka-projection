@@ -52,7 +52,7 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
           instruments.offsetsSuccessfullyCommitted.get should be(defaultNumberOfEnvelopes)
         }
         instruments.startedInvocations.get should be(10)
-        instruments.stoppedInvocations.get should be(1)
+        instruments.stoppedInvocations.get should be(10)
         instruments.failureInvocations.get should be(9)
       }
     }

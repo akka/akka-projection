@@ -22,11 +22,14 @@ import akka.annotation.InternalStableApi
  */
 trait Telemetry {
 
-  /** Invoked when a projection is stopped gracefully. */
+  /** Invoked when a projection is stopped. The reason for stopping is unspecified, can be a
+   * graceful stop or a failure (see [[failed()]]).
+   */
   def stopped(): Unit
 
   /**
-   * Invoked when a projection is stopped unexpectedly.
+   * Invoked when a projection processing an envelope fails (even after all retry attempts).  The
+   * projection may then be restarted by a supervisor.
    *
    * @param cause exception thrown by the errored envelope handler.
    */
@@ -55,7 +58,8 @@ trait Telemetry {
 
   /**
    * Invoked when processing an envelope errors.  When using a [[HandlerRecoveryStrategy]] that
-   * retries, this method will be invoked as many times as retries.
+   * retries, this method will be invoked as many times as retries.  If the error propagates and
+   * causes the projection to fail [[failed()]] will be invoked.
    *
    * @param cause exception thrown by the errored envelope handler.
    */
