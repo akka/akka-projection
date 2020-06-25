@@ -19,7 +19,7 @@ class LifecycleMetricSpec extends InternalProjectionStateMetricsSpec {
     projectionId = genRandomProjectionId()
   }
 
-  def instruments(implicit projectionId: ProjectionId) = InMemInstruments.forId(projectionId)
+  def instruments(implicit projectionId: ProjectionId) = InMemInstrumentsRegistry(system).forId(projectionId)
 
   val defaultNumberOfEnvelopes = 6
 

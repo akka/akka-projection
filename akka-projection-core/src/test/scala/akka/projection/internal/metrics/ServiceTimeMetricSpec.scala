@@ -23,7 +23,7 @@ sealed abstract class ServiceTimeAndProcessingCountMetricSpec extends InternalPr
     projectionId = genRandomProjectionId()
   }
 
-  def instruments(implicit projectionId: ProjectionId) = InMemInstruments.forId(projectionId)
+  def instruments(implicit projectionId: ProjectionId) = InMemInstrumentsRegistry(system).forId(projectionId)
   val defaultNumberOfEnvelopes = 6
 
 }

@@ -24,6 +24,8 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.Extension
+import akka.actor.typed.ExtensionId
 import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.projection.ProjectionContext
@@ -315,15 +317,24 @@ object Handlers {
 
 }
 
-object InMemInstruments {
+object InMemInstrumentsRegistry extends ExtensionId[InMemInstrumentsRegistry] {
+  override def createExtension(system: ActorSystem[_]): InMemInstrumentsRegistry = new InMemInstrumentsRegistry(system)
+}
+class InMemInstrumentsRegistry(system: ActorSystem[_]) extends Extension {
   private val instrumentMap = new ConcurrentHashMap[ProjectionId, InMemInstruments]()
   def forId(projectionId: ProjectionId): InMemInstruments = {
     instrumentMap.computeIfAbsent(projectionId, new function.Function[ProjectionId, InMemInstruments] {
       override def apply(t: ProjectionId): InMemInstruments = new InMemInstruments
     })
   }
+
+  // these are added to use the constructor argument and keep the AkkaDisciplinePlugin happy
+  val observedActorSystem = new AtomicReference[ActorSystem[_]](null)
+  observedActorSystem.set(system)
 }
+
 class InMemInstruments() {
+
   // the instruments outlive the InMemTelemetry instances. Multiple instances of InMemTelemetry
   // will share these instruments.
   val afterProcessInvocations = new AtomicInteger(0)
@@ -332,8 +343,6 @@ class InMemInstruments() {
   val onOffsetStoredInvocations = new AtomicInteger(0)
   val errorInvocations = new AtomicInteger(0)
   val lastErrorThrowable = new AtomicReference[Throwable](null)
-
-  val observedActorSystem = new AtomicReference[ActorSystem[_]](null)
 
   val startedInvocations = new AtomicInteger(0)
 
@@ -344,10 +353,8 @@ class InMemInstruments() {
 }
 
 class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry {
-  private val instruments: InMemInstruments = InMemInstruments.forId(projectionId)
+  private val instruments: InMemInstruments = InMemInstrumentsRegistry(system).forId(projectionId)
   import instruments._
-  // these is added to use the constructor argument and keep the AkkaDisciplinePlugin happy
-  observedActorSystem.set(system)
 
   startedInvocations.incrementAndGet()
 
