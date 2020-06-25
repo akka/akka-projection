@@ -93,7 +93,7 @@ object ShoppingCartApp extends App {
 //#guideProjectionRepo
 trait DailyCheckoutProjectionRepository {
   def save(cartId: String, date: Instant): Future[Done]
-  def countForDate(date: Instant): Future[Option[Int]]
+  def countForDate(date: Instant): Future[Int]
 }
 
 class DailyCheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit val ec: ExecutionContext)
@@ -105,10 +105,10 @@ class DailyCheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit 
     session.executeWrite(s"INSERT INTO $keyspace.$table (cart_id, date) VALUES (?, ?)", cartId, date)
   }
 
-  def countForDate(date: Instant): Future[Option[Int]] = {
+  def countForDate(date: Instant): Future[Int] = {
     session.selectOne(s"SELECT count(card_id) FROM $keyspace.$table WHERE date = ?", date).map {
-      case Some(row) => Some(row.getInt("count(cart_id)"))
-      case None      => None
+      case Some(row) => row.getInt("count(cart_id)")
+      case None      => 0
     }
   }
 
@@ -152,7 +152,7 @@ class DailyCheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: 
                   "ShoppingCartProjectionHandler({}) current daily count for today [{}] is {}",
                   tag,
                   dateOnly,
-                  count)
+                  count.toString)
               case Failure(ex) =>
                 log.error(s"ShoppingCartProjectionHandler($tag) an error occurred when connecting to the repo", ex)
             }

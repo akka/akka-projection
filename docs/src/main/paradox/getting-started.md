@@ -78,7 +78,7 @@ Scala
 Now it's time to write the Projection handler itself.
 There are many kinds of handlers we can choose from.
 This example uses a simple stateful Handler that will persist `ShoppingCartEvents.CheckedOut` events using the repo that was just created.
-The example will also occassionally log the current daily count.
+The example will also occasionally log the current daily count.
 Because it's not critical that the Handler counter be accurate from the start of the projection we can keep it in a simple local volatile variable.
 Every 10 events we will query the current daily count from the repository and log it.
 
@@ -91,6 +91,8 @@ Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionSetup }
 
 ## Part 3: Writing tests for a Projection
+
+
 
 ## Part 4: Running a Projection
 
