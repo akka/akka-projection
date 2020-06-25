@@ -46,10 +46,7 @@ trait Telemetry {
    * committed).  This method is granted to be invoked after the envelope handler has committed but
    * may or may not happen after the offset was committed (depending on the projection semantics).
    *
-   * @param externalContext TODO
-   *                        WAS: timestamp indicating when this envelope arrived at the projection.  That
-   *                            timestamp happens in the projection code so it happens outside the source
-   *                            provider (e.g. doesn't include deserializing the envelope from the wire).
+   * @param externalContext the context produced by [[beforeProcess()]] and attached to the processed envelope.
    */
   def afterProcess(externalContext: AnyRef): Unit
 
