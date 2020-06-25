@@ -6,6 +6,7 @@ package akka.projection.jdbc.scaladsl
 
 import scala.collection.immutable
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -23,6 +24,7 @@ import akka.projection.scaladsl.AtLeastOnceFlowProjection
 import akka.projection.scaladsl.AtLeastOnceProjection
 import akka.projection.scaladsl.ExactlyOnceProjection
 import akka.projection.scaladsl.GroupedProjection
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.FlowWithContext
 
@@ -67,7 +69,7 @@ object JdbcProjection {
   /**
    * Create a [[akka.projection.Projection]] with at-least-once processing semantics.
    *
-   * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
+   * It stores the offset in a relational database table using JDBC after the `handler` has processed the envelope.
    * This means that if the projection is restarted from previously stored offset then some elements may be processed
    * more than once.
    *
@@ -96,6 +98,41 @@ object JdbcProjection {
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
       handlerStrategy = SingleHandlerStrategy(adaptedHandler),
+      NoopStatusObserver,
+      offsetStore)
+  }
+
+  /**
+   * Create a [[akka.projection.Projection]] with at-least-once processing semantics.
+   *
+   * Compared to [[JdbcProjection.atLeastOnce]] the [[Handler]] is not storing the projected result in the
+   * database, but is integrating with something else.
+   *
+   * It stores the offset in a relational database table using JDBC after the `handler` has processed the envelope.
+   * This means that if the projection is restarted from previously stored offset then some elements may be processed
+   * more than once.
+   *
+   * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
+   * This window can be defined with [[AtLeastOnceProjection.withSaveOffset]] of the returned
+   * `AtLeastOnceProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.at-least-once`.
+   */
+  def atLeastOnceAsync[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionFactory: () => S,
+      handler: () => Handler[Envelope])(implicit system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
+
+    val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)
+
+    new JdbcProjectionImpl(
+      projectionId,
+      sourceProvider,
+      sessionFactory,
+      settingsOpt = None,
+      restartBackoffOpt = None,
+      offsetStrategy = AtLeastOnce(),
+      handlerStrategy = SingleHandlerStrategy(handler),
       NoopStatusObserver,
       offsetStore)
   }
@@ -130,6 +167,42 @@ object JdbcProjection {
       restartBackoffOpt = None,
       offsetStrategy = ExactlyOnce(),
       handlerStrategy = GroupedHandlerStrategy(adaptedHandler),
+      NoopStatusObserver,
+      offsetStore)
+  }
+
+  /**
+   * Create a [[akka.projection.Projection]] that groups envelopes and calls the `handler` with a group of `Envelopes`.
+   * The envelopes are grouped within a time window, or limited by a number of envelopes,
+   * whatever happens first. This window can be defined with [[GroupedProjection.withGroup]] of
+   * the returned `GroupedProjection`. The default settings for the window is defined in configuration
+   * section `akka.projection.grouped`.
+   *
+   * Compared to [[JdbcProjection.groupedWithin]] the [[Handler]] is not storing the projected result in the
+   * database, but is integrating with something else.
+   *
+   * It stores the offset in  a relational database table using JDBC immediately after the `handler` has
+   * processed the envelopes, but that is still with at-least-once processing semantics. This means that
+   * if the projection is restarted from previously stored offset the previous group of envelopes may be
+   * processed more than once.
+   */
+  def groupedWithinAsync[Offset, Envelope, S <: JdbcSession](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      sessionFactory: () => S,
+      handler: () => Handler[immutable.Seq[Envelope]])(
+      implicit system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
+
+    val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)
+
+    new JdbcProjectionImpl(
+      projectionId,
+      sourceProvider,
+      sessionFactory,
+      settingsOpt = None,
+      restartBackoffOpt = None,
+      offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(Duration.Zero)),
+      handlerStrategy = GroupedHandlerStrategy(handler),
       NoopStatusObserver,
       offsetStore)
   }

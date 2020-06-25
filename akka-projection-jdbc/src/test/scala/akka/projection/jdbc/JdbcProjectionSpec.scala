@@ -39,6 +39,7 @@ import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.jdbc.scaladsl.JdbcProjection
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
@@ -1067,6 +1068,38 @@ class JdbcProjectionSpec
           val concatStr = findById(entityId)
           concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
         }
+      }
+    }
+
+    "handle async projection and store offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val result = new StringBuffer()
+
+      def handler(): Handler[Envelope] = new Handler[Envelope] {
+        override def process(envelope: Envelope): Future[Done] = {
+          Future {
+            result.append(envelope.message).append("|")
+          }.map(_ => Done)
+        }
+      }
+
+      val projection =
+        JdbcProjection.atLeastOnceAsync(
+          projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          jdbcSessionFactory,
+          handler = () => handler())
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
       }
     }
   }
