@@ -698,6 +698,40 @@ class JdbcProjectionSpec
         handlerProbe.expectMessage(handlerCalled)
       }
     }
+
+    "handle grouped async projection and store offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val result = new StringBuffer()
+
+      def handler(): Handler[immutable.Seq[Envelope]] = new Handler[immutable.Seq[Envelope]] {
+        override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
+          Future {
+            envelopes.foreach(env => result.append(env.message).append("|"))
+          }.map(_ => Done)
+        }
+      }
+
+      val projection =
+        JdbcProjection
+          .groupedWithinAsync(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            jdbcSessionFactory,
+            handler = () => handler())
+          .withGroup(2, 3.seconds)
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
   }
 
   "A JDBC at-least-once projection" must {

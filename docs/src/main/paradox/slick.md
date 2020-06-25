@@ -117,6 +117,25 @@ instance should use a new `Handler` instance.
 
 @@@
 
+### Async handler
+
+The @apidoc[Handler] can be used with `SlickProjection.atLeastOnceAsync` and 
+`SlickProjection.groupedWithinAsync` if the handler is not storing the projection result in the database.
+The handler could @ref:[send to a Kafka topic](kafka.md#sending-to-kafka) or integrate with something else.
+
+There are several examples of such `Handler` in the @ref:[documentation for Cassandra Projections](cassandra.md#handler).
+Same type of handlers can be used with `SlickProjection` instead of `CassandraProjection`.
+
+### Actor handler
+
+A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html),
+which is described in @ref:[Processing with Actor](actor.md).
+
+### Flow handler
+
+An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes,
+which is described in @ref:[Processing with Akka Streams](flow.md).
+
 ### Handler lifecycle
 
 You can override the `start` and `stop` methods of the @apidoc[SlickHandler] to implement initialization
@@ -124,31 +143,6 @@ before first envelope is processed and resource cleanup when the projection is s
 Those methods are also called when the `Projection` is restarted after failure.
 
 See also @ref:[error handling](error.md).
-
-## Processing with Akka Streams
-
-An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes with at-least-once
-semantics.
-
-Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #atLeastOnceFlow }
-
-The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
-in the context of the `FlowWithContext` and is stored in the database when corresponding `Done` is emitted.
-Since the offset is stored after processing the envelope it means that if the projection is restarted
-from previously stored offset some envelopes may be processed more than once.
-
-There are a few caveats to be aware of:
-
-* If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
-  will be processed again if the projection is restarted and no later offset was stored.
-* The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
-  that the first offset is stored and when the projection is restarted that offset is considered completed even
-  though more of the duplicated enveloped were never processed.
-* The flow must not reorder elements, because the offsets may be stored in the wrong order and
-  and when the projection is restarted all envelopes up to the latest stored offset are considered
-  completed even though some of them may not have been processed. This is the reason the flow is
-  restricted to `FlowWithContext` rather than ordinary `Flow`.
 
 ## Schema
 

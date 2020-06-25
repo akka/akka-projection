@@ -3,6 +3,9 @@
 An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes with at-least-once
 semantics.
 
+The following example is using the `CassandraProjection` but the flow would be the same if used
+with `JdbcProjection` or `SlickProjection`.
+
 Scala
 :  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #atLeastOnceFlow }
 

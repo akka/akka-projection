@@ -23,6 +23,7 @@ import akka.kafka.javadsl.SendProducer;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.javadsl.ExactlyOnceProjection;
+import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
@@ -124,7 +125,7 @@ public interface KafkaDocExample {
   // #wordSource
 
   // #wordPublisher
-  class WordPublisher extends JdbcHandler<WordEnvelope, HibernateJdbcSession> {
+  class WordPublisher extends Handler<WordEnvelope> {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final String topic;
     private final SendProducer<String, String> sendProducer;
@@ -135,7 +136,7 @@ public interface KafkaDocExample {
     }
 
     @Override
-    public void process(HibernateJdbcSession session, WordEnvelope envelope) throws Exception {
+    public CompletionStage<Done> process(WordEnvelope envelope) {
       String word = envelope.word;
       // using the word as the key and `DefaultPartitioner` will select partition based on the key
       // so that same word always ends up in same partition
@@ -152,8 +153,7 @@ public interface KafkaDocExample {
                     recordMetadata.partition());
                 return Done.getInstance();
               });
-      // FIXME support for async Handler, issue #23
-      done.toCompletableFuture().get(5, TimeUnit.SECONDS);
+      return done;
     }
   }
   // #wordPublisher
@@ -217,14 +217,12 @@ public interface KafkaDocExample {
 
     ProjectionId projectionId = ProjectionId.of("PublishWords", "words");
     Projection<WordEnvelope> projection =
-        JdbcProjection.exactlyOnce(
+        JdbcProjection.atLeastOnceAsync(
             projectionId,
             sourceProvider,
             sessionProvider::newInstance,
             () -> new WordPublisher(topicName, sendProducer),
             system);
     // #sendToKafkaProjection
-
-    // FIXME change above to atLeastOnce
   }
 }
