@@ -141,7 +141,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 // `telemetry.afterProcess` is invoked immediately after `handler.process`
                 // even when retrying. Note that an error in handler.process must not
                 // invoke `afterProcess` (independently of the recovery strategy).
-                telemetry.afterProcess(context.readyTimestampNanos)
+                telemetry.afterProcess(context.externalContext)
                 done
               }
             }
@@ -170,7 +170,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
               val measured: () => Future[Done] = { () =>
                 handler.process(envelopes).map { done =>
                   group.foreach { ctx =>
-                    telemetry.afterProcess(ctx.readyTimestampNanos)
+                    telemetry.afterProcess(ctx.externalContext)
                   }
                   done
                 }
@@ -198,7 +198,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             .map {
               case (_, context) =>
                 val ctx = context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]]
-                telemetry.afterProcess(ctx.readyTimestampNanos)
+                telemetry.afterProcess(ctx.externalContext)
                 ctx
             }
       }
@@ -247,7 +247,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         val measured: () => Future[Done] = { () =>
           handler.process(envelopes).map { done =>
             partitioned.foreach { ctx =>
-              telemetry.afterProcess(ctx.readyTimestampNanos)
+              telemetry.afterProcess(ctx.externalContext)
             }
             done
           }
@@ -299,7 +299,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 // `telemetry.afterProcess` is invoked immediately after `handler.process`
                 // even when retrying. Note that an error in handler.process must not
                 // invoke `afterProcess` (independently of the recovery strategy).
-                telemetry.afterProcess(context.readyTimestampNanos)
+                telemetry.afterProcess(context.externalContext)
                 telemetry.onOffsetStored(1)
                 done
               }
@@ -351,7 +351,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                     // `telemetry.afterProcess` is invoked immediately after `handler.process`
                     // even when retrying. Note that an error in handler.process must not
                     // invoke `afterProcess` (independently of the recovery strategy).
-                    telemetry.afterProcess(context.readyTimestampNanos)
+                    telemetry.afterProcess(context.externalContext)
                     done
                   }
                 }
@@ -385,7 +385,10 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 .source(() => readOffsets())
             })
         .via(killSwitch.flow)
-        .map(env => ProjectionContextImpl(sourceProvider.extractOffset(env), env))
+        .map { env =>
+          val externalContext = telemetry.beforeProcess()
+          ProjectionContextImpl(sourceProvider.extractOffset(env), env, externalContext)
+        }
         .filter { context =>
           sourceProvider match {
             case vsp: VerifiableSourceProvider[Offset, Envelope] =>

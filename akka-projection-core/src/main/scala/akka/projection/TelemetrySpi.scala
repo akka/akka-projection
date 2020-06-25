@@ -36,15 +36,22 @@ trait Telemetry {
   def failed(cause: Throwable): Unit
 
   /**
+   * TODO:
+   * @return
+   */
+  def beforeProcess(): AnyRef
+
+  /**
    * Invoked after processing an event such that it is visible by the read-side threads (data is
    * committed).  This method is granted to be invoked after the envelope handler has committed but
    * may or may not happen after the offset was committed (depending on the projection semantics).
    *
-   * @param readyTimestampNanos timestamp indicating when this envelope arrived at the projection.  That
+   * @param externalContext TODO
+   *                        WAS: timestamp indicating when this envelope arrived at the projection.  That
    *                            timestamp happens in the projection code so it happens outside the source
    *                            provider (e.g. doesn't include deserializing the envelope from the wire).
    */
-  def afterProcess(readyTimestampNanos: Long): Unit
+  def afterProcess(externalContext: AnyRef): Unit
 
   /**
    * Invoked when the offset is committed.
@@ -95,7 +102,9 @@ trait Telemetry {
 
   override def stopped(): Unit = {}
 
-  override def afterProcess(readyTimestampNanos: Long): Unit = {}
+  override def beforeProcess(): AnyRef = Unit
+
+  override def afterProcess(externalContext: AnyRef): Unit = {}
 
   override def onOffsetStored(numberOfEnvelopes: Int): Unit = {}
 

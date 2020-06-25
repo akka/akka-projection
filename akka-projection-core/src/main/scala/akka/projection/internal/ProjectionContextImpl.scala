@@ -15,15 +15,17 @@ import akka.projection.ProjectionContext
 @InternalApi private[projection] case class ProjectionContextImpl[Offset, Envelope] private (
     offset: Offset,
     envelope: Envelope,
-    // TODO: make it a volatile var in the case class ??
-    groupSize: Int,
-    readyTimestampNanos: Long)
+    externalContext: AnyRef,
+    groupSize: Int)
     extends ProjectionContext
 
 /**
  * INTERNAL API
  */
 @InternalApi private[projection] object ProjectionContextImpl {
-  def apply[Offset, Envelope](offset: Offset, envelope: Envelope): ProjectionContextImpl[Offset, Envelope] =
-    new ProjectionContextImpl(offset, envelope, groupSize = 1, readyTimestampNanos = System.nanoTime())
+  def apply[Offset, Envelope](
+      offset: Offset,
+      envelope: Envelope,
+      externalContext: AnyRef): ProjectionContextImpl[Offset, Envelope] =
+    new ProjectionContextImpl(offset, envelope, externalContext, groupSize = 1)
 }

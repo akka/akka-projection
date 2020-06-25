@@ -32,8 +32,11 @@ class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends
   override def stopped(): Unit =
     stoppedInvocations.incrementAndGet()
 
-  override def afterProcess(readyTimestampNanos: Long): Unit = {
+  override def beforeProcess(): AnyRef = ExternalContext()
+
+  override def afterProcess(externalContext: AnyRef): Unit = {
     afterProcessInvocations.incrementAndGet()
+    val readyTimestampNanos = externalContext.asInstanceOf[ExternalContext].readyTimestampNanos
     lastServiceTimeInNanos.set(System.nanoTime() - readyTimestampNanos)
   }
 
@@ -48,6 +51,8 @@ class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends
   }
 
 }
+
+case class ExternalContext(readyTimestampNanos: Long = System.nanoTime())
 
 case object TelemetryException extends RuntimeException("Oh, no! Handler errored.") with NoStackTrace
 
