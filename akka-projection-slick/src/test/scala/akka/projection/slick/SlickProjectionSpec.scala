@@ -32,6 +32,7 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
@@ -738,6 +739,40 @@ class SlickProjectionSpec
         handlerProbe.expectMessage(handlerCalled)
       }
     }
+
+    "handle grouped async projection and store offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val result = new StringBuffer()
+
+      def handler(): Handler[immutable.Seq[Envelope]] = new Handler[immutable.Seq[Envelope]] {
+        override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
+          Future {
+            envelopes.foreach(env => result.append(env.message).append("|"))
+          }.map(_ => Done)
+        }
+      }
+
+      val projection =
+        SlickProjection
+          .groupedWithinAsync(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            handler = () => handler())
+          .withGroup(2, 3.seconds)
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
   }
 
   "A Slick at-least-once projection" must {
@@ -1122,6 +1157,38 @@ class SlickProjectionSpec
           val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
           concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
         }
+      }
+    }
+
+    "handle async projection and store offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val result = new StringBuffer()
+
+      def handler(): Handler[Envelope] = new Handler[Envelope] {
+        override def process(envelope: Envelope): Future[Done] = {
+          Future {
+            result.append(envelope.message).append("|")
+          }.map(_ => Done)
+        }
+      }
+
+      val projection =
+        SlickProjection.atLeastOnceAsync(
+          projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          databaseConfig = dbConfig,
+          handler = () => handler())
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
       }
     }
 
