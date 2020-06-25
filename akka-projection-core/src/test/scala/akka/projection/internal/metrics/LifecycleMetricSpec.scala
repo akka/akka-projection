@@ -10,7 +10,10 @@ import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
+import akka.projection.internal.metrics.tools.TestHandlers
+import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec._
 
 class LifecycleMetricSpec extends InternalProjectionStateMetricsSpec {
 
@@ -32,7 +35,7 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
       "count a start and a stop" in {
         val numOfEnvelopes = 20
         val tt: TelemetryTester =
-          new TelemetryTester(AtLeastOnce(), SingleHandlerStrategy(Handlers.single), numOfEnvelopes)
+          new TelemetryTester(AtLeastOnce(), SingleHandlerStrategy(TestHandlers.single), numOfEnvelopes)
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(numOfEnvelopes)
         }
@@ -40,7 +43,7 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
         instruments.stoppedInvocations.get should be(1)
       }
       "count projection failures" in {
-        val single = Handlers.singleWithErrors(1, 1, 1, 1, 2, 2, 3, 4, 5)
+        val single = TestHandlers.singleWithErrors(1, 1, 1, 1, 2, 2, 3, 4, 5)
         val tt = new TelemetryTester(
           AtLeastOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
           SingleHandlerStrategy(single))
@@ -56,7 +59,7 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
 
     " in `at-least-once` with groupedHandler" must {
       "report nothing in happy scenarios" in {
-        val tt = new TelemetryTester(AtLeastOnce(), GroupedHandlerStrategy(Handlers.grouped))
+        val tt = new TelemetryTester(AtLeastOnce(), GroupedHandlerStrategy(TestHandlers.grouped))
 
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(defaultNumberOfEnvelopes)
@@ -69,7 +72,7 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
     " in `at-least-once` with flowHandler" must {
       "report nothing in happy scenarios" in {
         val tt =
-          new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](Handlers.flow))
+          new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](TestHandlers.flow))
 
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(defaultNumberOfEnvelopes)

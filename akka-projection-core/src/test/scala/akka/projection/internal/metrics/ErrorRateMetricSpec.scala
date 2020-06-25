@@ -14,7 +14,10 @@ import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
+import akka.projection.internal.metrics.tools.TestHandlers
+import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec._
 
 abstract class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
   implicit var projectionId: ProjectionId = null
@@ -47,13 +50,13 @@ class ErrorRateMetricAtLeastOnceSpec extends ErrorRateMetricSpec {
       "report nothing in happy scenarios" in {
         val numOfEnvelopes = 20
         val tt: TelemetryTester =
-          new TelemetryTester(AtLeastOnce(), SingleHandlerStrategy(Handlers.single), numOfEnvelopes)
+          new TelemetryTester(AtLeastOnce(), SingleHandlerStrategy(TestHandlers.single), numOfEnvelopes)
         runInternal(tt.projectionState) {
           detectNoError(numOfEnvelopes)
         }
       }
       "report errors in flaky handlers" in {
-        val single = Handlers.singleWithErrors(1, 1, 1, 1, 2, 2, 3, 4, 5)
+        val single = TestHandlers.singleWithErrors(1, 1, 1, 1, 2, 2, 3, 4, 5)
         val tt = new TelemetryTester(
           AtLeastOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           SingleHandlerStrategy(single))
@@ -65,14 +68,14 @@ class ErrorRateMetricAtLeastOnceSpec extends ErrorRateMetricSpec {
     }
     " in `at-least-once` with groupedHandler" must {
       "report nothing in happy scenarios" in {
-        val tt = new TelemetryTester(AtLeastOnce(), GroupedHandlerStrategy(Handlers.grouped))
+        val tt = new TelemetryTester(AtLeastOnce(), GroupedHandlerStrategy(TestHandlers.grouped))
 
         runInternal(tt.projectionState) {
           detectNoError()
         }
       }
       "report errors in flaky handlers" in {
-        val grouped = Handlers.groupedWithErrors(2, 3, 3, 5)
+        val grouped = TestHandlers.groupedWithErrors(2, 3, 3, 5)
         val tt = new TelemetryTester(
           AtLeastOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           GroupedHandlerStrategy(grouped))
@@ -85,14 +88,14 @@ class ErrorRateMetricAtLeastOnceSpec extends ErrorRateMetricSpec {
     " in `at-least-once` with flowHandler" must {
       "report nothing in happy scenarios" in {
         val tt =
-          new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](Handlers.flow))
+          new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](TestHandlers.flow))
 
         runInternal(tt.projectionState) {
           detectNoError()
         }
       }
       "report errors in flaky handlers" in {
-        val flow = Handlers.flowWithErrors(2, 3, 6)
+        val flow = TestHandlers.flowWithErrors(2, 3, 6)
         val tt = new TelemetryTester(AtLeastOnce(), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
           detectSomeErrors(3)
@@ -110,14 +113,14 @@ class ErrorRateMetricExactlyOnceSpec extends ErrorRateMetricSpec {
     // exactly-once
     " in `exactly-once` with singleHandler" must {
       "report nothing in happy scenarios" in {
-        val tt = new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+        val tt = new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(TestHandlers.single))
 
         runInternal(tt.projectionState) {
           detectNoError()
         }
       }
       "report errors in flaky handlers" in {
-        val single = Handlers.singleWithErrors(2, 3, 4, 4, 4, 4, 4, 4, 4, 5, 6, 6)
+        val single = TestHandlers.singleWithErrors(2, 3, 4, 4, 4, 4, 4, 4, 4, 5, 6, 6)
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           SingleHandlerStrategy(single))
@@ -129,7 +132,7 @@ class ErrorRateMetricExactlyOnceSpec extends ErrorRateMetricSpec {
     }
     " in `exactly-once` with groupedHandler" must {
       "report nothing in happy scenarios" in {
-        val grouped = Handlers.grouped
+        val grouped = TestHandlers.grouped
         val groupHandler: GroupedHandlerStrategy[Envelope] = GroupedHandlerStrategy(grouped)
         val tt = new TelemetryTester(ExactlyOnce(), groupHandler)
 
@@ -138,7 +141,7 @@ class ErrorRateMetricExactlyOnceSpec extends ErrorRateMetricSpec {
         }
       }
       "report errors in flaky handlers" in {
-        val groupedWithFailures = Handlers.groupedWithErrors(1, 2, 5)
+        val groupedWithFailures = TestHandlers.groupedWithErrors(1, 2, 5)
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           GroupedHandlerStrategy(groupedWithFailures))
@@ -159,14 +162,14 @@ class ErrorRateMetricAtMostOnceSpec extends ErrorRateMetricSpec {
     // at-most-once
     " in `at-most-once` with singleHandler" must {
       "report nothing in happy scenarios" in {
-        val tt = new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+        val tt = new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(TestHandlers.single))
 
         runInternal(tt.projectionState) {
           detectNoError()
         }
       }
       "report nothing in case of failure" in {
-        val single = Handlers.singleWithErrors(1, 2, 4, 6)
+        val single = TestHandlers.singleWithErrors(1, 2, 4, 6)
         val tt = new TelemetryTester(
           AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.skip)),
           SingleHandlerStrategy(single))

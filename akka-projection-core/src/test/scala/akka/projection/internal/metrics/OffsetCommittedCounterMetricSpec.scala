@@ -14,7 +14,10 @@ import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec._
+import akka.projection.internal.metrics.tools.TestHandlers
+import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec._
 
 sealed abstract class OffsetCommittedCounterMetricSpec extends InternalProjectionStateMetricsSpec {
 
@@ -36,7 +39,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounter
     " in `at-least-once` with singleHandler" must {
       "count offsets (without afterEnvelops optimization)" in {
         val numberOfEnvelopes = 6
-        val single = Handlers.single
+        val single = TestHandlers.single
         val tt = new TelemetryTester(
           AtLeastOnce(afterEnvelopes = Some(1)),
           SingleHandlerStrategy(single),
@@ -53,7 +56,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounter
         val tt =
           new TelemetryTester(
             AtLeastOnce(afterEnvelopes = Some(batchSize)),
-            SingleHandlerStrategy(Handlers.single),
+            SingleHandlerStrategy(TestHandlers.single),
             numberOfEnvelopes = numberOfEnvelopes)
 
         runInternal(tt.projectionState) {
@@ -62,7 +65,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounter
         }
       }
       "count offsets only once in case of failure" in {
-        val single = Handlers.singleWithErrors(1, 2, 3, 4, 4, 4, 4, 5, 6)
+        val single = TestHandlers.singleWithErrors(1, 2, 3, 4, 4, 4, 4, 5, 6)
         val tt = new TelemetryTester(
           AtLeastOnce(
             afterEnvelopes = Some(1),
@@ -80,7 +83,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounter
       "count offsets (without afterEnvelops optimization)" in {
         val tt = new TelemetryTester(
           AtLeastOnce(afterEnvelopes = Some(1)),
-          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)))
+          GroupedHandlerStrategy(TestHandlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)))
 
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(6)
@@ -90,7 +93,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounter
       "count offsets (with afterEnvelops optimization)" in {
         val tt = new TelemetryTester(
           AtLeastOnce(afterEnvelopes = Some(3)),
-          GroupedHandlerStrategy(Handlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)))
+          GroupedHandlerStrategy(TestHandlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)))
 
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(6)
@@ -98,7 +101,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounter
         }
       }
       "count envelopes only once in case of failure" in {
-        val grouped = Handlers.groupedWithErrors(2, 3, 4)
+        val grouped = TestHandlers.groupedWithErrors(2, 3, 4)
         val tt = new TelemetryTester(
           AtLeastOnce(
             afterEnvelopes = Some(2),
@@ -114,7 +117,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounter
     " in `at-least-once` with flowHandler" must {
       "count offsets" in {
         val tt =
-          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](Handlers.flow))
+          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](TestHandlers.flow))
 
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(6)
@@ -122,7 +125,7 @@ class OffsetCommittedCounterMetricAtLeastOnceSpec extends OffsetCommittedCounter
         }
       }
       "count offsets only once in case of failure" in {
-        val flow = Handlers.flowWithErrors(1, 2, 3)
+        val flow = TestHandlers.flowWithErrors(1, 2, 3)
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
@@ -144,7 +147,7 @@ class OffsetCommittedCounterMetricExactlyOnceSpec extends OffsetCommittedCounter
     " in `exactly-once` with singleHandler" must {
       "count offsets" in {
         val tt =
-          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(TestHandlers.single))
 
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(6)
@@ -152,7 +155,7 @@ class OffsetCommittedCounterMetricExactlyOnceSpec extends OffsetCommittedCounter
         }
       }
       "count offsets only once in case of failure" in {
-        val single = Handlers.singleWithErrors(1, 1, 3, 4, 5, 5, 5, 5, 6)
+        val single = TestHandlers.singleWithErrors(1, 1, 3, 4, 5, 5, 5, 5, 6)
         val tt = new TelemetryTester(
           // using retryAndFail to try to get all message through
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
@@ -165,7 +168,7 @@ class OffsetCommittedCounterMetricExactlyOnceSpec extends OffsetCommittedCounter
     }
     " in `exactly-once` with groupedHandler" must {
       "count offsets" in {
-        val grouped = Handlers.grouped
+        val grouped = TestHandlers.grouped
         val groupHandler = GroupedHandlerStrategy(grouped, afterEnvelopes = Some(2))
         val tt =
           new TelemetryTester(ExactlyOnce(), groupHandler)
@@ -176,7 +179,7 @@ class OffsetCommittedCounterMetricExactlyOnceSpec extends OffsetCommittedCounter
         }
       }
       "count offsets only once in case of failure" in {
-        val groupedWithFailures = Handlers.groupedWithErrors(1, 2, 3)
+        val groupedWithFailures = TestHandlers.groupedWithErrors(1, 2, 3)
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndFail(maxRetries, 30.millis))),
           GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2)))
@@ -199,7 +202,7 @@ class OffsetCommittedCounterMetricAtMostOnceSpec extends OffsetCommittedCounterM
     " in `at-most-once` with singleHandler" must {
       "count offsets" in {
         val tt =
-          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(Handlers.single))
+          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(TestHandlers.single))
 
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(6)
@@ -207,7 +210,7 @@ class OffsetCommittedCounterMetricAtMostOnceSpec extends OffsetCommittedCounterM
         }
       }
       "count offsets once in case of failure (skip)" in {
-        val single = Handlers.singleWithErrors(2, 3, 4)
+        val single = TestHandlers.singleWithErrors(2, 3, 4)
         val tt = new TelemetryTester(
           AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.skip)),
           SingleHandlerStrategy(single))
@@ -217,7 +220,7 @@ class OffsetCommittedCounterMetricAtMostOnceSpec extends OffsetCommittedCounterM
         }
       }
       "count offsets once in case of failure (fail)" in {
-        val single = Handlers.singleWithErrors(4, 5, 6)
+        val single = TestHandlers.singleWithErrors(4, 5, 6)
         val tt = new TelemetryTester(
           AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
           SingleHandlerStrategy(single))

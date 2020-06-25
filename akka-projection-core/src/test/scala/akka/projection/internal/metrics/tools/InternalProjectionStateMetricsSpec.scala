@@ -2,21 +2,16 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.internal.metrics
+package akka.projection.internal.metrics.tools
 
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-import java.util.function
 
 import scala.collection.immutable
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.control.NoStackTrace
 
 import akka.Done
 import akka.NotUsed
@@ -24,15 +19,11 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.Extension
-import akka.actor.typed.ExtensionId
 import akka.event.Logging
 import akka.event.LoggingAdapter
-import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
-import akka.projection.Telemetry
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
@@ -42,12 +33,9 @@ import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec.Envelope
-import akka.projection.internal.metrics.InternalProjectionStateMetricsSpec.TelemetryException
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.SharedKillSwitch
-import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -56,6 +44,14 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+/**
+ * Superclass for the MetricsSpec run directly over [[InternalProjectionState]]. This provides a fake
+ * `SourceProvider` and a fake projection implementation (not Slick, not Cassandra,...) so it can live
+ * on akka-projections.core. That implementation has its own offset store and all.
+ *
+ * MetricsSpecs should create a [[TelemetryTester]] and run the projection using `runInternal` (see existing
+ * `XyzMetricsSpec` for more examples.
+ */
 abstract class InternalProjectionStateMetricsSpec
     extends ScalaTestWithActorTestKit(InternalProjectionStateMetricsSpec.config)
     with AnyWordSpecLike
@@ -131,8 +127,6 @@ object InternalProjectionStateMetricsSpec {
 
     override def extractOffset(env: Envelope): Long = env.offset
   }
-
-  case object TelemetryException extends RuntimeException("Oh, no! Handler errored.") with NoStackTrace
 
   class TelemetryTester(offsetStrategy: OffsetStrategy, handlerStrategy: HandlerStrategy, numberOfEnvelopes: Int = 6)(
       implicit system: ActorSystem[_],
@@ -233,152 +227,6 @@ object InternalProjectionStateMetricsSpec {
         futureDone
       }
     }
-  }
-
-}
-
-object Handlers {
-
-  trait ProcessStrategy
-  case object AlwaysSucceed extends ProcessStrategy
-  case class SomeFailures(erroredOffsets: List[Long]) extends ProcessStrategy {
-    require(erroredOffsets.sorted == erroredOffsets)
-  }
-  object ProcessStrategy {
-    def apply(erroredOffsets: List[Long]): ProcessStrategy =
-      if (erroredOffsets.length == 0) AlwaysSucceed else new SomeFailures(erroredOffsets)
-  }
-
-  val single: () => Handler[Envelope] = singleWithErrors()
-
-  /**
-   * @param erroredOffsets a stack of errors. Must be ordered. Each item is an offset which, when observed will
-   *                       trigger an error and then be removed from the stack. To fail an item multiple times
-   *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
-   */
-  def singleWithErrors(erroredOffsets: Int*): () => Handler[Envelope] = {
-    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
-    () =>
-      new Handler[Envelope] {
-        override def process(envelope: Envelope): Future[Done] = {
-          nextProcessStrategy match {
-            case SomeFailures(nextFail :: tail) if (nextFail == envelope.offset) =>
-              nextProcessStrategy = SomeFailures(tail)
-              throw TelemetryException
-            case _ => Future.successful(Done)
-          }
-        }
-      }
-  }
-
-  val grouped = groupedWithErrors()
-
-  /**
-   * @param erroredOffsets a stack of errors. Must be ordered. Each item is an offset which, when observed will
-   *                       trigger an error and then be removed from the stack. To fail an item multiple times
-   *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
-   */
-  def groupedWithErrors(erroredOffsets: Int*): () => Handler[immutable.Seq[Envelope]] = {
-    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
-    () =>
-      new Handler[immutable.Seq[Envelope]] {
-        override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-          nextProcessStrategy match {
-            case SomeFailures(nextFail :: tail) if (envelopes.map { _.offset }.contains(nextFail)) =>
-              nextProcessStrategy = SomeFailures(tail)
-              Future.failed(TelemetryException)
-            case _ =>
-              Future.successful(Done)
-          }
-        }
-      }
-  }
-
-  val flow = flowWithErrors()
-
-  /**
-   * @param erroredOffsets a stack of errors. Must be ordered. Each item is an offset which, when observed will
-   *                       trigger an error and then be removed from the stack. To fail an item multiple times
-   *                       add its offset repeatedly. Uses `Int` instead of `Long` for convenience.
-   */
-  def flowWithErrors(erroredOffsets: Int*) = {
-    var nextProcessStrategy = ProcessStrategy(erroredOffsets.map { _.toLong }.toList)
-    FlowWithContext[Envelope, ProjectionContext]
-      .map { envelope =>
-        nextProcessStrategy match {
-          case SomeFailures(nextFail :: tail) if (envelope.offset == nextFail) =>
-            nextProcessStrategy = SomeFailures(tail)
-            throw TelemetryException
-          case _ =>
-            Done
-        }
-      }
-  }
-
-}
-
-object InMemInstrumentsRegistry extends ExtensionId[InMemInstrumentsRegistry] {
-  override def createExtension(system: ActorSystem[_]): InMemInstrumentsRegistry = new InMemInstrumentsRegistry(system)
-}
-class InMemInstrumentsRegistry(system: ActorSystem[_]) extends Extension {
-  private val instrumentMap = new ConcurrentHashMap[ProjectionId, InMemInstruments]()
-  def forId(projectionId: ProjectionId): InMemInstruments = {
-    instrumentMap.computeIfAbsent(projectionId, new function.Function[ProjectionId, InMemInstruments] {
-      override def apply(t: ProjectionId): InMemInstruments = new InMemInstruments
-    })
-  }
-
-  // these are added to use the constructor argument and keep the AkkaDisciplinePlugin happy
-  val observedActorSystem = new AtomicReference[ActorSystem[_]](null)
-  observedActorSystem.set(system)
-}
-
-class InMemInstruments() {
-
-  // the instruments outlive the InMemTelemetry instances. Multiple instances of InMemTelemetry
-  // will share these instruments.
-  val afterProcessInvocations = new AtomicInteger(0)
-  val lastServiceTimeInNanos = new AtomicLong()
-  val offsetsSuccessfullyCommitted = new AtomicInteger(0)
-  val onOffsetStoredInvocations = new AtomicInteger(0)
-  val errorInvocations = new AtomicInteger(0)
-  val lastErrorThrowable = new AtomicReference[Throwable](null)
-
-  val startedInvocations = new AtomicInteger(0)
-
-  val stoppedInvocations = new AtomicInteger(0)
-  val failureInvocations = new AtomicInteger(0)
-  val lastFailureThrowable = new AtomicReference[Throwable](null)
-
-}
-
-class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry {
-  private val instruments: InMemInstruments = InMemInstrumentsRegistry(system).forId(projectionId)
-  import instruments._
-
-  startedInvocations.incrementAndGet()
-
-  override def failed(cause: Throwable): Unit = {
-    failureInvocations.incrementAndGet()
-    lastFailureThrowable.set(cause)
-  }
-
-  override def stopped(): Unit =
-    stoppedInvocations.incrementAndGet()
-
-  override def afterProcess(readyTimestampNanos: Long): Unit = {
-    afterProcessInvocations.incrementAndGet()
-    lastServiceTimeInNanos.set(System.nanoTime() - readyTimestampNanos)
-  }
-
-  override def onOffsetStored(numberOfEnvelopes: Int): Unit = {
-    onOffsetStoredInvocations.incrementAndGet()
-    offsetsSuccessfullyCommitted.addAndGet(numberOfEnvelopes)
-  }
-
-  override def error(cause: Throwable): Unit = {
-    lastErrorThrowable.set(cause)
-    errorInvocations.incrementAndGet()
   }
 
 }
