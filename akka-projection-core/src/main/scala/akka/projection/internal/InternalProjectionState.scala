@@ -138,6 +138,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
           Flow[ProjectionContextImpl[Offset, Envelope]].mapAsync(parallelism = 1) { context =>
             val measured: () => Future[Done] = { () =>
               handler.process(context.envelope).map { done =>
+                // `telemetry.afterProcess` is invoked immediately after `handler.process`
+                // even when retrying. Note that an error in handler.process must not
+                // invoke `afterProcess` (independently of the recovery strategy).
                 telemetry.afterProcess(context.readyTimestampNanos)
                 done
               }
@@ -172,6 +175,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                   abort.future,
                   () => handler.process(envelopes))
                 .map { _ =>
+                  // TODO: fix the skip case
                   group.foreach { ctx =>
                     telemetry.afterProcess(ctx.readyTimestampNanos)
                   }
@@ -288,8 +292,11 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             logger.warning(" Processing {}", context.envelope)
             val measured: () => Future[Done] = () => {
               handler.process(context.envelope).map { done =>
-                telemetry.onOffsetStored(1)
+                // `telemetry.afterProcess` is invoked immediately after `handler.process`
+                // even when retrying. Note that an error in handler.process must not
+                // invoke `afterProcess` (independently of the recovery strategy).
                 telemetry.afterProcess(context.readyTimestampNanos)
+                telemetry.onOffsetStored(1)
                 done
               }
             }
@@ -312,6 +319,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
               .map { t =>
                 telemetry.onOffsetStored(group.length)
                 group.foreach { ctx =>
+                  // TODO: fix the skip case
                   telemetry.afterProcess(ctx.readyTimestampNanos)
                 }
                 t
@@ -340,6 +348,9 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
               saveOffsetWithMetrics(projectionId, context.offset, 1).flatMap { _ =>
                 val measured: () => Future[Done] = { () =>
                   handler.process(context.envelope).map { done =>
+                    // `telemetry.afterProcess` is invoked immediately after `handler.process`
+                    // even when retrying. Note that an error in handler.process must not
+                    // invoke `afterProcess` (independently of the recovery strategy).
                     telemetry.afterProcess(context.readyTimestampNanos)
                     done
                   }
