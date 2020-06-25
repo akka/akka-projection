@@ -14,10 +14,10 @@ import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.tools.TestHandlers
 import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec._
+import akka.projection.internal.metrics.tools.TestHandlers
 
 sealed abstract class ServiceTimeAndProcessingCountMetricSpec extends InternalProjectionStateMetricsSpec {
   implicit var projectionId: ProjectionId = null
@@ -34,7 +34,6 @@ sealed abstract class ServiceTimeAndProcessingCountMetricSpec extends InternalPr
 class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndProcessingCountMetricSpec {
 
   "A metric reporting ServiceTime" must {
-    // at-least-once
     " in `at-least-once` with singleHandler" must {
       "reports measures for all envelopes (without afterEnvelops optimization)" in {
         val single = TestHandlers.single
@@ -85,6 +84,7 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
       }
+
       "report measures per envelope (with afterEnvelops optimization)" in {
         val tt = new TelemetryTester(
           AtLeastOnce(afterEnvelopes = Some(3)),
@@ -96,9 +96,9 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
         }
       }
 
-      "report multiple measures per envelope in case of failure" in {
+      "report multiple measures per envelope in case of failure (recovery == fail)" in {
         val grouped = TestHandlers.groupedWithErrors(3, 5, 6)
-        // magic numbers to fail bigger batches speeding up the test
+        // magic numbers to have at least a a batch of 4 groups of 3 envelopes (and one extra envelope)
         // 13 = 12+1 = (4*3)+1
         val numberOfEnvelopes = 13
         val tt = new TelemetryTester(
@@ -127,6 +127,39 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
           instruments.afterProcessInvocations.get should be(0 + 3 + 3 + 12 + 1)
         }
       }
+
+      "report multiple measures per envelope in case of failure (recovery == retryAndSkip)" in {
+        // Envelopes 3 and 7 will error twice so they must be skipped. Note that `retries = 1`
+        // means there's 1 retry _after_ an initial error so an envelope must error
+        // `retries+1` times to be skipped.
+        val grouped = TestHandlers.groupedWithErrors(3, 3, 6, 7, 7)
+        // magic number to have at least a complete batch of 2 groups of 2 envelopes after the last error (offset==7)
+        val numberOfEnvelopes = 13
+        val tt = new TelemetryTester(
+          AtLeastOnce(
+            afterEnvelopes = Some(2),
+            recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndSkip(retries = 1, 10.millis))),
+          GroupedHandlerStrategy(grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)),
+          numberOfEnvelopes = numberOfEnvelopes)
+
+        runInternal(tt.projectionState) {
+          // The number of invocations is 19 because:
+          //  - a batch of 2 groups of 2 items is processed:
+          //      [(1 2)(3 4)] but '3' errors, then it's retried, it errors again and it's skipped.
+          //      report 2 envelopes (1 2)
+          //  - a batch of 2 groups of 2 items is processed:
+          //      [(5 6)(7 8)] but '6' errors, reties and succeeds, then 7 errors twice and is skipped
+          //      report 2 envelopes (5 6)
+          //  - a batch of 2 groups of 2 items is processed:
+          //      [(9 10)(11 12)]
+          //      report 4
+          //  - a batch of 1 groups of 1 items is processed:
+          //      [(13)]
+          //      report 1
+          instruments.afterProcessInvocations.get should be(2 + 2 + 4 + 1)
+        }
+      }
+
     }
     " in `at-least-once` with flowHandler" must {
       "report a measure per envelope" in {
@@ -191,16 +224,37 @@ class ServiceTimeAndProcessingCountMetricExactlyOnceSpec extends ServiceTimeAndP
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
       }
-      "report only one measure per envelope even in case of failure" in {
+
+      "report only one measure per envelope even in case of failure (recovery is fail)" in {
         val groupedWithFailures = TestHandlers.groupedWithErrors(5)
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
-          GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2), orAfterDuration = Some(30.millis)))
+          GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2), orAfterDuration = Some(10.millis)))
         runInternal(tt.projectionState) {
           instruments.lastErrorThrowable.get should not be null
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
       }
+
+      "report only one measure per envelope even in case of failure (recovery is skip)" in {
+        val groupedWithFailures = TestHandlers.groupedWithErrors(1, 7)
+        val numberOfEnvelopes = 11
+        val tt = new TelemetryTester(
+          ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.skip)),
+          GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2), orAfterDuration = Some(10.millis)),
+          numberOfEnvelopes)
+        runInternal(tt.projectionState) {
+          instruments.lastErrorThrowable.get should not be null
+          // [(12)] -> 0
+          // [(34)] -> 2
+          // [(56)] -> 2
+          // [(78)] -> 0
+          // [(9 10)] -> 2
+          // [(11)] -> 1
+          instruments.afterProcessInvocations.get should be(0 + 2 + 2 + 0 + 2 + 1)
+        }
+      }
+
     }
 
   }

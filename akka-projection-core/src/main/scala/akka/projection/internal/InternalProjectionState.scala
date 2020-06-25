@@ -167,18 +167,17 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
               val first = group.head
               val last = group.last
               val envelopes = group.map { _.envelope }
-              handlerRecovery
-                .applyRecovery(
-                  first.envelope,
-                  first.offset,
-                  last.offset,
-                  abort.future,
-                  () => handler.process(envelopes))
-                .map { _ =>
-                  // TODO: fix the skip case
+              val measured: () => Future[Done] = { () =>
+                handler.process(envelopes).map { done =>
                   group.foreach { ctx =>
                     telemetry.afterProcess(ctx.readyTimestampNanos)
                   }
+                  done
+                }
+              }
+              handlerRecovery
+                .applyRecovery(first.envelope, first.offset, last.offset, abort.future, measured)
+                .map { _ =>
                   last.copy(groupSize = envelopes.length)
                 }
             }
@@ -241,14 +240,19 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         val first = partitioned.head
         val firstOffset = first.offset
         val lastOffset = partitioned.last.offset
-        val envelopes = partitioned.map { _.envelope }
+        val envelopes = partitioned.map {
+          _.envelope
+        }
 
-        handlerRecovery.applyRecovery(
-          first.envelope,
-          firstOffset,
-          lastOffset,
-          abort.future,
-          () => handler.process(envelopes))
+        val measured: () => Future[Done] = { () =>
+          handler.process(envelopes).map { done =>
+            partitioned.foreach { ctx =>
+              telemetry.afterProcess(ctx.readyTimestampNanos)
+            }
+            done
+          }
+        }
+        handlerRecovery.applyRecovery(first.envelope, firstOffset, lastOffset, abort.future, measured)
       }
 
       sourceProvider match {
@@ -318,10 +322,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope)
               .map { t =>
                 telemetry.onOffsetStored(group.length)
-                group.foreach { ctx =>
-                  // TODO: fix the skip case
-                  telemetry.afterProcess(ctx.readyTimestampNanos)
-                }
                 t
               }
           }
