@@ -16,7 +16,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Extension
 import akka.actor.typed.ExtensionId
 import akka.projection.ProjectionId
-import akka.projection.Telemetry
+import akka.projection.internal.Telemetry
 
 /**
  *

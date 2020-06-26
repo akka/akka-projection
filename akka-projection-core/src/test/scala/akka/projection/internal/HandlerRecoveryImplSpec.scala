@@ -17,7 +17,6 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.adapter._
 import akka.event.Logging
 import akka.projection.HandlerRecoveryStrategy
-import akka.projection.NoopTelemetry
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.Handler

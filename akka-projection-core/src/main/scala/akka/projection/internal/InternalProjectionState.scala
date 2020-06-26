@@ -22,14 +22,11 @@ import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
-import akka.projection.NoopTelemetry
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
-import akka.projection.Telemetry
-import akka.projection.TelemetryProvider
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.MergeableOffsetSourceProvider
