@@ -95,7 +95,7 @@ object JdbcOffsetStoreSpec {
     def jdbcSessionFactory(): PureJdbcSession =
       new PureJdbcSession(() => {
         Class.forName("org.h2.Driver")
-        val conn = DriverManager.getConnection("jdbc:h2:mem:offset-store-test;DB_CLOSE_DELAY=-1")
+        val conn = DriverManager.getConnection("jdbc:h2:mem:offset-store-test-jdbc;DB_CLOSE_DELAY=-1")
         conn.setAutoCommit(false)
         conn
       })
@@ -226,11 +226,13 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     }.futureValue
   }
 
+  private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
+
   s"The JdbcOffsetStore [$dialectLabel]" must {
 
     "create and update offsets" in {
 
-      val projectionId = ProjectionId("projection-with-long", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset 1L") {
         offsetStore.saveOffset(projectionId, 1L).futureValue
@@ -254,7 +256,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve offsets of type Long" in {
 
-      val projectionId = ProjectionId("projection-with-long", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         offsetStore.saveOffset(projectionId, 1L).futureValue
@@ -269,7 +271,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve offsets of type java.lang.Long" in {
 
-      val projectionId = ProjectionId("projection-with-java-long", "00")
+      val projectionId = genRandomProjectionId()
       withClue("check - save offset") {
         offsetStore.saveOffset(projectionId, java.lang.Long.valueOf(1L)).futureValue
       }
@@ -282,7 +284,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve offsets of type Int" in {
 
-      val projectionId = ProjectionId("projection-with-int", "00")
+      val projectionId = genRandomProjectionId()
       withClue("check - save offset") {
         offsetStore.saveOffset(projectionId, 1).futureValue
       }
@@ -296,7 +298,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve offsets of type java.lang.Integer" in {
 
-      val projectionId = ProjectionId("projection-with-java-int", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         offsetStore.saveOffset(projectionId, java.lang.Integer.valueOf(1)).futureValue
@@ -310,7 +312,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve offsets of type String" in {
 
-      val projectionId = ProjectionId("projection-with-String", "00")
+      val projectionId = genRandomProjectionId()
       val randOffset = UUID.randomUUID().toString
       withClue("check - save offset") {
         offsetStore.saveOffset(projectionId, randOffset).futureValue
@@ -324,7 +326,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve offsets of type akka.persistence.query.Sequence" in {
 
-      val projectionId = ProjectionId("projection-with-akka-seq", "00")
+      val projectionId = genRandomProjectionId()
 
       val seqOffset = Sequence(1L)
       withClue("check - save offset") {
@@ -340,7 +342,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve offsets of type akka.persistence.query.TimeBasedUUID" in {
 
-      val projectionId = ProjectionId("projection-with-timebased-uuid", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         offsetStore.saveOffset(projectionId, 1L).futureValue
@@ -354,7 +356,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     "save and retrieve MergeableOffset" in {
 
-      val projectionId = ProjectionId("projection-with-mergeable-offsets", "00")
+      val projectionId = genRandomProjectionId()
 
       val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 1L, StringKey("ghi") -> 1L))
       withClue("check - save offset") {
@@ -368,7 +370,8 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     }
 
     "add new offsets to MergeableOffset" in {
-      val projectionId = ProjectionId("projection-with-mergeable-offsets-mixed", "00")
+
+      val projectionId = genRandomProjectionId()
 
       val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 1L))
       withClue("check - save offset") {
@@ -393,7 +396,8 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     }
 
     "update timestamp" in {
-      val projectionId = ProjectionId("timestamp", "00")
+
+      val projectionId = genRandomProjectionId()
 
       val instant0 = clock.instant()
       offsetStore.saveOffset(projectionId, 15).futureValue
@@ -409,7 +413,8 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     }
 
     "clear offset" in {
-      val projectionId = ProjectionId("projection-clear", "00")
+
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         offsetStore.saveOffset(projectionId, 3L).futureValue

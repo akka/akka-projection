@@ -206,8 +206,7 @@ class SlickProjectionSpec
     Await.result(creationFut, 3.seconds)
   }
 
-  private def genRandomProjectionId() =
-    ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
+  private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
   @tailrec private def eventuallyExpectError(sinkProbe: TestSubscriber.Probe[_]): Throwable = {
     sinkProbe.expectNextOrError() match {
