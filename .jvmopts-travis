@@ -2,4 +2,3 @@
 
 -Dfile.encoding=UTF8
 -Dsbt.color=always
--Dakka.actor.testkit.typed.timefactor=3
