@@ -15,7 +15,9 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
+import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.StringKey
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
 import akka.projection.testkit.internal.TestClock
@@ -37,7 +39,7 @@ object SlickOffsetStoreSpec {
 
       # TODO: configure connection pool and slick async executor
       db = {
-       url = "jdbc:h2:mem:offset-store-test;DB_CLOSE_DELAY=-1"
+       url = "jdbc:h2:mem:offset-store-test-slick;DB_CLOSE_DELAY=-1"
        driver = org.h2.Driver
        connectionPool = disabled
        keepAliveConnection = true
@@ -88,13 +90,15 @@ class SlickOffsetStoreSpec
     dbConfig.db.run(action).futureValue.get.lastUpdated
   }
 
+  private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
+
   "The SlickOffsetStore" must {
 
     implicit val ec: ExecutionContext = dbConfig.db.executor.executionContext
 
     "create and update offsets" in {
 
-      val projectionId = ProjectionId("projection-with-long", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset 1L") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, 1L)).futureValue
@@ -118,7 +122,7 @@ class SlickOffsetStoreSpec
 
     "save and retrieve offsets of type Long" in {
 
-      val projectionId = ProjectionId("projection-with-long", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, 1L)).futureValue
@@ -133,7 +137,7 @@ class SlickOffsetStoreSpec
 
     "save and retrieve offsets of type java.lang.Long" in {
 
-      val projectionId = ProjectionId("projection-with-java-long", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, java.lang.Long.valueOf(1L))).futureValue
@@ -147,7 +151,7 @@ class SlickOffsetStoreSpec
 
     "save and retrieve offsets of type Int" in {
 
-      val projectionId = ProjectionId("projection-with-int", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, 1)).futureValue
@@ -162,7 +166,7 @@ class SlickOffsetStoreSpec
 
     "save and retrieve offsets of type java.lang.Integer" in {
 
-      val projectionId = ProjectionId("projection-with-java-int", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, java.lang.Integer.valueOf(1))).futureValue
@@ -176,7 +180,7 @@ class SlickOffsetStoreSpec
 
     "save and retrieve offsets of type String" in {
 
-      val projectionId = ProjectionId("projection-with-String", "00")
+      val projectionId = genRandomProjectionId()
 
       val randOffset = UUID.randomUUID().toString
       withClue("check - save offset") {
@@ -191,7 +195,7 @@ class SlickOffsetStoreSpec
 
     "save and retrieve offsets of type akka.persistence.query.Sequence" in {
 
-      val projectionId = ProjectionId("projection-with-akka-seq", "00")
+      val projectionId = genRandomProjectionId()
 
       val seqOffset = Sequence(1L)
       withClue("check - save offset") {
@@ -206,7 +210,7 @@ class SlickOffsetStoreSpec
 
     "save and retrieve offsets of type akka.persistence.query.TimeBasedUUID" in {
 
-      val projectionId = ProjectionId("projection-with-akka-seq", "00")
+      val projectionId = genRandomProjectionId()
 
       val timeOffset = TimeBasedUUID(UUID.fromString("49225740-2019-11ea-a752-ffae2393b6e4")) //2019-12-16T15:32:36.148Z[UTC]
       withClue("check - save offset") {
@@ -220,7 +224,7 @@ class SlickOffsetStoreSpec
     }
 
     "update timestamp" in {
-      val projectionId = ProjectionId("timestamp", "00")
+      val projectionId = genRandomProjectionId()
 
       val instant0 = clock.instant()
       dbConfig.db.run(offsetStore.saveOffset(projectionId, 15)).futureValue
@@ -233,8 +237,49 @@ class SlickOffsetStoreSpec
       instant3 shouldBe instant2
     }
 
+    "save and retrieve MergeableOffset" in {
+
+      val projectionId = genRandomProjectionId()
+
+      val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 1L, StringKey("ghi") -> 1L))
+      withClue("check - save offset") {
+        dbConfig.db.run(offsetStore.saveOffset(projectionId, origOffset)).futureValue
+      }
+
+      withClue("check - read offset") {
+        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        offset.futureValue.value shouldBe origOffset
+      }
+    }
+
+    "add new offsets to MergeableOffset" in {
+
+      val projectionId = genRandomProjectionId()
+
+      val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 1L))
+      withClue("check - save offset") {
+        dbConfig.db.run(offsetStore.saveOffset(projectionId, origOffset)).futureValue
+      }
+
+      withClue("check - read offset") {
+        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        offset.futureValue.value shouldBe origOffset
+      }
+
+      // mix updates and inserts
+      val updatedOffset = MergeableOffset(Map(StringKey("abc") -> 2L, StringKey("def") -> 2L, StringKey("ghi") -> 1L))
+      withClue("check - save offset") {
+        dbConfig.db.run(offsetStore.saveOffset(projectionId, updatedOffset)).futureValue
+      }
+
+      withClue("check - read offset") {
+        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        offset.futureValue.value shouldBe updatedOffset
+      }
+    }
+
     "clear offset" in {
-      val projectionId = ProjectionId("projection-clear", "00")
+      val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, 3L)).futureValue
