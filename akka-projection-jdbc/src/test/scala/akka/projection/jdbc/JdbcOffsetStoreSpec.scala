@@ -31,6 +31,7 @@ import akka.projection.testkit.internal.TestClock
 import com.dimafeng.testcontainers.JdbcDatabaseContainer
 import com.dimafeng.testcontainers.MSSQLServerContainer
 import com.dimafeng.testcontainers.MySQLContainer
+import com.dimafeng.testcontainers.OracleContainer
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
@@ -46,7 +47,7 @@ object JdbcOffsetStoreSpec {
   trait JdbcSpecConfig {
     val name: String
 
-    val config: Config = ConfigFactory.parseString("""
+    val baseConfig = ConfigFactory.parseString("""
     
     akka {
       loglevel = "DEBUG"
@@ -61,6 +62,7 @@ object JdbcOffsetStoreSpec {
       }
     }
     """)
+    val config: Config
     def jdbcSessionFactory(): JdbcSession
 
     def initContainer(): Unit
@@ -84,17 +86,11 @@ object JdbcOffsetStoreSpec {
 
     val name = "H2 Database"
     override val config: Config =
-      ConfigFactory.parseString("""
+      baseConfig.withFallback(ConfigFactory.parseString("""
         akka.projection.jdbc = {
           dialect = "h2-dialect"
-          offset-store {
-            schema = ""
-            table = "AKKA_PROJECTION_OFFSET_STORE"
-          }
-          
-          blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
         }
-        """)
+        """))
 
     def jdbcSessionFactory(): PureJdbcSession =
       new PureJdbcSession(() => {
@@ -112,17 +108,11 @@ object JdbcOffsetStoreSpec {
   abstract class ContainerJdbcSpecConfig(dialect: String) extends JdbcSpecConfig {
 
     override val config: Config =
-      ConfigFactory.parseString(s"""
+      baseConfig.withFallback(ConfigFactory.parseString(s"""
         akka.projection.jdbc = {
-          dialect = $dialect
-          offset-store {
-            schema = ""
-            table = "AKKA_PROJECTION_OFFSET_STORE"
-          }
-          
-          blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
+          dialect = $dialect 
         }
-        """)
+        """))
 
     def jdbcSessionFactory(): PureJdbcSession = {
 
@@ -177,12 +167,37 @@ object JdbcOffsetStoreSpec {
     }
   }
 
+  object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
+
+    val name = "Oracle Database"
+
+    override def initContainer(): Unit = {
+      val container =
+        // little hack to workaround that not all JDBC containers impl the same
+        // interface (Oracle doesn't impl JdbcDatabaseContainer)
+        new OracleContainer(dockerImageName = "oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
+          override def jdbcUrl: String = super.jdbcUrl
+
+          override def username: String = super.username
+
+          override def password: String = super.password
+
+          override def driverClassName: String = super.driverClassName
+        }
+
+      _container = Some(container)
+      container.start()
+    }
+
+  }
+
 }
 
 class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
 class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.PostgresSpecConfig)
 class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MySQLSpecConfig)
 class MSSQLServerJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MSSQLServerSpecConfig)
+class OracleJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.OracleSpecConfig)
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)
@@ -256,7 +271,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[Long](projectionId)
-        offset.futureValue.value shouldBe 1L
+        offset.futureValue shouldBe Some(1L)
       }
 
       withClue("check - save offset 2L") {
@@ -265,7 +280,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset after overwrite") {
         val offset = offsetStore.readOffset[Long](projectionId)
-        offset.futureValue.value shouldBe 2L // yep, saveOffset overwrites previous
+        offset.futureValue shouldBe Some(2L) // yep, saveOffset overwrites previous
       }
 
     }
@@ -280,7 +295,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[Long](projectionId)
-        offset.futureValue.value shouldBe 1L
+        offset.futureValue shouldBe Some(1L)
       }
 
     }
@@ -294,7 +309,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[java.lang.Long](projectionId)
-        offset.futureValue.value shouldBe 1L
+        offset.futureValue shouldBe Some(1L)
       }
     }
 
@@ -307,7 +322,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[Int](projectionId)
-        offset.futureValue.value shouldBe 1
+        offset.futureValue shouldBe Some(1)
       }
 
     }
@@ -322,7 +337,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[java.lang.Integer](projectionId)
-        offset.futureValue.value shouldBe 1
+        offset.futureValue shouldBe Some(1)
       }
     }
 
@@ -336,7 +351,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[String](projectionId)
-        offset.futureValue.value shouldBe randOffset
+        offset.futureValue shouldBe Some(randOffset)
       }
     }
 
@@ -366,7 +381,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[Long](projectionId)
-        offset.futureValue.value shouldBe 1L
+        offset.futureValue shouldBe Some(1L)
       }
     }
 
@@ -381,7 +396,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
-        offset.futureValue.value shouldBe origOffset
+        offset.futureValue shouldBe Some(origOffset)
       }
     }
 
@@ -396,7 +411,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
-        offset.futureValue.value shouldBe origOffset
+        offset.futureValue shouldBe Some(origOffset)
       }
 
       // mix updates and inserts
@@ -407,7 +422,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
       withClue("check - read offset") {
         val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
-        offset.futureValue.value shouldBe updatedOffset
+        offset.futureValue shouldBe Some(updatedOffset)
       }
     }
 
