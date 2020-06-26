@@ -53,6 +53,7 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException
 import org.scalatest.OptionValues
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -921,8 +922,13 @@ class JdbcProjectionSpec
         concatStr.text shouldBe "abc|def|ghi"
       }
       withClue(s"check: last seen offset is 2L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 2L
+        val configForFutureValue = implicitly[PatienceConfig]
+        val eventuallyTimeout = Timeout(configForFutureValue.timeout.scaledBy(3))
+        eventually(eventuallyTimeout) {
+          val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+          offset shouldBe 2L
+        }
+
       }
 
       // re-run projection without failing function
