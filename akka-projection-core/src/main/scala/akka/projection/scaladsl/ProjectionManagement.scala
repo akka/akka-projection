@@ -54,7 +54,7 @@ import akka.util.Timeout
   /**
    * INTERNAL API: ProjectionBehavior registers when started.
    */
-  @InternalApi private[akka] def register(
+  @InternalApi private[projection] def register(
       projectionId: ProjectionId,
       projection: ActorRef[OffsetManagementCommand]): Unit = {
     topic(projectionId.name) ! Topic.Subscribe(projection)

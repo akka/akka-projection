@@ -29,7 +29,7 @@ object ProjectionBehavior {
   /**
    * INTERNAL API
    */
-  @InternalApi private[akka] object Internal {
+  @InternalApi private[projection] object Internal {
 
     object Stopped extends Command
 
@@ -82,7 +82,7 @@ object ProjectionBehavior {
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class ProjectionBehavior[Offset, Envelope](
+@InternalApi private[projection] class ProjectionBehavior[Offset, Envelope](
     context: ActorContext[ProjectionBehavior.Command],
     projection: Projection[Envelope],
     stashBuffer: StashBuffer[ProjectionBehavior.Command]) {

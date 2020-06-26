@@ -64,7 +64,7 @@ import akka.annotation.InternalApi
     Future.successful(Done)
 
   /** INTERNAL API */
-  @InternalApi private[akka] def tryStart(): Future[Done] = {
+  @InternalApi private[projection] def tryStart(): Future[Done] = {
     try {
       start()
     } catch {
@@ -73,7 +73,7 @@ import akka.annotation.InternalApi
   }
 
   /** INTERNAL API */
-  @InternalApi private[akka] def tryStop(): Future[Done] = {
+  @InternalApi private[projection] def tryStop(): Future[Done] = {
     try {
       stop()
     } catch {

@@ -20,7 +20,7 @@ import akka.serialization.SerializerWithStringManifest
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class ProjectionSerializer(val system: akka.actor.ExtendedActorSystem)
+@InternalApi private[projection] class ProjectionSerializer(val system: akka.actor.ExtendedActorSystem)
     extends SerializerWithStringManifest
     with BaseSerializer {
 

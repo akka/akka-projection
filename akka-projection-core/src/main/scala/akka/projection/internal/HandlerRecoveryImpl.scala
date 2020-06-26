@@ -26,7 +26,7 @@ import akka.projection.StatusObserver
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object HandlerRecoveryImpl {
+@InternalApi private[projection] object HandlerRecoveryImpl {
 
   private val futDone = Future.successful(Done)
 
@@ -43,7 +43,7 @@ import akka.projection.StatusObserver
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class HandlerRecoveryImpl[Offset, Envelope](
+@InternalApi private[projection] class HandlerRecoveryImpl[Offset, Envelope](
     projectionId: ProjectionId,
     recoveryStrategy: HandlerRecoveryStrategy,
     logger: LoggingAdapter,

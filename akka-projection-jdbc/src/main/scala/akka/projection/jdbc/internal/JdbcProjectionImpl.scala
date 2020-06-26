@@ -231,7 +231,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
   override def withStatusObserver(observer: StatusObserver[Envelope]): JdbcProjectionImpl[Offset, Envelope, S] =
     copy(statusObserver = observer)
 
-  private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
+  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
     handlerStrategy.actorHandlerInit
 
   /**

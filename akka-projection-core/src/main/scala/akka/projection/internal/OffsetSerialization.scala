@@ -22,7 +22,7 @@ import akka.serialization.Serializers
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object OffsetSerialization {
+@InternalApi private[projection] object OffsetSerialization {
   sealed trait StorageRepresentation
   final case class SingleOffset(id: ProjectionId, manifest: String, offsetStr: String, mergeable: Boolean = false)
       extends StorageRepresentation
@@ -38,7 +38,7 @@ import akka.serialization.Serializers
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class OffsetSerialization(system: ActorSystem[_]) {
+@InternalApi private[projection] class OffsetSerialization(system: ActorSystem[_]) {
   import OffsetSerialization._
 
   private val serialization = SerializationExtension(system)

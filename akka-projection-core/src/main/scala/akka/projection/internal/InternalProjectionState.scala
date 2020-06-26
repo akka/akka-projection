@@ -41,7 +41,7 @@ import akka.stream.scaladsl.Source
  * INTERNAL API
  */
 @InternalApi
-private[akka] abstract class InternalProjectionState[Offset, Envelope](
+private[projection] abstract class InternalProjectionState[Offset, Envelope](
     projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     offsetStrategy: OffsetStrategy,

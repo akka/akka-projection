@@ -30,7 +30,7 @@ import akka.projection.jdbc.internal.JdbcSessionUtil._
  * INTERNAL API
  */
 @InternalApi
-private[akka] class JdbcOffsetStore[S <: JdbcSession](
+private[projection] class JdbcOffsetStore[S <: JdbcSession](
     system: ActorSystem[_],
     settings: JdbcSettings,
     jdbcSessionFactory: () => S,
@@ -43,7 +43,7 @@ private[akka] class JdbcOffsetStore[S <: JdbcSession](
   import offsetSerialization.fromStorageRepresentation
   import offsetSerialization.toStorageRepresentation
 
-  private[akka] implicit val executionContext = settings.executionContext
+  private[projection] implicit val executionContext = settings.executionContext
 
   def createIfNotExists(): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>

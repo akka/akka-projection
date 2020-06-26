@@ -23,7 +23,11 @@ private[jdbc] trait Dialect {
 
 }
 
-object Dialect {
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[jdbc] object Dialect {
   def removeQuotes(stmt: String): String =
     stmt.replace("\"", "")
 }

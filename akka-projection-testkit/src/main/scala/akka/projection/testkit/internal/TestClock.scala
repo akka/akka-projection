@@ -15,7 +15,7 @@ import akka.annotation.InternalApi
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class TestClock extends Clock {
+@InternalApi private[projection] class TestClock extends Clock {
 
   @volatile private var _instant = roundToMillis(Instant.now())
 

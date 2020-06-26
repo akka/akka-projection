@@ -136,7 +136,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
   override def withStatusObserver(observer: StatusObserver[Envelope]): SlickProjectionImpl[Offset, Envelope, P] =
     copy(statusObserver = observer)
 
-  private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
+  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
     handlerStrategy.actorHandlerInit
 
   /**

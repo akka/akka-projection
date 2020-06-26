@@ -38,7 +38,7 @@ import akka.stream.scaladsl.Source
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraProjectionImpl[Offset, Envelope](
+@InternalApi private[projection] class CassandraProjectionImpl[Offset, Envelope](
     override val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     settingsOpt: Option[ProjectionSettings],
@@ -139,7 +139,7 @@ import akka.stream.scaladsl.Source
   override def withStatusObserver(observer: StatusObserver[Envelope]): CassandraProjectionImpl[Offset, Envelope] =
     copy(statusObserver = observer)
 
-  private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
+  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
     handlerStrategy.actorHandlerInit
 
   /**

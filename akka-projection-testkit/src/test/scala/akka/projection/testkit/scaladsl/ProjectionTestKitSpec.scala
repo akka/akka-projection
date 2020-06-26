@@ -136,7 +136,10 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
   }
 
-  private[akka] case class TestProjection(src: Source[Int, NotUsed], strBuffer: StringBuffer, predicate: Int => Boolean)
+  private[projection] case class TestProjection(
+      src: Source[Int, NotUsed],
+      strBuffer: StringBuffer,
+      predicate: Int => Boolean)
       extends Projection[Int]
       with SettingsImpl[TestProjection] {
 
@@ -151,7 +154,7 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     override def projectionId: ProjectionId = ProjectionId("test-projection", "00")
 
-    private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
+    private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
     override def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(strBuffer, predicate).newRunningInstance()

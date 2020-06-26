@@ -22,7 +22,7 @@ import slick.jdbc.JdbcProfile
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class SlickOffsetStore[P <: JdbcProfile](
+@InternalApi private[projection] class SlickOffsetStore[P <: JdbcProfile](
     system: ActorSystem[_],
     val db: P#Backend#Database,
     val profile: P,
