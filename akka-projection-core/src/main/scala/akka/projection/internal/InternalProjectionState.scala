@@ -139,8 +139,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             val measured: () => Future[Done] = { () =>
               handler.process(context.envelope).map { done =>
                 // `telemetry.afterProcess` is invoked immediately after `handler.process`
-                // even when retrying. Note that an error in handler.process must not
-                // invoke `afterProcess` (independently of the recovery strategy).
                 telemetry.afterProcess(context.externalContext)
                 done
               }
@@ -297,8 +295,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             val measured: () => Future[Done] = () => {
               handler.process(context.envelope).map { done =>
                 // `telemetry.afterProcess` is invoked immediately after `handler.process`
-                // even when retrying. Note that an error in handler.process must not
-                // invoke `afterProcess` (independently of the recovery strategy).
                 telemetry.afterProcess(context.externalContext)
                 telemetry.onOffsetStored(1)
                 done
@@ -349,8 +345,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
                 val measured: () => Future[Done] = { () =>
                   handler.process(context.envelope).map { done =>
                     // `telemetry.afterProcess` is invoked immediately after `handler.process`
-                    // even when retrying. Note that an error in handler.process must not
-                    // invoke `afterProcess` (independently of the recovery strategy).
                     telemetry.afterProcess(context.externalContext)
                     done
                   }
