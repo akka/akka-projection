@@ -23,7 +23,7 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
 
   val table: String = config.getString("offset-store.table")
 
-  val dialect = {
+  val dialect: Dialect = {
     val dialectToLoad = config.getString("dialect")
     if (dialectToLoad.trim.isEmpty)
       throw new IllegalArgumentException(

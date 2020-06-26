@@ -25,7 +25,7 @@ import com.datastax.oss.driver.api.core.cql.Statement
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraOffsetStore(system: ActorSystem[_], clock: Clock) {
+@InternalApi private[projection] class CassandraOffsetStore(system: ActorSystem[_], clock: Clock) {
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
   import offsetSerialization.toStorageRepresentation

@@ -14,7 +14,7 @@ object EventEnvelope {
    * INTERNAL API
    */
   @InternalApi
-  private[akka] def apply[Event](eventEnvelope: akka.persistence.query.EventEnvelope): EventEnvelope[Event] = {
+  private[projection] def apply[Event](eventEnvelope: akka.persistence.query.EventEnvelope): EventEnvelope[Event] = {
     new EventEnvelope(
       offset = eventEnvelope.offset,
       persistenceId = eventEnvelope.persistenceId,

@@ -35,7 +35,7 @@ import org.apache.kafka.common.TopicPartition
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object KafkaSourceProviderImpl {
+@InternalApi private[projection] object KafkaSourceProviderImpl {
   private[kafka] type ReadOffsets = () => Future[Option[GroupOffsets]]
   private val EmptyTps: Set[TopicPartition] = Set.empty
 }
@@ -43,7 +43,7 @@ import org.apache.kafka.common.TopicPartition
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class KafkaSourceProviderImpl[K, V](
+@InternalApi private[projection] class KafkaSourceProviderImpl[K, V](
     system: ActorSystem[_],
     settings: ConsumerSettings[K, V],
     topics: Set[String],

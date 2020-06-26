@@ -77,7 +77,7 @@ trait Projection[Envelope] {
   /**
    * INTERNAL API
    */
-  @InternalApi private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]]
+  @InternalApi private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]]
 
   /**
    * INTERNAL API

@@ -41,7 +41,7 @@ object ProjectionBehaviorSpec {
    * This TestProjection has a internal state that we can use to prove that on restart,
    * the actor is taking a new projection instance.
    */
-  private[akka] case class TestProjection(
+  private[projection] case class TestProjection(
       src: Source[Int, NotUsed],
       testProbe: TestProbe[ProbeMessage],
       failToStop: Boolean = false,
@@ -51,7 +51,7 @@ object ProjectionBehaviorSpec {
 
     private val offsetStore = new AtomicInteger
 
-    private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
+    private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
     override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       new InternalProjectionState(testProbe, failToStop).newRunningInstance()

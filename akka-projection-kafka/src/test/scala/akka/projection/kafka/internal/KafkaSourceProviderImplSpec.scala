@@ -111,7 +111,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
   // FIXME: Copied mostly from ProjectionTestKitSpec.
   // Maybe a `TestProjection` could be abstracted out and reused to reduce test boilerplate
-  private[akka] case class TestProjection(
+  private[projection] case class TestProjection(
       sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]]
         with VerifiableSourceProvider[GroupOffsets, ConsumerRecord[String, String]],
       topic: String,
@@ -138,7 +138,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
     override private[projection] def mappedSource()(implicit system: ActorSystem[_]) =
       internalState.mappedSource()
 
-    private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
+    private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
     override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
       internalState.newRunningInstance()
