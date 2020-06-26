@@ -19,7 +19,7 @@ of an envelope fails. The alternatives are:
   It will give up, discard the element and continue with next if all attempts fail.
 
 The following example is using the `CassandraProjection` but the same can be used with any other
-[offset storage](overview.md).
+@ref:[Projection type](overview.md).
 
 The `HandlerRecoveryStrategy` can be defined `withRecoveryStrategy`:
 
@@ -41,7 +41,7 @@ The `Projection` will be restarted if it fails, for example if the offset can't 
 envelope fails after applying the @ref:[Handler recovery](#handler-recovery).
 
 The following example is using the `CassandraProjection` but the same can be used with any other
-[offset storage](overview.md).
+@ref:[Projection type](overview.md).
 
 The restart can be defined with exponential backoff settings:
 
