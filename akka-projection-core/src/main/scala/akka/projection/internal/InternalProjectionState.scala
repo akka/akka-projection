@@ -380,7 +380,7 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
             })
         .via(killSwitch.flow)
         .map { env =>
-          val externalContext = telemetry.beforeProcess()
+          val externalContext = telemetry.beforeProcess(env)
           ProjectionContextImpl(sourceProvider.extractOffset(env), env, externalContext)
         }
         .filter { context =>

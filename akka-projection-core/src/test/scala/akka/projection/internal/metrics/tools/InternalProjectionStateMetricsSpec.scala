@@ -103,7 +103,7 @@ object InternalProjectionStateMetricsSpec {
         random-factor = 0.1
       }
       akka.projection {
-        telemetry.fqcn = "${classOf[InMemTelemetry].getName}"
+        telemetry.implementation-class = "${classOf[InMemTelemetry].getName}"
       }
       """)
   case class Envelope(id: String, offset: Long, message: String)

@@ -36,7 +36,7 @@ class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends
   override def stopped(): Unit =
     stoppedInvocations.incrementAndGet()
 
-  override def beforeProcess(): AnyRef = ExternalContext()
+  override def beforeProcess[Envelope](envelope: Envelope): AnyRef = ExternalContext()
 
   override def afterProcess(externalContext: AnyRef): Unit = {
     afterProcessInvocations.incrementAndGet()

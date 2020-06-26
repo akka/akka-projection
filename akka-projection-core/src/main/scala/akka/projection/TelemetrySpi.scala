@@ -17,9 +17,10 @@ import akka.annotation.InternalStableApi
  * and [[ActorSystem[_]].  To setup your implementation, add a setting on your `application.conf`:
  *
  * {{{
- * akka.projection.telemetry.fqcn = com.example.MyMetrics
+ * akka.projection.telemetry.implementation-class = com.example.MyMetrics
  * }}}
  */
+@InternalStableApi
 trait Telemetry {
 
   /** Invoked when a projection is stopped. The reason for stopping is unspecified, can be a
@@ -36,10 +37,13 @@ trait Telemetry {
   def failed(cause: Throwable): Unit
 
   /**
-   * TODO:
-   * @return
+   * Invoked as soon as the envelope is read, deserialised and ready to be processed.
+   *
+   * @param envelope the envelope that's ready for processing.  The type [[Envelope]] will always
+   *                 represent a single item as stored in the event log.
+   * @return an externally-provided context that will propagate with the envelope until [[afterProcess()]]
    */
-  def beforeProcess(): AnyRef
+  def beforeProcess[Envelope](envelope: Envelope): AnyRef
 
   /**
    * Invoked after processing an event such that it is visible by the read-side threads (data is
@@ -73,18 +77,17 @@ trait Telemetry {
 /**
  * INTERNAL API
  */
-@InternalStableApi private[akka] object TelemetryProvider {
+@InternalApi private[akka] object TelemetryProvider {
   def start(projectionId: ProjectionId, system: ActorSystem[_]): Telemetry = {
     val dynamicAccess = system.dynamicAccess
-    if (system.settings.config.hasPath("akka.projection.telemetry.fqcn")) {
-      val telemetryFqcn: String = system.settings.config.getString("akka.projection.telemetry.fqcn")
+    if (system.settings.config.hasPath("akka.projection.telemetry.implementation-class")) {
+      val telemetryFqcn: String = system.settings.config.getString("akka.projection.telemetry.implementation-class")
       dynamicAccess
         .createInstanceFor[Telemetry](
           telemetryFqcn,
           immutable.Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
         .get
     } else {
-      // TODO: review this default: should use a default value in reference.conf instead?
       NoopTelemetry
     }
   }
@@ -98,7 +101,7 @@ trait Telemetry {
 
   override def stopped(): Unit = {}
 
-  override def beforeProcess(): AnyRef = Unit
+  override def beforeProcess[Envelope](envelope: Envelope): AnyRef = Unit
 
   override def afterProcess(externalContext: AnyRef): Unit = {}
 
