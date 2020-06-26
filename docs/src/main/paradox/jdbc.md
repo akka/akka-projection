@@ -29,6 +29,13 @@ The table below shows `akka-projection-jdbc`'s direct dependencies, and the seco
 
 @@dependencies{ projectId="akka-projection-jdbc" }
 
+## Required configuration settings
+
+There are two settings that need to be set beforehand in your `application.conf` file.
+
+* `akka.projection.jdbc.dialect` - The dialect type indicating your database of choice. Supported dialects are: `mysql-dialect`, `postgres-dialect` or `h2-dialect` (testing).
+* `akka.projection.jdbc.blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size` indicating the size of the blocking JDBC dispatcher. See also @ref:[Blocking JDBC Dispatcher](#blocking-jdbc-dispatcher).
+
 ## Defining a JdbcSession
 
 Before using Akka Projection JDBC you must implement a `JdbcSession` @scala[trait]@java[interface]. `JdbcSession` is used to open a connection and start a transaction. A new `JdbcSession` will be created for each call to the handler. At the end of the processing, the transaction will be committed (or rolled back). 
@@ -42,30 +49,30 @@ Java
 :  @@snip [JdbcProjectionDocExample.java](/examples/src/test/java/jdocs/jdbc/JdbcProjectionDocExample.java) { #jdbc-session-imports #jdbc-session }
 
 
-@@@ div { .group-java }
-An alternative Hibernate based implementation would look like this:
-
-@@snip [HibernateJdbcSession.java](/examples/src/test/java/jdocs/jdbc/HibernateJdbcSession.java) { #hibernate-session-imports #hibernate-session } 
-
-And a factory to create new instances:
-
-@@snip [HibernateSessionFactory.java](/examples/src/test/java/jdocs/jdbc/HibernateSessionFactory.java) { #hibernate-factory-imports #hibernate-factory }
-
+@@@ note
+It's highly recommended configuring it with a connection pool, for example [HikariCP](https://github.com/brettwooldridge/HikariCP).
 @@@
 
 When declaring a `JdbcProjection` you must provide a factory for the `JdbcSession`. The factory will be used to create new instances whenever needed.
 
-@@@ note
-It's highly recommended configuring it with a connection pool, for example [HikariCP](https://github.com/brettwooldridge/HikariCP).
-@@@
+An alternative Hibernate based implementation would look like this:
+
+Java
+:  @@snip [HibernateJdbcSession.java](/examples/src/test/java/jdocs/jdbc/HibernateJdbcSession.java) { #hibernate-session-imports #hibernate-session } 
+
+And a special factory that initializes the `EntityManagerFactory` and builds the `JdbcSession` instance:
+
+Java
+:  @@snip [HibernateSessionFactory.java](/examples/src/test/java/jdocs/jdbc/HibernateSessionFactory.java) { #hibernate-factory-imports #hibernate-factory }
+
 
 ## Blocking JDBC Dispatcher
 
 JDBC APIs are blocking by design, therefore Akka Projection JDBC will use a dedicated dispatcher to run all JDBC calls. It's important to configure the dispatcher to have the same size as the connection pool. 
 
-Each time an envelope is delivered to the handler one thread and one database connection will be used. If your connection pool is smaller than the number of threads, the thread can potentially block while waiting for the connection pool to provide a connection. 
+Each time the projection handler is called one thread and one database connection will be used. If your connection pool is smaller than the number of threads, the thread can potentially block while waiting for the connection pool to provide a connection. 
 
-The dispatcher pool size can be configured through the `akka.projection.jdbc.blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size` settings. See @ref:[configuration section](#configuration) below.
+The dispatcher pool size can be configured through the `akka.projection.jdbc.blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size` settings. See @ref:[Configuration](#configuration) section below.
 
 @@@ note
 Most applications will use database connections to read data, for instance to read a projected model upon user request. This means that other parts of the application will be competing for a connection. It's recommend to configure a connection pool dedicated to the projections and use a different one in other parts of the application.  
@@ -81,6 +88,8 @@ Scala
 
 Java
 :  @@snip [JdbcProjectionDocExample.java](/examples/src/test/java/jdocs/jdbc/JdbcProjectionDocExample.java) { #exactlyOnce }
+
+The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
 ## at-least-once
 
@@ -119,7 +128,6 @@ the window is defined in configuration section `akka.projection.grouped`.
 When using `groupedWithin` the handler is a @scala[`JdbcHandler[immutable.Seq[EventEnvelope[ShoppingCart.Event]]]`]@java[`JdbcHandler<List<EventEnvelope<ShoppingCart.Event>>>`].
 The @ref:[`GroupedShoppingCartHandler` is shown below](#grouped-handler).
 
-
 The offset is stored in the same transaction used for the user defined `handler`, which means exactly-once
 processing semantics if the projection is restarted from previously stored offset.
 
@@ -136,6 +144,10 @@ Scala
 Java
 :  @@snip [JdbcProjectionDocExample.java](/examples/src/test/java/jdocs/jdbc/JdbcProjectionDocExample.java) { #handler }
 
+@@@ note { title=Hint }
+Such simple handlers can also be defined as plain functions via the helper @scala[`JdbcHandler.apply`]@java[`JdbcHandler.fromFunction`] factory method.
+@@@
+
 where the `OrderRepository` is an implementation of:
 
 Scala
@@ -144,13 +156,9 @@ Scala
 Java
 :  @@snip [JdbcProjectionDocExample.java](/examples/src/test/java/jdocs/jdbc/JdbcProjectionDocExample.java) { #repository }
 
-
-Such simple handlers can also be defined as plain functions via the helper @scala[`JdbcHandler.apply`]@java[`JdbcHandler.fromFunction`] factory method.
-
 ### Grouped handler
 
 When using @ref:[`JdbcProjection.groupedWithin`](#groupedwithin) the handler is processing a @scala[`Seq`]@java[`List`] of envelopes.
-
 
 Scala
 :  @@snip [JdbcProjectionDocExample.scala](/examples/src/test/scala/docs/jdbc/JdbcProjectionDocExample.scala) { #handler-imports  #grouped-handler }
@@ -244,3 +252,9 @@ Make your edits/overrides in your application.conf.
 The reference configuration file with the default values:
 
 @@snip [reference.conf](/akka-projection-jdbc/src/main/resources/reference.conf) { #config }
+
+@@@ note
+Settings `akka.projection.jdbc.dialect` and `akka.projection.jdbc.blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size` do not have a valid default value. You must configured them in your `application.conf` file.  
+
+See @ref:[Required Configuration Settings](#required-configuration-settings) and @ref:[Blocking JDBC Dispatcher](#blocking-jdbc-dispatcher) sections for details. 
+@@@

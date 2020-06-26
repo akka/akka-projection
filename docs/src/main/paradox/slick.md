@@ -39,6 +39,8 @@ processing semantics if the projection is restarted from previously stored offse
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #projection-imports #actor-system #exactlyOnce }
 
+The @ref:[`ShoppingCartHandler` is shown below](#handler).
+
 ## at-least-once
 
 The offset is stored after the envelope has been processed and giving at-least-once processing semantics.
@@ -83,6 +85,10 @@ A handler that is consuming `ShoppingCart.Event` from `eventsByTag` can look lik
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #handler-imports #handler }
 
+@@@ note { title=Hint }
+Such simple handlers can also be defined as plain functions via the helper `SlickHandler.apply` factory method.
+@@@
+
 where the `OrderRepository` is:
 
 Scala
@@ -93,7 +99,6 @@ with the Slick `DatabaseConfig`:
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #db-config }
 
-Such simple handlers can also be defined as plain functions via the helper `SlickHandler.apply` factory method.
 
 ### Grouped handler
 

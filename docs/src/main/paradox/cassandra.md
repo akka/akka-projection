@@ -103,8 +103,10 @@ Scala
 Java
 :  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #handler-imports #handler }
 
+@@@ note { title=Hint }
 Such simple handlers can also be defined as plain @scala[functions]@java[lambdas] via the helper
 @scala[`Handler.apply`]@java[`Handler.fromFunction`] factory method.
+@@@
 
 ### Grouped handler
 
