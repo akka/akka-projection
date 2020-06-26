@@ -10,13 +10,6 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.annotation.tailrec
-import scala.collection.immutable
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration._
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.TestException
@@ -56,6 +49,13 @@ import org.scalatest.OptionValues
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.annotation.tailrec
+import scala.collection.immutable
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration._
 
 object JdbcProjectionSpec {
   val config: Config = ConfigFactory.parseString("""
@@ -219,7 +219,8 @@ class JdbcProjectionSpec
   implicit val executionContext: ExecutionContext = testKit.system.executionContext
 
   val jdbcSettings = JdbcSettings(testKit.system)
-  val offsetStore = new JdbcOffsetStore(system, jdbcSettings, jdbcSessionFactory)
+  implicit val offsetStore: JdbcOffsetStore[PureJdbcSession] =
+    new JdbcOffsetStore(system, jdbcSettings, jdbcSessionFactory)
 
   val projectionTestKit = ProjectionTestKit(testKit)
 
@@ -274,16 +275,28 @@ class JdbcProjectionSpec
     }
   }
 
+  private def assertOffsetIs(
+      expected: Long)(implicit offsetStore: JdbcOffsetStore[PureJdbcSession], projectionId: ProjectionId) = {
+    val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+    offset shouldBe expected
+  }
+
+  private def assertOffsetIsEmpty(
+      implicit offsetStore: JdbcOffsetStore[PureJdbcSession],
+      projectionId: ProjectionId) = {
+    withClue("check - offset is empty") {
+      val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+      offsetOpt shouldBe empty
+    }
+  }
+
   "A JDBC exactly-once projection" must {
 
     "persist projection and offset in the same write operation (transactional)" in {
       val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val projectionId = genRandomProjectionId()
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      assertOffsetIsEmpty
 
       val projection =
         JdbcProjection.exactlyOnce(
@@ -300,19 +313,15 @@ class JdbcProjectionSpec
       }
 
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
+        assertOffsetIs(6L)
       }
     }
 
     "skip failing events when using RecoveryStrategy.skip" in {
       val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val projectionId = genRandomProjectionId()
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      assertOffsetIsEmpty
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
@@ -333,19 +342,15 @@ class JdbcProjectionSpec
       }
 
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
+        assertOffsetIs(6L)
       }
     }
 
     "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
       val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val projectionId = genRandomProjectionId()
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      assertOffsetIsEmpty
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
@@ -382,15 +387,14 @@ class JdbcProjectionSpec
       statusProbe.expectNoMessage()
 
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
+        assertOffsetIs(6L)
       }
 
     }
 
     "fail after retrying when using RecoveryStrategy.retryAndFail" in {
       val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val projectionId = genRandomProjectionId()
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
@@ -403,10 +407,7 @@ class JdbcProjectionSpec
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      assertOffsetIsEmpty
 
       withClue("check: projection failed with stream failure") {
         projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
@@ -425,14 +426,13 @@ class JdbcProjectionSpec
       }
 
       withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 3L
+        assertOffsetIs(3L)
       }
     }
 
     "restart from previous offset - fail with throwing an exception" in {
       val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val projectionId = genRandomProjectionId()
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
@@ -443,10 +443,7 @@ class JdbcProjectionSpec
           jdbcSessionFactory,
           handler = () => bogusEventHandler)
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      assertOffsetIsEmpty
 
       withClue("check: projection failed with stream failure") {
         projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
@@ -459,8 +456,7 @@ class JdbcProjectionSpec
         concatStr.text shouldBe "abc|def|ghi"
       }
       withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 3L
+        assertOffsetIs(3L)
       }
 
       // re-run projection without failing function
@@ -479,14 +475,13 @@ class JdbcProjectionSpec
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
+        assertOffsetIs(6L)
       }
     }
 
     "restart from previous offset - fail with bad insert on user code" in {
       val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val projectionId = genRandomProjectionId()
 
       val bogusEventHandler = new JdbcHandler[Envelope, PureJdbcSession] {
         override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
@@ -505,10 +500,7 @@ class JdbcProjectionSpec
           jdbcSessionFactory,
           handler = () => bogusEventHandler)
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      assertOffsetIsEmpty
 
       projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
         sinkProbe.request(1000)
@@ -519,10 +511,7 @@ class JdbcProjectionSpec
         val concatStr = findById(entityId)
         concatStr.text shouldBe "abc|def|ghi"
       }
-      withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 3L
-      }
+      assertOffsetIs(3L)
 
       // re-run projection without failing function
       val projection =
@@ -540,8 +529,7 @@ class JdbcProjectionSpec
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
+        assertOffsetIs(6L)
       }
     }
 
