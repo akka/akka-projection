@@ -288,7 +288,6 @@ private[akka] abstract class InternalProjectionState[Offset, Envelope](
         val handler: Handler[Envelope] = single.handler()
         source
           .mapAsync(1) { context =>
-            logger.warning(" Processing {}", context.envelope)
             val measured: () => Future[Done] = () => {
               handler.process(context.envelope).map { done =>
                 // `telemetry.afterProcess` is invoked immediately after `handler.process`
