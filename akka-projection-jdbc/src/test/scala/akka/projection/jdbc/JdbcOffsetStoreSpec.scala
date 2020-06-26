@@ -29,6 +29,7 @@ import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.testkit.internal.TestClock
 import com.dimafeng.testcontainers.JdbcDatabaseContainer
+import com.dimafeng.testcontainers.MSSQLServerContainer
 import com.dimafeng.testcontainers.MySQLContainer
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.SingleContainer
@@ -162,11 +163,23 @@ object JdbcOffsetStoreSpec {
     }
   }
 
+  object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
+
+    val name = "MS SQL Server Database"
+
+    override def initContainer(): Unit = {
+      val container = new MSSQLServerContainer
+      _container = Some(container)
+      container.start()
+    }
+  }
+
 }
 
 class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
 class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.PostgresSpecConfig)
 class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MySQLSpecConfig)
+class MSSQLServerJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MSSQLServerSpecConfig)
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)
