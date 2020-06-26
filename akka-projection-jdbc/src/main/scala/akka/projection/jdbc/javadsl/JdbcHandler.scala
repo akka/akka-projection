@@ -11,6 +11,18 @@ import akka.Done
 import akka.projection.javadsl.HandlerLifecycle
 import akka.projection.jdbc.JdbcSession
 
+object JdbcHandler {
+
+  /** Handler that can be defined from a simple function */
+  private class HandlerFunction[Envelope, S <: JdbcSession](handler: (S, Envelope) => Unit)
+      extends JdbcHandler[Envelope, S] {
+    override def process(session: S, envelope: Envelope): Unit = handler(session, envelope)
+  }
+
+  def fromFunction[Envelope, S <: JdbcSession](handler: (S, Envelope) => Unit): JdbcHandler[Envelope, S] =
+    new HandlerFunction(handler)
+}
+
 /**
  * Implement this interface for the Envelope handler for  Jdbc Projections.
  *

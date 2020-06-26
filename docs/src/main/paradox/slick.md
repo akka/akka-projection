@@ -1,6 +1,6 @@
-# Offset in relational DB with Slick
+# Offset in a relational DB with Slick
 
-The @apidoc[SlickProjection] has support for storing the offset in a relational database with
+The @apidoc[SlickProjection] has support for storing the offset in a relational database using
 [Slick](http://scala-slick.org) (JDBC). This is only an option for Scala and for Java the
 @ref:[offset can be stored in relational DB with JDBC](jdbc.md).
 
@@ -39,6 +39,8 @@ processing semantics if the projection is restarted from previously stored offse
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #projection-imports #actor-system #exactlyOnce }
 
+The @ref:[`ShoppingCartHandler` is shown below](#handler).
+
 ## at-least-once
 
 The offset is stored after the envelope has been processed and giving at-least-once processing semantics.
@@ -49,9 +51,9 @@ Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #atLeastOnce }
 
 The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
-This window can be defined with `withSaveOffset` of the returned `AtLeastOnceSlickProjection`.
+This window can be defined with `withSaveOffset` of the returned `AtLeastOnceProjection`.
 The default settings for the window is defined in configuration section `akka.projection.at-least-once`.
-There is a performance benefit of not storing the offset too often but the drawback is that there can be more
+There is a performance benefit of not storing the offset too often, but the drawback is that there can be more
 duplicates when the projection that will be processed again when the projection is restarted.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
@@ -64,7 +66,7 @@ Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #grouped }
 
 The envelopes are grouped within a time window, or limited by a number of envelopes, whatever happens first.
-This window can be defined with `withGroup` of the returned `GroupedSlickProjection`. The default settings for
+This window can be defined with `withGroup` of the returned `GroupedProjection`. The default settings for
 the window is defined in configuration section `akka.projection.grouped`.
 
 When using `groupedWithin` the handler is a `SlickHandler[immutable.Seq[EventEnvelope[ShoppingCart.Event]]]`.
@@ -83,6 +85,10 @@ A handler that is consuming `ShoppingCart.Event` from `eventsByTag` can look lik
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #handler-imports #handler }
 
+@@@ note { title=Hint }
+Such simple handlers can also be defined as plain functions via the helper `SlickHandler.apply` factory method.
+@@@
+
 where the `OrderRepository` is:
 
 Scala
@@ -93,11 +99,10 @@ with the Slick `DatabaseConfig`:
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #db-config }
 
-Such simple handlers can also be defined as plain functions via the helper `SlickHandler.apply` factory method.
 
 ### Grouped handler
 
-When using @ref:[`SlickProjection.groupedWithin`](#groupedwithin) the handler is processing a `Seq` of envolopes.
+When using @ref:[`SlickProjection.groupedWithin`](#groupedwithin) the handler is processing a `Seq` of envelopes.
 
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #grouped-handler }
@@ -148,17 +153,21 @@ See also @ref:[error handling](error.md).
 
 The database schema for the offset storage table:
 
-```
-create table if not exists "AKKA_PROJECTION_OFFSET_STORE" (
-  "PROJECTION_NAME" CHAR(255) NOT NULL,
-  "PROJECTION_KEY" CHAR(255) NOT NULL,
-  "OFFSET" CHAR(255) NOT NULL,
-  "MANIFEST" VARCHAR(4) NOT NULL,
-  "MERGEABLE" BOOLEAN NOT NULL,
-  "LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL);
+Postgres
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
 
-alter table "AKKA_PROJECTION_OFFSET_STORE" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY");
-```
+MySQL
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mysql }
+
+MS SQL Server
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mssql }
+
+Oracle
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-oracle }
+
+H2
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
+
 
 ## Offset types
 

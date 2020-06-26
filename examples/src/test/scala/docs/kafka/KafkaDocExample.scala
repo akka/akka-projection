@@ -28,12 +28,11 @@ import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import jdocs.jpa.HibernateSessionProvider
-import jdocs.jpa.HibernateSessionProvider.HibernateJdbcSession
+import jdocs.jdbc.HibernateJdbcSession
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringSerializer
 import org.slf4j.LoggerFactory
-
+import jdocs.jdbc.HibernateSessionFactory
 //#imports
 import akka.kafka.ConsumerSettings
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -146,7 +145,7 @@ object KafkaDocExample {
     import IllustrateSourceProvider._
 
     //#exactlyOnce
-    val sessionProvider = new HibernateSessionProvider
+    val sessionProvider = new HibernateSessionFactory
 
     val projectionId = ProjectionId("WordCount", "wordcount-1")
     val projection =
@@ -174,7 +173,7 @@ object KafkaDocExample {
 
     //#sendToKafkaProjection
     val sourceProvider = new WordSource
-    val sessionProvider = new HibernateSessionProvider
+    val sessionProvider = new HibernateSessionFactory
 
     val projectionId = ProjectionId("PublishWords", "words")
     val projection =
@@ -191,7 +190,7 @@ object KafkaDocExample {
 
   def consumerProjection(n: Int): Projection[ConsumerRecord[String, String]] = {
     import IllustrateSourceProvider.sourceProvider
-    val sessionProvider = new HibernateSessionProvider
+    val sessionProvider = new HibernateSessionFactory
 
     val projectionId = ProjectionId("WordCount", s"wordcount-$n")
     JdbcProjection.exactlyOnce(

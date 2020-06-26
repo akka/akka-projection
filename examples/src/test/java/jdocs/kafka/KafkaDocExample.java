@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import akka.Done;
@@ -30,7 +29,7 @@ import akka.projection.jdbc.javadsl.JdbcProjection;
 import akka.projection.kafka.GroupOffsets;
 import akka.projection.kafka.javadsl.KafkaSourceProvider;
 import akka.stream.javadsl.Source;
-import jdocs.jpa.HibernateSessionProvider;
+import jdocs.jdbc.HibernateSessionFactory;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -45,7 +44,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 
 // #imports
 
-import static jdocs.jpa.HibernateSessionProvider.HibernateJdbcSession;
+import jdocs.jdbc.HibernateJdbcSession;
 
 public interface KafkaDocExample {
 
@@ -184,7 +183,7 @@ public interface KafkaDocExample {
         illustrateSourceProvider();
 
     // #exactlyOnce
-    final HibernateSessionProvider sessionProvider = new HibernateSessionProvider();
+    final HibernateSessionFactory sessionProvider = new HibernateSessionFactory();
 
     ProjectionId projectionId = ProjectionId.of("WordCount", "wordcount-1");
     ExactlyOnceProjection<GroupOffsets, ConsumerRecord<String, String>> projection =
@@ -213,7 +212,7 @@ public interface KafkaDocExample {
 
     // #sendToKafkaProjection
     WordSource sourceProvider = new WordSource();
-    HibernateSessionProvider sessionProvider = new HibernateSessionProvider();
+    HibernateSessionFactory sessionProvider = new HibernateSessionFactory();
 
     ProjectionId projectionId = ProjectionId.of("PublishWords", "words");
     Projection<WordEnvelope> projection =
