@@ -9,7 +9,8 @@ git:
 
 before_install:
   # using jabba for custom jdk management
-  - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.2/install.sh | bash && . ~/.jabba/jabba.sh
+  - if [ ! -f ~/.jabba/jabba.sh ]; then curl -L -v --retry 5 -o jabba-install.sh https://raw.githubusercontent.com/shyiko/jabba/0.11.2/install.sh && bash jabba-install.sh; fi
+  - . ~/.jabba/jabba.sh
 
 # default script for jobs, that do not have any specified
 script:
@@ -84,7 +85,7 @@ cache:
    - $HOME/.sbt/boot
    - $HOME/.sbt/launchers
    - $HOME/.cache/coursier
-   - $HOME/.jabba/jdk
+   - $HOME/.jabba
 
 env:
   global:
