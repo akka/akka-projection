@@ -37,7 +37,7 @@ object SlickOffsetStoreSpec {
 
       # TODO: configure connection pool and slick async executor
       db = {
-       url = "jdbc:h2:mem:offset-store-test;DB_CLOSE_DELAY=-1"
+       url = "jdbc:h2:mem:slick-offset-store-test;DB_CLOSE_DELAY=-1"
        driver = org.h2.Driver
        connectionPool = disabled
        keepAliveConnection = true
