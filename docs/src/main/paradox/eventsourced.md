@@ -25,7 +25,7 @@ The table below shows `akka-projection-eventsourced`'s direct dependencies and t
 
 @@dependencies{ projectId="akka-projection-eventsourced" }
 
-## SourcedProvider for eventsByTag
+## SourceProvider for eventsByTag
 
 A @apidoc[SourceProvider] defines the source of the event envelopes that the `Projection` will process. A `SourceProvider`
 for the `eventsByTag` query can be defined with the @apidoc[EventSourcedProvider] like this:
