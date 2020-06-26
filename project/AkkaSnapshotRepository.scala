@@ -7,7 +7,9 @@ import sbt._
 object AkkaSnapshotRepositories extends AutoPlugin {
   override def trigger: PluginTrigger = allRequirements
   override def projectSettings: Seq[Def.Setting[_]] = {
-    resolvers ++= (sys.props.get("build.akka.version") match {
+    resolvers ++= (sys.props
+      .get("build.akka.version")
+      .orElse(sys.props.get("build.alpakka.kafka.version")) match {
       case Some(_) =>
         Seq("akka-snapshot-repository".at("https://repo.akka.io/snapshots"))
       case None => Seq.empty
