@@ -24,7 +24,7 @@ Those building blocks are assembled into a `Projection`. You can have many insta
 @@@ warning
 
 This module is currently marked as [May Change](https://doc.akka.io/docs/akka/current/common/may-change.html)
-in the sense of that the API might be changed based on feedback from initial usage.
+in the sense that the API might be changed based on feedback from initial usage.
 However, the module is ready for usage in production and we will not break serialization format of 
 messages or stored data.
 

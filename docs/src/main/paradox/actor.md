@@ -3,7 +3,7 @@
 A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html).
 
 The following example is using the `CassandraProjection` but the handler and actor would be the same if used
-with `JdbcProjection` or `SlickProjection`. 
+any other [offset storage](overview.md). 
 
 An actor `Behavior` for the word count example that was introduced in the section about @ref:[Stateful handler](cassandra.md#stateful-handler):
 

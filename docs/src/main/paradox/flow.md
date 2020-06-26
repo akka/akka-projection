@@ -4,7 +4,7 @@ An Akka Streams `FlowWithContext` can be used instead of a handler for processin
 semantics.
 
 The following example is using the `CassandraProjection` but the flow would be the same if used
-with `JdbcProjection` or `SlickProjection`.
+any other [offset storage](overview.md).
 
 Scala
 :  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #atLeastOnceFlow }
