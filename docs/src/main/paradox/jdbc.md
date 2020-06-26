@@ -212,25 +212,16 @@ See also @ref:[error handling](error.md).
 
 The database schema for the offset storage table:
 
-```sql
-create table if not exists "AKKA_PROJECTION_OFFSET_STORE" (
-  "PROJECTION_NAME" VARCHAR(255) NOT NULL,
-  "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-  "OFFSET" VARCHAR(255) NOT NULL,
-  "MANIFEST" VARCHAR(4) NOT NULL,
-  "MERGEABLE" BOOLEAN NOT NULL,
-  "LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL);
+Postgres
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
 
-create index "PROJECTION_NAME_INDEX" on "AKKA_PROJECTION_OFFSET_STORE" ("PROJECTION_NAME");
+MySQL
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mysql }
 
-alter table "AKKA_PROJECTION_OFFSET_STORE" 
-    add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY");
-```
+H2
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
 
 
-@@@ note
-The DDL may need to be adapted according to the specifics of your database brand.
-@@@
 
 ## Offset types
 
