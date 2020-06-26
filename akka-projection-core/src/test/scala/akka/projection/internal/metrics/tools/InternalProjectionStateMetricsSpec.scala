@@ -97,13 +97,13 @@ object InternalProjectionStateMetricsSpec {
         loglevel = "DEBUG"
       }
       // Recover fast to speed up tests.
-      akka.projection.restart-backoff {
+      akka.projection.restart-backoff{
         min-backoff = 30ms
         max-backoff = 50ms
         random-factor = 0.1
       }
-      akka.projection.telemetry{
-        implementation-class = "${classOf[InMemTelemetry].getName}"
+      akka.projection {
+        telemetry.fqcn = "${classOf[InMemTelemetry].getName}"
       }
       """)
   case class Envelope(id: String, offset: Long, message: String)

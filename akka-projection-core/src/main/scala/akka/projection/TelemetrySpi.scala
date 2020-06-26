@@ -17,7 +17,7 @@ import akka.annotation.InternalStableApi
  * and [[ActorSystem[_]].  To setup your implementation, add a setting on your `application.conf`:
  *
  * {{{
- * akka.projection.telemetry.implementation-class = "com.example.MyMetrics"
+ * akka.projection.telemetry.fqcn = com.example.MyMetrics
  * }}}
  */
 trait Telemetry {
@@ -74,18 +74,17 @@ trait Telemetry {
  * INTERNAL API
  */
 @InternalStableApi private[akka] object TelemetryProvider {
-  private val ImplementationClass = "akka.projection.telemetry.implementation-class"
-
   def start(projectionId: ProjectionId, system: ActorSystem[_]): Telemetry = {
     val dynamicAccess = system.dynamicAccess
-    val fqcn: String = system.settings.config.getString(ImplementationClass)
-    if (fqcn != "") {
+    if (system.settings.config.hasPath("akka.projection.telemetry.fqcn")) {
+      val telemetryFqcn: String = system.settings.config.getString("akka.projection.telemetry.fqcn")
       dynamicAccess
         .createInstanceFor[Telemetry](
-          fqcn,
+          telemetryFqcn,
           immutable.Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
         .get
     } else {
+      // TODO: review this default: should use a default value in reference.conf instead?
       NoopTelemetry
     }
   }
