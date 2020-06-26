@@ -162,3 +162,39 @@ private[jdbc] case class MySQLDialect(schema: Option[String], tableName: String)
   override def updateStatement(): String =
     removeQuotes(DialectDefaults.updateStatement(table))
 }
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[jdbc] case class MSSQLServerDialect(schema: Option[String], tableName: String) extends Dialect {
+
+  def this(tableName: String) = this(None, tableName)
+
+  private val table = schema.map(s => s"$s.$tableName").getOrElse(tableName)
+  override val createTableStatements =
+    immutable.Seq(s"""
+      IF  NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'$table') AND type in (N'U'))
+      begin
+      create table "$table" (
+        "PROJECTION_NAME" VARCHAR(255) NOT NULL,
+        "PROJECTION_KEY" VARCHAR(255) NOT NULL,
+        "OFFSET" VARCHAR(255) NOT NULL,
+        "MANIFEST" VARCHAR(4) NOT NULL,
+        "MERGEABLE" BIT NOT NULL,
+        "LAST_UPDATED" DATETIME2 NOT NULL
+        )
+      
+      alter table "$table" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
+      
+      create index "PROJECTION_NAME_INDEX" on "$table" ("PROJECTION_NAME")
+      end""")
+
+  override val readOffsetQuery: String = DialectDefaults.readOffsetQuery(table)
+
+  override val clearOffsetStatement: String = DialectDefaults.clearOffsetStatement(table)
+
+  override def insertStatement(): String = DialectDefaults.insertStatement(table)
+
+  override def updateStatement(): String = DialectDefaults.updateStatement(table)
+}
