@@ -10,10 +10,10 @@ import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.tools.TestHandlers
 import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec._
+import akka.projection.internal.metrics.tools.TestHandlers
 
 class LifecycleMetricSpec extends InternalProjectionStateMetricsSpec {
 
@@ -39,8 +39,10 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(numOfEnvelopes)
         }
-        instruments.startedInvocations.get should be(1)
-        instruments.stoppedInvocations.get should be(1)
+        eventually {
+          instruments.startedInvocations.get should be(1)
+          instruments.stoppedInvocations.get should be(1)
+        }
       }
       "count projection failures" in {
         val single = TestHandlers.singleWithErrors(1, 1, 1, 1, 2, 2, 3, 4, 5)
@@ -51,9 +53,11 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(defaultNumberOfEnvelopes)
         }
-        instruments.startedInvocations.get should be(10)
-        instruments.stoppedInvocations.get should be(10)
-        instruments.failureInvocations.get should be(9)
+        eventually {
+          instruments.startedInvocations.get should be(10)
+          instruments.stoppedInvocations.get should be(10)
+          instruments.failureInvocations.get should be(9)
+        }
       }
     }
 
@@ -64,9 +68,11 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(defaultNumberOfEnvelopes)
         }
-        instruments.startedInvocations.get should be(1)
-        instruments.stoppedInvocations.get should be(1)
-        instruments.failureInvocations.get should be(0)
+        eventually {
+          instruments.startedInvocations.get should be(1)
+          instruments.stoppedInvocations.get should be(1)
+          instruments.failureInvocations.get should be(0)
+        }
       }
     }
     " in `at-least-once` with flowHandler" must {
@@ -77,9 +83,11 @@ class LifecycleMetricAtLeastOnceSpec extends LifecycleMetricSpec {
         runInternal(tt.projectionState) {
           instruments.offsetsSuccessfullyCommitted.get should be(defaultNumberOfEnvelopes)
         }
-        instruments.startedInvocations.get should be(1)
-        instruments.stoppedInvocations.get should be(1)
-        instruments.failureInvocations.get should be(0)
+        eventually {
+          instruments.startedInvocations.get should be(1)
+          instruments.stoppedInvocations.get should be(1)
+          instruments.failureInvocations.get should be(0)
+        }
       }
     }
 
