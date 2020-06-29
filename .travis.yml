@@ -1,5 +1,4 @@
 language: scala
-sudo: true
 services:
   - docker
 
