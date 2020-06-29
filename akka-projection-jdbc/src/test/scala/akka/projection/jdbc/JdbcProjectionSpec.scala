@@ -920,8 +920,10 @@ class JdbcProjectionSpec
         concatStr.text shouldBe "abc|def|ghi"
       }
       withClue(s"check: last seen offset is 2L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 2L
+        eventually {
+          val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+          offset shouldBe 2L
+        }
       }
 
       // re-run projection without failing function
