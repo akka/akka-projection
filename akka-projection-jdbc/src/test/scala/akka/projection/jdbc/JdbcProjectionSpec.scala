@@ -919,14 +919,9 @@ class JdbcProjectionSpec
           eventually {
             val concatStr = findById(entityId)
             concatStr.text shouldBe "abc|def|ghi"
+            val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+            offset shouldBe 2L
           }
-        }
-      }
-
-      withClue(s"check: last seen offset is 2L") {
-        eventually {
-          val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-          offset shouldBe 2L
         }
       }
 
