@@ -248,7 +248,9 @@ class JdbcProjectionSpec
 
   private val concatHandlerFail4Msg = "fail on fourth envelope"
   private def findById(entityId: String) = {
-    withRepo(_.findById(entityId)).futureValue.get
+    eventually {
+      withRepo(_.findById(entityId)).futureValue.get
+    }
   }
 
   private def withRepo[R](block: TestRepository => R): Future[R] = {
@@ -895,29 +897,48 @@ class JdbcProjectionSpec
         offsetOpt shouldBe empty
       }
 
-      val failingProjection =
+      def buildProjection(failPredicate: Long => Boolean = _ => false) =
         JdbcProjection
           .atLeastOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = () => new ConcatHandler(_ == 4))
+            handler = () => new ConcatHandler(failPredicate))
           .withSaveOffset(2, 1.minute)
+
+      val failingProjection = buildProjection(_ == 4)
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
+      withClue("check: projection handles 3 elements") {
+        projectionTestKit.runWithTestSink(failingProjection) { sinkProbe =>
+          sinkProbe.request(3)
+          eventually {
+            val concatStr = findById(entityId)
+            concatStr.text shouldBe "abc|def|ghi"
+          }
+        }
+      }
+
+      withClue(s"check: last seen offset is 2L") {
+        eventually {
+          val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+          offset shouldBe 2L
+        }
+      }
+
       withClue("check: projection failed with stream failure") {
         projectionTestKit.runWithTestSink(failingProjection) { sinkProbe =>
-          sinkProbe.request(1000)
+          sinkProbe.request(2) // processes item 3 again and fails when processing 4
           eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
         }
       }
       withClue("check: projection is consumed up to third") {
         val concatStr = findById(entityId)
-        concatStr.text shouldBe "abc|def|ghi"
+        concatStr.text shouldBe "abc|def|ghi|ghi" // note item 3 is processed twice
       }
       withClue(s"check: last seen offset is 2L") {
         eventually {
@@ -927,20 +948,13 @@ class JdbcProjectionSpec
       }
 
       // re-run projection without failing function
-      val projection =
-        JdbcProjection
-          .atLeastOnce(
-            projectionId,
-            sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionFactory,
-            handler = () => new ConcatHandler())
-          .withSaveOffset(2, 1.minute)
+      val projection = buildProjection()
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
           val concatStr = findById(entityId)
-          // note that 3rd is duplicated
-          concatStr.text shouldBe "abc|def|ghi|ghi|jkl|mno|pqr"
+          // note that 3rd is triplicate
+          concatStr.text shouldBe "abc|def|ghi|ghi|ghi|jkl|mno|pqr"
         }
       }
 
