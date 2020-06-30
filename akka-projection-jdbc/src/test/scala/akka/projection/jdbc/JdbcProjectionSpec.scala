@@ -39,6 +39,7 @@ import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.jdbc.scaladsl.JdbcProjection
+import akka.projection.scaladsl.AtLeastOnceProjection
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
@@ -248,9 +249,7 @@ class JdbcProjectionSpec
 
   private val concatHandlerFail4Msg = "fail on fourth envelope"
   private def findById(entityId: String) = {
-    eventually {
-      withRepo(_.findById(entityId)).futureValue.get
-    }
+    withRepo(_.findById(entityId)).futureValue.get
   }
 
   private def withRepo[R](block: TestRepository => R): Future[R] = {
@@ -897,7 +896,7 @@ class JdbcProjectionSpec
         offsetOpt shouldBe empty
       }
 
-      def buildProjection(failPredicate: Long => Boolean = _ => false) =
+      def buildProjection(failPredicate: Long => Boolean = _ => false): AtLeastOnceProjection[Long, Envelope] =
         JdbcProjection
           .atLeastOnce(
             projectionId,
