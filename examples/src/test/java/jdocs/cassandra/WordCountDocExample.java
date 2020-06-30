@@ -9,6 +9,7 @@ import akka.actor.typed.ActorSystem;
 import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.AskPattern;
 import akka.actor.typed.javadsl.StashBuffer;
+import akka.projection.cassandra.CassandraProjectionTest;
 import akka.projection.javadsl.ActorHandler;
 import akka.projection.javadsl.StatefulHandler;
 
@@ -157,6 +158,11 @@ public interface WordCountDocExample {
     @Override
     public Long extractOffset(WordEnvelope envelope) {
       return envelope.offset;
+    }
+
+    @Override
+    public Long extractCreationTime(WordEnvelope envelope) {
+      return 0l;
     }
   }
   // #sourceProvider

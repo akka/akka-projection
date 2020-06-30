@@ -15,7 +15,6 @@ import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.projection.eventsourced.EventEnvelope
-import akka.projection.scaladsl
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
@@ -40,8 +39,7 @@ object EventSourcedProvider {
       eventsByTagQuery: EventsByTagQuery,
       tag: String,
       system: ActorSystem[_])
-      extends SourceProvider[Offset, EventEnvelope[Event]]
-      with scaladsl.CreationTimeSourceProvider[Offset, EventEnvelope[Event]] {
+      extends SourceProvider[Offset, EventEnvelope[Event]] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[Event], NotUsed]] =
@@ -54,6 +52,6 @@ object EventSourcedProvider {
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
 
-    override def extractCreationTime(envelope: EventEnvelope[Event]): Long = envelope.timestamp
+    override def extractCreationTime(envelope: EventEnvelope[Event]): java.lang.Long = envelope.timestamp
   }
 }

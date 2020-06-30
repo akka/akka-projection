@@ -55,9 +55,7 @@ import org.apache.kafka.common.record.TimestampType
     with javadsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
     with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
     with javadsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
-    with javadsl.CreationTimeSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.CreationTimeSourceProvider[GroupOffsets, ConsumerRecord[K, V]] {
+    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]] {
 
   import KafkaSourceProviderImpl._
 
@@ -109,7 +107,7 @@ import org.apache.kafka.common.record.TimestampType
         "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
   }
 
-  override def extractCreationTime(record: ConsumerRecord[K, V]): Long = {
+  override def extractCreationTime(record: ConsumerRecord[K, V]): java.lang.Long = {
     if (record.timestampType() == TimestampType.CREATE_TIME)
       record.timestamp()
     else

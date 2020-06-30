@@ -85,6 +85,8 @@ object KafkaDocExample {
     }
 
     override def extractOffset(env: WordEnvelope): Long = env.offset
+
+    override def extractCreationTime(env: WordEnvelope): java.lang.Long = 0L
   }
   //#wordSource
 

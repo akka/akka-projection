@@ -45,8 +45,7 @@ object EventSourcedProvider {
       system: ActorSystem[_],
       eventsByTagQuery: EventsByTagQuery,
       tag: String)
-      extends javadsl.SourceProvider[Offset, EventEnvelope[Event]]
-      with javadsl.CreationTimeSourceProvider[Offset, EventEnvelope[Event]] {
+      extends javadsl.SourceProvider[Offset, EventEnvelope[Event]] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
@@ -61,6 +60,6 @@ object EventSourcedProvider {
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
 
-    override def extractCreationTime(envelope: EventEnvelope[Event]): Long = envelope.timestamp
+    override def extractCreationTime(envelope: EventEnvelope[Event]): java.lang.Long = envelope.timestamp
   }
 }

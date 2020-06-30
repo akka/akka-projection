@@ -21,6 +21,7 @@ import akka.kafka.ProducerSettings;
 import akka.kafka.javadsl.SendProducer;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
+import akka.projection.cassandra.CassandraProjectionTest;
 import akka.projection.javadsl.ExactlyOnceProjection;
 import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
@@ -119,6 +120,11 @@ public interface KafkaDocExample {
     @Override
     public Long extractOffset(WordEnvelope envelope) {
       return envelope.offset;
+    }
+
+    @Override
+    public Long extractCreationTime(WordEnvelope envelope) {
+      return 0l;
     }
   }
   // #wordSource

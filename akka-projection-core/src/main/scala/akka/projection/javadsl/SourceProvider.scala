@@ -20,6 +20,8 @@ abstract class SourceProvider[Offset, Envelope] {
 
   def extractOffset(envelope: Envelope): Offset
 
+  def extractCreationTime(envelope: Envelope): java.lang.Long
+
 }
 
 trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
@@ -30,9 +32,3 @@ trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, 
 
 trait MergeableOffsetSourceProvider[MKey <: MergeableKey, Offset <: MergeableOffset[MKey, _], Envelope]
     extends SourceProvider[Offset, Envelope]
-
-trait CreationTimeSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
-
-  def extractCreationTime(envelope: Envelope): Long
-
-}

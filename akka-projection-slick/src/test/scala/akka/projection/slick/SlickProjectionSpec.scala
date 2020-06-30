@@ -114,6 +114,8 @@ object SlickProjectionSpec {
 
     override def extractOffset(env: Envelope): Long = env.offset
 
+    override def extractCreationTime(env: Envelope): java.lang.Long = 0L
+
     override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
   }
   // test model is as simple as a text that gets other string concatenated to it

@@ -130,6 +130,8 @@ object JdbcProjectionSpec {
 
     override def extractOffset(env: Envelope): Long = env.offset
 
+    override def extractCreationTime(env: Envelope): java.lang.Long = 0L
+
     override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
 
   }
