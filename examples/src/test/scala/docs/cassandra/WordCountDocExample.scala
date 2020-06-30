@@ -95,7 +95,7 @@ object WordCountDocExample {
 
     override def extractOffset(env: WordEnvelope): Long = env.offset
 
-    override def extractCreationTime(env: WordEnvelope): java.lang.Long = 0L
+    override def extractCreationTime(env: WordEnvelope): Long = 0L
   }
   //#sourceProvider
 

@@ -18,7 +18,12 @@ trait SourceProvider[Offset, Envelope] {
 
   def extractOffset(envelope: Envelope): Offset
 
-  def extractCreationTime(envelope: Envelope): java.lang.Long
+  /**
+   * Timestamp (in millis-since-epoch) of the instant when the envelope was created. The meaning of "when the
+   * envelope was created" is implementation specific and could be an instant on the producer machine, or the
+   * instant when the database persisted the envelope, or other.
+   */
+  def extractCreationTime(envelope: Envelope): Long
 
 }
 

@@ -36,7 +36,11 @@ class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends
   override def stopped(): Unit =
     stoppedInvocations.incrementAndGet()
 
-  override def beforeProcess[Envelope](envelope: Envelope): AnyRef = ExternalContext()
+  override def beforeProcess[Envelope](envelope: Envelope, creationTimeInMillis: Long): AnyRef = {
+    creationTimestampInvocations.incrementAndGet()
+    lastCreationTimestamp.set(creationTimeInMillis)
+    ExternalContext()
+  }
 
   override def afterProcess(externalContext: AnyRef): Unit = {
     afterProcessInvocations.incrementAndGet()
@@ -78,8 +82,9 @@ class InMemInstrumentsRegistry(system: ActorSystem[_]) extends Extension {
 
 class InMemInstruments() {
 
-  // the instruments outlive the InMemTelemetry instances. Multiple instances of InMemTelemetry
-  // will share these instruments.
+  val creationTimestampInvocations = new AtomicInteger(0)
+  val lastCreationTimestamp = new AtomicLong()
+
   val afterProcessInvocations = new AtomicInteger(0)
   val lastServiceTimeInNanos = new AtomicLong()
   val offsetsSuccessfullyCommitted = new AtomicInteger(0)

@@ -161,8 +161,8 @@ public interface WordCountDocExample {
     }
 
     @Override
-    public Long extractCreationTime(WordEnvelope envelope) {
-      return 0l;
+    public long extractCreationTime(WordEnvelope envelope) {
+      return 0L;
     }
   }
   // #sourceProvider

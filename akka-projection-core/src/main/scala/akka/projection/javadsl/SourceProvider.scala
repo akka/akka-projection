@@ -8,9 +8,9 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
+import akka.NotUsed
 import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
-import akka.NotUsed
 import akka.projection.OffsetVerification
 
 abstract class SourceProvider[Offset, Envelope] {
@@ -20,7 +20,12 @@ abstract class SourceProvider[Offset, Envelope] {
 
   def extractOffset(envelope: Envelope): Offset
 
-  def extractCreationTime(envelope: Envelope): java.lang.Long
+  /**
+   * Timestamp (in millis-since-epoch) of the instant when the envelope was created. The meaning of "when the
+   * envelope was created" is implementation specific and could be an instant on the producer machine, or the
+   * instant when the database persisted the envelope, or other.
+   */
+  def extractCreationTime(envelope: Envelope): Long
 
 }
 

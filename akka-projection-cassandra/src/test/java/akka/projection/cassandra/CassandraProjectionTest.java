@@ -125,8 +125,8 @@ public class CassandraProjectionTest extends JUnitSuite {
     }
 
     @Override
-    public Long extractCreationTime(Envelope envelope) {
-      return 0l;
+    public long extractCreationTime(Envelope envelope) {
+      return 0L;
     }
   }
 

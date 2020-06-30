@@ -52,6 +52,6 @@ object EventSourcedProvider {
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
 
-    override def extractCreationTime(envelope: EventEnvelope[Event]): java.lang.Long = envelope.timestamp
+    override def extractCreationTime(envelope: EventEnvelope[Event]): Long = envelope.timestamp
   }
 }

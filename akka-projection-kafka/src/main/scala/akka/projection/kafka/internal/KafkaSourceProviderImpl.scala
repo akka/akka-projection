@@ -107,7 +107,7 @@ import org.apache.kafka.common.record.TimestampType
         "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
   }
 
-  override def extractCreationTime(record: ConsumerRecord[K, V]): java.lang.Long = {
+  override def extractCreationTime(record: ConsumerRecord[K, V]): Long = {
     if (record.timestampType() == TimestampType.CREATE_TIME)
       record.timestamp()
     else

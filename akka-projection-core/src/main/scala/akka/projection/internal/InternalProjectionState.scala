@@ -376,7 +376,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
             })
         .via(killSwitch.flow)
         .map { env =>
-          val externalContext = telemetry.beforeProcess(env)
+          val externalContext = telemetry.beforeProcess(env, sourceProvider.extractCreationTime(env))
           ProjectionContextImpl(sourceProvider.extractOffset(env), env, externalContext)
         }
         .filter { context =>
