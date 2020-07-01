@@ -31,6 +31,7 @@ import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.TimestampType
 
 /**
  * INTERNAL API
@@ -104,6 +105,13 @@ import org.apache.kafka.common.TopicPartition
     else
       VerificationFailure(
         "The offset contains Kafka topic partitions that were revoked or lost in a previous rebalance")
+  }
+
+  override def extractCreationTime(record: ConsumerRecord[K, V]): Long = {
+    if (record.timestampType() == TimestampType.CREATE_TIME)
+      record.timestamp()
+    else
+      0L
   }
 
   private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =

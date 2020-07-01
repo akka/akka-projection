@@ -106,7 +106,10 @@ object InternalProjectionStateMetricsSpec {
         telemetry.implementation-class = "${classOf[InMemTelemetry].getName}"
       }
       """)
-  case class Envelope(id: String, offset: Long, message: String)
+  case class Envelope(id: String, offset: Long, message: String) {
+    // some time in the past...
+    val creationTimestamp = System.currentTimeMillis() - 1000L
+  }
 
   def sourceProvider(system: ActorSystem[_], id: String, numberOfEnvelopes: Int): SourceProvider[Long, Envelope] = {
     val chars = "abcdefghijklkmnopqrstuvwxyz"
@@ -126,6 +129,8 @@ object InternalProjectionStateMetricsSpec {
       }
 
     override def extractOffset(env: Envelope): Long = env.offset
+
+    override def extractCreationTime(envelope: Envelope): Long = envelope.creationTimestamp
   }
 
   class TelemetryTester(offsetStrategy: OffsetStrategy, handlerStrategy: HandlerStrategy, numberOfEnvelopes: Int = 6)(

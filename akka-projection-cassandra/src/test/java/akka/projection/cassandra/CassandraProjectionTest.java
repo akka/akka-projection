@@ -123,6 +123,11 @@ public class CassandraProjectionTest extends JUnitSuite {
     public Long extractOffset(Envelope envelope) {
       return envelope.offset;
     }
+
+    @Override
+    public long extractCreationTime(Envelope envelope) {
+      return 0L;
+    }
   }
 
   static class TestActorHandler extends ActorHandler<Envelope, TestHandlerBehavior.Req> {

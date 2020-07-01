@@ -36,4 +36,6 @@ import akka.stream.scaladsl.Source
   }
 
   def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
+
+  def extractCreationTime(envelope: Envelope): Long = delegate.extractCreationTime(envelope)
 }

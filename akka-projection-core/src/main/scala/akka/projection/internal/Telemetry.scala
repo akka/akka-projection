@@ -41,11 +41,15 @@ trait Telemetry {
   /**
    * Invoked as soon as the envelope is read, deserialised and ready to be processed.
    *
-   * @param envelope the envelope that's ready for processing.  The type `Envelope` will always
-   *                 represent a single item as stored in the event log.
+   * @param envelope          the envelope that's ready for processing.  The type `Envelope` will always
+   *                          represent a single item as stored in the event log.
+   * @param creationTimeInMillis Timestamp (in millis-since-epoch) of the instant when the envelope was created. The
+   *                             meaning of "when the envelope was created" is implementation specific and could be
+   *                             an instant on the producer machine, or the instant when the database persisted the
+   *                             envelope, or other.
    * @return an externally-provided context that will propagate with the envelope until [[Telemetry.afterProcess]]
    */
-  def beforeProcess[Envelope](envelope: Envelope): AnyRef
+  def beforeProcess[Envelope](envelope: Envelope, creationTimeInMillis: Long): AnyRef
 
   /**
    * Invoked after processing an event such that it is visible by the read-side threads (data is
@@ -103,7 +107,7 @@ trait Telemetry {
 
   override def stopped(): Unit = {}
 
-  override def beforeProcess[Envelope](envelope: Envelope): AnyRef = NotUsed
+  override def beforeProcess[Envelope](envelope: Envelope, creationTimeInMillis: Long): AnyRef = NotUsed
 
   override def afterProcess(externalContext: AnyRef): Unit = {}
 

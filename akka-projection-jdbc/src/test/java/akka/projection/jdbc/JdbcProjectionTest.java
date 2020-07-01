@@ -162,6 +162,11 @@ public class JdbcProjectionTest extends JUnitSuite {
     public Long extractOffset(Envelope envelope) {
       return envelope.offset;
     }
+
+    @Override
+    public long extractCreationTime(Envelope envelope) {
+      return 0L;
+    }
   }
 
   private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
