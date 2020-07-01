@@ -49,6 +49,12 @@ public class ProjectionTestKitTest extends JUnitSuite {
 
   private final Source<Integer, NotUsed> src = Source.from(elements);
 
+  private final Source<Integer, NotUsed> delayedSrc(long delayedBy) {
+    return src.delayWith(
+        () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(delayedBy), __ -> true),
+        DelayOverflowStrategy.backpressure());
+  }
+
   @ClassRule public static final TestKitJunitResource testKitJunit = new TestKitJunitResource();
 
   private final ProjectionTestKit projectionTestKit =
@@ -59,39 +65,27 @@ public class ProjectionTestKitTest extends JUnitSuite {
     StringBuffer strBuffer = new StringBuffer();
     TestProjection prj = new TestProjection(src, strBuffer, i -> i <= 6);
 
-    projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
+    projectionTestKit.run(prj, () -> assertEquals("1-2-3-4-5-6", strBuffer.toString()));
   }
 
   @Test
   public void retryAssertionFunctionUntilItSucceedsWithinAMaxTimeout() {
 
     StringBuffer strBuffer = new StringBuffer();
-
-    Source<Integer, NotUsed> delayedSrc =
-        src.delayWith(
-            () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(200), __ -> true),
-            DelayOverflowStrategy.backpressure());
-
-    TestProjection prj = new TestProjection(delayedSrc, strBuffer, i -> i <= 6);
-
+    TestProjection prj = new TestProjection(delayedSrc(100), strBuffer, i -> i <= 6);
     projectionTestKit.run(
-        prj, Duration.ofSeconds(2), () -> assertEquals(strBuffer.toString(), "1-2-3-4-5-6"));
+        prj, Duration.ofSeconds(2), () -> assertEquals("1-2-3-4-5-6", strBuffer.toString()));
   }
 
   @Test
   public void retryAssertionFunctionAndFailWhenTimeoutExpires() {
     StringBuffer strBuffer = new StringBuffer();
 
-    Source<Integer, NotUsed> delayedSrc =
-        src.delayWith(
-            () -> DelayStrategy.linearIncreasingDelay(Duration.ofMillis(1000), __ -> true),
-            DelayOverflowStrategy.backpressure());
-
-    TestProjection prj = new TestProjection(delayedSrc, strBuffer, i -> i <= 2);
+    TestProjection prj = new TestProjection(delayedSrc(1000), strBuffer, i -> i <= 2);
 
     try {
       projectionTestKit.run(
-          prj, Duration.ofSeconds(1), () -> assertEquals(strBuffer.toString(), "1-2"));
+          prj, Duration.ofSeconds(1), () -> assertEquals("1-2", strBuffer.toString()));
       Assert.fail("should not reach that line");
     } catch (ComparisonFailure failure) {
       // that was expected
@@ -114,7 +108,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
             });
 
     try {
-      projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
+      projectionTestKit.run(prj, () -> assertEquals("1-2-3-4", strBuffer.toString()));
       Assert.fail("should not reach that line");
     } catch (RuntimeException ex) {
       assertEquals(ex.getMessage(), streamFailureMsg);
@@ -133,7 +127,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
     TestProjection prj = new TestProjection(failingSource, strBuffer, i -> i <= 4);
 
     try {
-      projectionTestKit.run(prj, () -> assertEquals(strBuffer.toString(), "1-2-3-4"));
+      projectionTestKit.run(prj, () -> assertEquals("1-2-3-4", strBuffer.toString()));
       Assert.fail("should not reach that line");
     } catch (RuntimeException ex) {
       assertEquals(ex.getMessage(), streamFailureMsg);
