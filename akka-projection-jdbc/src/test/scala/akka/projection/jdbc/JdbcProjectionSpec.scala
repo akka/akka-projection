@@ -221,7 +221,7 @@ class JdbcProjectionSpec
   implicit val executionContext: ExecutionContext = testKit.system.executionContext
 
   val jdbcSettings = JdbcSettings(testKit.system)
-  val offsetStore = new JdbcOffsetStore(system, jdbcSettings, jdbcSessionFactory)
+  implicit val offsetStore = new JdbcOffsetStore(system, jdbcSettings, jdbcSessionFactory)
 
   val projectionTestKit = ProjectionTestKit(testKit)
 
@@ -239,6 +239,24 @@ class JdbcProjectionSpec
   }
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
+
+  private def offsetShouldBe(
+      expected: Long)(implicit offsetStore: JdbcOffsetStore[PureJdbcSession], projectionId: ProjectionId) = {
+    val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+    offset shouldBe expected
+  }
+
+  private def offsetShouldBeEmpty()(
+      implicit offsetStore: JdbcOffsetStore[PureJdbcSession],
+      projectionId: ProjectionId) = {
+    val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+    offsetOpt shouldBe empty
+  }
+
+  private def projectedValueShouldBe(expected: String)(implicit entityId: String) = {
+    val concatStr = findById(entityId)
+    concatStr.text shouldBe expected
+  }
 
   // TODO: extract this to some utility
   @tailrec private def eventuallyExpectError(sinkProbe: TestSubscriber.Probe[_]): Throwable = {
@@ -279,13 +297,8 @@ class JdbcProjectionSpec
   "A JDBC exactly-once projection" must {
 
     "persist projection and offset in the same write operation (transactional)" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
-
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val projection =
         JdbcProjection.exactlyOnce(
@@ -294,27 +307,16 @@ class JdbcProjectionSpec
           jdbcSessionFactory,
           handler = () => new ConcatHandler)
 
+      offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        withClue("check - all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
       }
-
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "skip failing events when using RecoveryStrategy.skip" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
-
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
@@ -327,27 +329,16 @@ class JdbcProjectionSpec
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
+      offsetShouldBeEmpty()
       projectionTestKit.run(projectionFailing) {
-        withClue("check - not all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|mno|pqr")
       }
-
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
-
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
@@ -364,17 +355,13 @@ class JdbcProjectionSpec
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
           .withStatusObserver(statusObserver)
 
+      offsetShouldBeEmpty()
       projectionTestKit.run(projectionFailing) {
-        withClue("check - not all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|mno|pqr")
       }
 
-      withClue("check - event handler did failed 4 times") {
-        // 1 + 3 => 1 original attempt and 3 retries
-        bogusEventHandler.attempts shouldBe 1 + 3
-      }
+      // 1 + 3 => 1 original attempt and 3 retries
+      bogusEventHandler.attempts shouldBe 1 + 3
 
       val someTestException = TestException("err")
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
@@ -383,16 +370,12 @@ class JdbcProjectionSpec
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
       statusProbe.expectNoMessage()
 
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
-
+      offsetShouldBe(6L)
     }
 
     "fail after retrying when using RecoveryStrategy.retryAndFail" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
@@ -405,90 +388,47 @@ class JdbcProjectionSpec
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
+      offsetShouldBeEmpty()
+      projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
+        sinkProbe.request(1000)
+        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
       }
-
-      withClue("check: projection failed with stream failure") {
-        projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
-          sinkProbe.request(1000)
-          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
-        }
-      }
-      withClue("check: projection is consumed up to third") {
-        val concatStr = findById(entityId)
-        concatStr.text shouldBe "abc|def|ghi"
-      }
-
-      withClue("check - event handler did failed 4 times") {
-        // 1 + 3 => 1 original attempt and 3 retries
-        bogusEventHandler.attempts shouldBe 1 + 3
-      }
-
-      withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 3L
-      }
+      projectedValueShouldBe("abc|def|ghi")
+      // 1 + 3 => 1 original attempt and 3 retries
+      bogusEventHandler.attempts shouldBe 1 + 3
+      offsetShouldBe(3L)
     }
 
     "restart from previous offset - fail with throwing an exception" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
-      val bogusEventHandler = new ConcatHandler(_ == 4)
-
-      val projectionFailing =
+      def exactlyOnceProjection(failWhenOffset: Long => Boolean = _ => false) = {
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           jdbcSessionFactory,
-          handler = () => bogusEventHandler)
-
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
+          handler = () => new ConcatHandler(failWhenOffset))
       }
 
-      withClue("check: projection failed with stream failure") {
-        projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
-          sinkProbe.request(1000)
-          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
-        }
+      offsetShouldBeEmpty()
+      projectionTestKit.runWithTestSink(exactlyOnceProjection(_ == 4)) { sinkProbe =>
+        sinkProbe.request(1000)
+        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
       }
-      withClue("check: projection is consumed up to third") {
-        val concatStr = findById(entityId)
-        concatStr.text shouldBe "abc|def|ghi"
-      }
-      withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 3L
-      }
+      projectedValueShouldBe("abc|def|ghi")
+      offsetShouldBe(3L)
 
       // re-run projection without failing function
-      val projection =
-        JdbcProjection.exactlyOnce(
-          projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          jdbcSessionFactory,
-          handler = () => new ConcatHandler())
-
-      projectionTestKit.run(projection) {
-        withClue("checking: all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
-        }
+      projectionTestKit.run(exactlyOnceProjection()) {
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
       }
-
-      withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "restart from previous offset - fail with bad insert on user code" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val bogusEventHandler = new JdbcHandler[Envelope, PureJdbcSession] {
         override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
@@ -500,57 +440,32 @@ class JdbcProjectionSpec
         }
       }
 
-      val projectionFailing =
+      def exactlyOnceProjection(handler: () => JdbcHandler[Envelope, PureJdbcSession]) =
         JdbcProjection.exactlyOnce(
           projectionId,
           sourceProvider = sourceProvider(system, entityId),
           jdbcSessionFactory,
-          handler = () => bogusEventHandler)
+          handler = handler)
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
-
-      projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
-        sinkProbe.request(1000)
+      offsetShouldBeEmpty()
+      projectionTestKit.runWithTestSink(exactlyOnceProjection(() => bogusEventHandler)) { sinkProbe =>
+        sinkProbe.request(4)
         eventuallyExpectError(sinkProbe).getClass shouldBe classOf[JdbcSQLIntegrityConstraintViolationException]
       }
-
-      withClue("check: projection is consumed up to third") {
-        val concatStr = findById(entityId)
-        concatStr.text shouldBe "abc|def|ghi"
-      }
-      withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 3L
-      }
+      projectedValueShouldBe("abc|def|ghi")
+      offsetShouldBe(3L)
 
       // re-run projection without failing function
-      val projection =
-        JdbcProjection.exactlyOnce(
-          projectionId,
-          sourceProvider = sourceProvider(system, entityId),
-          jdbcSessionFactory,
-          handler = () => new ConcatHandler())
-
-      projectionTestKit.run(projection) {
-        withClue("checking: all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
-        }
+      projectionTestKit.run(exactlyOnceProjection(() => new ConcatHandler())) {
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
       }
-
-      withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "verify offsets before and after processing an envelope" in {
 
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       case class ProbeMessage(str: String, offset: Long)
       val verificationProbe = testKit.createTestProbe[ProbeMessage]("verification")
@@ -564,9 +479,7 @@ class JdbcProjectionSpec
       val handler = new JdbcHandler[Envelope, PureJdbcSession] {
         override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
 
-          withClue("checking: offset verified before handler function was run") {
-            verificationProbe.receiveMessage().offset shouldEqual envelope.offset
-          }
+          verificationProbe.receiveMessage().offset shouldEqual envelope.offset
           processProbe.ref ! ProbeMessage("process", envelope.offset)
 
           session.withConnection { conn =>
@@ -587,17 +500,15 @@ class JdbcProjectionSpec
       projectionTestKit.runWithTestSink(projection) { testSink =>
         for (i <- 1 to 6) {
           testSink.request(1)
-          withClue("checking: offset verified after handler function was run") {
-            processProbe.receiveMessage().offset shouldBe i
-          }
+          processProbe.receiveMessage().offset shouldBe i
         }
       }
 
     }
 
     "skip record if offset verification fails before processing envelope" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -616,16 +527,13 @@ class JdbcProjectionSpec
           handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
-        withClue("checking: all values except skipped were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
-        }
+        projectedValueShouldBe("abc|def|jkl|mno|pqr") // `ghi` was skipped
       }
     }
 
     "skip record if offset verification fails after processing envelope" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -644,23 +552,15 @@ class JdbcProjectionSpec
           handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
-        withClue("checking: all values except skipped were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
-        }
+        projectedValueShouldBe("abc|def|jkl|mno|pqr") // `ghi` was skipped
       }
     }
   }
 
   "A JDBC grouped projection" must {
     "persist projection and offset in the same write operation (transactional)" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
-
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val handlerCalled = "called"
       val handlerProbe = testKit.createTestProbe[String]("calls-to-handler")
@@ -682,27 +582,20 @@ class JdbcProjectionSpec
               })
           .withGroup(3, 3.seconds)
 
+      offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        withClue("check - all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
       }
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
 
-      withClue("check - handler was called only once with grouped envelopes") {
-        // handler probe is called twice
-        handlerProbe.expectMessage(handlerCalled)
-        handlerProbe.expectMessage(handlerCalled)
-      }
+      // handler probe is called twice
+      handlerProbe.expectMessage(handlerCalled)
+      handlerProbe.expectMessage(handlerCalled)
     }
 
     "handle grouped async projection and store offset" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val result = new StringBuffer()
 
@@ -723,28 +616,19 @@ class JdbcProjectionSpec
             handler = () => handler())
           .withGroup(2, 3.seconds)
 
+      offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        withClue("check - all values were concatenated") {
-          result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
-        }
+        result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
       }
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
   }
 
   "A JDBC at-least-once projection" must {
 
     "persist projection and offset" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
-
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val projection =
         JdbcProjection.atLeastOnce(
@@ -753,26 +637,16 @@ class JdbcProjectionSpec
           jdbcSessionFactory,
           handler = () => new ConcatHandler)
 
+      offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        withClue("check - all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
       }
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "skip failing events when using RecoveryStrategy.skip, save after 1" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
-
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val projection =
         JdbcProjection
@@ -783,26 +657,16 @@ class JdbcProjectionSpec
             handler = () => new ConcatHandler(_ == 4))
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
+      offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        withClue("check - all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|mno|pqr")
       }
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "skip failing events when using RecoveryStrategy.skip, save after 2" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
-
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val projection =
         JdbcProjection
@@ -814,145 +678,105 @@ class JdbcProjectionSpec
           .withSaveOffset(2, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
+      offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        withClue("check - all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|mno|pqr")
       }
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "restart from previous offset - handler throwing an exception, save after 1" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
-
-      val failingProjection =
+      def atLeastOnceProjection(failWhenOffset: Long => Boolean = _ => false) =
         JdbcProjection
           .atLeastOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = () => new ConcatHandler(_ == 4))
+            handler = () => new ConcatHandler(failWhenOffset))
           .withSaveOffset(1, Duration.Zero)
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
-
-      withClue("check: projection failed with stream failure") {
-        projectionTestKit.runWithTestSink(failingProjection) { sinkProbe =>
-          sinkProbe.request(1000)
-          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+      offsetShouldBeEmpty()
+      // run again up to safe point
+      projectionTestKit.runWithTestSink(atLeastOnceProjection(_ == 4)) { sinkProbe =>
+        sinkProbe.request(3)
+        eventually {
+          projectedValueShouldBe("abc|def|ghi")
+          // we are saving after each envelope!
+          offsetShouldBe(3)
         }
       }
-      withClue("check: projection is consumed up to third") {
-        val concatStr = findById(entityId)
-        concatStr.text shouldBe "abc|def|ghi"
-      }
-      withClue(s"check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 3L
-      }
 
+      // run again up to failure point
+      projectionTestKit.runWithTestSink(atLeastOnceProjection(_ == 4)) { sinkProbe =>
+        sinkProbe.request(3)
+        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        eventually {
+          // we re-start from 3, so `ghi` is not redelivered
+          projectedValueShouldBe("abc|def|ghi")
+          offsetShouldBe(3)
+        }
+      }
       // re-run projection without failing function
-
-      val projection =
-        JdbcProjection
-          .atLeastOnce(
-            projectionId,
-            sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionFactory,
-            handler = () => new ConcatHandler())
-          .withSaveOffset(1, Duration.Zero)
-
-      projectionTestKit.run(projection) {
-        withClue("checking: all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
-        }
+      projectionTestKit.run(atLeastOnceProjection()) {
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
       }
 
-      withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "restart from previous offset - handler throwing an exception, save after 2" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      offsetStore.readOffset[Long](projectionId).futureValue shouldBe empty
 
-      val failingProjection =
+      def atLeastOnceProjection(failWhenOffset: Long => Boolean = _ => false) =
         JdbcProjection
           .atLeastOnce(
             projectionId,
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
-            handler = () => new ConcatHandler(_ == 4))
+            handler = () => new ConcatHandler(failWhenOffset))
           .withSaveOffset(2, 1.minute)
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
-
-      withClue("check: projection failed with stream failure") {
-        projectionTestKit.runWithTestSink(failingProjection) { sinkProbe =>
-          sinkProbe.request(1000)
-          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+      offsetShouldBeEmpty()
+      // run again up to safe point
+      projectionTestKit.runWithTestSink(atLeastOnceProjection(_ == 4)) { sinkProbe =>
+        sinkProbe.request(3)
+        eventually {
+          projectedValueShouldBe("abc|def|ghi")
+          // we are saving after each 2 envelopes!
+          // Offset 3 won't be saved because `afterDuration` is 1.minute
+          offsetShouldBe(2)
         }
       }
-      withClue("check: projection is consumed up to third") {
-        val concatStr = findById(entityId)
-        concatStr.text shouldBe "abc|def|ghi"
-      }
-      withClue(s"check: last seen offset is 2L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 2L
+
+      // run again up to failure point
+      projectionTestKit.runWithTestSink(atLeastOnceProjection(_ == 4)) { sinkProbe =>
+        sinkProbe.request(2) // processes elem 3 again and fails when processing 4
+        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+        eventually {
+          projectedValueShouldBe("abc|def|ghi|ghi") // note elem 3 is processed twice
+          offsetShouldBe(2)
+        }
       }
 
       // re-run projection without failing function
-      val projection =
-        JdbcProjection
-          .atLeastOnce(
-            projectionId,
-            sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionFactory,
-            handler = () => new ConcatHandler())
-          .withSaveOffset(2, 1.minute)
+      val projection = atLeastOnceProjection()
 
       projectionTestKit.run(projection) {
-        withClue("checking: all values were concatenated") {
-          val concatStr = findById(entityId)
-          // note that 3rd is duplicated
-          concatStr.text shouldBe "abc|def|ghi|ghi|jkl|mno|pqr"
-        }
+        // note that 3rd is triplicate
+        projectedValueShouldBe("abc|def|ghi|ghi|ghi|jkl|mno|pqr")
       }
-
-      withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
 
     "save offset after number of elements" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       import akka.actor.typed.scaladsl.adapter._
       val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
@@ -982,22 +806,22 @@ class JdbcProjectionSpec
         }
         eventually {
           findById(entityId).text should include("elem-15")
+          offsetShouldBe(10L)
         }
-        offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 10L
 
         (16 to 22).foreach { n =>
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         eventually {
           findById(entityId).text should include("elem-22")
+          offsetShouldBe(20L)
         }
-        offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 20L
       }
     }
 
     "save offset after idle duration" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       import akka.actor.typed.scaladsl.adapter._
       val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
@@ -1027,23 +851,23 @@ class JdbcProjectionSpec
         }
         eventually {
           findById(entityId).text should include("elem-15")
+          offsetShouldBe(10L)
         }
-        offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 10L
 
         (16 to 17).foreach { n =>
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         eventually {
-          offsetStore.readOffset[Long](projectionId).futureValue.value shouldBe 17L
+          findById(entityId).text should include("elem-17")
+          offsetShouldBe(17L)
         }
-        findById(entityId).text should include("elem-17")
       }
 
     }
 
     "verify offsets before processing an envelope" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
       val verifiedProbe: TestProbe[Long] = createTestProbe[Long]()
 
       val testVerification = (offset: Long) => {
@@ -1061,25 +885,20 @@ class JdbcProjectionSpec
             jdbcSessionFactory,
             handler = () =>
               JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
-                withClue("checking: offset verified before handler function was run") {
-                  verifiedProbe.expectMessage(envelope.offset)
-                }
+                verifiedProbe.expectMessage(envelope.offset)
                 sess.withConnection { conn =>
                   TestRepository(conn).concatToText(envelope.id, envelope.message)
                 }
               })
 
       projectionTestKit.run(projection) {
-        withClue("checking: all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
       }
     }
 
     "skip record if offset verification fails before processing envelope" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -1099,16 +918,13 @@ class JdbcProjectionSpec
             handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
-        withClue("checking: all values except skipped were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|jkl|mno|pqr" // `ghi` was skipped
-        }
+        projectedValueShouldBe("abc|def|jkl|mno|pqr") // `ghi` was skipped
       }
     }
 
     "handle async projection and store offset" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val result = new StringBuffer()
 
@@ -1128,27 +944,19 @@ class JdbcProjectionSpec
           handler = () => handler())
 
       projectionTestKit.run(projection) {
-        withClue("check - all values were concatenated") {
-          result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
-        }
+        result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
       }
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
     }
   }
 
   "A JDBC flow projection" must {
 
     "persist projection and offset" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      offsetShouldBeEmpty()
 
       val flowHandler =
         FlowWithContext[Envelope, ProjectionContext]
@@ -1166,15 +974,9 @@ class JdbcProjectionSpec
           .withSaveOffset(1, 1.minute)
 
       projectionTestKit.run(projection) {
-        withClue("check - all values were concatenated") {
-          val concatStr = findById(entityId)
-          concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr"
-        }
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
       }
-      withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
-      }
+      offsetShouldBe(6L)
 
     }
   }
@@ -1226,8 +1028,8 @@ class JdbcProjectionSpec
     }
 
     "call start and stop of the handler" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref)
@@ -1267,8 +1069,8 @@ class JdbcProjectionSpec
     }
 
     "call start and stop of the handler when using TestKit.runWithTestSink" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref)
@@ -1309,8 +1111,8 @@ class JdbcProjectionSpec
     }
 
     "call start and stop of handler when restarted" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
       @volatile var _handler: Option[LifecycleHandler] = None
@@ -1382,8 +1184,8 @@ class JdbcProjectionSpec
     }
 
     "call start and stop of handler when failed but no restart" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
       val failOnceOnOffset = new AtomicInteger(4)
@@ -1413,8 +1215,8 @@ class JdbcProjectionSpec
     }
 
     "be able to stop when retrying" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref, alwaysFailOnOffset = 4)
@@ -1448,8 +1250,8 @@ class JdbcProjectionSpec
   "JdbcProjection management" must {
 
     "restart from beginning when offset is cleared" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val projection =
         JdbcProjection
@@ -1464,32 +1266,25 @@ class JdbcProjectionSpec
                 }
               })
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      offsetShouldBeEmpty()
 
       // not using ProjectionTestKit because want to test ProjectionManagement
       spawn(ProjectionBehavior(projection))
       eventually {
-        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+        offsetShouldBe(6L)
       }
-
       ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
-
-      val concatStr1 = findById(entityId)
-      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+      projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
 
       ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
       eventually {
-        val concatStr = findById(entityId)
-        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr"
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr")
       }
     }
 
     "restart from updated offset" in {
-      val entityId = UUID.randomUUID().toString
-      val projectionId = genRandomProjectionId()
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
 
       val projection =
         JdbcProjection
@@ -1504,26 +1299,20 @@ class JdbcProjectionSpec
                 }
               })
 
-      withClue("check - offset is empty") {
-        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-        offsetOpt shouldBe empty
-      }
+      offsetShouldBeEmpty()
 
       // not using ProjectionTestKit because want to test ProjectionManagement
       spawn(ProjectionBehavior(projection))
+
       eventually {
-        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+        offsetShouldBe(6L)
       }
-
       ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
-
-      val concatStr1 = findById(entityId)
-      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+      projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
 
       ProjectionManagement(system).updateOffset(projectionId, 3L).futureValue shouldBe Done
       eventually {
-        val concatStr = findById(entityId)
-        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr"
+        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr")
       }
     }
   }
