@@ -122,7 +122,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
     val groupOffsets: GroupOffsets = GroupOffsets(
       (0 until partitions).map(i => TopicPartitionKey(new TopicPartition(topic, i)) -> 0L).toMap)
 
-    val probe: TestProbe[ConsumerRecord[String, String]] = createTestProbe[ConsumerRecord[String, String]]
+    val probe: TestProbe[ConsumerRecord[String, String]] = createTestProbe[ConsumerRecord[String, String]]()
 
     def processNextN(n: Int): Seq[ConsumerRecord[String, String]] = {
       probe.receiveMessages(n)

@@ -196,23 +196,23 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   private val clock = new TestClock
 
   private val settings = JdbcSettings(testKit.system)
-  private val offsetStore = new JdbcOffsetStore(system, settings, specConfig.jdbcSessionFactory, clock)
+  private val offsetStore = new JdbcOffsetStore(system, settings, specConfig.jdbcSessionFactory _, clock)
   private val dialectLabel = specConfig.name
 
   override protected def beforeAll(): Unit = {
     // start test container if needed
     // Note, the H2 test don't run in container and are therefore will run must faster
-    specConfig.initContainer
+    specConfig.initContainer()
 
     // create offset table
     Await.result(offsetStore.createIfNotExists(), 3.seconds)
   }
 
   override protected def afterAll(): Unit =
-    specConfig.stopContainer
+    specConfig.stopContainer()
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
-    withConnection(specConfig.jdbcSessionFactory) { conn =>
+    withConnection(specConfig.jdbcSessionFactory _) { conn =>
 
       val statement = {
         val stmt = s"""SELECT * FROM "${settings.table}" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""

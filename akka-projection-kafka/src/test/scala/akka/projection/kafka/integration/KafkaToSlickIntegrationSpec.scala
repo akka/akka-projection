@@ -142,7 +142,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       produceEvents(topicName)
 
       val kafkaSourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
-        KafkaSourceProvider(system.toTyped, consumerDefaults.withGroupId(groupId), Set(topicName))
+        KafkaSourceProvider(system.toTyped, consumerDefaults().withGroupId(groupId), Set(topicName))
 
       val slickProjection =
         SlickProjection.exactlyOnce(
@@ -172,7 +172,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       produceEvents(topicName)
 
       val kafkaSourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
-        KafkaSourceProvider(system.toTyped, consumerDefaults.withGroupId(groupId), Set(topicName))
+        KafkaSourceProvider(system.toTyped, consumerDefaults().withGroupId(groupId), Set(topicName))
 
       // repository will fail to insert the "AddToCart" event type once only
       val failedOnce = new AtomicBoolean
