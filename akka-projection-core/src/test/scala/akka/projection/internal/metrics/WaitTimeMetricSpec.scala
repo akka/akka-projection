@@ -28,7 +28,7 @@ class WaitTimeMetricSpec extends InternalProjectionStateMetricsSpec {
 
 }
 
-class WaitTimeMetricAtLeastOnceSpec extends LifecycleMetricSpec {
+class WaitTimeMetricAtLeastOnceSpec extends WaitTimeMetricSpec {
 
   "A metric reporting Wait Time" must {
     " in `at-least-once` with singleHandler" must {
