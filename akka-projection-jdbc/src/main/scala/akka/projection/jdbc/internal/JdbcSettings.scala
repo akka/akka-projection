@@ -23,6 +23,8 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
 
   val table: String = config.getString("offset-store.table")
 
+  val verboseLoggingEnabled: Boolean = config.getBoolean("debug.verbose-offset-store-logging")
+
   val dialect: Dialect = {
     val dialectToLoad = config.getString("dialect")
     if (dialectToLoad.trim.isEmpty)

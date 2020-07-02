@@ -58,16 +58,19 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 object JdbcProjectionSpec {
-  val config: Config = ConfigFactory.parseString("""
-    akka.projection.jdbc = {
-      dialect = "h2-dialect"
-      offset-store {
-        schema = ""
-        table = "AKKA_PROJECTION_OFFSET_STORE"
+  val config: Config = ConfigFactory.parseString(s"""
+    akka {
+      loglevel = "DEBUG"
+      projection.jdbc = {
+        dialect = "h2-dialect"
+        offset-store {
+          schema = ""
+          table = "AKKA_PROJECTION_OFFSET_STORE"
+        }
+        
+        blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
+        debug.verbose-offset-store-logging = true
       }
-      
-      # TODO: configure a connection pool for the tests
-      blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
     }
     """)
 
@@ -75,7 +78,7 @@ object JdbcProjectionSpec {
 
     lazy val conn = {
       Class.forName("org.h2.Driver")
-      val c = DriverManager.getConnection("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1")
+      val c = DriverManager.getConnection("jdbc:h2:mem:jdbc-projection-test;DB_CLOSE_DELAY=-1")
       c.setAutoCommit(false)
       c
     }
@@ -84,9 +87,7 @@ object JdbcProjectionSpec {
       func(conn)
 
     override def commit(): Unit = conn.commit()
-
     override def rollback(): Unit = conn.rollback()
-
     override def close(): Unit = conn.close()
   }
 
@@ -102,12 +103,12 @@ object JdbcProjectionSpec {
 
     val envelopes =
       List(
-        Envelope(id, 1L, "abc"),
-        Envelope(id, 2L, "def"),
-        Envelope(id, 3L, "ghi"),
-        Envelope(id, 4L, "jkl"),
-        Envelope(id, 5L, "mno"),
-        Envelope(id, 6L, "pqr"))
+        Envelope(id, 1L, "e1"),
+        Envelope(id, 2L, "e2"),
+        Envelope(id, 3L, "e3"),
+        Envelope(id, 4L, "e4"),
+        Envelope(id, 5L, "e5"),
+        Envelope(id, 6L, "e6"))
 
     val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
     TestSourceProvider(system, src, verifyOffsetF)
@@ -142,6 +143,8 @@ object JdbcProjectionSpec {
 
   case class TestRepository(conn: Connection) {
 
+    private val logger = LoggerFactory.getLogger(this.getClass)
+
     private val table = "TEST_MODEL"
 
     def concatToText(id: String, payload: String): Done = {
@@ -160,6 +163,10 @@ object JdbcProjectionSpec {
     }
 
     private def insertOrUpdate(concatStr: ConcatStr): Done = {
+      logger.debug(
+        "TestRepository.insertOrUpdate: [{}], using connection id [{}]",
+        concatStr,
+        System.identityHashCode(conn))
       val stmtStr = s"""MERGE INTO "$table" ("ID","CONCATENATED")  VALUES (?,?)"""
       JdbcSessionUtil.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
         stmt.setString(1, concatStr.id)
@@ -174,6 +181,7 @@ object JdbcProjectionSpec {
       val stmtStr = s"SELECT * FROM $table WHERE ID = ?"
 
       JdbcSessionUtil.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
+        logger.debug("TestRepository.findById: [{}], using connection id [{}]", id, System.identityHashCode(conn))
         stmt.setString(1, id)
         val resultSet = stmt.executeQuery()
         if (resultSet.first()) {
@@ -181,8 +189,6 @@ object JdbcProjectionSpec {
         } else None
       }
     }
-
-    def readValue(id: String): String = ???
 
     def createTable(): Done = {
 
@@ -197,6 +203,7 @@ object JdbcProjectionSpec {
         s"""alter table "$table" add constraint "PK_ID" primary key("ID");"""
 
       JdbcSessionUtil.tryWithResource(conn.createStatement()) { stmt =>
+        logger.debug("TestRepository.createTable using connection id [{}]", System.identityHashCode(conn))
         stmt.execute(createTableStatement)
         stmt.execute(alterTableStatement)
         Done
@@ -242,20 +249,39 @@ class JdbcProjectionSpec
 
   private def offsetShouldBe(
       expected: Long)(implicit offsetStore: JdbcOffsetStore[PureJdbcSession], projectionId: ProjectionId) = {
-    val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-    offset shouldBe expected
+    offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(expected)
   }
 
   private def offsetShouldBeEmpty()(
       implicit offsetStore: JdbcOffsetStore[PureJdbcSession],
       projectionId: ProjectionId) = {
-    val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
-    offsetOpt shouldBe empty
+    offsetStore.readOffset[Long](projectionId).futureValue shouldBe empty
   }
 
   private def projectedValueShouldBe(expected: String)(implicit entityId: String) = {
-    val concatStr = findById(entityId)
-    concatStr.text shouldBe expected
+    val opt = withRepo(_.findById(entityId)).futureValue.map(_.text)
+    opt shouldBe Some(expected)
+  }
+
+  private def projectedValueShouldInclude(expected: String)(implicit entityId: String) = {
+    withClue(s"checking projected value contains [$expected]: ") {
+      val text = withRepo(_.findById(entityId)).futureValue.value.text
+      text should include(expected)
+    }
+  }
+
+  private def projectedValueShould(actual: String => Boolean)(implicit entityId: String) = {
+    withClue(s"checking projected value fulfil predicate: ") {
+      val text = withRepo(_.findById(entityId)).futureValue.value.text
+      actual(text)
+    }
+  }
+
+  private def projectedValueShouldIncludeNTimes(expected: String, nTimes: Int)(implicit entityId: String) = {
+    withClue(s"checking projected value contains [$expected] $nTimes times: ") {
+      val text = withRepo(_.findById(entityId)).futureValue.value.text
+      text.split("\\|").count(_ == expected) shouldBe nTimes
+    }
   }
 
   // TODO: extract this to some utility
@@ -267,9 +293,6 @@ class JdbcProjectionSpec
   }
 
   private val concatHandlerFail4Msg = "fail on fourth envelope"
-  private def findById(entityId: String) = {
-    withRepo(_.findById(entityId)).futureValue.get
-  }
 
   private def withRepo[R](block: TestRepository => R): Future[R] = {
     JdbcSessionUtil.withConnection(jdbcSessionFactory) { conn =>
@@ -288,6 +311,7 @@ class JdbcProjectionSpec
         throw TestException(concatHandlerFail4Msg + s" after $attempts attempts")
       } else {
         session.withConnection { conn =>
+          logger.debug(s"handling $envelope using [${System.identityHashCode(conn)}])")
           TestRepository(conn).concatToText(envelope.id, envelope.message)
         }
       }
@@ -309,7 +333,7 @@ class JdbcProjectionSpec
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
       offsetShouldBe(6L)
     }
@@ -331,7 +355,7 @@ class JdbcProjectionSpec
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projectionFailing) {
-        projectedValueShouldBe("abc|def|ghi|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e5|e6")
       }
       offsetShouldBe(6L)
     }
@@ -357,17 +381,17 @@ class JdbcProjectionSpec
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projectionFailing) {
-        projectedValueShouldBe("abc|def|ghi|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e5|e6")
       }
 
       // 1 + 3 => 1 original attempt and 3 retries
       bogusEventHandler.attempts shouldBe 1 + 3
 
       val someTestException = TestException("err")
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
       statusProbe.expectNoMessage()
 
       offsetShouldBe(6L)
@@ -393,7 +417,7 @@ class JdbcProjectionSpec
         sinkProbe.request(1000)
         eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
       }
-      projectedValueShouldBe("abc|def|ghi")
+      projectedValueShouldBe("e1|e2|e3")
       // 1 + 3 => 1 original attempt and 3 retries
       bogusEventHandler.attempts shouldBe 1 + 3
       offsetShouldBe(3L)
@@ -416,12 +440,12 @@ class JdbcProjectionSpec
         sinkProbe.request(1000)
         eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
       }
-      projectedValueShouldBe("abc|def|ghi")
+      projectedValueShouldBe("e1|e2|e3")
       offsetShouldBe(3L)
 
       // re-run projection without failing function
       projectionTestKit.run(exactlyOnceProjection()) {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
       offsetShouldBe(6L)
     }
@@ -452,12 +476,12 @@ class JdbcProjectionSpec
         sinkProbe.request(4)
         eventuallyExpectError(sinkProbe).getClass shouldBe classOf[JdbcSQLIntegrityConstraintViolationException]
       }
-      projectedValueShouldBe("abc|def|ghi")
+      projectedValueShouldBe("e1|e2|e3")
       offsetShouldBe(3L)
 
       // re-run projection without failing function
       projectionTestKit.run(exactlyOnceProjection(() => new ConcatHandler())) {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
       offsetShouldBe(6L)
     }
@@ -527,7 +551,7 @@ class JdbcProjectionSpec
           handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|jkl|mno|pqr") // `ghi` was skipped
+        projectedValueShouldBe("e1|e2|e4|e5|e6") // `e3` was skipped
       }
     }
 
@@ -552,7 +576,7 @@ class JdbcProjectionSpec
           handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|jkl|mno|pqr") // `ghi` was skipped
+        projectedValueShouldBe("e1|e2|e4|e5|e6") // `e3` was skipped
       }
     }
   }
@@ -584,7 +608,7 @@ class JdbcProjectionSpec
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
       offsetShouldBe(6L)
 
@@ -618,7 +642,7 @@ class JdbcProjectionSpec
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
+        result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
       }
       offsetShouldBe(6L)
     }
@@ -639,7 +663,7 @@ class JdbcProjectionSpec
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
       offsetShouldBe(6L)
     }
@@ -655,11 +679,12 @@ class JdbcProjectionSpec
             sourceProvider = sourceProvider(system, entityId),
             jdbcSessionFactory,
             handler = () => new ConcatHandler(_ == 4))
+          .withSaveOffset(1, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|ghi|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e5|e6")
       }
       offsetShouldBe(6L)
     }
@@ -680,7 +705,7 @@ class JdbcProjectionSpec
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|ghi|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e5|e6")
       }
       offsetShouldBe(6L)
     }
@@ -703,7 +728,7 @@ class JdbcProjectionSpec
       projectionTestKit.runWithTestSink(atLeastOnceProjection(_ == 4)) { sinkProbe =>
         sinkProbe.request(3)
         eventually {
-          projectedValueShouldBe("abc|def|ghi")
+          projectedValueShouldBe("e1|e2|e3")
           // we are saving after each envelope!
           offsetShouldBe(3)
         }
@@ -714,14 +739,14 @@ class JdbcProjectionSpec
         sinkProbe.request(3)
         eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
         eventually {
-          // we re-start from 3, so `ghi` is not redelivered
-          projectedValueShouldBe("abc|def|ghi")
+          // we re-start from 3, so `e3` is not redelivered
+          projectedValueShouldBe("e1|e2|e3")
           offsetShouldBe(3)
         }
       }
       // re-run projection without failing function
       projectionTestKit.run(atLeastOnceProjection()) {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
 
       offsetShouldBe(6L)
@@ -747,20 +772,21 @@ class JdbcProjectionSpec
       projectionTestKit.runWithTestSink(atLeastOnceProjection(_ == 4)) { sinkProbe =>
         sinkProbe.request(3)
         eventually {
-          projectedValueShouldBe("abc|def|ghi")
-          // we are saving after each 2 envelopes!
-          // Offset 3 won't be saved because `afterDuration` is 1.minute
-          offsetShouldBe(2)
+          projectedValueShouldBe("e1|e2|e3")
         }
       }
 
       // run again up to failure point
       projectionTestKit.runWithTestSink(atLeastOnceProjection(_ == 4)) { sinkProbe =>
-        sinkProbe.request(2) // processes elem 3 again and fails when processing 4
+        sinkProbe.request(4) // processes elem 3 again and fails when processing 4
         eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
         eventually {
-          projectedValueShouldBe("abc|def|ghi|ghi") // note elem 3 is processed twice
-          offsetShouldBe(2)
+          // because failures, we may consume 'e1' and 'e2' more then once
+          // we check that it at least starts with 'e1|e2|e3'
+          projectedValueShould(_.startsWith("e1|e2|e3"))
+
+          // note elem 3 is processed twice
+          projectedValueShouldIncludeNTimes("e3", 2)
         }
       }
 
@@ -768,8 +794,8 @@ class JdbcProjectionSpec
       val projection = atLeastOnceProjection()
 
       projectionTestKit.run(projection) {
-        // note that 3rd is triplicate
-        projectedValueShouldBe("abc|def|ghi|ghi|ghi|jkl|mno|pqr")
+        projectedValueShould(_.startsWith("e1|e2|e3"))
+        projectedValueShould(_.endsWith("e3|e4|e5|e6"))
       }
       offsetShouldBe(6L)
     }
@@ -805,7 +831,7 @@ class JdbcProjectionSpec
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         eventually {
-          findById(entityId).text should include("elem-15")
+          projectedValueShouldInclude("elem-15")
           offsetShouldBe(10L)
         }
 
@@ -813,7 +839,7 @@ class JdbcProjectionSpec
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         eventually {
-          findById(entityId).text should include("elem-22")
+          projectedValueShouldInclude("elem-22")
           offsetShouldBe(20L)
         }
       }
@@ -850,7 +876,7 @@ class JdbcProjectionSpec
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         eventually {
-          findById(entityId).text should include("elem-15")
+          projectedValueShouldInclude("elem-15")
           offsetShouldBe(10L)
         }
 
@@ -858,7 +884,7 @@ class JdbcProjectionSpec
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         eventually {
-          findById(entityId).text should include("elem-17")
+          projectedValueShouldInclude("elem-17")
           offsetShouldBe(17L)
         }
       }
@@ -892,7 +918,7 @@ class JdbcProjectionSpec
               })
 
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
     }
 
@@ -918,7 +944,7 @@ class JdbcProjectionSpec
             handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|jkl|mno|pqr") // `ghi` was skipped
+        projectedValueShouldBe("e1|e2|e4|e5|e6") // `e3` was skipped
       }
     }
 
@@ -944,7 +970,7 @@ class JdbcProjectionSpec
           handler = () => handler())
 
       projectionTestKit.run(projection) {
-        result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
+        result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
       }
       offsetShouldBe(6L)
     }
@@ -974,7 +1000,7 @@ class JdbcProjectionSpec
           .withSaveOffset(1, 1.minute)
 
       projectionTestKit.run(projection) {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
       offsetShouldBe(6L)
 
@@ -1054,12 +1080,12 @@ class JdbcProjectionSpec
       statusProbe.expectMessage(TestStatusObserver.Started)
 
       handlerProbe.expectMessage(handler.startMessage)
-      handlerProbe.expectMessage("abc")
-      handlerProbe.expectMessage("def")
-      handlerProbe.expectMessage("ghi")
-      handlerProbe.expectMessage("jkl")
-      handlerProbe.expectMessage("mno")
-      handlerProbe.expectMessage("pqr")
+      handlerProbe.expectMessage("e1")
+      handlerProbe.expectMessage("e2")
+      handlerProbe.expectMessage("e3")
+      handlerProbe.expectMessage("e4")
+      handlerProbe.expectMessage("e5")
+      handlerProbe.expectMessage("e6")
       // completed without failure
       handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
@@ -1085,7 +1111,7 @@ class JdbcProjectionSpec
 
       // not using ProjectionTestKit because want to test restarts
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
-        // request all 'strings' (abc to pqr)
+        // request all 'strings' (e1 to e6)
 
         handlerProbe.expectMessage(handler.createdMessage)
 
@@ -1094,12 +1120,12 @@ class JdbcProjectionSpec
 
         // request the elements
         sinkProbe.request(6)
-        handlerProbe.expectMessage("abc")
-        handlerProbe.expectMessage("def")
-        handlerProbe.expectMessage("ghi")
-        handlerProbe.expectMessage("jkl")
-        handlerProbe.expectMessage("mno")
-        handlerProbe.expectMessage("pqr")
+        handlerProbe.expectMessage("e1")
+        handlerProbe.expectMessage("e2")
+        handlerProbe.expectMessage("e3")
+        handlerProbe.expectMessage("e4")
+        handlerProbe.expectMessage("e5")
+        handlerProbe.expectMessage("e6")
 
         // all elements should have reached the sink
         sinkProbe.expectNextN(6)
@@ -1152,16 +1178,16 @@ class JdbcProjectionSpec
       statusProbe.expectMessage(TestStatusObserver.Started)
 
       handlerProbe.expectMessage(handler.startMessage)
-      handlerProbe.expectMessage("abc")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "abc")))
-      handlerProbe.expectMessage("def")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "def")))
-      handlerProbe.expectMessage("ghi")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "ghi")))
+      handlerProbe.expectMessage("e1")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "e1")))
+      handlerProbe.expectMessage("e2")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "e2")))
+      handlerProbe.expectMessage("e3")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "e3")))
       // fail 4
       handlerProbe.expectMessage(handler.failedMessage)
       val someTestException = TestException("err")
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
 
       // backoff will restart
       statusProbe.expectMessage(TestStatusObserver.Failed)
@@ -1169,12 +1195,12 @@ class JdbcProjectionSpec
       handlerProbe.expectMessage(handler.createdMessage)
       handlerProbe.expectMessage(handler.startMessage)
       statusProbe.expectMessage(TestStatusObserver.Started)
-      handlerProbe.expectMessage("jkl")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))
-      handlerProbe.expectMessage("mno")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "mno")))
-      handlerProbe.expectMessage("pqr")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 6, "pqr")))
+      handlerProbe.expectMessage("e4")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "e4")))
+      handlerProbe.expectMessage("e5")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "e5")))
+      handlerProbe.expectMessage("e6")
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 6, "e6")))
       // now completed without failure
       handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop
@@ -1205,9 +1231,9 @@ class JdbcProjectionSpec
 
       handlerProbe.expectMessage(handler.createdMessage)
       handlerProbe.expectMessage(handler.startMessage)
-      handlerProbe.expectMessage("abc")
-      handlerProbe.expectMessage("def")
-      handlerProbe.expectMessage("ghi")
+      handlerProbe.expectMessage("e1")
+      handlerProbe.expectMessage("e2")
+      handlerProbe.expectMessage("e3")
       // fail 4, not restarted
       // completed with failure
       handlerProbe.expectMessage(handler.failedMessage)
@@ -1234,9 +1260,9 @@ class JdbcProjectionSpec
 
       handlerProbe.expectMessage(handler.createdMessage)
       handlerProbe.expectMessage(handler.startMessage)
-      handlerProbe.expectMessage("abc")
-      handlerProbe.expectMessage("def")
-      handlerProbe.expectMessage("ghi")
+      handlerProbe.expectMessage("e1")
+      handlerProbe.expectMessage("e2")
+      handlerProbe.expectMessage("e3")
       // fail 4
 
       // let it retry for a while
@@ -1274,11 +1300,11 @@ class JdbcProjectionSpec
         offsetShouldBe(6L)
       }
       ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
-      projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+      projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
 
       ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
       eventually {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6|e1|e2|e3|e4|e5|e6")
       }
     }
 
@@ -1308,11 +1334,11 @@ class JdbcProjectionSpec
         offsetShouldBe(6L)
       }
       ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
-      projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr")
+      projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
 
       ProjectionManagement(system).updateOffset(projectionId, 3L).futureValue shouldBe Done
       eventually {
-        projectedValueShouldBe("abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr")
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6|e4|e5|e6")
       }
     }
   }
