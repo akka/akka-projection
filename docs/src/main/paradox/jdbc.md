@@ -212,13 +212,13 @@ See also @ref:[error handling](error.md).
 
 The database schema for the offset storage table:
 
-Postgres
+PostgreSQL
 :  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
 
 MySQL
 :  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mysql }
 
-MS SQL Server
+Microsoft SQL Server
 :  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mssql }
 
 H2
