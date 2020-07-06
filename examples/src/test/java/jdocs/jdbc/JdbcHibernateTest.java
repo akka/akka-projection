@@ -111,6 +111,11 @@ public class JdbcHibernateTest extends JUnitSuite {
     public Long extractOffset(Envelope envelope) {
       return envelope.offset;
     }
+
+    @Override
+    public long extractCreationTime(Envelope envelope) {
+      return 0;
+    }
   }
 
   private JdbcHandler<Envelope, HibernateJdbcSession> concatHandler(StringBuffer buffer) {
