@@ -48,14 +48,17 @@ object JdbcOffsetStoreSpec {
 
     val config: Config = ConfigFactory.parseString("""
     
-    akka.projection.jdbc = {
-      offset-store {
-        schema = ""
-        table = "AKKA_PROJECTION_OFFSET_STORE"
+    akka {
+      loglevel = "DEBUG"
+      projection.jdbc = {
+        offset-store {
+          schema = ""
+          table = "AKKA_PROJECTION_OFFSET_STORE"
+        }
+        
+        blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
+        debug.verbose-offset-store-logging = true
       }
-      
-      # TODO: configure a connection pool for the tests
-      blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
     }
     """)
     def jdbcSessionFactory(): JdbcSession

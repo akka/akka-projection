@@ -15,6 +15,7 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
@@ -25,6 +26,7 @@ import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.internal.DialectDefaults.InsertIndices
 import akka.projection.jdbc.internal.DialectDefaults.UpdateIndices
 import akka.projection.jdbc.internal.JdbcSessionUtil._
+import org.slf4j.LoggerFactory
 
 /**
  * INTERNAL API
@@ -35,6 +37,9 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
     settings: JdbcSettings,
     jdbcSessionFactory: () => S,
     clock: Clock) {
+
+  private val logger = LoggerFactory.getLogger(this.getClass)
+  private val verboseLogging = logger.isDebugEnabled() && settings.verboseLoggingEnabled
 
   def this(system: ActorSystem[_], settings: JdbcSettings, jdbcSessionFactory: () => S) =
     this(system, settings, jdbcSessionFactory, Clock.systemUTC())
@@ -47,6 +52,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
 
   def createIfNotExists(): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>
+      logger.debug("creating offset-store table, using connection id [{}]", System.identityHashCode(conn))
       tryWithResource(conn.createStatement()) { stmt =>
         settings.dialect.createTableStatements.foreach { stmtStr =>
           stmt.execute(stmtStr)
@@ -56,18 +62,28 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
     }
   }
 
-  def clearOffset(projectionId: ProjectionId): Future[Done] =
+  def clearOffset(projectionId: ProjectionId): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>
+      logger.debug(
+        "clearing offset for [{}], using connection id [{}], using connection id [{}]",
+        projectionId,
+        System.identityHashCode(conn))
       tryWithResource(conn.prepareStatement(settings.dialect.clearOffsetStatement)) { stmt =>
         stmt.setString(1, projectionId.name)
         stmt.setString(2, projectionId.key)
-        stmt.executeUpdate()
+        val i = stmt.executeUpdate()
+        logger.debug(s"clearing offset for [{}] - executed statement returned [{}]", projectionId, i)
         Done
       }
     }
+  }
 
   def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] =
     withConnection(jdbcSessionFactory) { conn =>
+
+      if (verboseLogging)
+        logger.debug("reading offset for [{}], using connection id [{}]", projectionId, System.identityHashCode(conn))
+
       // init Statement in try-with-resource
       tryWithResource(conn.prepareStatement(settings.dialect.readOffsetQuery)) { stmt =>
 
@@ -90,31 +106,41 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
             buffer.append(single)
           }
 
-          if (buffer.isEmpty) None
-          else if (buffer.forall(_.mergeable)) {
-            Some(
-              fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(buffer.toList))
-                .asInstanceOf[Offset])
-          } else {
-            buffer.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
-          }
+          val result =
+            if (buffer.isEmpty) None
+            else if (buffer.forall(_.mergeable)) {
+              Some(
+                fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(buffer.toList))
+                  .asInstanceOf[Offset])
+            } else {
+              buffer.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
+            }
+
+          if (verboseLogging) logger.debug2("found offset [{}] for [{}]", result, projectionId)
+
+          result
         }
+
       }
     }
 
   /**
    * Like saveOffset, but async. Useful for resetting an offset
    */
-  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] =
+  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>
       saveOffsetBlocking(conn, projectionId, offset)
     }
+  }
 
   /**
    * This method is explicitly made non-async because it's used together
    * with the users' handler code and run inside the same Future
    */
   def saveOffsetBlocking[Offset](conn: Connection, projectionId: ProjectionId, offset: Offset): Done = {
+
+    if (verboseLogging)
+      logger.debug("saving offset [{}], using connection id [{}]", offset, System.identityHashCode(conn))
 
     val now = new Timestamp(Instant.now(clock).toEpochMilli)
 
@@ -141,7 +167,11 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
           case MultipleOffsets(many) => many.foreach(updateRow)
         }
 
-        stmt.executeBatch()
+        val res = stmt.executeBatch()
+        if (verboseLogging) {
+          logger.debug2("tried to update offset [{}], batch result [{}]", offset, res.mkString("(", "|", ")"))
+        }
+        res
       }
 
     // Statement.EXECUTE_FAILED  (-3) means statement failed
@@ -177,6 +207,9 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
         }
 
         val triedInserts = stmt.executeBatch()
+
+        if (verboseLogging)
+          logger.debug2("tried to insert offset [{}], batch result [{}]", offset, triedInserts.mkString("(", "|", ")"))
 
         // did we get any failure on inserts?!
         if (triedInserts.exists(failedStatement)) {
