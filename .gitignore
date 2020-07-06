@@ -9,3 +9,5 @@ target
 # we don't want to push this file,
 # each contributor must create its own to signal acceptance
 akka-projection-jdbc/src/test/resources/container-license-acceptance.txt
+akka-projection-slick/src/test/resources/container-license-acceptance.txt
+

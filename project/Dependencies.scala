@@ -124,7 +124,20 @@ object Dependencies {
         Test.logback)
 
   val slick =
-    deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+    deps ++= Seq(
+        Compile.slick,
+        Compile.akkaPersistenceQuery,
+        Test.akkaTypedTestkit,
+        Test.h2Driver,
+        Test.postgresDriver,
+        Test.postgresContainer,
+        Test.mysqlDriver,
+        Test.mysqlContainer,
+        Test.msSQLServerDriver,
+        Test.msSQLServerContainer,
+        Test.oracleDriver,
+        Test.oracleDbContainer,
+        Test.logback)
 
   val cassandra =
     deps ++= Seq(
