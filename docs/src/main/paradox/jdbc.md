@@ -33,7 +33,7 @@ The table below shows `akka-projection-jdbc`'s direct dependencies, and the seco
 
 There are two settings that need to be set beforehand in your `application.conf` file.
 
-* `akka.projection.jdbc.dialect` - The dialect type indicating your database of choice. Supported dialects are: `mysql-dialect`, `postgres-dialect`, `mssql-dialect` or `h2-dialect` (testing).
+* `akka.projection.jdbc.dialect` - The dialect type indicating your database of choice. Supported dialects are: `mysql-dialect`, `postgres-dialect`, `mssql-dialect`, `oracle-dialect` or `h2-dialect` (testing).
 * `akka.projection.jdbc.blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size` indicating the size of the blocking JDBC dispatcher. See also @ref:[Blocking JDBC Dispatcher](#blocking-jdbc-dispatcher).
 
 ## Defining a JdbcSession
@@ -220,6 +220,9 @@ MySQL
 
 Microsoft SQL Server
 :  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mssql }
+
+Oracle
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-oracle }
 
 H2
 :  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }

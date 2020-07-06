@@ -146,10 +146,16 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
 
     val storageReps = toStorageRepresentation(projectionId, offset)
 
-    val triedUpdates =
-      tryWithResource(conn.prepareStatement(settings.dialect.updateStatement())) { stmt =>
+    // Statement.EXECUTE_FAILED  (-3) means statement failed
+    // -2 means successful, but there is no information about it (that's driver dependent).
+    // 0 means nothing inserted or updated,
+    // any positive number indicates the num of rows affected.
+    // What a mess!!
+    def failedStatement(i: Int) = i == 0 || i == Statement.EXECUTE_FAILED
 
-        def updateRow(singleOffset: SingleOffset): Unit = {
+    def insertOrUpdate(singleOffset: SingleOffset): Unit = {
+      val tryUpdateResult =
+        tryWithResource(conn.prepareStatement(settings.dialect.updateStatement())) { stmt =>
           // SET
           stmt.setString(UpdateIndices.OFFSET, singleOffset.offsetStr)
           stmt.setString(UpdateIndices.MANIFEST, singleOffset.manifest)
@@ -159,33 +165,15 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
           stmt.setString(UpdateIndices.PROJECTION_NAME, singleOffset.id.name)
           stmt.setString(UpdateIndices.PROJECTION_KEY, singleOffset.id.key)
 
-          stmt.addBatch()
+          stmt.executeUpdate()
         }
 
-        storageReps match {
-          case single: SingleOffset  => updateRow(single)
-          case MultipleOffsets(many) => many.foreach(updateRow)
-        }
-
-        val res = stmt.executeBatch()
-        if (verboseLogging) {
-          logger.debug2("tried to update offset [{}], batch result [{}]", offset, res.mkString("(", "|", ")"))
-        }
-        res
+      if (verboseLogging) {
+        logger.debug2("tried to update offset [{}], statement result [{}]", offset, tryUpdateResult)
       }
 
-    // Statement.EXECUTE_FAILED  (-3) means statement failed
-    // -2 means successful, but there is no information about it (that's driver dependent).
-    // 0 means nothing inserted or updated,
-    // any positive number indicates the num of rows affected.
-    // What a mess!!
-    def failedStatement(i: Int) = i == 0 || i == Statement.EXECUTE_FAILED
-
-    // if something didn't get update, insert it!!
-    if (triedUpdates.exists(failedStatement)) {
-      tryWithResource(conn.prepareStatement(settings.dialect.insertStatement())) { stmt =>
-
-        def insertRow(singleOffset: SingleOffset): Unit = {
+      if (failedStatement(tryUpdateResult)) {
+        tryWithResource(conn.prepareStatement(settings.dialect.insertStatement())) { stmt =>
           // VALUES
           stmt.setString(InsertIndices.PROJECTION_NAME, singleOffset.id.name)
           stmt.setString(InsertIndices.PROJECTION_KEY, singleOffset.id.key)
@@ -194,39 +182,23 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
           stmt.setBoolean(InsertIndices.MERGEABLE, singleOffset.mergeable)
           stmt.setTimestamp(InsertIndices.LAST_UPDATED, now)
 
-          stmt.addBatch()
-        }
+          val triedInsertResult = stmt.executeUpdate()
 
-        storageReps match {
-          case single: SingleOffset => insertRow(single)
-          case MultipleOffsets(many) =>
-            many.zipWithIndex.foreach {
-              case (offset, index) =>
-                if (failedStatement(triedUpdates(index))) insertRow(offset)
-            }
-        }
+          if (verboseLogging)
+            logger.debug2("tried to insert offset [{}], batch result [{}]", offset, triedInsertResult)
 
-        val triedInserts = stmt.executeBatch()
-
-        if (verboseLogging)
-          logger.debug2("tried to insert offset [{}], batch result [{}]", offset, triedInserts.mkString("(", "|", ")"))
-
-        // did we get any failure on inserts?!
-        if (triedInserts.exists(failedStatement)) {
-          storageReps match {
-            case single: SingleOffset => throw new RuntimeException(s"Failed to insert offset [$single]")
-            case MultipleOffsets(many) =>
-              val failedOffsets =
-                many.zipWithIndex.collect {
-                  case (offset, index) if failedStatement(triedInserts(index)) =>
-                    val sep = if (index == 0) "" else "|"
-                    sep + offset
-                }
-              throw new RuntimeException(s"Failed to insert one or more offsets [$failedOffsets]")
+          // did we get any failure on inserts?!
+          if (failedStatement(triedInsertResult)) {
+            throw new RuntimeException(s"Failed to insert offset [$singleOffset]")
           }
         }
-
       }
+
+    }
+
+    storageReps match {
+      case single: SingleOffset  => insertOrUpdate(single)
+      case MultipleOffsets(many) => many.foreach(insertOrUpdate)
     }
 
     Done
