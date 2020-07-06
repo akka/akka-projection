@@ -35,7 +35,7 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
       case "mysql-dialect"                   => MySQLDialect(schema, table)
       case "h2-dialect" | "postgres-dialect" => DefaultDialect(schema, table)
       case "mssql-dialect"                   => MSSQLServerDialect(schema, table)
-      case "oracle-dialect"                  => OracleServerDialect(schema, table)
+      case "oracle-dialect"                  => OracleDialect(schema, table)
       case unknown =>
         throw new IllegalArgumentException(
           s"Unknown dialect type: [$unknown]. Check settings 'akka.projection.jdbc.dialect'")

@@ -207,7 +207,7 @@ private[jdbc] case class MSSQLServerDialect(schema: Option[String], tableName: S
  * INTERNAL API
  */
 @InternalApi
-private[jdbc] case class OracleServerDialect(schema: Option[String], tableName: String) extends Dialect {
+private[jdbc] case class OracleDialect(schema: Option[String], tableName: String) extends Dialect {
 
   def this(tableName: String) = this(None, tableName)
 
