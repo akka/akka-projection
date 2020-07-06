@@ -172,7 +172,7 @@ public class JdbcProjectionTest extends JUnitSuite {
   private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
 
   private ProjectionId genRandomProjectionId() {
-    return ProjectionId.of(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+    return ProjectionId.of(UUID.randomUUID().toString(), "00");
   }
 
   private void assertStoredOffset(ProjectionId projectionId, long expectedOffset) {
