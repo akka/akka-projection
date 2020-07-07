@@ -5,18 +5,21 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.Future
 
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.Done
+import akka.actor.testkit.typed.scaladsl.LoggingTestKit
+import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Offset
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
-import akka.projection.testkit.scaladsl.TestProjection
-import akka.projection.testkit.scaladsl.TestSourceProvider
-import akka.testkit.EventFilter
+// #testKitImports
+import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.projection.testkit.TestProjection
+import akka.projection.testkit.TestSourceProvider
+// #testKitImports
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 
+// #testKitSpec
 object ShoppingCartAppSpec {
   class MockDailyCheckoutRepository extends DailyCheckoutProjectionRepository {
     val saveCount = new AtomicInteger()
@@ -66,11 +69,12 @@ class ShoppingCartAppSpec
     }
 
     "log current daily count every 10 messages" in {
+      val numEvents = 10L
       val repo = new MockDailyCheckoutRepository
       val handler = new DailyCheckoutProjectionHandler("tag", system, repo)
 
       val events =
-        for (i <- 0L to 10L)
+        for (i <- 0L to numEvents)
           yield createEnvelope(
             ShoppingCartEvents.CheckedOut(
               java.util.UUID.randomUUID().toString,
@@ -84,18 +88,16 @@ class ShoppingCartAppSpec
           extractOffset = env => env.offset)
       val projection =
         TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](system, projectionId, sourceProvider, handler)
-      //import scala.concurrent.duration._
-      import akka.actor.typed.scaladsl.adapter._
-      projectionTestKit.run(projection) {
-        // NOTE: will this work with akka typed?
-        EventFilter
-          .info(
-            source = classOf[DailyCheckoutProjectionHandler].getName(),
-            message =
-              "ShoppingCartProjectionHandler(tag) current daily count for today [2020-01-01T00:00:00Z] is 10 MDC: {}",
-            occurrences = 1)
-          .intercept {}(system.toClassic)
-      }
+
+      LoggingTestKit
+        .info("ShoppingCartProjectionHandler(tag) current daily count for today [2020-01-01T00:00:00Z] is 10")
+        .expect {
+          projectionTestKit.runWithTestSink(projection) { testSink =>
+            testSink.request(numEvents)
+            testSink.expectNextN(numEvents)
+          }
+        }
     }
   }
 }
+// #testKitSpec

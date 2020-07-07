@@ -1,24 +1,24 @@
-package akka.projection.testkit.scaladsl
+package akka.projection.testkit
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
-import akka.actor.typed.ActorSystem
-import akka.projection.StatusObserver
-import akka.projection.internal.ActorHandlerInit
-import akka.stream.scaladsl.Source
+import akka.Done
 import akka.NotUsed
+import akka.actor.typed.ActorSystem
 import akka.projection.Projection
 import akka.projection.ProjectionId
-import akka.stream.KillSwitches
-import akka.stream.SharedKillSwitch
-import akka.Done
 import akka.projection.RunningProjection
+import akka.projection.StatusObserver
+import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
-import akka.projection.internal.SettingsImpl
 import akka.projection.internal.RestartBackoffSettings
+import akka.projection.internal.SettingsImpl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
+import akka.stream.KillSwitches
+import akka.stream.SharedKillSwitch
+import akka.stream.scaladsl.Source
 
 // FIXME: this should be refactored as part of #198
 object TestProjection {
@@ -116,5 +116,3 @@ class TestSourceProvider[Offset, Envelope] private[projection] (
 
   override def extractCreationTime(envelope: Envelope): Long = _extractCreationTime(envelope)
 }
-
-class TestEnvelope[Event] {}
