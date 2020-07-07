@@ -110,7 +110,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
             if (buffer.isEmpty) None
             else if (buffer.forall(_.mergeable)) {
               Some(
-                fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(buffer.toList))
+                fromStorageRepresentation[MergeableOffset[_], Offset](MultipleOffsets(buffer.toList))
                   .asInstanceOf[Offset])
             } else {
               buffer.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])

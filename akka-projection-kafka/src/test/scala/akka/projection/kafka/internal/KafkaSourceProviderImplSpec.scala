@@ -4,6 +4,8 @@
 
 package akka.projection.kafka.internal
 
+import java.lang.{ Long => JLong }
+
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -14,6 +16,7 @@ import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorSystem
 import akka.kafka.ConsumerSettings
 import akka.kafka.scaladsl.Consumer
+import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.Projection
@@ -24,8 +27,7 @@ import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
-import akka.projection.kafka.GroupOffsets
-import akka.projection.kafka.GroupOffsets.TopicPartitionKey
+import akka.projection.kafka.KafkaOffsets
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
@@ -64,7 +66,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
       val provider =
         new KafkaSourceProviderImpl(system, settings, Set(topic), metadataClient, KafkaSourceProviderSettings(system)) {
           override protected[internal] def _source(
-              readOffsets: () => Future[Option[GroupOffsets]],
+              readOffsets: () => Future[Option[MergeableOffset[JLong]]],
               numPartitions: Int): Source[ConsumerRecord[String, String], Consumer.Control] =
             consumerSource
         }
@@ -112,15 +114,17 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
   // FIXME: Copied mostly from ProjectionTestKitSpec.
   // Maybe a `TestProjection` could be abstracted out and reused to reduce test boilerplate
   private[projection] case class TestProjection(
-      sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]]
-        with VerifiableSourceProvider[GroupOffsets, ConsumerRecord[String, String]],
+      sourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]]
+        with VerifiableSourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]],
       topic: String,
       partitions: Int)
       extends Projection[ConsumerRecord[Int, Int]]
       with SettingsImpl[TestProjection] {
 
-    val groupOffsets: GroupOffsets = GroupOffsets(
-      (0 until partitions).map(i => TopicPartitionKey(new TopicPartition(topic, i)) -> 0L).toMap)
+    val mergeableOffset: MergeableOffset[JLong] = MergeableOffset(
+      (0 until partitions)
+        .map(i => KafkaOffsets.partitionToKey(topic, i) -> JLong.valueOf(0L))
+        .toMap)
 
     val probe: TestProbe[ConsumerRecord[String, String]] = createTestProbe[ConsumerRecord[String, String]]()
 
@@ -162,14 +166,14 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
         val futSource =
           sourceProvider
-            .source(() => Future.successful(Option(groupOffsets)))
+            .source(() => Future.successful(Option(mergeableOffset)))
 
         Source
           .futureSource(futSource)
           .map(env => (sourceProvider.extractOffset(env), env))
           .mapMaterializedValue(fut => fut.map(_ => Done))
           .filter {
-            case (offset: GroupOffsets, _) =>
+            case (offset: MergeableOffset[JLong], _) =>
               sourceProvider.verifyOffset(offset) match {
                 case VerificationSuccess    => true
                 case VerificationFailure(_) => false

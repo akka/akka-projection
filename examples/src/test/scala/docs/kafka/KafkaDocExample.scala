@@ -4,7 +4,7 @@
 
 package docs.kafka
 
-import akka.actor.typed.scaladsl.LoggerOps
+import java.lang.{ Long => JLong }
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -14,14 +14,15 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.kafka.ProducerSettings
 import akka.kafka.scaladsl.SendProducer
+import akka.projection.MergeableOffset
 import akka.projection.Projection
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.jdbc.scaladsl.JdbcProjection
-import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
@@ -29,10 +30,10 @@ import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import jdocs.jdbc.HibernateJdbcSession
+import jdocs.jdbc.HibernateSessionFactory
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringSerializer
 import org.slf4j.LoggerFactory
-import jdocs.jdbc.HibernateSessionFactory
 //#imports
 import akka.kafka.ConsumerSettings
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -111,16 +112,23 @@ object KafkaDocExample {
   //#wordPublisher
 
   val config: Config = ConfigFactory.parseString("""
-    akka.projection.slick = {
-
-      profile = "slick.jdbc.H2Profile$"
-
-      db = {
-       url = "jdbc:h2:mem:test1"
-       driver = org.h2.Driver
-       connectionPool = disabled
-       keepAliveConnection = true
+    akka.projection.jdbc = {
+      dialect = "h2-dialect"
+      blocking-jdbc-dispatcher {
+        type = Dispatcher
+        executor = "thread-pool-executor"
+        thread-pool-executor {
+          fixed-pool-size = 10
+        }
+        throughput = 1
       }
+    
+      offset-store {
+        schema = ""
+        table = "AKKA_PROJECTION_OFFSET_STORE"
+      }
+    
+      debug.verbose-offset-store-logging = false
     }
     """)
 
@@ -138,7 +146,7 @@ object KafkaDocExample {
         .withGroupId(groupId)
         .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
-    val sourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
+    val sourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
       KafkaSourceProvider(system, consumerSettings, Set(topicName))
     //#sourceProvider
   }
@@ -234,6 +242,8 @@ object KafkaDocExample {
    * }}}
    */
   def main(args: Array[String]): Unit = {
+    val sessionProvider = new HibernateSessionFactory
+    JdbcProjection.createOffsetTableIfNotExists(() => sessionProvider.newInstance())
     system
   }
 

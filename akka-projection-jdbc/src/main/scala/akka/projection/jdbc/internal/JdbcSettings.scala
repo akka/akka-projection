@@ -65,7 +65,8 @@ private[projection] object JdbcSettings {
     if (config.hasPath(pathToPoolSize)) {
       if (config.getValue(pathToPoolSize).valueType() == ConfigValueType.STRING) {
         throw new IllegalArgumentException(
-          s"Config value for '$dispatcherConfigPath.$pathToPoolSize' isn't configured. " +
+          s"Config value for '$dispatcherConfigPath.$pathToPoolSize' isn't configured. Current value is [${config
+            .getValue(pathToPoolSize)}]. " +
           "The thread pool size must be as large as the JDBC connection pool.")
       }
     }

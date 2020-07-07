@@ -20,7 +20,6 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
-import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
@@ -251,10 +250,10 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
       }
 
       sourceProvider match {
-        case _: MergeableOffsetSourceProvider[_, Offset, Envelope] =>
+        case _: MergeableOffsetSourceProvider[Offset, Envelope] =>
           val batches = envelopesAndOffsets
             .flatMap {
-              case context @ ProjectionContextImpl(offset: MergeableOffset[MergeableKey, _] @unchecked, _, _, _) =>
+              case context @ ProjectionContextImpl(offset: MergeableOffset[_] @unchecked, _, _, _) =>
                 offset.entries.toSeq.map {
                   case (key, _) => (key, context)
                 }
@@ -268,7 +267,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
                 val envs = keyAndContexts.map {
                   case (_, context) => context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]]
                 }
-                key.surrogateKey -> envs
+                key -> envs
             }
 
           // process batches in sequence, but not concurrently, in order to provide singled threaded guarantees
