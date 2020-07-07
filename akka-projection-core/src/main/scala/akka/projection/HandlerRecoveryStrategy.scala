@@ -10,7 +10,7 @@ import akka.annotation.InternalApi
 import akka.util.JavaDurationConverters._
 
 /**
- * Error handling strategy when processing an `Envelope` fails. The default is defined in [[ProjectionSettings]].
+ * Error handling strategy when processing an `Envelope` fails. The default is defined in configuration .
  */
 sealed trait HandlerRecoveryStrategy
 sealed trait StrictRecoveryStrategy extends HandlerRecoveryStrategy
@@ -66,7 +66,7 @@ object HandlerRecoveryStrategy {
   /**
    * INTERNAL API: placed here instead of the `internal` package because of sealed trait
    */
-  @InternalApi private[akka] object Internal {
+  @InternalApi private[projection] object Internal {
     case object Fail extends StrictRecoveryStrategy with RetryRecoveryStrategy
     case object Skip extends StrictRecoveryStrategy with RetryRecoveryStrategy
 

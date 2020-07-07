@@ -1,6 +1,6 @@
-# Offset in relational DB with Slick
+# Offset in a relational DB with Slick
 
-The @apidoc[SlickProjection] has support for storing the offset in a relational database with
+The @apidoc[SlickProjection] has support for storing the offset in a relational database using
 [Slick](http://scala-slick.org) (JDBC). This is only an option for Scala and for Java the
 @ref:[offset can be stored in relational DB with JDBC](jdbc.md).
 
@@ -37,7 +37,9 @@ The offset is stored in the same transaction as the `DBIO` returned from the `ha
 processing semantics if the projection is restarted from previously stored offset.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #projection-imports #actor-system #exactlyOnce }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #projection-imports #exactlyOnce }
+
+The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
 ## at-least-once
 
@@ -46,12 +48,12 @@ This means that if the projection is restarted from a previously stored offset s
 than once.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #atLeastOnce }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #atLeastOnce }
 
 The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
-This window can be defined with `withSaveOffset` of the returned `AtLeastOnceSlickProjection`.
+This window can be defined with `withSaveOffset` of the returned `AtLeastOnceProjection`.
 The default settings for the window is defined in configuration section `akka.projection.at-least-once`.
-There is a performance benefit of not storing the offset too often but the drawback is that there can be more
+There is a performance benefit of not storing the offset too often, but the drawback is that there can be more
 duplicates when the projection that will be processed again when the projection is restarted.
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
@@ -61,10 +63,10 @@ The @ref:[`ShoppingCartHandler` is shown below](#handler).
 The envelopes can be grouped before processing, which can be useful for batch updates.
 
 Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #grouped }
+:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #grouped }
 
 The envelopes are grouped within a time window, or limited by a number of envelopes, whatever happens first.
-This window can be defined with `withGroup` of the returned `GroupedSlickProjection`. The default settings for
+This window can be defined with `withGroup` of the returned `GroupedProjection`. The default settings for
 the window is defined in configuration section `akka.projection.grouped`.
 
 When using `groupedWithin` the handler is a `SlickHandler[immutable.Seq[EventEnvelope[ShoppingCart.Event]]]`.
@@ -83,6 +85,10 @@ A handler that is consuming `ShoppingCart.Event` from `eventsByTag` can look lik
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #handler-imports #handler }
 
+@@@ note { title=Hint }
+Such simple handlers can also be defined as plain functions via the helper `SlickHandler.apply` factory method.
+@@@
+
 where the `OrderRepository` is:
 
 Scala
@@ -93,11 +99,10 @@ with the Slick `DatabaseConfig`:
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #db-config }
 
-Such simple handlers can also be defined as plain functions via the helper `SlickHandler.apply` factory method.
 
 ### Grouped handler
 
-When using @ref:[`SlickProjection.groupedWithin`](#groupedwithin) the handler is processing a `Seq` of envolopes.
+When using @ref:[`SlickProjection.groupedWithin`](#groupedwithin) the handler is processing a `Seq` of envelopes.
 
 Scala
 :  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #grouped-handler }
@@ -117,6 +122,25 @@ instance should use a new `Handler` instance.
 
 @@@
 
+### Async handler
+
+The @apidoc[Handler] can be used with `SlickProjection.atLeastOnceAsync` and 
+`SlickProjection.groupedWithinAsync` if the handler is not storing the projection result in the database.
+The handler could @ref:[send to a Kafka topic](kafka.md#sending-to-kafka) or integrate with something else.
+
+There are several examples of such `Handler` in the @ref:[documentation for Cassandra Projections](cassandra.md#handler).
+Same type of handlers can be used with `SlickProjection` instead of `CassandraProjection`.
+
+### Actor handler
+
+A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html),
+which is described in @ref:[Processing with Actor](actor.md).
+
+### Flow handler
+
+An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes,
+which is described in @ref:[Processing with Akka Streams](flow.md).
+
 ### Handler lifecycle
 
 You can override the `start` and `stop` methods of the @apidoc[SlickHandler] to implement initialization
@@ -125,46 +149,25 @@ Those methods are also called when the `Projection` is restarted after failure.
 
 See also @ref:[error handling](error.md).
 
-## Processing with Akka Streams
-
-An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes with at-least-once
-semantics.
-
-Scala
-:  @@snip [SlickProjectionDocExample.scala](/examples/src/test/scala/docs/slick/SlickProjectionDocExample.scala) { #actor-system #atLeastOnceFlow }
-
-The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
-in the context of the `FlowWithContext` and is stored in the database when corresponding `Done` is emitted.
-Since the offset is stored after processing the envelope it means that if the projection is restarted
-from previously stored offset some envelopes may be processed more than once.
-
-There are a few caveats to be aware of:
-
-* If the flow filters out envelopes the corresponding offset will not be stored, and such envelope
-  will be processed again if the projection is restarted and no later offset was stored.
-* The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
-  that the first offset is stored and when the projection is restarted that offset is considered completed even
-  though more of the duplicated enveloped were never processed.
-* The flow must not reorder elements, because the offsets may be stored in the wrong order and
-  and when the projection is restarted all envelopes up to the latest stored offset are considered
-  completed even though some of them may not have been processed. This is the reason the flow is
-  restricted to `FlowWithContext` rather than ordinary `Flow`.
-
 ## Schema
 
 The database schema for the offset storage table:
 
-```
-create table if not exists "AKKA_PROJECTION_OFFSET_STORE" (
-  "PROJECTION_NAME" CHAR(255) NOT NULL,
-  "PROJECTION_KEY" CHAR(255) NOT NULL,
-  "OFFSET" CHAR(255) NOT NULL,
-  "MANIFEST" VARCHAR(4) NOT NULL,
-  "MERGEABLE" BOOLEAN NOT NULL,
-  "LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL);
+Postgres
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
 
-alter table "AKKA_PROJECTION_OFFSET_STORE" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY");
-```
+MySQL
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mysql }
+
+MS SQL Server
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mssql }
+
+Oracle
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-oracle }
+
+H2
+:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
+
 
 ## Offset types
 
@@ -175,6 +178,9 @@ The supported offset types of the `SlickProjection` are:
 * `String`
 * `Int`
 * `Long`
+* Any other type that has a configured Akka Serializer is stored with base64 encoding of the serialized bytes.
+  For example the [Akka Persistence Spanner](https://doc.akka.io/docs/akka-persistence-spanner/current/) offset
+  is supported in this way.
 
 ## Configuration
 

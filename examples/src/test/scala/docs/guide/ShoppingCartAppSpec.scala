@@ -8,7 +8,9 @@ import scala.concurrent.Future
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.Done
+import akka.persistence.query.Offset
 import akka.projection.ProjectionId
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.testkit.scaladsl.TestProjection
 import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.testkit.EventFilter
@@ -35,21 +37,26 @@ class ShoppingCartAppSpec
 
   val projectionTestKit = ProjectionTestKit(testKit)
 
+  def createEnvelope(event: ShoppingCartEvents.Event, seqNo: Long, timestamp: Long = 0L) =
+    EventEnvelope(Offset.sequence(seqNo), "persistenceId", seqNo, event, timestamp)
+
   "The DailyCheckoutProjectionHandler" should {
     "only count CheckOut events" in {
       val repo = new MockDailyCheckoutRepository
       val handler = new DailyCheckoutProjectionHandler("tag", system, repo)
 
-      val events = List[(Long, ShoppingCartEvents.Event)](
-        0L -> ShoppingCartEvents.ItemAdded("a70989d4", "batteries", 1),
-        1L -> ShoppingCartEvents.ItemQuantityAdjusted("a70989d4", "batteries", 1), //2007-12-03T10:15:30.00Z
-        2L -> ShoppingCartEvents.CheckedOut("a70989d4", Instant.parse("2020-01-01T12:10:00.00Z")),
-        3L -> ShoppingCartEvents.ItemAdded("0d12dd9d", "crayons", 1),
-        4L -> ShoppingCartEvents.CheckedOut("0d12dd9d", Instant.parse("2020-01-01T08:00:00.00Z")))
+      val events = List[EventEnvelope[ShoppingCartEvents.Event]](
+        createEnvelope(ShoppingCartEvents.ItemAdded("a70989d4", "batteries", 1), 0L),
+        createEnvelope(ShoppingCartEvents.ItemQuantityAdjusted("a70989d4", "batteries", 1), 1L),
+        createEnvelope(ShoppingCartEvents.CheckedOut("a70989d4", Instant.parse("2020-01-01T12:10:00.00Z")), 2L),
+        createEnvelope(ShoppingCartEvents.ItemAdded("0d12dd9d", "crayons", 1), 3L),
+        createEnvelope(ShoppingCartEvents.CheckedOut("0d12dd9d", Instant.parse("2020-01-01T08:00:00.00Z")), 4L))
 
       val projectionId = ProjectionId("name", "key")
-      val sourceProvider = TestSourceProvider(events)
-      val projection = TestProjection[ShoppingCartEvents.Event](system, projectionId, sourceProvider, handler)
+      val sourceProvider =
+        TestSourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]](events, extractOffset = env => env.offset)
+      val projection =
+        TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](system, projectionId, sourceProvider, handler)
 
       projectionTestKit.runWithTestSink(projection) { testSink =>
         testSink.request(events.length)
@@ -64,13 +71,19 @@ class ShoppingCartAppSpec
 
       val events =
         for (i <- 0L to 10L)
-          yield (i -> (ShoppingCartEvents.CheckedOut(
-            java.util.UUID.randomUUID().toString,
-            Instant.parse("2020-01-01T08:00:00.00Z")): ShoppingCartEvents.Event))
+          yield createEnvelope(
+            ShoppingCartEvents.CheckedOut(
+              java.util.UUID.randomUUID().toString,
+              Instant.parse("2020-01-01T08:00:00.00Z")): ShoppingCartEvents.Event,
+            i)
 
       val projectionId = ProjectionId("name", "key")
-      val sourceProvider = TestSourceProvider(events.toList)
-      val projection = TestProjection[ShoppingCartEvents.Event](system, projectionId, sourceProvider, handler)
+      val sourceProvider =
+        TestSourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]](
+          events.toList,
+          extractOffset = env => env.offset)
+      val projection =
+        TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](system, projectionId, sourceProvider, handler)
       //import scala.concurrent.duration._
       import akka.actor.typed.scaladsl.adapter._
       projectionTestKit.run(projection) {

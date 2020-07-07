@@ -4,19 +4,16 @@
 
 package docs.slick
 
-import akka.actor.typed.scaladsl.LoggerOps
 import java.time.Instant
 
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
-import akka.projection.ProjectionContext
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
-import akka.projection.EventEnvelope
-import akka.stream.scaladsl.FlowWithContext
 import docs.eventsourced.ShoppingCart
 
 //#projection-imports
@@ -73,11 +70,11 @@ class SlickProjectionDocExample {
     override def process(envelope: EventEnvelope[ShoppingCart.Event]): DBIO[Done] = {
       envelope.event match {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info(s"Shopping cart $cartId was checked out at $time")
           repository.save(Order(cartId, time))
 
         case otherEvent =>
-          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug(s"Shopping cart ${otherEvent.cartId} changed by $otherEvent")
           DBIO.successful(Done)
       }
     }
@@ -94,11 +91,11 @@ class SlickProjectionDocExample {
     override def process(envelopes: immutable.Seq[EventEnvelope[ShoppingCart.Event]]): DBIO[Done] = {
       val dbios = envelopes.map(_.event).map {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info(s"Shopping cart $cartId was checked out at $time")
           repository.save(Order(cartId, time))
 
         case otherEvent =>
-          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug(s"Shopping cart ${otherEvent.cartId} changed by $otherEvent")
           DBIO.successful(Done)
       }
       DBIO.sequence(dbios).map(_ => Done)
@@ -106,9 +103,7 @@ class SlickProjectionDocExample {
   }
   //#grouped-handler
 
-  //#actor-system
   implicit val system = ActorSystem[Nothing](Behaviors.empty, "Example")
-  //#actor-system
 
   //#db-config
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
@@ -163,33 +158,6 @@ class SlickProjectionDocExample {
           handler = () => new GroupedShoppingCartHandler(repository))
         .withGroup(groupAfterEnvelopes = 20, groupAfterDuration = 500.millis)
     //#grouped
-  }
-
-  object IllustrateAtLeastOnceFlow {
-    //#atLeastOnceFlow
-    val logger = LoggerFactory.getLogger(getClass)
-
-    val flow = FlowWithContext[EventEnvelope[ShoppingCart.Event], ProjectionContext]
-      .map(envelope => envelope.event)
-      .map {
-        case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
-          Done
-
-        case otherEvent =>
-          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
-          Done
-      }
-
-    val projection =
-      SlickProjection
-        .atLeastOnceFlow(
-          projectionId = ProjectionId("shopping-carts", "carts-1"),
-          sourceProvider,
-          dbConfig,
-          handler = flow)
-        .withSaveOffset(afterEnvelopes = 100, afterDuration = 500.millis)
-    //#atLeastOnceFlow
   }
 
 }

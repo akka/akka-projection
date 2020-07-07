@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition
 /**
  * INTERNAL API
  */
-@InternalApi trait MetadataClientAdapter {
+@InternalApi private[projection] trait MetadataClientAdapter {
   def getBeginningOffsets(assignedTps: Set[TopicPartition]): Future[Map[TopicPartition, Long]]
   def numPartitions(topics: Set[String]): Future[Int]
   def stop(): Unit
@@ -30,7 +30,7 @@ import org.apache.kafka.common.TopicPartition
 /**
  * INTERNAL API
  */
-@InternalApi object MetadataClientAdapterImpl {
+@InternalApi private[projection] object MetadataClientAdapterImpl {
   private val KafkaMetadataTimeout = 10.seconds // FIXME get from config
 
   private val consumerActorNameCounter = new AtomicInteger
@@ -41,7 +41,9 @@ import org.apache.kafka.common.TopicPartition
 /**
  * INTERNAL API
  */
-@InternalApi class MetadataClientAdapterImpl(system: ActorSystem[_], settings: ConsumerSettings[_, _])
+@InternalApi private[projection] class MetadataClientAdapterImpl(
+    system: ActorSystem[_],
+    settings: ConsumerSettings[_, _])
     extends MetadataClientAdapter {
   import MetadataClientAdapterImpl._
 

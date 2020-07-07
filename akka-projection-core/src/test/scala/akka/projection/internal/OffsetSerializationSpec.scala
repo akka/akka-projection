@@ -4,20 +4,63 @@
 
 package akka.projection.internal
 
+import java.nio.charset.StandardCharsets
+import java.util.Base64
 import java.util.UUID
 
 import scala.collection.immutable
 
+import akka.actor.ExtendedActorSystem
+import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.StringKey
-import org.scalatest.TestSuite
-import org.scalatest.matchers.should.Matchers
+import akka.serialization.SerializerWithStringManifest
+import akka.util.unused
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class OffsetSerializationSpec extends TestSuite with Matchers with AnyWordSpecLike {
+object OffsetSerializationSpec {
+  class TestSerializer(@unused system: ExtendedActorSystem) extends SerializerWithStringManifest {
+    def identifier: Int = 9999
+
+    def manifest(o: AnyRef): String =
+      "a"
+
+    def toBinary(o: AnyRef): Array[Byte] = o match {
+      case OtherOffset(s) => s.getBytes(StandardCharsets.UTF_8)
+      case _ =>
+        throw new IllegalArgumentException(s"Can't serialize object of type ${o.getClass} in [${getClass.getName}]")
+    }
+
+    def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = manifest match {
+      case "a" => OtherOffset(new String(bytes, StandardCharsets.UTF_8))
+      case _   => throw new IllegalArgumentException(s"Unknown manifest [$manifest]")
+    }
+  }
+
+  final case class OtherOffset(s: String)
+}
+
+class OffsetSerializationSpec
+    extends ScalaTestWithActorTestKit("""
+      akka.actor {
+        serializers {
+          test = "akka.projection.internal.OffsetSerializationSpec$TestSerializer"
+        }
+        serialization-bindings {
+          "akka.projection.internal.OffsetSerializationSpec$OtherOffset" = test
+        }
+      }
+    """)
+    with AnyWordSpecLike
+    with LogCapturing {
+  import OffsetSerializationSpec._
   import OffsetSerialization._
+  private val offsetSerialization = new OffsetSerialization(system)
+  import offsetSerialization.fromStorageRepresentation
+  import offsetSerialization.toStorageRepresentation
 
   private val id = ProjectionId("user-view", "1")
   private val longValue = Long.MaxValue - 17
@@ -64,6 +107,13 @@ class OffsetSerializationSpec extends TestSuite with Matchers with AnyWordSpecLi
       val timeOffset = query.TimeBasedUUID(UUID.fromString(uuidString))
       toStorageRepresentation(id, timeOffset) shouldBe SingleOffset(id, TimeBasedUUIDManifest, uuidString)
       fromStorageRepresentation[query.TimeBasedUUID](uuidString, TimeBasedUUIDManifest) shouldBe timeOffset
+    }
+
+    "convert other offsets types with Akka Serialization" in {
+      val offsetValue = "123-åäö"
+      val base64EncodedValue = Base64.getEncoder.encodeToString(offsetValue.getBytes(StandardCharsets.UTF_8))
+      toStorageRepresentation(id, OtherOffset(offsetValue)) shouldBe SingleOffset(id, "9999:a", base64EncodedValue)
+      fromStorageRepresentation[OtherOffset](base64EncodedValue, "9999:a") shouldBe OtherOffset(offsetValue)
     }
   }
 

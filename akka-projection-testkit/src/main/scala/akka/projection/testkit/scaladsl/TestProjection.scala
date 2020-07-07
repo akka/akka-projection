@@ -13,40 +13,42 @@ import akka.projection.ProjectionId
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.Done
-import akka.persistence.query.Offset
 import akka.projection.RunningProjection
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SettingsImpl
 import akka.projection.internal.RestartBackoffSettings
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.EventEnvelope
 
 // FIXME: this should be refactored as part of #198
 object TestProjection {
-  def apply[Event](
+  def apply[Offset, Envelope](
       system: ActorSystem[_],
       projectionId: ProjectionId,
-      sourceProvider: SourceProvider[Offset, EventEnvelope[Event]],
-      handler: Handler[EventEnvelope[Event]]): Projection[EventEnvelope[Event]] =
+      sourceProvider: SourceProvider[Offset, Envelope],
+      handler: Handler[Envelope]): Projection[Envelope] =
     new TestProjection(projectionId, sourceProvider, handler)(system)
 }
 
-class TestProjection[Event](
+class TestProjection[Offset, Envelope](
     val projectionId: ProjectionId,
-    sourceProvider: SourceProvider[Offset, EventEnvelope[Event]],
-    handler: Handler[EventEnvelope[Event]])(implicit val system: ActorSystem[_])
-    extends Projection[EventEnvelope[Event]]
-    with SettingsImpl[TestProjection[Event]] {
+    sourceProvider: SourceProvider[Offset, Envelope],
+    handler: Handler[Envelope])(implicit val system: ActorSystem[_])
+    extends Projection[Envelope]
+    with SettingsImpl[TestProjection[Offset, Envelope]] {
 
-  override val statusObserver: StatusObserver[EventEnvelope[Event]] = NoopStatusObserver
+  override val statusObserver: StatusObserver[Envelope] = NoopStatusObserver
 
-  override def withStatusObserver(observer: StatusObserver[EventEnvelope[Event]]): TestProjection[Event] =
+  override def withStatusObserver(observer: StatusObserver[Envelope]): TestProjection[Offset, Envelope] =
     this // no need for StatusObserver in tests
 
-  final override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection[Event] = this
-  override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection[Event] = this
-  override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection[Event] = this
+  final override def withRestartBackoffSettings(
+      restartBackoff: RestartBackoffSettings): TestProjection[Offset, Envelope] = this
+  override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection[Offset, Envelope] =
+    this
+  override def withGroup(
+      groupAfterEnvelopes: Int,
+      groupAfterDuration: FiniteDuration): TestProjection[Offset, Envelope] = this
 
   private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
@@ -61,9 +63,8 @@ class TestProjection[Event](
    * This internal class will hold the KillSwitch that is needed
    * when building the mappedSource and when running the projection (to stop)
    */
-  private class InternalProjectionState(
-      sourceProvider: SourceProvider[Offset, EventEnvelope[Event]],
-      handler: Handler[EventEnvelope[Event]])(implicit val system: ActorSystem[_]) {
+  private class InternalProjectionState(sourceProvider: SourceProvider[Offset, Envelope], handler: Handler[Envelope])(
+      implicit val system: ActorSystem[_]) {
 
     private val killSwitch = KillSwitches.shared(projectionId.id)
 
@@ -93,22 +94,27 @@ class TestProjection[Event](
 
 // FIXME: this should be replaced as part of #198
 object TestSourceProvider {
-  def apply[Event](sourceEvents: List[(Long, Event)]): SourceProvider[Offset, EventEnvelope[Event]] = {
-    new TestSourceProvider[Event](sourceEvents)
+  def apply[Offset, Envelope](
+      sourceEvents: List[Envelope],
+      extractOffset: Envelope => Offset,
+      extractCreationTime: Envelope => Long = (_: Envelope) => 0L): SourceProvider[Offset, Envelope] = {
+    new TestSourceProvider[Offset, Envelope](sourceEvents, extractOffset, extractCreationTime)
   }
 }
 
-class TestSourceProvider[Event](sourceEvents: List[(Long, Event)])
-    extends SourceProvider[Offset, EventEnvelope[Event]] {
-  override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[Event], NotUsed]] =
+class TestSourceProvider[Offset, Envelope] private[projection] (
+    sourceEvents: List[Envelope],
+    _extractOffset: Envelope => Offset,
+    _extractCreationTime: Envelope => Long)
+    extends SourceProvider[Offset, Envelope] {
+  override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] =
     Future.successful {
-      val envelopes = sourceEvents.map {
-        case (offset, event) =>
-          val o = Offset.sequence(offset)
-          new EventEnvelope(o, "", 0L, event, 0L)
-      }
-      Source(envelopes).concat(Source.maybe)
+      Source(sourceEvents).concat(Source.maybe)
     }
 
-  override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
+  override def extractOffset(envelope: Envelope): Offset = _extractOffset(envelope)
+
+  override def extractCreationTime(envelope: Envelope): Long = _extractCreationTime(envelope)
 }
+
+class TestEnvelope[Event] {}

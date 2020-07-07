@@ -12,7 +12,7 @@ import akka.projection.StatusObserver
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object NoopStatusObserver extends StatusObserver[Any] {
+@InternalApi private[projection] object NoopStatusObserver extends StatusObserver[Any] {
 
   // Java access
   def getInstance[Envelope]: StatusObserver[Envelope] = NoopStatusObserver

@@ -6,10 +6,11 @@ package akka.projection.kafka.javadsl
 
 import akka.actor.typed.ActorSystem
 import akka.kafka.ConsumerSettings
+import akka.projection.javadsl.SourceProvider
 import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.internal.KafkaSourceProviderImpl
+import akka.projection.kafka.internal.KafkaSourceProviderSettings
 import akka.projection.kafka.internal.MetadataClientAdapterImpl
-import akka.projection.javadsl.SourceProvider
 import org.apache.kafka.clients.consumer.ConsumerRecord
 
 object KafkaSourceProvider {
@@ -26,7 +27,7 @@ object KafkaSourceProvider {
       system,
       settings,
       topics.asScala.toSet,
-      new MetadataClientAdapterImpl(system, settings))
+      new MetadataClientAdapterImpl(system, settings),
+      KafkaSourceProviderSettings(system))
   }
-
 }

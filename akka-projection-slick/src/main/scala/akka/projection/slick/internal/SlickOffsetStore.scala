@@ -11,6 +11,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.Done
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.projection.MergeableOffset
@@ -21,19 +22,22 @@ import slick.jdbc.JdbcProfile
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class SlickOffsetStore[P <: JdbcProfile](
+@InternalApi private[projection] class SlickOffsetStore[P <: JdbcProfile](
+    system: ActorSystem[_],
     val db: P#Backend#Database,
     val profile: P,
     slickSettings: SlickSettings,
     clock: Clock) {
   import OffsetSerialization.MultipleOffsets
   import OffsetSerialization.SingleOffset
-  import OffsetSerialization.fromStorageRepresentation
-  import OffsetSerialization.toStorageRepresentation
   import profile.api._
 
-  def this(db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
-    this(db, profile, slickSettings, Clock.systemUTC())
+  def this(system: ActorSystem[_], db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
+    this(system, db, profile, slickSettings, Clock.systemUTC())
+
+  private val offsetSerialization = new OffsetSerialization(system)
+  import offsetSerialization.fromStorageRepresentation
+  import offsetSerialization.toStorageRepresentation
 
   def readOffset[Offset](projectionId: ProjectionId)(implicit ec: ExecutionContext): Future[Option[Offset]] = {
     val action = offsetTable.filter(_.projectionName === projectionId.name).result.map { maybeRow =>
@@ -72,13 +76,15 @@ import slick.jdbc.JdbcProfile
 
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
 
-    def projectionName = column[String]("PROJECTION_NAME", O.Length(255, varying = false))
-    def projectionKey = column[String]("PROJECTION_KEY", O.Length(255, varying = false))
-    def offset = column[String]("OFFSET", O.Length(255, varying = false))
+    def projectionName = column[String]("PROJECTION_NAME", O.Length(255))
+    def projectionKey = column[String]("PROJECTION_KEY", O.Length(255))
+    def offset = column[String]("OFFSET", O.Length(255))
     def manifest = column[String]("MANIFEST", O.Length(4))
     def mergeable = column[Boolean]("MERGEABLE")
     def lastUpdated = column[Instant]("LAST_UPDATED")
+
     def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
+    def idx = index("PROJECTION_NAME_INDEX", projectionName)
 
     def * = (projectionName, projectionKey, offset, manifest, mergeable, lastUpdated).mapTo[OffsetRow]
   }

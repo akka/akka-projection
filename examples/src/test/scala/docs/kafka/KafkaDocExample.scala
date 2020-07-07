@@ -4,8 +4,6 @@
 
 package docs.kafka
 
-import scala.concurrent.Await
-
 import akka.actor.typed.scaladsl.LoggerOps
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -25,16 +23,16 @@ import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.scaladsl.KafkaSourceProvider
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import jdocs.jpa.HibernateSessionProvider
-import jdocs.jpa.HibernateSessionProvider.HibernateJdbcSession
+import jdocs.jdbc.HibernateJdbcSession
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringSerializer
 import org.slf4j.LoggerFactory
-
+import jdocs.jdbc.HibernateSessionFactory
 //#imports
 import akka.kafka.ConsumerSettings
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -87,15 +85,17 @@ object KafkaDocExample {
     }
 
     override def extractOffset(env: WordEnvelope): Long = env.offset
+
+    override def extractCreationTime(env: WordEnvelope): Long = 0L
   }
   //#wordSource
 
   //#wordPublisher
   class WordPublisher(topic: String, sendProducer: SendProducer[String, String])(implicit ec: ExecutionContext)
-      extends JdbcHandler[WordEnvelope, HibernateJdbcSession] {
+      extends Handler[WordEnvelope] {
     private val logger = LoggerFactory.getLogger(getClass)
 
-    override def process(session: HibernateJdbcSession, envelope: WordEnvelope): Unit = {
+    override def process(envelope: WordEnvelope): Future[Done] = {
       val word = envelope.word
       // using the word as the key and `DefaultPartitioner` will select partition based on the key
       // so that same word always ends up in same partition
@@ -105,8 +105,7 @@ object KafkaDocExample {
         logger.infoN("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition)
         Done
       }
-      // FIXME support for async Handler, issue #23
-      Await.result(result, 5.seconds)
+      result
     }
   }
   //#wordPublisher
@@ -148,7 +147,7 @@ object KafkaDocExample {
     import IllustrateSourceProvider._
 
     //#exactlyOnce
-    val sessionProvider = new HibernateSessionProvider
+    val sessionProvider = new HibernateSessionFactory
 
     val projectionId = ProjectionId("WordCount", "wordcount-1")
     val projection =
@@ -176,12 +175,12 @@ object KafkaDocExample {
 
     //#sendToKafkaProjection
     val sourceProvider = new WordSource
-    val sessionProvider = new HibernateSessionProvider
+    val sessionProvider = new HibernateSessionFactory
 
     val projectionId = ProjectionId("PublishWords", "words")
     val projection =
       JdbcProjection
-        .exactlyOnce(
+        .atLeastOnceAsync(
           projectionId,
           sourceProvider,
           () => sessionProvider.newInstance(),
@@ -189,12 +188,11 @@ object KafkaDocExample {
 
     //#sendToKafkaProjection
 
-    // FIXME change above to atLeastOnce
   }
 
   def consumerProjection(n: Int): Projection[ConsumerRecord[String, String]] = {
     import IllustrateSourceProvider.sourceProvider
-    val sessionProvider = new HibernateSessionProvider
+    val sessionProvider = new HibernateSessionFactory
 
     val projectionId = ProjectionId("WordCount", s"wordcount-$n")
     JdbcProjection.exactlyOnce(

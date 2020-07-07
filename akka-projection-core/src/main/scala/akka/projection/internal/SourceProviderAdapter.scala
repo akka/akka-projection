@@ -21,7 +21,7 @@ import akka.stream.scaladsl.Source
 /**
  * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
  */
-@InternalApi private[akka] class SourceProviderAdapter[Offset, Envelope](
+@InternalApi private[projection] class SourceProviderAdapter[Offset, Envelope](
     delegate: javadsl.SourceProvider[Offset, Envelope])
     extends scaladsl.SourceProvider[Offset, Envelope] {
 
@@ -36,4 +36,6 @@ import akka.stream.scaladsl.Source
   }
 
   def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
+
+  def extractCreationTime(envelope: Envelope): Long = delegate.extractCreationTime(envelope)
 }

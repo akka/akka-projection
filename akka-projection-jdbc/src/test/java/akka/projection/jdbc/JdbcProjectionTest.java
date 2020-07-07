@@ -108,7 +108,7 @@ public class JdbcProjectionTest extends JUnitSuite {
 
   private static final JdbcSettings jdbcSettings = JdbcSettings.apply(testKit.system());
   private static final JdbcOffsetStore<PureJdbcSession> offsetStore =
-      new JdbcOffsetStore<>(jdbcSettings, jdbcSessionCreator::create);
+      new JdbcOffsetStore<>(testKit.system(), jdbcSettings, jdbcSessionCreator::create);
 
   private static final scala.concurrent.duration.Duration awaitTimeout =
       scala.concurrent.duration.Duration.create(3, TimeUnit.SECONDS);
@@ -162,12 +162,17 @@ public class JdbcProjectionTest extends JUnitSuite {
     public Long extractOffset(Envelope envelope) {
       return envelope.offset;
     }
+
+    @Override
+    public long extractCreationTime(Envelope envelope) {
+      return 0L;
+    }
   }
 
   private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
 
   private ProjectionId genRandomProjectionId() {
-    return ProjectionId.of(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+    return ProjectionId.of(UUID.randomUUID().toString(), "00");
   }
 
   private void assertStoredOffset(ProjectionId projectionId, long expectedOffset) {

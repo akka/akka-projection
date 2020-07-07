@@ -23,14 +23,19 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
 
   val table: String = config.getString("offset-store.table")
 
-  val dialect = {
+  val verboseLoggingEnabled: Boolean = config.getBoolean("debug.verbose-offset-store-logging")
+
+  val dialect: Dialect = {
     val dialectToLoad = config.getString("dialect")
     if (dialectToLoad.trim.isEmpty)
       throw new IllegalArgumentException(
         s"Dialect type not set. Settings 'akka.projection.jdbc.dialect' currently set to [$dialectToLoad]")
 
     dialectToLoad match {
-      case "h2-dialect" => H2Dialect(schema, table)
+      case "mysql-dialect"                   => MySQLDialect(schema, table)
+      case "h2-dialect" | "postgres-dialect" => DefaultDialect(schema, table)
+      case "mssql-dialect"                   => MSSQLServerDialect(schema, table)
+      case "oracle-dialect"                  => OracleDialect(schema, table)
       case unknown =>
         throw new IllegalArgumentException(
           s"Unknown dialect type: [$unknown]. Check settings 'akka.projection.jdbc.dialect'")

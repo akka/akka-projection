@@ -32,6 +32,7 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
@@ -64,7 +65,7 @@ object SlickProjectionSpec {
 
           # TODO: configure connection pool and slick async executor
           db = {
-            url = "jdbc:h2:mem:projection-test;DB_CLOSE_DELAY=-1"
+            url = "jdbc:h2:mem:slick-projection-test;DB_CLOSE_DELAY=-1"
             driver = org.h2.Driver
             connectionPool = disabled
             keepAliveConnection = true
@@ -112,6 +113,8 @@ object SlickProjectionSpec {
       }
 
     override def extractOffset(env: Envelope): Long = env.offset
+
+    override def extractCreationTime(env: Envelope): Long = 0L
 
     override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
   }
@@ -181,7 +184,7 @@ class SlickProjectionSpec
 
   val dbConfig: DatabaseConfig[H2Profile] = DatabaseConfig.forConfig(SlickSettings.configPath, config)
 
-  val offsetStore = new SlickOffsetStore(dbConfig.db, dbConfig.profile, SlickSettings(system))
+  val offsetStore = new SlickOffsetStore(system, dbConfig.db, dbConfig.profile, SlickSettings(system))
 
   val projectionTestKit = ProjectionTestKit(testKit)
 
@@ -205,8 +208,7 @@ class SlickProjectionSpec
     Await.result(creationFut, 3.seconds)
   }
 
-  private def genRandomProjectionId() =
-    ProjectionId(UUID.randomUUID().toString, UUID.randomUUID().toString)
+  private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
   @tailrec private def eventuallyExpectError(sinkProbe: TestSubscriber.Probe[_]): Throwable = {
     sinkProbe.expectNextOrError() match {
@@ -738,6 +740,40 @@ class SlickProjectionSpec
         handlerProbe.expectMessage(handlerCalled)
       }
     }
+
+    "handle grouped async projection and store offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val result = new StringBuffer()
+
+      def handler(): Handler[immutable.Seq[Envelope]] = new Handler[immutable.Seq[Envelope]] {
+        override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
+          Future {
+            envelopes.foreach(env => result.append(env.message).append("|"))
+          }.map(_ => Done)
+        }
+      }
+
+      val projection =
+        SlickProjection
+          .groupedWithinAsync(
+            projectionId,
+            sourceProvider = sourceProvider(system, entityId),
+            databaseConfig = dbConfig,
+            handler = () => handler())
+          .withGroup(2, 3.seconds)
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
   }
 
   "A Slick at-least-once projection" must {
@@ -1125,6 +1161,38 @@ class SlickProjectionSpec
       }
     }
 
+    "handle async projection and store offset" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val result = new StringBuffer()
+
+      def handler(): Handler[Envelope] = new Handler[Envelope] {
+        override def process(envelope: Envelope): Future[Done] = {
+          Future {
+            result.append(envelope.message).append("|")
+          }.map(_ => Done)
+        }
+      }
+
+      val projection =
+        SlickProjection.atLeastOnceAsync(
+          projectionId,
+          sourceProvider = sourceProvider(system, entityId),
+          databaseConfig = dbConfig,
+          handler = () => handler())
+
+      projectionTestKit.run(projection) {
+        withClue("check - all values were concatenated") {
+          result.toString shouldBe "abc|def|ghi|jkl|mno|pqr|"
+        }
+      }
+      withClue("check - all offsets were seen") {
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+        offset shouldBe 6L
+      }
+    }
+
   }
 
   "A Slick flow projection" must {
@@ -1343,8 +1411,8 @@ class SlickProjectionSpec
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
 
       // backoff will restart
-      statusProbe.expectMessage(TestStatusObserver.Stopped)
       statusProbe.expectMessage(TestStatusObserver.Failed)
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
       handlerProbe.expectMessage(handler.createdMessage)
       handlerProbe.expectMessage(handler.startMessage)
       statusProbe.expectMessage(TestStatusObserver.Started)

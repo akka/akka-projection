@@ -51,13 +51,15 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
   private val projectionId = ProjectionId("test", "1")
   private val someTestException = TestException("err")
   private val neverCompleted = Promise[Done]().future
+  private val telemetry = NoopTelemetry
 
   "HandlerRecovery" must {
     "fail" in {
       val strategy = HandlerRecoveryStrategy.fail
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
@@ -70,7 +72,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val strategy = HandlerRecoveryStrategy.skip
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
@@ -83,7 +86,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val strategy = HandlerRecoveryStrategy.retryAndFail(1, 20.millis)
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
@@ -97,7 +101,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val strategy = HandlerRecoveryStrategy.retryAndFail(3, 20.millis)
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
@@ -113,7 +118,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val strategy = HandlerRecoveryStrategy.retryAndFail(1, 1.second)
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
@@ -132,7 +138,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val strategy = HandlerRecoveryStrategy.retryAndSkip(1, 20.millis)
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
@@ -147,7 +154,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val strategy = HandlerRecoveryStrategy.retryAndSkip(3, 20.millis)
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
         handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
@@ -164,7 +172,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val strategy = HandlerRecoveryStrategy.retryAndFail(100, 1.second)
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val abortException = TestException("abort")
       val abort = Future.failed[Done](abortException)
@@ -179,7 +188,8 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val strategy = HandlerRecoveryStrategy.retryAndFail(100, 1.second)
       val statusProbe = createTestProbe[Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
-      val handlerRecovery = HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver)
+      val handlerRecovery =
+        HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val abort = Promise[Done]()
       val result =

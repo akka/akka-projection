@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import akka.Done;
@@ -22,14 +21,16 @@ import akka.kafka.ProducerSettings;
 import akka.kafka.javadsl.SendProducer;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
+import akka.projection.cassandra.CassandraProjectionTest;
 import akka.projection.javadsl.ExactlyOnceProjection;
+import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
 import akka.projection.kafka.GroupOffsets;
 import akka.projection.kafka.javadsl.KafkaSourceProvider;
 import akka.stream.javadsl.Source;
-import jdocs.jpa.HibernateSessionProvider;
+import jdocs.jdbc.HibernateSessionFactory;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -44,7 +45,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 
 // #imports
 
-import static jdocs.jpa.HibernateSessionProvider.HibernateJdbcSession;
+import jdocs.jdbc.HibernateJdbcSession;
 
 public interface KafkaDocExample {
 
@@ -120,11 +121,16 @@ public interface KafkaDocExample {
     public Long extractOffset(WordEnvelope envelope) {
       return envelope.offset;
     }
+
+    @Override
+    public long extractCreationTime(WordEnvelope envelope) {
+      return 0L;
+    }
   }
   // #wordSource
 
   // #wordPublisher
-  class WordPublisher extends JdbcHandler<WordEnvelope, HibernateJdbcSession> {
+  class WordPublisher extends Handler<WordEnvelope> {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final String topic;
     private final SendProducer<String, String> sendProducer;
@@ -135,7 +141,7 @@ public interface KafkaDocExample {
     }
 
     @Override
-    public void process(HibernateJdbcSession session, WordEnvelope envelope) throws Exception {
+    public CompletionStage<Done> process(WordEnvelope envelope) {
       String word = envelope.word;
       // using the word as the key and `DefaultPartitioner` will select partition based on the key
       // so that same word always ends up in same partition
@@ -152,8 +158,7 @@ public interface KafkaDocExample {
                     recordMetadata.partition());
                 return Done.getInstance();
               });
-      // FIXME support for async Handler, issue #23
-      done.toCompletableFuture().get(5, TimeUnit.SECONDS);
+      return done;
     }
   }
   // #wordPublisher
@@ -184,7 +189,7 @@ public interface KafkaDocExample {
         illustrateSourceProvider();
 
     // #exactlyOnce
-    final HibernateSessionProvider sessionProvider = new HibernateSessionProvider();
+    final HibernateSessionFactory sessionProvider = new HibernateSessionFactory();
 
     ProjectionId projectionId = ProjectionId.of("WordCount", "wordcount-1");
     ExactlyOnceProjection<GroupOffsets, ConsumerRecord<String, String>> projection =
@@ -213,18 +218,16 @@ public interface KafkaDocExample {
 
     // #sendToKafkaProjection
     WordSource sourceProvider = new WordSource();
-    HibernateSessionProvider sessionProvider = new HibernateSessionProvider();
+    HibernateSessionFactory sessionProvider = new HibernateSessionFactory();
 
     ProjectionId projectionId = ProjectionId.of("PublishWords", "words");
     Projection<WordEnvelope> projection =
-        JdbcProjection.exactlyOnce(
+        JdbcProjection.atLeastOnceAsync(
             projectionId,
             sourceProvider,
             sessionProvider::newInstance,
             () -> new WordPublisher(topicName, sendProducer),
             system);
     // #sendToKafkaProjection
-
-    // FIXME change above to atLeastOnce
   }
 }

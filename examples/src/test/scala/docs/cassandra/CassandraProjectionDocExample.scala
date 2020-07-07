@@ -8,6 +8,7 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.ProjectionContext
+import akka.projection.eventsourced.EventEnvelope
 import akka.stream.scaladsl.FlowWithContext
 //#daemon-imports
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
@@ -17,7 +18,6 @@ import akka.projection.ProjectionBehavior
 
 //#source-provider-imports
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.projection.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import docs.eventsourced.ShoppingCart
 

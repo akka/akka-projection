@@ -18,7 +18,7 @@ import com.typesafe.config.Config
  * INTERNAL API
  */
 @InternalApi
-final case class ProjectionSettings(
+private[projection] final case class ProjectionSettings(
     restartBackoff: RestartBackoffSettings,
     saveOffsetAfterEnvelopes: Int,
     saveOffsetAfterDuration: FiniteDuration,
@@ -30,7 +30,7 @@ final case class ProjectionSettings(
  * INTERNAL API
  */
 @InternalApi
-object ProjectionSettings {
+private[projection] object ProjectionSettings {
 
   def apply(system: ActorSystem[_]): ProjectionSettings = {
     fromConfig(system.classicSystem.settings.config.getConfig("akka.projection"))
@@ -76,7 +76,7 @@ private object RecoveryStrategyConfig {
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] final case class RestartBackoffSettings(
+@InternalApi private[projection] final case class RestartBackoffSettings(
     minBackoff: FiniteDuration,
     maxBackoff: FiniteDuration,
     randomFactor: Double,
@@ -85,7 +85,7 @@ private object RecoveryStrategyConfig {
 /**
  * INTERNAL API: mixin to projection impl to not have to implement all overloaded variants in several places
  */
-@InternalApi private[akka] trait SettingsImpl[ProjectionImpl <: Projection[_]] { self: ProjectionImpl =>
+@InternalApi private[projection] trait SettingsImpl[ProjectionImpl <: Projection[_]] { self: ProjectionImpl =>
   def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): ProjectionImpl
 
   def withRestartBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double): ProjectionImpl =

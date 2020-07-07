@@ -26,7 +26,7 @@ object ProjectionTestKit {
 }
 
 @ApiMayChange
-final class ProjectionTestKit private[akka] (testKit: ActorTestKit) {
+final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
 
   private implicit val system: ActorSystem[Nothing] = testKit.system
   private implicit val settings: TestKitSettings = TestKitSettings(system)

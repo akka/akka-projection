@@ -18,7 +18,6 @@ import jdocs.eventsourced.ShoppingCart;
 
 // #daemon-imports
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
-import akka.cluster.sharding.typed.ShardedDaemonProcessSettings;
 import akka.projection.ProjectionBehavior;
 
 // #daemon-imports
@@ -34,7 +33,7 @@ import akka.persistence.cassandra.query.javadsl.CassandraReadJournal;
 import akka.persistence.query.Offset;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
-import akka.projection.EventEnvelope;
+import akka.projection.eventsourced.EventEnvelope;
 
 // #source-provider-imports
 

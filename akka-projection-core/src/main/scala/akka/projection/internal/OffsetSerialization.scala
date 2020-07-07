@@ -4,21 +4,25 @@
 
 package akka.projection.internal
 
+import java.util.Base64
 import java.util.UUID
 
 import scala.collection.immutable
 
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.query
 import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.StringKey
+import akka.serialization.SerializationExtension
+import akka.serialization.Serializers
 
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object OffsetSerialization {
+@InternalApi private[projection] object OffsetSerialization {
   sealed trait StorageRepresentation
   final case class SingleOffset(id: ProjectionId, manifest: String, offsetStr: String, mergeable: Boolean = false)
       extends StorageRepresentation
@@ -29,6 +33,15 @@ import akka.projection.StringKey
   final val IntManifest = "INT"
   final val SequenceManifest = "SEQ"
   final val TimeBasedUUIDManifest = "TBU"
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[projection] class OffsetSerialization(system: ActorSystem[_]) {
+  import OffsetSerialization._
+
+  private val serialization = SerializationExtension(system)
 
   /**
    * Deserialize an offset from a storage representation of one or more offsets.
@@ -58,6 +71,12 @@ import akka.projection.StringKey
       case IntManifest           => offsetStr.toInt
       case SequenceManifest      => query.Offset.sequence(offsetStr.toLong)
       case TimeBasedUUIDManifest => query.Offset.timeBasedUUID(UUID.fromString(offsetStr))
+      case _ =>
+        val parts = manifest.split(':')
+        val serializerId = parts(0).toInt
+        val serializerManifest = parts(1)
+        val bytes = Base64.getDecoder.decode(offsetStr)
+        serialization.deserialize(bytes, serializerId, serializerManifest).get
     }).asInstanceOf[Offset]
 
   /**
@@ -82,8 +101,14 @@ import akka.projection.StringKey
         }.toList
 
         MultipleOffsets(list)
-
-      case _ => throw new IllegalArgumentException(s"Unsupported offset type, found [${offset.getClass.getName}]")
+      case _ =>
+        val obj = offset.asInstanceOf[AnyRef]
+        val serializer = serialization.findSerializerFor(obj)
+        val serializerId = serializer.identifier
+        val serializerManifest = Serializers.manifestFor(serializer, obj)
+        val bytes = serializer.toBinary(obj)
+        val offsetStr = Base64.getEncoder.encodeToString(bytes)
+        SingleOffset(id, s"$serializerId:$serializerManifest", offsetStr)
     }
     reps
   }
