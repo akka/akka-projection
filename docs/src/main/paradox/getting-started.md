@@ -115,6 +115,7 @@ The TestKit includes several utilities to run the Projection handler in isolatio
 
 Using these tools we can assert that our Projection handler meets the following requirements of the `DailyCheckoutProjectionHandler`.
 
+// TODO: update for daily current item count
 1. Only count `CheckedOut` shopping cart events.
 1. Log every time we process increments of 10 `CheckedOut` in a single day.
 
@@ -123,10 +124,53 @@ Scala
 
 ## Part 4: Running a Projection
 
-Create Cassandra offset schema
-Schema: cassandra.md#schema
+@@@ note
 
-Create Cassandra projection schema
+This example requires a Cassandra database to run. 
+If you do not have a Cassandra database then you can run one locally as a Docker container.
+To run a Cassandra database locally you can use [`docker-compose`](https://docs.docker.com/compose/) to run the [`docker-compose.yaml`](https://github.com/akka/akka-projection/blob/master/docker-compose.yml) found in the Projections project root.
+The `docker-compose.yml` file references the latest [Cassandra Docker Image](https://hub.docker.com/_/cassandra).
+
+```shell
+$ docker-compose --project-name cassandra-projections up -d cassandra
+Creating network "cassandra-projections_default" with the default driver
+Creating cassandra-projections_cassandra_1 ... done
+```
+
+To get a `cqlsh` prompt run another Cassandra container in interactive mode using the same network (`cassandra-projections_default`) as the container currently running.
+
+```shell
+$ docker run -it --network cassandra-projections_default --rm cassandra cqlsh cassandra 
+Connected to Test Cluster at cassandra:9042.
+[cqlsh 5.0.1 | Cassandra 3.11.6 | CQL spec 3.4.4 | Native protocol v4]
+Use HELP for help.
+cqlsh> 
+```
+
+@@@
+
+To run the Projection we must setup our Cassandra database to support the Cassandra Projection offset store as well as the new table we are projecting into with the `DailyCheckoutProjectionHandler`.
+
+Create a Cassandra keyspace.
+
+```
+CREATE KEYSPACE IF NOT EXISTS akka_projection WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 };
+```
+
+Create the Cassandra Projection offset store table.
+The DDL can be found in the @ref:[Cassandra Projection, Schema section](cassandra.md#schema).
+
+Create the `DailyCheckoutProjectionHandler` projection table with the DDL found below.
+
+```
+CREATE TABLE IF NOT EXISTS akka_projection.daily_item_checkout_counts (
+  date date,
+  item_id text,
+  checkout_count counter,
+  PRIMARY KEY (date, item_id));
+```
+
+
 
 ## Part 5: Adding error handling
 

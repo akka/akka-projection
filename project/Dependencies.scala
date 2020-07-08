@@ -85,6 +85,7 @@ object Dependencies {
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
     val akkaPersistenceCassandra = "com.typesafe.akka" %% "akka-persistence-cassandra" % "1.0.0"
     val akkaPersistenceJdbc = "com.lightbend.akka" %% "akka-persistence-jdbc" % "4.0.0"
+    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka
   }
 
   private val deps = libraryDependencies
@@ -165,6 +166,7 @@ object Dependencies {
         Examples.akkaClusterShardingTyped,
         Examples.akkaPersistenceCassandra,
         Examples.akkaPersistenceJdbc,
+        Examples.akkaSerializationJackson,
         Examples.hibernate,
         Test.h2Driver,
         Test.akkaTypedTestkit,

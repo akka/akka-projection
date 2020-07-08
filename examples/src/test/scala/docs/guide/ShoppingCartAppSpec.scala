@@ -1,7 +1,6 @@
 package docs.guide
 
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.Future
 
@@ -12,30 +11,26 @@ import akka.persistence.query.Offset
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
 // #testKitImports
-import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.projection.testkit.TestProjection
 import akka.projection.testkit.TestSourceProvider
+import akka.projection.testkit.scaladsl.ProjectionTestKit
 // #testKitImports
-import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 
 // #testKitSpec
 object ShoppingCartAppSpec {
+  // manually mock out the Cassandra data layer and simulate recording the daily count
   class MockDailyCheckoutRepository extends DailyCheckoutProjectionRepository {
-    val saveCount = new AtomicInteger()
-    override def save(cartId: String, date: Instant): Future[Done] = {
-      saveCount.incrementAndGet()
+    var updateCount = Map[String, Int]()
+    override def update(date: Instant, itemId: String, quantity: Int): Future[Done] = {
+      updateCount = updateCount + (itemId -> quantity)
       Future.successful(Done)
     }
-    override def countForDate(date: Instant): Future[Int] = Future.successful(saveCount.get())
+    override def countForDate(date: Instant): Future[Map[String, Int]] = Future.successful(updateCount)
   }
 }
 
-class ShoppingCartAppSpec
-    extends ScalaTestWithActorTestKit(ConfigFactory.parseString("""
-    |akka.loggers = ["akka.testkit.TestEventListener"]
-    |""".stripMargin))
-    with AnyWordSpecLike {
+class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLike {
   import ShoppingCartAppSpec._
 
   val projectionTestKit = ProjectionTestKit(testKit)
@@ -44,16 +39,18 @@ class ShoppingCartAppSpec
     EventEnvelope(Offset.sequence(seqNo), "persistenceId", seqNo, event, timestamp)
 
   "The DailyCheckoutProjectionHandler" should {
-    "only count CheckOut events" in {
+    "process shopping cart events correctly" in {
       val repo = new MockDailyCheckoutRepository
       val handler = new DailyCheckoutProjectionHandler("tag", system, repo)
 
       val events = List[EventEnvelope[ShoppingCartEvents.Event]](
-        createEnvelope(ShoppingCartEvents.ItemAdded("a70989d4", "batteries", 1), 0L),
-        createEnvelope(ShoppingCartEvents.ItemQuantityAdjusted("a70989d4", "batteries", 1), 1L),
-        createEnvelope(ShoppingCartEvents.CheckedOut("a70989d4", Instant.parse("2020-01-01T12:10:00.00Z")), 2L),
-        createEnvelope(ShoppingCartEvents.ItemAdded("0d12dd9d", "crayons", 1), 3L),
-        createEnvelope(ShoppingCartEvents.CheckedOut("0d12dd9d", Instant.parse("2020-01-01T08:00:00.00Z")), 4L))
+        createEnvelope(ShoppingCartEvents.ItemAdded("a7098", "batteries", 1), 0L),
+        createEnvelope(ShoppingCartEvents.ItemQuantityAdjusted("a7098", "batteries", 2), 1L),
+        createEnvelope(ShoppingCartEvents.CheckedOut("a7098", Instant.parse("2020-01-01T12:10:00.00Z")), 2L),
+        createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "crayons", 1), 3L),
+        createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "pens", 1), 4L),
+        createEnvelope(ShoppingCartEvents.ItemRemoved("0d12d", "pens"), 5L),
+        createEnvelope(ShoppingCartEvents.CheckedOut("0d12d", Instant.parse("2020-01-01T08:00:00.00Z")), 6L))
 
       val projectionId = ProjectionId("name", "key")
       val sourceProvider =
@@ -64,17 +61,18 @@ class ShoppingCartAppSpec
       projectionTestKit.runWithTestSink(projection) { testSink =>
         testSink.request(events.length)
         testSink.expectNextN(events.length)
-        repo.saveCount.get() shouldBe 2
+        repo.updateCount shouldBe Map("batteries" -> 2, "crayons" -> 1)
       }
     }
 
-    "log current daily count every 10 messages" in {
-      val numEvents = 10L
+    // TODO: update for current daily item count
+    "log current daily item count every 10 checkouts" in {
       val repo = new MockDailyCheckoutRepository
       val handler = new DailyCheckoutProjectionHandler("tag", system, repo)
 
+      // create 10 `CheckedOut` events for the same day
       val events =
-        for (i <- 0L to numEvents)
+        for (i <- 0L to 10L)
           yield createEnvelope(
             ShoppingCartEvents.CheckedOut(
               java.util.UUID.randomUUID().toString,
@@ -93,8 +91,8 @@ class ShoppingCartAppSpec
         .info("ShoppingCartProjectionHandler(tag) current daily count for today [2020-01-01T00:00:00Z] is 10")
         .expect {
           projectionTestKit.runWithTestSink(projection) { testSink =>
-            testSink.request(numEvents)
-            testSink.expectNextN(numEvents)
+            testSink.request(events.length)
+            testSink.expectNextN(events.length)
           }
         }
     }

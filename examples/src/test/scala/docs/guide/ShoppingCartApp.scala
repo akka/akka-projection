@@ -11,6 +11,7 @@ import java.time.Instant
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.eventsourced.EventEnvelope
+import com.typesafe.config.ConfigFactory
 
 //#guideSetup
 //#guideSourceProviderImports
@@ -48,7 +49,7 @@ object ShoppingCartEvents {
   /**
    * This interface defines all the events that the ShoppingCart supports.
    */
-  sealed trait Event {
+  sealed trait Event extends CborSerializable {
     def cartId: String
   }
 
@@ -59,7 +60,8 @@ object ShoppingCartEvents {
 }
 
 object ShoppingCartApp extends App {
-  private val system = ActorSystem[Nothing](Behaviors.empty, "ShoppingCartApp")
+  val config = ConfigFactory.parseResources("./guide-shopping-cart-app.conf")
+  val system = ActorSystem[Nothing](Behaviors.empty, "ShoppingCartApp", config)
   //#guideSetup
   //#guideSourceProviderSetup
   val europeanShoppingCartsTag = "carts-eu"
@@ -92,76 +94,97 @@ object ShoppingCartApp extends App {
 
 //#guideProjectionRepo
 trait DailyCheckoutProjectionRepository {
-  def save(cartId: String, date: Instant): Future[Done]
-  def countForDate(date: Instant): Future[Int]
+  def update(date: Instant, itemId: String, quantity: Int): Future[Done]
+  def countForDate(date: Instant): Future[Map[String, Int]]
 }
 
 class DailyCheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit val ec: ExecutionContext)
     extends DailyCheckoutProjectionRepository {
-  val keyspace = "projections"
-  val table = "daily_checkouts"
+  val keyspace = "akka_projection"
+  val table = "daily_item_checkout_counts"
 
-  def save(cartId: String, date: Instant): Future[Done] = {
-    session.executeWrite(s"INSERT INTO $keyspace.$table (cart_id, date) VALUES (?, ?)", cartId, date)
+  def update(date: Instant, itemId: String, quantity: Int): Future[Done] = {
+    session.executeWrite(
+      s"UPDATE $keyspace.$table SET checkout_count = checkout_count + ? WHERE date = ? AND item_id = ?",
+      quantity.toString,
+      date,
+      itemId)
   }
 
-  def countForDate(date: Instant): Future[Int] = {
-    session.selectOne(s"SELECT count(card_id) FROM $keyspace.$table WHERE date = ?", date).map {
-      case Some(row) => row.getInt("count(cart_id)")
-      case None      => 0
-    }
-  }
-
-  //#guideProjectionRepo
-  def createKeyspaceAndTable(): Future[Done] = {
+  def countForDate(date: Instant): Future[Map[String, Int]] = {
     session
-      .executeDDL(
-        s"CREATE KEYSPACE IF NOT EXISTS $keyspace WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 }")
-      .flatMap(_ => session.executeDDL(s"""
-                                          |CREATE TABLE IF NOT EXISTS $keyspace.$table (
-                                          |  cart_id string,
-                                          |  date date,
-                                          |  PRIMARY KEY (cart_id, date))
-        """.stripMargin.trim))
+      .selectAll(s"SELECT item_id, checkout_count FROM $keyspace.$table WHERE date = ?", date)
+      .map { rows =>
+        rows.map(row => row.getString("item_id") -> row.getInt("checkout_count")).toMap
+      }
   }
-  //#guideProjectionRepo
 }
 //#guideProjectionRepo
 
 //#guideProjectionHandler
 class DailyCheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: DailyCheckoutProjectionRepository)
     extends Handler[EventEnvelope[ShoppingCartEvents.Event]] {
-  @volatile var currentDayLogCounter = 0
+  @volatile var checkoutCounter = 0
+  @volatile var cartItemCounts = Map[String, Map[String, Int]]()
+
   val log = LoggerFactory.getLogger(getClass)
   implicit val ec = system.classicSystem.dispatcher
+
+  def updateCartItemCounts(cartId: String, itemId: String, quantity: Int): Unit = {
+    val itemCount = (itemId -> quantity)
+    val cartItems = cartItemCounts
+      .get(cartId)
+      .map(_ + itemCount)
+      .getOrElse(Map(itemCount))
+
+    cartItemCounts = cartItemCounts + (cartId -> cartItems)
+  }
 
   override def process(envelope: EventEnvelope[ShoppingCartEvents.Event]): Future[Done] = {
     envelope.event match {
       case ShoppingCartEvents.CheckedOut(cartId, eventTime) =>
         val dateOnly = eventTime.truncatedTo(ChronoUnit.DAYS)
+        val cartItems = cartItemCounts.getOrElse(cartId, Map.empty)
 
-        val save = repo.save(cartId, dateOnly)
+        cartItemCounts = cartItemCounts - cartId
 
-        currentDayLogCounter += 1
-        if (currentDayLogCounter % 10 == 0) {
-          save.flatMap { _ =>
+        val updates = Future.sequence(cartItems.map {
+          case (itemId, quantity) => repo.update(dateOnly, itemId, quantity)
+        })
+
+        checkoutCounter += 1
+        if (checkoutCounter % 10 == 0) {
+          updates.flatMap { _ =>
             val countQuery = repo.countForDate(dateOnly)
             countQuery.onComplete {
-              case Success(count) =>
+              case Success(counts) =>
                 log.info(
-                  "ShoppingCartProjectionHandler({}) current daily count for today [{}] is {}",
+                  "DailyCheckoutProjectionHandler({}) current daily item counts for today [{}] is {}",
                   tag,
                   dateOnly,
-                  count.toString)
+                  counts.toString)
               case Failure(ex) =>
                 log.error(s"ShoppingCartProjectionHandler($tag) an error occurred when connecting to the repo", ex)
             }
             countQuery.map(_ => Done)
           }
-        } else save
+        } else updates.map(_ => Done)
 
-      // skip all other shopping cart events
-      case _ => Future.successful(Done)
+      case ShoppingCartEvents.ItemAdded(cartId, itemId, quantity) =>
+        updateCartItemCounts(cartId, itemId, quantity)
+        Future.successful(Done)
+
+      case ShoppingCartEvents.ItemQuantityAdjusted(cartId, itemId, newQuantity) =>
+        updateCartItemCounts(cartId, itemId, newQuantity)
+        Future.successful(Done)
+
+      case ShoppingCartEvents.ItemRemoved(cartId, itemId) =>
+        val cartItems = cartItemCounts
+          .get(cartId)
+          .map(_ - itemId)
+          .getOrElse(Map.empty)
+        cartItemCounts = cartItemCounts + (cartId -> cartItems)
+        Future.successful(Done)
     }
   }
 }
