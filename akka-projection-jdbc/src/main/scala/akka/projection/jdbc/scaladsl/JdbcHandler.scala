@@ -4,8 +4,8 @@
 
 package akka.projection.jdbc.scaladsl
 
+import akka.projection.jdbc.JdbcHandlerLifecycle
 import akka.projection.jdbc.JdbcSession
-import akka.projection.scaladsl.HandlerLifecycle
 
 /**
  * Implement this interface for the Envelope handler for  Jdbc Projections.
@@ -19,7 +19,7 @@ import akka.projection.scaladsl.HandlerLifecycle
  * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
-trait JdbcHandler[Envelope, S <: JdbcSession] extends HandlerLifecycle {
+trait JdbcHandler[Envelope, S <: JdbcSession] extends JdbcHandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`. Each time a new [[JdbcSession]] is passed with a new open transaction.

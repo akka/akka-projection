@@ -56,13 +56,10 @@ private[projection] object JdbcProjectionImpl {
       sessionFactory: () => S,
       handlerFactory: () => JdbcHandler[Envelope, S],
       offsetStore: JdbcOffsetStore[S]): () => Handler[Envelope] = { () =>
-    new Handler[Envelope] {
-      private val delegate = handlerFactory()
 
+    new AdaptedJdbcHandler(handlerFactory(), offsetStore.executionContext) {
       override def process(envelope: Envelope): Future[Done] = {
         val offset = sourceProvider.extractOffset(envelope)
-        // this scope ensures that the blocking DB dispatcher is used solely for DB operations
-        implicit val executionContext: ExecutionContext = offsetStore.executionContext
         JdbcSessionUtil
           .withSession(sessionFactory) { sess =>
             sess.withConnection[Unit] { conn =>
@@ -72,11 +69,7 @@ private[projection] object JdbcProjectionImpl {
             delegate.process(sess, envelope)
           }
           .map(_ => Done)
-
       }
-
-      override def start(): Future[Done] = delegate.start()
-      override def stop(): Future[Done] = delegate.stop()
     }
   }
 
@@ -84,23 +77,15 @@ private[projection] object JdbcProjectionImpl {
       sessionFactory: () => S,
       handlerFactory: () => JdbcHandler[Envelope, S],
       offsetStore: JdbcOffsetStore[S]): () => Handler[Envelope] = { () =>
-    new Handler[Envelope] {
-      private val delegate = handlerFactory()
-
+    new AdaptedJdbcHandler(handlerFactory(), offsetStore.executionContext) {
       override def process(envelope: Envelope): Future[Done] = {
-        // this scope ensures that the blocking DB dispatcher is used solely for DB operations
-        implicit val executionContext: ExecutionContext = offsetStore.executionContext
         JdbcSessionUtil
           .withSession(sessionFactory) { sess =>
             // run users handler
             delegate.process(sess, envelope)
           }
           .map(_ => Done)
-
       }
-
-      override def start(): Future[Done] = delegate.start()
-      override def stop(): Future[Done] = delegate.stop()
     }
   }
 
@@ -111,14 +96,9 @@ private[projection] object JdbcProjectionImpl {
       handlerFactory: () => JdbcHandler[immutable.Seq[Envelope], S],
       offsetStore: JdbcOffsetStore[S]): () => Handler[immutable.Seq[Envelope]] = { () =>
 
-    new Handler[immutable.Seq[Envelope]] {
-
-      private val delegate = handlerFactory()
-
+    new AdaptedJdbcHandler(handlerFactory(), offsetStore.executionContext) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
         val offset = sourceProvider.extractOffset(envelopes.last)
-        // this scope ensures that the blocking DB dispatcher is used solely for DB operations
-        implicit val executionContext: ExecutionContext = offsetStore.executionContext
         JdbcSessionUtil
           .withSession(sessionFactory) { sess =>
             sess.withConnection[Unit] { conn =>
@@ -128,11 +108,22 @@ private[projection] object JdbcProjectionImpl {
             delegate.process(sess, envelopes)
           }
           .map(_ => Done)
-
       }
+    }
+  }
 
-      override def start(): Future[Done] = delegate.start()
-      override def stop(): Future[Done] = delegate.stop()
+  abstract class AdaptedJdbcHandler[E, S <: JdbcSession](
+      val delegate: JdbcHandler[E, S],
+      implicit val executionContext: ExecutionContext)
+      extends Handler[E] {
+
+    override def start(): Future[Done] = Future {
+      delegate.start()
+      Done
+    }
+    override def stop(): Future[Done] = Future {
+      delegate.stop()
+      Done
     }
   }
 }

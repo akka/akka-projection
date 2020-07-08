@@ -1028,16 +1028,14 @@ class JdbcProjectionSpec
 
       probe ! createdMessage
 
-      override def start(): Future[Done] = {
+      override def start(): Unit = {
         // reset stop message to 'completed' on each new start
         stopMessage = completedMessage
         probe ! startMessage
-        Future.successful(Done)
       }
 
-      override def stop(): Future[Done] = {
+      override def stop(): Unit = {
         probe ! stopMessage
-        Future.successful(Done)
       }
 
       override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
