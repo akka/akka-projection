@@ -4,6 +4,8 @@
 
 package akka.projection.internal
 
+import java.util
+
 import scala.collection.immutable
 
 import akka.NotUsed
@@ -11,6 +13,7 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.annotation.InternalStableApi
 import akka.projection.ProjectionId
+import akka.util.ccompat.JavaConverters._
 
 /**
  * Service Provider Interface (SPI) for collecting metrics from projections.
@@ -19,7 +22,7 @@ import akka.projection.ProjectionId
  * and [[ActorSystem]].  To setup your implementation, add a setting on your `application.conf`:
  *
  * {{{
- * akka.projection.telemetry.implementation-class = com.example.MyMetrics
+ * akka.projection.telemetry.implementations += com.example.MyMetrics
  * }}}
  */
 @InternalStableApi
@@ -85,17 +88,31 @@ trait Telemetry {
  */
 @InternalApi private[akka] object TelemetryProvider {
   def start(projectionId: ProjectionId, system: ActorSystem[_]): Telemetry = {
-    val dynamicAccess = system.dynamicAccess
-    if (system.settings.config.hasPath("akka.projection.telemetry.implementation-class")) {
-      val telemetryFqcn: String = system.settings.config.getString("akka.projection.telemetry.implementation-class")
-      dynamicAccess
-        .createInstanceFor[Telemetry](
-          telemetryFqcn,
-          immutable.Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
-        .get
-    } else {
+    if (!system.settings.config.hasPath("akka.projection.telemetry.implementations")) {
       NoopTelemetry
+    } else {
+      val telemetryFqcns: util.List[String] =
+        system.settings.config.getStringList("akka.projection.telemetry.implementations")
+
+      telemetryFqcns.size() match {
+        case 0 =>
+          NoopTelemetry
+        case 1 =>
+          val fqcn = telemetryFqcns.get(0)
+          create(projectionId, system, fqcn)
+        case _ =>
+          new EnsembleTelemetry(telemetryFqcns.asScala.toSeq, projectionId, system)
+      }
     }
+  }
+
+  def create(projectionId: ProjectionId, system: ActorSystem[_], fqcn: String) = {
+    val dynamicAccess = system.dynamicAccess
+    dynamicAccess
+      .createInstanceFor[Telemetry](
+        fqcn,
+        immutable.Seq((classOf[ProjectionId], projectionId), (classOf[ActorSystem[_]], system)))
+      .get
   }
 }
 
@@ -114,5 +131,29 @@ trait Telemetry {
   override def onOffsetStored(numberOfEnvelopes: Int): Unit = {}
 
   override def error(cause: Throwable): Unit = {}
+
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class EnsembleTelemetry(
+    telemetryFqcns: Seq[String],
+    projectionId: ProjectionId,
+    system: ActorSystem[_])
+    extends Telemetry {
+
+  val telemetries = telemetryFqcns.map(fqcn => TelemetryProvider.create(projectionId, system, fqcn))
+
+  override def stopped(): Unit = telemetries.foreach(_.stopped())
+  override def failed(cause: Throwable): Unit = telemetries.foreach(_.failed(cause))
+  override def beforeProcess[Envelope](envelope: Envelope, creationTimeInMillis: Long): AnyRef =
+    telemetries.map(_.beforeProcess(envelope, creationTimeInMillis))
+  override def afterProcess(externalContext: AnyRef): Unit = {
+    val contexts = externalContext.asInstanceOf[Seq[AnyRef]]
+    contexts.zip(telemetries).foreach { case (ctx, telemetry) => telemetry.afterProcess(ctx) }
+  }
+  override def onOffsetStored(numberOfEnvelopes: Int): Unit = telemetries.foreach(_.onOffsetStored(numberOfEnvelopes))
+  override def error(cause: Throwable): Unit = telemetries.foreach(_.error(cause))
 
 }
