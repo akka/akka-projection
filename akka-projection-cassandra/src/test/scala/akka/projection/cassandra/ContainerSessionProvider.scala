@@ -14,6 +14,7 @@ import akka.stream.alpakka.cassandra.CqlSessionProvider
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.internal.core.metadata.DefaultEndPoint
 import com.dimafeng.testcontainers.CassandraContainer
+import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 
 /**
  * Use testcontainers to lazily provide a single CqlSession for all Cassandra tests
@@ -41,7 +42,12 @@ object ContainerSessionProvider {
     if (disabled)
       Future.successful(())
     else
-      Future.fromTry(Try(container.start()))
+      Future.fromTry(Try {
+        container.underlyingUnsafeContainer
+          .withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+          .withStartupAttempts(5)
+        container.start()
+      })
   }
 
   val Config =

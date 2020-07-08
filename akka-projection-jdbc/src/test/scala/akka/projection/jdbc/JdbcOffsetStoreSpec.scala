@@ -41,6 +41,8 @@ import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
+import org.testcontainers.containers.GenericContainer
+import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 
 object JdbcOffsetStoreSpec {
 
@@ -103,6 +105,7 @@ object JdbcOffsetStoreSpec {
     override def initContainer() = ()
 
     override def stopContainer() = ()
+
   }
 
   abstract class ContainerJdbcSpecConfig(dialect: String) extends JdbcSpecConfig {
@@ -130,6 +133,18 @@ object JdbcOffsetStoreSpec {
 
     protected var _container: Option[JdbcDatabaseContainer] = None
 
+    def newContainer(): JdbcDatabaseContainer
+
+    final override def initContainer(): Unit = {
+      val container = newContainer()
+      _container = Some(container)
+      val sc = container.asInstanceOf[SingleContainer[GenericContainer[_]]]
+      sc.underlyingUnsafeContainer
+        .withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+        .withStartupAttempts(5)
+      sc.start()
+    }
+
     override def stopContainer(): Unit =
       _container.get.asInstanceOf[SingleContainer[_]].stop()
   }
@@ -138,55 +153,39 @@ object JdbcOffsetStoreSpec {
 
     val name = "Postgres Database"
 
-    override def initContainer(): Unit = {
-      val container = new PostgreSQLContainer
-      _container = Some(container)
-      container.start()
-    }
+    override def newContainer(): JdbcDatabaseContainer = new PostgreSQLContainer
   }
 
   object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
 
     val name = "MySQL Database"
 
-    override def initContainer(): Unit = {
-      val container = new MySQLContainer
-      _container = Some(container)
-      container.start()
-    }
+    override def newContainer(): JdbcDatabaseContainer = new MySQLContainer
   }
 
   object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
 
     val name = "MS SQL Server Database"
 
-    override def initContainer(): Unit = {
-      val container = new MSSQLServerContainer
-      _container = Some(container)
-      container.start()
-    }
+    override def newContainer(): JdbcDatabaseContainer = new MSSQLServerContainer
   }
 
   object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
 
     val name = "Oracle Database"
 
-    override def initContainer(): Unit = {
-      val container =
-        // little hack to workaround that not all JDBC containers impl the same
-        // interface (Oracle doesn't impl JdbcDatabaseContainer)
-        new OracleContainer(dockerImageName = "oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
-          override def jdbcUrl: String = super.jdbcUrl
+    override def newContainer(): JdbcDatabaseContainer = {
+      // little hack to workaround that not all JDBC containers impl the same
+      // interface (Oracle doesn't impl JdbcDatabaseContainer)
+      new OracleContainer(dockerImageName = "oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
+        override def jdbcUrl: String = super.jdbcUrl
 
-          override def username: String = super.username
+        override def username: String = super.username
 
-          override def password: String = super.password
+        override def password: String = super.password
 
-          override def driverClassName: String = super.driverClassName
-        }
-
-      _container = Some(container)
-      container.start()
+        override def driverClassName: String = super.driverClassName
+      }
     }
 
   }
@@ -223,7 +222,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     specConfig.initContainer()
 
     // create offset table
-    Await.result(offsetStore.createIfNotExists(), 3.seconds)
+    Await.result(offsetStore.createIfNotExists(), 30.seconds)
   }
 
   override protected def afterAll(): Unit =

@@ -35,6 +35,8 @@ import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
+import org.testcontainers.containers.GenericContainer
+import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
 
@@ -93,6 +95,16 @@ object SlickOffsetStoreSpec {
         """))
 
     }
+
+    protected def initContainer(container: JdbcDatabaseContainer): JdbcDatabaseContainer = {
+      val sc = container.asInstanceOf[SingleContainer[GenericContainer[_]]]
+      sc.underlyingUnsafeContainer
+        .withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+        .withStartupAttempts(5)
+      sc.start()
+      container
+    }
+
     override def stopContainer(): Unit =
       container.asInstanceOf[SingleContainer[_]].stop()
   }
@@ -100,8 +112,7 @@ object SlickOffsetStoreSpec {
   class PostgresSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Postgres Database"
-    val container = new PostgreSQLContainer
-    container.start()
+    val container = initContainer(new PostgreSQLContainer)
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -114,8 +125,7 @@ object SlickOffsetStoreSpec {
   class MySQLSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "MySQL Database"
-    val container = new MySQLContainer
-    container.start()
+    val container = initContainer(new MySQLContainer)
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -127,8 +137,7 @@ object SlickOffsetStoreSpec {
   class MSSQLServerSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "MS SQL Server Database"
-    val container = new MSSQLServerContainer
-    container.start()
+    val container = initContainer(new MSSQLServerContainer)
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -140,7 +149,7 @@ object SlickOffsetStoreSpec {
   class OracleSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Oracle Database"
-    val container =
+    val container = initContainer(
       // little hack to workaround that not all JDBC containers impl the same
       // interface (Oracle doesn't impl JdbcDatabaseContainer)
       new OracleContainer(dockerImageName = "oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
@@ -151,9 +160,7 @@ object SlickOffsetStoreSpec {
         override def password: String = super.password
 
         override def driverClassName: String = super.driverClassName
-      }
-
-    container.start()
+      })
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -192,7 +199,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
   override protected def beforeAll(): Unit = {
     // create offset table
-    Await.result(offsetStore.createIfNotExists, 3.seconds)
+    Await.result(offsetStore.createIfNotExists, 30.seconds)
   }
 
   override protected def afterAll(): Unit = {
