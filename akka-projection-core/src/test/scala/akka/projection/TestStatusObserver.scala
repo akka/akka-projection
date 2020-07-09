@@ -48,7 +48,7 @@ class TestStatusObserver[Envelope](
       probe ! Stopped
   }
 
-  override def progress(projectionId: ProjectionId, env: Envelope): Unit = {
+  override def offsetProgress(projectionId: ProjectionId, env: Envelope): Unit = {
     progressProbe.foreach(_ ! Progress(env))
   }
 

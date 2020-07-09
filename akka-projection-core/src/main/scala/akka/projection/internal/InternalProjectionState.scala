@@ -68,7 +68,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     saveOffset(projectionId, projectionContext.offset)
       .map { done =>
         try {
-          statusObserver.progress(projectionId, projectionContext.envelope)
+          statusObserver.offsetProgress(projectionId, projectionContext.envelope)
         } catch {
           case NonFatal(_) => // ignore
         }
@@ -290,7 +290,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
                 telemetry.afterProcess(context.externalContext)
 
                 try {
-                  statusObserver.progress(projectionId, context.envelope)
+                  statusObserver.offsetProgress(projectionId, context.envelope)
                 } catch {
                   case NonFatal(_) => // ignore
                 }
@@ -316,7 +316,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
             processGrouped(handler, handlerRecovery, group)
               .map { t =>
                 try {
-                  statusObserver.progress(projectionId, last.envelope)
+                  statusObserver.offsetProgress(projectionId, last.envelope)
                 } catch {
                   case NonFatal(_) => // ignore
                 }
