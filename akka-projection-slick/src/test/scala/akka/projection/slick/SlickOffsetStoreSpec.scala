@@ -18,6 +18,7 @@ import akka.persistence.query.TimeBasedUUID
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.StringKey
+import akka.projection.TestTags
 import akka.projection.slick.SlickOffsetStoreSpec.SlickSpecConfig
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
@@ -31,6 +32,7 @@ import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
+import org.scalatest.Tag
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -44,6 +46,7 @@ object SlickOffsetStoreSpec {
 
   trait SlickSpecConfig {
     val name: String
+    def tag: Tag
     val baseConfig = ConfigFactory.parseString("""
     akka.projection.slick = {
       offset-store {
@@ -60,6 +63,7 @@ object SlickOffsetStoreSpec {
   object H2SpecConfig extends SlickSpecConfig {
 
     val name = "H2 Database"
+    val tag = TestTags.InMemoryDb
     override def config: Config =
       baseConfig.withFallback(ConfigFactory.parseString("""
         akka.projection.slick = {
@@ -78,6 +82,7 @@ object SlickOffsetStoreSpec {
 
   abstract class ContainerJdbcSpecConfig extends SlickSpecConfig {
 
+    val tag: Tag = TestTags.ContainerDb
     def container: JdbcDatabaseContainer
 
     override def config = {
@@ -137,6 +142,8 @@ object SlickOffsetStoreSpec {
   class MSSQLServerSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "MS SQL Server Database"
+    override val tag = TestTags.FlakyDb
+
     val container = initContainer(new MSSQLServerContainer)
 
     override def config: Config =
@@ -218,11 +225,11 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
-  s"The SlickOffsetStore [$dialectLabel]" must {
+  "The SlickOffsetStore" must {
 
     implicit val ec: ExecutionContext = dbConfig.db.executor.executionContext
 
-    "create and update offsets" in {
+    s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -246,7 +253,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
     }
 
-    "save and retrieve offsets of type Long" in {
+    s"save and retrieve offsets of type Long [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -261,7 +268,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
     }
 
-    "save and retrieve offsets of type java.lang.Long" in {
+    s"save and retrieve offsets of type java.lang.Long [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -275,7 +282,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type Int" in {
+    s"save and retrieve offsets of type Int [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -290,7 +297,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
     }
 
-    "save and retrieve offsets of type java.lang.Integer" in {
+    s"save and retrieve offsets of type java.lang.Integer [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -304,7 +311,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type String" in {
+    s"save and retrieve offsets of type String [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -319,7 +326,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type akka.persistence.query.Sequence" in {
+    s"save and retrieve offsets of type akka.persistence.query.Sequence [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -334,7 +341,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type akka.persistence.query.TimeBasedUUID" in {
+    s"save and retrieve offsets of type akka.persistence.query.TimeBasedUUID [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -349,7 +356,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "update timestamp" in {
+    s"update timestamp [$dialectLabel]" taggedAs (specConfig.tag) in {
       val projectionId = genRandomProjectionId()
 
       val instant0 = clock.instant()
@@ -363,7 +370,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       instant3 shouldBe instant2
     }
 
-    "save and retrieve MergeableOffset" in {
+    s"save and retrieve MergeableOffset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -378,7 +385,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "add new offsets to MergeableOffset" in {
+    s"add new offsets to MergeableOffset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -404,7 +411,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "clear offset" in {
+    s"clear offset [$dialectLabel]" taggedAs (specConfig.tag) in {
       val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {

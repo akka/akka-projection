@@ -36,7 +36,7 @@ jobs:
     - stage: test
       env:
         - ALPAKKA_KAFKA_SNAPSHOT="-Dbuild.alpakka.kafka.version=2.0.3+7-edfcbb02" # Remove when Alpakka Kafka 2.0.4 released
-        - CMD="test"
+        - CMD="test-only -- -l FlakyDb" # run all tests, expect those marked as FlakyDb
       name: "Run tests with Scala 2.13 and AdoptOpenJDK 8"
     - env:
         - ALPAKKA_KAFKA_SNAPSHOT="-Dbuild.alpakka.kafka.version=2.0.3+7-edfcbb02" # Remove when Alpakka Kafka 2.0.4 released

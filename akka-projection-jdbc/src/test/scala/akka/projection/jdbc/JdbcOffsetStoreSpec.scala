@@ -20,6 +20,7 @@ import akka.persistence.query.Sequence
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.StringKey
+import akka.projection.TestTags
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
 import akka.projection.jdbc.JdbcOffsetStoreSpec.MySQLSpecConfig
 import akka.projection.jdbc.internal.Dialect
@@ -37,6 +38,7 @@ import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
+import org.scalatest.Tag
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -48,7 +50,7 @@ object JdbcOffsetStoreSpec {
 
   trait JdbcSpecConfig {
     val name: String
-
+    def tag: Tag
     val baseConfig = ConfigFactory.parseString("""
     
     akka {
@@ -87,6 +89,8 @@ object JdbcOffsetStoreSpec {
   object H2SpecConfig extends JdbcSpecConfig {
 
     val name = "H2 Database"
+    val tag: Tag = TestTags.InMemoryDb
+
     override val config: Config =
       baseConfig.withFallback(ConfigFactory.parseString("""
         akka.projection.jdbc = {
@@ -109,6 +113,8 @@ object JdbcOffsetStoreSpec {
   }
 
   abstract class ContainerJdbcSpecConfig(dialect: String) extends JdbcSpecConfig {
+
+    val tag: Tag = TestTags.ContainerDb
 
     override val config: Config =
       baseConfig.withFallback(ConfigFactory.parseString(s"""
@@ -152,20 +158,19 @@ object JdbcOffsetStoreSpec {
   object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
 
     val name = "Postgres Database"
-
     override def newContainer(): JdbcDatabaseContainer = new PostgreSQLContainer
   }
 
   object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
 
     val name = "MySQL Database"
-
     override def newContainer(): JdbcDatabaseContainer = new MySQLContainer
   }
 
   object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
 
     val name = "MS SQL Server Database"
+    override val tag: Tag = TestTags.FlakyDb
 
     override def newContainer(): JdbcDatabaseContainer = new MSSQLServerContainer
   }
@@ -258,9 +263,9 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
-  s"The JdbcOffsetStore [$dialectLabel]" must {
+  "The JdbcOffsetStore" must {
 
-    "create and update offsets" in {
+    s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -284,7 +289,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     }
 
-    "save and retrieve offsets of type Long" in {
+    s"save and retrieve offsets of type Long [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -299,7 +304,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     }
 
-    "save and retrieve offsets of type java.lang.Long" in {
+    s"save and retrieve offsets of type java.lang.Long [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
       withClue("check - save offset") {
@@ -312,7 +317,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type Int" in {
+    s"save and retrieve offsets of type Int [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
       withClue("check - save offset") {
@@ -326,7 +331,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     }
 
-    "save and retrieve offsets of type java.lang.Integer" in {
+    s"save and retrieve offsets of type java.lang.Integer [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -340,7 +345,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type String" in {
+    s"save and retrieve offsets of type String [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
       val randOffset = UUID.randomUUID().toString
@@ -354,7 +359,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type akka.persistence.query.Sequence" in {
+    s"save and retrieve offsets of type akka.persistence.query.Sequence [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -370,7 +375,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type akka.persistence.query.TimeBasedUUID" in {
+    s"save and retrieve offsets of type akka.persistence.query.TimeBasedUUID [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -384,7 +389,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve MergeableOffset" in {
+    s"save and retrieve MergeableOffset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -399,7 +404,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "add new offsets to MergeableOffset" in {
+    s"add new offsets to MergeableOffset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -425,7 +430,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "update timestamp" in {
+    s"update timestamp [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -442,7 +447,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       instant3 shouldBe instant2
     }
 
-    "clear offset" in {
+    s"clear offset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
