@@ -28,7 +28,7 @@ object KafkaSourceProvider {
       system,
       settings,
       topics.asScala.toSet,
-      new MetadataClientAdapterImpl(system, settings),
+      () => new MetadataClientAdapterImpl(system, settings),
       KafkaSourceProviderSettings(system))
   }
 }

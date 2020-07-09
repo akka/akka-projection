@@ -45,6 +45,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
   implicit val ec = system.classicSystem.dispatcher
 
   "The KafkaSourceProviderImpl" must {
+
     "successfully verify offsets from assigned partitions" in {
       val topic = "topic"
       val partitions = 2
@@ -64,10 +65,16 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
         .mapMaterializedValue(_ => Consumer.NoopControl)
 
       val provider =
-        new KafkaSourceProviderImpl(system, settings, Set(topic), metadataClient, KafkaSourceProviderSettings(system)) {
+        new KafkaSourceProviderImpl(
+          system,
+          settings,
+          Set(topic),
+          () => metadataClient,
+          KafkaSourceProviderSettings(system)) {
           override protected[internal] def _source(
               readOffsets: () => Future[Option[MergeableOffset[JLong]]],
-              numPartitions: Int): Source[ConsumerRecord[String, String], Consumer.Control] =
+              numPartitions: Int,
+              metadataClient: MetadataClientAdapter): Source[ConsumerRecord[String, String], Consumer.Control] =
             consumerSource
         }
 

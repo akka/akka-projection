@@ -51,7 +51,7 @@ import org.apache.kafka.common.record.TimestampType
     system: ActorSystem[_],
     settings: ConsumerSettings[K, V],
     topics: Set[String],
-    metadataClient: MetadataClientAdapter,
+    metadataClientFactory: () => MetadataClientAdapter,
     sourceProviderSettings: KafkaSourceProviderSettings)
     extends javadsl.SourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]]
     with scaladsl.SourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]]
@@ -73,9 +73,10 @@ import org.apache.kafka.common.record.TimestampType
 
   protected[internal] def _source(
       readOffsets: ReadOffsets,
-      numPartitions: Int): Source[ConsumerRecord[K, V], Consumer.Control] =
+      numPartitions: Int,
+      metadataClient: MetadataClientAdapter): Source[ConsumerRecord[K, V], Consumer.Control] =
     Consumer
-      .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets))
+      .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets, metadataClient))
       .flatMapMerge(numPartitions, {
         case (_, partitionedSource) => partitionedSource
       })
@@ -83,10 +84,11 @@ import org.apache.kafka.common.record.TimestampType
   override def source(readOffsets: ReadOffsets): Future[Source[ConsumerRecord[K, V], NotUsed]] = {
     // get the total number of partitions to configure the `breadth` parameter, or we could just use a really large
     // number.  i don't think using a large number would present a problem.
+    val metadataClient = metadataClientFactory()
     val numPartitionsF = metadataClient.numPartitions(topics)
     numPartitionsF.failed.foreach(_ => metadataClient.stop())
     numPartitionsF.map { numPartitions =>
-      _source(readOffsets, numPartitions)
+      _source(readOffsets, numPartitions, metadataClient)
         .watchTermination()(Keep.right)
         .mapMaterializedValue { terminated =>
           terminated.onComplete(_ => metadataClient.stop())
@@ -118,7 +120,9 @@ import org.apache.kafka.common.record.TimestampType
       0L
   }
 
-  private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
+  private def getOffsetsOnAssign(
+      readOffsets: ReadOffsets,
+      metadataClient: MetadataClientAdapter): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) => {
       val delay = sourceProviderSettings.readOffsetDelay
       akka.pattern.after(delay, scheduler) {

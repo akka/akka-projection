@@ -27,6 +27,6 @@ object KafkaSourceProvider {
       system,
       settings,
       topics,
-      new MetadataClientAdapterImpl(system, settings),
+      () => new MetadataClientAdapterImpl(system, settings),
       KafkaSourceProviderSettings(system))
 }
