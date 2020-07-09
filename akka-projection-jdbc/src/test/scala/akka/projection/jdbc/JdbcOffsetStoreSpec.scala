@@ -31,12 +31,6 @@ import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
 import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.testkit.internal.TestClock
-import com.dimafeng.testcontainers.JdbcDatabaseContainer
-import com.dimafeng.testcontainers.MSSQLServerContainer
-import com.dimafeng.testcontainers.MySQLContainer
-import com.dimafeng.testcontainers.OracleContainer
-import com.dimafeng.testcontainers.PostgreSQLContainer
-import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
@@ -45,7 +39,11 @@ import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
-import org.testcontainers.containers.GenericContainer
+import org.testcontainers.containers.JdbcDatabaseContainer
+import org.testcontainers.containers.MSSQLServerContainer
+import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.OracleContainer
+import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 
 object JdbcOffsetStoreSpec {
@@ -131,70 +129,49 @@ object JdbcOffsetStoreSpec {
       val container = _container.get
 
       new PureJdbcSession(() => {
-        Class.forName(container.driverClassName)
+        Class.forName(container.getDriverClassName)
         val conn =
-          DriverManager.getConnection(container.jdbcUrl, container.username, container.password)
+          DriverManager.getConnection(container.getJdbcUrl, container.getUsername, container.getPassword)
         conn.setAutoCommit(false)
         conn
       })
     }
 
-    protected var _container: Option[JdbcDatabaseContainer] = None
+    protected var _container: Option[JdbcDatabaseContainer[_]] = None
 
-    def newContainer(): JdbcDatabaseContainer
+    def newContainer(): JdbcDatabaseContainer[_]
 
     final override def initContainer(): Unit = {
       val container = newContainer()
       _container = Some(container)
-      val sc = container.asInstanceOf[SingleContainer[GenericContainer[_]]]
-      sc.underlyingUnsafeContainer
-        .withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
-        .withStartupAttempts(5)
-      sc.start()
+      container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+      container.withStartupAttempts(5)
+      container.start()
     }
 
     override def stopContainer(): Unit =
-      _container.get.asInstanceOf[SingleContainer[_]].stop()
+      _container.get.stop()
   }
 
   object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
-
     val name = "Postgres Database"
-    override def newContainer(): JdbcDatabaseContainer = new PostgreSQLContainer
+    override def newContainer() = new PostgreSQLContainer
   }
 
   object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
-
     val name = "MySQL Database"
-    override def newContainer(): JdbcDatabaseContainer = new MySQLContainer
+    override def newContainer() = new MySQLContainer
   }
 
   object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
-
     val name = "MS SQL Server Database"
     override val tag: Tag = TestTags.FlakyDb
-
-    override def newContainer(): JdbcDatabaseContainer = new MSSQLServerContainer
+    override def newContainer() = new MSSQLServerContainer
   }
 
   object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
-
     val name = "Oracle Database"
-
-    override def newContainer(): JdbcDatabaseContainer = {
-      // little hack to workaround that not all JDBC containers impl the same
-      // interface (Oracle doesn't impl JdbcDatabaseContainer)
-      new OracleContainer(dockerImageName = "oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
-        override def jdbcUrl: String = super.jdbcUrl
-
-        override def username: String = super.username
-
-        override def password: String = super.password
-
-        override def driverClassName: String = super.driverClassName
-      }
-    }
-
+    override def newContainer() = new OracleContainer("oracleinanutshell/oracle-xe-11g")
   }
 
 }

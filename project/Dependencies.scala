@@ -20,6 +20,7 @@ object Dependencies {
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
     val testContainersScala = "0.37.0"
+    val testContainers = "1.14.3"
     val junit = "4.12"
     val h2Driver = "1.4.200"
   }
@@ -61,19 +62,17 @@ object Dependencies {
 
     val logback = "ch.qos.logback" % "logback-classic" % "1.2.3" % sbt.Test
 
-    val testContainersScalatest =
-      "com.dimafeng" %% "testcontainers-scala-scalatest" % Versions.testContainersScala % sbt.Test
     val cassandraContainer =
-      "com.dimafeng" %% "testcontainers-scala-cassandra" % Versions.testContainersScala % sbt.Test
+      "org.testcontainers" % "cassandra" % Versions.testContainers % sbt.Test
     val postgresContainer =
-      "com.dimafeng" %% "testcontainers-scala-postgresql" % Versions.testContainersScala % sbt.Test
+      "org.testcontainers" % "postgresql" % Versions.testContainers % sbt.Test
     val mysqlContainer =
-      "com.dimafeng" %% "testcontainers-scala-mysql" % Versions.testContainersScala % sbt.Test
+      "org.testcontainers" % "mysql" % Versions.testContainers % sbt.Test
     val msSQLServerContainer =
-      "com.dimafeng" %% "testcontainers-scala-mssqlserver" % Versions.testContainersScala % sbt.Test
+      "org.testcontainers" % "mssqlserver" % Versions.testContainers % sbt.Test
 
     val oracleDbContainer =
-      "com.dimafeng" %% "testcontainers-scala-oracle-xe" % Versions.testContainersScala % sbt.Test
+      "org.testcontainers" % "oracle-xe" % Versions.testContainers % sbt.Test
 
     val alpakkaKafkaTestkit = "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
   }
@@ -145,7 +144,6 @@ object Dependencies {
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.logback,
-        Test.testContainersScalatest,
         Test.cassandraContainer,
         Test.scalatestJUnit)
 
@@ -157,7 +155,6 @@ object Dependencies {
         Test.akkaStreamTestkit,
         Test.alpakkaKafkaTestkit,
         Test.logback,
-        Test.testContainersScalatest,
         Test.scalatestJUnit)
 
   val examples =
@@ -170,6 +167,5 @@ object Dependencies {
         Test.h2Driver,
         Test.akkaTypedTestkit,
         Test.logback,
-        Test.testContainersScalatest,
         Test.cassandraContainer)
 }

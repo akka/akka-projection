@@ -23,12 +23,6 @@ import akka.projection.slick.SlickOffsetStoreSpec.SlickSpecConfig
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
 import akka.projection.testkit.internal.TestClock
-import com.dimafeng.testcontainers.JdbcDatabaseContainer
-import com.dimafeng.testcontainers.MSSQLServerContainer
-import com.dimafeng.testcontainers.MySQLContainer
-import com.dimafeng.testcontainers.OracleContainer
-import com.dimafeng.testcontainers.PostgreSQLContainer
-import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
@@ -37,7 +31,11 @@ import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
-import org.testcontainers.containers.GenericContainer
+import org.testcontainers.containers.JdbcDatabaseContainer
+import org.testcontainers.containers.MSSQLServerContainer
+import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.OracleContainer
+import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
@@ -83,16 +81,16 @@ object SlickOffsetStoreSpec {
   abstract class ContainerJdbcSpecConfig extends SlickSpecConfig {
 
     val tag: Tag = TestTags.ContainerDb
-    def container: JdbcDatabaseContainer
+    def container: JdbcDatabaseContainer[_]
 
     override def config = {
       baseConfig.withFallback(ConfigFactory.parseString(s"""
         akka.projection.slick = {
            db = {
-             url = "${container.jdbcUrl}"
-             driver = ${container.driverClassName}
-             user = ${container.username}
-             password = ${container.password}
+             url = "${container.getJdbcUrl}"
+             driver = ${container.getDriverClassName}
+             user = ${container.getUsername}
+             password = ${container.getPassword}
              connectionPool = disabled
              keepAliveConnection = true
            }
@@ -101,17 +99,15 @@ object SlickOffsetStoreSpec {
 
     }
 
-    protected def initContainer(container: JdbcDatabaseContainer): JdbcDatabaseContainer = {
-      val sc = container.asInstanceOf[SingleContainer[GenericContainer[_]]]
-      sc.underlyingUnsafeContainer
-        .withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
-        .withStartupAttempts(5)
-      sc.start()
+    protected def initContainer(container: JdbcDatabaseContainer[_]): JdbcDatabaseContainer[_] = {
+      container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+      container.withStartupAttempts(5)
+      container.start()
       container
     }
 
     override def stopContainer(): Unit =
-      container.asInstanceOf[SingleContainer[_]].stop()
+      container.stop()
   }
 
   class PostgresSpecConfig extends ContainerJdbcSpecConfig {
@@ -156,18 +152,7 @@ object SlickOffsetStoreSpec {
   class OracleSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Oracle Database"
-    val container = initContainer(
-      // little hack to workaround that not all JDBC containers impl the same
-      // interface (Oracle doesn't impl JdbcDatabaseContainer)
-      new OracleContainer(dockerImageName = "oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
-        override def jdbcUrl: String = super.jdbcUrl
-
-        override def username: String = super.username
-
-        override def password: String = super.password
-
-        override def driverClassName: String = super.driverClassName
-      })
+    val container = initContainer(new OracleContainer("oracleinanutshell/oracle-xe-11g"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
