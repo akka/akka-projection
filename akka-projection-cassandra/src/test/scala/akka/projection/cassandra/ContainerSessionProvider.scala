@@ -13,7 +13,8 @@ import scala.util.Try
 import akka.stream.alpakka.cassandra.CqlSessionProvider
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.internal.core.metadata.DefaultEndPoint
-import com.dimafeng.testcontainers.CassandraContainer
+import org.testcontainers.containers.CassandraContainer
+import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 
 /**
  * Use testcontainers to lazily provide a single CqlSession for all Cassandra tests
@@ -23,12 +24,8 @@ final class ContainerSessionProvider extends CqlSessionProvider {
 
   override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = started.map { _ =>
     CqlSession.builder
-      .addContactEndPoint(
-        new DefaultEndPoint(
-          InetSocketAddress
-            .createUnresolved(
-              container.cassandraContainer.getContainerIpAddress,
-              container.cassandraContainer.getFirstMappedPort.intValue())))
+      .addContactEndPoint(new DefaultEndPoint(InetSocketAddress
+        .createUnresolved(container.getContainerIpAddress, container.getFirstMappedPort.intValue())))
       .withLocalDatacenter("datacenter1")
       .build()
   }
@@ -36,12 +33,16 @@ final class ContainerSessionProvider extends CqlSessionProvider {
 
 object ContainerSessionProvider {
   private val disabled = java.lang.Boolean.getBoolean("disable-cassandra-testcontainer")
-  private lazy val container: CassandraContainer = CassandraContainer()
+  private lazy val container = new CassandraContainer()
   lazy val started: Future[Unit] = {
     if (disabled)
       Future.successful(())
     else
-      Future.fromTry(Try(container.start()))
+      Future.fromTry(Try {
+        container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+        container.withStartupAttempts(5)
+        container.start()
+      })
   }
 
   val Config =

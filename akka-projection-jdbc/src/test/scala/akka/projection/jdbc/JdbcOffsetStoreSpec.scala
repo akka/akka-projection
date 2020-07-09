@@ -11,7 +11,9 @@ import java.util.UUID
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Try
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -20,6 +22,7 @@ import akka.persistence.query.Sequence
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.StringKey
+import akka.projection.TestTags
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
 import akka.projection.jdbc.JdbcOffsetStoreSpec.MySQLSpecConfig
 import akka.projection.jdbc.internal.Dialect
@@ -28,25 +31,26 @@ import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
 import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
 import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.testkit.internal.TestClock
-import com.dimafeng.testcontainers.JdbcDatabaseContainer
-import com.dimafeng.testcontainers.MSSQLServerContainer
-import com.dimafeng.testcontainers.MySQLContainer
-import com.dimafeng.testcontainers.OracleContainer
-import com.dimafeng.testcontainers.PostgreSQLContainer
-import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
+import org.scalatest.Tag
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
+import org.testcontainers.containers.JdbcDatabaseContainer
+import org.testcontainers.containers.MSSQLServerContainer
+import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.OracleContainer
+import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 
 object JdbcOffsetStoreSpec {
 
   trait JdbcSpecConfig {
     val name: String
-
+    def tag: Tag
     val baseConfig = ConfigFactory.parseString("""
     
     akka {
@@ -85,6 +89,8 @@ object JdbcOffsetStoreSpec {
   object H2SpecConfig extends JdbcSpecConfig {
 
     val name = "H2 Database"
+    val tag: Tag = TestTags.InMemoryDb
+
     override val config: Config =
       baseConfig.withFallback(ConfigFactory.parseString("""
         akka.projection.jdbc = {
@@ -103,9 +109,12 @@ object JdbcOffsetStoreSpec {
     override def initContainer() = ()
 
     override def stopContainer() = ()
+
   }
 
   abstract class ContainerJdbcSpecConfig(dialect: String) extends JdbcSpecConfig {
+
+    val tag: Tag = TestTags.ContainerDb
 
     override val config: Config =
       baseConfig.withFallback(ConfigFactory.parseString(s"""
@@ -120,75 +129,49 @@ object JdbcOffsetStoreSpec {
       val container = _container.get
 
       new PureJdbcSession(() => {
-        Class.forName(container.driverClassName)
+        Class.forName(container.getDriverClassName)
         val conn =
-          DriverManager.getConnection(container.jdbcUrl, container.username, container.password)
+          DriverManager.getConnection(container.getJdbcUrl, container.getUsername, container.getPassword)
         conn.setAutoCommit(false)
         conn
       })
     }
 
-    protected var _container: Option[JdbcDatabaseContainer] = None
+    protected var _container: Option[JdbcDatabaseContainer[_]] = None
+
+    def newContainer(): JdbcDatabaseContainer[_]
+
+    final override def initContainer(): Unit = {
+      val container = newContainer()
+      _container = Some(container)
+      container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+      container.withStartupAttempts(5)
+      container.start()
+    }
 
     override def stopContainer(): Unit =
-      _container.get.asInstanceOf[SingleContainer[_]].stop()
+      _container.get.stop()
   }
 
   object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
-
     val name = "Postgres Database"
-
-    override def initContainer(): Unit = {
-      val container = new PostgreSQLContainer
-      _container = Some(container)
-      container.start()
-    }
+    override def newContainer() = new PostgreSQLContainer
   }
 
   object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
-
     val name = "MySQL Database"
-
-    override def initContainer(): Unit = {
-      val container = new MySQLContainer
-      _container = Some(container)
-      container.start()
-    }
+    override def newContainer() = new MySQLContainer
   }
 
   object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
-
     val name = "MS SQL Server Database"
-
-    override def initContainer(): Unit = {
-      val container = new MSSQLServerContainer
-      _container = Some(container)
-      container.start()
-    }
+    override val tag: Tag = TestTags.FlakyDb
+    override def newContainer() = new MSSQLServerContainer
   }
 
   object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
-
     val name = "Oracle Database"
-
-    override def initContainer(): Unit = {
-      val container =
-        // little hack to workaround that not all JDBC containers impl the same
-        // interface (Oracle doesn't impl JdbcDatabaseContainer)
-        new OracleContainer(dockerImageName = "oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
-          override def jdbcUrl: String = super.jdbcUrl
-
-          override def username: String = super.username
-
-          override def password: String = super.password
-
-          override def driverClassName: String = super.driverClassName
-        }
-
-      _container = Some(container)
-      container.start()
-    }
-
+    override def newContainer() = new OracleContainer("oracleinanutshell/oracle-xe-11g")
   }
 
 }
@@ -220,10 +203,11 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override protected def beforeAll(): Unit = {
     // start test container if needed
     // Note, the H2 test don't run in container and are therefore will run must faster
-    specConfig.initContainer()
+    // wrapping Future to at least be able to add a timeout
+    Await.result(Future.fromTry(Try(specConfig.initContainer())), 30.seconds)
 
     // create offset table
-    Await.result(offsetStore.createIfNotExists(), 3.seconds)
+    Await.result(offsetStore.createIfNotExists(), 30.seconds)
   }
 
   override protected def afterAll(): Unit =
@@ -259,9 +243,9 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
-  s"The JdbcOffsetStore [$dialectLabel]" must {
+  "The JdbcOffsetStore" must {
 
-    "create and update offsets" in {
+    s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -285,7 +269,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     }
 
-    "save and retrieve offsets of type Long" in {
+    s"save and retrieve offsets of type Long [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -300,7 +284,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     }
 
-    "save and retrieve offsets of type java.lang.Long" in {
+    s"save and retrieve offsets of type java.lang.Long [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
       withClue("check - save offset") {
@@ -313,7 +297,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type Int" in {
+    s"save and retrieve offsets of type Int [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
       withClue("check - save offset") {
@@ -327,7 +311,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     }
 
-    "save and retrieve offsets of type java.lang.Integer" in {
+    s"save and retrieve offsets of type java.lang.Integer [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -341,7 +325,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type String" in {
+    s"save and retrieve offsets of type String [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
       val randOffset = UUID.randomUUID().toString
@@ -355,7 +339,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type akka.persistence.query.Sequence" in {
+    s"save and retrieve offsets of type akka.persistence.query.Sequence [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -371,7 +355,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type akka.persistence.query.TimeBasedUUID" in {
+    s"save and retrieve offsets of type akka.persistence.query.TimeBasedUUID [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -385,7 +369,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "save and retrieve MergeableOffset" in {
+    s"save and retrieve MergeableOffset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -400,7 +384,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "add new offsets to MergeableOffset" in {
+    s"add new offsets to MergeableOffset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -426,7 +410,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
 
-    "update timestamp" in {
+    s"update timestamp [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -443,7 +427,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       instant3 shouldBe instant2
     }
 
-    "clear offset" in {
+    s"clear offset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 

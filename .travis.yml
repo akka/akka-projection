@@ -21,6 +21,12 @@ script:
   - cp container-license-acceptance.txt akka-projection-slick/src/test/resources/container-license-acceptance.txt
   - sbt -jvm-opts .jvmopts-travis "$AKKA_SNAPSHOT" "$ALPAKKA_KAFKA_SNAPSHOT" "$CMD"
 
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    - env: ALLOW_FAILURE=true
+
 jobs:
   include:
     - stage: check
@@ -36,7 +42,7 @@ jobs:
     - stage: test
       env:
         - ALPAKKA_KAFKA_SNAPSHOT="-Dbuild.alpakka.kafka.version=2.0.3+7-edfcbb02" # Remove when Alpakka Kafka 2.0.4 released
-        - CMD="test"
+        - CMD="testOnly -- -l FlakyDb" # run all tests, expect those marked as FlakyDb
       name: "Run tests with Scala 2.13 and AdoptOpenJDK 8"
     - env:
         - ALPAKKA_KAFKA_SNAPSHOT="-Dbuild.alpakka.kafka.version=2.0.3+7-edfcbb02" # Remove when Alpakka Kafka 2.0.4 released
@@ -55,6 +61,12 @@ jobs:
     - script: openssl aes-256-cbc -K $encrypted_8fb0ea6dc959_key -iv $encrypted_8fb0ea6dc959_iv -in .travis/travis_gustav.enc -out .travis/id_rsa -d && eval "$(ssh-agent -s)" && chmod 600 .travis/id_rsa && ssh-add .travis/id_rsa && sbt -jvm-opts .jvmopts-travis docs/publishRsync
       name: "Publish API and reference documentation"
 
+  - stage: test-flaky-db
+      env:
+        - ALLOW_FAILURE=true
+        - ALPAKKA_KAFKA_SNAPSHOT="-Dbuild.alpakka.kafka.version=2.0.3+7-edfcbb02" # Remove when Alpakka Kafka 2.0.4 released
+        - CMD="testOnly -- -n FlakyDb" # exclude all tests but those marked as FlakyDb
+      name: "Run flaky tests with Scala 2.13 and AdoptOpenJDK 8 (allowed to fail)"
 
 stages:
   # runs on master commits and PRs
@@ -65,6 +77,9 @@ stages:
   - name: test
     if: NOT tag =~ ^v
 
+  - name: test-flaky-db
+    - if: NOT tag =~ ^v
+      -
   # runs on main repo master commits and version-tagged commits
   - name: whitesource
     if: repo = akka/akka-projection AND ( ( branch = master AND type = push ) OR tag =~ ^v)

@@ -18,23 +18,25 @@ import akka.persistence.query.TimeBasedUUID
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.StringKey
+import akka.projection.TestTags
 import akka.projection.slick.SlickOffsetStoreSpec.SlickSpecConfig
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
 import akka.projection.testkit.internal.TestClock
-import com.dimafeng.testcontainers.JdbcDatabaseContainer
-import com.dimafeng.testcontainers.MSSQLServerContainer
-import com.dimafeng.testcontainers.MySQLContainer
-import com.dimafeng.testcontainers.OracleContainer
-import com.dimafeng.testcontainers.PostgreSQLContainer
-import com.dimafeng.testcontainers.SingleContainer
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
+import org.scalatest.Tag
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
+import org.testcontainers.containers.JdbcDatabaseContainer
+import org.testcontainers.containers.MSSQLServerContainer
+import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.OracleContainer
+import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
 
@@ -42,6 +44,7 @@ object SlickOffsetStoreSpec {
 
   trait SlickSpecConfig {
     val name: String
+    def tag: Tag
     val baseConfig = ConfigFactory.parseString("""
     akka.projection.slick = {
       offset-store {
@@ -58,6 +61,7 @@ object SlickOffsetStoreSpec {
   object H2SpecConfig extends SlickSpecConfig {
 
     val name = "H2 Database"
+    val tag = TestTags.InMemoryDb
     override def config: Config =
       baseConfig.withFallback(ConfigFactory.parseString("""
         akka.projection.slick = {
@@ -76,16 +80,17 @@ object SlickOffsetStoreSpec {
 
   abstract class ContainerJdbcSpecConfig extends SlickSpecConfig {
 
-    def container: JdbcDatabaseContainer
+    val tag: Tag = TestTags.ContainerDb
+    def container: JdbcDatabaseContainer[_]
 
     override def config = {
       baseConfig.withFallback(ConfigFactory.parseString(s"""
         akka.projection.slick = {
            db = {
-             url = "${container.jdbcUrl}"
-             driver = ${container.driverClassName}
-             user = ${container.username}
-             password = ${container.password}
+             url = "${container.getJdbcUrl}"
+             driver = ${container.getDriverClassName}
+             user = ${container.getUsername}
+             password = ${container.getPassword}
              connectionPool = disabled
              keepAliveConnection = true
            }
@@ -93,15 +98,22 @@ object SlickOffsetStoreSpec {
         """))
 
     }
+
+    protected def initContainer(container: JdbcDatabaseContainer[_]): JdbcDatabaseContainer[_] = {
+      container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+      container.withStartupAttempts(5)
+      container.start()
+      container
+    }
+
     override def stopContainer(): Unit =
-      container.asInstanceOf[SingleContainer[_]].stop()
+      container.stop()
   }
 
   class PostgresSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Postgres Database"
-    val container = new PostgreSQLContainer
-    container.start()
+    val container = initContainer(new PostgreSQLContainer)
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -114,8 +126,7 @@ object SlickOffsetStoreSpec {
   class MySQLSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "MySQL Database"
-    val container = new MySQLContainer
-    container.start()
+    val container = initContainer(new MySQLContainer)
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -127,8 +138,9 @@ object SlickOffsetStoreSpec {
   class MSSQLServerSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "MS SQL Server Database"
-    val container = new MSSQLServerContainer
-    container.start()
+    override val tag = TestTags.FlakyDb
+
+    val container = initContainer(new MSSQLServerContainer)
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -140,20 +152,7 @@ object SlickOffsetStoreSpec {
   class OracleSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Oracle Database"
-    val container =
-      // little hack to workaround that not all JDBC containers impl the same
-      // interface (Oracle doesn't impl JdbcDatabaseContainer)
-      new OracleContainer(dockerImageName = "oracleinanutshell/oracle-xe-11g") with JdbcDatabaseContainer {
-        override def jdbcUrl: String = super.jdbcUrl
-
-        override def username: String = super.username
-
-        override def password: String = super.password
-
-        override def driverClassName: String = super.driverClassName
-      }
-
-    container.start()
+    val container = initContainer(new OracleContainer("oracleinanutshell/oracle-xe-11g"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -192,7 +191,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
   override protected def beforeAll(): Unit = {
     // create offset table
-    Await.result(offsetStore.createIfNotExists, 3.seconds)
+    Await.result(offsetStore.createIfNotExists, 30.seconds)
   }
 
   override protected def afterAll(): Unit = {
@@ -211,11 +210,11 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
-  s"The SlickOffsetStore [$dialectLabel]" must {
+  "The SlickOffsetStore" must {
 
     implicit val ec: ExecutionContext = dbConfig.db.executor.executionContext
 
-    "create and update offsets" in {
+    s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -239,7 +238,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
     }
 
-    "save and retrieve offsets of type Long" in {
+    s"save and retrieve offsets of type Long [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -254,7 +253,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
     }
 
-    "save and retrieve offsets of type java.lang.Long" in {
+    s"save and retrieve offsets of type java.lang.Long [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -268,7 +267,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type Int" in {
+    s"save and retrieve offsets of type Int [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -283,7 +282,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
     }
 
-    "save and retrieve offsets of type java.lang.Integer" in {
+    s"save and retrieve offsets of type java.lang.Integer [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -297,7 +296,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type String" in {
+    s"save and retrieve offsets of type String [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -312,7 +311,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type akka.persistence.query.Sequence" in {
+    s"save and retrieve offsets of type akka.persistence.query.Sequence [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -327,7 +326,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "save and retrieve offsets of type akka.persistence.query.TimeBasedUUID" in {
+    s"save and retrieve offsets of type akka.persistence.query.TimeBasedUUID [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -342,7 +341,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "update timestamp" in {
+    s"update timestamp [$dialectLabel]" taggedAs (specConfig.tag) in {
       val projectionId = genRandomProjectionId()
 
       val instant0 = clock.instant()
@@ -356,7 +355,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       instant3 shouldBe instant2
     }
 
-    "save and retrieve MergeableOffset" in {
+    s"save and retrieve MergeableOffset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -371,7 +370,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "add new offsets to MergeableOffset" in {
+    s"add new offsets to MergeableOffset [$dialectLabel]" taggedAs (specConfig.tag) in {
 
       val projectionId = genRandomProjectionId()
 
@@ -397,7 +396,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       }
     }
 
-    "clear offset" in {
+    s"clear offset [$dialectLabel]" taggedAs (specConfig.tag) in {
       val projectionId = genRandomProjectionId()
 
       withClue("check - save offset") {
