@@ -162,7 +162,7 @@ class ErrorRateMetricAtMostOnceSpec extends ErrorRateMetricSpec {
     // at-most-once
     " in `at-most-once` with singleHandler" must {
       "report nothing in happy scenarios" in {
-        val tt = new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(TestHandlers.single))
+        val tt = new TelemetryTester(AtMostOnce(), SingleHandlerStrategy(TestHandlers.single))
 
         runInternal(tt.projectionState) {
           detectNoError()
