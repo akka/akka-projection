@@ -11,7 +11,9 @@ import java.util.UUID
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Try
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -224,7 +226,8 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override protected def beforeAll(): Unit = {
     // start test container if needed
     // Note, the H2 test don't run in container and are therefore will run must faster
-    specConfig.initContainer()
+    // wrapping Future to at least be able to add a timeout
+    Await.result(Future.fromTry(Try(specConfig.initContainer())), 30.seconds)
 
     // create offset table
     Await.result(offsetStore.createIfNotExists(), 30.seconds)
