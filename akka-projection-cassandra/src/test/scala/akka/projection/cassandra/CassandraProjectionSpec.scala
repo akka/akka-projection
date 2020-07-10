@@ -153,6 +153,7 @@ class CassandraProjectionSpec
   import CassandraProjectionSpec._
 
   private implicit val ec: ExecutionContext = system.executionContext
+  private implicit val classicScheduler = system.classicSystem.scheduler
   private val offsetStore = new CassandraOffsetStore(system)
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
   private val repository = new TestRepository(session)
@@ -164,14 +165,20 @@ class CassandraProjectionSpec
     // don't use futureValue (patience) here because it can take a while to start the test container
     Await.result(ContainerSessionProvider.started, 30.seconds)
 
-    Await.result(for {
-      s <- session.underlying()
-      // reason for setSchemaMetadataEnabled is that it speed up tests
-      _ <- s.setSchemaMetadataEnabled(false).toScala
-      _ <- offsetStore.createKeyspaceAndTable()
-      _ <- repository.createKeyspaceAndTable()
-      _ <- s.setSchemaMetadataEnabled(null).toScala
-    } yield Done, 30.seconds)
+    def tryCreateTable() =
+      for {
+        s <- session.underlying()
+        // reason for setSchemaMetadataEnabled is that it speed up tests
+        _ <- s.setSchemaMetadataEnabled(false).toScala
+        _ <- offsetStore.createKeyspaceAndTable()
+        _ <- repository.createKeyspaceAndTable()
+        _ <- s.setSchemaMetadataEnabled(null).toScala
+      } yield Done
+
+    // the container can takes time to be 'ready',
+    // we should keep trying to create the table until it succeeds
+    Await.result(akka.pattern.retry(() => tryCreateTable(), 10, 3.seconds), 30.seconds)
+
   }
 
   override protected def afterAll(): Unit = {
