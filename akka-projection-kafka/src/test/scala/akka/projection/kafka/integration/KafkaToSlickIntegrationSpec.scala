@@ -125,6 +125,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
+
     val done = for {
       _ <- SlickProjection.createOffsetTableIfNotExists(dbConfig)
       _ <- repository.createIfNotExists
@@ -135,7 +136,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
   "KafkaSourceProvider with Slick" must {
 
     "project a model and Kafka offset map to a slick db exactly once" in {
-      val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
+      val topicName = createRandomTopic(partitions = 3, replication = 1)
       val groupId = createGroupId()
       val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
@@ -165,7 +166,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     }
 
     "project a model and Kafka offset map to a slick db exactly once with a retriable DBIO.failed" in {
-      val topicName = createTopic(suffix = 1, partitions = 3, replication = 1)
+      val topicName = createRandomTopic(partitions = 3, replication = 1)
       val groupId = createGroupId()
       val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
@@ -208,7 +209,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     // relates to issue https://github.com/akka/akka-projection/issues/305
     // we must ensure that we can read a kafka offset from the storage
     "recover a projection from a previously saved offset" in {
-      val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
+      val topicName = createRandomTopic(partitions = 3, replication = 1)
       val groupId = createGroupId()
       val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 

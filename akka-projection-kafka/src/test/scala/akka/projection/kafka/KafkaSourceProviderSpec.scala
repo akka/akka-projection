@@ -19,7 +19,7 @@ import akka.stream.testkit.scaladsl.TestSink
 class KafkaSourceProviderSpec extends KafkaSpecBase() {
   "KafkaSourceProviderSpec" must {
     "resume from provided offsets" in assertAllStagesStopped {
-      val topic = createTopic()
+      val topic = createRandomTopic()
       val groupId = createGroupId()
       val settings = consumerDefaults().withGroupId(groupId)
 
@@ -41,7 +41,7 @@ class KafkaSourceProviderSpec extends KafkaSpecBase() {
     }
 
     "resume from beginning offsets when none are provided" in assertAllStagesStopped {
-      val topic = createTopic()
+      val topic = createRandomTopic()
       val groupId = createGroupId()
       val settings = consumerDefaults().withGroupId(groupId)
 

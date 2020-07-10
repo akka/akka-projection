@@ -4,6 +4,10 @@
 
 package akka.projection.kafka
 
+import java.util
+import java.util.UUID
+import java.util.concurrent.TimeUnit
+
 import akka.actor.ActorSystem
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -13,6 +17,7 @@ import akka.kafka.testkit.scaladsl.KafkaSpec
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import org.apache.kafka.clients.admin.NewTopic
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.OptionValues
 import org.scalatest.Suite
@@ -45,4 +50,16 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
   implicit val dispatcher = testKit.system.executionContext
 
   override def bootstrapServers: String = "127.0.0.1:9092"
+
+  def createRandomTopic(): String =
+    createRandomTopic(1, 1)
+  def createRandomTopic(partitions: Int, replication: Int): String = {
+    val config = new util.HashMap[String, String]()
+    val topicName = UUID.randomUUID().toString
+    val createResult =
+      adminClient.createTopics(
+        util.Arrays.asList(new NewTopic(topicName, partitions, replication.toShort).configs(config)))
+    createResult.all().get(10, TimeUnit.SECONDS)
+    topicName
+  }
 }
