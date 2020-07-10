@@ -44,5 +44,5 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
   implicit val actorSystem = testKit.system
   implicit val dispatcher = testKit.system.executionContext
 
-  override def bootstrapServers: String = "0.0.0.0:9092"
+  override def bootstrapServers: String = "127.0.0.1:9092"
 }

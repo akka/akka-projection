@@ -31,8 +31,8 @@ while true; do
 done;
 }
 
-docker-compose -f scripts/docker-compose.yml kill
-docker-compose -f scripts/docker-compose.yml rm -f
-docker-compose -f scripts/docker-compose.yml up -d
+docker-compose -f docker-compose.yml kill
+docker-compose -f docker-compose.yml rm -f
+docker-compose -f docker-compose.yml up -d
 wait 9092 Kafka
 wait 9042 Cassandra
