@@ -191,7 +191,8 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override implicit val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
 
-  implicit val executionContext: ExecutionContextExecutor = testKit.system.executionContext
+  private implicit val executionContext: ExecutionContextExecutor = system.executionContext
+  private implicit val classicScheduler = system.classicSystem.scheduler
 
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
@@ -207,7 +208,9 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     Await.result(Future.fromTry(Try(specConfig.initContainer())), 30.seconds)
 
     // create offset table
-    Await.result(offsetStore.createIfNotExists(), 30.seconds)
+    // the container can takes time to be 'ready',
+    // we should keep trying to create the table until it succeeds
+    Await.result(akka.pattern.retry(() => offsetStore.createIfNotExists(), 10, 3.seconds), 30.seconds)
   }
 
   override protected def afterAll(): Unit =
