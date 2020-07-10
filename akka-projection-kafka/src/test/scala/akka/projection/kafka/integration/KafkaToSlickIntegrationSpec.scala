@@ -33,6 +33,7 @@ import com.typesafe.config.ConfigFactory
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.scalatest.Assertion
+import org.scalatest.Ignore
 import org.scalatest.time.Milliseconds
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -113,6 +114,7 @@ object KafkaToSlickIntegrationSpec {
   }
 }
 
+@Ignore
 class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config)) {
   import KafkaToSlickIntegrationSpec._
 
