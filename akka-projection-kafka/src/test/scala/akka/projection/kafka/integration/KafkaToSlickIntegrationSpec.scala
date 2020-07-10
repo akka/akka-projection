@@ -214,10 +214,10 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
       produceEvents(topicName)
 
-      def slickProjection() = {
+      val kafkaSourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
+        KafkaSourceProvider(system.toTyped, consumerDefaults().withGroupId(groupId), Set(topicName))
 
-        val kafkaSourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
-          KafkaSourceProvider(system.toTyped, consumerDefaults().withGroupId(groupId), Set(topicName))
+      def slickProjection() = {
 
         SlickProjection.exactlyOnce(
           projectionId,
