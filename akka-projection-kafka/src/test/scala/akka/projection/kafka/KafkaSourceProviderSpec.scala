@@ -4,16 +4,17 @@
 
 package akka.projection.kafka
 
+import java.lang.{ Long => JLong }
+
 import scala.concurrent.Await
 import scala.concurrent.Future
 
 import akka.actor.typed.scaladsl.adapter._
-import akka.projection.kafka.GroupOffsets.TopicPartitionKey
+import akka.projection.MergeableOffset
 import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink
-import org.apache.kafka.common.TopicPartition
 
 class KafkaSourceProviderSpec extends KafkaSpecBase() {
   "KafkaSourceProviderSpec" must {
@@ -26,7 +27,8 @@ class KafkaSourceProviderSpec extends KafkaSpecBase() {
 
       val provider = KafkaSourceProvider(system.toTyped, settings, Set(topic))
       val readOffsetsHandler =
-        () => Future.successful(Option(GroupOffsets(Map(TopicPartitionKey(new TopicPartition(topic, 0)) -> 5L))))
+        () =>
+          Future.successful(Option(MergeableOffset(Map(KafkaOffsets.partitionToKey(topic, 0) -> JLong.valueOf(5L)))))
       val probe = Source
         .futureSource(provider.source(readOffsetsHandler))
         .runWith(TestSink.probe)

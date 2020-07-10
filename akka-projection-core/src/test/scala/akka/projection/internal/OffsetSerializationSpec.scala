@@ -16,7 +16,6 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.StringKey
 import akka.serialization.SerializerWithStringManifest
 import akka.util.unused
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -120,7 +119,7 @@ class OffsetSerializationSpec
   "OffsetSerialization of MergeableOffsets" must {
     "convert offsets of type MergeableOffset" in {
       val surrogateProjectionKey = "user-group-topic-1"
-      val mergeableOffset = new MergeableOffset(Map(StringKey(surrogateProjectionKey) -> 1L))
+      val mergeableOffset = new MergeableOffset(Map(surrogateProjectionKey -> 1L))
       val actualRep = toStorageRepresentation(id, mergeableOffset)
 
       withClue("return a storage representation of MultipleOffsets") {
@@ -136,7 +135,7 @@ class OffsetSerializationSpec
 
       actualRep shouldBe storageRepresentation
 
-      fromStorageRepresentation[MergeableOffset[StringKey, Long], Long](storageRepresentation) shouldBe mergeableOffset
+      fromStorageRepresentation[MergeableOffset[Long], Long](storageRepresentation) shouldBe mergeableOffset
     }
 
     "merge rows into one MergeableOffset" in {
@@ -145,13 +144,13 @@ class OffsetSerializationSpec
       val surrogateProjectionKey2 = "user-group-topic-2"
 
       val mergeableOffset =
-        MergeableOffset(Map(StringKey(surrogateProjectionKey1) -> 1L, StringKey(surrogateProjectionKey2) -> 2L))
+        MergeableOffset(Map(surrogateProjectionKey1 -> 1L, surrogateProjectionKey2 -> 2L))
       val storageRepresentation = MultipleOffsets(
         immutable.Seq(
           SingleOffset(ProjectionId(projectionName, surrogateProjectionKey1), LongManifest, "1", mergeable = true),
           SingleOffset(ProjectionId(projectionName, surrogateProjectionKey2), LongManifest, "2", mergeable = true)))
 
-      fromStorageRepresentation[MergeableOffset[StringKey, Long], Long](storageRepresentation) shouldBe mergeableOffset
+      fromStorageRepresentation[MergeableOffset[Long], Long](storageRepresentation) shouldBe mergeableOffset
     }
   }
 }

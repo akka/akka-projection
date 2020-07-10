@@ -18,7 +18,6 @@ import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.StringKey
 import akka.projection.TestTags
 import akka.projection.slick.SlickOffsetStoreSpec.SlickSpecConfig
 import akka.projection.slick.internal.SlickOffsetStore
@@ -360,13 +359,13 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
       val projectionId = genRandomProjectionId()
 
-      val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 1L, StringKey("ghi") -> 1L))
+      val origOffset = MergeableOffset(Map("abc" -> 1L, "def" -> 1L, "ghi" -> 1L))
       withClue("check - save offset") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, origOffset)).futureValue
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId)
         offset.futureValue.value shouldBe origOffset
       }
     }
@@ -375,24 +374,24 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
       val projectionId = genRandomProjectionId()
 
-      val origOffset = MergeableOffset(Map(StringKey("abc") -> 1L, StringKey("def") -> 1L))
+      val origOffset = MergeableOffset(Map("abc" -> 1L, "def" -> 1L))
       withClue("check - save offset") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, origOffset)).futureValue
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId)
         offset.futureValue.value shouldBe origOffset
       }
 
       // mix updates and inserts
-      val updatedOffset = MergeableOffset(Map(StringKey("abc") -> 2L, StringKey("def") -> 2L, StringKey("ghi") -> 1L))
+      val updatedOffset = MergeableOffset(Map("abc" -> 2L, "def" -> 2L, "ghi" -> 1L))
       withClue("check - save offset") {
         dbConfig.db.run(offsetStore.saveOffset(projectionId, updatedOffset)).futureValue
       }
 
       withClue("check - read offset") {
-        val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId)
+        val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId)
         offset.futureValue.value shouldBe updatedOffset
       }
     }

@@ -4,6 +4,7 @@
 
 package akka.projection.kafka.integration
 
+import java.lang.{ Long => JLong }
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.immutable
@@ -25,8 +26,6 @@ import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
-import akka.projection.StringKey
-import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
@@ -134,6 +133,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
   }
 
   "KafkaSourceProvider with Slick" must {
+
     "project a model and Kafka offset map to a slick db exactly once" in {
       val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
       val groupId = createGroupId()
@@ -141,7 +141,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
       produceEvents(topicName)
 
-      val kafkaSourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
+      val kafkaSourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
         KafkaSourceProvider(system.toTyped, consumerDefaults().withGroupId(groupId), Set(topicName))
 
       val slickProjection =
@@ -171,7 +171,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
       produceEvents(topicName)
 
-      val kafkaSourceProvider: SourceProvider[GroupOffsets, ConsumerRecord[String, String]] =
+      val kafkaSourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
         KafkaSourceProvider(system.toTyped, consumerDefaults().withGroupId(groupId), Set(topicName))
 
       // repository will fail to insert the "AddToCart" event type once only
@@ -204,18 +204,58 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
         assertAllOffsetsObserved(projectionId, topicName)
       }
     }
+
+    // relates to issue https://github.com/akka/akka-projection/issues/305
+    // we must ensure that we can read a kafka offset from the storage
+    "recover a projection from a previously saved offset" in {
+      val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
+      val groupId = createGroupId()
+      val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
+
+      produceEvents(topicName)
+
+      def slickProjection() = {
+
+        val kafkaSourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
+          KafkaSourceProvider(system.toTyped, consumerDefaults().withGroupId(groupId), Set(topicName))
+
+        SlickProjection.exactlyOnce(
+          projectionId,
+          sourceProvider = kafkaSourceProvider,
+          dbConfig,
+          () =>
+            SlickHandler[ConsumerRecord[String, String]] { envelope =>
+              val userId = envelope.key()
+              val eventType = envelope.value()
+              val userEvent = UserEvent(userId, eventType)
+              // do something with the record, payload in record.value
+              repository.incrementCount(projectionId, userEvent.eventType)
+            })
+      }
+
+      projectionTestKit.run(slickProjection(), remainingOrDefault) {
+        assertEventTypeCount(projectionId)
+        assertAllOffsetsObserved(projectionId, topicName)
+      }
+
+      // re-run it in order to read back persisted offsets
+      projectionTestKit.run(slickProjection(), remainingOrDefault) {
+        assertEventTypeCount(projectionId)
+        assertAllOffsetsObserved(projectionId, topicName)
+      }
+    }
   }
 
   private def assertAllOffsetsObserved(projectionId: ProjectionId, topicName: String) = {
     def offsetForUser(userId: String) = userEvents.count(_.userId == userId) - 1
 
     withClue("check - all offsets were seen") {
-      val offset = offsetStore.readOffset[MergeableOffset[StringKey, Long]](projectionId).futureValue.value
+      val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId).futureValue.value
       offset shouldBe MergeableOffset(
         Map(
-          StringKey(s"$topicName-0") -> offsetForUser(user1),
-          StringKey(s"$topicName-1") -> offsetForUser(user2),
-          StringKey(s"$topicName-2") -> offsetForUser(user3)))
+          s"$topicName-0" -> offsetForUser(user1),
+          s"$topicName-1" -> offsetForUser(user2),
+          s"$topicName-2" -> offsetForUser(user3)))
     }
   }
 

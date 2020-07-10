@@ -19,15 +19,14 @@ import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.kafka.ProducerSettings;
 import akka.kafka.javadsl.SendProducer;
+import akka.projection.MergeableOffset;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
-import akka.projection.cassandra.CassandraProjectionTest;
 import akka.projection.javadsl.ExactlyOnceProjection;
 import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
-import akka.projection.kafka.GroupOffsets;
 import akka.projection.kafka.javadsl.KafkaSourceProvider;
 import akka.stream.javadsl.Source;
 import jdocs.jdbc.HibernateSessionFactory;
@@ -163,7 +162,8 @@ public interface KafkaDocExample {
   }
   // #wordPublisher
 
-  static SourceProvider<GroupOffsets, ConsumerRecord<String, String>> illustrateSourceProvider() {
+  static SourceProvider<MergeableOffset<Long>, ConsumerRecord<String, String>>
+      illustrateSourceProvider() {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 
     // #sourceProvider
@@ -176,7 +176,7 @@ public interface KafkaDocExample {
             .withGroupId(groupId)
             .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-    SourceProvider<GroupOffsets, ConsumerRecord<String, String>> sourceProvider =
+    SourceProvider<MergeableOffset<Long>, ConsumerRecord<String, String>> sourceProvider =
         KafkaSourceProvider.create(system, consumerSettings, Collections.singleton(topicName));
     // #sourceProvider
 
@@ -185,14 +185,14 @@ public interface KafkaDocExample {
 
   static void illustrateExactlyOnce() {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
-    SourceProvider<GroupOffsets, ConsumerRecord<String, String>> sourceProvider =
+    SourceProvider<MergeableOffset<Long>, ConsumerRecord<String, String>> sourceProvider =
         illustrateSourceProvider();
 
     // #exactlyOnce
     final HibernateSessionFactory sessionProvider = new HibernateSessionFactory();
 
     ProjectionId projectionId = ProjectionId.of("WordCount", "wordcount-1");
-    ExactlyOnceProjection<GroupOffsets, ConsumerRecord<String, String>> projection =
+    ExactlyOnceProjection<MergeableOffset<Long>, ConsumerRecord<String, String>> projection =
         JdbcProjection.exactlyOnce(
             projectionId,
             sourceProvider,

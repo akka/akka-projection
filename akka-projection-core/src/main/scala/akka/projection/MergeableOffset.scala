@@ -4,10 +4,4 @@
 
 package akka.projection
 
-trait MergeableKey {
-  def surrogateKey: String
-}
-
-final case class StringKey(val surrogateKey: String) extends MergeableKey
-
-case class MergeableOffset[Key <: MergeableKey, Offset](val entries: Map[Key, Offset])
+final case class MergeableOffset[Offset](val entries: Map[String, Offset])

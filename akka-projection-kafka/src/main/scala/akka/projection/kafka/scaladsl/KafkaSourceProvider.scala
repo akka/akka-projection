@@ -4,9 +4,10 @@
 
 package akka.projection.kafka.scaladsl
 
+import java.lang.{ Long => JLong }
 import akka.actor.typed.ActorSystem
 import akka.kafka.ConsumerSettings
-import akka.projection.kafka.GroupOffsets
+import akka.projection.MergeableOffset
 import akka.projection.kafka.internal.KafkaSourceProviderImpl
 import akka.projection.kafka.internal.KafkaSourceProviderSettings
 import akka.projection.kafka.internal.MetadataClientAdapterImpl
@@ -21,7 +22,7 @@ object KafkaSourceProvider {
   def apply[K, V](
       system: ActorSystem[_],
       settings: ConsumerSettings[K, V],
-      topics: Set[String]): SourceProvider[GroupOffsets, ConsumerRecord[K, V]] =
+      topics: Set[String]): SourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]] =
     new KafkaSourceProviderImpl[K, V](
       system,
       settings,
