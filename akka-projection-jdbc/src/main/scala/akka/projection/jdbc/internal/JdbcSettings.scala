@@ -73,8 +73,7 @@ private[projection] object JdbcSettings {
       // empty string can't be parsed to Int, users probably forgot to configure the pool-size
       if (isEmptyString)
         throw new IllegalArgumentException(
-          s"Config value for '$dispatcherConfigPath.$pathToPoolSize' is not configured.  Current value is [${config
-            .getValue(pathToPoolSize)}]. " +
+          s"Config value for '$dispatcherConfigPath.$pathToPoolSize' is not configured. " +
           "The thread pool size must be integer and be as large as the JDBC connection pool.")
 
       try {
@@ -83,7 +82,8 @@ private[projection] object JdbcSettings {
       } catch {
         case _: ConfigException.WrongType =>
           throw new IllegalArgumentException(
-            s"Value [${config.getValue(pathToPoolSize).render()}] is not a valid value for settings '$dispatcherConfigPath.$pathToPoolSize'" +
+            s"Value [${config.getValue(pathToPoolSize).render()}] is not a valid value for settings '$dispatcherConfigPath.$pathToPoolSize'. " +
+            s"Current value is [${config.getValue(pathToPoolSize)}]. " +
             "The thread pool size must be integer and be as large as the JDBC connection pool.")
       }
     }
