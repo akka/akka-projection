@@ -31,7 +31,7 @@ abstract class StatusObserver[-Envelope] {
   def stopped(projectionId: ProjectionId): Unit
 
   /**
-   * Called when the corresponding offset has been stored (even if the envelope has not been processed yet).
+   * Called when the corresponding offset has been stored.
    * It might not be called for each envelope.
    */
   def offsetProgress(projectionId: ProjectionId, env: Envelope): Unit
