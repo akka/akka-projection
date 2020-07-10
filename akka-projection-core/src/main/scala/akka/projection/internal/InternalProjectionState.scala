@@ -343,20 +343,18 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         val handler = single.handler()
         source
           .mapAsync(parallelism = 1) { context =>
-            val processed =
-              saveOffsetAndReport(projectionId, context, 1).flatMap { _ =>
-                val measured: () => Future[Done] = { () =>
-                  handler.process(context.envelope).map { done =>
-                    // `telemetry.afterProcess` is invoked immediately after `handler.process`
-                    telemetry.afterProcess(context.externalContext)
-                    done
-                  }
+            saveOffsetAndReport(projectionId, context, 1).flatMap { _ =>
+              val measured: () => Future[Done] = { () =>
+                handler.process(context.envelope).map { done =>
+                  // `telemetry.afterProcess` is invoked immediately after `handler.process`
+                  telemetry.afterProcess(context.externalContext)
+                  done
                 }
-
-                handlerRecovery
-                  .applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
               }
-            processed
+
+              handlerRecovery
+                .applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
+            }
           }
           .map(_ => Done)
       case _ =>
