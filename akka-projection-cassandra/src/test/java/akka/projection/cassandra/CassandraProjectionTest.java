@@ -30,6 +30,7 @@ import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.javadsl.Source;
 import org.junit.*;
 import org.scalatestplus.junit.JUnitSuite;
+import scala.compat.java8.FutureConverters;
 import scala.concurrent.Await;
 
 import java.time.Duration;
@@ -41,7 +42,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import scala.compat.java8.FutureConverters;
+
 import static org.junit.Assert.assertEquals;
 
 public class CassandraProjectionTest extends JUnitSuite {
@@ -70,13 +71,13 @@ public class CassandraProjectionTest extends JUnitSuite {
     CompletionStage<Done> createTableAttempts =
         Patterns.retry(
             () -> FutureConverters.toJava(offsetStore.createKeyspaceAndTable()),
-            10,
+            20,
             Duration.ofSeconds(3),
             testKit.system().classicSystem().scheduler(),
             testKit.system().executionContext());
     Await.result(
         FutureConverters.toScala(createTableAttempts),
-        scala.concurrent.duration.Duration.create(30, TimeUnit.SECONDS));
+        scala.concurrent.duration.Duration.create(60, TimeUnit.SECONDS));
   }
 
   @AfterClass

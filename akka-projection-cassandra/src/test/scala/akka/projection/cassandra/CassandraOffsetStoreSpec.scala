@@ -29,6 +29,9 @@ class CassandraOffsetStoreSpec
     with AnyWordSpecLike
     with LogCapturing {
 
+  override implicit val patienceConfig: PatienceConfig =
+    PatienceConfig(timeout = 10.seconds, interval = 100.millis)
+
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
   private val offsetStore = new CassandraOffsetStore(system, clock)
@@ -54,7 +57,7 @@ class CassandraOffsetStoreSpec
 
     // the container can takes time to be 'ready',
     // we should keep trying to create the table until it succeeds
-    Await.result(akka.pattern.retry(() => tryCreateTable(), 10, 3.seconds), 30.seconds)
+    Await.result(akka.pattern.retry(() => tryCreateTable(), 20, 3.seconds), 60.seconds)
   }
 
   override protected def afterAll(): Unit = {

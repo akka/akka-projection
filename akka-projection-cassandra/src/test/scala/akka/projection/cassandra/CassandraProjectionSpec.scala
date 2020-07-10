@@ -152,6 +152,9 @@ class CassandraProjectionSpec
 
   import CassandraProjectionSpec._
 
+  override implicit val patienceConfig: PatienceConfig =
+    PatienceConfig(timeout = 10.seconds, interval = 100.millis)
+
   private implicit val ec: ExecutionContext = system.executionContext
   private implicit val classicScheduler = system.classicSystem.scheduler
   private val offsetStore = new CassandraOffsetStore(system)
@@ -177,7 +180,7 @@ class CassandraProjectionSpec
 
     // the container can takes time to be 'ready',
     // we should keep trying to create the table until it succeeds
-    Await.result(akka.pattern.retry(() => tryCreateTable(), 10, 3.seconds), 30.seconds)
+    Await.result(akka.pattern.retry(() => tryCreateTable(), 20, 3.seconds), 60.seconds)
 
   }
 

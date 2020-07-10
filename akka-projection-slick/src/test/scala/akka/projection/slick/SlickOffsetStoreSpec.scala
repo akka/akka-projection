@@ -8,7 +8,6 @@ import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.language.existentials
 
@@ -27,9 +26,6 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
 import org.scalatest.Tag
-import org.scalatest.time.Millis
-import org.scalatest.time.Seconds
-import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.testcontainers.containers.JdbcDatabaseContainer
 import org.testcontainers.containers.MSSQLServerContainer
@@ -175,7 +171,10 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
     with OptionValues {
 
   override implicit val patienceConfig: PatienceConfig =
-    PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
+    PatienceConfig(timeout = 10.seconds, interval = 100.millis)
+
+  private implicit val executionContext = system.executionContext
+  private implicit val classicScheduler = system.classicSystem.scheduler
 
   private val slickConfig = specConfig.config.getConfig(SlickSettings.configPath)
   private val dialectLabel = specConfig.name
@@ -191,7 +190,9 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
   override protected def beforeAll(): Unit = {
     // create offset table
-    Await.result(offsetStore.createIfNotExists, 30.seconds)
+    // the container can takes time to be 'ready',
+    // we should keep trying to create the table until it succeeds
+    Await.result(akka.pattern.retry(() => offsetStore.createIfNotExists, 20, 3.seconds), 60.seconds)
   }
 
   override protected def afterAll(): Unit = {
@@ -211,8 +212,6 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
   "The SlickOffsetStore" must {
-
-    implicit val ec: ExecutionContext = dbConfig.db.executor.executionContext
 
     s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {
 

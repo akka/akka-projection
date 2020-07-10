@@ -195,7 +195,6 @@ class SlickProjectionSpec
   val repository = new TestRepository(dbConfig)
 
   private implicit val executionContext: ExecutionContext = system.executionContext
-  private implicit val classicScheduler = system.classicSystem.scheduler
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -205,10 +204,7 @@ class SlickProjectionSpec
       offsetStore.createIfNotExists
         .flatMap(_ => repository.createTable())
 
-    // create offset table
-    // the container can takes time to be 'ready',
-    // we should keep trying to create the table until it succeeds
-    Await.result(akka.pattern.retry(() => creationFut, 10, 3.seconds), 30.seconds)
+    Await.result(creationFut, 30.seconds)
   }
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")

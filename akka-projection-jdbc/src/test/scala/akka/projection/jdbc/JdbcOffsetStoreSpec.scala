@@ -35,9 +35,6 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.OptionValues
 import org.scalatest.Tag
-import org.scalatest.time.Millis
-import org.scalatest.time.Seconds
-import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.testcontainers.containers.JdbcDatabaseContainer
 import org.testcontainers.containers.MSSQLServerContainer
@@ -189,7 +186,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     with OptionValues {
 
   override implicit val patienceConfig: PatienceConfig =
-    PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
+    PatienceConfig(timeout = 10.seconds, interval = 100.millis)
 
   private implicit val executionContext: ExecutionContextExecutor = system.executionContext
   private implicit val classicScheduler = system.classicSystem.scheduler
@@ -210,7 +207,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     // create offset table
     // the container can takes time to be 'ready',
     // we should keep trying to create the table until it succeeds
-    Await.result(akka.pattern.retry(() => offsetStore.createIfNotExists(), 10, 3.seconds), 30.seconds)
+    Await.result(akka.pattern.retry(() => offsetStore.createIfNotExists(), 20, 3.seconds), 60.seconds)
   }
 
   override protected def afterAll(): Unit =
