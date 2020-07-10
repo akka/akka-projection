@@ -15,7 +15,9 @@ import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink
+import org.scalatest.Ignore
 
+@Ignore
 class KafkaSourceProviderSpec extends KafkaSpecBase() {
   "KafkaSourceProviderSpec" must {
     "resume from provided offsets" in assertAllStagesStopped {

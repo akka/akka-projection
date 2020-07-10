@@ -37,8 +37,10 @@ import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
+import org.scalatest.Ignore
 import org.scalatest.wordspec.AnyWordSpecLike
 
+@Ignore
 class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapturing with AnyWordSpecLike {
 
   val projectionTestKit: ProjectionTestKit = ProjectionTestKit(testKit)
