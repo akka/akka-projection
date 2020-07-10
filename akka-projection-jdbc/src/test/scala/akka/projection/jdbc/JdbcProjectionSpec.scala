@@ -367,7 +367,8 @@ class JdbcProjectionSpec
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
       val statusProbe = createTestProbe[TestStatusObserver.Status]()
-      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
+      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, progressProbe = Some(progressProbe.ref))
 
       val projectionFailing =
         JdbcProjection
@@ -393,6 +394,11 @@ class JdbcProjectionSpec
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
       statusProbe.expectNoMessage()
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "e1")))
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "e2")))
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "e3")))
+      // Offset 4 is not stored so it is not reported.
+      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "e5")))
 
       offsetShouldBe(6L)
     }

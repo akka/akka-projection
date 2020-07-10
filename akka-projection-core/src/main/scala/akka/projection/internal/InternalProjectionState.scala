@@ -60,21 +60,17 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
   val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
   val abort: Promise[Done] = Promise()
 
-  private def reportProgress[T](after: Future[T], envelope: Envelope): Future[T] = {
-    after
+  private def saveOffsetAndReport(
+      projectionId: ProjectionId,
+      projectionContext: ProjectionContextImpl[Offset, Envelope],
+      batchSize: Int): Future[Done] = {
+    saveOffset(projectionId, projectionContext.offset)
       .map { done =>
         try {
-          statusObserver.progress(projectionId, envelope)
+          statusObserver.offsetProgress(projectionId, projectionContext.envelope)
         } catch {
           case NonFatal(_) => // ignore
         }
-        done
-      }
-  }
-
-  private def saveOffsetWithMetrics(projectionId: ProjectionId, offset: Offset, batchSize: Int): Future[Done] = {
-    saveOffset(projectionId, offset)
-      .map { done =>
         telemetry.onOffsetStored(batchSize)
         done
       }
@@ -200,7 +196,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     if (afterEnvelopes == 1)
       // optimization of general AtLeastOnce case
       source.via(atLeastOnceHandlerFlow).mapAsync(1) { context =>
-        reportProgress(saveOffsetWithMetrics(projectionId, context.offset, context.groupSize), context.envelope)
+        saveOffsetAndReport(projectionId, context, context.groupSize)
       }
     else {
       source
@@ -213,7 +209,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
           // group may differ.
           val totalNumberOfEnvelopes = batch.map { _.groupSize }.sum
           val last = batch.last
-          reportProgress(saveOffsetWithMetrics(projectionId, last.offset, totalNumberOfEnvelopes), last.envelope)
+          saveOffsetAndReport(projectionId, last, totalNumberOfEnvelopes)
         }
     }
   }
@@ -291,13 +287,19 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
               handler.process(context.envelope).map { done =>
                 // `telemetry.afterProcess` is invoked immediately after `handler.process`
                 telemetry.afterProcess(context.externalContext)
+
+                try {
+                  statusObserver.offsetProgress(projectionId, context.envelope)
+                } catch {
+                  case NonFatal(_) => // ignore
+                }
                 telemetry.onOffsetStored(1)
+
                 done
               }
             }
-            val processed =
-              handlerRecovery.applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
-            reportProgress(processed, context.envelope)
+            handlerRecovery.applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
+
           }
 
       case grouped: GroupedHandlerStrategy[Envelope] =>
@@ -309,9 +311,14 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
           .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
           .filterNot(_.isEmpty)
           .mapAsync(parallelism = 1) { group =>
-            val last = group.last
-            reportProgress(processGrouped(handler, handlerRecovery, group), last.envelope)
+            val last: ProjectionContextImpl[Offset, Envelope] = group.last
+            processGrouped(handler, handlerRecovery, group)
               .map { t =>
+                try {
+                  statusObserver.offsetProgress(projectionId, last.envelope)
+                } catch {
+                  case NonFatal(_) => // ignore
+                }
                 telemetry.onOffsetStored(group.length)
                 t
               }
@@ -335,20 +342,18 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         val handler = single.handler()
         source
           .mapAsync(parallelism = 1) { context =>
-            val processed =
-              saveOffsetWithMetrics(projectionId, context.offset, 1).flatMap { _ =>
-                val measured: () => Future[Done] = { () =>
-                  handler.process(context.envelope).map { done =>
-                    // `telemetry.afterProcess` is invoked immediately after `handler.process`
-                    telemetry.afterProcess(context.externalContext)
-                    done
-                  }
+            saveOffsetAndReport(projectionId, context, 1).flatMap { _ =>
+              val measured: () => Future[Done] = { () =>
+                handler.process(context.envelope).map { done =>
+                  // `telemetry.afterProcess` is invoked immediately after `handler.process`
+                  telemetry.afterProcess(context.externalContext)
+                  done
                 }
-
-                handlerRecovery
-                  .applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
               }
-            reportProgress(processed, context.envelope)
+
+              handlerRecovery
+                .applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
+            }
           }
           .map(_ => Done)
       case _ =>
