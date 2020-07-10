@@ -13,6 +13,7 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.language.existentials
 import scala.util.Try
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
