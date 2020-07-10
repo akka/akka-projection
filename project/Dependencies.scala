@@ -14,12 +14,11 @@ object Dependencies {
   val AlpakkaKafkaVersionInDocs = "2.0"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.6.6")
-    val alpakka = "2.0.0"
+    val akka = sys.props.getOrElse("build.akka.version", "2.6.7")
+    val alpakka = "2.0.1"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.3")
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
-    val testContainersScala = "0.37.0"
     val testContainers = "1.14.3"
     val junit = "4.12"
     val h2Driver = "1.4.200"
