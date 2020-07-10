@@ -15,17 +15,13 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.Projection
 import akka.projection.ProjectionId
-import akka.projection.cassandra.ContainerSessionProvider
 import akka.projection.cassandra.scaladsl.CassandraProjection
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import docs.cassandra.WordCountDocExample._
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class WordCountDocExampleSpec
-    extends ScalaTestWithActorTestKit(ContainerSessionProvider.Config)
-    with AnyWordSpecLike
-    with LogCapturing {
+class WordCountDocExampleSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLike with LogCapturing {
 
   private implicit val ec: ExecutionContext = system.executionContext
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
@@ -34,9 +30,6 @@ class WordCountDocExampleSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-
-    // don't use futureValue (patience) here because it can take a while to start the test container
-    Await.result(ContainerSessionProvider.started, 30.seconds)
 
     Await.result(for {
       _ <- CassandraProjection.createOffsetTableIfNotExists()

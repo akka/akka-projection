@@ -4,33 +4,27 @@
 
 package jdocs.cassandra;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
-import akka.projection.cassandra.ContainerSessionProvider;
 import akka.projection.cassandra.javadsl.CassandraProjection;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.*;
 import org.scalatestplus.junit.JUnitSuite;
-import scala.concurrent.Await;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static jdocs.cassandra.WordCountDocExample.*;
-import static jdocs.cassandra.WordCountDocExample.IllustrateStatefulHandlerLoadingInitialState.WordCountHandler;
 import static jdocs.cassandra.WordCountDocExample.IllstrateActorLoadingInitialState.WordCountActorHandler;
 import static jdocs.cassandra.WordCountDocExample.IllstrateActorLoadingInitialState.WordCountProcessor;
+import static jdocs.cassandra.WordCountDocExample.IllustrateStatefulHandlerLoadingInitialState.WordCountHandler;
 import static org.junit.Assert.assertEquals;
 
 public class WordCountDocExampleTest extends JUnitSuite {
@@ -43,9 +37,6 @@ public class WordCountDocExampleTest extends JUnitSuite {
 
   @BeforeClass
   public static void beforeAll() throws Exception {
-    Await.result(
-        ContainerSessionProvider.started(),
-        scala.concurrent.duration.Duration.create(30, TimeUnit.SECONDS));
 
     session =
         CassandraSessionRegistry.get(testKit.system())

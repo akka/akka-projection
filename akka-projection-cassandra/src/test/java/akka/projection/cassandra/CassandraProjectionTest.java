@@ -56,11 +56,6 @@ public class CassandraProjectionTest extends JUnitSuite {
   @BeforeClass
   public static void beforeAll() throws Exception {
 
-    // don't use futureValue (patience) here because it can take a while to start the test container
-    Await.result(
-        ContainerSessionProvider.started(),
-        scala.concurrent.duration.Duration.create(30, TimeUnit.SECONDS));
-
     offsetStore = new CassandraOffsetStore(testKit.system());
     session =
         CassandraSessionRegistry.get(testKit.system())

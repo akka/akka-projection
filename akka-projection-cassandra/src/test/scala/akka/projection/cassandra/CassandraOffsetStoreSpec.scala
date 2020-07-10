@@ -42,9 +42,6 @@ class CassandraOffsetStoreSpec
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    // don't use futureValue (patience) here because it can take a while to start the test container
-    Await.result(ContainerSessionProvider.started, 30.seconds)
-
     def tryCreateTable() =
       for {
         s <- session.underlying()
