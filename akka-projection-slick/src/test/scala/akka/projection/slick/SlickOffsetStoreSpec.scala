@@ -10,6 +10,7 @@ import java.util.UUID
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.language.existentials
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit

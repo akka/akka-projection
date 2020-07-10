@@ -73,6 +73,7 @@ object AkkaDisciplinePlugin extends AutoPlugin {
   /** These options are desired, but some are excluded for the time being*/
   val disciplineScalacOptions = Set(
     "-Xfatal-warnings",
+    "-feature",
     "-Yno-adapted-args",
     "-deprecation",
     "-Xlint",
