@@ -145,10 +145,7 @@ object CassandraProjectionSpec {
 
 }
 
-class CassandraProjectionSpec
-    extends ScalaTestWithActorTestKit(ContainerSessionProvider.Config)
-    with AnyWordSpecLike
-    with LogCapturing {
+class CassandraProjectionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
 
   import CassandraProjectionSpec._
 
@@ -164,9 +161,6 @@ class CassandraProjectionSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-
-    // don't use futureValue (patience) here because it can take a while to start the test container
-    Await.result(ContainerSessionProvider.started, 30.seconds)
 
     def tryCreateTable() =
       for {
