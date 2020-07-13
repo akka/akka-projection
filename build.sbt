@@ -2,6 +2,8 @@ import akka.projections.Dependencies
 
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
     .settings(Dependencies.core)
     .settings(
       name := "akka-projection-core",
@@ -11,6 +13,8 @@ lazy val core =
 
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
     .settings(Dependencies.testKit)
     .dependsOn(core)
 
@@ -31,10 +35,12 @@ lazy val slick =
 // provides offset storage backed by a Cassandra table
 lazy val cassandra =
   Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
     .settings(Dependencies.cassandra)
     .settings(Test / parallelExecution := false)
-    .dependsOn(core % "compile->compile;test->test")
-    .dependsOn(testkit % "test->test")
+    .dependsOn(core % "compile->compile;test->test;compile->test")
+    .dependsOn(testkit % "test->test;compile->test")
 
 // provides source providers for akka-persistence-query
 lazy val eventsourced =

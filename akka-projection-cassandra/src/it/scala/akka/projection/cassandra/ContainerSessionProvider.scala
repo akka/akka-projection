@@ -13,6 +13,7 @@ import scala.util.Try
 import akka.stream.alpakka.cassandra.CqlSessionProvider
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.internal.core.metadata.DefaultEndPoint
+import com.github.ghik.silencer.silent
 import org.testcontainers.containers.CassandraContainer
 import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 
@@ -33,14 +34,19 @@ final class ContainerSessionProvider extends CqlSessionProvider {
 
 object ContainerSessionProvider {
   private val disabled = java.lang.Boolean.getBoolean("disable-cassandra-testcontainer")
-  private lazy val container = new CassandraContainer()
+
+  @silent private lazy val container: CassandraContainer[_] = {
+    val c = new CassandraContainer()
+    c.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
+    c.withStartupAttempts(5)
+    c
+  }
+
   lazy val started: Future[Unit] = {
     if (disabled)
       Future.successful(())
     else
       Future.fromTry(Try {
-        container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
-        container.withStartupAttempts(5)
         container.start()
       })
   }

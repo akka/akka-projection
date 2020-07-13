@@ -10,12 +10,14 @@ import scala.concurrent.Await
 import scala.concurrent.Future
 
 import akka.actor.typed.scaladsl.adapter._
+import akka.projection.ContainerTag
 import akka.projection.MergeableOffset
 import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink
 
+@ContainerTag
 class KafkaSourceProviderSpec extends KafkaSpecBase() {
   "KafkaSourceProviderSpec" must {
     "resume from provided offsets" in assertAllStagesStopped {
