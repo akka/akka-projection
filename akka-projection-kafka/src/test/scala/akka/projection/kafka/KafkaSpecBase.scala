@@ -4,6 +4,8 @@
 
 package akka.projection.kafka
 
+import scala.util.control.NonFatal
+
 import akka.actor.ActorSystem
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -61,6 +63,16 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
         val logConsumer = new Slf4jLogConsumer(logger)
         zk.withLogConsumer(logConsumer)
       })
+
+  override def startKafka(settings: KafkaTestkitTestcontainersSettings): String = {
+    try {
+      super.startKafka(settings)
+    } catch {
+      case NonFatal(ex) =>
+        this.brokerContainers.foreach(c => log.error(s"Container failed to start, logs:\n" + c.getLogs()))
+        throw ex
+    }
+  }
 
   implicit val actorSystem = testKit.system
   implicit val dispatcher = testKit.system.executionContext
