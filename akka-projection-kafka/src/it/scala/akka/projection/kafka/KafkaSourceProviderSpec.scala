@@ -16,7 +16,7 @@ import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink
 
-class KafkaSourceProviderSpec extends KafkaSpecBase() {
+class KafkaSourceProviderSpec extends KafkaSpecBase {
   "KafkaSourceProviderSpec" must {
     "resume from provided offsets" in assertAllStagesStopped {
       val topic = createTopic()

@@ -67,6 +67,7 @@ import org.apache.kafka.common.record.TimestampType
   private[kafka] val partitionHandler = new ProjectionPartitionHandler
   private val scheduler = system.classicSystem.scheduler
   private val subscription = Subscriptions.topics(topics).withPartitionAssignmentHandler(partitionHandler)
+  private[projection] var control: Option[Consumer.Control] = None
   // assigned partitions is only ever mutated by consumer rebalance partition handler executed in the Kafka consumer
   // poll thread in the Alpakka Kafka `KafkaConsumerActor`
   @volatile private var assignedPartitions: Set[TopicPartition] = Set.empty
@@ -89,6 +90,10 @@ import org.apache.kafka.common.record.TimestampType
     numPartitionsF.failed.foreach(_ => metadataClient.stop())
     numPartitionsF.map { numPartitions =>
       _source(readOffsets, numPartitions, metadataClient)
+        .mapMaterializedValue { m =>
+          control = Some(m)
+          m
+        }
         .watchTermination()(Keep.right)
         .mapMaterializedValue { terminated =>
           terminated.onComplete(_ => metadataClient.stop())

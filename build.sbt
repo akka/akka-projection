@@ -60,9 +60,9 @@ lazy val kafka =
     .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
     .settings(Test / parallelExecution := false)
-    .dependsOn(core)
+    .dependsOn(core % "compile->compile;test->test;compile->test")
     .dependsOn(testkit % "test->test")
-    .dependsOn(slick % "test->test;test->compile")
+    .dependsOn(slick % "test->test;compile->test")
 
 lazy val examples = project
   .configs(IntegrationTest)
