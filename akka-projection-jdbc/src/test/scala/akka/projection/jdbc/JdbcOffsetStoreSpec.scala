@@ -13,7 +13,6 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.language.existentials
 import scala.util.Try
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -24,8 +23,6 @@ import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.TestTags
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
-import akka.projection.jdbc.JdbcOffsetStoreSpec.MySQLSpecConfig
-import akka.projection.jdbc.internal.Dialect
 import akka.projection.jdbc.internal.JdbcOffsetStore
 import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
 import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
@@ -39,12 +36,6 @@ import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
-import org.testcontainers.containers.JdbcDatabaseContainer
-import org.testcontainers.containers.MSSQLServerContainer
-import org.testcontainers.containers.MySQLContainer
-import org.testcontainers.containers.OracleContainer
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 
 object JdbcOffsetStoreSpec {
 
@@ -111,76 +102,9 @@ object JdbcOffsetStoreSpec {
     override def stopContainer() = ()
 
   }
-
-  abstract class ContainerJdbcSpecConfig(dialect: String) extends JdbcSpecConfig {
-
-    val tag: Tag = TestTags.ContainerDb
-
-    override val config: Config =
-      baseConfig.withFallback(ConfigFactory.parseString(s"""
-        akka.projection.jdbc = {
-          dialect = $dialect 
-        }
-        """))
-
-    def jdbcSessionFactory(): PureJdbcSession = {
-
-      // this is safe as tests only start after the container is init
-      val container = _container.get
-
-      new PureJdbcSession(() => {
-        Class.forName(container.getDriverClassName)
-        val conn =
-          DriverManager.getConnection(container.getJdbcUrl, container.getUsername, container.getPassword)
-        conn.setAutoCommit(false)
-        conn
-      })
-    }
-
-    protected var _container: Option[JdbcDatabaseContainer[_]] = None
-
-    def newContainer(): JdbcDatabaseContainer[_]
-
-    final override def initContainer(): Unit = {
-      val container = newContainer()
-      _container = Some(container)
-      container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
-      container.withStartupAttempts(5)
-      container.start()
-    }
-
-    override def stopContainer(): Unit =
-      _container.get.stop()
-  }
-
-  object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
-    val name = "Postgres Database"
-    override def newContainer() = new PostgreSQLContainer
-  }
-
-  object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
-    val name = "MySQL Database"
-    override def newContainer() = new MySQLContainer
-  }
-
-  object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
-    val name = "MS SQL Server Database"
-    override val tag: Tag = TestTags.FlakyDb
-    override def newContainer() = new MSSQLServerContainer
-  }
-
-  object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
-    val name = "Oracle Database"
-    override def newContainer() = new OracleContainer("oracleinanutshell/oracle-xe-11g")
-  }
-
 }
 
 class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
-class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.PostgresSpecConfig)
-class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MySQLSpecConfig)
-class MSSQLServerJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.MSSQLServerSpecConfig)
-class OracleJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.OracleSpecConfig)
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)
@@ -216,16 +140,13 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override protected def afterAll(): Unit =
     specConfig.stopContainer()
 
+  def selectLastStatement: String =
+    s"""SELECT * FROM "${settings.table}" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     withConnection(specConfig.jdbcSessionFactory _) { conn =>
 
-      val statement = {
-        val stmt = s"""SELECT * FROM "${settings.table}" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
-        specConfig match {
-          case MySQLSpecConfig => Dialect.removeQuotes(stmt)
-          case _               => stmt
-        }
-      }
+      val statement = selectLastStatement
 
       // init statement in try-with-resource
       tryWithResource(conn.prepareStatement(statement)) { stmt =>

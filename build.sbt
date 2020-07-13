@@ -21,13 +21,17 @@ lazy val testkit =
 // provides offset storage backed by a JDBC table
 lazy val jdbc =
   Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
+    .configs(IntegrationTest.extend(Test))
+    .settings(Defaults.itSettings)
     .settings(Dependencies.jdbc)
-    .dependsOn(core % "compile->compile;test->test")
-    .dependsOn(testkit % "test->test")
+    .dependsOn(core % "compile->compile;test->test;compile->test")
+    .dependsOn(testkit % "test->test;compile->test")
 
 // provides offset storage backed by a JDBC (Slick) table
 lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
+    .configs(IntegrationTest.extend(Test))
+    .settings(Defaults.itSettings)
     .settings(Dependencies.slick)
     .dependsOn(core % "compile->compile;test->test")
     .dependsOn(testkit % "test->test")
@@ -52,6 +56,8 @@ lazy val eventsourced =
 // provides offset storage backed by Kafka managed offset commits
 lazy val kafka =
   Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
     .settings(Test / parallelExecution := false)
     .dependsOn(core)
@@ -59,6 +65,8 @@ lazy val kafka =
     .dependsOn(slick % "test->test;test->compile")
 
 lazy val examples = project
+  .configs(IntegrationTest)
+  .settings(Defaults.itSettings)
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
   .dependsOn(jdbc % "test->test")

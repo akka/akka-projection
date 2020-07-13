@@ -17,8 +17,8 @@ script:
   - jabba use ${JDK:=adopt@~1.8-0}
   - java -version
   # copy mssql license agreement for tests
-  - cp container-license-acceptance.txt akka-projection-jdbc/src/test/resources/container-license-acceptance.txt
-  - cp container-license-acceptance.txt akka-projection-slick/src/test/resources/container-license-acceptance.txt
+  - cp container-license-acceptance.txt akka-projection-jdbc/src/it/resources/container-license-acceptance.txt
+  - cp container-license-acceptance.txt akka-projection-slick/src/it/resources/container-license-acceptance.txt
   - sbt -jvm-opts .jvmopts-travis "$AKKA_SNAPSHOT" "$ALPAKKA_KAFKA_SNAPSHOT" "$CMD"
 
 jobs:
