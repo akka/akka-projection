@@ -21,19 +21,18 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.kafka.KafkaSpecBase
+import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
-import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
 import com.typesafe.config.ConfigFactory
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.scalatest.Assertion
-import org.scalatest.Ignore
 import org.scalatest.time.Milliseconds
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -114,7 +113,6 @@ object KafkaToSlickIntegrationSpec {
   }
 }
 
-@Ignore
 class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config)) {
   import KafkaToSlickIntegrationSpec._
 
