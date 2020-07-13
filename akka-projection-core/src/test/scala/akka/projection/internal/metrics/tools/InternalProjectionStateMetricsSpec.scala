@@ -24,6 +24,7 @@ import akka.event.LoggingAdapter
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
+import akka.projection.TestStatusObserver
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
@@ -133,12 +134,16 @@ object InternalProjectionStateMetricsSpec {
     override def extractCreationTime(envelope: Envelope): Long = envelope.creationTimestamp
   }
 
-  class TelemetryTester(offsetStrategy: OffsetStrategy, handlerStrategy: HandlerStrategy, numberOfEnvelopes: Int = 6)(
+  class TelemetryTester(
+      offsetStrategy: OffsetStrategy,
+      handlerStrategy: HandlerStrategy,
+      numberOfEnvelopes: Int = 6,
+      statusObserver: StatusObserver[Envelope] = NoopStatusObserver)(
       implicit system: ActorSystem[_],
       projectionId: ProjectionId) {
 
     private implicit val exCtx = system.executionContext
-    private val entityId = UUID.randomUUID().toString
+    val entityId = UUID.randomUUID().toString
 
     private val projectionSettings = ProjectionSettings(system)
 
@@ -178,7 +183,7 @@ object InternalProjectionStateMetricsSpec {
         sourceProvider(system, entityId, numberOfEnvelopes),
         offsetStrategy,
         adaptedHandlerStrategy,
-        NoopStatusObserver,
+        statusObserver,
         projectionSettings,
         offsetStore)
 

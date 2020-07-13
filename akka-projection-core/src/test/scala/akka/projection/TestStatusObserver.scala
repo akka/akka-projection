@@ -13,7 +13,11 @@ object TestStatusObserver {
   case object Failed extends Status
   case object Stopped extends Status
 
-  final case class Progress[Envelope](env: Envelope) extends Status
+  final case class OffsetProgress[Envelope](env: Envelope) extends Status
+
+  trait EnvelopeProgress[Envelope] extends Status
+  final case class Before[Envelope](env: Envelope) extends EnvelopeProgress[Envelope]
+  final case class After[Envelope](env: Envelope) extends EnvelopeProgress[Envelope]
 
   final case class Err[Envelope](env: Envelope, cause: Throwable) extends Status {
     // don't include cause message in equals
@@ -29,7 +33,8 @@ object TestStatusObserver {
 class TestStatusObserver[Envelope](
     probe: ActorRef[TestStatusObserver.Status],
     lifecycle: Boolean = false,
-    progressProbe: Option[ActorRef[TestStatusObserver.Progress[Envelope]]] = None)
+    offsetProgressProbe: Option[ActorRef[TestStatusObserver.OffsetProgress[Envelope]]] = None,
+    envelopeProgressProbe: Option[ActorRef[TestStatusObserver.EnvelopeProgress[Envelope]]] = None)
     extends StatusObserver[Envelope] {
   import TestStatusObserver._
 
@@ -49,7 +54,7 @@ class TestStatusObserver[Envelope](
   }
 
   override def offsetProgress(projectionId: ProjectionId, env: Envelope): Unit = {
-    progressProbe.foreach(_ ! Progress(env))
+    offsetProgressProbe.foreach(_ ! OffsetProgress(env))
   }
 
   override def error(

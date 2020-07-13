@@ -1,61 +1,41 @@
-/*
- * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
- */
+package akka.projection
 
-package akka.projection.internal.metrics
-
-import scala.concurrent.duration._
-
-import akka.projection.HandlerRecoveryStrategy
-import akka.projection.ProjectionId
-import akka.projection.TestStatusObserver
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
+import akka.projection.internal.metrics.ServiceTimeAndProcessingCountMetricSpec
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
-import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec._
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.Envelope
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.TelemetryTester
 import akka.projection.internal.metrics.tools.TestHandlers
 
-sealed abstract class ServiceTimeAndProcessingCountMetricSpec extends InternalProjectionStateMetricsSpec {
+// TODO: use a simpler InternalProjectionStateMetricsSpec (without metrics (?), with reused in mem artifacts from )
+// https://github.com/akka/akka-projection/issues/198
+sealed abstract class StatusObserverSpec extends InternalProjectionStateMetricsSpec {
   implicit var projectionId: ProjectionId = null
 
   before {
     projectionId = genRandomProjectionId()
   }
 
-  def instruments(implicit projectionId: ProjectionId) = InMemInstrumentsRegistry(system).forId(projectionId)
   val defaultNumberOfEnvelopes = 6
 
 }
 
-class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndProcessingCountMetricSpec {
+class StatusObserverAtLeastOnceSpec extends StatusObserverSpec {
 
-  "A metric reporting ServiceTime" must {
+  "A StatusObserver reporting before and after the event handler" must {
     " in `at-least-once` with singleHandler" must {
       "reports measures for all envelopes (without afterEnvelops optimization)" in {
-        val statusProbe = createTestProbe[TestStatusObserver.Status]()
-        val envelopeProgressProbe = createTestProbe[TestStatusObserver.EnvelopeProgress[Envelope]]()
-
-        val so = new TestStatusObserver[Envelope](statusProbe.ref,
-          lifecycle = false,
-          envelopeProgressProbe = Some(envelopeProgressProbe.ref))
-
         val single = TestHandlers.single
-        val tt = new TelemetryTester(
-          AtLeastOnce(afterEnvelopes = Some(1)),
-          SingleHandlerStrategy(single),
-          statusObserver = so
-        )
+        val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          envelopeProgressProbe.expectMessage(TestStatusObserver.Before(Envelope(tt.entityId, 1, "e1")))
-          envelopeProgressProbe.expectMessage(TestStatusObserver.After(Envelope(tt.entityId, 1, "e1")))
-          envelopeProgressProbe.expectMessage(TestStatusObserver.Before(Envelope(tt.entityId, 2, "e2")))
-          envelopeProgressProbe.expectMessage(TestStatusObserver.After(Envelope(tt.entityId, 2, "e2")))
+          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
+          instruments.lastServiceTimeInNanos.get() should be > (0L)
         }
       }
       "reports measures for all envelopes (with afterEnvelops optimization)" in {
@@ -66,8 +46,6 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
           // afterProcess invocations happen per envelope (not in a groupWithin!)
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
           instruments.lastServiceTimeInNanos.get() should be > (0L)
-
-          tt.
         }
       }
       "reports measures for all envelopes (multiple times when there are failures) " in {
