@@ -33,8 +33,8 @@ lazy val slick =
     .configs(IntegrationTest.extend(Test))
     .settings(Defaults.itSettings)
     .settings(Dependencies.slick)
-    .dependsOn(core % "compile->compile;test->test")
-    .dependsOn(testkit % "test->test")
+    .dependsOn(core % "compile->compile;test->test;compile->test")
+    .dependsOn(testkit % "test->test;compile->test")
 
 // provides offset storage backed by a Cassandra table
 lazy val cassandra =
