@@ -10,7 +10,6 @@ import java.util.UUID
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.language.existentials
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -31,12 +30,6 @@ import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.wordspec.AnyWordSpecLike
-import org.testcontainers.containers.JdbcDatabaseContainer
-import org.testcontainers.containers.MSSQLServerContainer
-import org.testcontainers.containers.MySQLContainer
-import org.testcontainers.containers.OracleContainer
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
 
@@ -77,96 +70,8 @@ object SlickOffsetStoreSpec {
 
     override def stopContainer(): Unit = ()
   }
-
-  abstract class ContainerJdbcSpecConfig extends SlickSpecConfig {
-
-    val tag: Tag = TestTags.ContainerDb
-    def container: JdbcDatabaseContainer[_]
-
-    override def config = {
-      baseConfig.withFallback(ConfigFactory.parseString(s"""
-        akka.projection.slick = {
-           db = {
-             url = "${container.getJdbcUrl}"
-             driver = ${container.getDriverClassName}
-             user = ${container.getUsername}
-             password = ${container.getPassword}
-             connectionPool = disabled
-             keepAliveConnection = true
-           }
-        }
-        """))
-
-    }
-
-    protected def initContainer(container: JdbcDatabaseContainer[_]): JdbcDatabaseContainer[_] = {
-      container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
-      container.withStartupAttempts(5)
-      container.start()
-      container
-    }
-
-    override def stopContainer(): Unit =
-      container.stop()
-  }
-
-  class PostgresSpecConfig extends ContainerJdbcSpecConfig {
-
-    val name = "Postgres Database"
-    val container = initContainer(new PostgreSQLContainer)
-
-    override def config: Config =
-      super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
-           profile = "slick.jdbc.PostgresProfile$"
-        }
-        """))
-  }
-
-  class MySQLSpecConfig extends ContainerJdbcSpecConfig {
-
-    val name = "MySQL Database"
-    val container = initContainer(new MySQLContainer)
-
-    override def config: Config =
-      super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
-           profile = "slick.jdbc.MySQLProfile$"
-        }
-        """))
-  }
-  class MSSQLServerSpecConfig extends ContainerJdbcSpecConfig {
-
-    val name = "MS SQL Server Database"
-    override val tag = TestTags.FlakyDb
-
-    val container = initContainer(new MSSQLServerContainer)
-
-    override def config: Config =
-      super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
-           profile = "slick.jdbc.SQLServerProfile$"
-        }
-        """))
-  }
-  class OracleSpecConfig extends ContainerJdbcSpecConfig {
-
-    val name = "Oracle Database"
-    val container = initContainer(new OracleContainer("oracleinanutshell/oracle-xe-11g"))
-
-    override def config: Config =
-      super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
-           profile = "slick.jdbc.OracleProfile$"
-        }
-        """))
-  }
 }
 class H2SlickOffsetStoreSpec extends SlickOffsetStoreSpec(SlickOffsetStoreSpec.H2SpecConfig)
-class PostgresSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickOffsetStoreSpec.PostgresSpecConfig)
-class MySQLSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickOffsetStoreSpec.MySQLSpecConfig)
-class MSSQLServerSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickOffsetStoreSpec.MSSQLServerSpecConfig)
-class OracleSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickOffsetStoreSpec.OracleSpecConfig)
 
 abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)

@@ -2,6 +2,8 @@ import akka.projections.Dependencies
 
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
     .settings(Dependencies.core)
     .settings(
       name := "akka-projection-core",
@@ -11,30 +13,38 @@ lazy val core =
 
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
     .settings(Dependencies.testKit)
     .dependsOn(core)
 
 // provides offset storage backed by a JDBC table
 lazy val jdbc =
   Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
+    .configs(IntegrationTest.extend(Test))
+    .settings(Defaults.itSettings)
     .settings(Dependencies.jdbc)
-    .dependsOn(core % "compile->compile;test->test")
-    .dependsOn(testkit % "test->test")
+    .dependsOn(core % "compile->compile;test->test;compile->test")
+    .dependsOn(testkit % "test->test;compile->test")
 
 // provides offset storage backed by a JDBC (Slick) table
 lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
+    .configs(IntegrationTest.extend(Test))
+    .settings(Defaults.itSettings)
     .settings(Dependencies.slick)
-    .dependsOn(core % "compile->compile;test->test")
-    .dependsOn(testkit % "test->test")
+    .dependsOn(core % "compile->compile;test->test;compile->test")
+    .dependsOn(testkit % "test->test;compile->test")
 
 // provides offset storage backed by a Cassandra table
 lazy val cassandra =
   Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
     .settings(Dependencies.cassandra)
-    .settings(Test / parallelExecution := false)
-    .dependsOn(core % "compile->compile;test->test")
-    .dependsOn(testkit % "test->test")
+    .settings(IntegrationTest / parallelExecution := false)
+    .dependsOn(core % "compile->compile;test->test;compile->test")
+    .dependsOn(testkit % "test->test;compile->test")
 
 // provides source providers for akka-persistence-query
 lazy val eventsourced =
@@ -46,21 +56,25 @@ lazy val eventsourced =
 // provides offset storage backed by Kafka managed offset commits
 lazy val kafka =
   Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
-    .settings(Test / parallelExecution := false)
-    .dependsOn(core)
+    .settings(IntegrationTest / parallelExecution := false)
+    .dependsOn(core % "compile->compile;test->test;compile->test")
     .dependsOn(testkit % "test->test")
-    .dependsOn(slick % "test->test;test->compile")
+    .dependsOn(slick % "test->test;compile->test")
 
 lazy val examples = project
+  .configs(IntegrationTest.extend(Test))
+  .settings(Defaults.itSettings)
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
   .dependsOn(jdbc % "test->test")
-  .dependsOn(cassandra % "test->test")
+  .dependsOn(cassandra % "test->test;test->it")
   .dependsOn(eventsourced)
   .dependsOn(kafka % "test->test")
   .dependsOn(testkit % "test->test")
-  .settings(Test / parallelExecution := false, publish / skip := true)
+  .settings(IntegrationTest / parallelExecution := false, Test / parallelExecution := false, publish / skip := true)
 
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)

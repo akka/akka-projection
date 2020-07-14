@@ -21,19 +21,18 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.kafka.KafkaSpecBase
+import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickHandler
 import akka.projection.slick.SlickProjection
 import akka.projection.slick.SlickProjectionSpec
 import akka.projection.slick.internal.SlickOffsetStore
-import akka.projection.kafka.scaladsl.KafkaSourceProvider
 import akka.projection.slick.internal.SlickSettings
 import akka.stream.scaladsl.Source
 import com.typesafe.config.ConfigFactory
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.scalatest.Assertion
-import org.scalatest.Ignore
 import org.scalatest.time.Milliseconds
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -114,7 +113,6 @@ object KafkaToSlickIntegrationSpec {
   }
 }
 
-@Ignore
 class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().withFallback(SlickProjectionSpec.config)) {
   import KafkaToSlickIntegrationSpec._
 
@@ -209,8 +207,11 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
     // relates to issue https://github.com/akka/akka-projection/issues/305
     // we must ensure that we can read a kafka offset from the storage
-    "recover a projection from a previously saved offset" in {
-      val topicName = createTopic(suffix = 0, partitions = 3, replication = 1)
+    //
+    // requires further investigation. a change during build instability broke this test.
+    // https://github.com/akka/akka-projection/issues/341
+    "recover a projection from a previously saved offset" ignore {
+      val topicName = createTopic(suffix = 2, partitions = 3, replication = 1)
       val groupId = createGroupId()
       val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
@@ -262,9 +263,10 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
   }
 
   private def assertEventTypeCount(id: ProjectionId): Assertion = {
-    def assertEventTypeCount(eventType: String): Assertion =
-      dbConfig.db.run(repository.findByEventType(id, eventType)).futureValue.value.count shouldBe userEvents.count(
-        _.eventType == eventType)
+    def assertEventTypeCount(eventType: String): Assertion = {
+      val count = dbConfig.db.run(repository.findByEventType(id, eventType)).futureValue.value.count
+      count shouldBe userEvents.count(_.eventType == eventType)
+    }
 
     withClue("check - all event type counts are correct") {
       assertEventTypeCount(EventType.Login)
