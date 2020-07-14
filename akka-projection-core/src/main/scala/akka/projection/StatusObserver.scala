@@ -30,6 +30,9 @@ abstract class StatusObserver[-Envelope] {
    */
   def stopped(projectionId: ProjectionId): Unit
 
+  def beforeProcess(projectionId: ProjectionId, envelope: Envelope): Unit
+  def afterProcess(projectionId: ProjectionId, envelope: Envelope): Unit
+
   /**
    * Called when the corresponding offset has been stored.
    * It might not be called for each envelope.

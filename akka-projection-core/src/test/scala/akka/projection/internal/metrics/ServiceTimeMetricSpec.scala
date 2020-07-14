@@ -8,7 +8,6 @@ import scala.concurrent.duration._
 
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
-import akka.projection.TestStatusObserver
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
@@ -37,25 +36,13 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
   "A metric reporting ServiceTime" must {
     " in `at-least-once` with singleHandler" must {
       "reports measures for all envelopes (without afterEnvelops optimization)" in {
-        val statusProbe = createTestProbe[TestStatusObserver.Status]()
-        val envelopeProgressProbe = createTestProbe[TestStatusObserver.EnvelopeProgress[Envelope]]()
-
-        val so = new TestStatusObserver[Envelope](statusProbe.ref,
-          lifecycle = false,
-          envelopeProgressProbe = Some(envelopeProgressProbe.ref))
-
         val single = TestHandlers.single
-        val tt = new TelemetryTester(
-          AtLeastOnce(afterEnvelopes = Some(1)),
-          SingleHandlerStrategy(single),
-          statusObserver = so
-        )
+        val tt =
+          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
-          envelopeProgressProbe.expectMessage(TestStatusObserver.Before(Envelope(tt.entityId, 1, "e1")))
-          envelopeProgressProbe.expectMessage(TestStatusObserver.After(Envelope(tt.entityId, 1, "e1")))
-          envelopeProgressProbe.expectMessage(TestStatusObserver.Before(Envelope(tt.entityId, 2, "e2")))
-          envelopeProgressProbe.expectMessage(TestStatusObserver.After(Envelope(tt.entityId, 2, "e2")))
+          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
+          instruments.lastServiceTimeInNanos.get() should be > (0L)
         }
       }
       "reports measures for all envelopes (with afterEnvelops optimization)" in {
@@ -67,7 +54,6 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
           instruments.lastServiceTimeInNanos.get() should be > (0L)
 
-          tt.
         }
       }
       "reports measures for all envelopes (multiple times when there are failures) " in {
@@ -191,7 +177,7 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
-          instruments.afterProcessInvocations.get should be(8)
+          instruments.afterProcessInvocations.get should be(10)
         }
       }
     }

@@ -24,7 +24,6 @@ import akka.event.LoggingAdapter
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.StatusObserver
-import akka.projection.TestStatusObserver
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
@@ -113,7 +112,7 @@ object InternalProjectionStateMetricsSpec {
   }
 
   def sourceProvider(system: ActorSystem[_], id: String, numberOfEnvelopes: Int): SourceProvider[Long, Envelope] = {
-    val chars = "abcdefghijklkmnopqrstuvwxyz"
+    val chars = "abcdefghijklmnopqrstuvwxyz"
     val envelopes = (1 to numberOfEnvelopes).map { offset =>
       Envelope(id, offset.toLong, chars.charAt((offset - 1) % chars.length).toString)
     }

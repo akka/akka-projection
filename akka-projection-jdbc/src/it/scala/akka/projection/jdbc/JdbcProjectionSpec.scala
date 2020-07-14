@@ -394,11 +394,11 @@ class JdbcProjectionSpec
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
       statusProbe.expectNoMessage()
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "e1")))
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "e2")))
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "e3")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 1, "e1")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 2, "e2")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 3, "e3")))
       // Offset 4 is not stored so it is not reported.
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "e5")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 5, "e5")))
 
       offsetShouldBe(6L)
     }

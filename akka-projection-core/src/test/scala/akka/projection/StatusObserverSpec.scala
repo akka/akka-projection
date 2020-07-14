@@ -1,19 +1,22 @@
 package akka.projection
 
+import scala.concurrent.duration._
+
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.ServiceTimeAndProcessingCountMetricSpec
+import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.Envelope
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.TelemetryTester
+import akka.projection.internal.metrics.tools.TelemetryException
 import akka.projection.internal.metrics.tools.TestHandlers
 
-// TODO: use a simpler InternalProjectionStateMetricsSpec (without metrics (?), with reused in mem artifacts from )
-// https://github.com/akka/akka-projection/issues/198
+// TODO: use a simpler InternalProjectionStateMetricsSpec (without metrics (?), with reused in mem artifacts:
+//        https://github.com/akka/akka-projection/issues/198 )
 sealed abstract class StatusObserverSpec extends InternalProjectionStateMetricsSpec {
   implicit var projectionId: ProjectionId = null
 
@@ -21,6 +24,7 @@ sealed abstract class StatusObserverSpec extends InternalProjectionStateMetricsS
     projectionId = genRandomProjectionId()
   }
 
+  def instruments(implicit projectionId: ProjectionId) = InMemInstrumentsRegistry(system).forId(projectionId)
   val defaultNumberOfEnvelopes = 6
 
 }
@@ -29,33 +33,95 @@ class StatusObserverAtLeastOnceSpec extends StatusObserverSpec {
 
   "A StatusObserver reporting before and after the event handler" must {
     " in `at-least-once` with singleHandler" must {
-      "reports measures for all envelopes (without afterEnvelops optimization)" in {
-        val single = TestHandlers.single
-        val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
+      "reports measures for all envelopes (without afterEnvelops optimizationt )" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+        val offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1))
+        val handler = SingleHandlerStrategy(TestHandlers.single)
+        val tt = new TelemetryTester(offsetStrategy, handler, statusObserver = statusObserver)
 
         runInternal(tt.projectionState) {
-          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-          instruments.lastServiceTimeInNanos.get() should be > (0L)
+          instruments.afterProcessInvocations.get should be(6)
         }
+        beforeProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.Before(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 6, "f"))))
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
       }
-      "reports measures for all envelopes (with afterEnvelops optimization)" in {
-        val tt =
-          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), SingleHandlerStrategy(TestHandlers.single))
+      "reports measures for all envelopes (with afterEnvelopes optimization)" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
 
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+
+        val tt =
+          new TelemetryTester(
+            AtLeastOnce(afterEnvelopes = Some(3)),
+            SingleHandlerStrategy(TestHandlers.single),
+            statusObserver = statusObserver)
         runInternal(tt.projectionState) {
-          // afterProcess invocations happen per envelope (not in a groupWithin!)
-          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-          instruments.lastServiceTimeInNanos.get() should be > (0L)
+          instruments.afterProcessInvocations.get should be(6)
         }
+        beforeProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.Before(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 6, "f"))))
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
+
       }
       "reports measures for all envelopes (multiple times when there are failures) " in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
         val single = TestHandlers.singleWithErrors(3, 5)
         val numberOfEnvelopes = 6
         val tt = new TelemetryTester(
           AtLeastOnce(
             afterEnvelopes = Some(numberOfEnvelopes - 1),
             recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
-          SingleHandlerStrategy(single))
+          SingleHandlerStrategy(single),
+          statusObserver = statusObserver)
         runInternal(tt.projectionState) {
           instruments.errorInvocations.get should be(2)
           // There's be 12 invocations to afterProcessInvocations because
@@ -64,33 +130,81 @@ class StatusObserverAtLeastOnceSpec extends StatusObserverSpec {
           //  - batch with [1,2,3,4,5] runs [1,2,3,4] and fails [5] (error(5) is dropped from the error stack)
           //  - batch with [1,2,3,4,5] runs [1,2,3,4,5] and commits offset [5]
           //  - batch with [6] runs [6] and commits offset [6]
-          instruments.afterProcessInvocations.get should be(12)
+          instruments.afterProcessInvocations.get should be(2 + 4 + 6)
         }
+        // There is no guarantee wrt what message will be observed in the beforeProbe
+        afterProbe.receiveMessages(2 + 4 + 6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            // `3` errors
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            // `5 ` errors
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
+
+        statusProbe.receiveMessages(2, 3.seconds) should be(
+          Seq(
+            TestStatusObserver.Err(Envelope(tt.entityId, 3, "c"), TelemetryException),
+            TestStatusObserver.Err(Envelope(tt.entityId, 5, "e"), TelemetryException)))
+
       }
     }
     " in `at-least-once` with groupedHandler" must {
       "report measures for each envelope (without afterEnvelops optimization)" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
         val tt = new TelemetryTester(
           AtLeastOnce(afterEnvelopes = Some(1)),
-          GroupedHandlerStrategy(TestHandlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(30.millis)))
+          GroupedHandlerStrategy(TestHandlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(30.millis)),
+          statusObserver = statusObserver)
 
         runInternal(tt.projectionState) {
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
-      }
-
-      "report measures per envelope (with afterEnvelops optimization)" in {
-        val tt = new TelemetryTester(
-          AtLeastOnce(afterEnvelopes = Some(3)),
-          GroupedHandlerStrategy(TestHandlers.grouped, afterEnvelopes = Some(2), orAfterDuration = Some(30.millis)))
-
-        runInternal(tt.projectionState) {
-          // even when grouping, there's 6 time measures reported
-          instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-        }
+        beforeProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.Before(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 6, "f"))))
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
       }
 
       "report multiple measures per envelope in case of failure (recovery == fail)" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+
         val grouped = TestHandlers.groupedWithErrors(3, 5, 6)
         // magic numbers to have at least a a batch of 4 groups of 3 envelopes (and one extra envelope)
         // 13 = 12+1 = (4*3)+1
@@ -98,7 +212,8 @@ class StatusObserverAtLeastOnceSpec extends StatusObserverSpec {
         val tt = new TelemetryTester(
           AtLeastOnce(afterEnvelopes = Some(4), recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
           GroupedHandlerStrategy(grouped, afterEnvelopes = Some(3), orAfterDuration = Some(30.millis)),
-          numberOfEnvelopes = numberOfEnvelopes)
+          numberOfEnvelopes = numberOfEnvelopes,
+          statusObserver = statusObserver)
 
         runInternal(tt.projectionState) {
           instruments.errorInvocations.get should be(3)
@@ -120,21 +235,64 @@ class StatusObserverAtLeastOnceSpec extends StatusObserverSpec {
           //      report 1
           instruments.afterProcessInvocations.get should be(0 + 3 + 3 + 12 + 1)
         }
+        afterProbe.receiveMessages(0 + 3 + 3 + 12 + 1, 3.second) should be(
+          Seq(
+            // 1st attempt nothing is reported
+            // `3` errors
+
+            // 2nd attempt (123) are reported
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            // `5` errors
+
+            // 3rd attempt (123) are reported
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            // `6` errors
+
+            // 4rd attempt (123)...(..12) are reported
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f")),
+            TestStatusObserver.After(Envelope(tt.entityId, 7, "g")),
+            TestStatusObserver.After(Envelope(tt.entityId, 8, "h")),
+            TestStatusObserver.After(Envelope(tt.entityId, 9, "i")),
+            TestStatusObserver.After(Envelope(tt.entityId, 10, "j")),
+            TestStatusObserver.After(Envelope(tt.entityId, 11, "k")),
+            TestStatusObserver.After(Envelope(tt.entityId, 12, "l")),
+            TestStatusObserver.After(Envelope(tt.entityId, 13, "m"))))
+
       }
 
       "report multiple measures per envelope in case of failure (recovery == retryAndSkip)" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+
         // Envelopes 3 and 7 will error twice so they must be skipped. Note that `retries = 1`
         // means there's 1 retry _after_ an initial error so an envelope must error
         // `retries+1` times to be skipped.
         val grouped = TestHandlers.groupedWithErrors(3, 3, 6, 7, 7)
         // magic number to have at least a complete batch of 2 groups of 2 envelopes after the last error (offset==7)
-        val numberOfEnvelopes = 13
+        val numberOfEnvelopes = 8
         val tt = new TelemetryTester(
           AtLeastOnce(
             afterEnvelopes = Some(2),
             recoveryStrategy = Some(HandlerRecoveryStrategy.retryAndSkip(retries = 1, 10.millis))),
           GroupedHandlerStrategy(grouped, afterEnvelopes = Some(2), orAfterDuration = Some(50.millis)),
-          numberOfEnvelopes = numberOfEnvelopes)
+          numberOfEnvelopes = numberOfEnvelopes,
+          statusObserver = statusObserver)
 
         runInternal(tt.projectionState) {
           // The number of invocations is 19 because:
@@ -144,101 +302,255 @@ class StatusObserverAtLeastOnceSpec extends StatusObserverSpec {
           //  - a batch of 2 groups of 2 items is processed:
           //      [(5 6)(7 8)] but '6' errors, reties and succeeds, then 7 errors twice and is skipped
           //      report 2 envelopes (5 6)
-          //  - a batch of 2 groups of 2 items is processed:
-          //      [(9 10)(11 12)]
-          //      report 4
-          //  - a batch of 1 groups of 1 items is processed:
-          //      [(13)]
-          //      report 1
-          instruments.afterProcessInvocations.get should be(2 + 2 + 4 + 1)
+          instruments.afterProcessInvocations.get should be(2 + 2)
         }
+
+        afterProbe.receiveMessages(2 + 2, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
       }
 
     }
     " in `at-least-once` with flowHandler" must {
       "report a measure per envelope" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
         val tt =
-          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(3)), FlowHandlerStrategy[Envelope](TestHandlers.flow))
+          new TelemetryTester(
+            AtLeastOnce(afterEnvelopes = Some(3)),
+            FlowHandlerStrategy[Envelope](TestHandlers.flow),
+            statusObserver = statusObserver)
 
         runInternal(tt.projectionState) {
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
+        beforeProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.Before(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 6, "f"))))
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
       }
       "report multiple measures per envelope in case of failure" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
         val flow = TestHandlers.flowWithErrors(2, 5, 6)
         val tt =
-          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
+          new TelemetryTester(
+            AtLeastOnce(afterEnvelopes = Some(2)),
+            FlowHandlerStrategy[Envelope](flow),
+            statusObserver = statusObserver)
         runInternal(tt.projectionState) {
-          instruments.afterProcessInvocations.get should be(8)
+          instruments.afterProcessInvocations.get should be(10)
         }
+
+        afterProbe.receiveMessages(10, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")), //0
+            // `2` errors
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")), //1
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")), //2
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")), //4
+            // `5` errors
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")), //6
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            // `6` errors
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
       }
     }
-
   }
-
 }
 
-class ServiceTimeAndProcessingCountMetricExactlyOnceSpec extends ServiceTimeAndProcessingCountMetricSpec {
+class StatusObserverExactlyOnceSpec extends StatusObserverSpec {
 
   "A metric reporting ServiceTime" must {
 
     // exactly-once
     " in `exactly-once` with singleHandler" must {
       "report only one measure per envelope" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+
         val tt =
-          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(TestHandlers.single))
+          new TelemetryTester(
+            ExactlyOnce(),
+            SingleHandlerStrategy(TestHandlers.single),
+            statusObserver = statusObserver)
 
         runInternal(tt.projectionState) {
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
+        beforeProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.Before(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 6, "f"))))
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
       }
+
       "report only one measure per envelope even in case of failure" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+
         val single = TestHandlers.singleWithErrors(2, 2, 2, 3, 3, 3, 5)
         val tt = new TelemetryTester(
           // using retryAndFail to try to get all message through
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
-          SingleHandlerStrategy(single))
+          SingleHandlerStrategy(single),
+          statusObserver = statusObserver)
 
         runInternal(tt.projectionState) {
-          // even in case of failures, the number of reported time measures is equal to the number of successes
-          instruments.lastErrorThrowable.get should not be null
-          instruments.errorInvocations.get should be(7)
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-          instruments.lastServiceTimeInNanos.get should be > 0L
         }
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
       }
     }
     " in `exactly-once` with groupedHandler" must {
       "report only one measure per envelope" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
         val grouped = TestHandlers.grouped
         val groupHandler = GroupedHandlerStrategy(grouped, afterEnvelopes = Some(2), orAfterDuration = Some(30.millis))
         val tt =
-          new TelemetryTester(ExactlyOnce(), groupHandler)
+          new TelemetryTester(ExactlyOnce(), groupHandler, statusObserver = statusObserver)
         runInternal(tt.projectionState) {
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
+        beforeProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.Before(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 6, "f"))))
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
       }
 
       "report only one measure per envelope even in case of failure (recovery is fail)" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+
         val groupedWithFailures = TestHandlers.groupedWithErrors(5)
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
-          GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2), orAfterDuration = Some(10.millis)))
+          GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2), orAfterDuration = Some(10.millis)),
+          statusObserver = statusObserver)
         runInternal(tt.projectionState) {
-          instruments.lastErrorThrowable.get should not be null
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
         }
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
+
       }
 
       "report only one measure per envelope even in case of failure (recovery is skip)" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+
         val groupedWithFailures = TestHandlers.groupedWithErrors(1, 7)
         val numberOfEnvelopes = 11
         val tt = new TelemetryTester(
           ExactlyOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.skip)),
           GroupedHandlerStrategy(groupedWithFailures, afterEnvelopes = Some(2), orAfterDuration = Some(10.millis)),
-          numberOfEnvelopes)
+          numberOfEnvelopes,
+          statusObserver = statusObserver)
         runInternal(tt.projectionState) {
-          instruments.lastErrorThrowable.get should not be null
           // [(12)] -> 0
           // [(34)] -> 2
           // [(56)] -> 2
@@ -247,41 +559,97 @@ class ServiceTimeAndProcessingCountMetricExactlyOnceSpec extends ServiceTimeAndP
           // [(11)] -> 1
           instruments.afterProcessInvocations.get should be(0 + 2 + 2 + 0 + 2 + 1)
         }
+        afterProbe.receiveMessages(0 + 2 + 2 + 0 + 2 + 1, 3.second) should be(
+          Seq(
+            // (12) are not reported
+            // (34) are reported
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            // (56) are reported
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f")),
+            // (78) are not reported
+            // (9 10) are reported
+            TestStatusObserver.After(Envelope(tt.entityId, 9, "i")),
+            TestStatusObserver.After(Envelope(tt.entityId, 10, "j")),
+            // (11) are reported
+            TestStatusObserver.After(Envelope(tt.entityId, 11, "k"))))
       }
-
     }
-
   }
 
 }
 
-class ServiceTimeAndProcessingCountMetricAtMostOnceSpec extends ServiceTimeAndProcessingCountMetricSpec {
+class StatusObserverAtMostOnceSpec extends StatusObserverSpec {
 
   "A metric reporting ServiceTime" must {
 
     // at-most-once
     " in `at-most-once` with singleHandler" must {
       "report measures" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
+
         val tt =
-          new TelemetryTester(ExactlyOnce(), SingleHandlerStrategy(TestHandlers.single))
+          new TelemetryTester(AtMostOnce(), SingleHandlerStrategy(TestHandlers.single), statusObserver = statusObserver)
         runInternal(tt.projectionState) {
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
-          instruments.lastServiceTimeInNanos.get should be > 0L
         }
+        beforeProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.Before(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.Before(Envelope(tt.entityId, 6, "f"))))
+        afterProbe.receiveMessages(6, 3.second) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 4, "d")),
+            TestStatusObserver.After(Envelope(tt.entityId, 5, "e")),
+            TestStatusObserver.After(Envelope(tt.entityId, 6, "f"))))
+
       }
       "report measures if envelopes were processed in case of failure" in {
+        val statusProbe = createTestProbe[TestStatusObserver.Status]()
+        val beforeProbe = createTestProbe[TestStatusObserver.Before[Envelope]]()
+        val afterProbe = createTestProbe[TestStatusObserver.After[Envelope]]()
+
+        val statusObserver =
+          new TestStatusObserver[Envelope](
+            statusProbe.ref,
+            beforeEnvelopeProbe = Some(beforeProbe.ref),
+            afterEnvelopeProbe = Some(afterProbe.ref))
         val single = TestHandlers.singleWithErrors(4, 5, 6)
         val numberOfEnvelopes = 100
         val tt = new TelemetryTester(
           AtMostOnce(recoveryStrategy = Some(HandlerRecoveryStrategy.fail)),
           SingleHandlerStrategy(single),
-          numberOfEnvelopes)
+          numberOfEnvelopes,
+          statusObserver = statusObserver)
 
         runInternal(tt.projectionState) {
-          instruments.lastErrorThrowable.get should not be null
           instruments.afterProcessInvocations.get should be(97)
-          instruments.lastServiceTimeInNanos.get should be > 0L
         }
+
+        afterProbe.receiveMessages(97, 3.second).take(5) should be(
+          Seq(
+            TestStatusObserver.After(Envelope(tt.entityId, 1, "a")),
+            TestStatusObserver.After(Envelope(tt.entityId, 2, "b")),
+            TestStatusObserver.After(Envelope(tt.entityId, 3, "c")),
+            TestStatusObserver.After(Envelope(tt.entityId, 7, "g")),
+            TestStatusObserver.After(Envelope(tt.entityId, 8, "h"))))
+
       }
     }
 
