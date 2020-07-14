@@ -4,13 +4,10 @@
 
 package akka.projection.kafka
 
-import scala.concurrent.duration._
-
 import akka.actor.ActorSystem
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.typed.scaladsl.adapter._
-import akka.kafka.ConsumerSettings
 import akka.kafka.testkit.internal.TestFrameworkInterface
 import akka.kafka.testkit.scaladsl.KafkaSpec
 import akka.kafka.testkit.scaladsl.TestcontainersKafkaPerClassLike
@@ -45,35 +42,6 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
 
   val testKit = ActorTestKit(system.toTyped)
   val projectionTestKit = ProjectionTestKit(testKit)
-
-  override def consumerDefaults(): ConsumerSettings[String, String] =
-    super.consumerDefaults().withStopTimeout(0.seconds)
-
-//  override val testcontainersSettings: KafkaTestkitTestcontainersSettings =
-//    KafkaTestkitTestcontainersSettings(testKit.system.classicSystem)
-//      .withConfigureKafka(brokers => {
-//        brokers.zipWithIndex.foreach {
-//          case (c, i) =>
-//            val logger = LoggerFactory.getLogger(s"${getClass.toString}[broker-$i]")
-//            val logConsumer = new Slf4jLogConsumer(logger)
-//            c.withLogConsumer(logConsumer)
-//        }
-//      })
-//      .withConfigureZooKeeper(zk => {
-//        val logger = LoggerFactory.getLogger(s"${getClass.toString}[zookeeper]")
-//        val logConsumer = new Slf4jLogConsumer(logger)
-//        zk.withLogConsumer(logConsumer)
-//      })
-//
-//  override def startKafka(settings: KafkaTestkitTestcontainersSettings): String = {
-//    try {
-//      super.startKafka(settings)
-//    } catch {
-//      case NonFatal(ex) =>
-//        this.brokerContainers.foreach(c => log.error(s"Container failed to start, logs:\n" + c.getLogs()))
-//        throw ex
-//    }
-//  }
 
   implicit val actorSystem = testKit.system
   implicit val dispatcher = testKit.system.executionContext

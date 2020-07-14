@@ -208,8 +208,9 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     // relates to issue https://github.com/akka/akka-projection/issues/305
     // we must ensure that we can read a kafka offset from the storage
     //
-    // SG: requires further investigation. a change during build instability broke this test.
-    "recover a projection from a previously saved offset" ignore {
+    // requires further investigation. a change during build instability broke this test.
+    // https://github.com/akka/akka-projection/issues/341
+    "recover a projection from a previously saved offset" in {
       val topicName = createTopic(suffix = 2, partitions = 3, replication = 1)
       val groupId = createGroupId()
       val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
