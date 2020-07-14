@@ -16,7 +16,7 @@ lazy val testkit =
     .configs(IntegrationTest)
     .settings(Defaults.itSettings)
     .settings(Dependencies.testKit)
-    .dependsOn(core)
+    .dependsOn(core % "compile->compile;test->test;it->it")
 
 // provides offset storage backed by a JDBC table
 lazy val jdbc =
@@ -24,8 +24,8 @@ lazy val jdbc =
     .configs(IntegrationTest.extend(Test))
     .settings(Defaults.itSettings)
     .settings(Dependencies.jdbc)
-    .dependsOn(core % "compile->compile;test->test;compile->test")
-    .dependsOn(testkit % "test->test;compile->test")
+    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(testkit % "test->test")
 
 // provides offset storage backed by a JDBC (Slick) table
 lazy val slick =
@@ -33,8 +33,8 @@ lazy val slick =
     .configs(IntegrationTest.extend(Test))
     .settings(Defaults.itSettings)
     .settings(Dependencies.slick)
-    .dependsOn(core % "compile->compile;test->test;compile->test")
-    .dependsOn(testkit % "test->test;compile->test")
+    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(testkit % "test->test")
 
 // provides offset storage backed by a Cassandra table
 lazy val cassandra =
@@ -44,7 +44,7 @@ lazy val cassandra =
     .settings(Dependencies.cassandra)
     .settings(IntegrationTest / parallelExecution := false)
     .dependsOn(core % "compile->compile;test->test;compile->test")
-    .dependsOn(testkit % "test->test;compile->test")
+    .dependsOn(testkit % "compile->compile;test->test")
 
 // provides source providers for akka-persistence-query
 lazy val eventsourced =
@@ -60,9 +60,9 @@ lazy val kafka =
     .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
     .settings(IntegrationTest / parallelExecution := false)
-    .dependsOn(core % "compile->compile;test->test;compile->test")
-    .dependsOn(testkit % "test->test")
-    .dependsOn(slick % "test->test;compile->test")
+    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(testkit % "compile->compile;test->test")
+    .dependsOn(slick % "compile->compile;test->test;it->it")
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
