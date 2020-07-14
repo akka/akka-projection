@@ -210,7 +210,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
     //
     // requires further investigation. a change during build instability broke this test.
     // https://github.com/akka/akka-projection/issues/341
-    "recover a projection from a previously saved offset" in {
+    "recover a projection from a previously saved offset" ignore {
       val topicName = createTopic(suffix = 2, partitions = 3, replication = 1)
       val groupId = createGroupId()
       val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")

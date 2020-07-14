@@ -42,7 +42,7 @@ lazy val cassandra =
     .configs(IntegrationTest)
     .settings(Defaults.itSettings)
     .settings(Dependencies.cassandra)
-    .settings(Test / parallelExecution := false)
+    .settings(IntegrationTest / parallelExecution := false)
     .dependsOn(core % "compile->compile;test->test;compile->test")
     .dependsOn(testkit % "test->test;compile->test")
 
@@ -59,7 +59,7 @@ lazy val kafka =
     .configs(IntegrationTest)
     .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
-    .settings(Test / parallelExecution := false)
+    .settings(IntegrationTest / parallelExecution := false)
     .dependsOn(core % "compile->compile;test->test;compile->test")
     .dependsOn(testkit % "test->test")
     .dependsOn(slick % "test->test;compile->test")
@@ -74,7 +74,7 @@ lazy val examples = project
   .dependsOn(eventsourced)
   .dependsOn(kafka % "test->test")
   .dependsOn(testkit % "test->test")
-  .settings(Test / parallelExecution := false, publish / skip := true)
+  .settings(IntegrationTest / parallelExecution := false, Test / parallelExecution := false, publish / skip := true)
 
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)

@@ -11,7 +11,7 @@ object SequentialTestExecutionInCI extends AutoPlugin {
     (sys.env
       .get("TRAVIS") match {
       case Some("true") =>
-        Seq(Test / parallelExecution := false)
+        Seq(IntegrationTest / parallelExecution := false, Test / parallelExecution := false)
       case _ => Seq.empty
     })
   }
