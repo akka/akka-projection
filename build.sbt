@@ -65,7 +65,7 @@ lazy val kafka =
     .dependsOn(slick % "test->test;compile->test")
 
 lazy val examples = project
-  .configs(IntegrationTest)
+  .configs(IntegrationTest.extend(Test))
   .settings(Defaults.itSettings)
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")

@@ -26,9 +26,9 @@ jobs:
     - stage: check
       env: CMD="verifyCodeStyle"
       name: "Code style check. Run locally with: sbt verifyCodeStyle"
-    - env: CMD="++2.12.11 Test/compile"
+    - env: CMD="++2.12.11 IntegrationTest/compile"
       name: "Compile all code with 2.12"
-    - env: CMD="Test/compile"
+    - env: CMD="IntegrationTest/compile"
       name: "Compile all code with 2.13"
     - env: CMD="unidoc; docs/paradox"
       name: "Create API and reference documentation"

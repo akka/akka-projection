@@ -38,10 +38,10 @@ This means that if the projection is restarted from a previously stored offset s
 than once.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #atLeastOnce }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #atLeastOnce }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #projection-imports #atLeastOnce }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #projection-imports #atLeastOnce }
 
 The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
 This window can be defined with `withSaveOffset` of the returned `AtLeastOnceProjection`.
@@ -58,10 +58,10 @@ processing semantics. This means that if the projection is restarted from previo
 may not have been processed.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #atMostOnce }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #atMostOnce }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atMostOnce }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atMostOnce }
 
 Since the offset must be stored for each envelope this is slower than @ref:[at-least-once](#at-least-once), which
 can batch offsets before storing.
@@ -73,10 +73,10 @@ The @ref:[`ShoppingCartHandler` is shown below](#handler).
 The envelopes can be grouped before processing, which can be useful for batch updates.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #grouped }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #grouped }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #grouped }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #grouped }
 
 The envelopes are grouped within a time window, or limited by a number of envelopes, whatever happens first.
 This window can be defined with `withGroup` of the returned `GroupedProjection`. The default settings for
@@ -98,10 +98,10 @@ can integrate with anything, such as publishing to a message broker, or updating
 A handler that is consuming `ShoppingCart.Event` from `eventsByTag` can look like this:
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #handler-imports #handler }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #handler-imports #handler }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #handler-imports #handler }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #handler-imports #handler }
 
 @@@ note { title=Hint }
 Such simple handlers can also be defined as plain @scala[functions]@java[lambdas] via the helper
@@ -113,10 +113,10 @@ Such simple handlers can also be defined as plain @scala[functions]@java[lambdas
 When using @ref:[`CassandraProjection.groupedWithin`](#groupedwithin) the handler is processing a @scala[`Seq`]@java[`List`] of envelopes.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #grouped-handler }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #grouped-handler }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #grouped-handler }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #grouped-handler }
 
 ### Stateful handler
 
@@ -129,10 +129,10 @@ The returned @scala[`Future[Done]`]@java[`CompletionStage<Done>`] is to be compl
 @scala[`Future[Done]`]@java[`CompletionStage<Done>`] has been completed.
 
 Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #mutableState }
+:  @@snip [WordCountDocExample.scala](/examples/src/it/scala/docs/cassandra/WordCountDocExample.scala) { #mutableState }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #mutableState }
+:  @@snip [WordCountDocExample.java](/examples/src/it/java/jdocs/cassandra/WordCountDocExample.java) { #mutableState }
 
 @@@ note
 
@@ -154,26 +154,26 @@ to process a stream of words and for each word keep track of how many times it h
 Given an envelope and `SourceProvider` for this example:
 
 Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #envelope #sourceProvider }
+:  @@snip [WordCountDocExample.scala](/examples/src/it/scala/docs/cassandra/WordCountDocExample.scala) { #envelope #sourceProvider }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #envelope #sourceProvider }
+:  @@snip [WordCountDocExample.java](/examples/src/it/java/jdocs/cassandra/WordCountDocExample.java) { #envelope #sourceProvider }
 
 and a repository for the interaction with the database:
 
 Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #repository }
+:  @@snip [WordCountDocExample.scala](/examples/src/it/scala/docs/cassandra/WordCountDocExample.scala) { #repository }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #repository }
+:  @@snip [WordCountDocExample.java](/examples/src/it/java/jdocs/cassandra/WordCountDocExample.java) { #repository }
 
 The `Projection` can be definined as:
 
 Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExampleSpec.scala) { #projection }
+:  @@snip [WordCountDocExample.scala](/examples/src/it/scala/docs/cassandra/WordCountDocExampleSpec.scala) { #projection }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExampleTest.java) { #projection }
+:  @@snip [WordCountDocExample.java](/examples/src/it/java/jdocs/cassandra/WordCountDocExampleTest.java) { #projection }
 
 The `handler` can be implemented as follows.
 
@@ -191,10 +191,10 @@ memory and only load it on startup or on demand.
 A handler that is loading the state from the database when it's starting up:
 
 Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingInitialState }
+:  @@snip [WordCountDocExample.scala](/examples/src/it/scala/docs/cassandra/WordCountDocExample.scala) { #loadingInitialState }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingInitialState }
+:  @@snip [WordCountDocExample.java](/examples/src/it/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingInitialState }
 
 The `StatefulHandler` has two methods that needs to be implemented. 
 
@@ -208,10 +208,10 @@ Another implementation would be a handler that is loading the current count for 
 caches it in the in-memory state:
 
 Scala
-:  @@snip [WordCountDocExample.scala](/examples/src/test/scala/docs/cassandra/WordCountDocExample.scala) { #loadingOnDemand }
+:  @@snip [WordCountDocExample.scala](/examples/src/it/scala/docs/cassandra/WordCountDocExample.scala) { #loadingOnDemand }
 
 Java
-:  @@snip [WordCountDocExample.java](/examples/src/test/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingOnDemand }
+:  @@snip [WordCountDocExample.java](/examples/src/it/java/jdocs/cassandra/WordCountDocExample.java) { #StatefulHandler-imports #loadingOnDemand }
 
 ### Actor handler
 

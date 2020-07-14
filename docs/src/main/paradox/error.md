@@ -24,10 +24,10 @@ The following example is using the `CassandraProjection` but the same can be use
 The `HandlerRecoveryStrategy` can be defined `withRecoveryStrategy`:
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #withRecoveryStrategy }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #withRecoveryStrategy }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #withRecoveryStrategy }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #withRecoveryStrategy }
 
 If the recovery strategy is not defined on the `Projection` the default is `fail`, and that can be defined
 in configuration:
@@ -46,10 +46,10 @@ The following example is using the `CassandraProjection` but the same can be use
 The restart can be defined with exponential backoff settings:
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #withRestartBackoff }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #withRestartBackoff }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #withRestartBackoff }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #withRestartBackoff }
  
 If the recovery strategy is not defined on the `Projection` the default is defined in configuration:
 
