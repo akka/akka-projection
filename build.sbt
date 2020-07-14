@@ -16,7 +16,7 @@ lazy val testkit =
     .configs(IntegrationTest)
     .settings(Defaults.itSettings)
     .settings(Dependencies.testKit)
-    .dependsOn(core % "compile->compile;test->test;it->it")
+    .dependsOn(core % "compile->compile;test->test")
 
 // provides offset storage backed by a JDBC table
 lazy val jdbc =
