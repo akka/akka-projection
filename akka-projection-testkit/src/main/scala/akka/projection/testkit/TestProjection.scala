@@ -26,16 +26,20 @@ object TestProjection {
       system: ActorSystem[_],
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
+      startOffset: Offset,
       handler: Handler[Envelope]): Projection[Envelope] =
-    new TestProjection(projectionId, sourceProvider, handler)(system)
+    new TestProjection(projectionId, sourceProvider, startOffset, handler)(system)
 }
 
 class TestProjection[Offset, Envelope](
     val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
+    startOffset: Offset,
     handler: Handler[Envelope])(implicit val system: ActorSystem[_])
     extends Projection[Envelope]
     with SettingsImpl[TestProjection[Offset, Envelope]] {
+
+  @volatile var currentOffset: Offset = startOffset
 
   override val statusObserver: StatusObserver[Envelope] = NoopStatusObserver
 
@@ -66,15 +70,20 @@ class TestProjection[Offset, Envelope](
   private class InternalProjectionState(sourceProvider: SourceProvider[Offset, Envelope], handler: Handler[Envelope])(
       implicit val system: ActorSystem[_]) {
 
+    implicit val ec = system.classicSystem.dispatcher
+
     private val killSwitch = KillSwitches.shared(projectionId.id)
 
-    def mappedSource(): Source[Done, Future[Done]] =
+    def mappedSource(): Source[Done, Future[Done]] = {
       Source
-        .futureSource(sourceProvider
-          .source(null))
+        .futureSource(
+          handler
+            .tryStart()
+            .flatMap(_ => sourceProvider.source(() => Future.successful(Option(currentOffset)))))
         .via(killSwitch.flow)
         .mapAsync(1)(i => handler.process(i))
         .mapMaterializedValue(_ => Future.successful(Done))
+    }
 
     def newRunningInstance(): RunningProjection =
       new TestRunningProjection(mappedSource(), killSwitch)
