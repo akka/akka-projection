@@ -7,9 +7,12 @@ package docs.guide
 //#guideSetup
 
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
+import akka.projection.ProjectionBehavior
 import akka.projection.eventsourced.EventEnvelope
 import com.typesafe.config.ConfigFactory
 import docs.guide.DailyCheckoutProjectionHandler.CartState
@@ -31,16 +34,15 @@ import java.time.temporal.ChronoUnit
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.util.Success
 import scala.util.Failure
+import scala.util.Success
 
 import akka.Done
 import akka.projection.ProjectionId
-import akka.projection.ProjectionBehavior
-import akka.projection.scaladsl.StatefulHandler
 import akka.projection.cassandra.scaladsl.CassandraProjection
-import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
+import akka.projection.scaladsl.StatefulHandler
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.slf4j.LoggerFactory
 
 //#guideProjectionImports
@@ -63,34 +65,39 @@ object ShoppingCartEvents {
 
 object ShoppingCartApp extends App {
   val config = ConfigFactory.parseResources("./guide-shopping-cart-app.conf")
-  val system = ActorSystem[Nothing](Behaviors.empty, "ShoppingCartApp", config)
-  //#guideSetup
-  //#guideSourceProviderSetup
-  val europeanShoppingCartsTag = "carts-eu"
-  val sourceProvider: SourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]] =
-    EventSourcedProvider
-      .eventsByTag[ShoppingCartEvents.Event](
-        system,
-        readJournalPluginId = CassandraReadJournal.Identifier,
-        tag = europeanShoppingCartsTag)
-  //#guideSourceProviderSetup
-  //#guideSetup
 
-  //#guideProjectionSetup
-  // FIXME: use a custom dispatcher for repo?
-  implicit val ec = system.classicSystem.dispatcher
-  val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
-  val repo = new DailyCheckoutProjectionRepositoryImpl(session)
-  val projection = CassandraProjection.atLeastOnce(
-    projectionId = ProjectionId("shopping-carts", europeanShoppingCartsTag),
-    sourceProvider,
-    handler = () => new DailyCheckoutProjectionHandler(europeanShoppingCartsTag, system, repo))
+  ActorSystem(
+    Behaviors.setup[String] { context =>
+      val system = context.system
 
-  Behaviors.setup[Nothing] { context =>
-    context.spawn(ProjectionBehavior(projection), "daily-count-projection")
-    Behaviors.empty
-  }
-  //#guideProjectionSetup
+      //#guideSetup
+      //#guideSourceProviderSetup
+      val europeanShoppingCartsTag = "carts-eu"
+      val sourceProvider: SourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]] =
+        EventSourcedProvider
+          .eventsByTag[ShoppingCartEvents.Event](
+            system,
+            readJournalPluginId = CassandraReadJournal.Identifier,
+            tag = europeanShoppingCartsTag)
+      //#guideSourceProviderSetup
+      //#guideSetup
+
+      //#guideProjectionSetup
+      // FIXME: use a custom dispatcher for repo?
+      implicit val ec = system.classicSystem.dispatcher
+      val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
+      val repo = new DailyCheckoutProjectionRepositoryImpl(session)
+      val projection = CassandraProjection.atLeastOnce(
+        projectionId = ProjectionId("shopping-carts", europeanShoppingCartsTag),
+        sourceProvider,
+        handler = () => new DailyCheckoutProjectionHandler(europeanShoppingCartsTag, system, repo))
+
+      context.spawn(ProjectionBehavior(projection), projection.projectionId.id)
+      //#guideProjectionSetup
+      Behaviors.empty
+    },
+    "ShoppingCartApp",
+    config)
 }
 //#guideSetup
 
@@ -115,18 +122,19 @@ class DailyCheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit 
 
   def checkoutCountsForDate(date: Instant): Future[Seq[DailyCheckoutItemCount]] = {
     session
-      .selectAll(s"SELECT item_id, checkout_count FROM $keyspace.$dailyItemCheckoutCountsTable WHERE date = ?", date)
+      .selectAll(
+        s"SELECT item_id, checkout_count FROM $keyspace.$dailyItemCheckoutCountsTable WHERE date = ?",
+        LocalDate.from(date.atZone(ZoneId.of("UTC"))))
       .map { rows =>
-        rows.map(row => DailyCheckoutItemCount(row.getString("item_id"), date, row.getInt("checkout_count")))
+        rows.map(row => DailyCheckoutItemCount(row.getString("item_id"), date, row.getLong("checkout_count")))
       }
   }
 
   def updateCheckoutItemCount(cartId: String, checkoutItem: DailyCheckoutItemCount): Future[Done] = {
     import checkoutItem._
     session.executeWrite(
-      s"UPDATE $keyspace.$dailyItemCheckoutCountsTable SET checkout_count = checkout_count + $count, last_cart_id = ? WHERE date = ? AND item_id = ? AND last_cart_id != ?",
-      cartId,
-      date,
+      s"UPDATE $keyspace.$dailyItemCheckoutCountsTable SET checkout_count = checkout_count + $count WHERE date = ? AND item_id = ? AND last_cart_id = ?",
+      LocalDate.from(date.atZone(ZoneId.of("UTC"))),
       itemId,
       cartId)
   }
@@ -143,7 +151,7 @@ class DailyCheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit 
     import cartState._
     session.executeWrite(
       s"UPDATE $keyspace.$cartStateTable SET quantity = ? WHERE cart_id = ? AND item_id = ?",
-      quantity.toString,
+      Integer.valueOf(quantity),
       cartId,
       itemId)
   }
@@ -156,7 +164,7 @@ class DailyCheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit 
 
 //#guideProjectionHandler
 object DailyCheckoutProjectionHandler {
-  final case class DailyCheckoutItemCount(itemId: String, date: Instant, count: Int)
+  final case class DailyCheckoutItemCount(itemId: String, date: Instant, count: Long)
   final case class CartState(cartId: String, itemId: String, quantity: Int)
 }
 

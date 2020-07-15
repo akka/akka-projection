@@ -251,7 +251,7 @@ CREATE TABLE IF NOT EXISTS akka_projection.offset_store (
   offset text,
   manifest text,
   last_updated timestamp,
-  PRIMARY KEY ((projection_name, partition), projection_key))
+  PRIMARY KEY ((projection_name, partition), projection_key));
 ```
 
 ## Offset types

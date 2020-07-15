@@ -83,7 +83,7 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
     "log current daily item counts every 10 checkouts" in {
       val repo = new MockDailyCheckoutRepository {
         override def checkoutCountsForDate(date: Instant): Future[Seq[DailyCheckoutItemCount]] = {
-          val count = updateCheckoutItemCounts.foldLeft(0) {
+          val count = updateCheckoutItemCounts.foldLeft(0L) {
             case (acc, dailyCheckoutItemCount) => acc + dailyCheckoutItemCount.count
           }
           Future.successful(List(updateCheckoutItemCounts.head.copy(count = count)))
@@ -121,9 +121,6 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
           projectionTestKit.runWithTestSink(projection) { testSink =>
             testSink.request(events.length)
             testSink.expectNextN(events.length)
-            repo.updateCheckoutItemCounts.foldLeft(0) {
-              case (acc, dailyCheckoutItemCount) => acc + dailyCheckoutItemCount.count
-            }
           }
         }
     }

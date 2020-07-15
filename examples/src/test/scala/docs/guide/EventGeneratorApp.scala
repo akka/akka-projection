@@ -69,6 +69,7 @@ object EventGeneratorApp extends App {
       }
   }, "EventGenerator", config)
 
+  // FIXME: create actor per cart id so shopping cart events for the same cart get processed in order when query distributed
   def eventSink(persistenceId: String): Behavior[ShoppingCartEvents.Event] =
     Behaviors.setup { ctx =>
       EventSourcedBehavior[ShoppingCartEvents.Event, ShoppingCartEvents.Event, List[Any]](
