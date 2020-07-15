@@ -11,7 +11,6 @@ import scala.compat.java8.FutureConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.japi.function.Creator
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.internal.AtLeastOnce
@@ -47,11 +46,11 @@ object JdbcProjection {
   def exactlyOnce[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      sessionCreator: Creator[S],
+      sessionCreator: Supplier[S],
       handler: Supplier[JdbcHandler[Envelope, S]],
       system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
-    val sessionFactory = () => sessionCreator.create()
+    val sessionFactory = () => sessionCreator.get()
     val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
@@ -90,11 +89,11 @@ object JdbcProjection {
   def atLeastOnce[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      sessionCreator: Creator[S],
+      sessionCreator: Supplier[S],
       handler: Supplier[JdbcHandler[Envelope, S]],
       system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
 
-    val sessionFactory = () => sessionCreator.create()
+    val sessionFactory = () => sessionCreator.get()
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
     val adaptedHandler =
@@ -133,11 +132,11 @@ object JdbcProjection {
   def atLeastOnceAsync[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      sessionCreator: Creator[S],
+      sessionCreator: Supplier[S],
       handler: Supplier[Handler[Envelope]],
       system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
 
-    val sessionFactory = () => sessionCreator.create()
+    val sessionFactory = () => sessionCreator.get()
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
     new JdbcProjectionImpl(
@@ -165,11 +164,11 @@ object JdbcProjection {
   def groupedWithin[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      sessionCreator: Creator[S],
+      sessionCreator: Supplier[S],
       handler: Supplier[JdbcHandler[java.util.List[Envelope], S]],
       system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
-    val sessionFactory = () => sessionCreator.create()
+    val sessionFactory = () => sessionCreator.get()
     val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
@@ -211,11 +210,11 @@ object JdbcProjection {
   def groupedWithinAsync[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      sessionCreator: Creator[S],
+      sessionCreator: Supplier[S],
       handler: Supplier[Handler[java.util.List[Envelope]]],
       system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
-    val sessionFactory = () => sessionCreator.create()
+    val sessionFactory = () => sessionCreator.get()
     val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
@@ -255,11 +254,11 @@ object JdbcProjection {
   def atLeastOnceFlow[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
-      sessionCreator: Creator[S],
+      sessionCreator: Supplier[S],
       handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _],
       system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
 
-    val sessionFactory = () => sessionCreator.create()
+    val sessionFactory = () => sessionCreator.get()
     val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
