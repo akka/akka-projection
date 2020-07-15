@@ -160,14 +160,21 @@ CREATE KEYSPACE IF NOT EXISTS akka_projection WITH REPLICATION = { 'class' : 'Si
 Create the Cassandra Projection offset store table.
 The DDL can be found in the @ref:[Cassandra Projection, Schema section](cassandra.md#schema).
 
-Create the `DailyCheckoutProjectionHandler` projection table with the DDL found below.
+Create the `DailyCheckoutProjectionHandler` projection tables with the DDL found below.
 
 ```
+CREATE TABLE IF NOT EXISTS akka_projection.cart_state (
+  cart_id text,
+  item_id text,
+  quantity int,
+  PRIMARY KEY (cart_id, item_id));
+
 CREATE TABLE IF NOT EXISTS akka_projection.daily_item_checkout_counts (
   date date,
   item_id text,
+  last_cart_id text,
   checkout_count counter,
-  PRIMARY KEY (date, item_id));
+  PRIMARY KEY (date, item_id, last_cart_id));
 ```
 
 

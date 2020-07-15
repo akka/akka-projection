@@ -17,16 +17,24 @@ import akka.projection.testkit.scaladsl.ProjectionTestKit
 // #testKitImports
 import org.scalatest.wordspec.AnyWordSpecLike
 
+import DailyCheckoutProjectionHandler._
+
 // #testKitSpec
 object ShoppingCartAppSpec {
   // manually mock out the Cassandra data layer and simulate recording the daily count
   class MockDailyCheckoutRepository extends DailyCheckoutProjectionRepository {
-    var updateCount = Map[String, Int]()
-    override def update(date: Instant, itemId: String, quantity: Int): Future[Done] = {
-      updateCount = updateCount + (itemId -> quantity)
+    var updateCount = Seq[DailyCheckoutItemCount]()
+
+    override def checkoutCountsForDate(date: Instant): Future[Seq[DailyCheckoutItemCount]] =
+      Future.successful(updateCount)
+    override def updateCheckoutItemCount(cartId: String, checkoutItem: DailyCheckoutItemCount): Future[Done] = {
+      updateCount = updateCount :+ checkoutItem
       Future.successful(Done)
     }
-    override def countForDate(date: Instant): Future[Map[String, Int]] = Future.successful(updateCount)
+
+    override def cartState(): Future[Seq[CartState]] = ???
+    override def updateCartState(cartState: CartState): Future[Done] = ???
+    override def deleteCartState(cartId: String): Future[Done] = ???
   }
 }
 
