@@ -367,8 +367,9 @@ class JdbcProjectionSpec
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
       val statusProbe = createTestProbe[TestStatusObserver.Status]()
-      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
-      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, progressProbe = Some(progressProbe.ref))
+      val progressProbe = createTestProbe[TestStatusObserver.OffsetProgress[Envelope]]()
+      val statusObserver =
+        new TestStatusObserver[Envelope](statusProbe.ref, offsetProgressProbe = Some(progressProbe.ref))
 
       val projectionFailing =
         JdbcProjection
