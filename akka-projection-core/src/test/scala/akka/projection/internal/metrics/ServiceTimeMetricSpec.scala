@@ -177,7 +177,12 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
-          instruments.afterProcessInvocations.get should be(10)
+          // When there's a failure handling `envelope(n)` there is a race condition between
+          // the stream cancellation and the invocation to `afterProcess(envelope(n-1))` (the
+          // previous envelope). As a consequence, the `afterProcessInvocations` count is
+          // nondeterministic and we can only assert it'll be some value between 8 and 10 (both
+          // included)
+          instruments.afterProcessInvocations.get should be >= (8)
         }
       }
     }
