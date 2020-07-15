@@ -53,7 +53,6 @@ object SlickProjection {
    *
    * It stores the offset in a relational database table using Slick in the same transaction
    * as the DBIO returned from the `handler`.
-   *
    */
   def exactlyOnce[Offset, Envelope, P <: JdbcProfile: ClassTag](
       projectionId: ProjectionId,
@@ -123,6 +122,9 @@ object SlickProjection {
 
   /**
    * Create a [[akka.projection.Projection]] with at-least-once processing semantics.
+   *
+   * The DBIO returned by the [[SlickHandler.process()]] of the provided [[handler]] will be
+   * wrapped in a transaction.
    *
    * It stores the offset in a relational database table using Slick after the `handler` has processed the envelope.
    * This means that if the projection is restarted from previously stored offset then some elements may be processed
