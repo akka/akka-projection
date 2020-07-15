@@ -9,7 +9,6 @@ import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
-import akka.japi.function.Creator;
 import akka.japi.function.Function;
 import akka.projection.Projection;
 import akka.projection.ProjectionContext;
@@ -96,10 +95,10 @@ public class JdbcProjectionTest extends JUnitSuite {
     }
   }
 
-  private static class JdbcSessionCreator implements Creator<PureJdbcSession> {
+  private static class JdbcSessionCreator implements Supplier<PureJdbcSession> {
 
     @Override
-    public PureJdbcSession create() {
+    public PureJdbcSession get() {
       return new PureJdbcSession();
     }
   }
@@ -108,7 +107,7 @@ public class JdbcProjectionTest extends JUnitSuite {
 
   private static final JdbcSettings jdbcSettings = JdbcSettings.apply(testKit.system());
   private static final JdbcOffsetStore<PureJdbcSession> offsetStore =
-      new JdbcOffsetStore<>(testKit.system(), jdbcSettings, jdbcSessionCreator::create);
+      new JdbcOffsetStore<>(testKit.system(), jdbcSettings, jdbcSessionCreator::get);
 
   private static final scala.concurrent.duration.Duration awaitTimeout =
       scala.concurrent.duration.Duration.create(3, TimeUnit.SECONDS);

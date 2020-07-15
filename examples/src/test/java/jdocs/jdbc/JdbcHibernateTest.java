@@ -7,7 +7,6 @@ package jdocs.jdbc;
 import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
-import akka.japi.function.Creator;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
 import akka.projection.javadsl.SourceProvider;
