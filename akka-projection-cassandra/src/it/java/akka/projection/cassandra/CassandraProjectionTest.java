@@ -15,6 +15,7 @@ import akka.actor.typed.Behavior;
 import akka.actor.typed.PostStop;
 import akka.actor.typed.javadsl.AskPattern;
 import akka.actor.typed.javadsl.Behaviors;
+import akka.pattern.Patterns;
 import akka.projection.Projection;
 import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
@@ -39,9 +40,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-
+import scala.compat.java8.FutureConverters;
 import static org.junit.Assert.assertEquals;
 
 public class CassandraProjectionTest extends JUnitSuite {
@@ -54,6 +54,7 @@ public class CassandraProjectionTest extends JUnitSuite {
 
   @BeforeClass
   public static void beforeAll() throws Exception {
+
     // don't use futureValue (patience) here because it can take a while to start the test container
     Await.result(
         ContainerSessionProvider.started(),
@@ -63,9 +64,19 @@ public class CassandraProjectionTest extends JUnitSuite {
     session =
         CassandraSessionRegistry.get(testKit.system())
             .sessionFor("akka.projection.cassandra.session-config");
+
+    // the container can takes time to be 'ready',
+    // we should keep trying to create the table until it succeeds
+    CompletionStage<Done> createTableAttempts =
+        Patterns.retry(
+            () -> FutureConverters.toJava(offsetStore.createKeyspaceAndTable()),
+            10,
+            Duration.ofSeconds(3),
+            testKit.system().classicSystem().scheduler(),
+            testKit.system().executionContext());
     Await.result(
-        offsetStore.createKeyspaceAndTable(),
-        scala.concurrent.duration.Duration.create(10, TimeUnit.SECONDS));
+        FutureConverters.toScala(createTableAttempts),
+        scala.concurrent.duration.Duration.create(30, TimeUnit.SECONDS));
   }
 
   @AfterClass

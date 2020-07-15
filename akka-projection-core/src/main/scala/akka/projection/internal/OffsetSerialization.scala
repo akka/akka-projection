@@ -12,10 +12,8 @@ import scala.collection.immutable
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.query
-import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.StringKey
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
 
@@ -51,11 +49,11 @@ import akka.serialization.Serializers
     val offset: Offset = rep match {
       case SingleOffset(_, manifest, offsetStr, _) => fromStorageRepresentation[Offset](offsetStr, manifest)
       case MultipleOffsets(reps) =>
-        val offsets: Map[StringKey, Inner] = reps.map {
+        val offsets: Map[String, Inner] = reps.map {
           case SingleOffset(id, manifest, offsetStr, _) =>
-            StringKey(id.key) -> fromStorageRepresentation[Inner](offsetStr, manifest)
+            id.key -> fromStorageRepresentation[Inner](offsetStr, manifest)
         }.toMap
-        MergeableOffset[StringKey, Inner](offsets).asInstanceOf[Offset]
+        MergeableOffset[Inner](offsets).asInstanceOf[Offset]
     }
     offset
   }
@@ -93,10 +91,10 @@ import akka.serialization.Serializers
       case i: Int                   => SingleOffset(id, IntManifest, i.toString, mergeable)
       case seq: query.Sequence      => SingleOffset(id, SequenceManifest, seq.value.toString, mergeable)
       case tbu: query.TimeBasedUUID => SingleOffset(id, TimeBasedUUIDManifest, tbu.value.toString, mergeable)
-      case mrg: MergeableOffset[_, _] =>
+      case mrg: MergeableOffset[_] =>
         val list = mrg.entries.map {
-          case (key: MergeableKey, innerOffset) =>
-            toStorageRepresentation(ProjectionId(id.name, key.surrogateKey), innerOffset, mergeable = true)
+          case (key, innerOffset) =>
+            toStorageRepresentation(ProjectionId(id.name, key), innerOffset, mergeable = true)
               .asInstanceOf[SingleOffset]
         }.toList
 

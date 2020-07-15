@@ -7,10 +7,10 @@ The following example is using the `CassandraProjection` but the flow would be t
 any other @ref:[offset storage](overview.md).
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #atLeastOnceFlow }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #atLeastOnceFlow }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atLeastOnceFlow }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #atLeastOnceFlow }
 
 The flow should emit a `Done` element for each completed envelope. The offset of the envelope is carried
 in the context of the `FlowWithContext` and is stored in Cassandra when corresponding `Done` is emitted.

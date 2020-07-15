@@ -4,6 +4,7 @@
 
 package akka.projection.kafka.internal
 
+import java.lang.{ Long => JLong }
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
@@ -21,11 +22,13 @@ import akka.kafka.RestrictedConsumer
 import akka.kafka.Subscriptions
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.PartitionAssignmentHandler
+import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.javadsl
-import akka.projection.kafka.GroupOffsets
+import akka.projection.kafka.KafkaOffsets
+import akka.projection.kafka.KafkaOffsets.keyToPartition
 import akka.projection.scaladsl
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
@@ -37,7 +40,7 @@ import org.apache.kafka.common.record.TimestampType
  * INTERNAL API
  */
 @InternalApi private[projection] object KafkaSourceProviderImpl {
-  private[kafka] type ReadOffsets = () => Future[Option[GroupOffsets]]
+  private[kafka] type ReadOffsets = () => Future[Option[MergeableOffset[JLong]]]
   private val EmptyTps: Set[TopicPartition] = Set.empty
 }
 
@@ -48,14 +51,14 @@ import org.apache.kafka.common.record.TimestampType
     system: ActorSystem[_],
     settings: ConsumerSettings[K, V],
     topics: Set[String],
-    metadataClient: MetadataClientAdapter,
+    metadataClientFactory: () => MetadataClientAdapter,
     sourceProviderSettings: KafkaSourceProviderSettings)
-    extends javadsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.SourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with javadsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.VerifiableSourceProvider[GroupOffsets, ConsumerRecord[K, V]]
-    with javadsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]]
-    with scaladsl.MergeableOffsetSourceProvider[GroupOffsets.TopicPartitionKey, GroupOffsets, ConsumerRecord[K, V]] {
+    extends javadsl.SourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]]
+    with scaladsl.SourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]]
+    with javadsl.VerifiableSourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]]
+    with scaladsl.VerifiableSourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]]
+    with javadsl.MergeableOffsetSourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]]
+    with scaladsl.MergeableOffsetSourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]] {
 
   import KafkaSourceProviderImpl._
 
@@ -64,15 +67,17 @@ import org.apache.kafka.common.record.TimestampType
   private[kafka] val partitionHandler = new ProjectionPartitionHandler
   private val scheduler = system.classicSystem.scheduler
   private val subscription = Subscriptions.topics(topics).withPartitionAssignmentHandler(partitionHandler)
+  private[projection] var control: Option[Consumer.Control] = None
   // assigned partitions is only ever mutated by consumer rebalance partition handler executed in the Kafka consumer
   // poll thread in the Alpakka Kafka `KafkaConsumerActor`
   @volatile private var assignedPartitions: Set[TopicPartition] = Set.empty
 
   protected[internal] def _source(
       readOffsets: ReadOffsets,
-      numPartitions: Int): Source[ConsumerRecord[K, V], Consumer.Control] =
+      numPartitions: Int,
+      metadataClient: MetadataClientAdapter): Source[ConsumerRecord[K, V], Consumer.Control] =
     Consumer
-      .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets))
+      .plainPartitionedManualOffsetSource(settings, subscription, getOffsetsOnAssign(readOffsets, metadataClient))
       .flatMapMerge(numPartitions, {
         case (_, partitionedSource) => partitionedSource
       })
@@ -80,10 +85,15 @@ import org.apache.kafka.common.record.TimestampType
   override def source(readOffsets: ReadOffsets): Future[Source[ConsumerRecord[K, V], NotUsed]] = {
     // get the total number of partitions to configure the `breadth` parameter, or we could just use a really large
     // number.  i don't think using a large number would present a problem.
+    val metadataClient = metadataClientFactory()
     val numPartitionsF = metadataClient.numPartitions(topics)
     numPartitionsF.failed.foreach(_ => metadataClient.stop())
     numPartitionsF.map { numPartitions =>
-      _source(readOffsets, numPartitions)
+      _source(readOffsets, numPartitions, metadataClient)
+        .mapMaterializedValue { m =>
+          control = Some(m)
+          m
+        }
         .watchTermination()(Keep.right)
         .mapMaterializedValue { terminated =>
           terminated.onComplete(_ => metadataClient.stop())
@@ -92,15 +102,16 @@ import org.apache.kafka.common.record.TimestampType
     }
   }
 
-  override def source(readOffsets: Supplier[CompletionStage[Optional[GroupOffsets]]])
+  override def source(readOffsets: Supplier[CompletionStage[Optional[MergeableOffset[JLong]]]])
       : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], NotUsed]] = {
     source(() => readOffsets.get().toScala.map(_.asScala)).map(_.asJava).toJava
   }
 
-  override def extractOffset(record: ConsumerRecord[K, V]): GroupOffsets = GroupOffsets(record)
+  override def extractOffset(record: ConsumerRecord[K, V]): MergeableOffset[JLong] =
+    KafkaOffsets.toMergeableOffset(record)
 
-  override def verifyOffset(offsets: GroupOffsets): OffsetVerification = {
-    if (offsets.partitions.forall(assignedPartitions.contains))
+  override def verifyOffset(offsets: MergeableOffset[JLong]): OffsetVerification = {
+    if (KafkaOffsets.partitions(offsets).forall(assignedPartitions.contains))
       VerificationSuccess
     else
       VerificationFailure(
@@ -114,7 +125,9 @@ import org.apache.kafka.common.record.TimestampType
       0L
   }
 
-  private def getOffsetsOnAssign(readOffsets: ReadOffsets): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
+  private def getOffsetsOnAssign(
+      readOffsets: ReadOffsets,
+      metadataClient: MetadataClientAdapter): Set[TopicPartition] => Future[Map[TopicPartition, Long]] =
     (assignedTps: Set[TopicPartition]) => {
       val delay = sourceProviderSettings.readOffsetDelay
       akka.pattern.after(delay, scheduler) {
@@ -122,8 +135,8 @@ import org.apache.kafka.common.record.TimestampType
           .flatMap {
             case Some(groupOffsets) =>
               val filteredMap = groupOffsets.entries.collect {
-                case (topicPartitionKey, offset) if assignedTps.contains(topicPartitionKey.tp) =>
-                  (topicPartitionKey.tp -> offset)
+                case (topicPartitionKey, offset) if assignedTps.contains(keyToPartition(topicPartitionKey)) =>
+                  (keyToPartition(topicPartitionKey) -> offset.asInstanceOf[Long])
               }
               Future.successful(filteredMap)
             case None => metadataClient.getBeginningOffsets(assignedTps)

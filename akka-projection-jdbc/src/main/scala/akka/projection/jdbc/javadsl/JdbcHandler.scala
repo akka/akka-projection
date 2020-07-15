@@ -4,11 +4,7 @@
 
 package akka.projection.jdbc.javadsl
 
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionStage
-
-import akka.Done
-import akka.projection.javadsl.HandlerLifecycle
+import akka.projection.jdbc.JdbcHandlerLifecycle
 import akka.projection.jdbc.JdbcSession
 
 object JdbcHandler {
@@ -35,7 +31,7 @@ object JdbcHandler {
  * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
-abstract class JdbcHandler[Envelope, S <: JdbcSession] extends HandlerLifecycle {
+abstract class JdbcHandler[Envelope, S <: JdbcSession] extends JdbcHandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`. Each time a new [[JdbcSession]] is passed with a new open transaction.
@@ -46,16 +42,4 @@ abstract class JdbcHandler[Envelope, S <: JdbcSession] extends HandlerLifecycle 
   @throws(classOf[Exception])
   def process(session: S, envelope: Envelope): Unit
 
-  /**
-   * Invoked when the projection is starting, before first envelope is processed.
-   * Can be overridden to implement initialization. It is also called when the `Projection`
-   * is restarted after a failure.
-   */
-  override def start(): CompletionStage[Done] = CompletableFuture.completedFuture(Done)
-
-  /**
-   * Invoked when the projection has been stopped. Can be overridden to implement resource
-   * cleanup. It is also called when the `Projection` is restarted after a failure.
-   */
-  override def stop(): CompletionStage[Done] = CompletableFuture.completedFuture(Done)
 }

@@ -9,7 +9,6 @@ import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
 import akka.NotUsed
-import akka.projection.MergeableKey
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
 
@@ -35,5 +34,4 @@ trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, 
 
 }
 
-trait MergeableOffsetSourceProvider[MKey <: MergeableKey, Offset <: MergeableOffset[MKey, _], Envelope]
-    extends SourceProvider[Offset, Envelope]
+trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_], Envelope] extends SourceProvider[Offset, Envelope]

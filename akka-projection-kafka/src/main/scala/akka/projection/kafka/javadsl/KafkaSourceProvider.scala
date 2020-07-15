@@ -4,10 +4,11 @@
 
 package akka.projection.kafka.javadsl
 
+import java.lang.{ Long => JLong }
 import akka.actor.typed.ActorSystem
 import akka.kafka.ConsumerSettings
+import akka.projection.MergeableOffset
 import akka.projection.javadsl.SourceProvider
-import akka.projection.kafka.GroupOffsets
 import akka.projection.kafka.internal.KafkaSourceProviderImpl
 import akka.projection.kafka.internal.KafkaSourceProviderSettings
 import akka.projection.kafka.internal.MetadataClientAdapterImpl
@@ -21,13 +22,13 @@ object KafkaSourceProvider {
   def create[K, V](
       system: ActorSystem[_],
       settings: ConsumerSettings[K, V],
-      topics: java.util.Set[String]): SourceProvider[GroupOffsets, ConsumerRecord[K, V]] = {
+      topics: java.util.Set[String]): SourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]] = {
     import akka.util.ccompat.JavaConverters._
     new KafkaSourceProviderImpl[K, V](
       system,
       settings,
       topics.asScala.toSet,
-      new MetadataClientAdapterImpl(system, settings),
+      () => new MetadataClientAdapterImpl(system, settings),
       KafkaSourceProviderSettings(system))
   }
 }

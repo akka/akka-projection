@@ -50,8 +50,7 @@ import slick.jdbc.JdbcProfile
     results.map {
       case Nil => None
       case reps if reps.forall(_.mergeable) =>
-        Some(
-          fromStorageRepresentation[MergeableOffset[_, _], Offset](MultipleOffsets(reps.toList)).asInstanceOf[Offset])
+        Some(fromStorageRepresentation[MergeableOffset[_], Offset](MultipleOffsets(reps.toList)).asInstanceOf[Offset])
       case reps =>
         reps.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
     }

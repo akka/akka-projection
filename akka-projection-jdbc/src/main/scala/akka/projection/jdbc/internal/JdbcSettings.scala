@@ -10,6 +10,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.DispatcherSelector
 import akka.annotation.InternalApi
 import com.typesafe.config.Config
+import com.typesafe.config.ConfigException
 import com.typesafe.config.ConfigValueType
 
 /**
@@ -58,23 +59,38 @@ private[projection] object JdbcSettings {
     val config = system.settings.config.getConfig(dispatcherConfigPath)
     val pathToPoolSize = "thread-pool-executor.fixed-pool-size"
 
+    def isEmptyString = {
+      config.getValue(pathToPoolSize).valueType() == ConfigValueType.STRING &&
+      config.getString(pathToPoolSize).trim.isEmpty
+    }
+
     // the reference config has a thread-pool-executor configured
     // with a invalid pool size. We need to check if users configured it correctly
     // it's also possible that user decide to not use a thread-pool-executor
     // in which case, we have nothing else to check
-    if (config.hasPath(pathToPoolSize)) {
-      if (config.getValue(pathToPoolSize).valueType() == ConfigValueType.STRING) {
+    if (config.getString("executor") == "thread-pool-executor") {
+
+      // empty string can't be parsed to Int, users probably forgot to configure the pool-size
+      if (isEmptyString)
         throw new IllegalArgumentException(
-          s"Config value for '$dispatcherConfigPath.$pathToPoolSize' isn't configured. " +
-          "The thread pool size must be as large as the JDBC connection pool.")
+          s"Config value for '$dispatcherConfigPath.$pathToPoolSize' is not configured. " +
+          "The thread pool size must be integer and be as large as the JDBC connection pool.")
+
+      try {
+        // not only explicit Int, but also Int defined as String are valid, eg: 10 and "10"
+        config.getInt(pathToPoolSize)
+      } catch {
+        case _: ConfigException.WrongType =>
+          throw new IllegalArgumentException(
+            s"Value [${config.getValue(pathToPoolSize).render()}] is not a valid value for settings '$dispatcherConfigPath.$pathToPoolSize'. " +
+            s"Current value is [${config.getValue(pathToPoolSize)}]. " +
+            "The thread pool size must be integer and be as large as the JDBC connection pool.")
       }
     }
   }
 
   def apply(system: ActorSystem[_]): JdbcSettings = {
-
     checkDispatcherConfig(system)
-
     val blockingDbDispatcher = system.dispatchers.lookup(DispatcherSelector.fromConfig(dispatcherConfigPath))
     JdbcSettings(system.settings.config.getConfig(configPath), blockingDbDispatcher)
   }

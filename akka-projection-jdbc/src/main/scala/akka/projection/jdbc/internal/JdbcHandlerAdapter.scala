@@ -5,10 +5,6 @@
 package akka.projection.jdbc.internal
 
 import scala.collection.immutable
-import scala.compat.java8.FutureConverters._
-import scala.concurrent.Future
-
-import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.javadsl
@@ -26,11 +22,8 @@ import akka.util.ccompat.JavaConverters._
     delegate.process(session, envelope)
   }
 
-  override def start(): Future[Done] =
-    delegate.start().toScala
-
-  override def stop(): Future[Done] =
-    delegate.stop().toScala
+  override def start(): Unit = delegate.start()
+  override def stop(): Unit = delegate.stop()
 }
 
 /**
@@ -44,9 +37,6 @@ import akka.util.ccompat.JavaConverters._
     delegate.process(session, envelopes.asJava)
   }
 
-  override def start(): Future[Done] =
-    delegate.start().toScala
-
-  override def stop(): Future[Done] =
-    delegate.stop().toScala
+  override def start(): Unit = delegate.start()
+  override def stop(): Unit = delegate.stop()
 }
