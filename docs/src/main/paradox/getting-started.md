@@ -49,14 +49,17 @@ To initialize the Source Provider we need to set parameters to choose the Akka P
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideSourceProviderSetup }
 
-## Part 2: Build a simple Projection handler
+## Part 2: Build a Stateful Projection handler
 
 While building a projection there are several non-functional requirements to consider.
 _What technology to project into? What message delivery semantics are acceptable for the system? Is it compatible with the chosen Source Provider to enable exactly-once message delivery? Does runtime state need to be maintained in the projection while it's running?_
 It's up to the user to choose the right answers to these questions, but you must research if the answers to these questions compatible with each other.
 
-For the purpose of this guide we will persist our Projection to Cassandra with at-least-once semantics and state will not be required in the projection handler itself.
-To proceed we must add the Cassandra Projection implementation to our project:
+For this guide we will create a Projection that represents all checked out shopping carts and all the items that were purchased.
+For the purpose of this guide we will persist our Projection to Cassandra with at-least-once semantics.
+The Projection itself will be represented as a Cassandra table.
+
+To proceed we must add the Cassandra Projection library to our project:
 
 @@dependency [sbt,Maven,Gradle] {
   group=com.lightbend.akka
@@ -69,19 +72,29 @@ Add the following imports to your project:
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionImports }
 
-It's the user's responsibility to implement the means to project into the target system, the Projection will only manage the persistence of the offset (though it is possible to enlist your projection into transactions when using projection implementations that support exactly-once like the @ref:[JDBC](jdbc.md)).
-Write the code necessary to implement your projection.
-For this example we are going filter `ShoppingCartEvents.CheckedOut` events from the Source Provider and write them to a Cassandra table that can be used to see the current daily count, as well as historical counts for the number of checked out shopping carts for each day of the year.
-Implement a Cassandra repository that will manage a Cassandra table named `daily_checkouts`.
+It's the user's responsibility to implement the means to project into the target system, the Projection itself will only manage the persistence of the offset (though it is possible to enlist your projection into transactions when using projection implementations that support exactly-once like the @ref:[JDBC](jdbc.md)).
+This guide encapsulates its data access layer in a Repository called the `DailyCheckoutProjectionRepository`.
+The repository will manage two Cassandra tables:
+
+1. The `daily_checkouts` table will contain the actual Projection data of checked out shopping carts.
+Each row in the table will include a date, shopping cart id, item id, and item quantity.
+End users will be able to query the table by a date, cart id, or item id.
+2. The `cart_state` table is an intermediate table that represents the current state of all active shopping carts.
+This is required so that we can restore our state after the projection has been shutdown (i.e. a previously planned shutdown, a failure, or a rebalance).
+This table can also be considered a Projection, even though we are only using it to represent intermediate state in this guide.
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionRepo }
 
 Now it's time to write the Projection handler itself.
-This example uses a simple stateful Handler that will persist `ShoppingCartEvents.CheckedOut` events using the repo that was just created.
-The example will also occasionally log the current daily count.
-Because it's not critical that the Handler counter be accurate from the start of the projection we can keep it in a simple local volatile variable.
-Every 10 events we will query the current daily count from the repository and log it.
+This example uses a @apidoc[StatefulHandler] that will process `ShoppingCartEvents.Event` events from the @apidoc[SourceProvider] that we implemented earlier.
+Since this is a @apidoc[StatefulHandler] we will load our initial shopping cart state into memory by implementing `initialState`.
+The event envelopes are processed in the `process` method. 
+Each type of event results in a different action to take against the Projection tables.
+
+This example will also occasionally log all the checked out carts and their contents every 10 checkout events that are processed.
+The count of checkout events that are processed is represented with a mutable variable within the handler.
+Because it's not critical that the logging counter be accurate from the start of the projection we can keep it in a simple local volatile variable.
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionHandler }
@@ -93,7 +106,7 @@ Scala
 
 ## Part 3: Writing tests for a Projection
 
-Like other akka libraries, Projections ships with a @ref:[TestKit](testing.md) that a user can include to assert their Projection handler implementation.
+Like other akka libraries, Projections ships with a @ref:[TestKit](testing.md) that a user can include to assert the correctness of their Projection handler implementation.
 Add the Projections TestKit dependency to your project:
 
 @@dependency [sbt,Maven,Gradle] {
@@ -115,14 +128,19 @@ The TestKit includes several utilities to run the Projection handler in isolatio
 
 Using these tools we can assert that our Projection handler meets the following requirements of the `DailyCheckoutProjectionHandler`.
 
-// TODO: update for daily current item count
-1. Only count `CheckedOut` shopping cart events.
-1. Log every time we process increments of 10 `CheckedOut` in a single day.
+1. Build cart state correctly with cart add/modify/remove events and project cart state for every checkout.
+1. Log the current checked out carts every time we process 10 checkout events.
 
 Scala
 :  @@snip [ShoppingCartAppSpec.scala](/examples/src/test/scala/docs/guide/ShoppingCartAppSpec.scala) { #testKitSpec }
 
-## Part 4: Running a Projection
+To run the tests from the command line run the following sbt command.
+
+```
+sbt "examples/testOnly docs.guide.ShoppingCartAppSpec"
+```
+
+## Part 4: Running the Projection
 
 @@@ note
 
@@ -147,9 +165,11 @@ Use HELP for help.
 cqlsh> 
 ```
 
+To use a different Cassandra database update the [Cassandra driver's contact-points configuration](https://doc.akka.io/docs/akka-persistence-cassandra/current/configuration.html#contact-points-configuration) found in `./examples/src/resources/guide-shopping-cart-app.conf`.
+
 @@@
 
-To run the Projection we must setup our Cassandra database to support the Cassandra Projection offset store as well as the new table we are projecting into with the `DailyCheckoutProjectionHandler`.
+To run the Projection we must setup our Cassandra database to support the Cassandra Projection offset store as well as the new tables we are projecting into with the `DailyCheckoutProjectionHandler`.
 
 Create a Cassandra keyspace.
 
@@ -169,15 +189,79 @@ CREATE TABLE IF NOT EXISTS akka_projection.cart_state (
   quantity int,
   PRIMARY KEY (cart_id, item_id));
 
-CREATE TABLE IF NOT EXISTS akka_projection.daily_item_checkout_counts (
+CREATE TABLE IF NOT EXISTS akka_projection.daily_checkouts (
   date date,
+  cart_id text,
   item_id text,
-  last_cart_id text,
-  checkout_count counter,
-  PRIMARY KEY (date, item_id, last_cart_id));
+  quantity int,
+  PRIMARY KEY (date, cart_id, item_id));
 ```
 
+Source events are generated with the `EventGeneratorApp`.
+This app is configured to use [Akka Persistence Cassandra](https://doc.akka.io/docs/akka-persistence-cassandra/current/index.html) to persist random `ShoppingCartApp.Events` to a journal.
+It will checkout 10 shopping carts with random items and quantities every 10 seconds.
+After 10 seconds it will increment the checkout time by 1 hour and repeat.
+This app will also automatically create all the Akka Persistence infrastructure tables in the `akka` keyspace.
+We won't go into any further detail about how this app functions because it falls outside the scope of Akka Projections.
+To learn more about the writing events with [Akka Persistence see the Akka documentation](https://doc.akka.io/docs/akka/current/typed/index-persistence.html).
 
+To run the `EventGeneratorApp` use the following sbt command.
+
+```shell
+sbt "examples/test:runMain docs.guide.EventGeneratorApp"
+```
+
+If you don't see any connection exceptions you should eventually see log lines produced with the event being written to the journal.
+
+Ex)
+
+<!-- FIXME: update when event generator app updated to persist to cart id persistenceids -->
+```shell
+[2020-07-16 15:13:59,855] [INFO] [docs.guide.EventGeneratorApp$] [] [EventGenerator-akka.actor.default-dispatcher-3] - persisting event ItemAdded(62e4e,bowling shoes,0) MDC: {persistencePhase=persist-evt, akkaAddress=akka://EventGenerator, akkaSource=akka://EventGenerator/user/persister, sourceActorSystem=EventGenerator, persistenceId=all-shopping-carts}
+```
+
+Finally, we can run the projection itself by using sbt to run `ShoppingCartApp`
+
+```shell
+sbt "examples/test:runMain docs.guide.ShoppingCartApp"
+```
+
+After a few seconds you should see the `DailyCheckoutProjectionHandler` logging that displays the current checkouts for the day:
+
+```shell
+[2020-07-16 15:26:23,420] [INFO] [docs.guide.DailyCheckoutProjectionHandler] [] [ShoppingCartApp-akka.actor.default-dispatcher-5] - DailyCheckoutProjectionHandler(carts-eu) current checkouts for the day [2020-07-16] is:                                                                                                 
+Date        Cart ID  Item ID             Quantity                                                                                                             
+2020-07-16  018db    akka t-shirt        0                                                                                                                    
+2020-07-16  018db    cat t-shirt         2                                                                                                                    
+2020-07-16  01ef3    akka t-shirt        1                                                                                                                    
+2020-07-16  05747    bowling shoes       1                                                                                                                    
+2020-07-16  064a0    cat t-shirt         1                                                                                                                    
+2020-07-16  064a0    skis                0             
+...
+```
+
+Use the CQL shell to observe the same information in the `daily_checkouts` table.
+
+```
+cqlsh:akka_projection> select cart_id, item_id, quantity from akka_projection.daily_checkouts where date = '2020-07-16' limit 10;
+
+ cart_id | item_id       | quantity
+---------+---------------+----------
+   018db |  akka t-shirt |        0
+   018db |   cat t-shirt |        2
+   01ef3 |  akka t-shirt |        1
+   03e7e | bowling shoes |        1
+   03e7e |   cat t-shirt |        1
+   05747 | bowling shoes |        1
+   064a0 |   cat t-shirt |        1
+   064a0 |          skis |        0
+   06602 |          skis |        0
+   084e1 |  akka t-shirt |        2
+
+(10 rows)
+```
+
+<!--
 
 ## Part 5: Adding error handling
 
@@ -185,3 +269,4 @@ CREATE TABLE IF NOT EXISTS akka_projection.daily_item_checkout_counts (
 
 ## Part 7: Manage offsets
 
+-->

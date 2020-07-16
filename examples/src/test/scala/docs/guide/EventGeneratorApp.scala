@@ -24,7 +24,7 @@ object EventGeneratorApp extends App {
   final case object Start extends Command
 
   val europeanShoppingCartsTag = "carts-eu"
-  val config = ConfigFactory.parseResources("./guide-shopping-cart-app.conf")
+  val config = ConfigFactory.parseResources("guide-shopping-cart-app.conf")
 
   ActorSystem(Behaviors.setup[Command] {
     ctx =>

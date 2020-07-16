@@ -1,6 +1,7 @@
 package docs.guide
 
 import java.time.Instant
+import java.time.LocalDate
 
 import scala.concurrent.Future
 
@@ -23,11 +24,11 @@ import DailyCheckoutProjectionHandler._
 object ShoppingCartAppSpec {
   // manually mock out the Cassandra data layer and simulate recording the daily count
   class MockDailyCheckoutRepository extends DailyCheckoutProjectionRepository {
-    var updateCheckoutItemCounts = Seq[DailyCheckoutItemCount]()
+    var updateCheckoutItemCounts = Seq[Checkout]()
 
-    override def checkoutCountsForDate(date: Instant): Future[Seq[DailyCheckoutItemCount]] =
+    override def checkoutCountsForDate(date: LocalDate): Future[Seq[Checkout]] =
       Future.successful(updateCheckoutItemCounts)
-    override def updateCheckoutItemCount(cartId: String, checkoutItem: DailyCheckoutItemCount): Future[Done] = {
+    override def addCheckout(checkoutItem: Checkout): Future[Done] = {
       updateCheckoutItemCounts = updateCheckoutItemCounts :+ checkoutItem
       Future.successful(Done)
     }
@@ -70,34 +71,28 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
           Offset.sequence(0L),
           handler)
 
-      val expectedDay = Instant.parse("2020-01-01T00:00:00.00Z")
+      val expectedDay = DailyCheckoutProjectionHandler.toDate(Instant.parse("2020-01-01T00:00:00.00Z"))
       projectionTestKit.runWithTestSink(projection) { testSink =>
         testSink.request(events.length)
         testSink.expectNextN(events.length)
         repo.updateCheckoutItemCounts shouldBe List(
-          DailyCheckoutItemCount("batteries", expectedDay, 2),
-          DailyCheckoutItemCount("crayons", expectedDay, 1))
+          Checkout(expectedDay, "a7098", "batteries", 2),
+          Checkout(expectedDay, "0d12d", "crayons", 1))
       }
     }
 
-    "log current daily item counts every 10 checkouts" in {
-      val repo = new MockDailyCheckoutRepository {
-        override def checkoutCountsForDate(date: Instant): Future[Seq[DailyCheckoutItemCount]] = {
-          val count = updateCheckoutItemCounts.foldLeft(0L) {
-            case (acc, dailyCheckoutItemCount) => acc + dailyCheckoutItemCount.count
-          }
-          Future.successful(List(updateCheckoutItemCounts.head.copy(count = count)))
-        }
-      }
+    "log cart checkouts for day every 10 checkouts" in {
+      val repo = new MockDailyCheckoutRepository
       val handler = new DailyCheckoutProjectionHandler("tag", system, repo)
 
       // create 10 `ItemAdded` and `CheckedOut` events each for one day
       val events = (0L to 20L by 2).flatMap { i =>
-        val cartId = java.util.UUID.randomUUID().toString.take(5)
+        val cartId = (i / 2).toString
         Seq(
           createEnvelope(ShoppingCartEvents.ItemAdded(cartId, "bowling shoes", 2), i),
           createEnvelope(
-            ShoppingCartEvents.CheckedOut(cartId, Instant.parse("2020-01-01T08:00:00.00Z")): ShoppingCartEvents.Event,
+            ShoppingCartEvents
+              .CheckedOut(cartId, Instant.parse("2020-01-01T08:00:00.00Z")): ShoppingCartEvents.Event,
             i + 1))
       }
 
@@ -115,8 +110,18 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
           handler)
 
       LoggingTestKit
-        .info(
-          "DailyCheckoutProjectionHandler(tag) current daily item counts for today [2020-01-01T00:00:00Z] is List(DailyCheckoutItemCount(bowling shoes,2020-01-01T00:00:00Z,20))")
+        .info("""DailyCheckoutProjectionHandler(tag) current checkouts for the day [2020-01-01] is: 
+                |Date        Cart ID  Item ID             Quantity
+                |2020-01-01  0        bowling shoes       2
+                |2020-01-01  1        bowling shoes       2
+                |2020-01-01  2        bowling shoes       2
+                |2020-01-01  3        bowling shoes       2
+                |2020-01-01  4        bowling shoes       2
+                |2020-01-01  5        bowling shoes       2
+                |2020-01-01  6        bowling shoes       2
+                |2020-01-01  7        bowling shoes       2
+                |2020-01-01  8        bowling shoes       2
+                |2020-01-01  9        bowling shoes       2""".stripMargin)
         .expect {
           projectionTestKit.runWithTestSink(projection) { testSink =>
             testSink.request(events.length)
