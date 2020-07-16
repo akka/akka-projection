@@ -186,7 +186,7 @@ private[jdbc] case class MSSQLServerDialect(schema: Option[String], tableName: S
         "OFFSET" VARCHAR(255) NOT NULL,
         "MANIFEST" VARCHAR(4) NOT NULL,
         "MERGEABLE" BIT NOT NULL,
-        "LAST_UPDATED" DATETIME2 NOT NULL
+        "LAST_UPDATED" DATETIME2(6) NOT NULL
         )
       
       alter table "$table" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
