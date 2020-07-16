@@ -130,6 +130,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
           Flow[ProjectionContextImpl[Offset, Envelope]].mapAsync(parallelism = 1) { context =>
             val measured: () => Future[Done] = { () =>
               handler.process(context.envelope).map { done =>
+                statusObserver.afterProcess(projectionId, context.envelope)
                 // `telemetry.afterProcess` is invoked immediately after `handler.process`
                 telemetry.afterProcess(context.externalContext)
                 done
@@ -160,6 +161,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
               val measured: () => Future[Done] = { () =>
                 handler.process(envelopes).map { done =>
                   group.foreach { ctx =>
+                    statusObserver.afterProcess(projectionId, ctx.envelope)
                     telemetry.afterProcess(ctx.externalContext)
                   }
                   done
@@ -188,6 +190,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
             .map {
               case (_, context) =>
                 val ctx = context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]]
+                statusObserver.afterProcess(projectionId, ctx.envelope)
                 telemetry.afterProcess(ctx.externalContext)
                 ctx
             }
@@ -237,6 +240,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         val measured: () => Future[Done] = { () =>
           handler.process(envelopes).map { done =>
             partitioned.foreach { ctx =>
+              statusObserver.afterProcess(projectionId, ctx.envelope)
               telemetry.afterProcess(ctx.externalContext)
             }
             done
@@ -285,6 +289,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
           .mapAsync(1) { context =>
             val measured: () => Future[Done] = () => {
               handler.process(context.envelope).map { done =>
+                statusObserver.afterProcess(projectionId, context.envelope)
                 // `telemetry.afterProcess` is invoked immediately after `handler.process`
                 telemetry.afterProcess(context.externalContext)
 
@@ -345,6 +350,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
             saveOffsetAndReport(projectionId, context, 1).flatMap { _ =>
               val measured: () => Future[Done] = { () =>
                 handler.process(context.envelope).map { done =>
+                  statusObserver.afterProcess(projectionId, context.envelope)
                   // `telemetry.afterProcess` is invoked immediately after `handler.process`
                   telemetry.afterProcess(context.externalContext)
                   done
@@ -380,6 +386,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
             })
         .via(killSwitch.flow)
         .map { env =>
+          statusObserver.beforeProcess(projectionId, env)
           val externalContext = telemetry.beforeProcess(env, sourceProvider.extractCreationTime(env))
           ProjectionContextImpl(sourceProvider.extractOffset(env), env, externalContext)
         }

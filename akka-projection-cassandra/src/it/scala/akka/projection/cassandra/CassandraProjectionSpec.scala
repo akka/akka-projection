@@ -942,7 +942,7 @@ class CassandraProjectionSpec
       }
 
       val statusProbe = createTestProbe[TestStatusObserver.Status]()
-      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
+      val progressProbe = createTestProbe[TestStatusObserver.OffsetProgress[Envelope]]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true, Some(progressProbe.ref))
 
       val projection =
@@ -961,11 +961,11 @@ class CassandraProjectionSpec
 
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("abc")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "abc")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 1, "abc")))
       handlerProbe.expectMessage("def")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "def")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 2, "def")))
       handlerProbe.expectMessage("ghi")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "ghi")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 3, "ghi")))
       // fail 4
       handlerProbe.expectMessage(handler.failedMessage)
       val someTestException = TestException("err")
@@ -978,11 +978,11 @@ class CassandraProjectionSpec
       handlerProbe.expectMessage(handler.startMessage)
       statusProbe.expectMessage(TestStatusObserver.Started)
       handlerProbe.expectMessage("jkl")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "jkl")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 4, "jkl")))
       handlerProbe.expectMessage("mno")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "mno")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 5, "mno")))
       handlerProbe.expectMessage("pqr")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 6, "pqr")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 6, "pqr")))
       // now completed without failure
       handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop

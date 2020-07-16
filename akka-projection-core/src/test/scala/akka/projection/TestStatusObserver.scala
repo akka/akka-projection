@@ -13,7 +13,11 @@ object TestStatusObserver {
   case object Failed extends Status
   case object Stopped extends Status
 
-  final case class Progress[Envelope](env: Envelope) extends Status
+  final case class OffsetProgress[Envelope](envelope: Envelope) extends Status
+
+  trait EnvelopeProgress[Envelope] extends Status
+  final case class Before[Envelope](envelope: Envelope) extends EnvelopeProgress[Envelope]
+  final case class After[Envelope](envelope: Envelope) extends EnvelopeProgress[Envelope]
 
   final case class Err[Envelope](env: Envelope, cause: Throwable) extends Status {
     // don't include cause message in equals
@@ -29,7 +33,9 @@ object TestStatusObserver {
 class TestStatusObserver[Envelope](
     probe: ActorRef[TestStatusObserver.Status],
     lifecycle: Boolean = false,
-    progressProbe: Option[ActorRef[TestStatusObserver.Progress[Envelope]]] = None)
+    offsetProgressProbe: Option[ActorRef[TestStatusObserver.OffsetProgress[Envelope]]] = None,
+    beforeEnvelopeProbe: Option[ActorRef[TestStatusObserver.Before[Envelope]]] = None,
+    afterEnvelopeProbe: Option[ActorRef[TestStatusObserver.After[Envelope]]] = None)
     extends StatusObserver[Envelope] {
   import TestStatusObserver._
 
@@ -48,15 +54,24 @@ class TestStatusObserver[Envelope](
       probe ! Stopped
   }
 
-  override def offsetProgress(projectionId: ProjectionId, env: Envelope): Unit = {
-    progressProbe.foreach(_ ! Progress(env))
+  override def beforeProcess(projectionId: ProjectionId, envelope: Envelope): Unit = {
+    beforeEnvelopeProbe.foreach(_ ! Before(envelope))
+  }
+
+  override def afterProcess(projectionId: ProjectionId, envelope: Envelope): Unit = {
+    afterEnvelopeProbe.foreach(_ ! After(envelope))
+  }
+
+  override def offsetProgress(projectionId: ProjectionId, envelope: Envelope): Unit = {
+    offsetProgressProbe.foreach(_ ! OffsetProgress(envelope))
   }
 
   override def error(
       projectionId: ProjectionId,
-      env: Envelope,
+      envelope: Envelope,
       cause: Throwable,
       recoveryStrategy: HandlerRecoveryStrategy): Unit = {
-    probe ! Err(env, cause)
+    probe ! Err(envelope, cause)
   }
+
 }

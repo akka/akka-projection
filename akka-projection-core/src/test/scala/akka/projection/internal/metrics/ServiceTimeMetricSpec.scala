@@ -37,7 +37,8 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
     " in `at-least-once` with singleHandler" must {
       "reports measures for all envelopes (without afterEnvelops optimization)" in {
         val single = TestHandlers.single
-        val tt = new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
+        val tt =
+          new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(1)), SingleHandlerStrategy(single))
 
         runInternal(tt.projectionState) {
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
@@ -52,6 +53,7 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
           // afterProcess invocations happen per envelope (not in a groupWithin!)
           instruments.afterProcessInvocations.get should be(defaultNumberOfEnvelopes)
           instruments.lastServiceTimeInNanos.get() should be > (0L)
+
         }
       }
       "reports measures for all envelopes (multiple times when there are failures) " in {
@@ -175,7 +177,12 @@ class ServiceTimeAndProcessingCountMetricAtLeastOnceSpec extends ServiceTimeAndP
         val tt =
           new TelemetryTester(AtLeastOnce(afterEnvelopes = Some(2)), FlowHandlerStrategy[Envelope](flow))
         runInternal(tt.projectionState) {
-          instruments.afterProcessInvocations.get should be(8)
+          // When there's a failure handling `envelope(n)` there is a race condition between
+          // the stream cancellation and the invocation to `afterProcess(envelope(n-1))` (the
+          // previous envelope). As a consequence, the `afterProcessInvocations` count is
+          // nondeterministic and we can only assert it'll be some value between 8 and 10 (both
+          // included)
+          instruments.afterProcessInvocations.get should be >= (8)
         }
       }
     }

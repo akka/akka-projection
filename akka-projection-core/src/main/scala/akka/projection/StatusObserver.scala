@@ -31,6 +31,19 @@ abstract class StatusObserver[-Envelope] {
   def stopped(projectionId: ProjectionId): Unit
 
   /**
+   * Called as soon as an envelop is ready to be processed. The envelope processing may
+   * not start immediately if grouping or batching are enabled.
+   */
+  def beforeProcess(projectionId: ProjectionId, envelope: Envelope): Unit
+
+  /**
+   * Invoked as soon as the projected information is readable by a separate thread (e.g
+   * committed to database). It will not be invoked if the envelope is skipped or
+   * handling fails.
+   */
+  def afterProcess(projectionId: ProjectionId, envelope: Envelope): Unit
+
+  /**
    * Called when the corresponding offset has been stored.
    * It might not be called for each envelope.
    */

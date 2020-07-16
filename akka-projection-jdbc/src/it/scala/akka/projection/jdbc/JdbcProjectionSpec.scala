@@ -367,8 +367,9 @@ class JdbcProjectionSpec
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
       val statusProbe = createTestProbe[TestStatusObserver.Status]()
-      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
-      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, progressProbe = Some(progressProbe.ref))
+      val progressProbe = createTestProbe[TestStatusObserver.OffsetProgress[Envelope]]()
+      val statusObserver =
+        new TestStatusObserver[Envelope](statusProbe.ref, offsetProgressProbe = Some(progressProbe.ref))
 
       val projectionFailing =
         JdbcProjection
@@ -394,11 +395,11 @@ class JdbcProjectionSpec
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
       statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
       statusProbe.expectNoMessage()
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "e1")))
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "e2")))
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "e3")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 1, "e1")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 2, "e2")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 3, "e3")))
       // Offset 4 is not stored so it is not reported.
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "e5")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 5, "e5")))
 
       offsetShouldBe(6L)
     }
@@ -1163,7 +1164,7 @@ class JdbcProjectionSpec
       }
 
       val statusProbe = createTestProbe[TestStatusObserver.Status]()
-      val progressProbe = createTestProbe[TestStatusObserver.Progress[Envelope]]()
+      val progressProbe = createTestProbe[TestStatusObserver.OffsetProgress[Envelope]]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true, Some(progressProbe.ref))
 
       val projection =
@@ -1185,11 +1186,11 @@ class JdbcProjectionSpec
 
       handlerProbe.expectMessage(handler.startMessage)
       handlerProbe.expectMessage("e1")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 1, "e1")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 1, "e1")))
       handlerProbe.expectMessage("e2")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 2, "e2")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 2, "e2")))
       handlerProbe.expectMessage("e3")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 3, "e3")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 3, "e3")))
       // fail 4
       handlerProbe.expectMessage(handler.failedMessage)
       val someTestException = TestException("err")
@@ -1202,11 +1203,11 @@ class JdbcProjectionSpec
       handlerProbe.expectMessage(handler.startMessage)
       statusProbe.expectMessage(TestStatusObserver.Started)
       handlerProbe.expectMessage("e4")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 4, "e4")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 4, "e4")))
       handlerProbe.expectMessage("e5")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 5, "e5")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 5, "e5")))
       handlerProbe.expectMessage("e6")
-      progressProbe.expectMessage(TestStatusObserver.Progress(Envelope(entityId, 6, "e6")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 6, "e6")))
       // now completed without failure
       handlerProbe.expectMessage(handler.completedMessage)
       handlerProbe.expectNoMessage() // no duplicate stop

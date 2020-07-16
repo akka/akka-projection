@@ -112,7 +112,7 @@ object InternalProjectionStateMetricsSpec {
   }
 
   def sourceProvider(system: ActorSystem[_], id: String, numberOfEnvelopes: Int): SourceProvider[Long, Envelope] = {
-    val chars = "abcdefghijklkmnopqrstuvwxyz"
+    val chars = "abcdefghijklmnopqrstuvwxyz"
     val envelopes = (1 to numberOfEnvelopes).map { offset =>
       Envelope(id, offset.toLong, chars.charAt((offset - 1) % chars.length).toString)
     }
@@ -133,12 +133,16 @@ object InternalProjectionStateMetricsSpec {
     override def extractCreationTime(envelope: Envelope): Long = envelope.creationTimestamp
   }
 
-  class TelemetryTester(offsetStrategy: OffsetStrategy, handlerStrategy: HandlerStrategy, numberOfEnvelopes: Int = 6)(
+  class TelemetryTester(
+      offsetStrategy: OffsetStrategy,
+      handlerStrategy: HandlerStrategy,
+      numberOfEnvelopes: Int = 6,
+      statusObserver: StatusObserver[Envelope] = NoopStatusObserver)(
       implicit system: ActorSystem[_],
       projectionId: ProjectionId) {
 
     private implicit val exCtx = system.executionContext
-    private val entityId = UUID.randomUUID().toString
+    val entityId = UUID.randomUUID().toString
 
     private val projectionSettings = ProjectionSettings(system)
 
@@ -178,7 +182,7 @@ object InternalProjectionStateMetricsSpec {
         sourceProvider(system, entityId, numberOfEnvelopes),
         offsetStrategy,
         adaptedHandlerStrategy,
-        NoopStatusObserver,
+        statusObserver,
         projectionSettings,
         offsetStore)
 

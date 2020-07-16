@@ -23,6 +23,10 @@ import akka.projection.StatusObserver
 
   def stopped(projectionId: ProjectionId): Unit = ()
 
+  override def beforeProcess(projectionId: ProjectionId, envelope: Any): Unit = ()
+
+  override def afterProcess(projectionId: ProjectionId, envelope: Any): Unit = ()
+
   def offsetProgress(projectionId: ProjectionId, env: Any): Unit = ()
 
   override def error(
