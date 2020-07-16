@@ -182,9 +182,9 @@ class DailyCheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: 
   def initialState(): Future[Map[String, Map[String, CartState]]] =
     repo.cartState().map { rows =>
       val byCartId = rows.groupBy(_.cartId)
-      val byCartAndItem = byCartId.view
-        .mapValues(_.groupBy(_.itemId).map { case (itemId, states) => (itemId -> states.head) })
-        .toMap
+      val byCartAndItem = byCartId.view.map {
+        case (k, v) => k -> v.groupBy(_.itemId).map { case (itemId, states) => (itemId -> states.head) }
+      }.toMap
       byCartAndItem
     }
 
