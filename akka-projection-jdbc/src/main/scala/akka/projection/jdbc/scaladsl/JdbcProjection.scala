@@ -35,7 +35,6 @@ object JdbcProjection {
    *
    * It stores the offset in a relational database table using JDBC in the same transaction
    * as the user defined `handler`.
-   *
    */
   def exactlyOnce[Offset, Envelope, S <: JdbcSession](
       projectionId: ProjectionId,
@@ -72,6 +71,10 @@ object JdbcProjection {
    * It stores the offset in a relational database table using JDBC after the `handler` has processed the envelope.
    * This means that if the projection is restarted from previously stored offset then some elements may be processed
    * more than once.
+   *
+   * The [[JdbcHandler.process()]] in [[handler]] will be wrapped in a transaction. It is highly recommended to use
+   * a [[sessionFactory]] that provides [[java.sql.Connection]]'s with [[setAutoCommit(false)]]. The transaction
+   * will be committed after invoking [[JdbcHandler.process()]].
    *
    * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first.
    * This window can be defined with [[AtLeastOnceProjection.withSaveOffset]] of the returned
