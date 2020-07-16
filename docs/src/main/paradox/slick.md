@@ -11,6 +11,11 @@ The envelope handler returns a `DBIO` that will be run by the projection. This m
 operations can be run in the same transaction as the storage of the offset, which means that @ref:[exactly-once](#exactly-once)
 processing semantics is supported. It also offers @ref:[at-least-once](#at-least-once) semantics.
 
+@@@ note
+Prefer using the JDBC implementation to implement your projection handler. Slick support in `akka-projection` is meant for users 
+migrating from [`Lagom's Slick ReadSideProcessor`](https://www.lagomframework.com/documentation/1.6.x/scala/ReadSideSlick.html).
+@@@
+
 ## Dependencies
 
 To use the Slick module of Akka Projections add the following dependency in your project:
