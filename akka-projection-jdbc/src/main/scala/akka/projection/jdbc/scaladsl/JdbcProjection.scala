@@ -72,7 +72,7 @@ object JdbcProjection {
    * This means that if the projection is restarted from previously stored offset then some elements may be processed
    * more than once.
    *
-   * The [[JdbcHandler.process()]] in [[handler]] will be wrapped in a transaction, it is highly recommended to use
+   * The [[JdbcHandler.process()]] in [[handler]] will be wrapped in a transaction. It is highly recommended to use
    * a [[sessionFactory]] that provides [[java.sql.Connection]]'s with [[setAutoCommit(false)]]. The transaction
    * will be committed after invoking [[JdbcHandler.process()]].
    *
