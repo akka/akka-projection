@@ -16,6 +16,11 @@ import akka.dispatch.ExecutionContexts
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
+import akka.projection.jdbc.internal.DefaultDialect
+import akka.projection.jdbc.internal.Dialect
+import akka.projection.jdbc.internal.MSSQLServerDialect
+import akka.projection.jdbc.internal.MySQLDialect
+import akka.projection.jdbc.internal.OracleDialect
 import slick.jdbc.JdbcProfile
 
 /**
@@ -33,6 +38,15 @@ import slick.jdbc.JdbcProfile
 
   def this(system: ActorSystem[_], db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
     this(system, db, profile, slickSettings, Clock.systemUTC())
+
+  val dialect: Dialect =
+    profile match {
+      case _: slick.jdbc.MySQLProfile     => MySQLDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.PostgresProfile  => DefaultDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.H2Profile        => DefaultDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.SQLServerProfile => MSSQLServerDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.OracleProfile    => OracleDialect(slickSettings.schema, slickSettings.table)
+    }
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -98,6 +112,19 @@ import slick.jdbc.JdbcProfile
 
   val offsetTable = TableQuery[OffsetStoreTable]
 
-  def createIfNotExists: Future[Done] =
-    db.run(offsetTable.schema.createIfNotExists).map(_ => Done)(ExecutionContexts.parasitic)
+  def createIfNotExists: Future[Done] = {
+    val prepareSchemaDBIO = SimpleDBIO[Unit] { jdbcContext =>
+      val connection = jdbcContext.connection
+      dialect.createTableStatements.foreach(statement => connection.prepareStatement(statement).execute())
+    }
+    val future = db.run(prepareSchemaDBIO)
+
+    future
+      .transform {
+        case tr =>
+          println(tr)
+          tr
+      }(ExecutionContexts.parasitic)
+      .map(_ => Done)(ExecutionContexts.parasitic)
+  }
 }
