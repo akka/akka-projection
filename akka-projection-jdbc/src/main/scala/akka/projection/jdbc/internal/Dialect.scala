@@ -48,7 +48,7 @@ private[jdbc] object DialectDefaults {
       "OFFSET" VARCHAR(255) NOT NULL,
       "MANIFEST" VARCHAR(4) NOT NULL,
       "MERGEABLE" BOOLEAN NOT NULL,
-      "LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL
+      "LAST_UPDATED" BIGINT NOT NULL
      );""",
       // create index
       s"""CREATE INDEX "PROJECTION_NAME_INDEX" on "$table" ("PROJECTION_NAME");""",
@@ -144,7 +144,7 @@ private[jdbc] case class MySQLDialect(schema: Option[String], tableName: String)
       OFFSET VARCHAR(255) NOT NULL,
       MANIFEST VARCHAR(4) NOT NULL,
       MERGEABLE BOOLEAN NOT NULL,
-      LAST_UPDATED TEXT NOT NULL
+      LAST_UPDATED BIGINT NOT NULL
      );
     """,
       // create index
@@ -186,7 +186,7 @@ private[jdbc] case class MSSQLServerDialect(schema: Option[String], tableName: S
         "OFFSET" VARCHAR(255) NOT NULL,
         "MANIFEST" VARCHAR(4) NOT NULL,
         "MERGEABLE" BIT NOT NULL,
-        "LAST_UPDATED" DATETIME2(6) NOT NULL
+        "LAST_UPDATED" BIGINT NOT NULL
         )
       
       alter table "$table" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
@@ -216,7 +216,7 @@ private[jdbc] case class OracleDialect(schema: Option[String], tableName: String
     immutable.Seq(s"""
 BEGIN
 
-execute immediate 'create table "$table" ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL) ';
+execute immediate 'create table "$table" ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
 execute immediate 'alter table "$table" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
 execute immediate 'create index "PROJECTION_NAME_INDEX" on "$table" ("PROJECTION_NAME") ';
 EXCEPTION

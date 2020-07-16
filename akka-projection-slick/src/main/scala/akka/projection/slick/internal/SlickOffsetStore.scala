@@ -5,7 +5,6 @@
 package akka.projection.slick.internal
 
 import java.time.Clock
-import java.time.Instant
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -56,15 +55,16 @@ import slick.jdbc.JdbcProfile
     }
   }
 
-  private def newRow[Offset](rep: SingleOffset, now: Instant): DBIO[_] =
-    offsetTable.insertOrUpdate(OffsetRow(rep.id.name, rep.id.key, rep.offsetStr, rep.manifest, rep.mergeable, now))
+  private def newRow[Offset](rep: SingleOffset, millisSinceEpoch: Long): DBIO[_] =
+    offsetTable.insertOrUpdate(
+      OffsetRow(rep.id.name, rep.id.key, rep.offsetStr, rep.manifest, rep.mergeable, millisSinceEpoch))
 
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): slick.dbio.DBIO[_] = {
-    val now: Instant = Instant.now(clock)
+    val millisSinceEpoch = clock.instant().toEpochMilli
     toStorageRepresentation(projectionId, offset) match {
-      case offset: SingleOffset => newRow(offset, now)
+      case offset: SingleOffset => newRow(offset, millisSinceEpoch)
       case MultipleOffsets(reps) =>
-        val actions = reps.map(rep => newRow(rep, now))
+        val actions = reps.map(rep => newRow(rep, millisSinceEpoch))
         DBIO.sequence(actions)
     }
   }
@@ -80,7 +80,7 @@ import slick.jdbc.JdbcProfile
     def offset = column[String]("OFFSET", O.Length(255))
     def manifest = column[String]("MANIFEST", O.Length(4))
     def mergeable = column[Boolean]("MERGEABLE")
-    def lastUpdated = column[Instant]("LAST_UPDATED")
+    def lastUpdated = column[Long]("LAST_UPDATED")
 
     def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
     def idx = index("PROJECTION_NAME_INDEX", projectionName)
@@ -94,7 +94,7 @@ import slick.jdbc.JdbcProfile
       offsetStr: String,
       manifest: String,
       mergeable: Boolean,
-      lastUpdated: Instant)
+      lastUpdated: Long)
 
   val offsetTable = TableQuery[OffsetStoreTable]
 
