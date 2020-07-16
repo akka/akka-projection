@@ -67,7 +67,7 @@ class OffsetSchemaSpec extends AnyWordSpecLike with Matchers {
 
   private def normalize(in: String): String = {
     in.toLowerCase // ignore case
-      .replaceAll("[\\s]++", " ") // ignore multiple blakspaces
+      .replaceAll("[\\s]++", " ") // ignore multiple blankspaces
       .trim // trim edges
   }
 }
