@@ -154,19 +154,19 @@ See also @ref:[error handling](error.md).
 The database schema for the offset storage table:
 
 PostgreSQL
-:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
+:  @@snip [create-table-default.sql](/examples/src/test/resources/create-table-default.sql) { #create-table-default }
 
 MySQL
-:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mysql }
+:  @@snip [create-table-mysql.sql](/examples/src/test/resources/create-table-mysql.sql) { #create-table-mysql }
 
 Microsoft SQL Server
-:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-mssql }
+:  @@snip [create-table-mssql.sql](/examples/src/test/resources/create-table-mssql.sql) { #create-table-mssql }
 
 Oracle
-:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-oracle }
+:  @@snip [create-table-oracle.sql](/examples/src/test/resources/create-table-oracle.sql) { #create-table-oracle }
 
 H2
-:  @@snip [create-tables.sql](/examples/src/test/resources/create-tables.sql) { #create-table-default }
+:  @@snip [create-table-default.sql](/examples/src/test/resources/create-table-default.sql) { #create-table-default }
 
 
 ## Offset types
