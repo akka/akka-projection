@@ -8,7 +8,7 @@
 
 * [Overview](overview.md)
 * [Use Cases](use-cases.md)
-* [Getting Started Guide](getting-started.md)
+* [Getting Started Guide](getting-started/index.md)
 * [Event Sourced](eventsourced.md)
 * [Kafka](kafka.md)
 * [Cassandra](cassandra.md)
