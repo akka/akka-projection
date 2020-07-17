@@ -117,14 +117,6 @@ import slick.jdbc.JdbcProfile
       val connection = jdbcContext.connection
       dialect.createTableStatements.foreach(statement => connection.prepareStatement(statement).execute())
     }
-    val future = db.run(prepareSchemaDBIO)
-
-    future
-      .transform {
-        case tr =>
-          println(tr)
-          tr
-      }(ExecutionContexts.parasitic)
-      .map(_ => Done)(ExecutionContexts.parasitic)
+    db.run(prepareSchemaDBIO).map(_ => Done)(ExecutionContexts.parasitic)
   }
 }

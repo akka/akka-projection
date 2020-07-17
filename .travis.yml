@@ -66,7 +66,7 @@ jobs:
     - env:
         - JDK="adopt@~1.11-0"
         - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="examples/test; examples/it:test"
+        - CMD="examples/it:test"
       name: "Run example projects integration tests with Scala 2.13 and AdoptOpenJDK 11"
 
     - stage: whitesource
