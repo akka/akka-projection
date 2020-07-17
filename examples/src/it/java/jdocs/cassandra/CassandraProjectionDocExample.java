@@ -18,7 +18,6 @@ import jdocs.eventsourced.ShoppingCart;
 
 // #daemon-imports
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
-import akka.cluster.sharding.typed.ShardedDaemonProcessSettings;
 import akka.projection.ProjectionBehavior;
 
 // #daemon-imports

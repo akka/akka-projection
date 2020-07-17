@@ -85,6 +85,7 @@ object Dependencies {
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
     val akkaPersistenceCassandra = "com.typesafe.akka" %% "akka-persistence-cassandra" % "1.0.0"
     val akkaPersistenceJdbc = "com.lightbend.akka" %% "akka-persistence-jdbc" % "4.0.0"
+    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka
   }
 
   private val deps = libraryDependencies
@@ -94,10 +95,9 @@ object Dependencies {
         Compile.akkaStream,
         Compile.akkaActorTyped,
         Compile.akkaProtobufV3,
-        // akka-persistence-query is only needed for OffsetSerialization, but that is always used together
-        // with more specific modules, such as akka-projection-cassandra, which defines the required
-        // dependency on akka-persistence-query
-        Compile.akkaPersistenceQuery % "optional;provided",
+        // akka-persistence-query is only needed for OffsetSerialization and to provide a typed EventEnvelope that
+        // references the Offset type from akka-persistence.
+        Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.logback,
         Test.scalatest)
@@ -164,6 +164,7 @@ object Dependencies {
         Examples.akkaClusterShardingTyped,
         Examples.akkaPersistenceCassandra,
         Examples.akkaPersistenceJdbc,
+        Examples.akkaSerializationJackson,
         Examples.hibernate,
         Test.h2Driver,
         Test.akkaTypedTestkit,

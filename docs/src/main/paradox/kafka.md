@@ -3,7 +3,7 @@
 A typical source for Projections is messages from Kafka. Akka Projections has integration with 
 [Alpakka Kafka](https://doc.akka.io/docs/alpakka-kafka/current/), which is described in here.
 
-The @apiddoc[KafkaSourceProvider] uses consumer group assignments from Kafka and can resume from offsets stored in
+The @apidoc[KafkaSourceProvider] uses consumer group assignments from Kafka and can resume from offsets stored in
 a database.
 
 Akka Projections can store the offsets from Kafka in a @ref:[relational DB with JDBC](jdbc.md)
@@ -85,7 +85,7 @@ can be used, and Akka Projections is not needed for that usage.
 
 The @apidoc[SendProducer] in Alpakka Kafka can be used for sending messages to Kafka from a Projection.
 
-A `JdbHandler` that is sending to Kafka may look like this:
+A `JdbcHandler` that is sending to Kafka may look like this:
 
 Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #wordPublisher }
