@@ -18,6 +18,7 @@ import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
 import akka.projection.jdbc.internal.DefaultDialect
 import akka.projection.jdbc.internal.Dialect
+import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.MSSQLServerDialect
 import akka.projection.jdbc.internal.MySQLDialect
 import akka.projection.jdbc.internal.OracleDialect
@@ -115,7 +116,10 @@ import slick.jdbc.JdbcProfile
   def createIfNotExists: Future[Done] = {
     val prepareSchemaDBIO = SimpleDBIO[Unit] { jdbcContext =>
       val connection = jdbcContext.connection
-      dialect.createTableStatements.foreach(statement => connection.prepareStatement(statement).execute())
+      dialect.createTableStatements.foreach(sql =>
+        JdbcSessionUtil.tryWithResource(connection.createStatement()) { stmt =>
+          stmt.execute(sql)
+        })
     }
     db.run(prepareSchemaDBIO).map(_ => Done)(ExecutionContexts.parasitic)
   }

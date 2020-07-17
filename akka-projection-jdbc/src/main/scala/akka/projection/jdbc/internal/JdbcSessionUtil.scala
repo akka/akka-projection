@@ -18,7 +18,7 @@ import akka.projection.jdbc.JdbcSession
  * INTERNAL API
  */
 @InternalApi
-private[jdbc] object JdbcSessionUtil {
+private[projection] object JdbcSessionUtil {
 
   /**
    * run the blocking DB operations on a single thread on the passed ExecutionContext.
