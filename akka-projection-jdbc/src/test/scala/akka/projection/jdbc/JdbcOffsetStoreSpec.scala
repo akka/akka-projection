@@ -154,8 +154,8 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
         tryWithResource(stmt.executeQuery()) { resultSet =>
 
           if (resultSet.next()) {
-            val t = resultSet.getTimestamp(6)
-            Instant.ofEpochMilli(t.getTime)
+            val millisSinceEpoch = resultSet.getLong(6)
+            Instant.ofEpochMilli(millisSinceEpoch)
           } else throw new RuntimeException(s"no records found for $projectionId")
         }
       }

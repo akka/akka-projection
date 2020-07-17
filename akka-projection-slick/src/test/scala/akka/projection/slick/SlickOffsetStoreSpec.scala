@@ -111,7 +111,8 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
       .filter(r => r.projectionName === projectionId.name && r.projectionKey === projectionId.key)
       .result
       .headOption
-    dbConfig.db.run(action).futureValue.get.lastUpdated
+    val millis = dbConfig.db.run(action).futureValue.get.lastUpdated
+    Instant.ofEpochMilli(millis)
   }
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")

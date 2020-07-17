@@ -33,6 +33,7 @@ lazy val slick =
     .configs(IntegrationTest.extend(Test))
     .settings(Defaults.itSettings)
     .settings(Dependencies.slick)
+    .dependsOn(jdbc)
     .dependsOn(core % "compile->compile;test->test")
     .dependsOn(testkit % "test->test")
 

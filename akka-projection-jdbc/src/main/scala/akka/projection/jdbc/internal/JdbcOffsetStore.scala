@@ -6,7 +6,6 @@ package akka.projection.jdbc.internal
 
 import java.sql.Connection
 import java.sql.Statement
-import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
 
@@ -142,7 +141,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
     if (verboseLogging)
       logger.debug("saving offset [{}], using connection id [{}]", offset, System.identityHashCode(conn))
 
-    val now = new Timestamp(Instant.now(clock).toEpochMilli)
+    val now = Instant.now(clock).toEpochMilli
 
     val storageReps = toStorageRepresentation(projectionId, offset)
 
@@ -160,7 +159,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
           stmt.setString(UpdateIndices.OFFSET, singleOffset.offsetStr)
           stmt.setString(UpdateIndices.MANIFEST, singleOffset.manifest)
           stmt.setBoolean(UpdateIndices.MERGEABLE, singleOffset.mergeable)
-          stmt.setTimestamp(UpdateIndices.LAST_UPDATED, now)
+          stmt.setLong(UpdateIndices.LAST_UPDATED, now)
           // WHERE
           stmt.setString(UpdateIndices.PROJECTION_NAME, singleOffset.id.name)
           stmt.setString(UpdateIndices.PROJECTION_KEY, singleOffset.id.key)
@@ -180,7 +179,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
           stmt.setString(InsertIndices.OFFSET, singleOffset.offsetStr)
           stmt.setString(InsertIndices.MANIFEST, singleOffset.manifest)
           stmt.setBoolean(InsertIndices.MERGEABLE, singleOffset.mergeable)
-          stmt.setTimestamp(InsertIndices.LAST_UPDATED, now)
+          stmt.setLong(InsertIndices.LAST_UPDATED, now)
 
           val triedInsertResult = stmt.executeUpdate()
 

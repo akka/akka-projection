@@ -13,7 +13,7 @@ import akka.projection.jdbc.internal.Dialect.removeQuotes
  * INTERNAL API
  */
 @InternalApi
-private[jdbc] trait Dialect {
+private[projection] trait Dialect {
   def createTableStatements: immutable.Seq[String]
 
   def readOffsetQuery: String
@@ -37,7 +37,7 @@ private[jdbc] object Dialect {
  * Defines the basic statements. Dialects may use it or define their own.
  */
 @InternalApi
-private[jdbc] object DialectDefaults {
+private[projection] object DialectDefaults {
 
   def createTableStatement(table: String): immutable.Seq[String] =
     immutable.Seq(
@@ -48,7 +48,7 @@ private[jdbc] object DialectDefaults {
       "OFFSET" VARCHAR(255) NOT NULL,
       "MANIFEST" VARCHAR(4) NOT NULL,
       "MERGEABLE" BOOLEAN NOT NULL,
-      "LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL
+      "LAST_UPDATED" BIGINT NOT NULL
      );""",
       // create index
       s"""CREATE INDEX "PROJECTION_NAME_INDEX" on "$table" ("PROJECTION_NAME");""",
@@ -109,7 +109,7 @@ private[jdbc] object DialectDefaults {
  * INTERNAL API
  */
 @InternalApi
-private[jdbc] case class DefaultDialect(schema: Option[String], tableName: String) extends Dialect {
+private[projection] case class DefaultDialect(schema: Option[String], tableName: String) extends Dialect {
 
   def this(tableName: String) = this(None, tableName)
 
@@ -130,7 +130,7 @@ private[jdbc] case class DefaultDialect(schema: Option[String], tableName: Strin
  * INTERNAL API
  */
 @InternalApi
-private[jdbc] case class MySQLDialect(schema: Option[String], tableName: String) extends Dialect {
+private[projection] case class MySQLDialect(schema: Option[String], tableName: String) extends Dialect {
 
   def this(tableName: String) = this(None, tableName)
 
@@ -144,7 +144,7 @@ private[jdbc] case class MySQLDialect(schema: Option[String], tableName: String)
       OFFSET VARCHAR(255) NOT NULL,
       MANIFEST VARCHAR(4) NOT NULL,
       MERGEABLE BOOLEAN NOT NULL,
-      LAST_UPDATED TEXT NOT NULL
+      LAST_UPDATED BIGINT NOT NULL
      );
     """,
       // create index
@@ -171,7 +171,7 @@ private[jdbc] case class MySQLDialect(schema: Option[String], tableName: String)
  * INTERNAL API
  */
 @InternalApi
-private[jdbc] case class MSSQLServerDialect(schema: Option[String], tableName: String) extends Dialect {
+private[projection] case class MSSQLServerDialect(schema: Option[String], tableName: String) extends Dialect {
 
   def this(tableName: String) = this(None, tableName)
 
@@ -186,7 +186,7 @@ private[jdbc] case class MSSQLServerDialect(schema: Option[String], tableName: S
         "OFFSET" VARCHAR(255) NOT NULL,
         "MANIFEST" VARCHAR(4) NOT NULL,
         "MERGEABLE" BIT NOT NULL,
-        "LAST_UPDATED" DATETIME2 NOT NULL
+        "LAST_UPDATED" BIGINT NOT NULL
         )
       
       alter table "$table" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
@@ -207,7 +207,7 @@ private[jdbc] case class MSSQLServerDialect(schema: Option[String], tableName: S
  * INTERNAL API
  */
 @InternalApi
-private[jdbc] case class OracleDialect(schema: Option[String], tableName: String) extends Dialect {
+private[projection] case class OracleDialect(schema: Option[String], tableName: String) extends Dialect {
 
   def this(tableName: String) = this(None, tableName)
 
@@ -216,7 +216,7 @@ private[jdbc] case class OracleDialect(schema: Option[String], tableName: String
     immutable.Seq(s"""
 BEGIN
 
-execute immediate 'create table "$table" ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" TIMESTAMP(9) WITH TIME ZONE NOT NULL) ';
+execute immediate 'create table "$table" ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
 execute immediate 'alter table "$table" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
 execute immediate 'create index "PROJECTION_NAME_INDEX" on "$table" ("PROJECTION_NAME") ';
 EXCEPTION

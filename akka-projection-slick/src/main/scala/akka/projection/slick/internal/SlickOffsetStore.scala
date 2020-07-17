@@ -5,7 +5,6 @@
 package akka.projection.slick.internal
 
 import java.time.Clock
-import java.time.Instant
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -17,6 +16,12 @@ import akka.dispatch.ExecutionContexts
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
+import akka.projection.jdbc.internal.DefaultDialect
+import akka.projection.jdbc.internal.Dialect
+import akka.projection.jdbc.internal.JdbcSessionUtil
+import akka.projection.jdbc.internal.MSSQLServerDialect
+import akka.projection.jdbc.internal.MySQLDialect
+import akka.projection.jdbc.internal.OracleDialect
 import slick.jdbc.JdbcProfile
 
 /**
@@ -34,6 +39,15 @@ import slick.jdbc.JdbcProfile
 
   def this(system: ActorSystem[_], db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
     this(system, db, profile, slickSettings, Clock.systemUTC())
+
+  val dialect: Dialect =
+    profile match {
+      case _: slick.jdbc.MySQLProfile     => MySQLDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.PostgresProfile  => DefaultDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.H2Profile        => DefaultDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.SQLServerProfile => MSSQLServerDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.OracleProfile    => OracleDialect(slickSettings.schema, slickSettings.table)
+    }
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -56,15 +70,16 @@ import slick.jdbc.JdbcProfile
     }
   }
 
-  private def newRow[Offset](rep: SingleOffset, now: Instant): DBIO[_] =
-    offsetTable.insertOrUpdate(OffsetRow(rep.id.name, rep.id.key, rep.offsetStr, rep.manifest, rep.mergeable, now))
+  private def newRow[Offset](rep: SingleOffset, millisSinceEpoch: Long): DBIO[_] =
+    offsetTable.insertOrUpdate(
+      OffsetRow(rep.id.name, rep.id.key, rep.offsetStr, rep.manifest, rep.mergeable, millisSinceEpoch))
 
   def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): slick.dbio.DBIO[_] = {
-    val now: Instant = Instant.now(clock)
+    val millisSinceEpoch = clock.instant().toEpochMilli
     toStorageRepresentation(projectionId, offset) match {
-      case offset: SingleOffset => newRow(offset, now)
+      case offset: SingleOffset => newRow(offset, millisSinceEpoch)
       case MultipleOffsets(reps) =>
-        val actions = reps.map(rep => newRow(rep, now))
+        val actions = reps.map(rep => newRow(rep, millisSinceEpoch))
         DBIO.sequence(actions)
     }
   }
@@ -80,7 +95,7 @@ import slick.jdbc.JdbcProfile
     def offset = column[String]("OFFSET", O.Length(255))
     def manifest = column[String]("MANIFEST", O.Length(4))
     def mergeable = column[Boolean]("MERGEABLE")
-    def lastUpdated = column[Instant]("LAST_UPDATED")
+    def lastUpdated = column[Long]("LAST_UPDATED")
 
     def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
     def idx = index("PROJECTION_NAME_INDEX", projectionName)
@@ -94,10 +109,18 @@ import slick.jdbc.JdbcProfile
       offsetStr: String,
       manifest: String,
       mergeable: Boolean,
-      lastUpdated: Instant)
+      lastUpdated: Long)
 
   val offsetTable = TableQuery[OffsetStoreTable]
 
-  def createIfNotExists: Future[Done] =
-    db.run(offsetTable.schema.createIfNotExists).map(_ => Done)(ExecutionContexts.parasitic)
+  def createIfNotExists: Future[Done] = {
+    val prepareSchemaDBIO = SimpleDBIO[Unit] { jdbcContext =>
+      val connection = jdbcContext.connection
+      dialect.createTableStatements.foreach(sql =>
+        JdbcSessionUtil.tryWithResource(connection.createStatement()) { stmt =>
+          stmt.execute(sql)
+        })
+    }
+    db.run(prepareSchemaDBIO).map(_ => Done)(ExecutionContexts.parasitic)
+  }
 }
