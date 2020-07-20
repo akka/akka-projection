@@ -10,7 +10,6 @@ import java.util.function.Supplier
 
 import akka.NotUsed
 import akka.annotation.ApiMayChange
-import akka.annotation.DoNotInherit
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
 
