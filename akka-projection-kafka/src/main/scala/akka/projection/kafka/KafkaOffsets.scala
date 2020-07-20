@@ -5,10 +5,13 @@
 package akka.projection.kafka
 
 import java.lang.{ Long => JLong }
+
+import akka.annotation.ApiMayChange
 import akka.projection.MergeableOffset
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 
+@ApiMayChange
 object KafkaOffsets {
 
   private val separator = "-"

@@ -39,6 +39,10 @@ import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
+
+/**
+ * INTERNAL API
+ */
 @InternalApi
 private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile](
     val projectionId: ProjectionId,

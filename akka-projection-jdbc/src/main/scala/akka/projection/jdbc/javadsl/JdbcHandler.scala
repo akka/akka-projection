@@ -4,9 +4,11 @@
 
 package akka.projection.jdbc.javadsl
 
+import akka.annotation.ApiMayChange
 import akka.projection.jdbc.JdbcHandlerLifecycle
 import akka.projection.jdbc.JdbcSession
 
+@ApiMayChange
 object JdbcHandler {
 
   /** Handler that can be defined from a simple function */
@@ -31,6 +33,7 @@ object JdbcHandler {
  * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
+@ApiMayChange
 abstract class JdbcHandler[Envelope, S <: JdbcSession] extends JdbcHandlerLifecycle {
 
   /**
