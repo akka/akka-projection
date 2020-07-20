@@ -9,14 +9,14 @@ artifact=akka-projection-testkit_$scala.binary.version$
 version=$project.version$
 }
 
-Import the @apidoc[ProjectionTestKit] and other utilities into a new [ScalaTest](https://www.scalatest.org/) test spec.
+Import the @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit] and other utilities into a new [ScalaTest](https://www.scalatest.org/) test spec.
 
 Scala
 :  @@snip [ShoppingCartAppSpec.scala](/examples/src/test/scala/docs/guide/ShoppingCartAppSpec.scala) { #testKitImports }
 
 The TestKit includes several utilities to run the Projection handler in isolation so that a full projection implementation and source provider are not required.
 
-* @apidoc[ProjectionTestKit] takes an Akka @apidoc[akka.actor.testkit.typed.(javadsl|scaladsl).ActorTestKit] and runs a projection with the test @apidoc[akka.actor.typed.ActorSystem].
+* @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit] takes an Akka @apidoc[akka.actor.testkit.typed.(javadsl|scaladsl).ActorTestKit] and runs a projection with the test @apidoc[akka.actor.typed.ActorSystem].
 * @apidoc[TestSourceProvider] allows the user to mock out test data `Envelopes` that will be processed by the Projection Handler.
 * @apidoc[TestProjection] is a test Projection implementation that uses an in-memory internal offset store.
 
