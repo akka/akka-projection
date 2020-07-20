@@ -50,7 +50,9 @@ abstract class StatusObserver[-Envelope] {
   def offsetProgress(projectionId: ProjectionId, env: Envelope): Unit
 
   /**
-   * Called when processing of an envelope failed.
+   * Called when processing of an envelope failed. The invocation of this method is not guaranteed
+   * when the handler failure causes a stream failure (e.g. using a Flow-based handler or a recovery
+   * strategy that immediately fails).
    *
    * From the `recoveryStrategy` and keeping track how many times `error` is called it's possible to derive
    * what next step will be; fail, skip, retry.
