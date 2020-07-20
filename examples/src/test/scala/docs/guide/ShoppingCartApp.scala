@@ -71,13 +71,13 @@ object ShoppingCartApp extends App {
 
       //#guideSetup
       //#guideSourceProviderSetup
-      val europeanShoppingCartsTag = "carts-eu"
+      val shoppingCartsTag = "shopping-cart-001"
       val sourceProvider: SourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]] =
         EventSourcedProvider
           .eventsByTag[ShoppingCartEvents.Event](
             system,
             readJournalPluginId = CassandraReadJournal.Identifier,
-            tag = europeanShoppingCartsTag)
+            tag = shoppingCartsTag)
       //#guideSourceProviderSetup
 
       //#guideProjectionSetup
@@ -86,9 +86,9 @@ object ShoppingCartApp extends App {
       val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
       val repo = new DailyCheckoutProjectionRepositoryImpl(session)
       val projection = CassandraProjection.atLeastOnce(
-        projectionId = ProjectionId("shopping-carts", europeanShoppingCartsTag),
+        projectionId = ProjectionId("shopping-carts", shoppingCartsTag),
         sourceProvider,
-        handler = () => new DailyCheckoutProjectionHandler(europeanShoppingCartsTag, system, repo))
+        handler = () => new DailyCheckoutProjectionHandler(shoppingCartsTag, system, repo))
 
       context.spawn(ProjectionBehavior(projection), projection.projectionId.id)
       //#guideProjectionSetup

@@ -27,7 +27,7 @@ object EventGeneratorApp extends App {
   sealed trait Command
   final case object Start extends Command
 
-  val europeanShoppingCartsTag = "carts-eu"
+  val shoppingCartsTag = "shopping-cart-001"
   val config = ConfigFactory.parseResources("guide-shopping-cart-app.conf")
 
   ActorSystem(Behaviors.setup[Command] {
@@ -83,6 +83,6 @@ object EventGeneratorApp extends App {
           ctx.log.info("persisting event {}", event)
           Effect.persist(event)
         },
-        (_, _) => Nil).withTagger(_ => Set(europeanShoppingCartsTag))
+        (_, _) => Nil).withTagger(_ => Set(shoppingCartsTag))
     }
 }
