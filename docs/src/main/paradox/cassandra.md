@@ -35,7 +35,7 @@ The table below shows `akka-projection-cassandra`'s direct dependencies and the 
 
 The offset is stored after the envelope has been processed and giving at-least-once processing semantics.
 This means that if the projection is restarted from a previously stored offset some elements may be processed more
-than once.
+than once. Therefore, the [Handler](#handler) code must be idempotent.
 
 Scala
 :  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #atLeastOnce }
