@@ -1,6 +1,6 @@
 # Offset in a relational DB with JDBC
 
-The @apidoc[JdbcProjection] has support for storing the offset in a relational database using JDBC.
+The @apidoc[JdbcProjection$] has support for storing the offset in a relational database using JDBC.
 
 The source of the envelopes can be @ref:[events from Akka Persistence](eventsourced.md) or any other `SourceProvider`
 with supported @ref:[offset types](#offset-types).
@@ -233,8 +233,8 @@ H2
 
 The supported offset types of the `JdbcProjection` are:
 
-* `akka.persistence.query.Offset` types from @ref:[events from Akka Persistence](eventsourced.md)
-* `MergeableOffset` that is used for @ref:[messages from Kafka](kafka.md)
+* @apidoc[akka.persistence.query.Offset] types from @ref:[events from Akka Persistence](eventsourced.md)
+* @apidoc[MergeableOffset] that is used for @ref:[messages from Kafka](kafka.md#mergeable-offset)
 * `String`
 * `Int`
 * `Long`

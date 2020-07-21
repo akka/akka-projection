@@ -1,6 +1,6 @@
 # Offset in Cassandra
 
-The @apidoc[CassandraProjection] has support for storing the offset in Cassandra.
+The @apidoc[CassandraProjection$] has support for storing the offset in Cassandra.
 
 The source of the envelopes can be @ref:[events from Akka Persistence](eventsourced.md) or any other `SourceProvider`
 with supported @ref:[offset types](#offset-types).
