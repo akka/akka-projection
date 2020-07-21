@@ -22,7 +22,7 @@ private[projection] case class CassandraSettings(config: Config) {
 /**
  * INTERNAL API
  */
-@akka.annotation.InternalApi
+@InternalApi
 private[projection] object CassandraSettings {
 
   def apply(system: ActorSystem[_]): CassandraSettings =

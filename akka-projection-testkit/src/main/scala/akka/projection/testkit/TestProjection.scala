@@ -10,6 +10,7 @@ import scala.concurrent.duration.FiniteDuration
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.annotation.ApiMayChange
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
@@ -25,6 +26,7 @@ import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 
 // FIXME: this should be refactored as part of #198
+@ApiMayChange
 object TestProjection {
   def apply[Offset, Envelope](
       system: ActorSystem[_],
@@ -35,6 +37,7 @@ object TestProjection {
     new TestProjection(projectionId, sourceProvider, startOffset, handler)(system)
 }
 
+@ApiMayChange
 class TestProjection[Offset, Envelope](
     val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
@@ -106,6 +109,7 @@ class TestProjection[Offset, Envelope](
 }
 
 // FIXME: this should be replaced as part of #198
+@ApiMayChange
 object TestSourceProvider {
   def apply[Offset, Envelope](
       sourceEvents: List[Envelope],
@@ -115,6 +119,7 @@ object TestSourceProvider {
   }
 }
 
+@ApiMayChange
 class TestSourceProvider[Offset, Envelope] private[projection] (
     sourceEvents: List[Envelope],
     _extractOffset: Envelope => Offset,

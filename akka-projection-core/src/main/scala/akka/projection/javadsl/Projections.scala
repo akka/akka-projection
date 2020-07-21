@@ -30,6 +30,7 @@ trait ExactlyOnceProjection[Offset, Envelope] extends Projection[Envelope] {
 
   def withRecoveryStrategy(recoveryStrategy: HandlerRecoveryStrategy): ExactlyOnceProjection[Offset, Envelope]
 }
+
 @DoNotInherit
 trait AtLeastOnceFlowProjection[Offset, Envelope] extends Projection[Envelope] {
   self: InternalProjection =>

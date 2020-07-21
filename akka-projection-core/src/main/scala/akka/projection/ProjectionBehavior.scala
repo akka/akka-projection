@@ -14,9 +14,11 @@ import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.StashBuffer
+import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.projection.scaladsl.ProjectionManagement
 
+@ApiMayChange
 object ProjectionBehavior {
 
   sealed trait Command

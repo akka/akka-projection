@@ -4,10 +4,12 @@
 
 package akka.projection.eventsourced
 
+import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.persistence.query.Offset
 import akka.util.HashCode
 
+@ApiMayChange
 object EventEnvelope {
 
   /**
@@ -35,6 +37,7 @@ object EventEnvelope {
     Some((arg.offset, arg.persistenceId, arg.sequenceNr, arg.event, arg.timestamp))
 }
 
+@ApiMayChange
 final class EventEnvelope[Event](
     val offset: Offset,
     val persistenceId: String,
