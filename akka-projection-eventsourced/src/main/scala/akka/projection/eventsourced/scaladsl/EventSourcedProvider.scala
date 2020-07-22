@@ -10,7 +10,6 @@ import scala.concurrent.Future
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
-import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
@@ -33,10 +32,6 @@ object EventSourcedProvider {
     new EventsByTagSourceProvider(eventsByTagQuery, tag, system)
   }
 
-  /**
-   * INTERNAL API
-   */
-  @InternalApi
   private class EventsByTagSourceProvider[Event](
       eventsByTagQuery: EventsByTagQuery,
       tag: String,

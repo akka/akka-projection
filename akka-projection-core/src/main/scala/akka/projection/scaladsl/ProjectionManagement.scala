@@ -17,7 +17,6 @@ import akka.actor.typed.ExtensionId
 import akka.actor.typed.pubsub.Topic
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.annotation.ApiMayChange
-import akka.annotation.InternalApi
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.util.Timeout
@@ -52,11 +51,9 @@ import akka.util.Timeout
   }
 
   /**
-   * INTERNAL API: ProjectionBehavior registers when started.
+   * ProjectionBehavior registers when started
    */
-  @InternalApi private[projection] def register(
-      projectionId: ProjectionId,
-      projection: ActorRef[OffsetManagementCommand]): Unit = {
+  private[projection] def register(projectionId: ProjectionId, projection: ActorRef[OffsetManagementCommand]): Unit = {
     topic(projectionId.name) ! Topic.Subscribe(projection)
   }
 
