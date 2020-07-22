@@ -50,6 +50,9 @@ import akka.util.Timeout
     })
   }
 
+  /**
+   * ProjectionBehavior registers when started
+   */
   private[projection] def register(projectionId: ProjectionId, projection: ActorRef[OffsetManagementCommand]): Unit = {
     topic(projectionId.name) ! Topic.Subscribe(projection)
   }
