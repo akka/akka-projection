@@ -15,9 +15,9 @@ import akka.annotation.InternalApi
 object Handler {
 
   /**
-   * Handler that can be defined from a simple function
-   *
    * INTERNAL API
+   *
+   * Handler that can be defined from a simple function
    */
   @InternalApi
   private class HandlerFunction[Envelope](handler: Envelope => CompletionStage[Done]) extends Handler[Envelope] {
