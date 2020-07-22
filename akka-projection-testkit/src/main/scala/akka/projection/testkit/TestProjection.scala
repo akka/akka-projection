@@ -11,6 +11,7 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
@@ -61,11 +62,19 @@ class TestProjection[Offset, Envelope](
       groupAfterEnvelopes: Int,
       groupAfterDuration: FiniteDuration): TestProjection[Offset, Envelope] = this
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
   override def run()(implicit system: ActorSystem[_]): RunningProjection =
     new InternalProjectionState(sourceProvider, handler).newRunningInstance()
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
     new InternalProjectionState(sourceProvider, handler).mappedSource()
 
@@ -74,6 +83,7 @@ class TestProjection[Offset, Envelope](
    * This internal class will hold the KillSwitch that is needed
    * when building the mappedSource and when running the projection (to stop)
    */
+  @InternalApi
   private class InternalProjectionState(sourceProvider: SourceProvider[Offset, Envelope], handler: Handler[Envelope])(
       implicit val system: ActorSystem[_]) {
 
@@ -96,6 +106,10 @@ class TestProjection[Offset, Envelope](
       new TestRunningProjection(mappedSource(), killSwitch)
   }
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch)
       extends RunningProjection {
 

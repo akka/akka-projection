@@ -5,13 +5,19 @@
 package akka.projection.jdbc.javadsl
 
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.projection.jdbc.JdbcHandlerLifecycle
 import akka.projection.jdbc.JdbcSession
 
 @ApiMayChange
 object JdbcHandler {
 
-  /** Handler that can be defined from a simple function */
+  /**
+   * Handler that can be defined from a simple function
+   *
+   * INTERNAL API
+   */
+  @InternalApi
   private class HandlerFunction[Envelope, S <: JdbcSession](handler: (S, Envelope) => Unit)
       extends JdbcHandler[Envelope, S] {
     override def process(session: S, envelope: Envelope): Unit = handler(session, envelope)

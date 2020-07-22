@@ -33,10 +33,6 @@ object EventSourcedProvider {
     new EventsByTagSourceProvider(eventsByTagQuery, tag, system)
   }
 
-  /**
-   * INTERNAL API
-   */
-  @InternalApi
   private class EventsByTagSourceProvider[Event](
       eventsByTagQuery: EventsByTagQuery,
       tag: String,
