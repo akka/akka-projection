@@ -17,7 +17,6 @@ import akka.actor.typed.ExtensionId
 import akka.actor.typed.pubsub.Topic
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.annotation.ApiMayChange
-import akka.annotation.InternalApi
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.util.Timeout
