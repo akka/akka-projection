@@ -1,6 +1,6 @@
 # Offset in a relational DB with Slick
 
-The @apidoc[SlickProjection] has support for storing the offset in a relational database using
+The @apidoc[SlickProjection$] has support for storing the offset in a relational database using
 [Slick](http://scala-slick.org) (JDBC). This is only an option for Scala and for Java the
 @ref:[offset can be stored in relational DB with JDBC](jdbc.md).
 
@@ -178,8 +178,8 @@ H2
 
 The supported offset types of the `SlickProjection` are:
 
-* `akka.persistence.query.Offset` types from @ref:[events from Akka Persistence](eventsourced.md)
-* `MergeableOffset` that is used for @ref:[messages from Kafka](kafka.md)
+* @apidoc[akka.persistence.query.Offset] types from @ref:[events from Akka Persistence](eventsourced.md)
+* @apidoc[MergeableOffset] that is used for @ref:[messages from Kafka](kafka.md#mergeable-offset)
 * `String`
 * `Int`
 * `Long`

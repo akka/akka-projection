@@ -8,7 +8,7 @@ addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "0.9.3")
 addSbtPlugin("org.foundweekends" % "sbt-bintray" % "0.5.6")
 
 // Documentation
-addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.32")
+addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.34")
 addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.1")
 addSbtPlugin("com.lightbend.sbt" % "sbt-publish-rsync" % "0.2")
 addSbtPlugin("com.eed3si9n" % "sbt-unidoc" % "0.4.3")

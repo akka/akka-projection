@@ -3,7 +3,7 @@
 A typical source for Projections is messages from Kafka. Akka Projections has integration with 
 [Alpakka Kafka](https://doc.akka.io/docs/alpakka-kafka/current/), which is described in here.
 
-The @apidoc[KafkaSourceProvider] uses consumer group assignments from Kafka and can resume from offsets stored in
+The @apidoc[KafkaSourceProvider$] uses consumer group assignments from Kafka and can resume from offsets stored in
 a database.
 
 Akka Projections can store the offsets from Kafka in a @ref:[relational DB with JDBC](jdbc.md)
@@ -44,7 +44,7 @@ The table below shows `akka-projection-kafka`'s direct dependencies and the seco
 ## KafkaSourceProvider
 
 A @apidoc[SourceProvider] defines the source of the envelopes that the `Projection` will process. A `SourceProvider`
-for messages from Kafka can be defined with the @apidoc[KafkaSourceProvider] like this:
+for messages from Kafka can be defined with the @apidoc[KafkaSourceProvider$] like this:
 
 Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #imports #sourceProvider }
@@ -73,7 +73,7 @@ Java
 
 ## Committing offset in Kafka
 
-The `KafkaSourceProvider` described above stores the Kafka offsets in database. It is more common to
+The `KafkaSourceProvider` described above stores the Kafka offsets in a database. It is more common to
 commit the offsets back to Kafka. The main advantage of storing the offsets in a database is that exactly-once
 processing semantics can be achieved if the target database operations of the projection can be run in the same
 transaction as the storage of the offset.
@@ -120,5 +120,16 @@ Scala
 Java
 :  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #wordSource }
 
+## Mergeable Offset
 
+The offset type for a projection is determined by the @apidoc[SourceProvider] that's used.
+Akka Projections supports a variety of offset types.
+In most cases an event is associated with a single offset row in the projection implementation's offset store, but the @apidoc[KafkaSourceProvider$] uses a special type of offset called a @apidoc[MergeableOffset].
+
+@apidoc[MergeableOffset] allows us to read and write a map of offsets to the projection offset store.
+This is required because a subscription to consume from Kafka normally spans more than 1 Kafka Partition (see the [Apache Kafka documentation](https://kafka.apache.org/documentation/#intro_topics) for more information on Kafka's partitioning model).
+To begin consuming from Kafka using offsets stored in a projection's offset store we must provide the Kafka Consumer with a map of topic partitions to offset map (a @scala[`java.util.Map[org.apache.kafka.common, java.lang.Long]`]@java[`java.util.Map<org.apache.kafka.common, java.lang.Long>`]).
+The Kafka offset map is modelled as multiple rows in the projection offset table, where each row includes the projection name, a surrogate projection key that represents the Kafka topic partition, and the offset as a `java.lang.Long`.
+When a projection with @apidoc[KafkaSourceProvider$] is started, or when a Kafka consumer group rebalance occurs, we read all the rows from the offset table for a projection name.
+When an offset is committed we persist one or more rows of the Kafka offset map back to the projection offset table.
 
