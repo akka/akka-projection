@@ -128,7 +128,7 @@ In most cases an event is associated with a single offset row in the projection 
 
 @apidoc[MergeableOffset] allows us to read and write a map of offsets to the projection offset store.
 This is required because a subscription to consume from Kafka normally spans more than 1 Kafka Partition (see the [Apache Kafka documentation](https://kafka.apache.org/documentation/#intro_topics) for more information on Kafka's partitioning model).
-To begin consuming from Kafka using offsets stored in a projection's offset store we must provide the Kafka Consumer with a map of topic partitions to offset map (a @scala[`java.util.Map[org.apache.kafka.common, java.lang.Long]`]@java[`java.util.Map<org.apache.kafka.common, java.lang.Long>`]).
+To begin consuming from Kafka using offsets stored in a projection's offset store we must provide the Kafka Consumer with a map of topic partitions to offset map (a @scala[`java.util.Map[org.apache.kafka.common.TopicPartition, java.lang.Long]`]@java[`java.util.Map<org.apache.kafka.common.TopicPartition, java.lang.Long>`]).
 The Kafka offset map is modelled as multiple rows in the projection offset table, where each row includes the projection name, a surrogate projection key that represents the Kafka topic partition, and the offset as a `java.lang.Long`.
 When a projection with @apidoc[KafkaSourceProvider$] is started, or when a Kafka consumer group rebalance occurs, we read all the rows from the offset table for a projection name.
 When an offset is committed we persist one or more rows of the Kafka offset map back to the projection offset table.
