@@ -123,8 +123,6 @@ object JdbcProjectionDocExample {
 
   object IllustrateExactlyOnce {
     //#exactlyOnce
-    implicit val ec = system.executionContext
-
     val projection =
       JdbcProjection
         .exactlyOnce(
@@ -137,8 +135,6 @@ object JdbcProjectionDocExample {
 
   object IllustrateAtLeastOnce {
     //#atLeastOnce
-    implicit val ec = system.executionContext
-
     val projection =
       JdbcProjection
         .atLeastOnce(
@@ -152,8 +148,6 @@ object JdbcProjectionDocExample {
 
   object IllustrateGrouped {
     //#grouped
-    implicit val ec = system.executionContext
-
     val projection =
       JdbcProjection
         .groupedWithin(
