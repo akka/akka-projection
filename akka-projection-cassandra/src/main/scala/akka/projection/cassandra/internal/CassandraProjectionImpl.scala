@@ -176,7 +176,6 @@ import akka.stream.scaladsl.Source
         statusObserver,
         settings) {
 
-    // FIXME maybe use the session-dispatcher config
     override implicit def executionContext: ExecutionContext = system.executionContext
     override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
 
