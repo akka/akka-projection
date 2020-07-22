@@ -130,3 +130,11 @@ To begin consuming from Kafka using offsets stored in a projection's offset stor
 The Kafka offset map is modelled as multiple rows in the projection offset table, where each row includes the projection name, a surrogate projection key that represents the Kafka topic partition, and the offset as a `java.lang.Long`.
 When a projection with @apidoc[KafkaSourceProvider$] is started, or when a Kafka consumer group rebalance occurs, we read all the rows from the offset table for a projection name.
 When an offset is committed we persist one or more rows of the Kafka offset map back to the projection offset table.
+
+## Configuration
+
+Make your edits/overrides in your application.conf.
+
+The reference configuration file with the default values:
+
+@@snip [reference.conf](/akka-projection-kafka/src/main/resources/reference.conf) { #config }
