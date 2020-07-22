@@ -5,6 +5,7 @@
 package docs.kafka
 
 import java.lang.{ Long => JLong }
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -15,8 +16,6 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.LoggerOps
-import akka.kafka.ProducerSettings
-import akka.kafka.scaladsl.SendProducer
 import akka.projection.MergeableOffset
 import akka.projection.Projection
 import akka.projection.ProjectionBehavior
@@ -31,16 +30,32 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import jdocs.jdbc.HibernateJdbcSession
 import jdocs.jdbc.HibernateSessionFactory
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.serialization.StringSerializer
 import org.slf4j.LoggerFactory
+
+// #imports-producer
+import org.apache.kafka.common.serialization.StringSerializer
+import akka.kafka.ProducerSettings
+// #imports-producer
+
 //#imports
 import akka.kafka.ConsumerSettings
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
-
 //#imports
+
+// #sendProducer
+import akka.kafka.scaladsl.SendProducer
+// #sendProducer
+
+// #producerFlow
+import org.apache.kafka.clients.producer.ProducerRecord
+import akka.kafka.ProducerMessage
+import akka.kafka.scaladsl.Producer
+import akka.stream.scaladsl.FlowWithContext
+import akka.projection.ProjectionContext
+
+// #producerFlow
 
 object KafkaDocExample {
 
@@ -195,6 +210,37 @@ object KafkaDocExample {
           handler = () => new WordPublisher(topicName, sendProducer))
 
     //#sendToKafkaProjection
+
+  }
+
+  object IllustrateSendingToKafkaUsingFlow {
+
+    implicit val ec = system.executionContext
+
+    //#producerFlow
+    val bootstrapServers = "localhost:9092"
+    val topicName = "words"
+
+    private val producerSettings =
+      ProducerSettings(system, new StringSerializer, new StringSerializer)
+        .withBootstrapServers(bootstrapServers)
+
+    val producerFlow =
+      FlowWithContext[WordEnvelope, ProjectionContext]
+        .map(wordEnv => ProducerMessage.single(new ProducerRecord(topicName, wordEnv.word, wordEnv.word)))
+        .via(Producer.flowWithContext(producerSettings))
+        .map(_ => Done)
+    //#producerFlow
+
+    //#sendToKafkaProjectionFlow
+    val sourceProvider = new WordSource
+    val sessionProvider = new HibernateSessionFactory
+
+    val projectionId = ProjectionId("PublishWords", "words")
+    val projection =
+      JdbcProjection
+        .atLeastOnceFlow(projectionId, sourceProvider, () => sessionProvider.newInstance(), producerFlow)
+    //#sendToKafkaProjectionFlow
 
   }
 

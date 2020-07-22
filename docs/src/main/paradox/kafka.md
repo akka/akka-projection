@@ -81,9 +81,11 @@ When using the approach of committing the offsets back to Kafka the [Alpakka Kaf
 
 ## Sending to Kafka
 
-The @apidoc[SendProducer] in Alpakka Kafka can be used for sending messages to Kafka from a Projection.
+To send events to Kafka one can use @apidoc[SendProducer] or @apidoc[Producer.flowWithContext](Producer$) method in Alpakka Kafka.
 
-A `JdbcHandler` that is sending to Kafka may look like this:
+### Sending to Kafka using the SendProducer
+
+An async `Handler` that is sending to Kafka may look like this:
 
 Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #wordPublisher }
@@ -94,10 +96,10 @@ Java
 The `SendProducer` is constructed with:
 
 Scala
-:  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #sendProducer }
+:  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #imports-producer #sendProducer }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #sendProducer }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #imports-producer #sendProducer }
 
 Please consult the [Alpakka Kafka documentation](https://doc.akka.io/docs/alpakka-kafka/current/producer.html) for
 specifics around the `ProducerSettings` and `SendProducer`.
@@ -117,6 +119,26 @@ Scala
 
 Java
 :  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #wordSource }
+
+### Sending to Kafka using a Producer Flow
+
+Alternatively, we can be define the same projection using @apidoc[Producer.flowWithContext](Producer$) in combination with `atLeastOnceFlow`.
+
+The `WordSource` emits `WordEnvelope`s, therefore we will build a flow that takes every single emitted `WordEnvelope` and map it using Alpakka Kafka's @apidoc[ProducerMessage.single](ProducerMessage$), we pass it through @apidoc[Producer.flowWithContext](Producer$) that will publish it to the Kafka Topic and finally we map the result to `Done`.
+
+Scala
+:  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #imports-producer #producerFlow }
+
+Java
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #imports-producer #producerFlow }
+
+The resulting flow is then used in the `atLeastOnceFlow` factory method to build the Projection.
+
+Scala
+:  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #sendToKafkaProjectionFlow }
+
+Java
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #sendToKafkaProjectionFlow }
 
 ## Mergeable Offset
 
