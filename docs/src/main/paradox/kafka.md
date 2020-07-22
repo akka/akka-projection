@@ -1,13 +1,13 @@
 # Messages from and to Kafka
 
-A typical source for Projections is messages from Kafka. Akka Projections has integration with [Alpakka Kafka](https://doc.akka.io/docs/alpakka-kafka/current/), which is described in here.
+A typical source for Projections is messages from Kafka. Akka Projections supports integration with Kafka using [Alpakka Kafka](https://doc.akka.io/docs/alpakka-kafka/current/).
 
 The @apidoc[KafkaSourceProvider$] uses consumer group assignments from Kafka and can resume from offsets stored in a database.
 
 Akka Projections can store the offsets from Kafka in a @ref:[relational DB with JDBC](jdbc.md)
 or in @ref:[relational DB with Slick](slick.md).
 
-The `JdbcProjection` @scala[or `SlickProjection`] envelope handler will be run by the projection. This means that the target database operations can be run in the same transaction as the storage of the offset, which means when used @ref:[exactly-once](jdbc.md#exactly-once) the offsets will be persisted on the same transaction as the projected model (see @ref:[Committing offset outside Kafka](#committing-offset-outside-kafka)). It also offers @ref:[at-least-once](jdbc.md#at-least-once) semantics.
+The `JdbcProjection` @scala[or `SlickProjection`] envelope handler will be run by the projection. This means that the target database operations can be run in the same transaction as the storage of the offset, which means when used with @ref:[exactly-once](jdbc.md#exactly-once) the offsets will be persisted on the same transaction as the projected model (see @ref:[Committing offset outside Kafka](#committing-offset-outside-kafka)). It also offers @ref:[at-least-once](jdbc.md#at-least-once) semantics.
 
 @@@ note
 
