@@ -16,7 +16,7 @@ Creating getting-started_cassandra_1 ... done
 To get a `cqlsh` prompt run another Cassandra container in interactive mode using the same network (`cassandra-projections_default`) as the container currently running.
 
 ```shell
-$ docker run -it --network getting-started_default --rm cassandra cqlsh cassandra 
+$ docker run -it --network getting-started_default --rm cassandra cqlsh cassandra
 Connected to Test Cluster at cassandra:9042.
 [cqlsh 5.0.1 | Cassandra 3.11.6 | CQL spec 3.4.4 | Native protocol v4]
 Use HELP for help.
@@ -29,7 +29,7 @@ To use a different Cassandra database update the [Cassandra driver's contact-poi
 
 @@@
 
-To run the Projection we must setup our Cassandra database to support the Cassandra Projection offset store as well as the new tables we are projecting into with the `DailyCheckoutProjectionHandler`.
+To run the Projection we must setup our Cassandra database to support the Cassandra Projection offset store as well as the new tables we are projecting into with the `CheckoutProjectionHandler`.
 
 Create a Cassandra keyspace.
 
@@ -82,34 +82,37 @@ sbt "examples/test:runMain docs.guide.ShoppingCartApp"
 After a few seconds you should see the `CheckoutProjectionHandler` logging that displays the current checkouts for the day:
 
 ```shell
-[2020-07-16 15:26:23,420] [INFO] [docs.guide.CheckoutProjectionHandler] [] [ShoppingCartApp-akka.actor.default-dispatcher-5] - CheckoutProjectionHandler(shopping-cart-001) current checkouts for the day [2020-07-16] is:                                                                                                 
-Date        Cart ID  Item ID             Quantity                                                                                                             
-2020-07-16  018db    akka t-shirt        0                                                                                                                    
-2020-07-16  018db    cat t-shirt         2                                                                                                                    
-2020-07-16  01ef3    akka t-shirt        1                                                                                                                    
-2020-07-16  05747    bowling shoes       1                                                                                                                    
-2020-07-16  064a0    cat t-shirt         1                                                                                                                    
-2020-07-16  064a0    skis                0             
-...
+[2020-07-23 12:15:36,723] [INFO] [docs.guide.CheckoutProjectionHandler] [] [ShoppingCartApp-akka.actor.default-dispatcher-4] - CheckoutProjectionHandler(shopping-cart) last [10] checkouts: 
+Cart ID     Event Time
+2e389       2020-07-23T16:15:19.817630Z
+b9e20       2020-07-23T16:15:19.817630Z
+4b445       2020-07-23T16:15:19.817630Z
+98934       2020-07-23T16:15:19.817630Z
+8a177       2020-07-23T16:15:19.817630Z
+13abe       2020-07-23T16:15:19.817630Z
+e5880       2020-07-23T16:15:19.817630Z
+5a1c6       2020-07-23T16:15:19.817630Z
+14930       2020-07-23T16:15:19.817630Z
+db5d4       2020-07-23T17:15:19.817630Z
 ```
 
-Use the CQL shell to observe the same information in the `daily_checkouts` table.
+Use the CQL shell to observe the same information in the `cart_checkout_state` table.
 
 ```
-cqlsh:akka_projection> select cart_id, item_id, quantity from akka_projection.daily_checkouts where date = '2020-07-16' limit 10;
+cqlsh> select cart_id, last_updated, checkout_time from akka_projection.cart_checkout_state limit 10;
 
-cart_id | item_id       | quantity
----------+---------------+----------
-018db |  akka t-shirt |        0
-018db |   cat t-shirt |        2
-01ef3 |  akka t-shirt |        1
-03e7e | bowling shoes |        1
-03e7e |   cat t-shirt |        1
-05747 | bowling shoes |        1
-064a0 |   cat t-shirt |        1
-064a0 |          skis |        0
-06602 |          skis |        0
-084e1 |  akka t-shirt |        2
+ cart_id | last_updated                    | checkout_time
+---------+---------------------------------+---------------------------------
+   64256 | 2020-07-23 16:16:30.023000+0000 | 2020-07-23 22:15:19.817000+0000
+   540ed | 2020-07-23 16:10:35.317000+0000 | 2020-07-31 14:37:16.790000+0000
+   6f5af | 2020-07-23 15:57:53.977000+0000 | 2020-07-27 20:37:16.790000+0000
+   058f0 | 2020-07-23 15:52:41.684000+0000 |                            null
+   fd52b | 2020-07-23 16:10:35.234000+0000 | 2020-07-31 05:37:16.790000+0000
+   05ab1 | 2020-07-23 15:57:53.848000+0000 | 2020-07-27 14:37:16.790000+0000
+   b2e40 | 2020-07-23 15:52:41.639000+0000 |                            null
+   4ab5d | 2020-07-23 15:52:41.285000+0000 |                            null
+   cbf17 | 2020-07-23 15:52:41.626000+0000 |                            null
+   f6007 | 2020-07-23 16:10:35.036000+0000 | 2020-07-30 06:37:16.790000+0000
 
 (10 rows)
 ```

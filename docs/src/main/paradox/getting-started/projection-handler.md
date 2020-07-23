@@ -35,11 +35,10 @@ Scala
 Now it's time to write the Projection handler itself.
 This example uses a @apidoc[Handler] that will process `ShoppingCartEvents.Event` events from the @apidoc[SourceProvider] that we implemented earlier.
 The event envelopes are processed in the `process` method. 
-Each type of event results in a different action to take against the Projection tables.
 
-This example will also log the last 10 checked out carts and their contents every 10 checkout events that are processed.
-The count of checkout events that are processed is represented with a mutable variable within the handler.
-Because it's not critical that the logging counter be accurate from the start of the projection we can keep it in a simple local volatile variable.
+This example will also log the last 10 checked out carts every 10 checkout events that are processed.
+The last 10 shopping carts are stored within a mutable variable within the handler.
+Since this is a simple log operation managing the state in this manner is fine, but to handle more advanced stateful operations you should evaluate using the @apidoc[StatefulHandler].
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionHandler }
