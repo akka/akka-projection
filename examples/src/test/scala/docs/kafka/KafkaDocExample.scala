@@ -28,6 +28,7 @@ import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import javax.persistence.EntityManager
 import jdocs.jdbc.HibernateJdbcSession
 import jdocs.jdbc.HibernateSessionFactory
 import org.slf4j.LoggerFactory
@@ -59,9 +60,10 @@ import akka.projection.ProjectionContext
 
 object KafkaDocExample {
 
-  //#handler
+  //#wordSource
   type Word = String
   type Count = Int
+  //#wordSource
 
   class WordCountHandler(projectionId: ProjectionId)
       extends JdbcHandler[ConsumerRecord[String, String], HibernateJdbcSession] {
@@ -81,7 +83,6 @@ object KafkaDocExample {
       state = state.updated(word, newCount)
     }
   }
-  //#handler
 
   //#wordSource
   final case class WordEnvelope(offset: Long, word: Word)
@@ -169,6 +170,7 @@ object KafkaDocExample {
   object IllustrateExactlyOnce {
     import IllustrateSourceProvider._
 
+    val wordRepository: WordRepository = ???
     //#exactlyOnce
     val sessionProvider = new HibernateSessionFactory
 
@@ -178,8 +180,28 @@ object KafkaDocExample {
         projectionId,
         sourceProvider,
         () => sessionProvider.newInstance(),
-        handler = () => new WordCountHandler(projectionId))
+        handler = () => new WordCountJdbcHandler(wordRepository))
     //#exactlyOnce
+
+    // #exactly-once-jdbc-handler
+    class WordCountJdbcHandler(val wordRepository: WordRepository)
+        extends JdbcHandler[ConsumerRecord[String, String], HibernateJdbcSession] {
+
+      @throws[Exception]
+      override def process(session: HibernateJdbcSession, envelope: ConsumerRecord[String, String]): Unit = {
+        val word = envelope.value
+        wordRepository.increment(session.entityManager, word)
+      }
+    }
+
+    // #exactly-once-jdbc-handler
+
+    // #repository
+    trait WordRepository {
+      def increment(entityManager: EntityManager, word: String): Unit
+    }
+    // #repository
+
   }
 
   object IllustrateSendingToKafka {

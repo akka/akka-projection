@@ -59,13 +59,21 @@ Scala
 Java
 :  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #exactlyOnce }
 
-and the `WordCountHandler`:
+and the `WordCountJdbcHandler`:
 
 Scala
-:  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #handler }
+:  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #exactly-once-jdbc-handler }
 
 Java
-:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #handler }
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #exactly-once-jdbc-handler }
+
+Where the `WordRepository` is an implementation of:
+
+Scala
+:  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #repository }
+
+Java
+:  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #repository }
 
 ## Committing offset outside Kafka
 
