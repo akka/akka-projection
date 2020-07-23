@@ -124,7 +124,7 @@ Java
 
 Alternatively, we can define the same projection using @apidoc[Producer.flowWithContext](Producer$) in combination with `atLeastOnceFlow`.
 
-The `WordSource` emits `WordEnvelope`s, therefore we will build a flow that takes every single emitted `WordEnvelope` and map it into an Alpakka Kafka @apidoc[ProducerMessage]. The `ProducerMessage` factory methods can be used to produce a single message, multiple messages, or pass through a message (skip a message from being produced). The @apidoc[ProducerMessage] will pass through @apidoc[Producer.flowWithContext](Producer$) that will publish it to the Kafka Topic and finally we map the result to `Done`.
+The `WordSource` emits `WordEnvelope`s, therefore we will build a flow that takes every single emitted `WordEnvelope` and map it into an Alpakka Kafka @apidoc[ProducerMessage$]. The `ProducerMessage` factory methods can be used to produce a single message, multiple messages, or pass through a message (skip a message from being produced). The @apidoc[ProducerMessage$] will pass through @apidoc[Producer.flowWithContext](Producer$) that will publish it to the Kafka Topic and finally we map the result to `Done`.
 
 Scala
 :  @@snip [KafkaDocExample.scala](/examples/src/test/scala/docs/kafka/KafkaDocExample.scala) { #imports-producer #producerFlow }
