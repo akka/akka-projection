@@ -17,8 +17,6 @@ import akka.Done;
 import akka.NotUsed;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
-import akka.kafka.ProducerSettings;
-import akka.kafka.javadsl.SendProducer;
 import akka.projection.MergeableOffset;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
@@ -30,9 +28,8 @@ import akka.projection.jdbc.javadsl.JdbcProjection;
 import akka.projection.kafka.javadsl.KafkaSourceProvider;
 import akka.stream.javadsl.Source;
 import jdocs.jdbc.HibernateSessionFactory;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.serialization.StringSerializer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +40,25 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
 // #imports
+
+// #imports-producer
+import org.apache.kafka.common.serialization.StringSerializer;
+import akka.kafka.ProducerSettings;
+// #imports-producer
+
+// #sendProducer
+import akka.kafka.javadsl.SendProducer;
+
+// #sendProducer
+
+// #producerFlow
+import org.apache.kafka.clients.producer.ProducerRecord;
+import akka.kafka.ProducerMessage;
+import akka.kafka.javadsl.Producer;
+import akka.stream.javadsl.FlowWithContext;
+import akka.projection.ProjectionContext;
+
+// #producerFlow
 
 import jdocs.jdbc.HibernateJdbcSession;
 
@@ -229,5 +245,40 @@ public interface KafkaDocExample {
             () -> new WordPublisher(topicName, sendProducer),
             system);
     // #sendToKafkaProjection
+  }
+
+  static void IllustrateSendingToKafkaFlow() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+
+    // #producerFlow
+    String bootstrapServers = "localhost:9092";
+    String topicName = "words";
+
+    ProducerSettings<String, String> producerSettings =
+        ProducerSettings.create(system, new StringSerializer(), new StringSerializer())
+            .withBootstrapServers(bootstrapServers);
+
+    FlowWithContext<WordEnvelope, ProjectionContext, Done, ProjectionContext, NotUsed>
+        producerFlow =
+            FlowWithContext.<WordEnvelope, ProjectionContext>create()
+                .map(
+                    wordEnv ->
+                        ProducerMessage.single(
+                            new ProducerRecord<String, String>(
+                                topicName, wordEnv.word, wordEnv.word)))
+                .via(Producer.flowWithContext(producerSettings))
+                .map(__ -> Done.getInstance());
+
+    // #producerFlow
+
+    // #sendToKafkaProjectionFlow
+    WordSource sourceProvider = new WordSource();
+    HibernateSessionFactory sessionProvider = new HibernateSessionFactory();
+
+    ProjectionId projectionId = ProjectionId.of("PublishWords", "words");
+    Projection<WordEnvelope> projection =
+        JdbcProjection.atLeastOnceFlow(
+            projectionId, sourceProvider, sessionProvider::newInstance, producerFlow, system);
+    // #sendToKafkaProjectionFlow
   }
 }
