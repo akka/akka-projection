@@ -166,11 +166,11 @@ object KafkaDocExample {
         projectionId,
         sourceProvider,
         () => sessionProvider.newInstance(),
-        handler = () => new WordCountSlickHandler(wordRepository))
+        handler = () => new WordCountJdbcHandler(wordRepository))
     //#exactlyOnce
 
     // #exactly-once-jdbc-handler
-    class WordCountSlickHandler(val wordRepository: WordRepository)
+    class WordCountJdbcHandler(val wordRepository: WordRepository)
         extends JdbcHandler[ConsumerRecord[String, String], HibernateJdbcSession] {
 
       @throws[Exception]
