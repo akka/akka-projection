@@ -87,7 +87,7 @@ object EventGeneratorApp extends App {
         persistenceId = PersistenceId.ofUniqueId(persistenceId),
         Nil,
         (_, event) => {
-          ctx.log.info("id [{}], persisting event {}", persistenceId, event)
+          ctx.log.info("id [{}], persisting event {}", persistenceId, event.toString)
           Effect.persist(event)
         },
         (_, _) => Nil).withTagger(_ => Set(shoppingCartsTag))
