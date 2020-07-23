@@ -9,11 +9,17 @@ import java.util.concurrent.CompletionStage
 
 import akka.Done
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 
 @ApiMayChange
 object Handler {
 
-  /** Handler that can be defined from a simple function */
+  /**
+   * INTERNAL API
+   *
+   * Handler that can be defined from a simple function
+   */
+  @InternalApi
   private class HandlerFunction[Envelope](handler: Envelope => CompletionStage[Done]) extends Handler[Envelope] {
     override def process(envelope: Envelope): CompletionStage[Done] = handler(envelope)
   }

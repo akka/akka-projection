@@ -18,6 +18,7 @@ import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.javadsl.Adapter
 import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.japi.function.Effect
 import akka.japi.function.Procedure
 import akka.projection.Projection
@@ -92,6 +93,10 @@ final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
   def run(projection: Projection[_], max: Duration, interval: Duration, assertFunction: Effect): Unit =
     runInternal(projection, assertFunction, max, interval)
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private def runInternal(
       projection: Projection[_],
       assertFunction: Effect,
@@ -137,6 +142,10 @@ final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
     }
   }
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private def spawnActorHandler(projection: Projection[_]): Option[ActorRef[_]] = {
     projection.actorHandlerInit[Any].map { init =>
       val ref = testKit.spawn(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart))
