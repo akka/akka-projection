@@ -115,13 +115,15 @@ class CheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit val e
 
   def updateCart(cartId: String): Future[Done] = {
     session.executeWrite(
-      s"UPDATE $keyspace.$cartStateTable SET last_updated = toTimeStamp(now()) WHERE cart_id = ?",
+      s"UPDATE $keyspace.$cartStateTable SET last_updated = ? WHERE cart_id = ?",
+      Instant.now(),
       cartId)
   }
 
   def checkoutCart(checkout: Checkout): Future[Done] = {
     session.executeWrite(
-      s"UPDATE $keyspace.$cartStateTable SET last_updated = toTimeStamp(now()), checkout_time = ? WHERE cart_id = ?",
+      s"UPDATE $keyspace.$cartStateTable SET last_updated = ?, checkout_time = ? WHERE cart_id = ?",
+      Instant.now(),
       checkout.checkoutTime,
       checkout.cartId)
   }
