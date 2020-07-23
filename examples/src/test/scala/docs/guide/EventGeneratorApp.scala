@@ -27,7 +27,7 @@ object EventGeneratorApp extends App {
   sealed trait Command
   final case object Start extends Command
 
-  val shoppingCartsTag = "shopping-cart-001"
+  val shoppingCartsTag = "shopping-cart"
   val config = ConfigFactory.parseResources("guide-shopping-cart-app.conf")
 
   ActorSystem(Behaviors.setup[Command] {
