@@ -71,7 +71,7 @@ object ShoppingCartApp extends App {
 
       //#guideSetup
       //#guideSourceProviderSetup
-      val shoppingCartsTag = "shopping-cart-001"
+      val shoppingCartsTag = "shopping-cart"
       val sourceProvider: SourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]] =
         EventSourcedProvider
           .eventsByTag[ShoppingCartEvents.Event](

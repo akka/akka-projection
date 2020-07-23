@@ -87,7 +87,7 @@ sbt "examples/test:runMain docs.guide.ShoppingCartApp"
 After a few seconds you should see the `DailyCheckoutProjectionHandler` logging that displays the current checkouts for the day:
 
 ```shell
-[2020-07-16 15:26:23,420] [INFO] [docs.guide.DailyCheckoutProjectionHandler] [] [ShoppingCartApp-akka.actor.default-dispatcher-5] - DailyCheckoutProjectionHandler(shopping-cart-001) current checkouts for the day [2020-07-16] is:                                                                                                 
+[2020-07-16 15:26:23,420] [INFO] [docs.guide.DailyCheckoutProjectionHandler] [] [ShoppingCartApp-akka.actor.default-dispatcher-5] - DailyCheckoutProjectionHandler(shopping-cart) current checkouts for the day [2020-07-16] is:                                                                                                 
 Date        Cart ID  Item ID             Quantity                                                                                                             
 2020-07-16  018db    akka t-shirt        0                                                                                                                    
 2020-07-16  018db    cat t-shirt         2                                                                                                                    
