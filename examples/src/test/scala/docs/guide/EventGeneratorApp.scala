@@ -15,6 +15,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
@@ -87,7 +88,7 @@ object EventGeneratorApp extends App {
         persistenceId = PersistenceId.ofUniqueId(persistenceId),
         Nil,
         (_, event) => {
-          ctx.log.info("id [{}], persisting event {}", persistenceId.toString, event.toString)
+          ctx.log.info2("id [{}], persisting event {}", persistenceId, event)
           Effect.persist(event)
         },
         (_, _) => Nil).withTagger(_ => Set(shoppingCartsTag))
