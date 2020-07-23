@@ -46,6 +46,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 
 import jdocs.jdbc.HibernateJdbcSession;
 
+import javax.persistence.EntityManager;
+
 public interface KafkaDocExample {
 
   // #todo
@@ -187,6 +189,7 @@ public interface KafkaDocExample {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
     SourceProvider<MergeableOffset<Long>, ConsumerRecord<String, String>> sourceProvider =
         illustrateSourceProvider();
+    WordRepository wordRepository = null;
 
     // #exactlyOnce
     final HibernateSessionFactory sessionProvider = new HibernateSessionFactory();
@@ -197,10 +200,35 @@ public interface KafkaDocExample {
             projectionId,
             sourceProvider,
             sessionProvider::newInstance,
-            () -> new WordCountHandler(projectionId),
+            () -> new WordCountJdbcHandler(wordRepository),
             system);
     // #exactlyOnce
   }
+
+  // #exactly-once-jdbc-handler
+  public class WordCountJdbcHandler
+      extends JdbcHandler<ConsumerRecord<String, String>, HibernateJdbcSession> {
+    private Logger logger = LoggerFactory.getLogger(getClass());
+    private WordRepository wordRepository;
+
+    public WordCountJdbcHandler(WordRepository wordRepository) {
+      this.wordRepository = wordRepository;
+    }
+
+    @Override
+    public void process(HibernateJdbcSession session, ConsumerRecord<String, String> envelope)
+        throws Exception {
+      String word = envelope.value();
+      wordRepository.increment(session.entityManager, word);
+    }
+  }
+  // #exactly-once-jdbc-handler
+
+  // #repository
+  interface WordRepository {
+    void increment(EntityManager entityManager, String word);
+  }
+  // #repository
 
   static void IllustrateSendingToKafka() {
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");

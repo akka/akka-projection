@@ -19,7 +19,7 @@ import java.sql.SQLException;
 // #hibernate-session
 public class HibernateJdbcSession implements JdbcSession {
 
-  final EntityManager entityManager;
+  public final EntityManager entityManager;
   private final EntityTransaction transaction;
 
   public HibernateJdbcSession(EntityManager entityManager) {
