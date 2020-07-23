@@ -8,20 +8,22 @@ To run a Cassandra database locally you can use [`docker-compose`](https://docs.
 The `docker-compose.yml` file references the latest [Cassandra Docker Image](https://hub.docker.com/_/cassandra).
 
 ```shell
-$ docker-compose --project-name cassandra-projections up -d cassandra
-Creating network "cassandra-projections_default" with the default driver
-Creating cassandra-projections_cassandra_1 ... done
+$ docker-compose --project-name getting-started up -d cassandra
+Creating network "getting-started_default" with the default driver
+Creating getting-started_cassandra_1 ... done
 ```
 
 To get a `cqlsh` prompt run another Cassandra container in interactive mode using the same network (`cassandra-projections_default`) as the container currently running.
 
 ```shell
-$ docker run -it --network cassandra-projections_default --rm cassandra cqlsh cassandra 
+$ docker run -it --network getting-started_default --rm cassandra cqlsh cassandra 
 Connected to Test Cluster at cassandra:9042.
 [cqlsh 5.0.1 | Cassandra 3.11.6 | CQL spec 3.4.4 | Native protocol v4]
 Use HELP for help.
 cqlsh> 
 ```
+
+To stop Cassandra use `docker-compose --project-name getting-started stop`. To delete the container's state use `docker-compose --project-name getting-started rm -f`.
 
 To use a different Cassandra database update the [Cassandra driver's contact-points configuration](https://doc.akka.io/docs/akka-persistence-cassandra/current/configuration.html#contact-points-configuration) found in `./examples/src/resources/guide-shopping-cart-app.conf`.
 
@@ -38,21 +40,14 @@ CREATE KEYSPACE IF NOT EXISTS akka_projection WITH REPLICATION = { 'class' : 'Si
 Create the Cassandra Projection offset store table.
 The DDL can be found in the @ref:[Cassandra Projection, Schema section](../cassandra.md#schema).
 
-Create the `DailyCheckoutProjectionHandler` projection tables with the DDL found below.
+Create the `CheckoutProjectionHandler` projection table with the DDL found below.
 
 ```
-CREATE TABLE IF NOT EXISTS akka_projection.cart_state (
+CREATE TABLE IF NOT EXISTS akka_projection.cart_checkout_state (
 cart_id text,
-item_id text,
-quantity int,
-PRIMARY KEY (cart_id, item_id));
-
-CREATE TABLE IF NOT EXISTS akka_projection.daily_checkouts (
-date date,
-cart_id text,
-item_id text,
-quantity int,
-PRIMARY KEY (date, cart_id, item_id));
+last_updated timestamp,
+checkout_time timestamp,
+PRIMARY KEY (cart_id));
 ```
 
 Source events are generated with the `EventGeneratorApp`.
@@ -84,10 +79,10 @@ Finally, we can run the projection itself by using sbt to run `ShoppingCartApp`
 sbt "examples/test:runMain docs.guide.ShoppingCartApp"
 ```
 
-After a few seconds you should see the `DailyCheckoutProjectionHandler` logging that displays the current checkouts for the day:
+After a few seconds you should see the `CheckoutProjectionHandler` logging that displays the current checkouts for the day:
 
 ```shell
-[2020-07-16 15:26:23,420] [INFO] [docs.guide.DailyCheckoutProjectionHandler] [] [ShoppingCartApp-akka.actor.default-dispatcher-5] - DailyCheckoutProjectionHandler(shopping-cart-001) current checkouts for the day [2020-07-16] is:                                                                                                 
+[2020-07-16 15:26:23,420] [INFO] [docs.guide.CheckoutProjectionHandler] [] [ShoppingCartApp-akka.actor.default-dispatcher-5] - CheckoutProjectionHandler(shopping-cart-001) current checkouts for the day [2020-07-16] is:                                                                                                 
 Date        Cart ID  Item ID             Quantity                                                                                                             
 2020-07-16  018db    akka t-shirt        0                                                                                                                    
 2020-07-16  018db    cat t-shirt         2                                                                                                                    

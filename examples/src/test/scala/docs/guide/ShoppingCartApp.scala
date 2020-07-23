@@ -7,15 +7,15 @@ package docs.guide
 //#guideSetup
 
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
+
+import scala.collection.immutable
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.ProjectionBehavior
 import akka.projection.eventsourced.EventEnvelope
+import akka.projection.scaladsl.Handler
 import com.typesafe.config.ConfigFactory
-import docs.guide.DailyCheckoutProjectionHandler.CartState
 
 //#guideSetup
 //#guideSourceProviderImports
@@ -31,13 +31,10 @@ import akka.projection.scaladsl.SourceProvider
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.util.Failure
-import scala.util.Success
 
 import akka.Done
 import akka.projection.ProjectionId
 import akka.projection.cassandra.scaladsl.CassandraProjection
-import akka.projection.scaladsl.StatefulHandler
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.slf4j.LoggerFactory
@@ -84,11 +81,11 @@ object ShoppingCartApp extends App {
       // FIXME: use a custom dispatcher for repo?
       implicit val ec = system.classicSystem.dispatcher
       val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
-      val repo = new DailyCheckoutProjectionRepositoryImpl(session)
+      val repo = new CheckoutProjectionRepositoryImpl(session)
       val projection = CassandraProjection.atLeastOnce(
         projectionId = ProjectionId("shopping-carts", shoppingCartsTag),
         sourceProvider,
-        handler = () => new DailyCheckoutProjectionHandler(shoppingCartsTag, system, repo))
+        handler = () => new CheckoutProjectionHandler(shoppingCartsTag, system, repo))
 
       context.spawn(ProjectionBehavior(projection), projection.projectionId.id)
       //#guideProjectionSetup
@@ -102,165 +99,86 @@ object ShoppingCartApp extends App {
 //#guideSetup
 
 //#guideProjectionRepo
-trait DailyCheckoutProjectionRepository {
-  import DailyCheckoutProjectionHandler._
+trait CheckoutProjectionRepository {
+  import CheckoutProjectionHandler._
 
-  def checkoutCountsForDate(date: LocalDate): Future[Seq[Checkout]]
-  def addCheckout(checkoutItem: Checkout): Future[Done]
-  def cartState(): Future[Seq[CartState]]
-  def updateCartState(cartState: CartState): Future[Done]
-  def deleteCartState(cartId: String): Future[Done]
+  def updateCart(cartId: String): Future[Done]
+  def checkoutCart(checkout: Checkout): Future[Done]
 }
 
-class DailyCheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit val ec: ExecutionContext)
-    extends DailyCheckoutProjectionRepository {
-  import DailyCheckoutProjectionHandler._
+class CheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit val ec: ExecutionContext)
+    extends CheckoutProjectionRepository {
+  import CheckoutProjectionHandler._
 
   val keyspace = "akka_projection"
-  val dailyCheckoutsTable = "daily_checkouts"
-  val cartStateTable = "cart_state"
+  val cartStateTable = "cart_checkout_state"
 
-  def checkoutCountsForDate(date: LocalDate): Future[Seq[Checkout]] = {
-    session
-      .selectAll(s"SELECT cart_id, item_id, quantity FROM $keyspace.$dailyCheckoutsTable WHERE date = ?", date)
-      .map { rows =>
-        rows.map(row => Checkout(date, row.getString("cart_id"), row.getString("item_id"), row.getInt("quantity")))
-      }
-  }
-
-  def addCheckout(checkoutItem: Checkout): Future[Done] = {
-    import checkoutItem._
+  def updateCart(cartId: String): Future[Done] = {
     session.executeWrite(
-      s"INSERT INTO $keyspace.$dailyCheckoutsTable (date, cart_id, item_id, quantity) VALUES (?, ?, ?, ?)",
-      date,
-      cartId,
-      itemId,
-      Int.box(quantity))
+      s"UPDATE $keyspace.$cartStateTable SET last_updated = toTimeStamp(now()) WHERE cart_id = ?",
+      cartId)
   }
 
-  def cartState(): Future[Seq[CartState]] = {
-    session
-      .selectAll(s"SELECT cart_id, item_id, quantity FROM $keyspace.$cartStateTable")
-      .map { rows =>
-        rows.map(row => CartState(row.getString("cart_id"), row.getString("item_id"), row.getInt("quantity")))
-      }
-  }
-
-  def updateCartState(cartState: CartState): Future[Done] = {
-    import cartState._
+  def checkoutCart(checkout: Checkout): Future[Done] = {
     session.executeWrite(
-      s"UPDATE $keyspace.$cartStateTable SET quantity = ? WHERE cart_id = ? AND item_id = ?",
-      Integer.valueOf(quantity),
-      cartId,
-      itemId)
-  }
-
-  def deleteCartState(cartId: String): Future[Done] = {
-    session.executeWrite(s"DELETE FROM $keyspace.$cartStateTable WHERE cart_id = ?", cartId)
+      s"UPDATE $keyspace.$cartStateTable SET last_updated = toTimeStamp(now()), checkout_time = ? WHERE cart_id = ?",
+      checkout.checkoutTime,
+      checkout.cartId)
   }
 }
 //#guideProjectionRepo
 
 //#guideProjectionHandler
-object DailyCheckoutProjectionHandler {
-  final case class Checkout(date: LocalDate, cartId: String, itemId: String, quantity: Int)
-  final case class CartState(cartId: String, itemId: String, quantity: Int)
+object CheckoutProjectionHandler {
+  val CheckoutLogInterval = 10
+  val CheckoutFormat = "%-12s%-9s"
 
-  def toDate(date: Instant) = LocalDate.from(date.atZone(ZoneId.of("UTC")))
+  final case class Checkout(cartId: String, checkoutTime: Instant)
 }
 
-class DailyCheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: DailyCheckoutProjectionRepository)
-    extends StatefulHandler[Map[String, Map[String, CartState]], EventEnvelope[ShoppingCartEvents.Event]]()(
-      system.classicSystem.dispatcher) {
+class CheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: CheckoutProjectionRepository)
+    extends Handler[EventEnvelope[ShoppingCartEvents.Event]]() {
 
-  import DailyCheckoutProjectionHandler._
+  import CheckoutProjectionHandler._
 
-  @volatile private var checkoutCounter = 0
+  @volatile private var checkouts: immutable.Seq[Checkout] = Nil
   private val log = LoggerFactory.getLogger(getClass)
   private implicit val ec: ExecutionContext = system.classicSystem.dispatcher
 
-  def initialState(): Future[Map[String, Map[String, CartState]]] =
-    repo.cartState().map { rows =>
-      val byCartId = rows.groupBy(_.cartId)
-      val byCartAndItem = byCartId.view.map {
-        case (k, v) => k -> v.groupBy(_.itemId).map { case (itemId, states) => (itemId -> states.head) }
-      }.toMap
-      byCartAndItem
-    }
-
-  override def process(
-      state: Map[String, Map[String, CartState]],
-      envelope: EventEnvelope[ShoppingCartEvents.Event]): Future[Map[String, Map[String, CartState]]] = {
+  override def process(envelope: EventEnvelope[ShoppingCartEvents.Event]): Future[Done] = {
     envelope.event match {
       case ShoppingCartEvents.CheckedOut(cartId, eventTime) =>
-        val dateOnly = toDate(eventTime)
-        val cartItems = state.getOrElse(cartId, Map.empty)
+        val checkout = Checkout(cartId, eventTime)
+        val update = repo.checkoutCart(checkout)
 
-        val updates = Future.sequence(cartItems.map {
-          case (itemId, cartState) =>
-            repo.addCheckout(Checkout(dateOnly, cartId, itemId, cartState.quantity))
-        })
+        checkouts = checkouts :+ checkout
+        if (checkouts.length == CheckoutLogInterval) {
+          log.info(
+            "CheckoutProjectionHandler({}) last [{}] checkouts: {}",
+            tag,
+            CheckoutLogInterval,
+            formatCheckouts(checkouts))
+          checkouts = Nil
+        }
 
-        checkoutCounter += 1
-        val updatesWithCountStatus = if (checkoutCounter % 10 == 0) {
-          updates.flatMap { _ =>
-            val countQuery = repo.checkoutCountsForDate(dateOnly)
-            countQuery.onComplete {
-              case Success(checkouts) =>
-                log.info(
-                  "DailyCheckoutProjectionHandler({}) current checkouts for the day [{}] is: {}",
-                  tag,
-                  dateOnly,
-                  dailyCheckouts(checkouts))
-              case Failure(ex) =>
-                log.error(s"ShoppingCartProjectionHandler($tag) an error occurred when connecting to the repo", ex)
-            }
-            countQuery
-          }
-        } else updates
+        update.map(_ => Done)
+      case ShoppingCartEvents.ItemAdded(cartId, _, _) =>
+        repo.updateCart(cartId)
 
-        val newState = state - cartId
-        Future
-          .sequence(Seq(updatesWithCountStatus, repo.deleteCartState(cartId)))
-          .map(_ => newState)
+      case ShoppingCartEvents.ItemQuantityAdjusted(cartId, _, _) =>
+        repo.updateCart(cartId)
 
-      case ShoppingCartEvents.ItemAdded(cartId, itemId, quantity) =>
-        updateCartItemCounts(state, CartState(cartId, itemId, quantity))
-
-      case ShoppingCartEvents.ItemQuantityAdjusted(cartId, itemId, newQuantity) =>
-        updateCartItemCounts(state, CartState(cartId, itemId, newQuantity))
-
-      case ShoppingCartEvents.ItemRemoved(cartId, itemId) =>
-        val cartItems = state
-          .get(cartId)
-          .map(_ - itemId)
-          .getOrElse(Map.empty)
-        Future.successful(state + (cartId -> cartItems))
+      case ShoppingCartEvents.ItemRemoved(cartId, _) =>
+        repo.updateCart(cartId)
     }
   }
 
-  private def updateCartItemCounts(
-      state: Map[String, Map[String, CartState]],
-      cartState: CartState): Future[Map[String, Map[String, CartState]]] = {
-    import cartState._
-    val f = repo.updateCartState(cartState)
-    val itemCount = itemId -> cartState
-    val updatedCartItems = state
-      .get(cartId)
-      .map(_ + itemCount)
-      .getOrElse(Map(itemCount))
-
-    f.map(_ => state + (cartId -> updatedCartItems))
-  }
-
-  val CheckoutFormat = "%-12s%-9s%-20s%s"
-
-  private def dailyCheckouts(checkouts: Seq[Checkout]): String = {
+  private def formatCheckouts(checkouts: immutable.Seq[Checkout]): String = {
     if (checkouts.isEmpty) "(no checkouts)"
     else {
-      val header = CheckoutFormat.format("Date", "Cart ID", "Item ID", "Quantity")
+      val header = CheckoutFormat.format("Cart ID", "Event Time")
       val lines = header +: checkouts.map {
-          case Checkout(date, cartId, itemId, quantity) => CheckoutFormat.format(date, cartId, itemId, quantity)
+          case Checkout(cartId, checkoutTime) => CheckoutFormat.format(cartId, checkoutTime)
         }
       lines.mkString("\n", "\n", "\n")
     }
