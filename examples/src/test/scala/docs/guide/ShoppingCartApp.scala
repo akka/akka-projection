@@ -156,7 +156,7 @@ class CheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: Check
           log.info(
             "CheckoutProjectionHandler({}) last [{}] checkouts: {}",
             tag,
-            CheckoutLogInterval,
+            CheckoutLogInterval.toString,
             formatCheckouts(checkouts))
           checkouts = Nil
         }
