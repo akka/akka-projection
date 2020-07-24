@@ -86,7 +86,7 @@ trait Telemetry {
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object TelemetryProvider {
+@InternalApi private[projection] object TelemetryProvider {
   def start(projectionId: ProjectionId, system: ActorSystem[_]): Telemetry = {
     if (!system.settings.config.hasPath("akka.projection.telemetry.implementations")) {
       NoopTelemetry
@@ -119,7 +119,7 @@ trait Telemetry {
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object NoopTelemetry extends Telemetry {
+@InternalApi private[projection] object NoopTelemetry extends Telemetry {
   override def failed(cause: Throwable): Unit = {}
 
   override def stopped(): Unit = {}
@@ -137,7 +137,7 @@ trait Telemetry {
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class EnsembleTelemetry(
+@InternalApi private[projection] class EnsembleTelemetry(
     telemetryFqcns: Seq[String],
     projectionId: ProjectionId,
     system: ActorSystem[_])
