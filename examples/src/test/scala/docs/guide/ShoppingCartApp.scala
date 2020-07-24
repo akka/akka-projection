@@ -143,7 +143,7 @@ class CheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: Check
 
   import CheckoutProjectionHandler._
 
-  @volatile private var checkouts: immutable.Seq[Checkout] = Nil
+  private var checkouts: immutable.Seq[Checkout] = Nil
   private val log = LoggerFactory.getLogger(getClass)
   private implicit val ec: ExecutionContext = system.classicSystem.dispatcher
 
