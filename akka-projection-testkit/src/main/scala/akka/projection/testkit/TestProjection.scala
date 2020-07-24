@@ -66,7 +66,7 @@ class TestProjection[Offset, Envelope](
    * INTERNAL API
    */
   @InternalApi
-  private[akka] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
+  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
   override def run()(implicit system: ActorSystem[_]): RunningProjection =
     new InternalProjectionState(sourceProvider, handler).newRunningInstance()
