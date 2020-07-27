@@ -4,13 +4,11 @@
 
 package akka.projection.testkit
 
-import java.util.Optional
 import java.util.function.Supplier
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-import scala.compat.java8.OptionConverters._
 
 import akka.Done
 import akka.NotUsed
@@ -45,9 +43,28 @@ object TestProjection {
   def apply[Offset, Envelope](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
+      handler: () => Handler[Envelope]): Projection[Envelope] =
+    new TestProjection(projectionId, sourceProvider, SingleHandlerStrategy(handler), None)
+
+  def apply[Offset, Envelope](
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
       handler: () => Handler[Envelope],
-      startOffset: Option[Offset]): Projection[Envelope] =
-    new TestProjection(projectionId, sourceProvider, SingleHandlerStrategy(handler), startOffset)
+      startOffset: Offset): Projection[Envelope] =
+    new TestProjection(projectionId, sourceProvider, SingleHandlerStrategy(handler), Some(startOffset))
+
+  /**
+   * Java API
+   */
+  def create[Offset, Envelope](
+      projectionId: ProjectionId,
+      sourceProvider: akka.projection.javadsl.SourceProvider[Offset, Envelope],
+      handler: Supplier[akka.projection.javadsl.Handler[Envelope]]): Projection[Envelope] =
+    new TestProjection(
+      projectionId,
+      new SourceProviderAdapter(sourceProvider),
+      SingleHandlerStrategy(() => HandlerAdapter(handler.get())),
+      None)
 
   /**
    * Java API
@@ -56,12 +73,12 @@ object TestProjection {
       projectionId: ProjectionId,
       sourceProvider: akka.projection.javadsl.SourceProvider[Offset, Envelope],
       handler: Supplier[akka.projection.javadsl.Handler[Envelope]],
-      startOffset: Optional[Offset]): Projection[Envelope] =
+      startOffset: Offset): Projection[Envelope] =
     new TestProjection(
       projectionId,
       new SourceProviderAdapter(sourceProvider),
       SingleHandlerStrategy(() => HandlerAdapter(handler.get())),
-      startOffset.asScala)
+      Some(startOffset))
 }
 
 @ApiMayChange
@@ -128,6 +145,7 @@ class TestProjection[Offset, Envelope] private (
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerStrategy: HandlerStrategy,
+      // FIXME: Is `startOffset` ever useful?
       startOffset: Option[Offset])(implicit val system: ActorSystem[_])
       extends InternalProjectionState[Offset, Envelope](
         projectionId,
@@ -136,7 +154,8 @@ class TestProjection[Offset, Envelope] private (
         // FIXME: Is there any reason to let the user choose the `OffsetStrategy` in tests?
         AtLeastOnce(afterEnvelopes = Some(1)),
         handlerStrategy,
-        NoopStatusObserver, // FIXME: Always disable metrics during tests?
+        // FIXME: Always disable metrics during tests?
+        NoopStatusObserver,
         ProjectionSettings(system)) {
 
     override implicit val executionContext: ExecutionContext = system.executionContext
@@ -180,21 +199,38 @@ class TestProjection[Offset, Envelope] private (
 object TestSourceProvider {
   def apply[Offset, Envelope](
       sourceEvents: List[Envelope],
-      extractOffset: Envelope => Offset,
-      extractCreationTime: Envelope => Long = (_: Envelope) => 0L): SourceProvider[Offset, Envelope] = {
-    new TestSourceProvider[Offset, Envelope](sourceEvents, extractOffset, extractCreationTime)
+      extractOffset: Envelope => Offset): SourceProvider[Offset, Envelope] = {
+    apply(Source(sourceEvents), extractOffset, (_: Envelope) => 0L, allowCompletion = false)
   }
+
+  def apply[Offset, Envelope](
+      sourceEvents: Source[Envelope, NotUsed],
+      extractOffset: Envelope => Offset): SourceProvider[Offset, Envelope] = {
+    apply(sourceEvents, extractOffset, (_: Envelope) => 0L, allowCompletion = false)
+  }
+
+  def apply[Offset, Envelope](
+      sourceEvents: Source[Envelope, NotUsed],
+      extractOffset: Envelope => Offset,
+      extractCreationTime: Envelope => Long,
+      allowCompletion: Boolean): SourceProvider[Offset, Envelope] = {
+    new TestSourceProvider[Offset, Envelope](sourceEvents, extractOffset, extractCreationTime, allowCompletion)
+  }
+
+  // TODO: Java API
 }
 
 @ApiMayChange
-class TestSourceProvider[Offset, Envelope] private[projection] (
-    sourceEvents: List[Envelope],
+class TestSourceProvider[Offset, Envelope] private (
+    sourceEvents: Source[Envelope, NotUsed],
     _extractOffset: Envelope => Offset,
-    _extractCreationTime: Envelope => Long)
+    _extractCreationTime: Envelope => Long,
+    allowCompletion: Boolean)
     extends SourceProvider[Offset, Envelope] {
   override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] =
     Future.successful {
-      Source(sourceEvents).concat(Source.maybe)
+      if (allowCompletion) sourceEvents
+      else sourceEvents.concat(Source.maybe)
     }
 
   override def extractOffset(envelope: Envelope): Offset = _extractOffset(envelope)
