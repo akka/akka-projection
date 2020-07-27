@@ -15,6 +15,7 @@ import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.compat.java8.OptionConverters._
 
 import akka.Done
 import akka.NotUsed
@@ -165,8 +166,10 @@ class TestProjection[Offset, Envelope] private[projection] (
   final override def withRestartBackoffSettings(
       restartBackoff: RestartBackoffSettings): TestProjection[Offset, Envelope] =
     this
+
   override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection[Offset, Envelope] =
     this
+
   override def withGroup(
       groupAfterEnvelopes: Int,
       groupAfterDuration: FiniteDuration): TestProjection[Offset, Envelope] = this
