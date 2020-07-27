@@ -170,7 +170,7 @@ object KafkaDocExample {
   object IllustrateExactlyOnce {
     import IllustrateSourceProvider._
 
-    val wordRepository: WordRepository = ???
+    val wordRepository: WordRepository = null
     //#exactlyOnce
     val sessionProvider = new HibernateSessionFactory
 
