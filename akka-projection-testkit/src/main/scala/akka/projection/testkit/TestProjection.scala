@@ -15,7 +15,6 @@ import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-import scala.compat.java8.OptionConverters._
 
 import akka.Done
 import akka.NotUsed
@@ -104,6 +103,7 @@ object TestProjection {
       sourceProvider: akka.projection.javadsl.SourceProvider[Offset, Envelope],
       handler: Supplier[akka.projection.javadsl.Handler[Envelope]]): Projection[Envelope] =
     apply(projectionId, new SourceProviderAdapter(sourceProvider), () => HandlerAdapter(handler.get()))
+
 }
 
 @ApiMayChange
