@@ -63,11 +63,10 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
         TestSourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]](events, extractOffset = env => env.offset)
       val projection =
         TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](
-          system,
           projectionId,
           sourceProvider,
-          Offset.sequence(0L),
-          handler)
+          () => handler,
+          Some(Offset.sequence(0L)))
 
       projectionTestKit.run(projection) {
         repo.checkouts shouldBe List(
@@ -98,11 +97,10 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
           extractOffset = env => env.offset)
       val projection =
         TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](
-          system,
           projectionId,
           sourceProvider,
-          Offset.sequence(0L),
-          handler)
+          () => handler,
+          Some(Offset.sequence(0L)))
 
       LoggingTestKit
         .info("""CheckoutProjectionHandler(tag) last [10] checkouts: 
