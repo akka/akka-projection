@@ -18,7 +18,6 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.HandlerStrategy
-import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.scaladsl.Handler
@@ -77,14 +76,7 @@ object ProjectionBehaviorSpec {
       handlerStrategy: HandlerStrategy,
       testProbe: TestProbe[ProbeMessage],
       failToStop: Boolean)
-      extends TestProjection(
-        projectionId,
-        sourceProvider,
-        handlerStrategy,
-        AtMostOnce(),
-        NoopStatusObserver,
-        _ => TestInMemoryOffsetStore[Int](),
-        None) {
+      extends TestProjection(projectionId, sourceProvider, handlerStrategy, AtMostOnce(), None) {
 
     override private[projection] def newState(implicit system: ActorSystem[_]): TestInternalProjectionState =
       new ProjectionBehaviourTestInternalProjectionState(
@@ -92,7 +84,6 @@ object ProjectionBehaviorSpec {
         sourceProvider,
         handlerStrategy,
         offsetStrategy,
-        offsetStoreFactory(system),
         testProbe,
         failToStop)
 
@@ -101,16 +92,9 @@ object ProjectionBehaviorSpec {
         sourceProvider: SourceProvider[Int, Int],
         handlerStrategy: HandlerStrategy,
         offsetStrategy: OffsetStrategy,
-        offsetStore: TestInMemoryOffsetStore[Int],
         testProbe: TestProbe[ProbeMessage],
         failToStop: Boolean)(implicit system: ActorSystem[_])
-        extends TestInternalProjectionState(
-          projectionId,
-          sourceProvider,
-          handlerStrategy,
-          offsetStrategy,
-          offsetStore,
-          None) {
+        extends TestInternalProjectionState(projectionId, sourceProvider, handlerStrategy, offsetStrategy, None) {
       override def newRunningInstance(): RunningProjection =
         new ProjectionBehaviourTestRunningProjection(
           projectionId,
