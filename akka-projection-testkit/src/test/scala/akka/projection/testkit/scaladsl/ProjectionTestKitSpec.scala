@@ -119,11 +119,8 @@ class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLi
 
     "run a projection with a TestSink" in {
       val strBuffer = new StringBuffer()
-      val sp = TestSourceProvider(
-        Source(1 to 5),
-        extractOffset = (i: Int) => i,
-        extractCreationTime = (_: Int) => 0L,
-        allowCompletion = true)
+      val sp = TestSourceProvider(Source(1 to 5), extractOffset = (i: Int) => i)
+        .withAllowCompletion(true)
       val prj = TestProjection(projectionId, sp, () => handler(strBuffer, _ <= 5))
 
       projectionTestKit.runWithTestSink(prj) { sinkProbe =>
