@@ -4,9 +4,13 @@
 
 package akka.projection.testkit
 
+import java.util.Optional
+import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
 import scala.compat.java8.FunctionConverters._
+import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
@@ -88,9 +92,9 @@ object TestProjection {
    *
    * The [[TestProjection]] does not support grouping, at least once offset batching, or restart backoff strategies.
    *
-   * @param projectionId - a Projection ID
+   * @param projectionId   - a Projection ID
    * @param sourceProvider - a [[akka.projection.javadsl.SourceProvider]] to supply envelopes to the Projection
-   * @param handler - a user-defined [[akka.projection.javadsl.Handler]] to run within the Projection
+   * @param handler        - a user-defined [[akka.projection.javadsl.Handler]] to run within the Projection
    */
   def create[Offset, Envelope](
       projectionId: ProjectionId,
@@ -288,7 +292,8 @@ class TestSourceProvider[Offset, Envelope] private (
     extractOffsetFn: Envelope => Offset,
     extractCreationTimeFn: Envelope => Long,
     allowCompletion: Boolean)
-    extends SourceProvider[Offset, Envelope] {
+    extends akka.projection.javadsl.SourceProvider[Offset, Envelope]
+    with SourceProvider[Offset, Envelope] {
 
   /**
    * A user-defined function to extract the event creation time from an envelope.
@@ -316,6 +321,12 @@ class TestSourceProvider[Offset, Envelope] private (
       if (allowCompletion) sourceEvents
       else sourceEvents.concat(Source.maybe)
     }
+
+  override def source(offset: Supplier[CompletionStage[Optional[Offset]]])
+      : CompletionStage[akka.stream.javadsl.Source[Envelope, NotUsed]] = {
+    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
+    source(() => offset.get().toScala.map(_.asScala)).map(_.asJava).toJava
+  }
 
   override def extractOffset(envelope: Envelope): Offset = extractOffsetFn(envelope)
 

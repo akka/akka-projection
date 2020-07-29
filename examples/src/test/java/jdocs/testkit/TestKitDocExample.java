@@ -13,12 +13,15 @@ import akka.projection.internal.ActorHandlerInit;
 import akka.projection.internal.ProjectionSettings;
 import akka.projection.RunningProjection;
 import akka.projection.StatusObserver;
-import akka.stream.scaladsl.Source;
+import akka.projection.javadsl.Handler;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 // #testkit-import
+import akka.projection.testkit.TestSourceProvider;
+import com.datastax.oss.driver.shaded.guava.common.base.Function;
 import org.junit.ClassRule;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
@@ -31,6 +34,8 @@ import scala.concurrent.duration.FiniteDuration;
 // #testkit-duration
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 // #testkit-duration
 
@@ -38,6 +43,16 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.Assert.assertEquals;
 
 // #testkit-assertion-import
+
+// #testkit-testprojection
+
+import java.util.stream.Stream;
+import akka.japi.Pair;
+import akka.stream.javadsl.Source;
+import akka.projection.testkit.TestProjection;
+import akka.projection.testkit.TestSourceProvider;
+
+// #testkit-testprojection
 
 public class TestKitDocExample {
 
@@ -60,65 +75,7 @@ public class TestKitDocExample {
   ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
   // #testkit
 
-  Projection<String> projection =
-      new Projection<String>() {
-        @Override
-        public ProjectionId projectionId() {
-          return null;
-        }
-
-        @Override
-        public StatusObserver<String> statusObserver() {
-          return null;
-        }
-
-        @Override
-        public Projection<String> withStatusObserver(StatusObserver<String> observer) {
-          return null;
-        }
-
-        @Override
-        public Projection<String> withRestartBackoff(
-            FiniteDuration minBackoff, FiniteDuration maxBackoff, double randomFactor) {
-          return this;
-        }
-
-        @Override
-        public Projection<String> withRestartBackoff(
-            FiniteDuration minBackoff,
-            FiniteDuration maxBackoff,
-            double randomFactor,
-            int maxRestarts) {
-          return this;
-        }
-
-        @Override
-        public Projection<String> withRestartBackoff(
-            Duration minBackoff, Duration maxBackoff, double randomFactor) {
-          return this;
-        }
-
-        @Override
-        public Projection<String> withRestartBackoff(
-            Duration minBackoff, Duration maxBackoff, double randomFactor, int maxRestarts) {
-          return this;
-        }
-
-        @Override
-        public Source<Done, Future<Done>> mappedSource(ActorSystem<?> system) {
-          return null;
-        }
-
-        @Override
-        public <M> Option<ActorHandlerInit<M>> actorHandlerInit() {
-          return Option.empty();
-        }
-
-        @Override
-        public RunningProjection run(ActorSystem<?> system) {
-          return null;
-        }
-      };
+  Projection<String> projection = TestProjection.create(null, null, null);
 
   CartCheckoutRepository cartCheckoutRepository = new CartCheckoutRepository();
 
@@ -160,6 +117,33 @@ public class TestKitDocExample {
         });
 
     // #testkit-sink-probe
+  }
+
+  void illustrateTestKitTestProjection() {
+    Handler<Pair<Integer, String>> handler = null;
+
+    // #testkit-testprojection
+    List<Pair<Integer, String>> testData = Stream.of(
+      Pair.create(0, "abc"), Pair.create(1, "def")
+    ).collect(Collectors.toList());
+
+    Source<Pair<Integer, String>, NotUsed> source = Source.from(testData);
+
+    Function<Pair<Integer, String>, Integer> extractOffsetFn = (Pair<Integer, String> env) -> env.first();
+
+    TestSourceProvider<Integer, Pair<Integer, String>> sourceProvider =
+      TestSourceProvider.create(source, extractOffsetFn);
+
+    Projection<Pair<Integer, String>> projection =
+      TestProjection.create(ProjectionId.of("test", "00"), sourceProvider, () -> handler);
+
+    projectionTestKit.run(
+      projection,
+      () -> {
+        // assert logic ...
+      }
+    );
+    // #testkit-testprojection
   }
 
   // #fixme
