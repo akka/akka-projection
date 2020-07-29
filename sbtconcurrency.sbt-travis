@@ -1,0 +1,1 @@
+concurrentRestrictions in Global += Tags.limit(Tags.Test, 1)
