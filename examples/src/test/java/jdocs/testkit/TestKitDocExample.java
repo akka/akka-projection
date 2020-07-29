@@ -21,6 +21,7 @@ import java.util.concurrent.CompletionStage;
 
 // #testkit-import
 import akka.projection.testkit.TestSourceProvider;
+import com.datastax.oss.driver.shaded.guava.common.base.Function;
 import org.junit.ClassRule;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
@@ -33,7 +34,6 @@ import scala.concurrent.duration.FiniteDuration;
 // #testkit-duration
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -46,7 +46,6 @@ import static org.junit.Assert.assertEquals;
 
 // #testkit-testprojection
 
-import java.util.function.Function;
 import java.util.stream.Stream;
 import akka.japi.Pair;
 import akka.stream.javadsl.Source;
@@ -124,25 +123,26 @@ public class TestKitDocExample {
     Handler<Pair<Integer, String>> handler = null;
 
     // #testkit-testprojection
-    List<Pair<Integer, String>> testData =
-        Stream.of(Pair.create(0, "abc"), Pair.create(1, "def")).collect(Collectors.toList());
+    List<Pair<Integer, String>> testData = Stream.of(
+      Pair.create(0, "abc"), Pair.create(1, "def")
+    ).collect(Collectors.toList());
 
     Source<Pair<Integer, String>, NotUsed> source = Source.from(testData);
 
-    Function<Pair<Integer, String>, Integer> extractOffsetFn =
-        (Pair<Integer, String> env) -> env.first();
+    Function<Pair<Integer, String>, Integer> extractOffsetFn = (Pair<Integer, String> env) -> env.first();
 
     TestSourceProvider<Integer, Pair<Integer, String>> sourceProvider =
-        TestSourceProvider.create(source, extractOffsetFn);
+      TestSourceProvider.create(source, extractOffsetFn);
 
     Projection<Pair<Integer, String>> projection =
-        TestProjection.create(ProjectionId.of("test", "00"), sourceProvider, () -> handler);
+      TestProjection.create(ProjectionId.of("test", "00"), sourceProvider, () -> handler);
 
     projectionTestKit.run(
-        projection,
-        () -> {
-          // assert logic ...
-        });
+      projection,
+      () -> {
+        // assert logic ...
+      }
+    );
     // #testkit-testprojection
   }
 
