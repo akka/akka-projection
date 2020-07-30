@@ -365,9 +365,12 @@ class TestSourceProvider[Offset, Envelope] private[projection] (
    *
    * First parameter: Last offset processed. Second parameter this envelope's offset from [[sourceEvents]].
    */
-  def withStartSourceFrom(
-      startSourceFromFn: java.util.function.BiFunction[Offset, Offset, Boolean]): TestSourceProvider[Offset, Envelope] =
-    withStartSourceFrom(startSourceFromFn.asScala)
+  def withStartSourceFrom(startSourceFromFn: java.util.function.BiFunction[Offset, Offset, java.lang.Boolean])
+      : TestSourceProvider[Offset, Envelope] = {
+    val adapted: (Offset, Offset) => Boolean = (lastOffset, offset) =>
+      Boolean.box(startSourceFromFn.apply(lastOffset, offset))
+    withStartSourceFrom(adapted)
+  }
 
   override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
     implicit val ec = akka.dispatch.ExecutionContexts.parasitic
