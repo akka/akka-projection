@@ -22,6 +22,7 @@ import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
+import akka.projection.OffsetVerification
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
@@ -40,6 +41,7 @@ import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.SourceProviderAdapter
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 
@@ -271,6 +273,8 @@ object TestSourceProvider {
       sourceEvents = sourceEvents,
       extractOffsetFn = extractOffset,
       extractCreationTimeFn = (_: Envelope) => 0L,
+      verifyOffsetFn = (_: Offset) => OffsetVerification.VerificationSuccess,
+      startSourceFromFn = (_: Offset, _: Offset) => false,
       allowCompletion = false)
   }
 
@@ -287,19 +291,36 @@ object TestSourceProvider {
 }
 
 @ApiMayChange
-class TestSourceProvider[Offset, Envelope] private (
+class TestSourceProvider[Offset, Envelope] private[projection] (
     sourceEvents: Source[Envelope, NotUsed],
     extractOffsetFn: Envelope => Offset,
     extractCreationTimeFn: Envelope => Long,
+    verifyOffsetFn: Offset => OffsetVerification,
+    startSourceFromFn: (Offset, Offset) => Boolean,
     allowCompletion: Boolean)
-    extends akka.projection.javadsl.SourceProvider[Offset, Envelope]
-    with SourceProvider[Offset, Envelope] {
+    extends akka.projection.javadsl.VerifiableSourceProvider[Offset, Envelope]
+    with VerifiableSourceProvider[Offset, Envelope] {
+
+  private def copy(
+      sourceEvents: Source[Envelope, NotUsed] = sourceEvents,
+      extractOffsetFn: Envelope => Offset = extractOffsetFn,
+      extractCreationTimeFn: Envelope => Long = extractCreationTimeFn,
+      verifyOffsetFn: Offset => OffsetVerification = verifyOffsetFn,
+      startSourceFromFn: (Offset, Offset) => Boolean = startSourceFromFn,
+      allowCompletion: Boolean = allowCompletion): TestSourceProvider[Offset, Envelope] =
+    new TestSourceProvider(
+      sourceEvents,
+      extractOffsetFn,
+      extractCreationTimeFn,
+      verifyOffsetFn,
+      startSourceFromFn,
+      allowCompletion)
 
   /**
    * A user-defined function to extract the event creation time from an envelope.
    */
   def withExtractCreationTimeFunction(extractCreationTimeFn: Envelope => Long): TestSourceProvider[Offset, Envelope] =
-    new TestSourceProvider(sourceEvents, extractOffsetFn, extractCreationTimeFn, allowCompletion)
+    copy(extractCreationTimeFn = extractCreationTimeFn)
 
   /**
    * Java API
@@ -307,20 +328,57 @@ class TestSourceProvider[Offset, Envelope] private (
    * A user-defined function to extract the event creation time from an envelope.
    */
   def withExtractCreationTimeFunction(
-      extractCreationTime: java.util.function.Function[Envelope, Long]): TestSourceProvider[Offset, Envelope] =
-    new TestSourceProvider(sourceEvents, extractOffsetFn, extractCreationTime.asScala, allowCompletion)
+      extractCreationTimeFn: java.util.function.Function[Envelope, Long]): TestSourceProvider[Offset, Envelope] =
+    withExtractCreationTimeFunction(extractCreationTimeFn.asScala)
 
   /**
    * Allow the [[sourceEvents]] Source to complete or stay open indefinitely.
    */
   def withAllowCompletion(allowCompletion: Boolean): TestSourceProvider[Offset, Envelope] =
-    new TestSourceProvider(sourceEvents, extractOffsetFn, extractCreationTimeFn, allowCompletion)
+    copy(allowCompletion = allowCompletion)
 
-  override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] =
-    Future.successful {
+  /**
+   * A user-defined function to verify offsets.
+   */
+  def withOffsetVerification(verifyOffsetFn: Offset => OffsetVerification): TestSourceProvider[Offset, Envelope] =
+    copy(verifyOffsetFn = verifyOffsetFn)
+
+  /**
+   * Java API: A user-defined function to verify offsets.
+   */
+  def withOffsetVerification(offsetVerificationFn: java.util.function.Function[Offset, OffsetVerification])
+      : TestSourceProvider[Offset, Envelope] =
+    withOffsetVerification(offsetVerificationFn.asScala)
+
+  /**
+   * A user-defined function to compare the last offset returned by the offset store with the offset in the source
+   * to filter out previously processed offsets.
+   *
+   * First parameter: Last offset processed. Second parameter this envelope's offset from [[sourceEvents]].
+   */
+  def withStartSourceFrom(startSourceFromFn: (Offset, Offset) => Boolean): TestSourceProvider[Offset, Envelope] =
+    copy(startSourceFromFn = startSourceFromFn)
+
+  /**
+   * Java API: A user-defined function to compare the last offset returned by the offset store with the offset in the source
+   * to filter out previously processed offsets.
+   *
+   * First parameter: Last offset processed. Second parameter this envelope's offset from [[sourceEvents]].
+   */
+  def withStartSourceFrom(
+      startSourceFromFn: java.util.function.BiFunction[Offset, Offset, Boolean]): TestSourceProvider[Offset, Envelope] =
+    withStartSourceFrom(startSourceFromFn.asScala)
+
+  override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
+    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
+    val src =
       if (allowCompletion) sourceEvents
       else sourceEvents.concat(Source.maybe)
+    offset().map {
+      case Some(o) => src.dropWhile(env => startSourceFromFn(o, extractOffset(env)))
+      case _       => src
     }
+  }
 
   override def source(offset: Supplier[CompletionStage[Optional[Offset]]])
       : CompletionStage[akka.stream.javadsl.Source[Envelope, NotUsed]] = {
@@ -331,8 +389,9 @@ class TestSourceProvider[Offset, Envelope] private (
   override def extractOffset(envelope: Envelope): Offset = extractOffsetFn(envelope)
 
   override def extractCreationTime(envelope: Envelope): Long = extractCreationTimeFn(envelope)
-}
 
+  override def verifyOffset(offset: Offset): OffsetVerification = verifyOffsetFn(offset)
+}
 @ApiMayChange
 object TestInMemoryOffsetStore {
 
@@ -353,7 +412,7 @@ object TestInMemoryOffsetStore {
 }
 
 @ApiMayChange
-class TestInMemoryOffsetStore[Offset] private (system: ActorSystem[_]) {
+class TestInMemoryOffsetStore[Offset] private[projection] (system: ActorSystem[_]) {
   private implicit val executionContext: ExecutionContext = system.executionContext
 
   private var savedOffsets = List[(ProjectionId, Offset)]()
