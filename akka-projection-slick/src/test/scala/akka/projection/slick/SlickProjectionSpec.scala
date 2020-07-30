@@ -23,7 +23,6 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
-import akka.actor.typed.ActorSystem
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
@@ -35,9 +34,9 @@ import akka.projection.TestStatusObserver
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
+import akka.projection.testkit.TestSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
@@ -82,42 +81,26 @@ object SlickProjectionSpec {
   case class Envelope(id: String, offset: Long, message: String)
 
   def sourceProvider(
-      system: ActorSystem[_],
       id: String,
       complete: Boolean = true,
-      verifyOffsetF: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
-    val envelopes =
-      List(
-        Envelope(id, 1L, "abc"),
-        Envelope(id, 2L, "def"),
-        Envelope(id, 3L, "ghi"),
-        Envelope(id, 4L, "jkl"),
-        Envelope(id, 5L, "mno"),
-        Envelope(id, 6L, "pqr"))
+      verifyOffsetFn: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
+    val envelopes: Source[Envelope, NotUsed] =
+      Source(
+        List(
+          Envelope(id, 1L, "abc"),
+          Envelope(id, 2L, "def"),
+          Envelope(id, 3L, "ghi"),
+          Envelope(id, 4L, "jkl"),
+          Envelope(id, 5L, "mno"),
+          Envelope(id, 6L, "pqr")))
 
-    val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
-    TestSourceProvider(system, src, verifyOffsetF)
+    val sp = TestSourceProvider[Long, Envelope](envelopes, _.offset)
+      .withOffsetVerification(verifyOffsetFn)
+      .withStartSourceFrom((lastProcessedOffset, offset) => offset <= lastProcessedOffset)
+    if (complete) sp.withAllowCompletion(true)
+    else sp
   }
 
-  case class TestSourceProvider(
-      system: ActorSystem[_],
-      src: Source[Envelope, NotUsed],
-      offsetVerificationF: Long => OffsetVerification)
-      extends SourceProvider[Long, Envelope]
-      with VerifiableSourceProvider[Long, Envelope] {
-    implicit val executionContext: ExecutionContext = system.executionContext
-    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, NotUsed]] =
-      offset().map {
-        case Some(o) => src.dropWhile(_.offset <= o)
-        case _       => src
-      }
-
-    override def extractOffset(env: Envelope): Long = env.offset
-
-    override def extractCreationTime(env: Envelope): Long = 0L
-
-    override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
-  }
   // test model is as simple as a text that gets other string concatenated to it
   case class ConcatStr(id: String, text: String) {
     def concat(newMsg: String) = copy(text = text + "|" + newMsg)
@@ -246,7 +229,7 @@ class SlickProjectionSpec
       val slickProjection =
         SlickProjection.exactlyOnce(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           // build event handler from simple lambda
           handler = () =>
@@ -281,7 +264,7 @@ class SlickProjectionSpec
         SlickProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
@@ -316,7 +299,7 @@ class SlickProjectionSpec
         SlickProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
@@ -357,7 +340,7 @@ class SlickProjectionSpec
         SlickProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
@@ -398,7 +381,7 @@ class SlickProjectionSpec
       val slickProjectionFailing =
         SlickProjection.exactlyOnce(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           () => bogusEventHandler)
 
@@ -430,7 +413,7 @@ class SlickProjectionSpec
       val slickProjection =
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           () => eventHandler())
 
@@ -455,7 +438,7 @@ class SlickProjectionSpec
       val slickProjectionFailing =
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           () => bogusEventHandler)
 
@@ -487,7 +470,7 @@ class SlickProjectionSpec
       val slickProjection =
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           () => eventHandler())
 
@@ -516,7 +499,7 @@ class SlickProjectionSpec
       val slickProjectionFailing =
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           () => bogusEventHandler)
 
@@ -548,7 +531,7 @@ class SlickProjectionSpec
       val slickProjection =
         SlickProjection.exactlyOnce(
           projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           () => eventHandler())
 
@@ -580,7 +563,7 @@ class SlickProjectionSpec
         repository.concatToText(envelope.id, envelope.message)
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val slickProjection =
         SlickProjection.exactlyOnce(
@@ -634,7 +617,7 @@ class SlickProjectionSpec
           VerificationSuccess
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val slickProjection =
         SlickProjection.exactlyOnce(
@@ -673,7 +656,7 @@ class SlickProjectionSpec
         repository.concatToText(envelope.id, envelope.message)
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val slickProjection =
         SlickProjection.exactlyOnce(
@@ -710,7 +693,7 @@ class SlickProjectionSpec
         SlickProjection
           .groupedWithin(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             // build event handler from simple lambda
             handler = () =>
@@ -758,7 +741,7 @@ class SlickProjectionSpec
         SlickProjection
           .groupedWithinAsync(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             handler = () => handler())
           .withGroup(2, 3.seconds)
@@ -793,7 +776,7 @@ class SlickProjectionSpec
       val slickProjection =
         SlickProjection.atLeastOnce(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           () => eventHandler())
 
@@ -823,7 +806,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => eventHandler())
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
@@ -854,7 +837,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => eventHandler())
           .withSaveOffset(2, 1.minute)
@@ -881,7 +864,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce(
             projectionId = projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => bogusEventHandler)
           .withSaveOffset(1, Duration.Zero)
@@ -915,7 +898,7 @@ class SlickProjectionSpec
       val slickProjection =
         SlickProjection.atLeastOnce(
           projectionId = projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           () => eventHandler())
 
@@ -941,7 +924,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce(
             projectionId = projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => bogusEventHandler)
           .withSaveOffset(2, 1.minute)
@@ -976,7 +959,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce(
             projectionId = projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => eventHandler())
           .withSaveOffset(2, 1.minute)
@@ -1014,7 +997,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce[Long, Envelope, H2Profile](
             projectionId = projectionId,
-            sourceProvider = TestSourceProvider(system, source, _ => VerificationSuccess),
+            sourceProvider = TestSourceProvider[Long, Envelope](source, _.offset),
             databaseConfig = dbConfig,
             () => eventHandler())
           .withSaveOffset(10, 1.minute)
@@ -1064,7 +1047,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce[Long, Envelope, H2Profile](
             projectionId = projectionId,
-            sourceProvider = TestSourceProvider(system, source, _ => VerificationSuccess),
+            sourceProvider = TestSourceProvider[Long, Envelope](source, _.offset),
             databaseConfig = dbConfig,
             () => eventHandler())
           .withSaveOffset(10, 2.seconds)
@@ -1112,7 +1095,7 @@ class SlickProjectionSpec
         repository.concatToText(envelope.id, envelope.message)
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val slickProjection =
         SlickProjection.atLeastOnce(
@@ -1140,7 +1123,7 @@ class SlickProjectionSpec
           VerificationSuccess
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val slickProjection =
         SlickProjection.atLeastOnce(
@@ -1177,7 +1160,7 @@ class SlickProjectionSpec
       val projection =
         SlickProjection.atLeastOnceAsync(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           databaseConfig = dbConfig,
           handler = () => handler())
 
@@ -1208,7 +1191,7 @@ class SlickProjectionSpec
 
       val projection =
         SlickProjection
-          .atLeastOnceFlow(projectionId, sourceProvider(system, entityId), dbConfig, flowHandler)
+          .atLeastOnceFlow(projectionId, sourceProvider(entityId), dbConfig, flowHandler)
           .withSaveOffset(1, 1.minute)
 
       projectionTestKit.run(projection) {
@@ -1284,7 +1267,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce[Long, Envelope, H2Profile](
             projectionId = projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => handler)
           .withSaveOffset(1, Duration.Zero)
@@ -1323,7 +1306,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce[Long, Envelope, H2Profile](
             projectionId = projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => handler)
           .withSaveOffset(1, Duration.Zero)
@@ -1383,7 +1366,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce[Long, Envelope, H2Profile](
             projectionId = projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             handlerFactory)
           .withRestartBackoff(1.second, 2.seconds, 0.0)
@@ -1441,7 +1424,7 @@ class SlickProjectionSpec
         SlickProjection
           .atLeastOnce[Long, Envelope, H2Profile](
             projectionId = projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             databaseConfig = dbConfig,
             () => handler)
           .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0) // no restarts
@@ -1470,7 +1453,7 @@ class SlickProjectionSpec
 
       val projection =
         SlickProjection
-          .atLeastOnce(projectionId, sourceProvider(system, entityId), dbConfig, () => handler)
+          .atLeastOnce(projectionId, sourceProvider(entityId), dbConfig, () => handler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
           .withSaveOffset(1, Duration.Zero)
 
@@ -1505,7 +1488,7 @@ class SlickProjectionSpec
         SlickProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider(system, entityId, complete = false),
+            sourceProvider(entityId, complete = false),
             databaseConfig = dbConfig,
             () => eventHandler)
 
@@ -1545,7 +1528,7 @@ class SlickProjectionSpec
         SlickProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider(system, entityId, complete = false),
+            sourceProvider(entityId, complete = false),
             databaseConfig = dbConfig,
             () => eventHandler)
 
