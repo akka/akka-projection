@@ -35,9 +35,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -132,16 +130,20 @@ public class JdbcProjectionTest extends JUnitSuite {
   }
 
   public static SourceProvider<Long, Envelope> sourceProvider(String entityId) {
-    Source<Envelope, NotUsed> envelopes = Source.from(Arrays.asList(
-      new Envelope(entityId, 1, "abc"),
-      new Envelope(entityId, 2, "def"),
-      new Envelope(entityId, 3, "ghi"),
-      new Envelope(entityId, 4, "jkl"),
-      new Envelope(entityId, 5, "mno"),
-      new Envelope(entityId, 6, "pqr")));
+    Source<Envelope, NotUsed> envelopes =
+        Source.from(
+            Arrays.asList(
+                new Envelope(entityId, 1, "abc"),
+                new Envelope(entityId, 2, "def"),
+                new Envelope(entityId, 3, "ghi"),
+                new Envelope(entityId, 4, "jkl"),
+                new Envelope(entityId, 5, "mno"),
+                new Envelope(entityId, 6, "pqr")));
 
-    TestSourceProvider<Long, Envelope> sourceProvider = TestSourceProvider.create(envelopes, env -> env.offset)
-      .withStartSourceFrom((Long lastProcessedOffset, Long offset) -> offset <= lastProcessedOffset);
+    TestSourceProvider<Long, Envelope> sourceProvider =
+        TestSourceProvider.create(envelopes, env -> env.offset)
+            .withStartSourceFrom(
+                (Long lastProcessedOffset, Long offset) -> offset <= lastProcessedOffset);
 
     return sourceProvider;
   }
@@ -378,11 +380,7 @@ public class JdbcProjectionTest extends JUnitSuite {
 
     Projection<Envelope> projection =
         JdbcProjection.atLeastOnceFlow(
-                projectionId,
-                sourceProvider(entityId),
-                jdbcSessionCreator,
-                flow,
-                testKit.system())
+                projectionId, sourceProvider(entityId), jdbcSessionCreator, flow, testKit.system())
             .withSaveOffset(1, Duration.ofMinutes(1));
 
     projectionTestKit.run(

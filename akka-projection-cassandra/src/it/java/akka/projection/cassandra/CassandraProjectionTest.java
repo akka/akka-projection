@@ -24,6 +24,7 @@ import akka.projection.cassandra.javadsl.CassandraProjection;
 import akka.projection.javadsl.ActorHandler;
 import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
+import akka.projection.testkit.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
@@ -36,12 +37,10 @@ import scala.concurrent.Await;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
 
@@ -100,46 +99,19 @@ public class CassandraProjectionTest extends JUnitSuite {
     }
   }
 
-  static class TestSourceProvider extends SourceProvider<Long, Envelope> {
+  public static SourceProvider<Long, Envelope> sourceProvider(String entityId) {
+    Source<Envelope, NotUsed> envelopes = Source.from(Arrays.asList(
+      new Envelope(entityId, 1, "abc"),
+      new Envelope(entityId, 2, "def"),
+      new Envelope(entityId, 3, "ghi"),
+      new Envelope(entityId, 4, "jkl"),
+      new Envelope(entityId, 5, "mno"),
+      new Envelope(entityId, 6, "pqr")));
 
-    private final String entityId;
+    TestSourceProvider<Long, Envelope> sourceProvider = TestSourceProvider.create(envelopes, env -> env.offset)
+      .withStartSourceFrom((Long lastProcessedOffset, Long offset) -> offset <= lastProcessedOffset);
 
-    private final List<Envelope> envelopes;
-
-    TestSourceProvider(String entityId) {
-      this.entityId = entityId;
-      envelopes =
-          Arrays.asList(
-              new Envelope(entityId, 1, "abc"),
-              new Envelope(entityId, 2, "def"),
-              new Envelope(entityId, 3, "ghi"),
-              new Envelope(entityId, 4, "jkl"),
-              new Envelope(entityId, 5, "mno"),
-              new Envelope(entityId, 6, "pqr"));
-    }
-
-    @Override
-    public CompletionStage<Source<Envelope, NotUsed>> source(
-        Supplier<CompletionStage<Optional<Long>>> offsetF) {
-      return offsetF
-          .get()
-          .toCompletableFuture()
-          .thenApplyAsync(
-              offset -> {
-                if (offset.isPresent()) return Source.from(envelopes).drop(offset.get().intValue());
-                else return Source.from(envelopes);
-              });
-    }
-
-    @Override
-    public Long extractOffset(Envelope envelope) {
-      return envelope.offset;
-    }
-
-    @Override
-    public long extractCreationTime(Envelope envelope) {
-      return 0L;
-    }
+    return sourceProvider;
   }
 
   static class TestActorHandler extends ActorHandler<Envelope, TestHandlerBehavior.Req> {
@@ -265,7 +237,7 @@ public class CassandraProjectionTest extends JUnitSuite {
 
     Projection<Envelope> projection =
         CassandraProjection.atLeastOnce(
-                projectionId, new TestSourceProvider(entityId), () -> concatHandler(str))
+                projectionId, sourceProvider(entityId), () -> concatHandler(str))
             .withSaveOffset(1, Duration.ZERO);
 
     projectionTestKit.run(
@@ -286,7 +258,7 @@ public class CassandraProjectionTest extends JUnitSuite {
 
     Projection<Envelope> projection =
         CassandraProjection.atLeastOnce(
-                projectionId, new TestSourceProvider(entityId), () -> concatHandlerFail4(str))
+                projectionId, sourceProvider(entityId), () -> concatHandlerFail4(str))
             .withSaveOffset(1, Duration.ZERO);
 
     try {
@@ -305,7 +277,7 @@ public class CassandraProjectionTest extends JUnitSuite {
     // re-run projection without failing function
     Projection<Envelope> projection2 =
         CassandraProjection.atLeastOnce(
-                projectionId, new TestSourceProvider(entityId), () -> concatHandler(str))
+                projectionId, sourceProvider(entityId), () -> concatHandler(str))
             .withSaveOffset(1, Duration.ZERO);
 
     projectionTestKit.run(
@@ -326,7 +298,7 @@ public class CassandraProjectionTest extends JUnitSuite {
     Projection<Envelope> projection =
         CassandraProjection.groupedWithin(
                 projectionId,
-                new TestSourceProvider(entityId),
+                sourceProvider(entityId),
                 () -> new GroupedConcatHandler(str, handlerProbe))
             .withGroup(3, Duration.ofMinutes(1));
 
@@ -349,7 +321,7 @@ public class CassandraProjectionTest extends JUnitSuite {
 
     Projection<Envelope> projection =
         CassandraProjection.atMostOnce(
-            projectionId, new TestSourceProvider(entityId), () -> concatHandler(str));
+            projectionId, sourceProvider(entityId), () -> concatHandler(str));
 
     projectionTestKit.run(
         projection,
@@ -369,7 +341,7 @@ public class CassandraProjectionTest extends JUnitSuite {
 
     Projection<Envelope> projection =
         CassandraProjection.atMostOnce(
-            projectionId, new TestSourceProvider(entityId), () -> concatHandlerFail4(str));
+            projectionId, sourceProvider(entityId), () -> concatHandlerFail4(str));
 
     try {
       projectionTestKit.run(
@@ -387,7 +359,7 @@ public class CassandraProjectionTest extends JUnitSuite {
     // re-run projection without failing function
     Projection<Envelope> projection2 =
         CassandraProjection.atMostOnce(
-            projectionId, new TestSourceProvider(entityId), () -> concatHandler(str));
+            projectionId, sourceProvider(entityId), () -> concatHandler(str));
 
     projectionTestKit.run(
         projection2,
@@ -408,7 +380,7 @@ public class CassandraProjectionTest extends JUnitSuite {
     Projection<Envelope> projection =
         CassandraProjection.atLeastOnce(
                 projectionId,
-                new TestSourceProvider(entityId),
+                sourceProvider(entityId),
                 () ->
                     new TestActorHandler(
                         TestHandlerBehavior.create(receiveProbe.getRef(), stopProbe.getRef()),
