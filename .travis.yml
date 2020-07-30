@@ -34,15 +34,22 @@ jobs:
 #    - env: CMD="unidoc; docs/paradox"
 #      name: "Create API and reference documentation"
 #
+
+    - stage: test
+      env:
+        - JDK="adopt@~1.11-0"
+        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
+        - CMD="it:test"
+      name: "Run all integration tests with Scala 2.13 and AdoptOpenJDK 11"
 #    - stage: test
 #      env:
 #        - CMD="test"
 #      name: "Run unit tests with Scala 2.13 and AdoptOpenJDK 8"
-    - env:
-        - JDK="adopt@~1.11-0"
-        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="it:test"
-      name: "Run unit tests with Scala 2.13 and AdoptOpenJDK 11"
+#    - env:
+#        - JDK="adopt@~1.11-0"
+#        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
+#        - CMD="test"
+#      name: "Run unit tests with Scala 2.13 and AdoptOpenJDK 11"
 #    - env:
 #        - JDK="adopt@~1.11-0"
 #        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
