@@ -16,7 +16,8 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
-import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec._
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.Envelope
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.TelemetryTester
 import akka.projection.internal.metrics.tools.TestHandlers
 
 sealed abstract class ServiceTimeAndProcessingCountMetricSpec extends InternalProjectionStateMetricsSpec {

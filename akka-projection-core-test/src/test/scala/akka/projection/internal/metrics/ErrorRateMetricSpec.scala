@@ -14,10 +14,11 @@ import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.metrics.tools.TestHandlers
 import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
-import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec._
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.Envelope
+import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.TelemetryTester
+import akka.projection.internal.metrics.tools.TestHandlers
 
 abstract class ErrorRateMetricSpec extends InternalProjectionStateMetricsSpec {
   implicit var projectionId: ProjectionId = null
