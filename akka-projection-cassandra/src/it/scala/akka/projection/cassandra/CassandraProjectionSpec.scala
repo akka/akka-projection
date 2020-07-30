@@ -55,8 +55,6 @@ import org.scalatest.wordspec.AnyWordSpecLike
 object CassandraProjectionSpec {
   case class Envelope(id: String, offset: Long, message: String)
 
-  def offsetExtractor(env: Envelope): Long = env.offset
-
   def sourceProvider(
       id: String,
       complete: Boolean = true,
