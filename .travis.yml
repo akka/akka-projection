@@ -19,7 +19,6 @@ script:
   # copy mssql license agreement for tests
   - cp container-license-acceptance.txt akka-projection-jdbc/src/it/resources/container-license-acceptance.txt
   - cp container-license-acceptance.txt akka-projection-slick/src/it/resources/container-license-acceptance.txt
-  - cp sbtconcurrency.sbt-travis sbtconcurrency.sbt
   - sbt -jvm-opts .jvmopts-travis "$AKKA_SNAPSHOT" "$ALPAKKA_KAFKA_SNAPSHOT" "$CMD"
 
 jobs:
