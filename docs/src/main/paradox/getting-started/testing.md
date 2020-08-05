@@ -1,6 +1,6 @@
 # Writing tests for a Projection
 
-Like other akka libraries, Projections ships with a @ref:[TestKit](../testing.md) that a user can include to assert the correctness of their Projection handler implementation.
+Like other Akka libraries, Projections ships with a @ref:[TestKit](../testing.md) that a user can include to assert the correctness of their Projection handler implementation.
 Add the Projections TestKit dependency to your project:
 
 @@dependency [sbt,Maven,Gradle] {
@@ -9,7 +9,9 @@ artifact=akka-projection-testkit_$scala.binary.version$
 version=$project.version$
 }
 
-Import the @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit] and other utilities into a new [ScalaTest](https://www.scalatest.org/) test spec.
+Import the @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit] and other utilities into a new 
+@scala[[ScalaTest](https://doc.akka.io/docs/akka/current/typed/testing-async.html#test-framework-integration) test spec]
+@java[[JUnit](https://doc.akka.io/docs/akka/current/typed/testing-async.html#test-framework-integration) test].
 
 Scala
 :  @@snip [ShoppingCartAppSpec.scala](/examples/src/test/scala/docs/guide/ShoppingCartAppSpec.scala) { #testKitImports }

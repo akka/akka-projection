@@ -33,7 +33,7 @@ private[projection] final case class ProjectionSettings(
 private[projection] object ProjectionSettings {
 
   def apply(system: ActorSystem[_]): ProjectionSettings = {
-    fromConfig(system.classicSystem.settings.config.getConfig("akka.projection"))
+    fromConfig(system.settings.config.getConfig("akka.projection"))
   }
 
   def fromConfig(config: Config): ProjectionSettings = {

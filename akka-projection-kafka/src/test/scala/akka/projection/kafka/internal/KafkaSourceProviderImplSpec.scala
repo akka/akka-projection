@@ -47,7 +47,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
   import KafkaSourceProviderImplSpec._
 
   val projectionTestKit: ProjectionTestKit = ProjectionTestKit(testKit)
-  implicit val ec = system.classicSystem.dispatcher
+  implicit val ec = system.executionContext
 
   "The KafkaSourceProviderImpl" must {
 
