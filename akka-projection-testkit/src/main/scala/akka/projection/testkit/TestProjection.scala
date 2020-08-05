@@ -8,7 +8,7 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 import scala.compat.java8.FunctionConverters._
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
@@ -43,6 +43,7 @@ import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
+import com.github.ghik.silencer.silent
 
 @ApiMayChange
 object TestProjection {
@@ -371,6 +372,7 @@ class TestInMemoryOffsetStore[Offset] private () {
   /**
    * Java API: All offsets saved to the offset store.
    */
+  @silent
   def allOffsetsJava(): java.util.List[akka.japi.Pair[ProjectionId, Offset]] =
     savedOffsets.map { case (id, offset) => akka.japi.Pair(id, offset) }.asJava
 
