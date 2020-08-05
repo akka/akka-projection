@@ -124,26 +124,25 @@ public class TestKitDocExample {
     Handler<Pair<Integer, String>> handler = null;
 
     // #testkit-testprojection
-    List<Pair<Integer, String>> testData = Stream.of(
-      Pair.create(0, "abc"), Pair.create(1, "def")
-    ).collect(Collectors.toList());
+    List<Pair<Integer, String>> testData =
+        Stream.of(Pair.create(0, "abc"), Pair.create(1, "def")).collect(Collectors.toList());
 
     Source<Pair<Integer, String>, NotUsed> source = Source.from(testData);
 
-    Function<Pair<Integer, String>, Integer> extractOffsetFn = (Pair<Integer, String> env) -> env.first();
+    Function<Pair<Integer, String>, Integer> extractOffsetFn =
+        (Pair<Integer, String> env) -> env.first();
 
     TestSourceProvider<Integer, Pair<Integer, String>> sourceProvider =
-      TestSourceProvider.create(source, extractOffsetFn);
+        TestSourceProvider.create(source, extractOffsetFn);
 
     Projection<Pair<Integer, String>> projection =
-      TestProjection.create(ProjectionId.of("test", "00"), sourceProvider, () -> handler);
+        TestProjection.create(ProjectionId.of("test", "00"), sourceProvider, () -> handler);
 
     projectionTestKit.run(
-      projection,
-      () -> {
-        // assert logic ...
-      }
-    );
+        projection,
+        () -> {
+          // assert logic ...
+        });
     // #testkit-testprojection
   }
 

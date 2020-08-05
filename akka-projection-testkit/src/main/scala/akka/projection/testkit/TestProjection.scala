@@ -75,7 +75,7 @@ object TestProjection {
       // Disable batching so that `ProjectionTestKit.runWithTestSink` emits 1 `Done` per envelope.
       offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1)),
       statusObserver = NoopStatusObserver,
-      offsetStoreFactory = system => TestInMemoryOffsetStore[Offset](system),
+      offsetStoreFactory = _ => TestInMemoryOffsetStore[Offset](),
       startOffset = None)
 
   /**
@@ -339,24 +339,18 @@ object TestInMemoryOffsetStore {
 
   /**
    * An in-memory offset store that may be used with a [[TestProjection]].
-   *
-   * @param system - an [[akka.actor.typed.ActorSystem]] to provide an execution context to asynchronous operations.
    */
-  def apply[Offset](system: ActorSystem[_]): TestInMemoryOffsetStore[Offset] =
-    new TestInMemoryOffsetStore[Offset](system)
+  def apply[Offset](): TestInMemoryOffsetStore[Offset] =
+    new TestInMemoryOffsetStore[Offset]()
 
   /**
    * An in-memory offset store that may be used with a [[TestProjection]].
-   *
-   * @param system - an [[akka.actor.typed.ActorSystem]] to provide an execution context to asynchronous operations.
    */
-  def create[Offset](system: ActorSystem[_]): TestInMemoryOffsetStore[Offset] = apply(system)
+  def create[Offset](): TestInMemoryOffsetStore[Offset] = apply()
 }
 
 @ApiMayChange
-class TestInMemoryOffsetStore[Offset] private (system: ActorSystem[_]) {
-  private implicit val executionContext: ExecutionContext = system.executionContext
-
+class TestInMemoryOffsetStore[Offset] private () {
   private var savedOffsets = List[(ProjectionId, Offset)]()
 
   /**
