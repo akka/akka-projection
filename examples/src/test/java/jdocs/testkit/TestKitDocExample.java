@@ -21,7 +21,6 @@ import java.util.concurrent.CompletionStage;
 
 // #testkit-import
 import akka.projection.testkit.TestSourceProvider;
-import com.datastax.oss.driver.shaded.guava.common.base.Function;
 import org.junit.ClassRule;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
@@ -34,6 +33,7 @@ import scala.concurrent.duration.FiniteDuration;
 // #testkit-duration
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -46,6 +46,7 @@ import static org.junit.Assert.assertEquals;
 
 // #testkit-testprojection
 
+import java.util.function.Function;
 import java.util.stream.Stream;
 import akka.japi.Pair;
 import akka.stream.javadsl.Source;

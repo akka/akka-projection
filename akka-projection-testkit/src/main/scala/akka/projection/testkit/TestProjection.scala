@@ -8,6 +8,7 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
+import scala.jdk.CollectionConverters._
 import scala.compat.java8.FunctionConverters._
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
@@ -145,8 +146,8 @@ class TestProjection[Offset, Envelope] private[projection] (
   def withStartOffset(offset: Offset): TestProjection[Offset, Envelope] = copy(startOffset = Some(offset))
 
   /**
-   * The offset store factory. The offset store has the same lifetime as the Projection. It is instantiated when a
-   * new [[InternalProjectionState]] is created with [[newState]].
+   * The offset store factory. The offset store has the same lifetime as the Projection. It is instantiated when the
+   * projection is first run and is created with [[newState]].
    */
   def withOffsetStoreFactory(
       factory: ActorSystem[_] => TestInMemoryOffsetStore[Offset]): TestProjection[Offset, Envelope] =
@@ -361,16 +362,27 @@ class TestInMemoryOffsetStore[Offset] private (system: ActorSystem[_]) {
   /**
    * The last saved offset to the offset store.
    */
-  def lastOffset(): Option[Offset] = savedOffsets.headOption.map { case (_, offset) => offset }
+  def lastOffset(): Option[Offset] = this.synchronized(savedOffsets.headOption.map { case (_, offset) => offset })
+
+  /**
+   * Java API: The last saved offset to the offset store.
+   */
+  def lastOffsetJava(): Optional[Offset] = lastOffset().asJava
 
   /**
    * All offsets saved to the offset store.
    */
-  def allOffsets(): List[(ProjectionId, Offset)] = savedOffsets
+  def allOffsets(): List[(ProjectionId, Offset)] = this.synchronized(savedOffsets)
 
-  def readOffsets(): Future[Option[Offset]] = Future(lastOffset())
+  /**
+   * Java API: All offsets saved to the offset store.
+   */
+  def allOffsetsJava(): java.util.List[akka.japi.Pair[ProjectionId, Offset]] =
+    savedOffsets.map { case (id, offset) => akka.japi.Pair(id, offset) }.asJava
 
-  def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = {
+  def readOffsets(): Future[Option[Offset]] = this.synchronized { Future.successful(lastOffset()) }
+
+  def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = this.synchronized {
     savedOffsets = (projectionId -> offset) +: savedOffsets
     Future.successful(Done)
   }
