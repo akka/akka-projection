@@ -83,7 +83,7 @@ object ProjectionBehaviorSpec {
         handlerStrategy,
         AtMostOnce(),
         NoopStatusObserver,
-        system => TestInMemoryOffsetStore[Int](system),
+        _ => TestInMemoryOffsetStore[Int](),
         None) {
 
     override private[projection] def newState(implicit system: ActorSystem[_]): TestInternalProjectionState =
