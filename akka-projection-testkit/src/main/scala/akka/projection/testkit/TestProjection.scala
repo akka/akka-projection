@@ -4,25 +4,18 @@
 
 package akka.projection.testkit
 
-import java.util.Optional
-import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.compat.java8.FunctionConverters._
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
-import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
-import akka.projection.OffsetVerification
 import akka.projection.Projection
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
@@ -41,7 +34,6 @@ import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.SourceProviderAdapter
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 
@@ -76,7 +68,7 @@ object TestProjection {
       // Disable batching so that `ProjectionTestKit.runWithTestSink` emits 1 `Done` per envelope.
       offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1)),
       statusObserver = NoopStatusObserver,
-      offsetStoreFactory = system => TestInMemoryOffsetStore[Offset](system),
+      offsetStoreFactory = () => TestInMemoryOffsetStore[Offset](),
       startOffset = None)
 
   /**
@@ -112,7 +104,7 @@ class TestProjection[Offset, Envelope] private[projection] (
     val handlerStrategy: HandlerStrategy,
     val offsetStrategy: OffsetStrategy,
     val statusObserver: StatusObserver[Envelope],
-    val offsetStoreFactory: ActorSystem[_] => TestInMemoryOffsetStore[Offset],
+    val offsetStoreFactory: () => TestInMemoryOffsetStore[Offset],
     val startOffset: Option[Offset])
     extends Projection[Envelope]
     with SettingsImpl[TestProjection[Offset, Envelope]] {
@@ -127,7 +119,7 @@ class TestProjection[Offset, Envelope] private[projection] (
       handlerStrategy: HandlerStrategy = handlerStrategy,
       offsetStrategy: OffsetStrategy = offsetStrategy,
       statusObserver: StatusObserver[Envelope] = statusObserver,
-      offsetStoreFactory: ActorSystem[_] => TestInMemoryOffsetStore[Offset] = offsetStoreFactory,
+      offsetStoreFactory: () => TestInMemoryOffsetStore[Offset] = offsetStoreFactory,
       startOffset: Option[Offset] = startOffset): TestProjection[Offset, Envelope] =
     new TestProjection(
       projectionId,
@@ -147,11 +139,10 @@ class TestProjection[Offset, Envelope] private[projection] (
   def withStartOffset(offset: Offset): TestProjection[Offset, Envelope] = copy(startOffset = Some(offset))
 
   /**
-   * The offset store factory. The offset store has the same lifetime as the Projection. It is instantiated when a
-   * new [[InternalProjectionState]] is created with [[newState]].
+   * The offset store factory. The offset store has the same lifetime as the Projection. It is instantiated when the
+   * projection is first run and is created with [[newState]].
    */
-  def withOffsetStoreFactory(
-      factory: ActorSystem[_] => TestInMemoryOffsetStore[Offset]): TestProjection[Offset, Envelope] =
+  def withOffsetStoreFactory(factory: () => TestInMemoryOffsetStore[Offset]): TestProjection[Offset, Envelope] =
     copy(offsetStoreFactory = factory)
 
   /**
@@ -178,7 +169,7 @@ class TestProjection[Offset, Envelope] private[projection] (
   private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
 
   /**
-   * INTERNAL API: To control the [[InternalProjectionState]] used in the projection.
+   * INTERNAL API: To control the [[akka.projection.internal.InternalProjectionState]] used in the projection.
    */
   @InternalApi
   private[projection] def newState(implicit system: ActorSystem[_]): TestInternalProjectionState =
@@ -187,7 +178,7 @@ class TestProjection[Offset, Envelope] private[projection] (
       sourceProvider,
       handlerStrategy,
       offsetStrategy,
-      offsetStoreFactory(system),
+      offsetStoreFactory(),
       startOffset)
 
   private def state(implicit system: ActorSystem[_]): TestInternalProjectionState = {
@@ -254,186 +245,5 @@ class TestProjection[Offset, Envelope] private[projection] (
       killSwitch.shutdown()
       futureDone
     }
-  }
-}
-
-@ApiMayChange
-object TestSourceProvider {
-
-  /**
-   * A [[TestSourceProvider]] is used to supply an arbitrary stream of envelopes to a [[TestProjection]]
-   *
-   * @param sourceEvents - a [[akka.stream.scaladsl.Source]] of envelopes
-   * @param extractOffset - a user-defined function to extract the offset from an envelope.
-   */
-  def apply[Offset, Envelope](
-      sourceEvents: Source[Envelope, NotUsed],
-      extractOffset: Envelope => Offset): TestSourceProvider[Offset, Envelope] = {
-    new TestSourceProvider[Offset, Envelope](
-      sourceEvents = sourceEvents,
-      extractOffsetFn = extractOffset,
-      extractCreationTimeFn = (_: Envelope) => 0L,
-      verifyOffsetFn = (_: Offset) => OffsetVerification.VerificationSuccess,
-      startSourceFromFn = (_: Offset, _: Offset) => false,
-      allowCompletion = false)
-  }
-
-  /**
-   * A [[TestSourceProvider]] is used to supply an arbitrary stream of envelopes to a [[TestProjection]]
-   *
-   * @param sourceEvents - a [[akka.stream.javadsl.Source]] of envelopes
-   * @param extractOffset - a user-defined function to extract the offset from an envelope
-   */
-  def create[Offset, Envelope](
-      sourceEvents: akka.stream.javadsl.Source[Envelope, NotUsed],
-      extractOffset: java.util.function.Function[Envelope, Offset]): TestSourceProvider[Offset, Envelope] =
-    apply(sourceEvents.asScala, extractOffset.asScala)
-}
-
-@ApiMayChange
-class TestSourceProvider[Offset, Envelope] private[projection] (
-    sourceEvents: Source[Envelope, NotUsed],
-    extractOffsetFn: Envelope => Offset,
-    extractCreationTimeFn: Envelope => Long,
-    verifyOffsetFn: Offset => OffsetVerification,
-    startSourceFromFn: (Offset, Offset) => Boolean,
-    allowCompletion: Boolean)
-    extends akka.projection.javadsl.VerifiableSourceProvider[Offset, Envelope]
-    with VerifiableSourceProvider[Offset, Envelope] {
-
-  private def copy(
-      sourceEvents: Source[Envelope, NotUsed] = sourceEvents,
-      extractOffsetFn: Envelope => Offset = extractOffsetFn,
-      extractCreationTimeFn: Envelope => Long = extractCreationTimeFn,
-      verifyOffsetFn: Offset => OffsetVerification = verifyOffsetFn,
-      startSourceFromFn: (Offset, Offset) => Boolean = startSourceFromFn,
-      allowCompletion: Boolean = allowCompletion): TestSourceProvider[Offset, Envelope] =
-    new TestSourceProvider(
-      sourceEvents,
-      extractOffsetFn,
-      extractCreationTimeFn,
-      verifyOffsetFn,
-      startSourceFromFn,
-      allowCompletion)
-
-  /**
-   * A user-defined function to extract the event creation time from an envelope.
-   */
-  def withExtractCreationTimeFunction(extractCreationTimeFn: Envelope => Long): TestSourceProvider[Offset, Envelope] =
-    copy(extractCreationTimeFn = extractCreationTimeFn)
-
-  /**
-   * Java API
-   *
-   * A user-defined function to extract the event creation time from an envelope.
-   */
-  def withExtractCreationTimeFunction(
-      extractCreationTimeFn: java.util.function.Function[Envelope, Long]): TestSourceProvider[Offset, Envelope] =
-    withExtractCreationTimeFunction(extractCreationTimeFn.asScala)
-
-  /**
-   * Allow the [[sourceEvents]] Source to complete or stay open indefinitely.
-   */
-  def withAllowCompletion(allowCompletion: Boolean): TestSourceProvider[Offset, Envelope] =
-    copy(allowCompletion = allowCompletion)
-
-  /**
-   * A user-defined function to verify offsets.
-   */
-  def withOffsetVerification(verifyOffsetFn: Offset => OffsetVerification): TestSourceProvider[Offset, Envelope] =
-    copy(verifyOffsetFn = verifyOffsetFn)
-
-  /**
-   * Java API: A user-defined function to verify offsets.
-   */
-  def withOffsetVerification(offsetVerificationFn: java.util.function.Function[Offset, OffsetVerification])
-      : TestSourceProvider[Offset, Envelope] =
-    withOffsetVerification(offsetVerificationFn.asScala)
-
-  /**
-   * A user-defined function to compare the last offset returned by the offset store with the offset in the source
-   * to filter out previously processed offsets.
-   *
-   * First parameter: Last offset processed. Second parameter this envelope's offset from [[sourceEvents]].
-   */
-  def withStartSourceFrom(startSourceFromFn: (Offset, Offset) => Boolean): TestSourceProvider[Offset, Envelope] =
-    copy(startSourceFromFn = startSourceFromFn)
-
-  /**
-   * Java API: A user-defined function to compare the last offset returned by the offset store with the offset in the source
-   * to filter out previously processed offsets.
-   *
-   * First parameter: Last offset processed. Second parameter this envelope's offset from [[sourceEvents]].
-   */
-  def withStartSourceFrom(startSourceFromFn: java.util.function.BiFunction[Offset, Offset, java.lang.Boolean])
-      : TestSourceProvider[Offset, Envelope] = {
-    val adapted: (Offset, Offset) => Boolean = (lastOffset, offset) =>
-      Boolean.box(startSourceFromFn.apply(lastOffset, offset))
-    withStartSourceFrom(adapted)
-  }
-
-  override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
-    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
-    val src =
-      if (allowCompletion) sourceEvents
-      else sourceEvents.concat(Source.maybe)
-    offset().map {
-      case Some(o) => src.dropWhile(env => startSourceFromFn(o, extractOffset(env)))
-      case _       => src
-    }
-  }
-
-  override def source(offset: Supplier[CompletionStage[Optional[Offset]]])
-      : CompletionStage[akka.stream.javadsl.Source[Envelope, NotUsed]] = {
-    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
-    source(() => offset.get().toScala.map(_.asScala)).map(_.asJava).toJava
-  }
-
-  override def extractOffset(envelope: Envelope): Offset = extractOffsetFn(envelope)
-
-  override def extractCreationTime(envelope: Envelope): Long = extractCreationTimeFn(envelope)
-
-  override def verifyOffset(offset: Offset): OffsetVerification = verifyOffsetFn(offset)
-}
-@ApiMayChange
-object TestInMemoryOffsetStore {
-
-  /**
-   * An in-memory offset store that may be used with a [[TestProjection]].
-   *
-   * @param system - an [[akka.actor.typed.ActorSystem]] to provide an execution context to asynchronous operations.
-   */
-  def apply[Offset](system: ActorSystem[_]): TestInMemoryOffsetStore[Offset] =
-    new TestInMemoryOffsetStore[Offset](system)
-
-  /**
-   * An in-memory offset store that may be used with a [[TestProjection]].
-   *
-   * @param system - an [[akka.actor.typed.ActorSystem]] to provide an execution context to asynchronous operations.
-   */
-  def create[Offset](system: ActorSystem[_]): TestInMemoryOffsetStore[Offset] = apply(system)
-}
-
-@ApiMayChange
-class TestInMemoryOffsetStore[Offset] private[projection] (system: ActorSystem[_]) {
-  private implicit val executionContext: ExecutionContext = system.executionContext
-
-  private var savedOffsets = List[(ProjectionId, Offset)]()
-
-  /**
-   * The last saved offset to the offset store.
-   */
-  def lastOffset(): Option[Offset] = savedOffsets.headOption.map { case (_, offset) => offset }
-
-  /**
-   * All offsets saved to the offset store.
-   */
-  def allOffsets(): List[(ProjectionId, Offset)] = savedOffsets
-
-  def readOffsets(): Future[Option[Offset]] = Future(lastOffset())
-
-  def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = {
-    savedOffsets = (projectionId -> offset) +: savedOffsets
-    Future.successful(Done)
   }
 }
