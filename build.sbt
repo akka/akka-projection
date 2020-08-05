@@ -11,6 +11,15 @@ lazy val core =
           "Automatic-Module-Name" -> "akka.projection.core"))
     .settings(Protobuf.settings)
 
+lazy val coreTest =
+  Project(id = "akka-projection-core-test", base = file("akka-projection-core-test"))
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings)
+    .settings(Protobuf.settings)
+    .settings(publish / skip := true)
+    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(testkit % "test->test")
+
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
     .configs(IntegrationTest)
@@ -125,7 +134,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, testkit, jdbc, slick, cassandra, eventsourced, kafka, examples, docs)
+  .aggregate(core, coreTest, testkit, jdbc, slick, cassandra, eventsourced, kafka, examples, docs)
   .settings(publish / skip := true, whitesourceIgnore := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)

@@ -14,6 +14,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Offset
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
+import akka.stream.scaladsl.Source
 // #testKitImports
 import akka.projection.testkit.TestProjection
 import akka.projection.testkit.TestSourceProvider
@@ -49,25 +50,21 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
       val repo = new MockCheckoutRepository
       val handler = new CheckoutProjectionHandler("tag", system, repo)
 
-      val events = List[EventEnvelope[ShoppingCartEvents.Event]](
-        createEnvelope(ShoppingCartEvents.ItemAdded("a7098", "batteries", 1), 0L),
-        createEnvelope(ShoppingCartEvents.ItemQuantityAdjusted("a7098", "batteries", 2), 1L),
-        createEnvelope(ShoppingCartEvents.CheckedOut("a7098", Instant.parse("2020-01-01T12:10:00.00Z")), 2L),
-        createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "crayons", 1), 3L),
-        createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "pens", 1), 4L),
-        createEnvelope(ShoppingCartEvents.ItemRemoved("0d12d", "pens"), 5L),
-        createEnvelope(ShoppingCartEvents.CheckedOut("0d12d", Instant.parse("2020-01-01T08:00:00.00Z")), 6L))
+      val events = Source(
+        List[EventEnvelope[ShoppingCartEvents.Event]](
+          createEnvelope(ShoppingCartEvents.ItemAdded("a7098", "batteries", 1), 0L),
+          createEnvelope(ShoppingCartEvents.ItemQuantityAdjusted("a7098", "batteries", 2), 1L),
+          createEnvelope(ShoppingCartEvents.CheckedOut("a7098", Instant.parse("2020-01-01T12:10:00.00Z")), 2L),
+          createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "crayons", 1), 3L),
+          createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "pens", 1), 4L),
+          createEnvelope(ShoppingCartEvents.ItemRemoved("0d12d", "pens"), 5L),
+          createEnvelope(ShoppingCartEvents.CheckedOut("0d12d", Instant.parse("2020-01-01T08:00:00.00Z")), 6L)))
 
       val projectionId = ProjectionId("name", "key")
       val sourceProvider =
         TestSourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]](events, extractOffset = env => env.offset)
       val projection =
-        TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](
-          system,
-          projectionId,
-          sourceProvider,
-          Offset.sequence(0L),
-          handler)
+        TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](projectionId, sourceProvider, () => handler)
 
       projectionTestKit.run(projection) {
         repo.checkouts shouldBe List(
@@ -94,15 +91,10 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
       val projectionId = ProjectionId("name", "key")
       val sourceProvider =
         TestSourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]](
-          events.toList,
+          Source(events),
           extractOffset = env => env.offset)
       val projection =
-        TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](
-          system,
-          projectionId,
-          sourceProvider,
-          Offset.sequence(0L),
-          handler)
+        TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](projectionId, sourceProvider, () => handler)
 
       LoggingTestKit
         .info("""CheckoutProjectionHandler(tag) last [10] checkouts: 
