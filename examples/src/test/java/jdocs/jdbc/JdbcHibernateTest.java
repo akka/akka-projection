@@ -14,7 +14,7 @@ import akka.projection.jdbc.internal.JdbcOffsetStore;
 import akka.projection.jdbc.internal.JdbcSettings;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
-import akka.projection.testkit.TestSourceProvider;
+import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.javadsl.Source;
 import com.typesafe.config.Config;

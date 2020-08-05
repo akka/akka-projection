@@ -11,8 +11,6 @@ import akka.Done
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.Handler
-import akka.projection.testkit.TestProjection
-import akka.projection.testkit.TestSourceProvider
 import akka.stream.DelayOverflowStrategy
 import akka.stream.scaladsl.DelayStrategy
 import akka.stream.scaladsl.Source

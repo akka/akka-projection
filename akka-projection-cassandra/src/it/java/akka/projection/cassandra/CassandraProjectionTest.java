@@ -24,7 +24,7 @@ import akka.projection.cassandra.javadsl.CassandraProjection;
 import akka.projection.javadsl.ActorHandler;
 import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
-import akka.projection.testkit.TestSourceProvider;
+import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;

@@ -34,7 +34,7 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.testkit.TestSourceProvider
+import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config

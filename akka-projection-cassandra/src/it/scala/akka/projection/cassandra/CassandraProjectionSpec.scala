@@ -41,8 +41,8 @@ import akka.projection.scaladsl.ActorHandler
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.testkit.TestSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.FlowWithContext

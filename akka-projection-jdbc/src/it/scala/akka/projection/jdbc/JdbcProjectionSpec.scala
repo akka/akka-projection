@@ -42,8 +42,8 @@ import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.testkit.TestSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
