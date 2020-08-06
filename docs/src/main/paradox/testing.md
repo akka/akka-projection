@@ -67,3 +67,19 @@ Scala
 
 Java
 :  @@snip [TestKitDocExample.java](/examples/src/test/java/jdocs/testkit/TestKitDocExample.java) { #testkit-assertion-import #testkit-sink-probe }
+
+## Testing with mocked Projection and SourceProvider
+
+To test a handler in isolation you may want to mock out the implementation of a Projection or SourceProvider so that you don't have to setup and teardown the associated technology as part of your _unit_ test.
+For example, you may want to project against a Cassandra database, or read envelopes from an Akka Persistence journal source, but you don't want to have to run Docker containers or embedded/in-memory services just to run your tests.
+The @apidoc[TestProjection] allows you to isolate the runtime of your handler so that you don't need to run these services.
+Using a `TestProjection` has the added benefit of being fast, since you can run everything within the JVM that runs your tests.
+
+Alongside the `TestProjection` is the @apidoc[TestSourceProvider] which can be used to provide test data to the `TestProjection` running the handler.
+Test data can be represented in an akka streams @apidoc[akka.stream.(javadsl|scaladsl).Source] that is passed to the `TestSourceProvider` constructor.
+
+Scala
+:  @@snip [TestKitDocExample.scala](/examples/src/test/scala/docs/testkit/TestKitDocExample.scala) { #testkit-testprojection }
+
+Java
+:  @@snip [TestKitDocExample.scala](/examples/src/test/java/jdocs/testkit/TestKitDocExample.java) { #testkit-testprojection }

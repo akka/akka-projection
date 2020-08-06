@@ -8,7 +8,7 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.projection.ProjectionId
-import akka.projection.slick.SlickProjection
+import akka.projection.scaladsl.Handler
 
 //#testkit-import
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -20,6 +20,13 @@ import akka.projection.testkit.scaladsl.ProjectionTestKit
 import scala.concurrent.duration._
 
 //#testkit-duration
+
+//#testkit-testprojection
+import akka.stream.scaladsl.Source
+import akka.projection.testkit.TestProjection
+import akka.projection.testkit.TestSourceProvider
+
+//#testkit-testprojection
 
 // FIXME: this test can't run, most of its building blocks are 'fake' or are using null values
 // abstract so it doesn run for now
@@ -39,11 +46,7 @@ class TestKitDocExample extends ScalaTestWithActorTestKit {
   val cartViewRepository = new CartViewRepository
 
   // it only needs to compile
-  val projection = SlickProjection.exactlyOnce(
-    ProjectionId("test", "00"),
-    sourceProvider = null,
-    databaseConfig = null,
-    handler = null)
+  val projection = TestProjection(ProjectionId("test", "00"), sourceProvider = null, handler = null)
 
   {
     //#testkit-run
@@ -73,6 +76,24 @@ class TestKitDocExample extends ScalaTestWithActorTestKit {
   cartViewRepository.findById("abc-def").futureValue
 
   //#testkit-sink-probe
+
+  {
+    val handler: Handler[(Int, String)] = null
+
+    //#testkit-testprojection
+    val testData = Source((0, "abc") :: (1, "def") :: Nil)
+
+    val extractOffset = (envelope: (Int, String)) => envelope._1
+
+    val sourceProvider = TestSourceProvider(testData, extractOffset)
+
+    val projection = TestProjection(ProjectionId("test", "00"), sourceProvider, () => handler)
+
+    projectionTestKit.run(projection) {
+      // assert logic ..
+    }
+    //#testkit-testprojection
+  }
 //#testkit
 }
 //#testkit
