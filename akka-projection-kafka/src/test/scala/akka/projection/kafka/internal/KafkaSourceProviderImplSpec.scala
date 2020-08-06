@@ -4,42 +4,47 @@
 
 package akka.projection.kafka.internal
 
-import java.lang.{ Long => JLong }
-
-import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.concurrent.Future
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
-import akka.actor.typed.ActorSystem
 import akka.kafka.ConsumerSettings
 import akka.kafka.scaladsl.Consumer
 import akka.projection.MergeableOffset
-import akka.projection.OffsetVerification.VerificationFailure
-import akka.projection.OffsetVerification.VerificationSuccess
-import akka.projection.Projection
 import akka.projection.ProjectionId
-import akka.projection.RunningProjection
-import akka.projection.StatusObserver
-import akka.projection.internal.ActorHandlerInit
-import akka.projection.internal.NoopStatusObserver
-import akka.projection.internal.RestartBackoffSettings
-import akka.projection.internal.SettingsImpl
-import akka.projection.kafka.KafkaOffsets
-import akka.projection.scaladsl.SourceProvider
-import akka.projection.scaladsl.VerifiableSourceProvider
+import akka.projection.scaladsl.Handler
+import akka.projection.testkit.TestProjection
 import akka.projection.testkit.scaladsl.ProjectionTestKit
-import akka.stream.KillSwitches
-import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.scalatest.wordspec.AnyWordSpecLike
 
+object KafkaSourceProviderImplSpec {
+  private val TestProjectionId = ProjectionId("test-projection", "00")
+
+  def handler(probe: TestProbe[ConsumerRecord[String, String]]): Handler[ConsumerRecord[String, String]] =
+    new Handler[ConsumerRecord[String, String]] {
+      override def process(env: ConsumerRecord[String, String]): Future[Done] = {
+        probe.ref ! env
+        Future.successful(Done)
+      }
+    }
+
+  private class TestMetadataClientAdapter(partitions: Int) extends MetadataClientAdapter {
+    override def getBeginningOffsets(assignedTps: Set[TopicPartition]): Future[Map[TopicPartition, Long]] =
+      Future.successful((0 until partitions).map(i => new TopicPartition("topic", i) -> 0L).toMap)
+    override def numPartitions(topics: Set[String]): Future[Int] = Future.successful(partitions)
+    override def stop(): Unit = ()
+  }
+}
+
 class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapturing with AnyWordSpecLike {
+  import KafkaSourceProviderImplSpec._
 
   val projectionTestKit: ProjectionTestKit = ProjectionTestKit(testKit)
   implicit val ec = system.classicSystem.dispatcher
@@ -61,7 +66,6 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
           yield new ConsumerRecord(tp.topic(), tp.partition(), n, n.toString, n.toString)
 
       val consumerSource = Source(consumerRecords)
-        .concat(Source.maybe)
         .mapMaterializedValue(_ => Consumer.NoopControl)
 
       val provider =
@@ -72,13 +76,14 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
           () => metadataClient,
           KafkaSourceProviderSettings(system)) {
           override protected[internal] def _source(
-              readOffsets: () => Future[Option[MergeableOffset[JLong]]],
+              readOffsets: () => Future[Option[MergeableOffset[java.lang.Long]]],
               numPartitions: Int,
               metadataClient: MetadataClientAdapter): Source[ConsumerRecord[String, String], Consumer.Control] =
             consumerSource
         }
 
-      val projection = TestProjection(provider, topic, partitions)
+      val probe = testKit.createTestProbe[ConsumerRecord[String, String]]()
+      val projection = TestProjection(TestProjectionId, provider, () => handler(probe))
 
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
         provider.partitionHandler.onAssign(Set(tp0, tp1), null)
@@ -86,7 +91,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
         sinkProbe.request(10)
         sinkProbe.expectNextN(10)
-        var records = projection.processNextN(10)
+        var records = probe.receiveMessages(10)
 
         withClue("checking: processed records contain 5 from each partition") {
           records.length shouldBe 10
@@ -98,113 +103,19 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
         provider.partitionHandler.onAssign(Set(tp0), null)
         provider.partitionHandler.onRevoke(Set(tp1), null)
 
-        // only 5 records should remain, because the other 5 were filtered out
+        // drain any remaining messages that were processed before rebalance because of async stages in the internal
+        // projection stream
+        eventually(probe.expectNoMessage(1.millis))
+
+        // only records from partition 0 should remain, because the rest were filtered
         sinkProbe.request(5)
-        records = projection.processNextN(5)
         sinkProbe.expectNextN(5)
+        records = probe.receiveMessages(5)
 
         withClue("checking: after rebalance processed records should only have records from partition 0") {
           records.count(_.partition() == tp0.partition()) shouldBe 5
           records.count(_.partition() == tp1.partition()) shouldBe 0
         }
-      }
-    }
-  }
-
-  class TestMetadataClientAdapter(partitions: Int) extends MetadataClientAdapter {
-    override def getBeginningOffsets(assignedTps: Set[TopicPartition]): Future[Map[TopicPartition, Long]] =
-      Future.successful((0 until partitions).map(i => new TopicPartition("topic", i) -> 0L).toMap)
-    override def numPartitions(topics: Set[String]): Future[Int] = Future.successful(partitions)
-    override def stop(): Unit = ()
-  }
-
-  // FIXME: Copied mostly from ProjectionTestKitSpec.
-  // Maybe a `TestProjection` could be abstracted out and reused to reduce test boilerplate
-  private[projection] case class TestProjection(
-      sourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]]
-        with VerifiableSourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]],
-      topic: String,
-      partitions: Int)
-      extends Projection[ConsumerRecord[Int, Int]]
-      with SettingsImpl[TestProjection] {
-
-    val mergeableOffset: MergeableOffset[JLong] = MergeableOffset(
-      (0 until partitions)
-        .map(i => KafkaOffsets.partitionToKey(topic, i) -> JLong.valueOf(0L))
-        .toMap)
-
-    val probe: TestProbe[ConsumerRecord[String, String]] = createTestProbe[ConsumerRecord[String, String]]()
-
-    def processNextN(n: Int): Seq[ConsumerRecord[String, String]] = {
-      probe.receiveMessages(n)
-    }
-
-    private lazy val internalState = new InternalProjectionState()
-
-    override def projectionId: ProjectionId = ProjectionId("name", "key")
-    override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
-    override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
-    override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
-
-    override private[projection] def mappedSource()(implicit system: ActorSystem[_]) =
-      internalState.mappedSource()
-
-    private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
-
-    override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
-      internalState.newRunningInstance()
-
-    override val statusObserver: StatusObserver[ConsumerRecord[Int, Int]] = NoopStatusObserver
-
-    override def withStatusObserver(
-        observer: StatusObserver[ConsumerRecord[Int, Int]]): Projection[ConsumerRecord[Int, Int]] =
-      this // no need for StatusObserver in tests
-
-    /*
-     * INTERNAL API
-     * This internal class will hold the KillSwitch that is needed
-     * when building the mappedSource and when running the projection (to stop)
-     */
-    private class InternalProjectionState()(implicit val system: ActorSystem[_]) {
-
-      private val killSwitch = KillSwitches.shared(projectionId.id)
-
-      def mappedSource(): Source[Done, Future[Done]] = {
-
-        val futSource =
-          sourceProvider
-            .source(() => Future.successful(Option(mergeableOffset)))
-
-        Source
-          .futureSource(futSource)
-          .map(env => (sourceProvider.extractOffset(env), env))
-          .mapMaterializedValue(fut => fut.map(_ => Done))
-          .filter {
-            case (offset: MergeableOffset[JLong], _) =>
-              sourceProvider.verifyOffset(offset) match {
-                case VerificationSuccess    => true
-                case VerificationFailure(_) => false
-              }
-          }
-          .map {
-            case (_, record: ConsumerRecord[String, String]) =>
-              probe.ref ! record
-              Done
-          }
-      }
-
-      def newRunningInstance(): RunningProjection =
-        new TestRunningProjection(mappedSource(), killSwitch)
-    }
-
-    private class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch)
-        extends RunningProjection {
-
-      private val futureDone = source.run()
-
-      override def stop(): Future[Done] = {
-        killSwitch.shutdown()
-        futureDone
       }
     }
   }

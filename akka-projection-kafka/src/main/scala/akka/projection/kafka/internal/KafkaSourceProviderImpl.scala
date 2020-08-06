@@ -136,7 +136,7 @@ import org.apache.kafka.common.record.TimestampType
             case Some(groupOffsets) =>
               val filteredMap = groupOffsets.entries.collect {
                 case (topicPartitionKey, offset) if assignedTps.contains(keyToPartition(topicPartitionKey)) =>
-                  (keyToPartition(topicPartitionKey) -> offset.asInstanceOf[Long])
+                  (keyToPartition(topicPartitionKey) -> (offset.asInstanceOf[Long] + 1L))
               }
               Future.successful(filteredMap)
             case None => metadataClient.getBeginningOffsets(assignedTps)

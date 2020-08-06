@@ -4,11 +4,10 @@
 
 package akka.projection
 
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.concurrent.Future
 
 import akka.Done
 import akka.NotUsed
@@ -17,12 +16,17 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.projection.internal.ActorHandlerInit
+import akka.projection.internal.AtMostOnce
+import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.NoopStatusObserver
-import akka.projection.internal.RestartBackoffSettings
-import akka.projection.internal.SettingsImpl
+import akka.projection.internal.OffsetStrategy
+import akka.projection.internal.SingleHandlerStrategy
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
-import akka.stream.KillSwitches
+import akka.projection.scaladsl.SourceProvider
+import akka.projection.testkit.TestInMemoryOffsetStore
+import akka.projection.testkit.TestProjection
+import akka.projection.testkit.TestSourceProvider
 import akka.stream.OverflowStrategy
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
@@ -37,78 +41,98 @@ object ProjectionBehaviorSpec {
 
   private val TestProjectionId = ProjectionId("test-projection", "00")
 
+  def handler(probe: TestProbe[ProbeMessage]): Handler[Int] = new Handler[Int] {
+    val strBuffer: StringBuffer = new StringBuffer()
+    override def process(env: Int): Future[Done] = {
+      concat(env)
+      probe.ref ! Consumed(env, strBuffer.toString)
+      Future.successful(Done)
+    }
+
+    def concat(i: Int) = {
+      if (strBuffer.toString.isEmpty) strBuffer.append(i)
+      else strBuffer.append("-").append(i)
+    }
+  }
+
   /*
    * This TestProjection has a internal state that we can use to prove that on restart,
    * the actor is taking a new projection instance.
    */
-  private[projection] case class TestProjection(
-      src: Source[Int, NotUsed],
+  private[projection] object ProjectionBehaviourTestProjection {
+    def apply(
+        src: Source[Int, NotUsed],
+        probe: TestProbe[ProbeMessage],
+        projectionId: ProjectionId = TestProjectionId,
+        failToStop: Boolean = false): ProjectionBehaviourTestProjection = {
+      val handlerStrategy = new SingleHandlerStrategy[Int](() => handler(probe))
+      val sourceProvider = TestSourceProvider(src, (i: Int) => i)
+      new ProjectionBehaviourTestProjection(projectionId, sourceProvider, handlerStrategy, probe, failToStop)
+    }
+  }
+
+  private[projection] class ProjectionBehaviourTestProjection(
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Int, Int],
+      handlerStrategy: HandlerStrategy,
       testProbe: TestProbe[ProbeMessage],
-      failToStop: Boolean = false,
-      override val projectionId: ProjectionId = ProjectionBehaviorSpec.TestProjectionId)
-      extends Projection[Int]
-      with SettingsImpl[TestProjection] {
+      failToStop: Boolean)
+      extends TestProjection(
+        projectionId,
+        sourceProvider,
+        handlerStrategy,
+        AtMostOnce(),
+        NoopStatusObserver,
+        _ => TestInMemoryOffsetStore[Int](),
+        None) {
 
-    private val offsetStore = new AtomicInteger
+    override private[projection] def newState(implicit system: ActorSystem[_]): TestInternalProjectionState =
+      new ProjectionBehaviourTestInternalProjectionState(
+        projectionId,
+        sourceProvider,
+        handlerStrategy,
+        offsetStrategy,
+        offsetStoreFactory(system),
+        testProbe,
+        failToStop)
 
-    private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
-
-    override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
-      new InternalProjectionState(testProbe, failToStop).newRunningInstance()
-
-    override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
-      new InternalProjectionState(testProbe, failToStop).mappedSource()
-
-    override val statusObserver: StatusObserver[Int] = NoopStatusObserver
-
-    override def withStatusObserver(observer: StatusObserver[Int]): Projection[Int] =
-      this // no need for StatusObserver in tests
-
-    override def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): TestProjection = this
-    override def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): TestProjection = this
-    override def withGroup(groupAfterEnvelopes: Int, groupAfterDuration: FiniteDuration): TestProjection = this
-
-    /*
-     * INTERNAL API
-     * This internal class will hold the KillSwitch that is needed
-     * when building the mappedSource and when running the projection (to stop)
-     */
-    private class InternalProjectionState(testProbe: TestProbe[ProbeMessage], failToStop: Boolean = false)(
-        implicit val system: ActorSystem[_]) {
-
-      private val strBuffer = new StringBuffer("")
-
-      private val killSwitch = KillSwitches.shared(projectionId.id)
-
-      def mappedSource(): Source[Done, Future[Done]] =
-        src.via(killSwitch.flow).mapAsync(1)(i => process(i)).mapMaterializedValue(_ => Future.successful(Done))
-
-      private def process(i: Int): Future[Done] = {
-
-        if (strBuffer.toString.isEmpty) strBuffer.append(i)
-        else strBuffer.append("-").append(i)
-
-        offsetStore.incrementAndGet()
-
-        testProbe.ref ! Consumed(i, strBuffer.toString)
-        Future.successful(Done)
-      }
-
-      def newRunningInstance(): RunningProjection =
-        new TestRunningProjection(mappedSource(), testProbe, failToStop, killSwitch)
+    private[projection] class ProjectionBehaviourTestInternalProjectionState(
+        projectionId: ProjectionId,
+        sourceProvider: SourceProvider[Int, Int],
+        handlerStrategy: HandlerStrategy,
+        offsetStrategy: OffsetStrategy,
+        offsetStore: TestInMemoryOffsetStore[Int],
+        testProbe: TestProbe[ProbeMessage],
+        failToStop: Boolean)(implicit system: ActorSystem[_])
+        extends TestInternalProjectionState(
+          projectionId,
+          sourceProvider,
+          handlerStrategy,
+          offsetStrategy,
+          offsetStore,
+          None) {
+      override def newRunningInstance(): RunningProjection =
+        new ProjectionBehaviourTestRunningProjection(
+          projectionId,
+          mappedSource(),
+          killSwitch,
+          offsetStore,
+          testProbe,
+          failToStop)
     }
 
-    private class TestRunningProjection(
-        source: Source[Done, Future[Done]],
+    private[projection] class ProjectionBehaviourTestRunningProjection(
+        projectionId: ProjectionId,
+        source: Source[Done, _],
+        killSwitch: SharedKillSwitch,
+        offsetStore: TestInMemoryOffsetStore[Int],
         testProbe: TestProbe[ProbeMessage],
-        failToStop: Boolean = false,
-        killSwitch: SharedKillSwitch)(implicit system: ActorSystem[_])
-        extends RunningProjection
+        failToStop: Boolean)(implicit _system: ActorSystem[_])
+        extends TestRunningProjection(source, killSwitch)
         with ProjectionOffsetManagement[Int] {
       import system.executionContext
 
       testProbe.ref ! StartObserved
-      private val futureDone = source.run()
 
       override def stop(): Future[Done] = {
         val stopFut =
@@ -129,26 +153,27 @@ object ProjectionBehaviorSpec {
       }
 
       override def getOffset(): Future[Option[Int]] = {
-        offsetStore.get() match {
-          case 0 => Future.successful(None)
-          case n => Future.successful(Some(n))
+        offsetStore.lastOffset() match {
+          case Some(0) => Future.successful(None)
+          case Some(n) => Future.successful(Some(n))
+          case _       => Future.failed(new IllegalStateException("No offset has been stored"))
         }
       }
 
       override def setOffset(offset: Option[Int]): Future[Done] = {
         offset match {
           case None =>
-            offsetStore.set(0)
+            offsetStore.saveOffset(projectionId, 0)
             Future.successful(Done)
           case Some(n) =>
             if (n <= 3) {
-              offsetStore.set(n)
+              offsetStore.saveOffset(projectionId, n)
               Future.successful(Done)
             } else {
               import akka.actor.typed.scaladsl.adapter._
               import akka.pattern.after
               after(100.millis, system.toClassic.scheduler) {
-                offsetStore.set(n)
+                offsetStore.saveOffset(projectionId, n)
                 Future.successful(Done)
               }
             }
@@ -156,7 +181,6 @@ object ProjectionBehaviorSpec {
 
       }
     }
-
   }
 }
 class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
@@ -174,9 +198,9 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
           srcRef.set(ref.toTyped)
           NotUsed
       }
-
     val testProbe = testKit.createTestProbe[ProbeMessage]()
-    val projectionRef = testKit.spawn(ProjectionBehavior(TestProjection(src, testProbe, projectionId = projectionId)))
+    val projectionRef =
+      testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, projectionId)))
     eventually {
       srcRef.get() should not be null
     }
@@ -189,7 +213,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
-      testKit.spawn(ProjectionBehavior(TestProjection(src, testProbe)))
+      testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))
@@ -202,7 +226,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
-      val projectionRef = testKit.spawn(ProjectionBehavior(TestProjection(src, testProbe)))
+      val projectionRef = testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))
@@ -220,7 +244,8 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
-      val projectionRef = testKit.spawn(ProjectionBehavior(TestProjection(src, testProbe, failToStop = true)))
+      val projectionRef =
+        testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, failToStop = true)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))

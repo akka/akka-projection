@@ -35,7 +35,7 @@ class KafkaSourceProviderSpec extends KafkaSpecBase {
 
       probe.request(1)
       val first = probe.expectNext()
-      first.offset() shouldBe 5L
+      first.offset() shouldBe 6L // next offset
 
       probe.cancel()
     }
