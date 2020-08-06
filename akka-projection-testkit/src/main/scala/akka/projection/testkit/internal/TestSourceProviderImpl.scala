@@ -48,56 +48,27 @@ private[projection] class TestSourceProviderImpl[Offset, Envelope] private[proje
       startSourceFromFn,
       allowCompletion)
 
-  /**
-   * A user-defined function to extract the event creation time from an envelope.
-   */
   def withExtractCreationTimeFunction(
       extractCreationTimeFn: Envelope => Long): TestSourceProviderImpl[Offset, Envelope] =
     copy(extractCreationTimeFn = extractCreationTimeFn)
 
-  /**
-   * Java API
-   *
-   * A user-defined function to extract the event creation time from an envelope.
-   */
   def withExtractCreationTimeFunction(
       extractCreationTimeFn: java.util.function.Function[Envelope, Long]): TestSourceProviderImpl[Offset, Envelope] =
     withExtractCreationTimeFunction(extractCreationTimeFn.asScala)
 
-  /**
-   * Allow the [[sourceEvents]] Source to complete or stay open indefinitely.
-   */
   def withAllowCompletion(allowCompletion: Boolean): TestSourceProviderImpl[Offset, Envelope] =
     copy(allowCompletion = allowCompletion)
 
-  /**
-   * A user-defined function to verify offsets.
-   */
   def withOffsetVerification(verifyOffsetFn: Offset => OffsetVerification): TestSourceProviderImpl[Offset, Envelope] =
     copy(verifyOffsetFn = verifyOffsetFn)
 
-  /**
-   * Java API: A user-defined function to verify offsets.
-   */
   override def withOffsetVerification(offsetVerificationFn: java.util.function.Function[Offset, OffsetVerification])
       : TestSourceProviderImpl[Offset, Envelope] =
     withOffsetVerification(offsetVerificationFn.asScala)
 
-  /**
-   * A user-defined function to compare the last offset returned by the offset store with the offset in the source
-   * to filter out previously processed offsets.
-   *
-   * First parameter: Last offset processed. Second parameter this envelope's offset from [[sourceEvents]].
-   */
   def withStartSourceFrom(startSourceFromFn: (Offset, Offset) => Boolean): TestSourceProviderImpl[Offset, Envelope] =
     copy(startSourceFromFn = startSourceFromFn)
 
-  /**
-   * Java API: A user-defined function to compare the last offset returned by the offset store with the offset in the source
-   * to filter out previously processed offsets.
-   *
-   * First parameter: Last offset processed. Second parameter this envelope's offset from [[sourceEvents]].
-   */
   def withStartSourceFrom(startSourceFromFn: java.util.function.BiFunction[Offset, Offset, java.lang.Boolean])
       : TestSourceProviderImpl[Offset, Envelope] = {
     val adapted: (Offset, Offset) => Boolean = (lastOffset, offset) =>

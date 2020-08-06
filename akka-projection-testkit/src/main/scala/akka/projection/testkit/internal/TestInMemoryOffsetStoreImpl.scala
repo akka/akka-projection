@@ -18,14 +18,8 @@ import akka.projection.testkit.scaladsl.TestOffsetStore
 private[projection] class TestInMemoryOffsetStoreImpl[Offset] private[projection] () extends TestOffsetStore[Offset] {
   private var savedOffsets = List[(ProjectionId, Offset)]()
 
-  /**
-   * The last saved offset to the offset store.
-   */
   def lastOffset(): Option[Offset] = this.synchronized(savedOffsets.headOption.map { case (_, offset) => offset })
 
-  /**
-   * All offsets saved to the offset store.
-   */
   def allOffsets(): List[(ProjectionId, Offset)] = this.synchronized(savedOffsets)
 
   def readOffsets(): Future[Option[Offset]] = this.synchronized { Future.successful(lastOffset()) }

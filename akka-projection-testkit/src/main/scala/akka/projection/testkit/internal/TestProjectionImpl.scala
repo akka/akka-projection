@@ -72,31 +72,15 @@ private[projection] class TestProjectionImpl[Offset, Envelope] private[projectio
   override def withStatusObserver(observer: StatusObserver[Envelope]): TestProjectionImpl[Offset, Envelope] =
     copy(statusObserver = observer)
 
-  /**
-   * The initial offset of the offset store.
-   */
   def withStartOffset(offset: Offset): TestProjectionImpl[Offset, Envelope] = copy(startOffset = Some(offset))
 
-  /**
-   * The offset store factory. The offset store has the same lifetime as the Projection. It is instantiated when the
-   * projection is first run and is created with [[newState]].
-   */
   def withOffsetStoreFactory(factory: () => TestOffsetStore[Offset]): TestProjectionImpl[Offset, Envelope] =
     copy(offsetStoreFactory = factory)
 
-  /**
-   * Java API
-   *
-   * The offset store factory. The offset store has the same lifetime as the Projection. It is instantiated when the
-   * projection is first run and is created with [[newState]].
-   */
   override def withOffsetStoreFactory(factory: Supplier[akka.projection.testkit.javadsl.TestOffsetStore[Offset]])
       : javadsl.TestProjection[Offset, Envelope] =
     withOffsetStoreFactory(() => new TestOffsetStoreAdapter(factory.get()))
 
-  /**
-   * INTERNAL API: Choose a different [[OffsetStrategy]] for saving offsets. This is intended for Projection development only.
-   */
   @InternalApi
   private[projection] def withOffsetStrategy(strategy: OffsetStrategy): TestProjectionImpl[Offset, Envelope] =
     copy(offsetStrategy = strategy)

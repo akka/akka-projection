@@ -19,14 +19,8 @@ import com.github.ghik.silencer.silent
     delegate: akka.projection.testkit.javadsl.TestOffsetStore[Offset])
     extends TestOffsetStore[Offset] {
 
-  /**
-   * The last saved offset to the offset store.
-   */
   override def lastOffset(): Option[Offset] = delegate.lastOffset().asScala
 
-  /**
-   * All offsets saved to the offset store.
-   */
   @silent override def allOffsets(): List[(ProjectionId, Offset)] = delegate.allOffsets().asScala.map(_.toScala).toList
 
   override def readOffsets(): Future[Option[Offset]] = {
