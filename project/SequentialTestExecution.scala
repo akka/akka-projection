@@ -7,30 +7,31 @@ import sbt._
  * tests within a task.
  */
 object SequentialTestExecution extends AutoPlugin {
+  val IntegrationTestTag = Tags.Tag("IntegrationTest")
+
   override def trigger: PluginTrigger = allRequirements
 
   override def projectSettings: Seq[Def.Setting[_]] = {
-    sys.env
-      .get("TRAVIS") match {
-      case Some("true") => Seq(concurrentRestrictions in Global += Tags.limit(Tags.Test, 1))
-      /*
-          Observations:
+    /*
+      1. `parallelExecution := false` will only run tests in parallel per sbt task. When multiple cores are
+      available sbt's default configuration will run 1 task per sub-project, but each task will run each test method
+      in sequence
 
-          1. `parallelExecution := false` will only run tests in parallel per sbt task. When multiple cores are
-          available sbt's default configuration will run 1 task per sub-project, but each task will run each test method
-          in sequence
+      2. When `concurrentRestrictions` and `parallelExecution` are used together sbt always appears to
+      invalidate the `concurrentRestriction` setting and run multiple project tests at once (one per task):
 
-          2. When `concurrentRestrictions` and `parallelExecution` are used together sbt always appears to
-          invalidate the `concurrentRestriction` setting and run multiple project tests at once (one per task).
-
-          ```
-          Seq(
-            IntegrationTest / parallelExecution := false,
-            Test / parallelExecution := false,
-            concurrentRestrictions in Global += Tags.limit(Tags.Test, 1))
-          ```
-       */
+      ```
+      Seq(
+        IntegrationTest / parallelExecution := false,
+        Test / parallelExecution := false,
+        concurrentRestrictions in Global += Tags.limit(Tags.Test, 1))
+      ```
+     */
+    Seq(tags in test in IntegrationTest := Seq(IntegrationTestTag -> 1)) ++
+    (sys.env.get("TRAVIS") match {
+      case Some("true") =>
+        Seq(concurrentRestrictions in Global := Seq(Tags.limit(IntegrationTestTag, 1)))
       case _ => Seq(IntegrationTest / parallelExecution := false, Test / parallelExecution := false)
-    }
+    })
   }
 }
