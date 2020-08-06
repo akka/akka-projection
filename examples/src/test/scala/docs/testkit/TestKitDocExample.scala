@@ -9,6 +9,8 @@ import scala.concurrent.Future
 import akka.Done
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.Handler
+import akka.projection.testkit.scaladsl.TestProjection
+import akka.projection.testkit.scaladsl.TestSourceProvider
 
 //#testkit-import
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -23,8 +25,6 @@ import scala.concurrent.duration._
 
 //#testkit-testprojection
 import akka.stream.scaladsl.Source
-import akka.projection.testkit.TestProjection
-import akka.projection.testkit.TestSourceProvider
 
 //#testkit-testprojection
 

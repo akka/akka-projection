@@ -42,8 +42,8 @@ import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
@@ -96,46 +96,26 @@ object JdbcProjectionSpec {
   case class Envelope(id: String, offset: Long, message: String)
 
   def sourceProvider(
-      system: ActorSystem[_],
       id: String,
       complete: Boolean = true,
-      verifyOffsetF: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
+      verifyOffsetFn: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
+    val envelopes: Source[Envelope, NotUsed] =
+      Source(
+        List(
+          Envelope(id, 1L, "e1"),
+          Envelope(id, 2L, "e2"),
+          Envelope(id, 3L, "e3"),
+          Envelope(id, 4L, "e4"),
+          Envelope(id, 5L, "e5"),
+          Envelope(id, 6L, "e6")))
 
-    val envelopes =
-      List(
-        Envelope(id, 1L, "e1"),
-        Envelope(id, 2L, "e2"),
-        Envelope(id, 3L, "e3"),
-        Envelope(id, 4L, "e4"),
-        Envelope(id, 5L, "e5"),
-        Envelope(id, 6L, "e6"))
-
-    val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
-    TestSourceProvider(system, src, verifyOffsetF)
+    val sp = TestSourceProvider[Long, Envelope](envelopes, _.offset)
+      .withOffsetVerification(verifyOffsetFn)
+      .withStartSourceFrom((lastProcessedOffset, offset) => offset <= lastProcessedOffset)
+    if (complete) sp.withAllowCompletion(true)
+    else sp
   }
 
-  case class TestSourceProvider(
-      system: ActorSystem[_],
-      src: Source[Envelope, NotUsed],
-      offsetVerificationF: Long => OffsetVerification)
-      extends SourceProvider[Long, Envelope]
-      with VerifiableSourceProvider[Long, Envelope] {
-
-    implicit val executionContext: ExecutionContext = system.executionContext
-
-    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, NotUsed]] =
-      offset().map {
-        case Some(o) => src.dropWhile(_.offset <= o)
-        case _       => src
-      }
-
-    override def extractOffset(env: Envelope): Long = env.offset
-
-    override def extractCreationTime(env: Envelope): Long = 0L
-
-    override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
-
-  }
   // test model is as simple as a text that gets other string concatenated to it
   case class ConcatStr(id: String, text: String) {
     def concat(newMsg: String) = copy(text = text + "|" + newMsg)
@@ -327,7 +307,7 @@ class JdbcProjectionSpec
       val projection =
         JdbcProjection.exactlyOnce(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           jdbcSessionFactory,
           handler = () => new ConcatHandler)
 
@@ -348,7 +328,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
@@ -375,7 +355,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
@@ -414,7 +394,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
@@ -437,7 +417,7 @@ class JdbcProjectionSpec
       def exactlyOnceProjection(failWhenOffset: Long => Boolean = _ => false) = {
         JdbcProjection.exactlyOnce(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           jdbcSessionFactory,
           handler = () => new ConcatHandler(failWhenOffset))
       }
@@ -474,7 +454,7 @@ class JdbcProjectionSpec
       def exactlyOnceProjection(handler: () => JdbcHandler[Envelope, PureJdbcSession]) =
         JdbcProjection.exactlyOnce(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           jdbcSessionFactory,
           handler = handler)
 
@@ -519,7 +499,7 @@ class JdbcProjectionSpec
         }
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
         JdbcProjection.exactlyOnce(
@@ -548,7 +528,7 @@ class JdbcProjectionSpec
           VerificationSuccess
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
         JdbcProjection.exactlyOnce(
@@ -573,7 +553,7 @@ class JdbcProjectionSpec
           VerificationSuccess
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
         JdbcProjection.exactlyOnce(
@@ -600,7 +580,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .groupedWithin(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () =>
               JdbcHandler[PureJdbcSession, immutable.Seq[Envelope]] { (sess, envelopes) =>
@@ -642,7 +622,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .groupedWithinAsync(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => handler())
           .withGroup(2, 3.seconds)
@@ -664,7 +644,7 @@ class JdbcProjectionSpec
       val projection =
         JdbcProjection.atLeastOnce(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           jdbcSessionFactory,
           handler = () => new ConcatHandler)
 
@@ -683,7 +663,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .atLeastOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => new ConcatHandler(_ == 4))
           .withSaveOffset(1, 1.minute)
@@ -704,7 +684,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .atLeastOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => new ConcatHandler(_ == 4))
           .withSaveOffset(2, 1.minute)
@@ -725,7 +705,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .atLeastOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => new ConcatHandler(failWhenOffset))
           .withSaveOffset(1, Duration.Zero)
@@ -769,7 +749,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .atLeastOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => new ConcatHandler(failWhenOffset))
           .withSaveOffset(2, 1.minute)
@@ -824,7 +804,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .atLeastOnce(
             projectionId,
-            sourceProvider = TestSourceProvider(system, source, _ => VerificationSuccess),
+            sourceProvider = TestSourceProvider[Long, Envelope](source, _.offset),
             jdbcSessionFactory,
             handler = () => new ConcatHandler())
           .withSaveOffset(10, 1.minute)
@@ -869,7 +849,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .atLeastOnce(
             projectionId,
-            sourceProvider = TestSourceProvider(system, source, _ => VerificationSuccess),
+            sourceProvider = TestSourceProvider[Long, Envelope](source, _.offset),
             jdbcSessionFactory,
             handler = () => new ConcatHandler())
           .withSaveOffset(10, 2.seconds)
@@ -910,7 +890,7 @@ class JdbcProjectionSpec
         VerificationSuccess
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
         JdbcProjection
@@ -942,7 +922,7 @@ class JdbcProjectionSpec
           VerificationSuccess
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
         JdbcProjection
@@ -974,7 +954,7 @@ class JdbcProjectionSpec
       val projection =
         JdbcProjection.atLeastOnceAsync(
           projectionId,
-          sourceProvider = sourceProvider(system, entityId),
+          sourceProvider = sourceProvider(entityId),
           jdbcSessionFactory,
           handler = () => handler())
 
@@ -1003,7 +983,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .atLeastOnceFlow(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = flowHandler)
           .withSaveOffset(1, 1.minute)
@@ -1074,7 +1054,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => handler)
           .withStatusObserver(statusObserver)
@@ -1112,7 +1092,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => handler)
 
@@ -1169,11 +1149,7 @@ class JdbcProjectionSpec
 
       val projection =
         JdbcProjection
-          .exactlyOnce(
-            projectionId,
-            sourceProvider = sourceProvider(system, entityId),
-            jdbcSessionFactory,
-            handlerFactory)
+          .exactlyOnce(projectionId, sourceProvider = sourceProvider(entityId), jdbcSessionFactory, handlerFactory)
           .withRestartBackoff(1.second, 2.seconds, 0.0)
           .withStatusObserver(statusObserver)
 
@@ -1228,7 +1204,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => handler)
           .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
@@ -1258,7 +1234,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () => handler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
@@ -1290,7 +1266,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () =>
               JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
@@ -1323,7 +1299,7 @@ class JdbcProjectionSpec
         JdbcProjection
           .exactlyOnce(
             projectionId,
-            sourceProvider = sourceProvider(system, entityId),
+            sourceProvider = sourceProvider(entityId),
             jdbcSessionFactory,
             handler = () =>
               JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>

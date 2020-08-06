@@ -33,7 +33,8 @@ lazy val jdbc =
     .configs(IntegrationTest.extend(Test))
     .settings(Defaults.itSettings)
     .settings(Dependencies.jdbc)
-    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(core % "compile->compile")
+    .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % "test->test")
 
 // provides offset storage backed by a JDBC (Slick) table
@@ -43,7 +44,8 @@ lazy val slick =
     .settings(Defaults.itSettings)
     .settings(Dependencies.slick)
     .dependsOn(jdbc)
-    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(core)
+    .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % "test->test")
 
 // provides offset storage backed by a Cassandra table
@@ -53,7 +55,8 @@ lazy val cassandra =
     .settings(Defaults.itSettings)
     .settings(Dependencies.cassandra)
     .settings(IntegrationTest / parallelExecution := false)
-    .dependsOn(core % "compile->compile;test->test;compile->test")
+    .dependsOn(core)
+    .dependsOn(coreTest % "test->test;compile->test;")
     .dependsOn(testkit % "compile->compile;test->test")
 
 // provides source providers for akka-persistence-query
@@ -70,7 +73,7 @@ lazy val kafka =
     .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
     .settings(IntegrationTest / parallelExecution := false)
-    .dependsOn(core % "compile->compile;test->test")
+    .dependsOn(core)
     .dependsOn(testkit % "compile->compile;test->test")
     .dependsOn(slick % "compile->compile;test->test;it->it")
 

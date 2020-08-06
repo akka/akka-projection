@@ -14,7 +14,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
-import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl._
@@ -35,6 +34,7 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
@@ -111,26 +111,13 @@ object InternalProjectionStateMetricsSpec {
     val creationTimestamp = System.currentTimeMillis() - 1000L
   }
 
-  def sourceProvider(system: ActorSystem[_], id: String, numberOfEnvelopes: Int): SourceProvider[Long, Envelope] = {
+  def sourceProvider(id: String, numberOfEnvelopes: Int): SourceProvider[Long, Envelope] = {
     val chars = "abcdefghijklmnopqrstuvwxyz"
     val envelopes = (1 to numberOfEnvelopes).map { offset =>
       Envelope(id, offset.toLong, chars.charAt((offset - 1) % chars.length).toString)
     }
-    TestSourceProvider(system, Source(envelopes))
-  }
-
-  case class TestSourceProvider(system: ActorSystem[_], src: Source[Envelope, NotUsed])
-      extends SourceProvider[Long, Envelope] {
-    implicit val executionContext: ExecutionContext = system.executionContext
-    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, NotUsed]] =
-      offset().map {
-        case Some(o) => src.dropWhile(_.offset <= o)
-        case _       => src
-      }
-
-    override def extractOffset(env: Envelope): Long = env.offset
-
-    override def extractCreationTime(envelope: Envelope): Long = envelope.creationTimestamp
+    TestSourceProvider[Long, Envelope](Source(envelopes), _.offset)
+      .withStartSourceFrom((lastProcessedOffset, offset) => offset <= lastProcessedOffset)
   }
 
   class TelemetryTester(
@@ -179,7 +166,7 @@ object InternalProjectionStateMetricsSpec {
     val projectionState =
       new InMemInternalProjectionState[Long, Envelope](
         projectionId,
-        sourceProvider(system, entityId, numberOfEnvelopes),
+        sourceProvider(entityId, numberOfEnvelopes),
         offsetStrategy,
         adaptedHandlerStrategy,
         statusObserver,

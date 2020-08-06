@@ -24,7 +24,6 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
-import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.PostStop
 import akka.actor.typed.scaladsl.Behaviors
@@ -42,8 +41,8 @@ import akka.projection.scaladsl.ActorHandler
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.FlowWithContext
@@ -56,45 +55,25 @@ import org.scalatest.wordspec.AnyWordSpecLike
 object CassandraProjectionSpec {
   case class Envelope(id: String, offset: Long, message: String)
 
-  def offsetExtractor(env: Envelope): Long = env.offset
-
   def sourceProvider(
-      system: ActorSystem[_],
       id: String,
       complete: Boolean = true,
-      verifyOffsetF: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
+      verifyOffsetFn: Long => OffsetVerification = _ => VerificationSuccess): SourceProvider[Long, Envelope] = {
+    val envelopes: Source[Envelope, NotUsed] =
+      Source(
+        List(
+          Envelope(id, 1L, "abc"),
+          Envelope(id, 2L, "def"),
+          Envelope(id, 3L, "ghi"),
+          Envelope(id, 4L, "jkl"),
+          Envelope(id, 5L, "mno"),
+          Envelope(id, 6L, "pqr")))
 
-    val envelopes =
-      List(
-        Envelope(id, 1L, "abc"),
-        Envelope(id, 2L, "def"),
-        Envelope(id, 3L, "ghi"),
-        Envelope(id, 4L, "jkl"),
-        Envelope(id, 5L, "mno"),
-        Envelope(id, 6L, "pqr"))
-
-    val src = if (complete) Source(envelopes) else Source(envelopes).concat(Source.maybe)
-    TestSourceProvider(system, src, verifyOffsetF)
-  }
-
-  case class TestSourceProvider(
-      system: ActorSystem[_],
-      src: Source[Envelope, NotUsed],
-      offsetVerificationF: Long => OffsetVerification)
-      extends SourceProvider[Long, Envelope]
-      with VerifiableSourceProvider[Long, Envelope] {
-    implicit val executionContext: ExecutionContext = system.executionContext
-    override def source(offset: () => Future[Option[Long]]): Future[Source[Envelope, NotUsed]] =
-      offset().map {
-        case Some(o) => src.dropWhile(_.offset <= o)
-        case _       => src
-      }
-
-    override def extractOffset(env: Envelope): Long = env.offset
-
-    override def extractCreationTime(env: Envelope): Long = 0L
-
-    override def verifyOffset(offset: Long): OffsetVerification = offsetVerificationF(offset)
+    val sp = TestSourceProvider[Long, Envelope](envelopes, _.offset)
+      .withOffsetVerification(verifyOffsetFn)
+      .withStartSourceFrom((lastProcessedOffset, offset) => offset <= lastProcessedOffset)
+    if (complete) sp.withAllowCompletion(true)
+    else sp
   }
 
   // test model is as simple as a text that gets other string concatenated to it
@@ -240,7 +219,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandler())
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandler())
           .withSaveOffset(1, Duration.Zero)
 
       projectionTestKit.run(projection) {
@@ -261,7 +240,7 @@ class CassandraProjectionSpec
 
       val failingProjection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandlerFail4())
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandlerFail4())
           .withSaveOffset(1, Duration.Zero)
 
       withClue("check - offset is empty") {
@@ -287,7 +266,7 @@ class CassandraProjectionSpec
       // re-run projection without failing function
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandler())
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandler())
           .withSaveOffset(1, Duration.Zero)
 
       projectionTestKit.run(projection) {
@@ -309,7 +288,7 @@ class CassandraProjectionSpec
 
       val failingProjection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandlerFail4())
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandlerFail4())
           .withSaveOffset(2, 1.minute)
 
       withClue("check - offset is empty") {
@@ -335,7 +314,7 @@ class CassandraProjectionSpec
       // re-run projection without failing function
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandler())
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandler())
           .withSaveOffset(2, 1.minute)
 
       projectionTestKit.run(projection) {
@@ -365,10 +344,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](
-            projectionId,
-            TestSourceProvider(system, source, _ => VerificationSuccess),
-            () => concatHandler())
+          .atLeastOnce[Long, Envelope](projectionId, TestSourceProvider(source, _.offset), () => concatHandler())
           .withSaveOffset(10, 1.minute)
 
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
@@ -408,10 +384,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](
-            projectionId,
-            TestSourceProvider(system, source, _ => VerificationSuccess),
-            () => concatHandler())
+          .atLeastOnce[Long, Envelope](projectionId, TestSourceProvider(source, _.offset), () => concatHandler())
           .withSaveOffset(10, 2.seconds)
 
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
@@ -446,7 +419,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandlerFail4())
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandlerFail4())
           .withSaveOffset(2, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
@@ -475,7 +448,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => handler)
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => handler)
           .withSaveOffset(2, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
           .withStatusObserver(statusObserver)
@@ -514,7 +487,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => handler)
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => handler)
           .withSaveOffset(2, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
 
@@ -550,7 +523,7 @@ class CassandraProjectionSpec
         repository.concatToText(envelope.id, envelope.message)
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
         CassandraProjection
@@ -575,7 +548,7 @@ class CassandraProjectionSpec
           VerificationSuccess
       }
 
-      val testSourceProvider = sourceProvider(system, entityId, verifyOffsetF = testVerification)
+      val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
         CassandraProjection
@@ -619,7 +592,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .groupedWithin[Long, Envelope](projectionId, sourceProvider(system, entityId), () => groupedHandler())
+          .groupedWithin[Long, Envelope](projectionId, sourceProvider(entityId), () => groupedHandler())
           .withGroup(groupAfterEnvelopes = 3, groupAfterDuration = 1.minute)
 
       projectionTestKit.run(projection) {
@@ -649,7 +622,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnceFlow(projectionId, sourceProvider(system, entityId), flowHandler)
+          .atLeastOnceFlow(projectionId, sourceProvider(entityId), flowHandler)
           .withSaveOffset(1, 1.minute)
 
       projectionTestKit.run(projection) {
@@ -700,7 +673,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce(projectionId, sourceProvider(system, entityId), () => actorHandler())
+          .atLeastOnce(projectionId, sourceProvider(entityId), () => actorHandler())
           .withSaveOffset(1, 1.minute)
 
       val projectionRef = spawn(ProjectionBehavior(projection))
@@ -736,7 +709,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atMostOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandler())
+          .atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandler())
 
       projectionTestKit.run(projection) {
         withClue("check - all values were concatenated") {
@@ -756,7 +729,7 @@ class CassandraProjectionSpec
 
       val failingProjection =
         CassandraProjection
-          .atMostOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandlerFail4())
+          .atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandlerFail4())
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
@@ -781,7 +754,7 @@ class CassandraProjectionSpec
       // re-run projection without failing function
       val projection =
         CassandraProjection
-          .atMostOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => concatHandler())
+          .atMostOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => concatHandler())
 
       projectionTestKit.run(projection) {
         withClue("checking: all values were concatenated") {
@@ -856,7 +829,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => handler)
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => handler)
           .withSaveOffset(1, Duration.Zero)
           .withStatusObserver(statusObserver)
 
@@ -891,7 +864,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => handler)
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => handler)
           .withSaveOffset(1, Duration.Zero)
 
       // not using ProjectionTestKit because want to test restarts
@@ -947,7 +920,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), handlerFactory)
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), handlerFactory)
           .withRestartBackoff(1.second, 2.seconds, 0.0)
           .withSaveOffset(1, Duration.Zero)
           .withStatusObserver(statusObserver)
@@ -1001,7 +974,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => handler)
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => handler)
           .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0) // no restarts
           .withSaveOffset(1, Duration.Zero)
 
@@ -1028,7 +1001,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(system, entityId), () => handler)
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => handler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
           .withSaveOffset(1, Duration.Zero)
 
@@ -1056,10 +1029,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](
-            projectionId,
-            sourceProvider(system, entityId, complete = false),
-            () => concatHandler())
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId, complete = false), () => concatHandler())
           .withSaveOffset(1, Duration.Zero)
 
       withClue("check - offset is empty") {
@@ -1091,10 +1061,7 @@ class CassandraProjectionSpec
 
       val projection =
         CassandraProjection
-          .atLeastOnce[Long, Envelope](
-            projectionId,
-            sourceProvider(system, entityId, complete = false),
-            () => concatHandler())
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId, complete = false), () => concatHandler())
           .withSaveOffset(1, Duration.Zero)
 
       withClue("check - offset is empty") {

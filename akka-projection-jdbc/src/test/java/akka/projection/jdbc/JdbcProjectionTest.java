@@ -18,6 +18,7 @@ import akka.projection.jdbc.internal.JdbcOffsetStore;
 import akka.projection.jdbc.internal.JdbcSettings;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
+import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
 import akka.stream.javadsl.FlowWithContext;
 import akka.stream.javadsl.Source;
@@ -34,7 +35,6 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -129,43 +129,23 @@ public class JdbcProjectionTest extends JUnitSuite {
     }
   }
 
-  static class TestSourceProvider extends SourceProvider<Long, Envelope> {
+  public static SourceProvider<Long, Envelope> sourceProvider(String entityId) {
+    Source<Envelope, NotUsed> envelopes =
+        Source.from(
+            Arrays.asList(
+                new Envelope(entityId, 1, "abc"),
+                new Envelope(entityId, 2, "def"),
+                new Envelope(entityId, 3, "ghi"),
+                new Envelope(entityId, 4, "jkl"),
+                new Envelope(entityId, 5, "mno"),
+                new Envelope(entityId, 6, "pqr")));
 
-    private final List<Envelope> envelopes;
+    TestSourceProvider<Long, Envelope> sourceProvider =
+        TestSourceProvider.create(envelopes, env -> env.offset)
+            .withStartSourceFrom(
+                (Long lastProcessedOffset, Long offset) -> offset <= lastProcessedOffset);
 
-    TestSourceProvider(String entityId) {
-      envelopes =
-          Arrays.asList(
-              new Envelope(entityId, 1, "abc"),
-              new Envelope(entityId, 2, "def"),
-              new Envelope(entityId, 3, "ghi"),
-              new Envelope(entityId, 4, "jkl"),
-              new Envelope(entityId, 5, "mno"),
-              new Envelope(entityId, 6, "pqr"));
-    }
-
-    @Override
-    public CompletionStage<Source<Envelope, NotUsed>> source(
-        Supplier<CompletionStage<Optional<Long>>> offsetF) {
-      return offsetF
-          .get()
-          .toCompletableFuture()
-          .thenApplyAsync(
-              offset -> {
-                if (offset.isPresent()) return Source.from(envelopes).drop(offset.get().intValue());
-                else return Source.from(envelopes);
-              });
-    }
-
-    @Override
-    public Long extractOffset(Envelope envelope) {
-      return envelope.offset;
-    }
-
-    @Override
-    public long extractCreationTime(Envelope envelope) {
-      return 0L;
-    }
+    return sourceProvider;
   }
 
   private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
@@ -247,7 +227,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     Projection<Envelope> projection =
         JdbcProjection.exactlyOnce(
             projectionId,
-            new TestSourceProvider(entityId),
+            sourceProvider(entityId),
             jdbcSessionCreator,
             () -> concatHandler(str),
             testKit.system());
@@ -268,7 +248,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     Projection<Envelope> projection =
         JdbcProjection.exactlyOnce(
             projectionId,
-            new TestSourceProvider(entityId),
+            sourceProvider(entityId),
             jdbcSessionCreator,
             // fail on forth offset
             () -> concatHandler(str, offset -> offset == 4),
@@ -292,7 +272,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     Projection<Envelope> projection =
         JdbcProjection.atLeastOnce(
                 projectionId,
-                new TestSourceProvider(entityId),
+                sourceProvider(entityId),
                 jdbcSessionCreator,
                 () -> concatHandler(str),
                 testKit.system())
@@ -317,7 +297,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     Projection<Envelope> projection =
         JdbcProjection.atLeastOnce(
                 projectionId,
-                new TestSourceProvider(entityId),
+                sourceProvider(entityId),
                 jdbcSessionCreator,
                 // fail on forth offset
                 () -> concatHandler(str, offset -> offset == 4),
@@ -341,7 +321,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     Projection<Envelope> projection2 =
         JdbcProjection.atLeastOnce(
                 projectionId,
-                new TestSourceProvider(entityId),
+                sourceProvider(entityId),
                 jdbcSessionCreator,
                 () -> concatHandler(str),
                 testKit.system())
@@ -366,7 +346,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     Projection<Envelope> projection =
         JdbcProjection.groupedWithin(
                 projectionId,
-                new TestSourceProvider(entityId),
+                sourceProvider(entityId),
                 jdbcSessionCreator,
                 () -> groupedConcatHandler(str, handlerProbe),
                 testKit.system())
@@ -400,11 +380,7 @@ public class JdbcProjectionTest extends JUnitSuite {
 
     Projection<Envelope> projection =
         JdbcProjection.atLeastOnceFlow(
-                projectionId,
-                new TestSourceProvider(entityId),
-                jdbcSessionCreator,
-                flow,
-                testKit.system())
+                projectionId, sourceProvider(entityId), jdbcSessionCreator, flow, testKit.system())
             .withSaveOffset(1, Duration.ofMinutes(1));
 
     projectionTestKit.run(
