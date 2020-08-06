@@ -95,7 +95,7 @@ The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
 The offset is stored after the envelope has been processed and giving at-least-once processing semantics.
 This means that if the projection is restarted from a previously stored offset some elements may be processed more
-than once. Therefore, the [Handler](#handler) code must be idempotent.
+than once. Therefore, the @ref:[Handler](#handler) code must be idempotent.
 
 Scala
 :  @@snip [JdbcProjectionDocExample.scala](/examples/src/test/scala/docs/jdbc/JdbcProjectionDocExample.scala) { #projection-imports #atLeastOnce }
