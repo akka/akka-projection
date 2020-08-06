@@ -45,10 +45,12 @@ object ProjectionBehaviorSpec {
   private val TestProjectionId = ProjectionId("test-projection", "00")
 
   def handler(probe: TestProbe[ProbeMessage]): Handler[Int] = new Handler[Int] {
+    println("Handler initialized")
     val strBuffer: StringBuffer = new StringBuffer()
     override def process(env: Int): Future[Done] = {
       concat(env)
       probe.ref ! Consumed(env, strBuffer.toString)
+      println(s"Consumed: $env, ${strBuffer.toString}")
       Future.successful(Done)
     }
 
@@ -139,6 +141,7 @@ object ProjectionBehaviorSpec {
       import system.executionContext
 
       testProbe.ref ! StartObserved
+      println("StartObserved")
 
       override def stop(): Future[Done] = {
         val stopFut =
@@ -155,6 +158,7 @@ object ProjectionBehaviorSpec {
           .andThen {
             case _ =>
               testProbe.ref ! StopObserved
+              println("StopObserved")
           }
       }
 
