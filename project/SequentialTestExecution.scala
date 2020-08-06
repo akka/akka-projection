@@ -1,3 +1,4 @@
+import sbt.Def
 import sbt.Keys._
 import sbt._
 
@@ -27,11 +28,18 @@ object SequentialTestExecution extends AutoPlugin {
         concurrentRestrictions in Global += Tags.limit(Tags.Test, 1))
       ```
      */
+    sys.env.get("TRAVIS") match {
+      case Some("true") => Nil
+      case _            => Seq(IntegrationTest / parallelExecution := false, Test / parallelExecution := false)
+    }
+
+  }
+
+  override def globalSettings: Seq[Def.Setting[_]] = {
     Seq(tags in test in IntegrationTest := Seq(IntegrationTestTag -> 1)) ++
     (sys.env.get("TRAVIS") match {
-      case Some("true") =>
-        Seq(concurrentRestrictions in Global := Seq(Tags.limit(IntegrationTestTag, 1)))
-      case _ => Seq(IntegrationTest / parallelExecution := false, Test / parallelExecution := false)
+      case Some("true") => Seq(concurrentRestrictions in Global := Seq(Tags.limit(IntegrationTestTag, 1)))
+      case _            => Nil
     })
   }
 }
