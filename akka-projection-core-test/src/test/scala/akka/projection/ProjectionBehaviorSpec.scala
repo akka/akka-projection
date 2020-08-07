@@ -47,7 +47,7 @@ object ProjectionBehaviorSpec {
   private val TestProjectionId = ProjectionId("test-projection", "00")
 
   def handler(probe: TestProbe[ProbeMessage], logger: Logger): Handler[Int] = new Handler[Int] {
-    println("Handler initialized")
+    logger.info("Handler initialized")
     val strBuffer: StringBuffer = new StringBuffer()
     override def process(env: Int): Future[Done] = {
       concat(env)
