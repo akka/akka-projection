@@ -70,7 +70,7 @@ public class WordCountDocExampleTest extends JUnitSuite {
         .get(10, TimeUnit.SECONDS);
   }
 
-  private ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
+  private ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.system());
 
   private ProjectionId genRandomProjectionId() {
     return ProjectionId.of(UUID.randomUUID().toString(), UUID.randomUUID().toString());

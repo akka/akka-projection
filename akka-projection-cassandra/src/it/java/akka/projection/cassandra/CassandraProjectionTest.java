@@ -164,7 +164,7 @@ public class CassandraProjectionTest extends JUnitSuite {
     }
   }
 
-  private ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
+  private ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.system());
 
   private ProjectionId genRandomProjectionId() {
     return ProjectionId.of(UUID.randomUUID().toString(), UUID.randomUUID().toString());

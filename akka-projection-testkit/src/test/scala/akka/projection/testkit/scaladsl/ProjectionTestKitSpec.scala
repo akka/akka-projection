@@ -8,6 +8,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
+import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.Handler
@@ -17,9 +18,9 @@ import akka.stream.scaladsl.Source
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
+class ProjectionTestKitSpec extends ScalaTestWithActorTestKit with LogCapturing with AnyWordSpecLike {
 
-  val projectionTestKit: ProjectionTestKit = ProjectionTestKit(testKit)
+  val projectionTestKit: ProjectionTestKit = ProjectionTestKit(system)
   val projectionId: ProjectionId = ProjectionId("name", "key")
 
   def handler(strBuffer: StringBuffer, predicate: Int => Boolean): Handler[Int] = new Handler[Int] {

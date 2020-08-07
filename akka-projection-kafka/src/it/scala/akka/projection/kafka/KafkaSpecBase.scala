@@ -41,7 +41,7 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
   protected def this(config: Config) = this(config = config, kafkaPort = -1)
 
   val testKit = ActorTestKit(system.toTyped)
-  val projectionTestKit = ProjectionTestKit(testKit)
+  val projectionTestKit = ProjectionTestKit(system.toTyped)
 
   implicit val actorSystem = testKit.system
   implicit val dispatcher = testKit.system.executionContext

@@ -16,7 +16,7 @@ Scala
 
 The TestKit includes several utilities to run the Projection handler in isolation so that a full projection implementation and source provider are not required.
 
-* @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit] takes an Akka @apidoc[akka.actor.testkit.typed.(javadsl|scaladsl).ActorTestKit] and runs a projection with the test @apidoc[akka.actor.typed.ActorSystem].
+* @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit] runs a projection with the test @apidoc[akka.actor.typed.ActorSystem].
 * @apidoc[TestSourceProvider] allows the user to mock out test data `Envelopes` that will be processed by the Projection Handler.
 * @apidoc[TestProjection] is a test Projection implementation that uses an in-memory internal offset store.
 

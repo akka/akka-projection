@@ -6,37 +6,25 @@ package akka.projection.testkit.javadsl
 
 import java.time.Duration
 
-import scala.concurrent.Await
-import scala.concurrent.duration._
-
 import akka.Done
-import akka.actor.testkit.typed.TestKitSettings
-import akka.actor.testkit.typed.javadsl.ActorTestKit
-import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.SupervisorStrategy
-import akka.actor.typed.javadsl.Adapter
-import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.ApiMayChange
-import akka.annotation.InternalApi
 import akka.japi.function.Effect
 import akka.japi.function.Procedure
 import akka.projection.Projection
+import akka.projection.testkit.scaladsl
 import akka.stream.testkit.TestSubscriber
-import akka.stream.testkit.javadsl.TestSink
 import akka.util.JavaDurationConverters._
 
 @ApiMayChange
 object ProjectionTestKit {
-  def create(testKit: ActorTestKit): ProjectionTestKit =
-    new ProjectionTestKit(testKit)
+  def create(system: ActorSystem[_]): ProjectionTestKit =
+    new ProjectionTestKit(system)
 }
 
 @ApiMayChange
-final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
-
-  private implicit val system: ActorSystem[Void] = testKit.system
-  private implicit val settings: TestKitSettings = TestKitSettings(system)
+final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
+  private val delegate = scaladsl.ProjectionTestKit(system)
 
   /**
    * Run a Projection and assert its projected data using the passed assert function.
@@ -53,7 +41,7 @@ final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
    * @param assertFunction - a function that exercises the test assertions
    */
   def run(projection: Projection[_], assertFunction: Effect): Unit =
-    runInternal(projection, assertFunction, settings.SingleExpectDefaultTimeout.asJava, 100.millis.asJava)
+    delegate.run(projection)(assertFunction.apply())
 
   /**
    * Run a Projection and assert its projected data using the passed assert function and the max duration of the test.
@@ -71,7 +59,7 @@ final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
    * @param assertFunction - a function that exercises the test assertions
    */
   def run(projection: Projection[_], max: Duration, assertFunction: Effect): Unit =
-    runInternal(projection, assertFunction, max, 100.millis.asJava)
+    delegate.run(projection, max.asScala)(assertFunction.apply())
 
   /**
    * Run a Projection and assert its projected data using the passed assert function,
@@ -91,32 +79,7 @@ final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
    * @param assertFunction - a function that exercises the test assertions
    */
   def run(projection: Projection[_], max: Duration, interval: Duration, assertFunction: Effect): Unit =
-    runInternal(projection, assertFunction, max, interval)
-
-  /**
-   * INTERNAL API
-   */
-  @InternalApi
-  private def runInternal(
-      projection: Projection[_],
-      assertFunction: Effect,
-      max: Duration,
-      interval: Duration): Unit = {
-
-    val probe = testKit.createTestProbe[Nothing]("internal-projection-testkit-probe")
-    val actorHandler = spawnActorHandler(projection)
-    val running =
-      projection
-        .withRestartBackoff(0.millis, 0.millis, 0.0, 0)
-        .run()(testKit.system)
-
-    try {
-      probe.awaitAssert(max, interval, () => assertFunction())
-    } finally {
-      Await.result(running.stop(), max.asScala)
-      actorHandler.foreach(ref => testKit.stop(ref))
-    }
-  }
+    delegate.run(projection, max.asScala, interval.asScala)(assertFunction.apply())
 
   /**
    * Run a Projection with an attached `TestSubscriber.Probe` allowing
@@ -131,27 +94,7 @@ final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
    * @param projection - the Projection to run
    * @param assertFunction - a function receiving a `TestSubscriber.Probe[Done]`
    */
-  def runWithTestSink(projection: Projection[_], assertFunction: Procedure[TestSubscriber.Probe[Done]]): Unit = {
-    val actorHandler = spawnActorHandler(projection)
-    val sinkProbe = projection.mappedSource().runWith(TestSink.probe[Done](Adapter.toClassic(testKit.system)))
-    try {
-      assertFunction(sinkProbe)
-    } finally {
-      sinkProbe.cancel()
-      actorHandler.foreach(ref => testKit.stop(ref))
-    }
-  }
-
-  /**
-   * INTERNAL API
-   */
-  @InternalApi
-  private def spawnActorHandler(projection: Projection[_]): Option[ActorRef[_]] = {
-    projection.actorHandlerInit[Any].map { init =>
-      val ref = testKit.spawn(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart))
-      init.setActor(ref)
-      ref
-    }
-  }
+  def runWithTestSink(projection: Projection[_], assertFunction: Procedure[TestSubscriber.Probe[Done]]): Unit =
+    delegate.runWithTestSink(projection)(probe => assertFunction.apply(probe))
 
 }

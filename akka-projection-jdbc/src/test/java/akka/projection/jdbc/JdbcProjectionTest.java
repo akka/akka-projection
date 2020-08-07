@@ -148,7 +148,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     return sourceProvider;
   }
 
-  private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
+  private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.system());
 
   private ProjectionId genRandomProjectionId() {
     return ProjectionId.of(UUID.randomUUID().toString(), "00");

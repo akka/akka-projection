@@ -8,7 +8,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 import akka.Done
-import akka.actor.testkit.typed.TestKitSettings
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -21,15 +20,14 @@ import akka.stream.testkit.scaladsl.TestSink
 
 @ApiMayChange
 object ProjectionTestKit {
-  def apply(testKit: ActorTestKit): ProjectionTestKit =
-    new ProjectionTestKit(testKit)
+  def apply(system: ActorSystem[_]): ProjectionTestKit =
+    new ProjectionTestKit(system)
 }
 
 @ApiMayChange
-final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
+final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
 
-  private implicit val system: ActorSystem[Nothing] = testKit.system
-  private implicit val settings: TestKitSettings = TestKitSettings(system)
+  private val testKit = ActorTestKit(system)
 
   /**
    * Run a Projection and assert its projected data using the passed assert function.
@@ -47,7 +45,7 @@ final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
    * @param assertFunction - a by-name code block that exercise the test assertions
    */
   def run(projection: Projection[_])(assertFunction: => Unit): Unit =
-    runInternal(projection, assertFunction, settings.SingleExpectDefaultTimeout, 100.millis)
+    runInternal(projection, assertFunction, testKit.testKitSettings.SingleExpectDefaultTimeout, 100.millis)
 
   /**
    * Run a Projection and assert its projected data using the passed assert function and the max duration of the test.
@@ -122,6 +120,7 @@ final class ProjectionTestKit private[projection] (testKit: ActorTestKit) {
    */
   def runWithTestSink(projection: Projection[_])(assertFunction: TestSubscriber.Probe[Done] => Unit): Unit = {
     val actorHandler = spawnActorHandler(projection)
+    implicit val sys: ActorSystem[_] = system
     val sinkProbe = projection.mappedSource().runWith(TestSink.probe[Done](testKit.system.classicSystem))
     try {
       assertFunction(sinkProbe)

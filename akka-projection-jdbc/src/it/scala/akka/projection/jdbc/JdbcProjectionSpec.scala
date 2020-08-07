@@ -210,7 +210,7 @@ class JdbcProjectionSpec
   val jdbcSettings = JdbcSettings(testKit.system)
   implicit val offsetStore = new JdbcOffsetStore(system, jdbcSettings, jdbcSessionFactory)
 
-  val projectionTestKit = ProjectionTestKit(testKit)
+  val projectionTestKit = ProjectionTestKit(system)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

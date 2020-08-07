@@ -58,7 +58,7 @@ public class ProjectionTestKitTest extends JUnitSuite {
   @ClassRule public static final TestKitJunitResource testKitJunit = new TestKitJunitResource();
 
   private final ProjectionTestKit projectionTestKit =
-      ProjectionTestKit.create(testKitJunit.testKit());
+      ProjectionTestKit.create(testKitJunit.system());
 
   @Test
   public void assertProgressOfAProjection() {
