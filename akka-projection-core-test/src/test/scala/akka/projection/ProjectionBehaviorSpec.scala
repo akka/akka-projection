@@ -34,6 +34,8 @@ import akka.stream.OverflowStrategy
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 import org.scalatest.wordspec.AnyWordSpecLike
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 object ProjectionBehaviorSpec {
 
@@ -44,13 +46,13 @@ object ProjectionBehaviorSpec {
 
   private val TestProjectionId = ProjectionId("test-projection", "00")
 
-  def handler(probe: TestProbe[ProbeMessage]): Handler[Int] = new Handler[Int] {
+  def handler(probe: TestProbe[ProbeMessage], logger: Logger): Handler[Int] = new Handler[Int] {
     println("Handler initialized")
     val strBuffer: StringBuffer = new StringBuffer()
     override def process(env: Int): Future[Done] = {
       concat(env)
       probe.ref ! Consumed(env, strBuffer.toString)
-      println(s"Consumed: $env, ${strBuffer.toString}")
+      logger.info(s"Consumed: $env, ${strBuffer.toString}")
       Future.successful(Done)
     }
 
@@ -68,11 +70,12 @@ object ProjectionBehaviorSpec {
     def apply(
         src: Source[Int, NotUsed],
         probe: TestProbe[ProbeMessage],
+        logger: Logger,
         projectionId: ProjectionId = TestProjectionId,
         failToStop: Boolean = false): ProjectionBehaviourTestProjection = {
-      val handlerStrategy = new SingleHandlerStrategy[Int](() => handler(probe))
+      val handlerStrategy = new SingleHandlerStrategy[Int](() => handler(probe, logger))
       val sourceProvider = TestSourceProvider(src, (i: Int) => i)
-      new ProjectionBehaviourTestProjection(projectionId, sourceProvider, handlerStrategy, probe, failToStop)
+      new ProjectionBehaviourTestProjection(projectionId, sourceProvider, handlerStrategy, probe, failToStop, logger)
     }
   }
 
@@ -81,7 +84,8 @@ object ProjectionBehaviorSpec {
       sourceProvider: SourceProvider[Int, Int],
       handlerStrategy: HandlerStrategy,
       testProbe: TestProbe[ProbeMessage],
-      failToStop: Boolean)
+      failToStop: Boolean,
+      logger: Logger)
       extends TestProjectionImpl[Int, Int](
         projectionId,
         sourceProvider,
@@ -141,7 +145,7 @@ object ProjectionBehaviorSpec {
       import system.executionContext
 
       testProbe.ref ! StartObserved
-      println("StartObserved")
+      logger.info("StartObserved")
 
       override def stop(): Future[Done] = {
         val stopFut =
@@ -158,7 +162,7 @@ object ProjectionBehaviorSpec {
           .andThen {
             case _ =>
               testProbe.ref ! StopObserved
-              println("StopObserved")
+              logger.info("StopObserved")
           }
       }
 
@@ -198,6 +202,8 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
   import ProjectionBehavior.Internal._
   import ProjectionBehaviorSpec._
 
+  private val logger: Logger = LoggerFactory.getLogger(this.getClass)
+
   private def setupTestProjection(projectionId: ProjectionId = TestProjectionId)
       : (TestProbe[ProbeMessage], ActorRef[ProjectionBehavior.Command], AtomicReference[ActorRef[Int]]) = {
     val srcRef = new AtomicReference[ActorRef[Int]]()
@@ -210,7 +216,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
       }
     val testProbe = testKit.createTestProbe[ProbeMessage]()
     val projectionRef =
-      testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, projectionId)))
+      testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, logger, projectionId)))
     eventually {
       srcRef.get() should not be null
     }
@@ -223,7 +229,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
-      testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe)))
+      testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, logger)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))
@@ -236,7 +242,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
-      val projectionRef = testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe)))
+      val projectionRef = testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, logger)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))
@@ -255,7 +261,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val src = Source(1 to 2)
       val projectionRef =
-        testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, failToStop = true)))
+        testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, logger, failToStop = true)))
 
       testProbe.expectMessage(StartObserved)
       testProbe.expectMessage(Consumed(1, "1"))
