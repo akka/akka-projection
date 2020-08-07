@@ -144,8 +144,11 @@ object ProjectionBehaviorSpec {
         with ProjectionOffsetManagement[Int] {
       import system.executionContext
 
-      testProbe.ref ! StartObserved
-      logger.info("StartObserved")
+      override protected def run(): Future[Done] = {
+        testProbe.ref ! StartObserved
+        logger.info("StartObserved")
+        source.run()
+      }
 
       override def stop(): Future[Done] = {
         val stopFut =
