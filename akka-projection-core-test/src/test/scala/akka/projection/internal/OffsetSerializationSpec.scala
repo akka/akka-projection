@@ -55,8 +55,8 @@ class OffsetSerializationSpec
     """)
     with AnyWordSpecLike
     with LogCapturing {
-  import OffsetSerializationSpec._
   import OffsetSerialization._
+  import OffsetSerializationSpec._
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
   import offsetSerialization.toStorageRepresentation

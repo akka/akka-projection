@@ -29,7 +29,7 @@ import akka.util.ccompat.JavaConverters._
 /**
  * INTERNAL API: Adapter from javadsl.Handler to scaladsl.Handler
  */
-@InternalApi private[projection] class HandlerAdapter[Envelope] private (delegate: javadsl.Handler[Envelope])
+@InternalApi private[projection] class HandlerAdapter[Envelope](delegate: javadsl.Handler[Envelope])
     extends scaladsl.Handler[Envelope] {
 
   override def process(envelope: Envelope): Future[Done] = {

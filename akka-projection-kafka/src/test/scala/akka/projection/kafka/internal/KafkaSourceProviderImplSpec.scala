@@ -16,8 +16,8 @@ import akka.kafka.scaladsl.Consumer
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.scaladsl.Handler
-import akka.projection.testkit.TestProjection
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.projection.testkit.scaladsl.TestProjection
 import akka.stream.scaladsl.Source
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition

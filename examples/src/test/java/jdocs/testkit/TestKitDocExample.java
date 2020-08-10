@@ -6,13 +6,8 @@ package jdocs.testkit;
 
 import akka.Done;
 import akka.NotUsed;
-import akka.actor.typed.ActorSystem;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
-import akka.projection.internal.ActorHandlerInit;
-import akka.projection.internal.ProjectionSettings;
-import akka.projection.RunningProjection;
-import akka.projection.StatusObserver;
 import akka.projection.javadsl.Handler;
 
 import java.util.List;
@@ -20,13 +15,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 // #testkit-import
-import akka.projection.testkit.TestSourceProvider;
+import akka.projection.testkit.javadsl.TestSourceProvider;
 import org.junit.ClassRule;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
-import scala.Option;
-import scala.concurrent.Future;
-import scala.concurrent.duration.FiniteDuration;
 
 // #testkit-import
 
@@ -46,12 +38,9 @@ import static org.junit.Assert.assertEquals;
 
 // #testkit-testprojection
 
-import java.util.function.Function;
-import java.util.stream.Stream;
 import akka.japi.Pair;
 import akka.stream.javadsl.Source;
-import akka.projection.testkit.TestProjection;
-import akka.projection.testkit.TestSourceProvider;
+import akka.projection.testkit.javadsl.TestProjection;
 
 // #testkit-testprojection
 

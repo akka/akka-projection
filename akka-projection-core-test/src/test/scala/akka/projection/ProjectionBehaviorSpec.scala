@@ -6,8 +6,8 @@ package akka.projection
 
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.concurrent.duration._
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
@@ -24,9 +24,12 @@ import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
-import akka.projection.testkit.TestInMemoryOffsetStore
-import akka.projection.testkit.TestProjection
-import akka.projection.testkit.TestSourceProvider
+import akka.projection.testkit.internal.TestInMemoryOffsetStoreImpl
+import akka.projection.testkit.internal.TestInternalProjectionState
+import akka.projection.testkit.internal.TestProjectionImpl
+import akka.projection.testkit.internal.TestRunningProjection
+import akka.projection.testkit.scaladsl.TestOffsetStore
+import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.OverflowStrategy
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
@@ -77,22 +80,23 @@ object ProjectionBehaviorSpec {
       handlerStrategy: HandlerStrategy,
       testProbe: TestProbe[ProbeMessage],
       failToStop: Boolean)
-      extends TestProjection(
+      extends TestProjectionImpl[Int, Int](
         projectionId,
         sourceProvider,
         handlerStrategy,
         AtMostOnce(),
         NoopStatusObserver,
-        _ => TestInMemoryOffsetStore[Int](),
+        () => new TestInMemoryOffsetStoreImpl[Int](),
         None) {
 
-    override private[projection] def newState(implicit system: ActorSystem[_]): TestInternalProjectionState =
+    override private[projection] def newState(implicit system: ActorSystem[_]): TestInternalProjectionState[Int, Int] =
       new ProjectionBehaviourTestInternalProjectionState(
         projectionId,
         sourceProvider,
         handlerStrategy,
         offsetStrategy,
-        offsetStoreFactory(system),
+        NoopStatusObserver,
+        offsetStoreFactory(),
         testProbe,
         failToStop)
 
@@ -101,14 +105,16 @@ object ProjectionBehaviorSpec {
         sourceProvider: SourceProvider[Int, Int],
         handlerStrategy: HandlerStrategy,
         offsetStrategy: OffsetStrategy,
-        offsetStore: TestInMemoryOffsetStore[Int],
+        statusObserver: StatusObserver[Int],
+        offsetStore: TestOffsetStore[Int],
         testProbe: TestProbe[ProbeMessage],
         failToStop: Boolean)(implicit system: ActorSystem[_])
-        extends TestInternalProjectionState(
+        extends TestInternalProjectionState[Int, Int](
           projectionId,
           sourceProvider,
           handlerStrategy,
           offsetStrategy,
+          statusObserver,
           offsetStore,
           None) {
       override def newRunningInstance(): RunningProjection =
@@ -125,7 +131,7 @@ object ProjectionBehaviorSpec {
         projectionId: ProjectionId,
         source: Source[Done, _],
         killSwitch: SharedKillSwitch,
-        offsetStore: TestInMemoryOffsetStore[Int],
+        offsetStore: TestOffsetStore[Int],
         testProbe: TestProbe[ProbeMessage],
         failToStop: Boolean)(implicit _system: ActorSystem[_])
         extends TestRunningProjection(source, killSwitch)
