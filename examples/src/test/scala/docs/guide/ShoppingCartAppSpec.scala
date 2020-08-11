@@ -40,7 +40,7 @@ object ShoppingCartAppSpec {
 class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLike {
   import ShoppingCartAppSpec._
 
-  val projectionTestKit = ProjectionTestKit(testKit)
+  private val projectionTestKit = ProjectionTestKit(system)
 
   def createEnvelope(event: ShoppingCartEvents.Event, seqNo: Long, timestamp: Long = 0L) =
     EventEnvelope(Offset.sequence(seqNo), "persistenceId", seqNo, event, timestamp)

@@ -33,7 +33,7 @@ import akka.stream.scaladsl.Source
 abstract
 //#testkit
 class TestKitDocExample extends ScalaTestWithActorTestKit {
-  val projectionTestKit = ProjectionTestKit(testKit)
+  private val projectionTestKit = ProjectionTestKit(system)
 
   //#testkit
 

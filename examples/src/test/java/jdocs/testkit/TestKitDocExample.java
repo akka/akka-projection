@@ -62,7 +62,7 @@ public class TestKitDocExample {
 
   // #testkit
   @ClassRule static final TestKitJunitResource testKit = new TestKitJunitResource();
-  ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
+  ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.system());
   // #testkit
 
   Projection<String> projection = TestProjection.create(null, null, null);
