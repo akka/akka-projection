@@ -121,8 +121,9 @@ lazy val docs = project
         // Scala
         "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
         "scaladoc.akka.projection.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
-        "javadoc.akka.projection.base_url" -> ""
-      ), // no Javadoc is published
+        "javadoc.akka.projection.base_url" -> "", // no Javadoc is published
+        // Misc
+        "extref.samples.base_url" -> "https://developer.lightbend.com/start/?group=akka&amp;project=%s"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,

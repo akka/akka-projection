@@ -58,7 +58,7 @@ object ShoppingCartEvents {
 }
 
 object ShoppingCartApp extends App {
-  val config = ConfigFactory.parseResources("guide-shopping-cart-app.conf")
+  val config = ConfigFactory.load("guide-shopping-cart-app.conf")
 
   ActorSystem(
     Behaviors.setup[String] { context =>
@@ -78,8 +78,7 @@ object ShoppingCartApp extends App {
       //#guideSourceProviderSetup
 
       //#guideProjectionSetup
-      // FIXME: use a custom dispatcher for repo?
-      implicit val ec = system.classicSystem.dispatcher
+      implicit val ec = system.executionContext
       val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
       val repo = new CheckoutProjectionRepositoryImpl(session)
       val projection = CassandraProjection.atLeastOnce(
@@ -145,7 +144,7 @@ class CheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: Check
 
   private var checkouts: immutable.Seq[Checkout] = Nil
   private val log = LoggerFactory.getLogger(getClass)
-  private implicit val ec: ExecutionContext = system.classicSystem.dispatcher
+  private implicit val ec: ExecutionContext = system.executionContext
 
   override def process(envelope: EventEnvelope[ShoppingCartEvents.Event]): Future[Done] = {
     envelope.event match {

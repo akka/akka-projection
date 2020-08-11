@@ -10,7 +10,7 @@ This isn't strictly required, because as we add other dependencies in the follow
 }
 
 Define the event type protocol that will represent each `Envelope` streamed from the Source Provider.
-Create a typed @apidoc[akka.actor.typed.ActorSystem] for various Projections implementations to use.
+Create a @apidoc[akka.actor.typed.ActorSystem] for various Projections implementations to use.
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideSetup }

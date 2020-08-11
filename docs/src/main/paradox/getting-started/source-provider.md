@@ -1,6 +1,6 @@
 #  Choosing a Source Provider
 
-A @apidoc:[SourceProvider] will provide the data to our projection. 
+A @apidoc[SourceProvider] will provide the data to our projection. 
 In Projections each element that's processed is an `Envelope` and each `Envelope` contains an `Event`.
 An `Envelope` must include an `Offset`, but it can also contain other information such as creation timestamp, a topic name, an entity tag, etc.
 There are several supported Source Provider's available (or you can build your own), but in this example we will use the @ref:[Akka Persistence `EventSourced` Source Provider](../eventsourced.md).

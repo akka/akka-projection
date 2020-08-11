@@ -14,7 +14,6 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.scaladsl.adapter._
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
@@ -39,13 +38,13 @@ object EventGeneratorApp extends App {
     .parseString("""
       |akka.actor.provider = "cluster"
       |""".stripMargin)
-    .withFallback(ConfigFactory.parseResources("guide-shopping-cart-app.conf"))
+    .withFallback(ConfigFactory.load("guide-shopping-cart-app.conf"))
   val EntityKey: EntityTypeKey[ShoppingCartEvents.Event] =
     EntityTypeKey[ShoppingCartEvents.Event]("shopping-cart-event")
 
   ActorSystem(Behaviors.setup[Command] {
     ctx =>
-      val system = ctx.system
+      implicit val system = ctx.system
       val cluster = Cluster(system)
       val upAdapter = ctx.messageAdapter[SelfUp](_ => Start)
       cluster.subscriptions ! Subscribe(upAdapter, classOf[SelfUp])
@@ -58,8 +57,6 @@ object EventGeneratorApp extends App {
           val maxQuantity = 3
           val maxItems = 3
           val products = List("cat t-shirt", "akka t-shirt", "skis", "bowling shoes")
-
-          implicit val classic: akka.actor.ActorSystem = system.toClassic
 
           val _: Future[Done] =
             Source
