@@ -2,7 +2,7 @@
 
 While building a projection there are several non-functional requirements to consider.
 _What technology to project into? What message delivery semantics are acceptable for the system? Is it compatible with the chosen Source Provider to enable exactly-once message delivery? Does runtime state need to be maintained in the projection while it's running?_
-It's up to the user to choose the right answers to these questions, but you must research if the answers to these are questions compatible with each other.
+It's up to the user to choose the right answers to these questions, but you must research if the answers to these questions are compatible with each other.
 
 For this guide we will create a Projection that represents cart checkout state.
 We will persist our Projection to Cassandra with at-least-once semantics.
