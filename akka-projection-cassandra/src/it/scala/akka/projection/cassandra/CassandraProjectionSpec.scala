@@ -139,7 +139,7 @@ class CassandraProjectionSpec
   private val offsetStore = new CassandraOffsetStore(system)
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
   private val repository = new TestRepository(session)
-  private val projectionTestKit = ProjectionTestKit(testKit)
+  private val projectionTestKit = ProjectionTestKit(system)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

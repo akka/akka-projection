@@ -51,7 +51,7 @@ public class JdbcHibernateTest extends JUnitSuite {
   @ClassRule public static final TestKitJunitResource testKit = new TestKitJunitResource(config);
   @Rule public final LogCapturing logCapturing = new LogCapturing();
 
-  private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.testKit());
+  private final ProjectionTestKit projectionTestKit = ProjectionTestKit.create(testKit.system());
 
   static class Envelope {
     final String id;

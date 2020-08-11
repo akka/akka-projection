@@ -177,7 +177,9 @@ private[projection] class TestRunningProjection(val source: Source[Done, _], kil
     implicit val system: ActorSystem[_])
     extends RunningProjection {
 
-  protected val futureDone: Future[Done] = source.run()
+  protected val futureDone: Future[Done] = run()
+
+  protected def run(): Future[Done] = source.run()
 
   override def stop(): Future[Done] = {
     killSwitch.shutdown()

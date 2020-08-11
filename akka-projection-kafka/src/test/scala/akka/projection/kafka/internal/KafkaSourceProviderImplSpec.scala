@@ -46,8 +46,8 @@ object KafkaSourceProviderImplSpec {
 class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapturing with AnyWordSpecLike {
   import KafkaSourceProviderImplSpec._
 
-  val projectionTestKit: ProjectionTestKit = ProjectionTestKit(testKit)
-  implicit val ec = system.executionContext
+  val projectionTestKit: ProjectionTestKit = ProjectionTestKit(system)
+  implicit val ec = system.classicSystem.dispatcher
 
   "The KafkaSourceProviderImpl" must {
 

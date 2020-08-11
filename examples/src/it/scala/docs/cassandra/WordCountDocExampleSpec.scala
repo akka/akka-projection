@@ -30,7 +30,7 @@ class WordCountDocExampleSpec
   private implicit val ec: ExecutionContext = system.executionContext
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
   private val repository = new CassandraWordCountRepository(session)
-  private val projectionTestKit = ProjectionTestKit(testKit)
+  private val projectionTestKit = ProjectionTestKit(system)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
