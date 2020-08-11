@@ -43,30 +43,13 @@ jobs:
         - CMD="test"
       name: "Run unit tests with Scala 2.13 and AdoptOpenJDK 11"
     - env:
-        - JDK="adopt@~1.11-0"
-        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="akka-projection-cassandra/it:test"
-      name: "Run Cassandra integration tests with Scala 2.13 and AdoptOpenJDK 11"
+        - CMD="it:test"
+      name: "Run all integration tests with Scala 2.13 and AdoptOpenJDK 8"
     - env:
         - JDK="adopt@~1.11-0"
         - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="akka-projection-slick/it:test"
-      name: "Run Slick integration tests with Scala 2.13 and AdoptOpenJDK 11"
-    - env:
-        - JDK="adopt@~1.11-0"
-        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="akka-projection-jdbc/it:test"
-      name: "Run JDBC integration tests with Scala 2.13 and AdoptOpenJDK 11"
-    - env:
-        - JDK="adopt@~1.11-0"
-        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="akka-projection-kafka/it:test"
-      name: "Run Kafka integration tests with Scala 2.13 and AdoptOpenJDK 11"
-    - env:
-        - JDK="adopt@~1.11-0"
-        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="examples/it:test"
-      name: "Run example projects integration tests with Scala 2.13 and AdoptOpenJDK 11"
+        - CMD="it:test"
+      name: "Run all integration tests with Scala 2.13 and AdoptOpenJDK 11"
 
     - stage: whitesource
       name: WhiteSource
