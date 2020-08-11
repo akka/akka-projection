@@ -43,7 +43,7 @@ Since this is a simple log operation managing the state in this manner is fine, 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionHandler }
 
-The projection is run by wrapping it in a @apidoc[ProjectionBehavior] and running it with a typed @apidoc[akka.actor.typed.ActorSystem].
+The projection is run by wrapping it in a @apidoc[ProjectionBehavior$] and running it with a typed @apidoc[akka.actor.typed.ActorSystem].
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionSetup }
