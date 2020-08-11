@@ -138,7 +138,10 @@ object ProjectionBehaviorSpec {
         with ProjectionOffsetManagement[Int] {
       import system.executionContext
 
-      testProbe.ref ! StartObserved
+      override protected def run(): Future[Done] = {
+        testProbe.ref ! StartObserved
+        source.run()
+      }
 
       override def stop(): Future[Done] = {
         val stopFut =
@@ -153,8 +156,7 @@ object ProjectionBehaviorSpec {
         // make sure the StopObserved is sent to testProbe before returned Future is completed
         stopFut
           .andThen {
-            case _ =>
-              testProbe.ref ! StopObserved
+            case _ => testProbe.ref ! StopObserved
           }
       }
 
