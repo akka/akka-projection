@@ -2,9 +2,9 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package docs.guide
-
 //#guideSetup
+
+package docs.guide
 
 import java.time.Instant
 

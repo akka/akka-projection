@@ -30,8 +30,11 @@ Using these tools we can assert that our Projection handler meets the following 
 Scala
 :  @@snip [ShoppingCartAppSpec.scala](/examples/src/test/scala/docs/guide/ShoppingCartAppSpec.scala) { #testKitSpec }
 
-To run the tests from the command line run the following sbt command.
+To run the tests from the command line run the following sbt command:
 
-```
+<!-- run from repo:
 sbt "examples/testOnly docs.guide.ShoppingCartAppSpec"
+-->
+```
+sbt "testOnly docs.guide.ShoppingCartAppSpec"
 ```
