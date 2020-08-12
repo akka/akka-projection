@@ -12,6 +12,7 @@ import scala.util.Success
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.projection.ProjectionBehavior
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.Handler
@@ -174,7 +175,7 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
           case Some((itemId, count)) =>
             log.info("ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]", tag, itemId, count.toString)
           case None =>
-            log.info("ItemPopularityProjectionHandler({}) item popularity for '{}': [0]", tag, itemId)
+            log.info2("ItemPopularityProjectionHandler({}) item popularity for '{}': [0]", tag, itemId)
         }
       }
     case _ => ()
