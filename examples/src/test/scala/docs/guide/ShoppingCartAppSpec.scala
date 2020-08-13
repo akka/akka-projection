@@ -20,20 +20,21 @@ import akka.stream.scaladsl.Source
 // #testKitImports
 import akka.projection.testkit.scaladsl.ProjectionTestKit
 // #testKitImports
-import docs.guide.CheckoutProjectionHandler._
 import org.scalatest.wordspec.AnyWordSpecLike
 
 // #testKitSpec
 object ShoppingCartAppSpec {
-  // mock out the Cassandra data layer and simulate recording checkouts
-  class MockCheckoutRepository extends CheckoutProjectionRepository {
-    var checkouts = Seq[Checkout]()
+  // mock out the Cassandra data layer and simulate recording item count updates
+  class MockItemPopularityRepository extends ItemPopularityProjectionRepository {
+    var counts: Map[String, Long] = Map.empty
 
-    def updateCart(cartId: String): Future[Done] = Future.successful(Done)
-    def checkoutCart(checkout: Checkout): Future[Done] = {
-      checkouts = checkouts :+ checkout
-      Future.successful(Done)
+    def update(itemId: String, delta: Int): Future[Done] = Future.successful {
+      counts = counts + (itemId -> (counts.getOrElse(itemId, 0L) + delta))
+      Done
     }
+
+    def getItem(itemId: String): Future[Option[(String, Long)]] =
+      Future.successful(Some(itemId -> counts.getOrElse(itemId, 0L)))
   }
 }
 
@@ -45,20 +46,20 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
   def createEnvelope(event: ShoppingCartEvents.Event, seqNo: Long, timestamp: Long = 0L) =
     EventEnvelope(Offset.sequence(seqNo), "persistenceId", seqNo, event, timestamp)
 
-  "The CheckoutProjectionHandler" should {
-    "process cart checkout cart correctly" in {
-      val repo = new MockCheckoutRepository
-      val handler = new CheckoutProjectionHandler("tag", system, repo)
+  "The ItemPopularityProjectionHandler" should {
+    "process item events correctly" in {
+      val repo = new MockItemPopularityRepository
+      val handler = new ItemPopularityProjectionHandler("tag", system, repo)
 
       val events = Source(
         List[EventEnvelope[ShoppingCartEvents.Event]](
-          createEnvelope(ShoppingCartEvents.ItemAdded("a7098", "batteries", 1), 0L),
-          createEnvelope(ShoppingCartEvents.ItemQuantityAdjusted("a7098", "batteries", 2), 1L),
-          createEnvelope(ShoppingCartEvents.CheckedOut("a7098", Instant.parse("2020-01-01T12:10:00.00Z")), 2L),
-          createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "crayons", 1), 3L),
-          createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "pens", 1), 4L),
-          createEnvelope(ShoppingCartEvents.ItemRemoved("0d12d", "pens"), 5L),
-          createEnvelope(ShoppingCartEvents.CheckedOut("0d12d", Instant.parse("2020-01-01T08:00:00.00Z")), 6L)))
+          createEnvelope(ShoppingCartEvents.ItemAdded("a7098", "bowling shoes", 1), 0L),
+          createEnvelope(ShoppingCartEvents.ItemQuantityAdjusted("a7098", "bowling shoes", 2, 1), 1L),
+          createEnvelope(ShoppingCartEvents.CheckedOut("a7098", Instant.parse("2020-01-01T12:00:00.00Z")), 2L),
+          createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "akka t-shirt", 1), 3L),
+          createEnvelope(ShoppingCartEvents.ItemAdded("0d12d", "skis", 1), 4L),
+          createEnvelope(ShoppingCartEvents.ItemRemoved("0d12d", "skis", 1), 5L),
+          createEnvelope(ShoppingCartEvents.CheckedOut("0d12d", Instant.parse("2020-01-01T12:05:00.00Z")), 6L)))
 
       val projectionId = ProjectionId("name", "key")
       val sourceProvider =
@@ -67,25 +68,16 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
         TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](projectionId, sourceProvider, () => handler)
 
       projectionTestKit.run(projection) {
-        repo.checkouts shouldBe List(
-          Checkout("a7098", Instant.parse("2020-01-01T12:10:00.00Z")),
-          Checkout("0d12d", Instant.parse("2020-01-01T08:00:00.00Z")))
+        repo.counts shouldBe Map("bowling shoes" -> 2, "akka t-shirt" -> 1, "skis" -> 0)
       }
     }
 
-    "log cart checkouts for day every 10 checkouts" in {
-      val repo = new MockCheckoutRepository
-      val handler = new CheckoutProjectionHandler("tag", system, repo)
+    "log item popularity for day every 10 item events" in {
+      val repo = new MockItemPopularityRepository
+      val handler = new ItemPopularityProjectionHandler("tag", system, repo)
 
-      // create 10 `ItemAdded` and `CheckedOut` events each for one day
-      val events = (0L to 20L by 2).flatMap { i =>
-        val cartId = (i / 2).toString
-        Seq(
-          createEnvelope(ShoppingCartEvents.ItemAdded(cartId, "bowling shoes", 2), i),
-          createEnvelope(
-            ShoppingCartEvents
-              .CheckedOut(cartId, Instant.parse("2020-01-01T08:00:00.00Z")): ShoppingCartEvents.Event,
-            i + 1))
+      val events = (0L to 10L).map { i =>
+        createEnvelope(ShoppingCartEvents.ItemAdded("a7098", "bowling shoes", 1), i)
       }
 
       val projectionId = ProjectionId("name", "key")
@@ -97,18 +89,7 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
         TestProjection[Offset, EventEnvelope[ShoppingCartEvents.Event]](projectionId, sourceProvider, () => handler)
 
       LoggingTestKit
-        .info("""CheckoutProjectionHandler(tag) last [10] checkouts: 
-                |Cart ID     Event Time
-                |0           2020-01-01T08:00:00Z
-                |1           2020-01-01T08:00:00Z
-                |2           2020-01-01T08:00:00Z
-                |3           2020-01-01T08:00:00Z
-                |4           2020-01-01T08:00:00Z
-                |5           2020-01-01T08:00:00Z
-                |6           2020-01-01T08:00:00Z
-                |7           2020-01-01T08:00:00Z
-                |8           2020-01-01T08:00:00Z
-                |9           2020-01-01T08:00:00Z""".stripMargin)
+        .info("ItemPopularityProjectionHandler(tag) item popularity for 'bowling shoes': [10]")
         .expect {
           projectionTestKit.runWithTestSink(projection) { testSink =>
             testSink.request(events.length)

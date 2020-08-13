@@ -8,14 +8,16 @@ package docs.guide
 
 import java.time.Instant
 
-import scala.collection.immutable
+import scala.util.Success
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.projection.ProjectionBehavior
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.Handler
 import com.typesafe.config.ConfigFactory
+import docs.guide.ShoppingCartEvents.ItemEvent
 
 //#guideSetup
 //#guideSourceProviderImports
@@ -51,9 +53,14 @@ object ShoppingCartEvents {
     def cartId: String
   }
 
-  final case class ItemAdded(cartId: String, itemId: String, quantity: Int) extends Event
-  final case class ItemRemoved(cartId: String, itemId: String) extends Event
-  final case class ItemQuantityAdjusted(cartId: String, itemId: String, newQuantity: Int) extends Event
+  sealed trait ItemEvent extends Event {
+    def itemId: String
+  }
+
+  final case class ItemAdded(cartId: String, itemId: String, quantity: Int) extends ItemEvent
+  final case class ItemRemoved(cartId: String, itemId: String, oldQuantity: Int) extends ItemEvent
+  final case class ItemQuantityAdjusted(cartId: String, itemId: String, newQuantity: Int, oldQuantity: Int)
+      extends ItemEvent
   final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
 }
 
@@ -80,11 +87,11 @@ object ShoppingCartApp extends App {
       //#guideProjectionSetup
       implicit val ec = system.executionContext
       val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
-      val repo = new CheckoutProjectionRepositoryImpl(session)
+      val repo = new ItemPopularityProjectionRepositoryImpl(session)
       val projection = CassandraProjection.atLeastOnce(
         projectionId = ProjectionId("shopping-carts", shoppingCartsTag),
         sourceProvider,
-        handler = () => new CheckoutProjectionHandler(shoppingCartsTag, system, repo))
+        handler = () => new ItemPopularityProjectionHandler(shoppingCartsTag, system, repo))
 
       context.spawn(ProjectionBehavior(projection), projection.projectionId.id)
       //#guideProjectionSetup
@@ -98,91 +105,80 @@ object ShoppingCartApp extends App {
 //#guideSetup
 
 //#guideProjectionRepo
-trait CheckoutProjectionRepository {
-  import CheckoutProjectionHandler._
+trait ItemPopularityProjectionRepository {
 
-  def updateCart(cartId: String): Future[Done]
-  def checkoutCart(checkout: Checkout): Future[Done]
+  def update(itemId: String, delta: Int): Future[Done]
+  def getItem(itemId: String): Future[Option[(String, Long)]]
 }
 
-class CheckoutProjectionRepositoryImpl(session: CassandraSession)(implicit val ec: ExecutionContext)
-    extends CheckoutProjectionRepository {
-  import CheckoutProjectionHandler._
+class ItemPopularityProjectionRepositoryImpl(session: CassandraSession)(implicit val ec: ExecutionContext)
+    extends ItemPopularityProjectionRepository {
 
   val keyspace = "akka_projection"
-  val cartStateTable = "cart_checkout_state"
+  val popularityTable = "item_popularity"
 
-  def updateCart(cartId: String): Future[Done] = {
+  def update(itemId: String, delta: Int): Future[Done] = {
     session.executeWrite(
-      s"UPDATE $keyspace.$cartStateTable SET last_updated = ? WHERE cart_id = ?",
-      Instant.now(),
-      cartId)
+      s"UPDATE $keyspace.$popularityTable SET count = count + ? WHERE item_id = ?",
+      java.lang.Long.valueOf(delta),
+      itemId)
   }
 
-  def checkoutCart(checkout: Checkout): Future[Done] = {
-    session.executeWrite(
-      s"UPDATE $keyspace.$cartStateTable SET last_updated = ?, checkout_time = ? WHERE cart_id = ?",
-      Instant.now(),
-      checkout.checkoutTime,
-      checkout.cartId)
+  def getItem(itemId: String): Future[Option[(String, Long)]] = {
+    session
+      .selectOne(s"SELECT item_id, count FROM $keyspace.$popularityTable WHERE item_id = ?", itemId)
+      .map(opt => opt.map(row => (row.getString("item_id"), row.getLong("count").longValue())))
   }
 }
 //#guideProjectionRepo
 
 //#guideProjectionHandler
-object CheckoutProjectionHandler {
-  val CheckoutLogInterval = 10
-  val CheckoutFormat = "%-12s%-9s"
-
-  final case class Checkout(cartId: String, checkoutTime: Instant)
+object ItemPopularityProjectionHandler {
+  val LogInterval = 10
 }
 
-class CheckoutProjectionHandler(tag: String, system: ActorSystem[_], repo: CheckoutProjectionRepository)
+class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo: ItemPopularityProjectionRepository)
     extends Handler[EventEnvelope[ShoppingCartEvents.Event]]() {
 
-  import CheckoutProjectionHandler._
-
-  private var checkouts: immutable.Seq[Checkout] = Nil
+  private var logCounter: Int = 0
   private val log = LoggerFactory.getLogger(getClass)
   private implicit val ec: ExecutionContext = system.executionContext
 
   override def process(envelope: EventEnvelope[ShoppingCartEvents.Event]): Future[Done] = {
-    envelope.event match {
-      case ShoppingCartEvents.CheckedOut(cartId, eventTime) =>
-        val checkout = Checkout(cartId, eventTime)
-        val update = repo.checkoutCart(checkout)
+    logItemCount(envelope.event)
+    val processed = envelope.event match {
+      case ShoppingCartEvents.ItemAdded(_, itemId, quantity) =>
+        repo.update(itemId, quantity)
 
-        checkouts = checkouts :+ checkout
-        if (checkouts.length == CheckoutLogInterval) {
-          log.info(
-            "CheckoutProjectionHandler({}) last [{}] checkouts: {}",
-            tag,
-            CheckoutLogInterval.toString,
-            formatCheckouts(checkouts))
-          checkouts = Nil
-        }
+      case ShoppingCartEvents.ItemQuantityAdjusted(_, itemId, newQuantity, oldQuantity) =>
+        repo.update(itemId, newQuantity - oldQuantity)
 
-        update.map(_ => Done)
-      case ShoppingCartEvents.ItemAdded(cartId, _, _) =>
-        repo.updateCart(cartId)
+      case ShoppingCartEvents.ItemRemoved(_, itemId, oldQuantity) =>
+        repo.update(itemId, 0 - oldQuantity)
 
-      case ShoppingCartEvents.ItemQuantityAdjusted(cartId, _, _) =>
-        repo.updateCart(cartId)
-
-      case ShoppingCartEvents.ItemRemoved(cartId, _) =>
-        repo.updateCart(cartId)
+      case _: ShoppingCartEvents.CheckedOut => Future.successful(Done)
     }
+    processed.onComplete {
+      case Success(_) => logItemCount(envelope.event)
+      case _          => ()
+    }
+    processed
   }
 
-  private def formatCheckouts(checkouts: immutable.Seq[Checkout]): String = {
-    if (checkouts.isEmpty) "(no checkouts)"
-    else {
-      val header = CheckoutFormat.format("Cart ID", "Event Time")
-      val lines = header +: checkouts.map {
-          case Checkout(cartId, checkoutTime) => CheckoutFormat.format(cartId, checkoutTime)
+  private def logItemCount(event: ShoppingCartEvents.Event): Unit = event match {
+    case itemEvent: ItemEvent =>
+      logCounter += 1
+      val itemId = itemEvent.itemId
+      if (logCounter == ItemPopularityProjectionHandler.LogInterval) {
+        logCounter = 0
+        repo.getItem(itemId).foreach {
+          case Some((itemId, count)) =>
+            log.info("ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]", tag, itemId, count.toString)
+          case None =>
+            log.info2("ItemPopularityProjectionHandler({}) item popularity for '{}': [0]", tag, itemId)
         }
-      lines.mkString("\n", "\n", "\n")
-    }
+      }
+    case _ => ()
   }
 
 }

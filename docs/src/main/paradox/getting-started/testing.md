@@ -22,10 +22,10 @@ The TestKit includes several utilities to run the Projection handler in isolatio
 * @apidoc[TestSourceProvider] allows the user to mock out test data `Envelopes` that will be processed by the Projection Handler.
 * @apidoc[TestProjection] is a test Projection implementation that uses an in-memory internal offset store.
 
-Using these tools we can assert that our Projection handler meets the following requirements of the `CheckoutProjectionHandler`.
+Using these tools we can assert that our Projection handler meets the following requirements of the `ItemPopularityProjectionHandler`.
 
-1. Write checkout events to the database each time they're encountered.
-1. Log the last 10 checked out carts.
+1. Process each shopping cart item event, correctly calculate the item count delta, and update the database.
+1. Log the popularity of every 10th shopping cart item event that is processed.
 
 Scala
 :  @@snip [ShoppingCartAppSpec.scala](/examples/src/test/scala/docs/guide/ShoppingCartAppSpec.scala) { #testKitSpec }
