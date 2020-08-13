@@ -16,7 +16,6 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
@@ -47,7 +46,7 @@ object EventGeneratorApp extends App {
   val MaxItems = 3
   val MaxItemsAdjusted = 3
 
-  val ShoppingCartsTag = "shopping-cart"
+  val DefaultShoppingCartTag = "shopping-cart"
 
   val EntityKey: EntityTypeKey[Event] = EntityTypeKey[Event]("shopping-cart-event")
 
@@ -67,7 +66,9 @@ object EventGeneratorApp extends App {
       cluster.subscriptions ! Subscribe(upAdapter, classOf[SelfUp])
       cluster.manager ! Join(cluster.selfMember.address)
       val sharding = ClusterSharding(system)
-      val _ = sharding.init(Entity(EntityKey)(entityCtx => cartBehaviour(entityCtx.entityId)))
+      val _ = sharding.init(Entity(EntityKey) { entityCtx =>
+        cartBehaviour(entityCtx.entityId, tagFactory(entityCtx.entityId))
+      })
 
       Behaviors.receiveMessage {
         case Start =>
@@ -77,40 +78,37 @@ object EventGeneratorApp extends App {
               .mapConcat {
                 case "checkout" =>
                   val cartId = java.util.UUID.randomUUID().toString.take(5)
-                  val items = Random.nextInt(MaxItems)
+                  val items = randomItems()
+                  val itemEvents = (0 to items).flatMap {
+                    _ =>
+                      val itemId = Products(Random.nextInt(Products.size))
 
-                  if (items == 0) {
-                    val itemEvents = (0 to items).flatMap {
-                      _ =>
-                        val itemId = Products(Random.nextInt(Products.size))
+                      // add the item
+                      val quantity = randomQuantity()
+                      val itemAdded = ItemAdded(cartId, itemId, quantity)
 
-                        // add the item
-                        val quantity = randomQuantity()
-                        val itemAdded = ItemAdded(cartId, itemId, quantity)
+                      // make up to `MaxItemAdjusted` adjustments to quantity of item
+                      val adjustments = Random.nextInt(MaxItemsAdjusted)
+                      val itemQuantityAdjusted = (0 to adjustments).foldLeft(Seq[ItemQuantityAdjusted]()) {
+                        case (events, _) =>
+                          val newQuantity = randomQuantity()
+                          val oldQuantity =
+                            if (events.isEmpty) itemAdded.quantity
+                            else events.last.newQuantity
+                          events :+ ItemQuantityAdjusted(cartId, itemId, newQuantity, oldQuantity)
+                      }
 
-                        // make up to `MaxItemAdjusted` adjustments to quantity of item
-                        val adjustments = Random.nextInt(MaxItemsAdjusted)
-                        val itemQuantityAdjusted = (0 to adjustments).foldLeft(Seq[ItemQuantityAdjusted]()) {
-                          case (events, _) =>
-                            val newQuantity = randomQuantity()
-                            val oldQuantity =
-                              if (events.isEmpty) itemAdded.quantity
-                              else events.last.newQuantity
-                            events :+ ItemQuantityAdjusted(cartId, itemId, newQuantity, oldQuantity)
-                        }
+                      // flip a coin to decide whether or not to remove the item
+                      val itemRemoved =
+                        if (Random.nextBoolean())
+                          List(ItemRemoved(cartId, itemId, itemQuantityAdjusted.last.newQuantity))
+                        else Nil
 
-                        // flip a coin to decide whether or not to remove the item
-                        val itemRemoved =
-                          if (Random.nextBoolean())
-                            List(ItemRemoved(cartId, itemId, itemQuantityAdjusted.last.newQuantity))
-                          else Nil
+                      List(itemAdded) ++ itemQuantityAdjusted ++ itemRemoved
+                  }
 
-                        List(itemAdded) ++ itemQuantityAdjusted ++ itemRemoved
-                    }
-
-                    // checkout the cart and all its preceding item events
-                    itemEvents :+ CheckedOut(cartId, Instant.now())
-                  } else Nil
+                  // checkout the cart and all its preceding item events
+                  itemEvents :+ CheckedOut(cartId, Instant.now())
               }
               // send each event to the sharded entity represented by the event's cartId
               .map(event => sharding.entityRefFor(EntityKey, event.cartId).ref.tell(event))
@@ -125,16 +123,34 @@ object EventGeneratorApp extends App {
    */
   def randomQuantity(): Int = Random.nextInt(MaxQuantity - 1) + 1
 
-  def cartBehaviour(persistenceId: String): Behavior[Event] =
+  /**
+   * Random non-zero based count for how many `ItemAdded` events to generate
+   */
+  def randomItems(): Int = Random.nextInt(MaxItems - 1) + 1
+
+  /**
+   * Choose a tag from `ShoppingCartTags` based on the entity id (cart id)
+   */
+  def tagFactory(entityId: String): String =
+    if (args.contains("cluster")) {
+      val n = math.abs(entityId.hashCode % ShoppingCartTags.tags.size)
+      val selectedTag = ShoppingCartTags.tags(n)
+      selectedTag
+    } else DefaultShoppingCartTag
+
+  /**
+   * Construct an Actor that persists shopping cart events for a particular persistence id (cart id) and tag.
+   */
+  def cartBehaviour(persistenceId: String, tag: String): Behavior[Event] =
     Behaviors.setup { ctx =>
       EventSourcedBehavior[Event, Event, List[Any]](
         persistenceId = PersistenceId.ofUniqueId(persistenceId),
         Nil,
         (_, event) => {
-          ctx.log.info2("id [{}], persisting event {}", persistenceId, event)
+          ctx.log.info("id [{}] tag [{}] event: {}", persistenceId, tag, event)
           Effect.persist(event)
         },
-        (_, _) => Nil).withTagger(_ => Set(ShoppingCartsTag))
+        (_, _) => Nil).withTagger(_ => Set(tag))
     }
 }
 // #guideEventGeneratorApp

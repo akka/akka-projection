@@ -16,6 +16,7 @@ It builds a full @ref:[CQRS](../use-cases.md#command-query-responsibility-segreg
 * [Build a Stateful Projection handler](projection-handler.md)
 * [Writing tests for a Projection](testing.md)
 * [Running the Projection](running.md)
+* [Running the Projection in Akka Cluster](running-cluster.md)
 
 @@@
 
