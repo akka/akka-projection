@@ -2,6 +2,7 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
+// #testKitSpec
 package docs.guide
 
 import java.time.Instant
@@ -22,7 +23,6 @@ import akka.projection.testkit.scaladsl.ProjectionTestKit
 // #testKitImports
 import org.scalatest.wordspec.AnyWordSpecLike
 
-// #testKitSpec
 object ShoppingCartAppSpec {
   // mock out the Cassandra data layer and simulate recording item count updates
   class MockItemPopularityRepository extends ItemPopularityProjectionRepository {

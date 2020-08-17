@@ -4,7 +4,7 @@
 
 This example requires a Cassandra database to run. 
 If you do not have a Cassandra database then you can run one locally as a Docker container.
-To run a Cassandra database locally you can use [`docker-compose`](https://docs.docker.com/compose/) to run the [`docker-compose.yaml`](https://github.com/akka/akka-projection/blob/master/docker-compose.yml) found in the Projections project root.
+To run a Cassandra database locally you can use [`docker-compose`](https://docs.docker.com/compose/) to run the [`docker-compose.yaml`](https://raw.githubusercontent.com/akka/akka-projection/master/docker-compose.yml) found in the Projections project root.
 The `docker-compose.yml` file references the latest [Cassandra Docker Image](https://hub.docker.com/_/cassandra).
 
 Change directory to the directory of the `docker-compose.yml` file and manage a Cassandra container with the following commands.
@@ -41,17 +41,32 @@ PRIMARY KEY (item_id));
 ```
 
 Source events are generated with the `EventGeneratorApp`.
-This app is configured to use [Akka Persistence Cassandra](https://doc.akka.io/docs/akka-persistence-cassandra/current/index.html) to persist random `ShoppingCartApp.Events` to a journal.
-It will checkout 10 shopping carts with random items and quantities every 10 seconds.
-After 10 seconds it will increment the checkout time by 1 hour and repeat.
-This app will also automatically create all the Akka Persistence infrastructure tables in the `akka` keyspace.
+This app is configured to use [Akka Persistence Cassandra](https://doc.akka.io/docs/akka-persistence-cassandra/current/index.html) and [Akka Cluster](https://doc.akka.io/docs/akka/current/typed/cluster.html) [Sharding](https://doc.akka.io/docs/akka/current/typed/cluster-sharding.html) to persist random `ShoppingCartApp.Events` to a journal.
+It will checkout a shopping cart with random items and quantities every 1 second.
+The app will automatically create all the Akka Persistence infrastructure tables in the `akka` keyspace.
 We won't go into any further detail about how this app functions because it falls outside the scope of Akka Projections.
 To learn more about the writing events with [Akka Persistence see the Akka documentation](https://doc.akka.io/docs/akka/current/typed/index-persistence.html).
 
-To run the `EventGeneratorApp` use the following sbt command.
+Add the Akka Cluster Sharding Typed library to your project:
 
-```shell
+@@dependency [sbt,Maven,Gradle] {
+group=com.lightbend.akka
+artifact=akka-cluster-sharding-typed_$scala.binary.version$
+version=$project.version$
+}
+
+The source for the `EventGeneratorApp`:
+
+Scala
+:  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/EventGeneratorApp.scala) { #guideEventGeneratorApp }
+
+To run the `EventGeneratorApp` use the following sbt command:
+
+<!-- run from repo:
 sbt "examples/test:runMain docs.guide.EventGeneratorApp"
+-->
+```shell
+sbt "runMain docs.guide.EventGeneratorApp"
 ```
 
 If you don't see any connection exceptions you should eventually see log lines produced with the event being written to the journal.
@@ -63,10 +78,13 @@ Ex)
 [2020-07-16 15:13:59,855] [INFO] [docs.guide.EventGeneratorApp$] [] [EventGenerator-akka.actor.default-dispatcher-3] - persisting event ItemAdded(62e4e,bowling shoes,0) MDC: {persistencePhase=persist-evt, akkaAddress=akka://EventGenerator, akkaSource=akka://EventGenerator/user/persister, sourceActorSystem=EventGenerator, persistenceId=all-shopping-carts}
 ```
 
-Finally, we can run the projection itself by using sbt to run `ShoppingCartApp` in a new terminal.
+Finally, we can run the projection itself by using sbt to run `ShoppingCartApp` in a new terminal:
 
-```shell
+<!-- run from repo:
 sbt "examples/test:runMain docs.guide.ShoppingCartApp"
+-->
+```shell
+sbt "runMain docs.guide.ShoppingCartApp"
 ```
 
 After a few seconds you should see the `ItemPopularityProjectionHandler` logging that displays the current checkouts for the day:
@@ -88,5 +106,4 @@ cqlsh> SELECT item_id, count FROM akka_projection.item_popularity;
  bowling shoes |    65
 
 (4 rows)
-
 ```

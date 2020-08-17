@@ -16,7 +16,7 @@ artifact=akka-projection-cassandra_$scala.binary.version$
 version=$project.version$
 }
 
-Add the following imports to your project:
+Use the following package and imports in your project:
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionImports }

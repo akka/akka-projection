@@ -2,9 +2,9 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package docs.guide
-
 //#guideSetup
+
+package docs.guide
 
 import java.time.Instant
 
@@ -17,7 +17,6 @@ import akka.projection.ProjectionBehavior
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.Handler
 import com.typesafe.config.ConfigFactory
-import docs.guide.ShoppingCartEvents.ItemEvent
 
 //#guideSetup
 //#guideSourceProviderImports
@@ -139,24 +138,19 @@ object ItemPopularityProjectionHandler {
 
 class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo: ItemPopularityProjectionRepository)
     extends Handler[EventEnvelope[ShoppingCartEvents.Event]]() {
+  import ShoppingCartEvents._
 
   private var logCounter: Int = 0
   private val log = LoggerFactory.getLogger(getClass)
   private implicit val ec: ExecutionContext = system.executionContext
 
-  override def process(envelope: EventEnvelope[ShoppingCartEvents.Event]): Future[Done] = {
+  override def process(envelope: EventEnvelope[Event]): Future[Done] = {
     logItemCount(envelope.event)
     val processed = envelope.event match {
-      case ShoppingCartEvents.ItemAdded(_, itemId, quantity) =>
-        repo.update(itemId, quantity)
-
-      case ShoppingCartEvents.ItemQuantityAdjusted(_, itemId, newQuantity, oldQuantity) =>
-        repo.update(itemId, newQuantity - oldQuantity)
-
-      case ShoppingCartEvents.ItemRemoved(_, itemId, oldQuantity) =>
-        repo.update(itemId, 0 - oldQuantity)
-
-      case _: ShoppingCartEvents.CheckedOut => Future.successful(Done)
+      case ItemAdded(_, itemId, quantity)                            => repo.update(itemId, quantity)
+      case ItemQuantityAdjusted(_, itemId, newQuantity, oldQuantity) => repo.update(itemId, newQuantity - oldQuantity)
+      case ItemRemoved(_, itemId, oldQuantity)                       => repo.update(itemId, 0 - oldQuantity)
+      case _: CheckedOut                                             => Future.successful(Done)
     }
     processed.onComplete {
       case Success(_) => logItemCount(envelope.event)
@@ -165,7 +159,7 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
     processed
   }
 
-  private def logItemCount(event: ShoppingCartEvents.Event): Unit = event match {
+  private def logItemCount(event: Event): Unit = event match {
     case itemEvent: ItemEvent =>
       logCounter += 1
       val itemId = itemEvent.itemId
