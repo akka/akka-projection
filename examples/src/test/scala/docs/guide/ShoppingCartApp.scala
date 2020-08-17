@@ -187,7 +187,7 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
 //#guideClusterSetup
 
 object ShoppingCartTags {
-  val tags = Vector("shopping-cart-0", "shopping-cart-1", "shopping-cart-2")
+  val tags = Vector("carts-0", "carts-1", "carts-2")
 }
 
 object ShoppingCartClusterApp extends App {
