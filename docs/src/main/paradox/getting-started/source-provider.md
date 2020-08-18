@@ -24,3 +24,7 @@ To initialize the Source Provider we need to set parameters to choose the Akka P
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideSourceProviderSetup }
+
+Finally, we must configure Akka Persistence by adding a configuration file `guide-shopping-cart-cluster-app.conf` to the `src/main/resources/` directory of the project:
+
+@@snip [guide-shopping-cart-cluster-app.conf](/examples/src/test/resources/guide-shopping-cart-app.conf) { #guideConfig }

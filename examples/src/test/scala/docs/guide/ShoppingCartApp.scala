@@ -42,6 +42,12 @@ import org.slf4j.LoggerFactory
 
 //#guideProjectionImports
 
+//#guideClusterImports
+
+import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
+
+//#guideClusterImports
+
 //#guideSetup
 object ShoppingCartEvents {
 
@@ -177,3 +183,55 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
 
 }
 //#guideProjectionHandler
+
+//#guideClusterSetup
+
+object ShoppingCartTags {
+  val tags = Vector("carts-0", "carts-1", "carts-2")
+}
+
+object ShoppingCartClusterApp extends App {
+  val port = args.headOption match {
+    case Some(portString) if portString.matches("""\d+""") => portString.toInt
+    case _                                                 => throw new IllegalArgumentException("An akka cluster port argument is required")
+  }
+
+  val config = ConfigFactory
+    .parseString(s"""
+                    |akka.remote.artery.canonical.port = $port
+                    |""".stripMargin)
+    .withFallback(ConfigFactory.load("guide-shopping-cart-cluster-app.conf"))
+
+  ActorSystem(
+    Behaviors.setup[String] { context =>
+      val system = context.system
+      implicit val ec = system.executionContext
+      val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
+      val repo = new ItemPopularityProjectionRepositoryImpl(session)
+
+      def sourceProvider(tag: String): SourceProvider[Offset, EventEnvelope[ShoppingCartEvents.Event]] =
+        EventSourcedProvider
+          .eventsByTag[ShoppingCartEvents.Event](
+            system,
+            readJournalPluginId = CassandraReadJournal.Identifier,
+            tag = tag)
+
+      def projection(tag: String) =
+        CassandraProjection.atLeastOnce(
+          projectionId = ProjectionId("shopping-carts", tag),
+          sourceProvider(tag),
+          handler = () => new ItemPopularityProjectionHandler(tag, system, repo))
+
+      ShardedDaemonProcess(system).init[ProjectionBehavior.Command](
+        name = "shopping-carts",
+        numberOfInstances = ShoppingCartTags.tags.size,
+        behaviorFactory = (n: Int) => ProjectionBehavior(projection(ShoppingCartTags.tags(n))),
+        stopMessage = ProjectionBehavior.Stop)
+
+      Behaviors.empty
+    },
+    "ShoppingCartClusterApp",
+    config)
+}
+
+//#guideClusterSetup
