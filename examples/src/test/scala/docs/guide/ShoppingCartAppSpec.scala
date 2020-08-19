@@ -28,13 +28,13 @@ object ShoppingCartAppSpec {
   class MockItemPopularityRepository extends ItemPopularityProjectionRepository {
     var counts: Map[String, Long] = Map.empty
 
-    def update(itemId: String, delta: Int): Future[Done] = Future.successful {
+    override def update(itemId: String, delta: Int): Future[Done] = Future.successful {
       counts = counts + (itemId -> (counts.getOrElse(itemId, 0L) + delta))
       Done
     }
 
-    def getItem(itemId: String): Future[Option[(String, Long)]] =
-      Future.successful(Some(itemId -> counts.getOrElse(itemId, 0L)))
+    override def getItem(itemId: String): Future[Option[Long]] =
+      Future.successful(counts.get(itemId))
   }
 }
 
