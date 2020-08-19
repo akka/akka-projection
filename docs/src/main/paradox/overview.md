@@ -83,6 +83,13 @@ The table below shows `akka-projection-core`'s direct dependencies and the secon
 
 See the individual modules for their transitive dependencies.
 
+### Akka Classic
+
+Akka Projections can be used with the [new Actor API](https://doc.akka.io/docs/akka/current/typed/actors.html) or
+the [classic Actor API](https://doc.akka.io/docs/akka/current/index-classic.html). The documentation samples
+show the new Actor API, and the @ref:[Akka Classic page](classic.md) highlights how to use it with the classic
+Actor API.
+
 ## Contributing
 
 Please feel free to contribute to Akka and Akka Projection by reporting issues you identify, or by suggesting changes to the code. Please refer to our [contributing instructions](https://github.com/akka/akka/blob/master/CONTRIBUTING.md) to learn how it can be done.
