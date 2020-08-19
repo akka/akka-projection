@@ -21,5 +21,6 @@
 * [Projection Settings](projection-settings.md)
 * [Management](management.md)
 * [Testing](testing.md)
+* [Classic](classic.md)
 
 @@@
