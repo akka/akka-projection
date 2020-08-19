@@ -17,7 +17,7 @@ Java
 
 ## PersistentActor
 
-@ref:[Events from Akka Persistence](eventsourced.md) can be emitted from `PersistentActor` and consumed by a
+@ref:[Events from Akka Classic Persistence](eventsourced.md) can be emitted from `PersistentActor` and consumed by a
 Projection with the @apidoc[EventSourcedProvider$]. The events from the `PersistentActor` must be tagged by wrapping
 them in `akka.persistence.journal.Tagged`, which can be done in the `PersistentActor` or by using
 [Event Adapters](https://doc.akka.io/docs/akka/current/persistence.html#event-adapters).
@@ -36,7 +36,6 @@ Scala
 
 Java
 :  @@snip [ClassicDocExample.java](/examples/src/test/java/jdocs/classic/ClassicDocExample.java) { #import-adapter #spawn }
-
 
 
 
