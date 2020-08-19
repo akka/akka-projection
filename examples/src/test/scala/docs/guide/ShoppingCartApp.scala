@@ -113,7 +113,7 @@ object ShoppingCartApp extends App {
 trait ItemPopularityProjectionRepository {
 
   def update(itemId: String, delta: Int): Future[Done]
-  def getItem(itemId: String): Future[Option[(String, Long)]]
+  def getItem(itemId: String): Future[Option[Long]]
 }
 
 class ItemPopularityProjectionRepositoryImpl(session: CassandraSession)(implicit val ec: ExecutionContext)
@@ -122,17 +122,17 @@ class ItemPopularityProjectionRepositoryImpl(session: CassandraSession)(implicit
   val keyspace = "akka_projection"
   val popularityTable = "item_popularity"
 
-  def update(itemId: String, delta: Int): Future[Done] = {
+  override def update(itemId: String, delta: Int): Future[Done] = {
     session.executeWrite(
       s"UPDATE $keyspace.$popularityTable SET count = count + ? WHERE item_id = ?",
       java.lang.Long.valueOf(delta),
       itemId)
   }
 
-  def getItem(itemId: String): Future[Option[(String, Long)]] = {
+  override def getItem(itemId: String): Future[Option[Long]] = {
     session
       .selectOne(s"SELECT item_id, count FROM $keyspace.$popularityTable WHERE item_id = ?", itemId)
-      .map(opt => opt.map(row => (row.getString("item_id"), row.getLong("count").longValue())))
+      .map(opt => opt.map(row => row.getLong("count").longValue()))
   }
 }
 //#guideProjectionRepo
@@ -172,8 +172,8 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
       if (logCounter == ItemPopularityProjectionHandler.LogInterval) {
         logCounter = 0
         repo.getItem(itemId).foreach {
-          case Some((itemId, count)) =>
-            log.info("ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]", tag, itemId, count.toString)
+          case Some(count) =>
+            log.infoN("ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]", tag, itemId, count)
           case None =>
             log.info2("ItemPopularityProjectionHandler({}) item popularity for '{}': [0]", tag, itemId)
         }
