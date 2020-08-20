@@ -3,7 +3,6 @@
  */
 
 // #guideEventGeneratorApp
-
 package docs.guide
 
 import java.time.Instant
@@ -45,8 +44,6 @@ object EventGeneratorApp extends App {
   val MaxQuantity = 5
   val MaxItems = 3
   val MaxItemsAdjusted = 3
-
-  val DefaultShoppingCartTag = "shopping-cart"
 
   val EntityKey: EntityTypeKey[Event] = EntityTypeKey[Event]("shopping-cart-event")
 
@@ -136,7 +133,7 @@ object EventGeneratorApp extends App {
       val n = math.abs(entityId.hashCode % ShoppingCartTags.tags.size)
       val selectedTag = ShoppingCartTags.tags(n)
       selectedTag
-    } else DefaultShoppingCartTag
+    } else ShoppingCartTags.single
 
   /**
    * Construct an Actor that persists shopping cart events for a particular persistence id (cart id) and tag.

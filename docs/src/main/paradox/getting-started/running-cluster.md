@@ -16,10 +16,10 @@ This configuration is largely the same as before, but includes extra configurati
 
 @@snip [guide-shopping-cart-cluster-app.conf](/examples/src/test/resources/guide-shopping-cart-cluster-app.conf) { #guideClusterConfig }
 
-Add the `ShoppingCartClusterApp` to your project source:
+Add the `ShoppingCartClusterApp` to your project:
 
 Scala
-:  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideClusterSetup }
+:  @@snip [ShoppingCartClusterApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartClusterApp.scala) { #guideClusterSetup }
     
 Before running the app we must first run the `EventGeneratorApp` in `cluster` mode in order to generate new shopping cart events for multiple tags, instead of just one.
 Shopping cart events are tagged in a similar way to the sharded entities themselves.

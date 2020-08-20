@@ -13,7 +13,7 @@ Add the following dependencies to your project:
   version=$project.version$
 }
 
-Add the following imports to your project:
+Add the following imports to `ShoppingCartApp`:
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideSourceProviderImports }
@@ -22,9 +22,11 @@ Create the @apidoc[SourceProvider].
 The @ref:[Event Sourced Source Provider](../eventsourced.md) is using [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/persistence.html) internally (specifically the [eventsByTag](https://doc.akka.io/docs/akka/current/persistence-query.html#eventsbytag-and-currenteventsbytag) API).
 To initialize the Source Provider we need to set parameters to choose the Akka Persistence plugin (Cassandra) to use as well as the name of the tag used for events we're interested in from the journal.
 
+Setup the `SourceProvider` in the Guardian `Behavior` defined in `ShoppingCartApp`:
+
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideSourceProviderSetup }
 
-Finally, we must configure Akka Persistence by adding a configuration file `guide-shopping-cart-cluster-app.conf` to the `src/main/resources/` directory of the project:
+Finally, we must configure Akka Persistence by adding a configuration file `guide-shopping-cart-app.conf` to the `src/main/resources/` directory of the project:
 
-@@snip [guide-shopping-cart-cluster-app.conf](/examples/src/test/resources/guide-shopping-cart-app.conf) { #guideConfig }
+@@snip [guide-shopping-cart-app.conf](/examples/src/test/resources/guide-shopping-cart-app.conf) { #guideConfig }
