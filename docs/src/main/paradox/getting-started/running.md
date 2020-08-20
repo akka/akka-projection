@@ -55,10 +55,10 @@ artifact=akka-cluster-sharding-typed_$scala.binary.version$
 version=$project.version$
 }
 
-The source for the `EventGeneratorApp`:
+Add the `EventGeneratorApp` to your project:
 
 Scala
-:  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/EventGeneratorApp.scala) { #guideEventGeneratorApp }
+:  @@snip [EventGeneratorApp.scala](/examples/src/test/scala/docs/guide/EventGeneratorApp.scala) { #guideEventGeneratorApp }
 
 To run the `EventGeneratorApp` use the following sbt command:
 
