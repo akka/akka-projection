@@ -48,9 +48,7 @@ object EventGeneratorApp extends App {
   val EntityKey: EntityTypeKey[Event] = EntityTypeKey[Event]("shopping-cart-event")
 
   val config = ConfigFactory
-    .parseString("""
-      |akka.actor.provider = "cluster"
-      |""".stripMargin)
+    .parseString("""akka.actor.provider = "cluster"""")
     .withFallback(ConfigFactory.load("guide-shopping-cart-app.conf"))
 
   ActorSystem(Behaviors.setup[Command] {
@@ -64,7 +62,7 @@ object EventGeneratorApp extends App {
       cluster.manager ! Join(cluster.selfMember.address)
       val sharding = ClusterSharding(system)
       val _ = sharding.init(Entity(EntityKey) { entityCtx =>
-        cartBehaviour(entityCtx.entityId, tagFactory(entityCtx.entityId))
+        cartBehavior(entityCtx.entityId, tagFactory(entityCtx.entityId))
       })
 
       Behaviors.receiveMessage {
@@ -108,12 +106,11 @@ object EventGeneratorApp extends App {
                   itemEvents :+ CheckedOut(cartId, Instant.now())
               }
               // send each event to the sharded entity represented by the event's cartId
-              .map(event => sharding.entityRefFor(EntityKey, event.cartId).ref.tell(event))
-              .runWith(Sink.ignore)
+              .runWith(Sink.foreach(event => sharding.entityRefFor(EntityKey, event.cartId).ref.tell(event)))
 
           Behaviors.empty
       }
-  }, "EventGenerator", config)
+  }, "EventGeneratorApp", config)
 
   /**
    * Random non-zero based quantity for `ItemAdded` and `ItemQuantityAdjusted` events
@@ -130,15 +127,15 @@ object EventGeneratorApp extends App {
    */
   def tagFactory(entityId: String): String =
     if (args.contains("cluster")) {
-      val n = math.abs(entityId.hashCode % ShoppingCartTags.tags.size)
-      val selectedTag = ShoppingCartTags.tags(n)
+      val n = math.abs(entityId.hashCode % ShoppingCartTags.Tags.size)
+      val selectedTag = ShoppingCartTags.Tags(n)
       selectedTag
-    } else ShoppingCartTags.single
+    } else ShoppingCartTags.Single
 
   /**
    * Construct an Actor that persists shopping cart events for a particular persistence id (cart id) and tag.
    */
-  def cartBehaviour(persistenceId: String, tag: String): Behavior[Event] =
+  def cartBehavior(persistenceId: String, tag: String): Behavior[Event] =
     Behaviors.setup { ctx =>
       EventSourcedBehavior[Event, Event, List[Any]](
         persistenceId = PersistenceId.ofUniqueId(persistenceId),

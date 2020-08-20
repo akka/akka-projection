@@ -52,9 +52,9 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
   private def logItemCount(event: Event): Unit = event match {
     case itemEvent: ItemEvent =>
       logCounter += 1
-      val itemId = itemEvent.itemId
       if (logCounter == ItemPopularityProjectionHandler.LogInterval) {
         logCounter = 0
+        val itemId = itemEvent.itemId
         repo.getItem(itemId).foreach {
           case Some(count) =>
             log.infoN("ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]", tag, itemId, count)

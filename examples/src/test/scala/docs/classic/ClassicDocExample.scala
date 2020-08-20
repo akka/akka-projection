@@ -22,7 +22,7 @@ object ClassicDocExample {
 
   object IllustrateSpawn {
     private val system = akka.actor.ActorSystem("Example")
-    private val projection: Projection[Any] = ???
+    private val projection: Projection[Any] = null
 
     //#spawn
     import akka.actor.typed.scaladsl.adapter._

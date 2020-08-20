@@ -51,8 +51,8 @@ object ShoppingCartClusterApp extends App {
 
       ShardedDaemonProcess(system).init[ProjectionBehavior.Command](
         name = "shopping-carts",
-        numberOfInstances = ShoppingCartTags.tags.size,
-        behaviorFactory = (n: Int) => ProjectionBehavior(projection(ShoppingCartTags.tags(n))),
+        numberOfInstances = ShoppingCartTags.Tags.size,
+        behaviorFactory = (n: Int) => ProjectionBehavior(projection(ShoppingCartTags.Tags(n))),
         stopMessage = ProjectionBehavior.Stop)
 
       Behaviors.empty
