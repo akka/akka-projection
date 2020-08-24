@@ -14,7 +14,8 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-public class ItemPopularityProjectionHandler extends Handler<EventEnvelope<ShoppingCartEvents.Event>> {
+public class ItemPopularityProjectionHandler
+    extends Handler<EventEnvelope<ShoppingCartEvents.Event>> {
   public final int LogInterval = 10;
 
   private Logger log = LoggerFactory.getLogger(this.getClass());
@@ -33,7 +34,8 @@ public class ItemPopularityProjectionHandler extends Handler<EventEnvelope<Shopp
 
   /** The Envelope handler to process events. */
   @Override
-  public CompletionStage<Done> process(EventEnvelope<ShoppingCartEvents.Event> envelope) throws Exception {
+  public CompletionStage<Done> process(EventEnvelope<ShoppingCartEvents.Event> envelope)
+      throws Exception {
     ShoppingCartEvents.Event event = envelope.event();
 
     CompletionStage<Done> dbEffect = null;
