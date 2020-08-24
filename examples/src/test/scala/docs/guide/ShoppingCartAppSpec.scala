@@ -15,11 +15,11 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Offset
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
-import akka.projection.testkit.scaladsl.TestProjection
-import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.scaladsl.Source
 // #testKitImports
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.projection.testkit.scaladsl.TestProjection
+import akka.projection.testkit.scaladsl.TestSourceProvider
 // #testKitImports
 import org.scalatest.wordspec.AnyWordSpecLike
 
