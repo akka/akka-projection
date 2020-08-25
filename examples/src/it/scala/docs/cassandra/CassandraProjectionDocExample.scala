@@ -194,7 +194,7 @@ object CassandraProjectionDocExample {
     ShardedDaemonProcess(system).init[ProjectionBehavior.Command](
       name = "shopping-carts",
       numberOfInstances = ShoppingCart.tags.size,
-      behaviorFactory = (n: Int) => ProjectionBehavior(projection(ShoppingCart.tags(n))),
+      behaviorFactory = (i: Int) => ProjectionBehavior(projection(ShoppingCart.tags(i))),
       stopMessage = ProjectionBehavior.Stop)
     //#running-with-daemon-process
   }
