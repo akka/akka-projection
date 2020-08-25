@@ -7,11 +7,9 @@ package docs.guide
 
 import java.time.Instant
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Random
 
-import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
@@ -20,8 +18,6 @@ import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
-import akka.cluster.typed.SelfUp
-import akka.cluster.typed.Subscribe
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
@@ -36,9 +32,6 @@ import com.typesafe.config.ConfigFactory
 object EventGeneratorApp extends App {
   import ShoppingCartEvents._
 
-  sealed trait Command
-  final case object Start extends Command
-
   val Products = List("cat t-shirt", "akka t-shirt", "skis", "bowling shoes")
 
   val MaxQuantity = 5
@@ -51,65 +44,57 @@ object EventGeneratorApp extends App {
     .parseString("""akka.actor.provider = "cluster"""")
     .withFallback(ConfigFactory.load("guide-shopping-cart-app.conf"))
 
-  ActorSystem(Behaviors.setup[Command] {
+  ActorSystem(Behaviors.setup[String] {
     ctx =>
       implicit val system = ctx.system
       val cluster = Cluster(system)
-
-      // start generating events when this cluster member is up
-      val upAdapter = ctx.messageAdapter[SelfUp](_ => Start)
-      cluster.subscriptions ! Subscribe(upAdapter, classOf[SelfUp])
       cluster.manager ! Join(cluster.selfMember.address)
       val sharding = ClusterSharding(system)
       val _ = sharding.init(Entity(EntityKey) { entityCtx =>
         cartBehavior(entityCtx.entityId, tagFactory(entityCtx.entityId))
       })
 
-      Behaviors.receiveMessage {
-        case Start =>
-          val _: Future[Done] =
-            Source
-              .tick(1.second, 1.second, "checkout")
-              .mapConcat {
-                case "checkout" =>
-                  val cartId = java.util.UUID.randomUUID().toString.take(5)
-                  val items = randomItems()
-                  val itemEvents = (0 to items).flatMap {
-                    _ =>
-                      val itemId = Products(Random.nextInt(Products.size))
+      Source
+        .tick(1.second, 1.second, "checkout")
+        .mapConcat {
+          case "checkout" =>
+            val cartId = java.util.UUID.randomUUID().toString.take(5)
+            val items = randomItems()
+            val itemEvents = (0 to items).flatMap {
+              _ =>
+                val itemId = Products(Random.nextInt(Products.size))
 
-                      // add the item
-                      val quantity = randomQuantity()
-                      val itemAdded = ItemAdded(cartId, itemId, quantity)
+                // add the item
+                val quantity = randomQuantity()
+                val itemAdded = ItemAdded(cartId, itemId, quantity)
 
-                      // make up to `MaxItemAdjusted` adjustments to quantity of item
-                      val adjustments = Random.nextInt(MaxItemsAdjusted)
-                      val itemQuantityAdjusted = (0 to adjustments).foldLeft(Seq[ItemQuantityAdjusted]()) {
-                        case (events, _) =>
-                          val newQuantity = randomQuantity()
-                          val oldQuantity =
-                            if (events.isEmpty) itemAdded.quantity
-                            else events.last.newQuantity
-                          events :+ ItemQuantityAdjusted(cartId, itemId, newQuantity, oldQuantity)
-                      }
+                // make up to `MaxItemAdjusted` adjustments to quantity of item
+                val adjustments = Random.nextInt(MaxItemsAdjusted)
+                val itemQuantityAdjusted = (0 to adjustments).foldLeft(Seq[ItemQuantityAdjusted]()) {
+                  case (events, _) =>
+                    val newQuantity = randomQuantity()
+                    val oldQuantity =
+                      if (events.isEmpty) itemAdded.quantity
+                      else events.last.newQuantity
+                    events :+ ItemQuantityAdjusted(cartId, itemId, newQuantity, oldQuantity)
+                }
 
-                      // flip a coin to decide whether or not to remove the item
-                      val itemRemoved =
-                        if (Random.nextBoolean())
-                          List(ItemRemoved(cartId, itemId, itemQuantityAdjusted.last.newQuantity))
-                        else Nil
+                // flip a coin to decide whether or not to remove the item
+                val itemRemoved =
+                  if (Random.nextBoolean())
+                    List(ItemRemoved(cartId, itemId, itemQuantityAdjusted.last.newQuantity))
+                  else Nil
 
-                      List(itemAdded) ++ itemQuantityAdjusted ++ itemRemoved
-                  }
+                List(itemAdded) ++ itemQuantityAdjusted ++ itemRemoved
+            }
 
-                  // checkout the cart and all its preceding item events
-                  itemEvents :+ CheckedOut(cartId, Instant.now())
-              }
-              // send each event to the sharded entity represented by the event's cartId
-              .runWith(Sink.foreach(event => sharding.entityRefFor(EntityKey, event.cartId).ref.tell(event)))
+            // checkout the cart and all its preceding item events
+            itemEvents :+ CheckedOut(cartId, Instant.now())
+        }
+        // send each event to the sharded entity represented by the event's cartId
+        .runWith(Sink.foreach(event => sharding.entityRefFor(EntityKey, event.cartId).ref.tell(event)))
 
-          Behaviors.empty
-      }
+      Behaviors.empty
   }, "EventGeneratorApp", config)
 
   /**

@@ -45,7 +45,7 @@ public class ShoppingCartApp {
               // #guideSourceProviderSetup
               SourceProvider<Offset, EventEnvelope<ShoppingCartEvents.Event>> sourceProvider =
                   EventSourcedProvider.eventsByTag(
-                      system, CassandraReadJournal.Identifier(), ShoppingCartTags.Single);
+                      system, CassandraReadJournal.Identifier(), ShoppingCartTags.SINGLE);
               // #guideSourceProviderSetup
 
               // #guideProjectionSetup
@@ -56,11 +56,11 @@ public class ShoppingCartApp {
                   new ItemPopularityProjectionRepositoryImpl(session);
               AtLeastOnceProjection<Offset, EventEnvelope<ShoppingCartEvents.Event>> projection =
                   CassandraProjection.atLeastOnce(
-                      ProjectionId.of("shopping-carts", ShoppingCartTags.Single),
+                      ProjectionId.of("shopping-carts", ShoppingCartTags.SINGLE),
                       sourceProvider,
                       () ->
                           new ItemPopularityProjectionHandler(
-                              ShoppingCartTags.Single, system, repo));
+                              ShoppingCartTags.SINGLE, system, repo));
 
               context.spawn(ProjectionBehavior.create(projection), projection.projectionId().id());
               // #guideProjectionSetup

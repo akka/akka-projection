@@ -60,16 +60,13 @@ Add the `EventGeneratorApp` to your project:
 Scala
 :  @@snip [EventGeneratorApp.scala](/examples/src/test/scala/docs/guide/EventGeneratorApp.scala) { #guideEventGeneratorApp }
 
-To run the `EventGeneratorApp` use the following sbt command:
+Run `EventGeneratorApp` with @scala[sbt: `sbt "runMain docs.guide.EventGeneratorApp"`]@java[maven: `mvn compile exec:java -Dexec.mainClass="jdocs.guide.EventGeneratorApp"`].
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.EventGeneratorApp"
 -->
-```shell
-sbt "runMain docs.guide.EventGeneratorApp"
-```
 
-If you don't see any connection exceptions you should eventually see log lines produced with the event being written to the journal.
+If you don't see any connection exceptions then you should eventually see log lines produced indicating that events are written to the journal.
 
 Ex)
 
@@ -77,14 +74,11 @@ Ex)
 [2020-08-13 15:20:05,583] [INFO] [docs.guide.EventGeneratorApp$] [] [EventGenerator-akka.actor.default-dispatcher-22] - id [cb52b] tag [shopping-cart] event: ItemQuantityAdjusted(cb52b,skis,1,1) MDC: {persistencePhase=persist-evt, akkaAddress=akka://EventGenerator@127.0.1.1:25520, akkaSource=akka://EventGenerator/system/sharding/shopping-cart-event/678/cb52b, sourceActorSystem=EventGenerator, persistenceId=cb52b}
 ```
 
-Finally, we can run the projection itself by using sbt to run `ShoppingCartApp` in a new terminal:
+Finally, we can run `ShoppingCartApp` in a new terminal with @scala[sbt: `sbt "runMain docs.guide.ShoppingCartApp"`]@java[maven: `mvn compile exec:java -Dexec.mainClass="jdocs.guide.ShoppingCartApp"`].
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.ShoppingCartApp"
 -->
-```shell
-sbt "runMain docs.guide.ShoppingCartApp"
-```
 
 After a few seconds you should see the `ItemPopularityProjectionHandler` logging that displays the current checkouts for the day:
 
