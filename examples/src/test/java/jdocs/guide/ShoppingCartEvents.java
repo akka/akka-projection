@@ -16,7 +16,7 @@ public class ShoppingCartEvents {
     String getItemId();
   }
 
-  public static class ItemAdded implements ItemEvent {
+  public static final class ItemAdded implements ItemEvent {
     public final String cartId;
     public final String itemId;
     public final int quantity;
@@ -36,7 +36,7 @@ public class ShoppingCartEvents {
     }
   }
 
-  public static class ItemRemoved implements ItemEvent {
+  public static final class ItemRemoved implements ItemEvent {
     public final String cartId;
     public final String itemId;
     public final int oldQuantity;
@@ -56,7 +56,7 @@ public class ShoppingCartEvents {
     }
   }
 
-  public static class ItemQuantityAdjusted implements ItemEvent {
+  public static final class ItemQuantityAdjusted implements ItemEvent {
     public final String cartId;
     public final String itemId;
     public final int newQuantity;
@@ -78,7 +78,7 @@ public class ShoppingCartEvents {
     }
   }
 
-  public static class CheckedOut implements Event {
+  public static final class CheckedOut implements Event {
     public final String cartId;
     public final Instant eventTime;
 

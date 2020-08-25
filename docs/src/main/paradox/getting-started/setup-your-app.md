@@ -15,12 +15,18 @@ Add `ShoppingCartEvents` to your project:
 Scala
 :  @@snip [ShoppingCartEvents.scala](/examples/src/test/scala/docs/guide/ShoppingCartEvents.scala) { #guideEvents }
 
+Java
+:  @@snip [ShoppingCartEvents.java](/examples/src/test/java/jdocs/guide/ShoppingCartEvents.java) { #guideEvents }
+
 Define the persistence tags to be used in your project.
 Note that partitioned tags will be used later when @ref[running the projection in Akka Cluster](running-cluster.md).
 Add `ShoppingCartTags` to your project:
 
 Scala
 :  @@snip [ShoppingCartTags.scala](/examples/src/test/scala/docs/guide/ShoppingCartTags.scala) { #guideTags }
+
+Java
+:  @@snip [ShoppingCartTags.java](/examples/src/test/java/jdocs/guide/ShoppingCartTags.java) { #guideTags }
 
 Create the `ShoppingCartApp` with an `akka.actor.typed.ActorSystem` (API: @apidoc[akka.actor.typed.ActorSystem]) for Projections to use.
 Create an empty [Guardian Actor](https://doc.akka.io/docs/akka/2.6/typed/actor-lifecycle.html#the-guardian-actor) (the root Actor of the `ActorSystem`).
@@ -30,3 +36,7 @@ You may use any package, but this package is used in following steps when refere
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideSetup }
+
+Java
+:  @@snip [ShoppingCartApp.java](/examples/src/test/java/jdocs/guide/ShoppingCartApp.java) { #guideSetup }
+

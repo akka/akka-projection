@@ -16,6 +16,9 @@ Import the @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit]
 Scala
 :  @@snip [ShoppingCartAppSpec.scala](/examples/src/test/scala/docs/guide/ShoppingCartAppSpec.scala) { #testKitImports }
 
+Java
+:  @@snip [ShoppingCartAppTest.java](/examples/src/test/java/jdocs/guide/ShoppingCartAppTest.java) { #testKitImports }
+
 The TestKit includes several utilities to run the Projection handler in isolation so that a full projection implementation and source provider are not required.
 
 * @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit] runs a projection with the test @apidoc[akka.actor.typed.ActorSystem].
@@ -29,6 +32,9 @@ Using these tools we can assert that our Projection handler meets the following 
 
 Scala
 :  @@snip [ShoppingCartAppSpec.scala](/examples/src/test/scala/docs/guide/ShoppingCartAppSpec.scala) { #testKitSpec }
+
+Java
+:  @@snip [ShoppingCartAppTest.java](/examples/src/test/java/jdocs/guide/ShoppingCartAppTest.java) { #testKitSpec }
 
 <!-- run from repo:
 sbt "examples/testOnly docs.guide.ShoppingCartAppSpec"

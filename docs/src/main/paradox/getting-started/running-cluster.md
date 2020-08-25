@@ -20,6 +20,9 @@ Add the `ShoppingCartClusterApp` to your project:
 
 Scala
 :  @@snip [ShoppingCartClusterApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartClusterApp.scala) { #guideClusterSetup }
+
+Java
+:  @@snip [ShoppingCartClusterApp.java](/examples/src/test/java/jdocs/guide/ShoppingCartClusterApp.java) { #guideClusterSetup }
     
 Before running the app we must first run the `EventGeneratorApp` in `cluster` mode in order to generate new shopping cart events for multiple tags, instead of just one.
 Shopping cart events are tagged in a similar way to the sharded entities themselves.
@@ -32,6 +35,7 @@ Run the app with @scala[sbt: `sbt "runMain docs.guide.EventGeneratorApp cluster"
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.EventGeneratorApp cluster"
+sbt "examples/test:runMain jdocs.guide.EventGeneratorApp cluster"
 -->
 
 When the app is running you will observe that the logs show events written to different tags (`carts-0`, `carts-1`, etc.), instead of just one (`shopping-cart`).
@@ -44,6 +48,7 @@ Run the first member of your new Akka cluster with @scala[sbt: `sbt "runMain doc
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.ShoppingCartClusterApp 2551"
+sbt "examples/test:runMain jdocs.guide.ShoppingCartClusterApp 2551"
 -->
 
 When the app is running you will observe that it will process all the shopping cart event tags, because it's the only member of the cluster.
@@ -60,6 +65,7 @@ Run the app in a new terminal with @scala[sbt: `sbt "runMain docs.guide.Shopping
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.ShoppingCartClusterApp 2552"
+sbt "examples/test:runMain jdocs.guide.ShoppingCartClusterApp 2552"
 -->
 
 When the second app is running you will observe a sharding rebalance complete and then see a distinct set of tagged events processed on each cluster member.

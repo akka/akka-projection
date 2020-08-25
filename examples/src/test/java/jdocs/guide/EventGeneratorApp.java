@@ -75,7 +75,7 @@ class Guardian {
 
           sharding.init(
               Entity.of(
-                ENTITY_KEY,
+                  ENTITY_KEY,
                   entityCtx -> {
                     PersistenceId persistenceId = PersistenceId.ofUniqueId(entityCtx.getEntityId());
                     String tag = tagFactory(entityCtx.getEntityId(), clusterMode);
@@ -101,14 +101,13 @@ class Guardian {
                                   // add the item
                                   int quantity = getRandomNumber(1, MAX_QUANTITY);
                                   ShoppingCartEvents.ItemAdded itemAdded =
-                                      new ShoppingCartEvents.ItemAdded(
-                                          cartId, itemId, quantity);
+                                      new ShoppingCartEvents.ItemAdded(cartId, itemId, quantity);
 
                                   // make up to `MaxItemAdjusted` adjustments to quantity
                                   // of item
                                   int adjustments = getRandomNumber(0, MAX_ITEMS_ADJUSTED);
-                                  ArrayList<ShoppingCartEvents.ItemEvent>
-                                      itemQuantityAdjusted = new ArrayList<>();
+                                  ArrayList<ShoppingCartEvents.ItemEvent> itemQuantityAdjusted =
+                                      new ArrayList<>();
                                   for (int j = 0; j < adjustments; j++) {
                                     int newQuantity = getRandomNumber(1, MAX_QUANTITY);
                                     int oldQuantity = itemAdded.quantity;
@@ -140,6 +139,7 @@ class Guardian {
                                   }
 
                                   events.add(itemAdded);
+
                                   events.addAll(itemQuantityAdjusted);
                                   events.addAll(itemRemoved);
 
@@ -149,17 +149,13 @@ class Guardian {
                     // checkout the cart and all its preceding item events
                     return Stream.concat(
                             itemEvents,
-                            Stream.of(
-                                new ShoppingCartEvents.CheckedOut(cartId, Instant.now())))
+                            Stream.of(new ShoppingCartEvents.CheckedOut(cartId, Instant.now())))
                         .collect(Collectors.toList());
                   })
               // send each event to the sharded entity represented by the event's cartId
               .runWith(
                   Sink.foreach(
-                      event ->
-                          sharding
-                              .entityRefFor(ENTITY_KEY, event.getCartId())
-                              .tell(event)),
+                      event -> sharding.entityRefFor(ENTITY_KEY, event.getCartId()).tell(event)),
                   system);
 
           return Behaviors.empty();

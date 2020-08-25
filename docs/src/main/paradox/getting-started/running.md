@@ -60,10 +60,15 @@ Add the `EventGeneratorApp` to your project:
 Scala
 :  @@snip [EventGeneratorApp.scala](/examples/src/test/scala/docs/guide/EventGeneratorApp.scala) { #guideEventGeneratorApp }
 
+Java
+:  @@snip [EventGeneratorApp.java](/examples/src/test/java/jdocs/guide/EventGeneratorApp.java) { #guideEventGeneratorApp }
+
+
 Run `EventGeneratorApp` with @scala[sbt: `sbt "runMain docs.guide.EventGeneratorApp"`]@java[maven: `mvn compile exec:java -Dexec.mainClass="jdocs.guide.EventGeneratorApp"`].
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.EventGeneratorApp"
+sbt "examples/test:runMain jdocs.guide.EventGeneratorApp"
 -->
 
 If you don't see any connection exceptions then you should eventually see log lines produced indicating that events are written to the journal.
