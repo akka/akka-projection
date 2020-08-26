@@ -32,7 +32,7 @@ We will configure the project to use this type when we setup Akka Persistence co
 
 @@@ note
 
-For Jackson serialization in this guide to work correctly in Java projects you must use the `javac` compiler parameter `-parameters` when building your project.
+For Jackson serialization to work correctly in Java projects you must use the `javac` compiler parameter `-parameters` when building your project.
 In @scala[sbt you can add it your sbt project by adding it to the `javacOptions` Setting: `javacOptions += "-parameters"`]@java[maven you can add an argument to `maven-compiler-plugin` plugin under `compilerArgs` ([see an example here](https://github.com/akka/akka-samples/blob/2.6/akka-sample-cqrs-java/pom.xml#L136))].
 
 @@@

@@ -65,5 +65,5 @@ Setup the Projection in the Guardian `Behavior` defined in `ShoppingCartApp`:
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionSetup }
 
-java
+Java
 :  @@snip [ShoppingCartApp.java](/examples/src/test/java/jdocs/guide/ShoppingCartApp.java) { #guideProjectionSetup }
