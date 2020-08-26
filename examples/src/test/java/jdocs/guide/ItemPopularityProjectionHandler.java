@@ -69,19 +69,14 @@ public class ItemPopularityProjectionHandler
         String itemId = itemEvent.getItemId();
         repo.getItem(itemId)
             .thenAccept(
-                opt ->
-                    opt.ifPresentOrElse(
-                        (count) ->
-                            this.log.info(
-                                "ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]",
-                                this.tag,
-                                itemId,
-                                count),
-                        () ->
-                            this.log.info(
-                                "ItemPopularityProjectionHandler({}) item popularity for '{}': [0]",
-                                this.tag,
-                                itemId)));
+                opt -> {
+                  long count = opt.orElse(0L);
+                  this.log.info(
+                      "ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]",
+                      this.tag,
+                      itemId,
+                      count);
+                });
       }
     }
   }

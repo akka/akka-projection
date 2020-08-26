@@ -26,10 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -55,7 +52,7 @@ public class EventGeneratorApp {
 
 class Guardian {
   static final List<String> PRODUCTS =
-      List.of("cat t-shirt", "akka t-shirt", "skis", "bowling shoes");
+      Arrays.asList("cat t-shirt", "akka t-shirt", "skis", "bowling shoes");
 
   static final int MAX_QUANTITY = 5;
   static final int MAX_ITEMS = 3;
@@ -184,10 +181,12 @@ class Guardian {
 
     private final Logger log = LoggerFactory.getLogger(this.getClass());
     private final String tag;
+    private final Set<String> tags;
 
     public CartPersistentBehavior(PersistenceId persistenceId, String tag) {
       super(persistenceId);
       this.tag = tag;
+      this.tags = new HashSet<>(Collections.singletonList(tag));
     }
 
     @Override
@@ -211,7 +210,7 @@ class Guardian {
 
     @Override
     public Set<String> tagsFor(ShoppingCartEvents.Event event) {
-      return Set.of(tag);
+      return this.tags;
     }
   }
 }

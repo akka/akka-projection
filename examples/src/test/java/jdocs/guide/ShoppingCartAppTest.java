@@ -136,15 +136,15 @@ public class ShoppingCartAppTest {
     @Override
     public CompletionStage<Done> update(String itemId, int delta) {
       counts.put(itemId, counts.getOrDefault(itemId, 0L) + delta);
-      return CompletableFuture.completedStage(Done.getInstance());
+      return CompletableFuture.completedFuture(Done.getInstance());
     }
 
     @Override
     public CompletionStage<Optional<Long>> getItem(String itemId) {
       if (counts.containsKey(itemId))
-        return CompletableFuture.completedStage(Optional.of(counts.get(itemId)));
+        return CompletableFuture.completedFuture(Optional.of(counts.get(itemId)));
 
-      return CompletableFuture.completedStage(Optional.empty());
+      return CompletableFuture.completedFuture(Optional.empty());
     }
   }
 }
