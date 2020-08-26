@@ -1,4 +1,4 @@
-#  Choosing a Source Provider
+# Choosing a Source Provider
 
 A @apidoc[SourceProvider] will provide the data to our projection. 
 In Projections each element that's processed is an `Envelope` and each `Envelope` contains an `Event`.

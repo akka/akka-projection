@@ -18,6 +18,25 @@ Scala
 Java
 :  @@snip [ShoppingCartEvents.java](/examples/src/test/java/jdocs/guide/ShoppingCartEvents.java) { #guideEvents }
 
+To enable SerDes of events with Akka Persistence it's necessary to define a base type for your event type hierarchy.
+In this guide we are using [Jackson Serialization](https://doc.akka.io/docs/akka/current/serialization-jackson.html).
+Add the `CborSerializable` base type to your project:
+
+Scala
+:  @@snip [CborSerializable.scala](/examples/src/test/scala/docs/guide/CborSerializable.scala) { #guideCbor }
+
+Java
+:  @@snip [CborSerializable.java](/examples/src/test/java/jdocs/guide/CborSerializable.java) { #guideCbor }
+
+We will configure the project to use this type when we setup Akka Persistence configuration in the @ref:[Choosing a SourceProvider](source-provider.md) section of the guide.
+
+@@@ note
+
+For Jackson serialization in this guide to work correctly in Java projects you must use the `javac` compiler parameter `-parameters` when building your project.
+In @scala[sbt you can add it your sbt project by adding it to the `javacOptions` Setting: `javacOptions += "-parameters"`]@java[maven you can add an argument to `maven-compiler-plugin` plugin under `compilerArgs` ([see an example here](https://github.com/akka/akka-samples/blob/2.6/akka-sample-cqrs-java/pom.xml#L136))].
+
+@@@
+
 Define the persistence tags to be used in your project.
 Note that partitioned tags will be used later when @ref[running the projection in Akka Cluster](running-cluster.md).
 Add `ShoppingCartTags` to your project:

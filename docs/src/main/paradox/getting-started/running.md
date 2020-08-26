@@ -63,7 +63,6 @@ Scala
 Java
 :  @@snip [EventGeneratorApp.java](/examples/src/test/java/jdocs/guide/EventGeneratorApp.java) { #guideEventGeneratorApp }
 
-
 Run `EventGeneratorApp` with @scala[sbt: `sbt "runMain docs.guide.EventGeneratorApp"`]@java[maven: `mvn compile exec:java -Dexec.mainClass="jdocs.guide.EventGeneratorApp"`].
 
 <!-- run from repo:
