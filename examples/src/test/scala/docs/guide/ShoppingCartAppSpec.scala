@@ -76,7 +76,7 @@ class ShoppingCartAppSpec extends ScalaTestWithActorTestKit() with AnyWordSpecLi
       val repo = new MockItemPopularityRepository
       val handler = new ItemPopularityProjectionHandler("tag", system, repo)
 
-      val events = (0L to 10L).map { i =>
+      val events = (0L until 10L).map { i =>
         createEnvelope(ShoppingCartEvents.ItemAdded("a7098", "bowling shoes", 1), i)
       }
 

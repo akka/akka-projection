@@ -100,7 +100,7 @@ public class ShoppingCartAppTest {
     Source<EventEnvelope<ShoppingCartEvents.Event>, NotUsed> events =
         Source.fromJavaStream(
             () ->
-                IntStream.rangeClosed(0, (int) eventsNum)
+                IntStream.range(0, (int) eventsNum)
                     .boxed()
                     .map(
                         i ->
