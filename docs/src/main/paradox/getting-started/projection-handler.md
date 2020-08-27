@@ -50,6 +50,9 @@ Since this is a simple log operation managing the state in this manner is fine, 
 Scala
 :  @@snip [ItemPopularityProjectionHandler.scala](/examples/src/test/scala/docs/guide/ItemPopularityProjectionHandler.scala) { #guideProjectionHandler }
 
+Java
+:  @@snip [ItemPopularityProjectionHandler.java](/examples/src/test/java/jdocs/guide/ItemPopularityProjectionHandler.java) { #guideProjectionHandler }
+
 The projection is run by wrapping it in a @apidoc[ProjectionBehavior$] and spawning it as an Actor in the @apidoc[akka.actor.typed.ActorSystem].
 
 Add the following imports to `ShoppingCartApp`:

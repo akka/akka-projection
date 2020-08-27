@@ -41,7 +41,7 @@ object EventGeneratorApp extends App {
   val EntityKey: EntityTypeKey[Event] = EntityTypeKey[Event]("shopping-cart-event")
 
   val config = ConfigFactory
-    .parseString("""akka.actor.provider = "cluster"""")
+    .parseString("akka.actor.provider = cluster")
     .withFallback(ConfigFactory.load("guide-shopping-cart-app.conf"))
 
   ActorSystem(Behaviors.setup[String] {

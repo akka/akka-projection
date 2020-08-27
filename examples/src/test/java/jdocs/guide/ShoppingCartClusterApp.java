@@ -50,10 +50,10 @@ public class ShoppingCartClusterApp {
                   .init(
                       ProjectionBehavior.Command.class,
                       "shopping-carts",
-                      ShoppingCartTags.TAGS.size(),
+                      ShoppingCartTags.TAGS.length,
                       n ->
                           ProjectionBehavior.create(
-                              projection(system, repo, ShoppingCartTags.TAGS.get(n))),
+                              projection(system, repo, ShoppingCartTags.TAGS[n])),
                       ProjectionBehavior.stopMessage());
 
               return Behaviors.empty();

@@ -2,6 +2,7 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
+// #guideProjectionHandler
 package jdocs.guide;
 
 import akka.Done;
@@ -81,3 +82,4 @@ public class ItemPopularityProjectionHandler
     }
   }
 }
+// #guideProjectionHandler

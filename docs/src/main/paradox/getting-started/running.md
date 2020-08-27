@@ -47,10 +47,10 @@ The app will automatically create all the Akka Persistence infrastructure tables
 We won't go into any further detail about how this app functions because it falls outside the scope of Akka Projections.
 To learn more about the writing events with [Akka Persistence see the Akka documentation](https://doc.akka.io/docs/akka/current/typed/index-persistence.html).
 
-Add the Akka Cluster Sharding Typed library to your project:
+Add the Akka Cluster Sharding library to your project:
 
 @@dependency [sbt,Maven,Gradle] {
-group=com.lightbend.akka
+group=com.typesafe.akka
 artifact=akka-cluster-sharding-typed_$scala.binary.version$
 version=$project.version$
 }

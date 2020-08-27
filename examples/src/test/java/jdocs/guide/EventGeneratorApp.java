@@ -45,7 +45,7 @@ public class EventGeneratorApp {
   }
 
   private static Config config() {
-    return ConfigFactory.parseString("akka.actor.provider = \"cluster\"\n")
+    return ConfigFactory.parseString("akka.actor.provider = cluster")
         .withFallback(ConfigFactory.load("guide-shopping-cart-app.conf"));
   }
 }
@@ -166,8 +166,8 @@ class Guardian {
   /** Choose a tag from `ShoppingCartTags` based on the entity id (cart id) */
   static String tagFactory(String entityId, Boolean clusterMode) {
     if (clusterMode) {
-      int n = Math.abs(entityId.hashCode() % ShoppingCartTags.TAGS.size());
-      String selectedTag = ShoppingCartTags.TAGS.get(n);
+      int n = Math.abs(entityId.hashCode() % ShoppingCartTags.TAGS.length);
+      String selectedTag = ShoppingCartTags.TAGS[n];
       return selectedTag;
     } else return ShoppingCartTags.SINGLE;
   }

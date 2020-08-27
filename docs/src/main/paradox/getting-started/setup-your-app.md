@@ -18,7 +18,7 @@ Scala
 Java
 :  @@snip [ShoppingCartEvents.java](/examples/src/test/java/jdocs/guide/ShoppingCartEvents.java) { #guideEvents }
 
-To enable SerDes of events with Akka Persistence it's necessary to define a base type for your event type hierarchy.
+To enable serialization and deserialization of events with Akka Persistence it's necessary to define a base type for your event type hierarchy.
 In this guide we are using [Jackson Serialization](https://doc.akka.io/docs/akka/current/serialization-jackson.html).
 Add the `CborSerializable` base type to your project:
 
@@ -28,7 +28,14 @@ Scala
 Java
 :  @@snip [CborSerializable.java](/examples/src/test/java/jdocs/guide/CborSerializable.java) { #guideCbor }
 
-We will configure the project to use this type when we setup Akka Persistence configuration in the @ref:[Choosing a SourceProvider](source-provider.md) section of the guide.
+Configure the `CborSerializable` type to use `jackson-cbor` configuration in your `application.conf`.
+We will add this configuration when Akka Persistence configuration is setup in the @ref:[Choosing a SourceProvider](source-provider.md) section of the guide.
+
+Scala
+:  @@snip [guide-shopping-cart-app.conf](/examples/src/test/resources/guide-shopping-cart-app.conf) { #guideSerializationBindingsScala }
+
+Java
+:  @@snip [guide-shopping-cart-app.conf](/examples/src/test/resources/guide-shopping-cart-app.conf) { #guideSerializationBindingsJava }
 
 @@@ note
 
@@ -50,8 +57,8 @@ Java
 Create the `ShoppingCartApp` with an `akka.actor.typed.ActorSystem` (API: @apidoc[akka.actor.typed.ActorSystem]) for Projections to use.
 Create an empty [Guardian Actor](https://doc.akka.io/docs/akka/2.6/typed/actor-lifecycle.html#the-guardian-actor) (the root Actor of the `ActorSystem`).
 We will populate this Actor in the following steps of the guide.
-Note that we are using the `docs.scaladsl` package.
-You may use any package, but this package is used in following steps when referencing the main class to run the app built with this guide.
+Note that we are using the @scala[`docs.scaladsl`]@java[`jdocs.scaladsl`] package.
+You may use any package, but we include this package in snippets throughout the guide.
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideSetup }
