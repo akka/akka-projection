@@ -6,7 +6,7 @@
 package docs.guide
 
 object ShoppingCartTags {
-  val single = "shopping-cart"
-  val tags = Vector("carts-0", "carts-1", "carts-2")
+  val Single = "shopping-cart"
+  val Tags = Vector("carts-0", "carts-1", "carts-2")
 }
 //#guideTags

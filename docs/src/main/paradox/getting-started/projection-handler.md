@@ -34,6 +34,9 @@ Add the `ItemPopularityProjectionRepository` to your project:
 Scala
 :  @@snip [ItemPopularityProjectionRepository.scala](/examples/src/test/scala/docs/guide/ItemPopularityProjectionRepository.scala) { #guideProjectionRepo }
 
+Java
+:  @@snip [ItemPopularityProjectionRepository.java](/examples/src/test/java/jdocs/guide/ItemPopularityProjectionRepository.java) { #guideProjectionRepo }
+
 Now it's time to write the Projection handler itself.
 This example uses a @apidoc[Handler] that will process `ShoppingCartEvents.Event` events from the @apidoc[SourceProvider] that we implemented earlier.
 Specifically, it will only process `ItemEvents` that modify the items added or removed from a shopping cart.
@@ -47,6 +50,9 @@ Since this is a simple log operation managing the state in this manner is fine, 
 Scala
 :  @@snip [ItemPopularityProjectionHandler.scala](/examples/src/test/scala/docs/guide/ItemPopularityProjectionHandler.scala) { #guideProjectionHandler }
 
+Java
+:  @@snip [ItemPopularityProjectionHandler.java](/examples/src/test/java/jdocs/guide/ItemPopularityProjectionHandler.java) { #guideProjectionHandler }
+
 The projection is run by wrapping it in a @apidoc[ProjectionBehavior$] and spawning it as an Actor in the @apidoc[akka.actor.typed.ActorSystem].
 
 Add the following imports to `ShoppingCartApp`:
@@ -54,7 +60,13 @@ Add the following imports to `ShoppingCartApp`:
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionImports }
 
+Java
+:  @@snip [ShoppingCartApp.java](/examples/src/test/java/jdocs/guide/ShoppingCartApp.java) { #guideProjectionImports }
+
 Setup the Projection in the Guardian `Behavior` defined in `ShoppingCartApp`:
 
 Scala
 :  @@snip [ShoppingCartApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartApp.scala) { #guideProjectionSetup }
+
+Java
+:  @@snip [ShoppingCartApp.java](/examples/src/test/java/jdocs/guide/ShoppingCartApp.java) { #guideProjectionSetup }

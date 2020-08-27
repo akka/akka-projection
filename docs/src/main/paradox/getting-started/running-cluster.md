@@ -20,6 +20,9 @@ Add the `ShoppingCartClusterApp` to your project:
 
 Scala
 :  @@snip [ShoppingCartClusterApp.scala](/examples/src/test/scala/docs/guide/ShoppingCartClusterApp.scala) { #guideClusterSetup }
+
+Java
+:  @@snip [ShoppingCartClusterApp.java](/examples/src/test/java/jdocs/guide/ShoppingCartClusterApp.java) { #guideClusterSetup }
     
 Before running the app we must first run the `EventGeneratorApp` in `cluster` mode in order to generate new shopping cart events for multiple tags, instead of just one.
 Shopping cart events are tagged in a similar way to the sharded entities themselves.
@@ -27,14 +30,27 @@ Given a sequence of tags from `0..n` a hash is generated using the sharding enti
 The hash is modded `%` by the number of tags in the sequence to choose a tag from the sequence.
 See the @ref:[Tagging Events in EventSourcedBehavior](../running.md#tagging-events-in-eventsourcedbehavior) section of the documentation for an example of how events can be tagged with Akka Persistence, or look at the source of the `EventGeneratorApp` in the previous @ref:[Running the Projection](running.md) section.
 
-Run the same `EventGeneratorApp` from the previous @ref:[Running the Projection](running.md) section, with an additional argument `cluster`:
+The same `EventGeneratorApp` from the previous @ref:[Running the Projection](running.md) section can be used to generate events for this app with an additional argument `cluster`.
+Run the app:
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.EventGeneratorApp cluster"
+sbt "examples/test:runMain jdocs.guide.EventGeneratorApp cluster"
 -->
-```shell
+
+sbt
+:   @@@vars
+```
 sbt "runMain docs.guide.EventGeneratorApp cluster"
 ```
+@@@
+
+Maven
+:   @@@vars
+```
+mvn compile exec:java -Dexec.mainClass="jdocs.guide.EventGeneratorApp" -Dexec.args="cluster"
+```
+@@@
 
 When the app is running you will observe that the logs show events written to different tags (`carts-0`, `carts-1`, etc.), instead of just one (`shopping-cart`).
 
@@ -42,14 +58,26 @@ When the app is running you will observe that the logs show events written to di
 [2020-08-13 15:18:58,383] [INFO] [docs.guide.EventGeneratorApp$] [] [EventGenerator-akka.actor.default-dispatcher-19] - id [6059e] tag [carts-1] event: ItemQuantityAdjusted(6059e,cat t-shirt,1,2) MDC: {persistencePhase=persist-evt, akkaAddress=akka://EventGenerator@127.0.1.1:25520, akkaSource=akka://EventGenerator/system/sharding/shopping-cart-event/903/6059e, sourceActorSystem=EventGenerator, persistenceId=6059e}
 ```
 
-Run the first member of your new Akka cluster.
+Run the first member of your new Akka cluster:
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.ShoppingCartClusterApp 2551"
+sbt "examples/test:runMain jdocs.guide.ShoppingCartClusterApp 2551"
 -->
-```shell
-sbt "runMain docs.guide.ShoppingCartClusterApp 2551"
+
+sbt
+:   @@@vars
 ```
+sbt "runMain docs.guide.ShoppingCartClusterApp 2551
+```
+@@@
+
+Maven
+:   @@@vars
+```
+mvn compile exec:java -Dexec.mainClass="jdocs.guide.ShoppingCartClusterApp" -Dexec.args="2551"
+```
+@@@
 
 When the app is running you will observe that it will process all the shopping cart event tags, because it's the only member of the cluster.
 
@@ -60,14 +88,26 @@ When the app is running you will observe that it will process all the shopping c
 ...
 ```
 
-Run a second member in a new terminal to expand the Akka cluster member count to 2.
+Run a second member to expand the Akka cluster member count to 2.
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.ShoppingCartClusterApp 2552"
+sbt "examples/test:runMain jdocs.guide.ShoppingCartClusterApp 2552"
 -->
-```shell
-sbt "runMain docs.guide.ShoppingCartClusterApp 2552"
+
+sbt
+:   @@@vars
 ```
+sbt "runMain docs.guide.ShoppingCartClusterApp 2552
+```
+@@@
+
+Maven
+:   @@@vars
+```
+mvn compile exec:java -Dexec.mainClass="jdocs.guide.ShoppingCartClusterApp" -Dexec.args="2552"
+```
+@@@
 
 When the second app is running you will observe a sharding rebalance complete and then see a distinct set of tagged events processed on each cluster member.
 

@@ -32,7 +32,6 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
    * The Envelope handler to process events.
    */
   override def process(envelope: EventEnvelope[Event]): Future[Done] = {
-    logItemCount(envelope.event)
     val processed = envelope.event match {
       case ItemAdded(_, itemId, quantity)                            => repo.update(itemId, quantity)
       case ItemQuantityAdjusted(_, itemId, newQuantity, oldQuantity) => repo.update(itemId, newQuantity - oldQuantity)
@@ -52,9 +51,9 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
   private def logItemCount(event: Event): Unit = event match {
     case itemEvent: ItemEvent =>
       logCounter += 1
-      val itemId = itemEvent.itemId
       if (logCounter == ItemPopularityProjectionHandler.LogInterval) {
         logCounter = 0
+        val itemId = itemEvent.itemId
         repo.getItem(itemId).foreach {
           case Some(count) =>
             log.infoN("ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]", tag, itemId, count)

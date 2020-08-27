@@ -33,6 +33,13 @@ object EventEnvelope {
       timestamp: Long): EventEnvelope[Event] =
     new EventEnvelope(offset, persistenceId, sequenceNr, event, timestamp)
 
+  def create[Event](
+      offset: Offset,
+      persistenceId: String,
+      sequenceNr: Long,
+      event: Event,
+      timestamp: Long): EventEnvelope[Event] = apply(offset, persistenceId, sequenceNr, event, timestamp)
+
   def unapply[Event](arg: EventEnvelope[Event]): Option[(Offset, String, Long, Event, Long)] =
     Some((arg.offset, arg.persistenceId, arg.sequenceNr, arg.event, arg.timestamp))
 }

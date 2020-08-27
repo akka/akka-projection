@@ -47,12 +47,12 @@ The app will automatically create all the Akka Persistence infrastructure tables
 We won't go into any further detail about how this app functions because it falls outside the scope of Akka Projections.
 To learn more about the writing events with [Akka Persistence see the Akka documentation](https://doc.akka.io/docs/akka/current/typed/index-persistence.html).
 
-Add the Akka Cluster Sharding Typed library to your project:
+Add the Akka Cluster Sharding library to your project:
 
 @@dependency [sbt,Maven,Gradle] {
-group=com.lightbend.akka
+group=com.typesafe.akka
 artifact=akka-cluster-sharding-typed_$scala.binary.version$
-version=$project.version$
+version=$akka.version$
 }
 
 Add the `EventGeneratorApp` to your project:
@@ -60,16 +60,31 @@ Add the `EventGeneratorApp` to your project:
 Scala
 :  @@snip [EventGeneratorApp.scala](/examples/src/test/scala/docs/guide/EventGeneratorApp.scala) { #guideEventGeneratorApp }
 
-To run the `EventGeneratorApp` use the following sbt command:
+Java
+:  @@snip [EventGeneratorApp.java](/examples/src/test/java/jdocs/guide/EventGeneratorApp.java) { #guideEventGeneratorApp }
+
+Run `EventGeneratorApp`:
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.EventGeneratorApp"
+sbt "examples/test:runMain jdocs.guide.EventGeneratorApp"
 -->
-```shell
+
+sbt
+:   @@@vars
+```
 sbt "runMain docs.guide.EventGeneratorApp"
 ```
+@@@
 
-If you don't see any connection exceptions you should eventually see log lines produced with the event being written to the journal.
+Maven
+:   @@@vars
+```
+mvn compile exec:java -Dexec.mainClass="jdocs.guide.EventGeneratorApp"
+```
+@@@
+
+If you don't see any connection exceptions then you should eventually see log lines produced indicating that events are written to the journal.
 
 Ex)
 
@@ -77,14 +92,25 @@ Ex)
 [2020-08-13 15:20:05,583] [INFO] [docs.guide.EventGeneratorApp$] [] [EventGenerator-akka.actor.default-dispatcher-22] - id [cb52b] tag [shopping-cart] event: ItemQuantityAdjusted(cb52b,skis,1,1) MDC: {persistencePhase=persist-evt, akkaAddress=akka://EventGenerator@127.0.1.1:25520, akkaSource=akka://EventGenerator/system/sharding/shopping-cart-event/678/cb52b, sourceActorSystem=EventGenerator, persistenceId=cb52b}
 ```
 
-Finally, we can run the projection itself by using sbt to run `ShoppingCartApp` in a new terminal:
+Finally, we can run `ShoppingCartApp` in a new terminal:
 
 <!-- run from repo:
 sbt "examples/test:runMain docs.guide.ShoppingCartApp"
 -->
-```shell
+
+sbt
+:   @@@vars
+```
 sbt "runMain docs.guide.ShoppingCartApp"
 ```
+@@@
+
+Maven
+:   @@@vars
+```
+mvn compile exec:java -Dexec.mainClass="jdocs.guide.ShoppingCartApp"
+```
+@@@
 
 After a few seconds you should see the `ItemPopularityProjectionHandler` logging that displays the current checkouts for the day:
 
