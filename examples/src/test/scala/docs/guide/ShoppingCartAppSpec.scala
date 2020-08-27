@@ -2,6 +2,7 @@
  * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
+// #testKitSpec
 package docs.guide
 
 import java.time.Instant
@@ -14,27 +15,26 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Offset
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
-import akka.projection.testkit.scaladsl.TestProjection
-import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.scaladsl.Source
 // #testKitImports
 import akka.projection.testkit.scaladsl.ProjectionTestKit
+import akka.projection.testkit.scaladsl.TestProjection
+import akka.projection.testkit.scaladsl.TestSourceProvider
 // #testKitImports
 import org.scalatest.wordspec.AnyWordSpecLike
 
-// #testKitSpec
 object ShoppingCartAppSpec {
   // mock out the Cassandra data layer and simulate recording item count updates
   class MockItemPopularityRepository extends ItemPopularityProjectionRepository {
     var counts: Map[String, Long] = Map.empty
 
-    def update(itemId: String, delta: Int): Future[Done] = Future.successful {
+    override def update(itemId: String, delta: Int): Future[Done] = Future.successful {
       counts = counts + (itemId -> (counts.getOrElse(itemId, 0L) + delta))
       Done
     }
 
-    def getItem(itemId: String): Future[Option[(String, Long)]] =
-      Future.successful(Some(itemId -> counts.getOrElse(itemId, 0L)))
+    override def getItem(itemId: String): Future[Option[Long]] =
+      Future.successful(counts.get(itemId))
   }
 }
 

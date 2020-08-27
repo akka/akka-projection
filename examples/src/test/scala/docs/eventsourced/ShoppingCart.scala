@@ -140,16 +140,17 @@ object ShoppingCart {
 
   //#tagging
   val EntityKey: EntityTypeKey[Command] = EntityTypeKey[Command]("ShoppingCart")
+
   def init(system: ActorSystem[_]): Unit = {
     ClusterSharding(system).init(Entity(EntityKey) { entityContext =>
-      val n = math.abs(entityContext.entityId.hashCode % tags.size)
-      val selectedTag = tags(n)
+      val i = math.abs(entityContext.entityId.hashCode % tags.size)
+      val selectedTag = tags(i)
       ShoppingCart(entityContext.entityId, selectedTag)
     }.withRole("write-model"))
   }
   //#tagging
 
-  def apply(cartId: String, eventProcessorTag: String): Behavior[Command] = {
+  def apply(cartId: String, projectionTag: String): Behavior[Command] = {
     EventSourcedBehavior
       .withEnforcedReplies[Command, Event, State](
         PersistenceId(EntityKey.name, cartId),
@@ -160,7 +161,7 @@ object ShoppingCart {
           if (state.isCheckedOut) checkedOutShoppingCart(cartId, state, command)
           else openShoppingCart(cartId, state, command),
         (state, event) => handleEvent(state, event))
-      .withTagger(_ => Set(eventProcessorTag))
+      .withTagger(_ => Set(projectionTag))
       .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
       .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }

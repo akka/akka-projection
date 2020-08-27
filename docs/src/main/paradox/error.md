@@ -38,7 +38,9 @@ in configuration:
 ## Projection restart
 
 The `Projection` will be restarted if it fails, for example if the offset can't be saved or processing of an
-envelope fails after applying the @ref:[Handler recovery](#handler-recovery).
+envelope fails after applying the @ref:[Handler recovery](#handler-recovery). Restart means that the projection
+is restarted from latest saved offset. Projections are restarted in case of failures by default, but it can be
+customized.
 
 The following example is using the `CassandraProjection` but the same can be used with any other
 @ref:[Projection type](overview.md).
