@@ -369,5 +369,4 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       }
     }
   }
-
 }
