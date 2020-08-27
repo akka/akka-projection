@@ -36,6 +36,7 @@ lazy val jdbc =
     .dependsOn(core % "compile->compile")
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % "test->test")
+    .settings(parallelExecution in Test := false)
 
 // provides offset storage backed by a JDBC (Slick) table
 lazy val slick =
@@ -47,6 +48,7 @@ lazy val slick =
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % "test->test")
+    .settings(parallelExecution in Test := false)
 
 // provides offset storage backed by a Cassandra table
 lazy val cassandra =
