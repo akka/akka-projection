@@ -55,8 +55,8 @@ lazy val cassandra =
     .settings(Defaults.itSettings)
     .settings(Dependencies.cassandra)
     .dependsOn(core)
-    .dependsOn(coreTest % "test->test;compile->test;")
-    .dependsOn(testkit % "compile->compile;test->test")
+    .dependsOn(coreTest % "test->compile;it->test")
+    .dependsOn(testkit % "test->compile;it->compile")
 
 // provides source providers for akka-persistence-query
 lazy val eventsourced =
@@ -72,8 +72,8 @@ lazy val kafka =
     .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
     .dependsOn(core)
-    .dependsOn(testkit % "compile->compile;test->test")
-    .dependsOn(slick % "compile->compile;test->test;it->it")
+    .dependsOn(testkit % "test->test")
+    .dependsOn(slick % "test->test;it->it")
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
