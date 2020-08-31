@@ -55,7 +55,7 @@ lazy val cassandra =
     .settings(Defaults.itSettings)
     .settings(Dependencies.cassandra)
     .dependsOn(core)
-    // strictly speaking it is not needed to have test->test here. 
+    // strictly speaking it is not needed to have test->test here.
     // Cassandra module doesn't have tests, only integration tests
     // however, without it the generated pom.xml doesn't get this test dependencies
     .dependsOn(coreTest % "test->test;it->test")
