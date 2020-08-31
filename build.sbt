@@ -18,7 +18,7 @@ lazy val coreTest =
     .settings(Dependencies.coreTest)
     .settings(publish / skip := true)
     .dependsOn(core)
-    .dependsOn(testkit % "test")
+    .dependsOn(testkit % Test)
 
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
@@ -35,7 +35,7 @@ lazy val jdbc =
     .settings(Dependencies.jdbc)
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
-    .dependsOn(testkit % "test")
+    .dependsOn(testkit % Test)
 
 // provides offset storage backed by a JDBC (Slick) table
 lazy val slick =
@@ -46,7 +46,7 @@ lazy val slick =
     .dependsOn(jdbc)
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
-    .dependsOn(testkit % "test")
+    .dependsOn(testkit % Test)
 
 // provides offset storage backed by a Cassandra table
 lazy val cassandra =
@@ -66,7 +66,7 @@ lazy val eventsourced =
   Project(id = "akka-projection-eventsourced", base = file("akka-projection-eventsourced"))
     .settings(Dependencies.eventsourced)
     .dependsOn(core)
-    .dependsOn(testkit % "test")
+    .dependsOn(testkit % Test)
 
 // provides offset storage backed by Kafka managed offset commits
 lazy val kafka =
@@ -75,7 +75,7 @@ lazy val kafka =
     .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
     .dependsOn(core)
-    .dependsOn(testkit % "test")
+    .dependsOn(testkit % Test)
     .dependsOn(slick % "test->test;it->it")
 
 lazy val examples = project
@@ -87,7 +87,7 @@ lazy val examples = project
   .dependsOn(cassandra % "test->test;test->it")
   .dependsOn(eventsourced)
   .dependsOn(kafka % "test->test")
-  .dependsOn(testkit % "test")
+  .dependsOn(testkit % Test)
   .settings(publish / skip := true, scalacOptions += "-feature", javacOptions += "-parameters")
 
 lazy val docs = project
