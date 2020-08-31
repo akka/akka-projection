@@ -102,8 +102,23 @@ object Dependencies {
         Test.logback,
         Test.scalatest)
 
+  val coreTest =
+    deps ++= Seq(
+        Test.akkaTypedTestkit,
+        Test.akkaStreamTestkit,
+        Test.scalatest,
+        Test.scalatestJUnit,
+        Test.junit,
+        Test.logback)
+
   val testKit =
-    deps ++= Seq(Compile.akkaTypedTestkit, Compile.akkaStreamTestkit, Test.scalatest, Test.scalatestJUnit, Test.junit)
+    deps ++= Seq(
+        Compile.akkaTypedTestkit,
+        Compile.akkaStreamTestkit,
+        Test.scalatest,
+        Test.scalatestJUnit,
+        Test.junit,
+        Test.logback)
 
   val eventsourced =
     deps ++= Seq(Compile.akkaPersistenceQuery)
