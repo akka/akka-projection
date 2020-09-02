@@ -282,8 +282,8 @@ object JdbcProjection {
    * before the system is started.
    */
   def createOffsetTableIfNotExists[S <: JdbcSession](
-      sessionFactory: () => S,
+      sessionFactory: Supplier[S],
       system: ActorSystem[_]): CompletionStage[Done] =
-    JdbcProjectionImpl.createOffsetStore(sessionFactory)(system).createIfNotExists().toJava
+    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).createIfNotExists().toJava
 
 }
