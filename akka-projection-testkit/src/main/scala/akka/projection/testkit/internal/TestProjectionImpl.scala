@@ -101,7 +101,7 @@ private[projection] class TestProjectionImpl[Offset, Envelope] private[projectio
    * INTERNAL API
    */
   @InternalApi
-  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
+  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = handlerStrategy.actorHandlerInit
 
   /**
    * INTERNAL API: To control the [[akka.projection.internal.InternalProjectionState]] used in the projection.
