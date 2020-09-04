@@ -92,7 +92,7 @@ import slick.jdbc.JdbcProfile
 
     def projectionName = column[String]("PROJECTION_NAME", O.Length(255))
     def projectionKey = column[String]("PROJECTION_KEY", O.Length(255))
-    def offset = column[String]("OFFSET", O.Length(255))
+    def offset = column[String]("CURRENT_OFFSET", O.Length(255))
     def manifest = column[String]("MANIFEST", O.Length(4))
     def mergeable = column[Boolean]("MERGEABLE")
     def lastUpdated = column[Long]("LAST_UPDATED")

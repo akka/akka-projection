@@ -95,7 +95,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
 
           while (resultSet.next()) {
 
-            val offsetStr = resultSet.getString("OFFSET")
+            val offsetStr = resultSet.getString("CURRENT_OFFSET")
             val manifest = resultSet.getString("MANIFEST")
             val mergeable = resultSet.getBoolean("MERGEABLE")
             val key = resultSet.getString("PROJECTION_KEY")
