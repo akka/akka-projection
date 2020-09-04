@@ -17,6 +17,7 @@ import akka.persistence.query.TimeBasedUUID
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.TestTags
+import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
 import akka.projection.slick.SlickOffsetStoreSpec.SlickSpecConfig
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
@@ -40,6 +41,7 @@ object SlickOffsetStoreSpec {
         schema = ""
         table = "AKKA_PROJECTION_OFFSET_STORE"
       }
+      debug.verbose-offset-store-logging = true
     }
     """)
     def config: Config
@@ -107,12 +109,32 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     import dbConfig.profile.api._
-    val action = offsetStore.offsetTable
-      .filter(r => r.projectionName === projectionId.name && r.projectionKey === projectionId.key)
-      .result
-      .headOption
-    val millis = dbConfig.db.run(action).futureValue.get.lastUpdated
-    Instant.ofEpochMilli(millis)
+
+    val action =
+      SimpleDBIO[Instant] { jdbcContext =>
+        val statement =
+          s"""SELECT * FROM akka_projection_offset_store 
+           |WHERE PROJECTION_NAME = ? AND PROJECTION_KEY = ?""".stripMargin
+
+        val connection = jdbcContext.connection
+        // init statement in try-with-resource
+        tryWithResource(connection.prepareStatement(statement)) { stmt =>
+          stmt.setString(1, projectionId.name)
+          stmt.setString(2, projectionId.key)
+
+          // init ResultSet in try-with-resource
+          tryWithResource(stmt.executeQuery()) { resultSet =>
+
+            if (resultSet.next()) {
+              val millisSinceEpoch = resultSet.getLong(6)
+              Instant.ofEpochMilli(millisSinceEpoch)
+            } else throw new RuntimeException(s"no records found for $projectionId")
+          }
+        }
+
+      }
+
+    dbConfig.db.run(action).futureValue
   }
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")

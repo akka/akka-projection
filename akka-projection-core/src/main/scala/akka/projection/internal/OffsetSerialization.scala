@@ -85,7 +85,8 @@ import akka.serialization.Serializers
       id: ProjectionId,
       offset: Offset,
       mergeable: Boolean = false): StorageRepresentation = {
-    val reps = offset match {
+
+    offset match {
       case s: String                => SingleOffset(id, StringManifest, s, mergeable)
       case l: Long                  => SingleOffset(id, LongManifest, l.toString, mergeable)
       case i: Int                   => SingleOffset(id, IntManifest, i.toString, mergeable)
@@ -108,6 +109,5 @@ import akka.serialization.Serializers
         val offsetStr = Base64.getEncoder.encodeToString(bytes)
         SingleOffset(id, s"$serializerId:$serializerManifest", offsetStr)
     }
-    reps
   }
 }
