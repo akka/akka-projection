@@ -355,6 +355,11 @@ object SlickProjection {
       createOffsetStore(databaseConfig))
   }
 
+  /**
+   * For testing purposes the offset table can be created programmatically.
+   * For production it's recommended to create the table with DDL statements
+   * before the system is started.
+   */
   def createOffsetTableIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]): Future[Done] = {
     createOffsetStore(databaseConfig).createIfNotExists

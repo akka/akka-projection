@@ -173,6 +173,7 @@ Oracle
 H2
 :  @@snip [create-table-default.sql](/examples/src/test/resources/create-table-default.sql) { #create-table-default }
 
+The schema can be created using the method `SlickProjection.createOffsetTableIfNotExists`. This is particularly useful when writting tests. For production enviornments, we recommend creating the schema before deploying the application.
 
 ## Offset types
 

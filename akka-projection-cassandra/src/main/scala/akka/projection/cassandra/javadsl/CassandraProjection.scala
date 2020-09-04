@@ -139,6 +139,11 @@ object CassandraProjection {
       handlerStrategy = SingleHandlerStrategy(() => HandlerAdapter(handler.get())),
       statusObserver = NoopStatusObserver)
 
+  /**
+   * For testing purposes the offset table can be created programmatically.
+   * For production it's recommended to create the table with DDL statements
+   * before the system is started.
+   */
   def createOffsetTableIfNotExists(system: ActorSystem[_]): CompletionStage[Done] = {
     import scala.compat.java8.FutureConverters._
     val offsetStore = new CassandraOffsetStore(system)
