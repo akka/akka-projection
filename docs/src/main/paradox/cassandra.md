@@ -273,6 +273,8 @@ for the `CassandraProjection` yet, see [issue #97](https://github.com/akka/akka-
 
 @@@
 
+The schema can be created using the method `CassandraProjection.createOffsetTableIfNotExists`. This is particularly useful when writting tests. For production enviornments, we recommend creating the schema before deploying the application.
+
 ## Configuration
 
 Make your edits/overrides in your application.conf.
