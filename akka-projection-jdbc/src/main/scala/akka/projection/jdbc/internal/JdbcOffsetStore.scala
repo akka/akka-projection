@@ -95,7 +95,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
 
           while (resultSet.next()) {
 
-            val offsetStr = resultSet.getString("OFFSET")
+            val offsetStr = resultSet.getString("LAST_SEEN_OFFSET")
             val manifest = resultSet.getString("MANIFEST")
             val mergeable = resultSet.getBoolean("MERGEABLE")
             val key = resultSet.getString("PROJECTION_KEY")
@@ -156,7 +156,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
       val tryUpdateResult =
         tryWithResource(conn.prepareStatement(settings.dialect.updateStatement())) { stmt =>
           // SET
-          stmt.setString(UpdateIndices.OFFSET, singleOffset.offsetStr)
+          stmt.setString(UpdateIndices.LAST_SEEN_OFFSET, singleOffset.offsetStr)
           stmt.setString(UpdateIndices.MANIFEST, singleOffset.manifest)
           stmt.setBoolean(UpdateIndices.MERGEABLE, singleOffset.mergeable)
           stmt.setLong(UpdateIndices.LAST_UPDATED, now)
@@ -176,7 +176,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
           // VALUES
           stmt.setString(InsertIndices.PROJECTION_NAME, singleOffset.id.name)
           stmt.setString(InsertIndices.PROJECTION_KEY, singleOffset.id.key)
-          stmt.setString(InsertIndices.OFFSET, singleOffset.offsetStr)
+          stmt.setString(InsertIndices.LAST_SEEN_OFFSET, singleOffset.offsetStr)
           stmt.setString(InsertIndices.MANIFEST, singleOffset.manifest)
           stmt.setBoolean(InsertIndices.MERGEABLE, singleOffset.mergeable)
           stmt.setLong(InsertIndices.LAST_UPDATED, now)

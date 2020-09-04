@@ -138,7 +138,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     specConfig.stopContainer()
 
   def selectLastStatement: String =
-    s"""SELECT * FROM "${settings.table}" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+    s"""SELECT * FROM ${settings.table} WHERE PROJECTION_NAME = ? AND PROJECTION_KEY = ?"""
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     withConnection(specConfig.jdbcSessionFactory _) { conn =>

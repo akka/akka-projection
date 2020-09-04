@@ -42,51 +42,51 @@ private[projection] object DialectDefaults {
   def createTableStatement(table: String): immutable.Seq[String] =
     immutable.Seq(
       s"""
-     CREATE TABLE IF NOT EXISTS "$table" (
-      "PROJECTION_NAME" VARCHAR(255) NOT NULL,
-      "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-      "OFFSET" VARCHAR(255) NOT NULL,
-      "MANIFEST" VARCHAR(4) NOT NULL,
-      "MERGEABLE" BOOLEAN NOT NULL,
-      "LAST_UPDATED" BIGINT NOT NULL
+     CREATE TABLE IF NOT EXISTS $table (
+      PROJECTION_NAME VARCHAR(255) NOT NULL,
+      PROJECTION_KEY VARCHAR(255) NOT NULL,
+      LAST_SEEN_OFFSET VARCHAR(255) NOT NULL,
+      MANIFEST VARCHAR(4) NOT NULL,
+      MERGEABLE BOOLEAN NOT NULL,
+      LAST_UPDATED BIGINT NOT NULL
      );""",
       // create index
-      s"""CREATE INDEX "PROJECTION_NAME_INDEX" on "$table" ("PROJECTION_NAME");""",
+      s"""CREATE INDEX PROJECTION_NAME_INDEX on $table (PROJECTION_NAME);""",
       // add primary key
-      s"""ALTER TABLE "$table" 
-       ADD CONSTRAINT "PK_PROJECTION_ID" PRIMARY KEY("PROJECTION_NAME","PROJECTION_KEY");
+      s"""ALTER TABLE $table
+       ADD CONSTRAINT PK_PROJECTION_ID PRIMARY KEY(PROJECTION_NAME,PROJECTION_KEY);
     """)
 
   def readOffsetQuery(table: String) =
-    s"""SELECT * FROM "$table" WHERE "PROJECTION_NAME" = ?"""
+    s"""SELECT * FROM $table WHERE PROJECTION_NAME = ?"""
 
   def clearOffsetStatement(table: String) =
-    s"""DELETE FROM "$table" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+    s"""DELETE FROM $table WHERE PROJECTION_NAME = ? AND PROJECTION_KEY = ?"""
 
   def insertStatement(table: String): String =
-    s"""INSERT INTO "$table" (
-      "PROJECTION_NAME",
-      "PROJECTION_KEY",
-      "OFFSET",
-      "MANIFEST",
-      "MERGEABLE",
-      "LAST_UPDATED"
+    s"""INSERT INTO $table (
+      PROJECTION_NAME,
+      PROJECTION_KEY,
+      LAST_SEEN_OFFSET,
+      MANIFEST,
+      MERGEABLE,
+      LAST_UPDATED
     )  VALUES (?,?,?,?,?,?)"""
 
   def updateStatement(table: String): String =
-    s"""UPDATE "$table" 
+    s"""UPDATE $table 
         SET
-         "OFFSET" = ?,
-         "MANIFEST" = ?,
-         "MERGEABLE" = ?,
-         "LAST_UPDATED" = ?
-        WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?
+         LAST_SEEN_OFFSET = ?,
+         MANIFEST = ?,
+         MERGEABLE = ?,
+         LAST_UPDATED = ?
+        WHERE PROJECTION_NAME = ? AND PROJECTION_KEY = ?
         """
 
   object InsertIndices {
     val PROJECTION_NAME = 1
     val PROJECTION_KEY = 2
-    val OFFSET = 3
+    val LAST_SEEN_OFFSET = 3
     val MANIFEST = 4
     val MERGEABLE = 5
     val LAST_UPDATED = 6
@@ -94,7 +94,7 @@ private[projection] object DialectDefaults {
 
   object UpdateIndices {
     // SET
-    val OFFSET = 1
+    val LAST_SEEN_OFFSET = 1
     val MANIFEST = 2
     val MERGEABLE = 3
     val LAST_UPDATED = 4
@@ -141,7 +141,7 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
      CREATE TABLE IF NOT EXISTS $table (
       PROJECTION_NAME VARCHAR(255) NOT NULL,
       PROJECTION_KEY VARCHAR(255) NOT NULL,
-      OFFSET VARCHAR(255) NOT NULL,
+      LAST_SEEN_OFFSET VARCHAR(255) NOT NULL,
       MANIFEST VARCHAR(4) NOT NULL,
       MERGEABLE BOOLEAN NOT NULL,
       LAST_UPDATED BIGINT NOT NULL
@@ -183,7 +183,7 @@ private[projection] case class MSSQLServerDialect(schema: Option[String], tableN
       create table "$table" (
         "PROJECTION_NAME" VARCHAR(255) NOT NULL,
         "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-        "OFFSET" VARCHAR(255) NOT NULL,
+        "LAST_SEEN_OFFSET" VARCHAR(255) NOT NULL,
         "MANIFEST" VARCHAR(4) NOT NULL,
         "MERGEABLE" BIT NOT NULL,
         "LAST_UPDATED" BIGINT NOT NULL
@@ -216,7 +216,7 @@ private[projection] case class OracleDialect(schema: Option[String], tableName: 
     immutable.Seq(s"""
 BEGIN
 
-execute immediate 'create table "$table" ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
+execute immediate 'create table "$table" ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"LAST_SEEN_OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
 execute immediate 'alter table "$table" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
 execute immediate 'create index "PROJECTION_NAME_INDEX" on "$table" ("PROJECTION_NAME") ';
 EXCEPTION
