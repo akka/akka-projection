@@ -9,30 +9,30 @@ import java.sql.DriverManager
 import java.time.Instant
 import java.util.UUID
 
+import scala.concurrent.duration._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.Future
-import scala.concurrent.duration._
 import scala.util.Try
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.japi.function
 import akka.persistence.query.Sequence
+import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
+import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
+import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
+import akka.projection.jdbc.internal.JdbcOffsetStore
+import akka.projection.jdbc.internal.JdbcSettings
+import akka.projection.testkit.internal.TestClock
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.TestTags
-import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
-import akka.projection.jdbc.internal.JdbcOffsetStore
-import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
-import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
-import akka.projection.jdbc.internal.JdbcSettings
-import akka.projection.testkit.internal.TestClock
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.OptionValues
 import org.scalatest.Tag
-import org.scalatest.wordspec.AnyWordSpecLike
 
 object JdbcOffsetStoreSpec {
 
@@ -45,7 +45,6 @@ object JdbcOffsetStoreSpec {
       loglevel = "DEBUG"
       projection.jdbc = {
         offset-store {
-          schema = ""
           table = "AKKA_PROJECTION_OFFSET_STORE"
         }
         
@@ -137,8 +136,10 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override protected def afterAll(): Unit =
     specConfig.stopContainer()
 
+  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
+
   def selectLastStatement: String =
-    s"""SELECT * FROM "${settings.table}" WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     withConnection(specConfig.jdbcSessionFactory _) { conn =>
