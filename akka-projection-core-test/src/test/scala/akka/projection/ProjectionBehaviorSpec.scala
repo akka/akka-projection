@@ -6,34 +6,20 @@ package akka.projection
 
 import java.util.concurrent.atomic.AtomicReference
 
+import akka.{Done, NotUsed}
+import akka.actor.testkit.typed.scaladsl.{LogCapturing, ScalaTestWithActorTestKit, TestProbe}
+import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.projection.internal._
+import akka.projection.scaladsl.{Handler, ProjectionManagement, SourceProvider}
+import akka.projection.testkit.internal.{TestInMemoryOffsetStoreImpl, TestInternalProjectionState, TestProjectionImpl, TestRunningProjection}
+import akka.projection.testkit.scaladsl.{TestOffsetStore, TestSourceProvider}
+import akka.stream.{OverflowStrategy, SharedKillSwitch}
+import akka.stream.scaladsl.Source
+import akka.stream.testkit.TestPublisher
+import org.scalatest.wordspec.AnyWordSpecLike
+
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
-import akka.Done
-import akka.NotUsed
-import akka.actor.testkit.typed.scaladsl.LogCapturing
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.actor.testkit.typed.scaladsl.TestProbe
-import akka.actor.typed.ActorRef
-import akka.actor.typed.ActorSystem
-import akka.projection.internal.AtMostOnce
-import akka.projection.internal.HandlerStrategy
-import akka.projection.internal.NoopStatusObserver
-import akka.projection.internal.OffsetStrategy
-import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.scaladsl.Handler
-import akka.projection.scaladsl.ProjectionManagement
-import akka.projection.scaladsl.SourceProvider
-import akka.projection.testkit.internal.TestInMemoryOffsetStoreImpl
-import akka.projection.testkit.internal.TestInternalProjectionState
-import akka.projection.testkit.internal.TestProjectionImpl
-import akka.projection.testkit.internal.TestRunningProjection
-import akka.projection.testkit.scaladsl.TestOffsetStore
-import akka.projection.testkit.scaladsl.TestSourceProvider
-import akka.stream.OverflowStrategy
-import akka.stream.SharedKillSwitch
-import akka.stream.scaladsl.Source
-import org.scalatest.wordspec.AnyWordSpecLike
 
 object ProjectionBehaviorSpec {
 
@@ -246,6 +232,37 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
       testProbe.expectTerminated(projectionRef)
 
+    }
+
+    "restart previously stopped projection" in {
+
+      val testProbe = testKit.createTestProbe[ProbeMessage]()
+
+      // we create a source from a publisher so to have fine grained control over the production of elements
+      val testPublisher = TestPublisher.probe[Int](1)(testKit.system.classicSystem)
+      val projection = ProjectionBehaviourTestProjection(Source.fromPublisher(testPublisher), testProbe)
+
+      val projectionRef = testKit.spawn(ProjectionBehavior(projection))
+
+      testProbe.expectMessage(StartObserved)
+
+      testPublisher.sendNext(1)
+      testProbe.expectMessage(Consumed(1, "1"))
+      testPublisher.sendNext(2)
+      testProbe.expectMessage(Consumed(2, "1-2"))
+
+      // stop the projection and wait for the actor to terminate
+      projectionRef ! ProjectionBehavior.Stop
+      testProbe.expectMessage(StopObserved)
+      testProbe.expectTerminated(projectionRef)
+
+      // Respawn the projection behavior
+      testKit.spawn(ProjectionBehavior(projection))
+      testProbe.expectMessage(StartObserved)
+
+      // Assert then projection resumes from where it left
+      testPublisher.sendNext(3)
+      testProbe.expectMessage(Consumed(3, "1-3"))
     }
 
     "also stop when stopping underlying stream results in failure" in {
