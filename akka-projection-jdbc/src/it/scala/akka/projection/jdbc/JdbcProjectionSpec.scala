@@ -64,7 +64,7 @@ object JdbcProjectionSpec {
       projection.jdbc = {
         dialect = "h2-dialect"
         offset-store {
-          schema = test_schema
+          schema = ""
           table = "AKKA_PROJECTION_OFFSET_STORE"
         }
         
@@ -214,13 +214,6 @@ class JdbcProjectionSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-
-    // create schema
-    jdbcSettings.schema.foreach { schema =>
-      jdbcSessionFactory().withConnection {
-        conn => conn.createStatement().execute(s"""CREATE SCHEMA IF NOT EXISTS "$schema";""")
-      }
-    }
 
     // create offset table
     val creationFut = offsetStore
