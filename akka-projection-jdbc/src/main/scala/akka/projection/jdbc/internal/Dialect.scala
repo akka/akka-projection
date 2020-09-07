@@ -134,8 +134,7 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
 
   def this(tableName: String) = this(None, tableName)
 
-  private val table = schema.map(s => s"""$s.$tableName""").getOrElse(s"""$tableName""")
-
+  private val table = schema.map(s => s"$s.$tableName").getOrElse(tableName)
   override val createTableStatements =
     immutable.Seq(
       s"""

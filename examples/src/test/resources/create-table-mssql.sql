@@ -1,6 +1,6 @@
 
 #create-table-mssql
-IF  NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'AKKA_PROJECTION_OFFSET_STORE') AND type in (N'U'))
+IF  NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'"AKKA_PROJECTION_OFFSET_STORE"') AND type in (N'U'))
 begin
 create table "AKKA_PROJECTION_OFFSET_STORE" (
   "PROJECTION_NAME" VARCHAR(255) NOT NULL,
