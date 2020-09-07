@@ -218,7 +218,7 @@ class JdbcProjectionSpec
     // create schema
     jdbcSettings.schema.foreach { schema =>
       jdbcSessionFactory().withConnection {
-        conn => conn.createStatement().execute(s"""CREATE SCHEMA IF NOT EXISTS $schema;""")
+        conn => conn.createStatement().execute(s"""CREATE SCHEMA IF NOT EXISTS "$schema";""")
       }
     }
 

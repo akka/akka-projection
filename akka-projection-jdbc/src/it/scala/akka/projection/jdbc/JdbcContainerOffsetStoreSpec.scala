@@ -6,21 +6,15 @@ package akka.projection.jdbc
 
 import java.sql.DriverManager
 
-import scala.language.existentials
-
 import akka.projection.TestTags
-import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
-import akka.projection.jdbc.JdbcOffsetStoreSpec.PureJdbcSession
+import akka.projection.jdbc.JdbcOffsetStoreSpec.{JdbcSpecConfig, PureJdbcSession}
 import akka.projection.jdbc.internal.Dialect
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.Tag
-import org.testcontainers.containers.JdbcDatabaseContainer
-import org.testcontainers.containers.MSSQLServerContainer
-import org.testcontainers.containers.MySQLContainer
-import org.testcontainers.containers.OracleContainer
-import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.containers._
 import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
+
+import scala.language.existentials
 
 object JdbcContainerOffsetStoreSpec {
 
@@ -28,9 +22,12 @@ object JdbcContainerOffsetStoreSpec {
 
     val tag: Tag = TestTags.ContainerDb
 
+    final val schemaName = "test_schema"
+
     override val config: Config =
       baseConfig.withFallback(ConfigFactory.parseString(s"""
         akka.projection.jdbc = {
+          offset-store.schema = "$schemaName"
           dialect = $dialect
         }
         """))
@@ -67,23 +64,23 @@ object JdbcContainerOffsetStoreSpec {
 
   object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
     val name = "Postgres Database"
-    override def newContainer() = new PostgreSQLContainer
+    override def newContainer(): JdbcDatabaseContainer[_] = new PostgreSQLContainer().withInitScript("db/default-init.sql")
   }
 
   object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
     val name = "MySQL Database"
-    override def newContainer() = new MySQLContainer
+    override def newContainer(): JdbcDatabaseContainer[_] = new MySQLContainer().withDatabaseName(schemaName)
   }
 
   object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
     val name = "MS SQL Server Database"
     override val tag: Tag = TestTags.FlakyDb
-    override def newContainer() = new MSSQLServerContainer
+    override def newContainer(): JdbcDatabaseContainer[_] = new MSSQLServerContainer().withInitScript("db/default-init.sql")
   }
 
   object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
     val name = "Oracle Database"
-    override def newContainer() = new OracleContainer("oracleinanutshell/oracle-xe-11g")
+    override def newContainer() = new OracleContainer("oracleinanutshell/oracle-xe-11g").withInitScript("db/oracle-init.sql")
   }
 
 }

@@ -1,0 +1,2 @@
+CREATE USER "test_schema" IDENTIFIED BY password;
+GRANT UNLIMITED TABLESPACE TO "test_schema"
