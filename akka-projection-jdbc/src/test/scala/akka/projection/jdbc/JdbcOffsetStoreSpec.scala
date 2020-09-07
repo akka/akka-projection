@@ -4,25 +4,35 @@
 
 package akka.projection.jdbc
 
-import java.sql.{ Connection, DriverManager }
+import java.sql.Connection
+import java.sql.DriverManager
 import java.time.Instant
 import java.util.UUID
 
-import akka.actor.testkit.typed.scaladsl.{ LogCapturing, ScalaTestWithActorTestKit }
+import scala.concurrent.duration._
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.Future
+import scala.util.Try
+
+import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.japi.function
 import akka.persistence.query.Sequence
-import akka.projection.{ MergeableOffset, ProjectionId, TestTags }
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
-import akka.projection.jdbc.internal.JdbcSessionUtil.{ tryWithResource, withConnection }
-import akka.projection.jdbc.internal.{ JdbcOffsetStore, JdbcSettings }
+import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
+import akka.projection.jdbc.internal.JdbcSessionUtil.withConnection
+import akka.projection.jdbc.internal.JdbcOffsetStore
+import akka.projection.jdbc.internal.JdbcSettings
 import akka.projection.testkit.internal.TestClock
-import com.typesafe.config.{ Config, ConfigFactory }
-import org.scalatest.{ OptionValues, Tag }
+import akka.projection.MergeableOffset
+import akka.projection.ProjectionId
+import akka.projection.TestTags
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
-
-import scala.concurrent.{ Await, ExecutionContextExecutor, Future }
-import scala.concurrent.duration._
-import scala.util.Try
+import org.scalatest.OptionValues
+import org.scalatest.Tag
 
 object JdbcOffsetStoreSpec {
 

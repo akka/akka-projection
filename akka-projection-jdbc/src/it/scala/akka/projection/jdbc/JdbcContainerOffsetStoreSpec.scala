@@ -6,15 +6,17 @@ package akka.projection.jdbc
 
 import java.sql.DriverManager
 
+import scala.language.existentials
+
 import akka.projection.TestTags
-import akka.projection.jdbc.JdbcOffsetStoreSpec.{JdbcSpecConfig, PureJdbcSession}
+import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
+import akka.projection.jdbc.JdbcOffsetStoreSpec.PureJdbcSession
 import akka.projection.jdbc.internal.Dialect
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
 import org.scalatest.Tag
 import org.testcontainers.containers._
 import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
-
-import scala.language.existentials
 
 object JdbcContainerOffsetStoreSpec {
 
