@@ -6,14 +6,19 @@ package akka.projection
 
 import java.util.concurrent.atomic.AtomicReference
 
-import akka.{Done, NotUsed}
-import akka.actor.testkit.typed.scaladsl.{LogCapturing, ScalaTestWithActorTestKit, TestProbe}
-import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.{ Done, NotUsed }
+import akka.actor.testkit.typed.scaladsl.{ LogCapturing, ScalaTestWithActorTestKit, TestProbe }
+import akka.actor.typed.{ ActorRef, ActorSystem }
 import akka.projection.internal._
-import akka.projection.scaladsl.{Handler, ProjectionManagement, SourceProvider}
-import akka.projection.testkit.internal.{TestInMemoryOffsetStoreImpl, TestInternalProjectionState, TestProjectionImpl, TestRunningProjection}
-import akka.projection.testkit.scaladsl.{TestOffsetStore, TestSourceProvider}
-import akka.stream.{OverflowStrategy, SharedKillSwitch}
+import akka.projection.scaladsl.{ Handler, ProjectionManagement, SourceProvider }
+import akka.projection.testkit.internal.{
+  TestInMemoryOffsetStoreImpl,
+  TestInternalProjectionState,
+  TestProjectionImpl,
+  TestRunningProjection
+}
+import akka.projection.testkit.scaladsl.{ TestOffsetStore, TestSourceProvider }
+import akka.stream.{ OverflowStrategy, SharedKillSwitch }
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import org.scalatest.wordspec.AnyWordSpecLike
