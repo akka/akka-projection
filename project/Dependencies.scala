@@ -20,7 +20,7 @@ object Dependencies {
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
     val testContainers = "1.14.3"
-    val junit = "4.12"
+    val junit = "4.13"
     val h2Driver = "1.4.200"
   }
 
