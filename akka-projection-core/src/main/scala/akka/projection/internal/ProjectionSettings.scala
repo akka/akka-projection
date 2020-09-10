@@ -55,6 +55,7 @@ private[projection] object ProjectionSettings {
   }
 }
 
+@InternalApi
 private object RecoveryStrategyConfig {
   def fromConfig(config: Config): HandlerRecoveryStrategy = {
     val strategy = config.getString("strategy")
