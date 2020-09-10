@@ -28,10 +28,12 @@ trait SourceProvider[Offset, Envelope] {
 
 }
 
+@ApiMayChange
 trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
 
   def verifyOffset(offset: Offset): OffsetVerification
 
 }
 
+@ApiMayChange
 trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_], Envelope] extends SourceProvider[Offset, Envelope]

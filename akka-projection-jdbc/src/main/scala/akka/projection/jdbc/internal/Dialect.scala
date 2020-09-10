@@ -239,8 +239,3 @@ END;
 
   override def updateStatement(): String = DialectDefaults.updateStatement(table)
 }
-
-/*
-
-
- */

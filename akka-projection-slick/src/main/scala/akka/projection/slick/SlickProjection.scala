@@ -370,6 +370,7 @@ object SlickProjection {
     new SlickOffsetStore(system, databaseConfig.db, databaseConfig.profile, SlickSettings(system))
 }
 
+@ApiMayChange
 object SlickHandler {
 
   /** SlickHandler that can be define from a simple function */
