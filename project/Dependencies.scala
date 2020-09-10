@@ -20,7 +20,7 @@ object Dependencies {
     val slick = "3.3.2"
     val scalaTest = "3.1.1"
     val testContainers = "1.14.3"
-    val junit = "4.12"
+    val junit = "4.13"
     val h2Driver = "1.4.200"
   }
 
@@ -55,8 +55,8 @@ object Dependencies {
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
     val h2Driver = Compile.h2Driver % allTestConfig
-    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.12" % allTestConfig
-    val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.21" % allTestConfig
+    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.16" % allTestConfig
+    val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.20" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
 
@@ -79,7 +79,7 @@ object Dependencies {
   }
 
   object Examples {
-    val hibernate = "org.hibernate" % "hibernate-core" % "5.4.18.Final"
+    val hibernate = "org.hibernate" % "hibernate-core" % "5.4.21.Final"
 
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
