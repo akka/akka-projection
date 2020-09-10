@@ -1,7 +1,7 @@
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.3.2")
 addSbtPlugin("com.lightbend.sbt" % "sbt-java-formatter" % "0.6.0")
 addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.6.0")
-addSbtPlugin("com.dwijnand" % "sbt-dynver" % "4.0.0")
+addSbtPlugin("com.dwijnand" % "sbt-dynver" % "4.1.1")
 
 addSbtPlugin("com.lightbend" % "sbt-whitesource" % "0.1.18")
 addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "1.0.0")
