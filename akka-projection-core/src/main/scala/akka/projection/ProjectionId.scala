@@ -8,6 +8,7 @@ import scala.collection.immutable
 
 import akka.annotation.ApiMayChange
 import akka.util.ccompat.JavaConverters._
+
 @ApiMayChange
 object ProjectionId {
 
