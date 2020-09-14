@@ -1,10 +1,10 @@
 # Testing
 
-Akka Projection provides a TestKit to ease testing. There are two supported styles of test: running with an assert function and driving it with an Akka Streams TestKit `TestSubscriber.Probe`.
+Akka Projections provides a TestKit to ease testing. There are two supported styles of test: running with an assert function and driving it with an Akka Streams TestKit `TestSubscriber.Probe`.
 
 ## Dependencies
 
-To use the Akka Projection TestKit add the following dependency in your project:
+To use the Akka Projections TestKit add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
   group=com.lightbend.akka
