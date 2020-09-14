@@ -38,7 +38,7 @@ There are two settings that need to be set beforehand in your `application.conf`
 
 ## Defining a JdbcSession
 
-Before using Akka Projection JDBC you must implement a `JdbcSession` @scala[trait]@java[interface]. `JdbcSession` is used to open a connection and start a transaction. A new `JdbcSession` will be created for each call to the handler. At the end of the processing, the transaction will be committed (or rolled back). 
+Before using Akka Projections JDBC you must implement a `JdbcSession` @scala[trait]@java[interface]. `JdbcSession` is used to open a connection and start a transaction. A new `JdbcSession` will be created for each call to the handler. At the end of the processing, the transaction will be committed (or rolled back). 
 
 When using `JdbcProjection.exactlyOnce`, the `JdbcSession` that is passed to the handler will be used to save the offset behind the scenes. Therefore, it's extremely important to disable auto-commit (eg: `setAutoCommit(false)`), otherwise the two operations won't participate on the same transaction.  
 
@@ -68,7 +68,7 @@ Java
 
 ## Blocking JDBC Dispatcher
 
-JDBC APIs are blocking by design, therefore Akka Projection JDBC will use a dedicated dispatcher to run all JDBC calls. It's important to configure the dispatcher to have the same size as the connection pool. 
+JDBC APIs are blocking by design, therefore Akka Projections JDBC will use a dedicated dispatcher to run all JDBC calls. It's important to configure the dispatcher to have the same size as the connection pool. 
 
 Each time the projection handler is called one thread and one database connection will be used. If your connection pool is smaller than the number of threads, the thread can potentially block while waiting for the connection pool to provide a connection. 
 
