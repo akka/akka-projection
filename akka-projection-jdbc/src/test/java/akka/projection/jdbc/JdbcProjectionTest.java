@@ -9,6 +9,7 @@ import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
+import akka.japi.JavaPartialFunction;
 import akka.japi.function.Function;
 import akka.projection.Projection;
 import akka.projection.ProjectionContext;
@@ -20,10 +21,13 @@ import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
 import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
+import akka.stream.impl.ActorSubscriberMessage;
 import akka.stream.javadsl.FlowWithContext;
 import akka.stream.javadsl.Source;
+import akka.stream.testkit.TestSubscriber;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import org.jetbrains.annotations.NotNull;
 import org.junit.*;
 import org.scalatestplus.junit.JUnitSuite;
 import scala.Option;
@@ -175,6 +179,20 @@ public class JdbcProjectionTest extends JUnitSuite {
     return "fail on envelope with offset: [" + offset + "]";
   }
 
+  @NotNull
+  private JavaPartialFunction<TestSubscriber.SubscriberEvent, Object> expectErrorMessage(
+      String msg) {
+    return new JavaPartialFunction<>() {
+      public String apply(TestSubscriber.SubscriberEvent in, boolean isCheck) {
+        if (in instanceof TestSubscriber.OnError) {
+          TestSubscriber.OnError err = (TestSubscriber.OnError) in;
+          if (err.cause().getMessage().equals(msg)) return null;
+        }
+        throw noMatch();
+      }
+    };
+  }
+
   private JdbcHandler<Envelope, PureJdbcSession> concatHandler(StringBuffer str) {
     return concatHandler(str, __ -> false);
   }
@@ -250,16 +268,19 @@ public class JdbcProjectionTest extends JUnitSuite {
             projectionId,
             sourceProvider(entityId),
             jdbcSessionCreator,
-            // fail on forth offset
+            // fail on fourth offset
             () -> concatHandler(str, offset -> offset == 4),
             testKit.system());
 
-    try {
-      projectionTestKit.run(projection, () -> assertEquals("abc|def|ghi|", str.toString()));
-      Assert.fail("Expected exception");
-    } catch (RuntimeException e) {
-      assertEquals(failMessage(4), e.getMessage());
-    }
+    projectionTestKit.runWithTestSink(
+        projection,
+        (probe) -> {
+          probe.request(3);
+          probe.expectNextN(3);
+          assertEquals("abc|def|ghi|", str.toString());
+          probe.request(1);
+          probe.expectEventPF(expectErrorMessage(failMessage(4)));
+        });
   }
 
   @Test
@@ -299,21 +320,20 @@ public class JdbcProjectionTest extends JUnitSuite {
                 projectionId,
                 sourceProvider(entityId),
                 jdbcSessionCreator,
-                // fail on forth offset
+                // fail on fourth offset
                 () -> concatHandler(str, offset -> offset == 4),
                 testKit.system())
             .withSaveOffset(1, Duration.ZERO);
 
-    try {
-      projectionTestKit.run(
-          projection,
-          () -> {
-            assertEquals("abc|def|ghi|", str.toString());
-          });
-      Assert.fail("Expected exception");
-    } catch (RuntimeException e) {
-      assertEquals(failMessage(4), e.getMessage());
-    }
+    projectionTestKit.runWithTestSink(
+        projection,
+        (probe) -> {
+          probe.request(2);
+          probe.expectNextN(2);
+          assertEquals("abc|def|ghi|", str.toString());
+          probe.request(1);
+          probe.expectEventPF(expectErrorMessage(failMessage(4)));
+        });
 
     assertStoredOffset(projectionId, 3L);
 
