@@ -1,10 +1,12 @@
 import akka.projections.Dependencies
 import bintray.BintrayPlugin.autoImport._
+import sbtdynver.DynVerPlugin.autoImport._
 import com.lightbend.paradox.projectinfo.ParadoxProjectInfoPluginKeys._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
 import sbt.Keys._
 import sbt._
 import sbt.plugins.JvmPlugin
+import com.typesafe.tools.mima.plugin.MimaKeys._
 
 object Common extends AutoPlugin {
 
@@ -64,5 +66,9 @@ object Common extends AutoPlugin {
     Test / logBuffered := false,
     bintrayOrganization := Some("akka"),
     bintrayPackage := "akka-projection",
-    bintrayRepository := (if (isSnapshot.value) "snapshots" else "maven"))
+    bintrayRepository := (if (isSnapshot.value) "snapshots" else "maven"),
+    mimaPreviousArtifacts := Set(
+        organization.value %% moduleName.value % previousStableVersion.value
+          .getOrElse(throw new Error("Unable to determine previous version"))))
+
 }

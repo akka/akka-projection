@@ -14,6 +14,7 @@ lazy val core =
 lazy val coreTest =
   Project(id = "akka-projection-core-test", base = file("akka-projection-core-test"))
     .configs(IntegrationTest)
+    .disablePlugins(MimaPlugin)
     .settings(Defaults.itSettings)
     .settings(Dependencies.coreTest)
     .settings(publish / skip := true)
@@ -80,6 +81,7 @@ lazy val kafka =
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
+  .disablePlugins(MimaPlugin)
   .settings(Defaults.itSettings)
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
@@ -92,6 +94,7 @@ lazy val examples = project
 
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
+  .disablePlugins(MimaPlugin)
   .dependsOn(core, testkit)
   .settings(
     name := "Akka Projections",
@@ -138,7 +141,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
   .aggregate(core, coreTest, testkit, jdbc, slick, cassandra, eventsourced, kafka, examples, docs)
   .settings(publish / skip := true, whitesourceIgnore := true)
   .enablePlugins(ScalaUnidocPlugin)
-  .disablePlugins(SitePlugin)
+  .disablePlugins(SitePlugin, MimaPlugin)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {
