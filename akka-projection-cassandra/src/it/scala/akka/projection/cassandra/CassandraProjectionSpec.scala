@@ -229,8 +229,8 @@ class CassandraProjectionSpec
         }
       }
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
 
@@ -254,13 +254,17 @@ class CassandraProjectionSpec
           eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
         }
       }
-      withClue("check: projection is consumed up to third") {
-        val concatStr = repository.findById(entityId).futureValue.get
-        concatStr.text shouldBe "abc|def|ghi"
+      eventually {
+        withClue("check: projection is consumed up to third") {
+          val concatStr = repository.findById(entityId).futureValue
+          concatStr should matchPattern {
+            case Some(ConcatStr(_, "abc|def|ghi")) =>
+          }
+        }
       }
       withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 3L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(3L)
       }
 
       // re-run projection without failing function
@@ -277,8 +281,8 @@ class CassandraProjectionSpec
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
 
@@ -302,13 +306,19 @@ class CassandraProjectionSpec
           eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
         }
       }
-      withClue("check: projection is consumed up to third") {
-        val concatStr = repository.findById(entityId).futureValue.get
-        concatStr.text shouldBe "abc|def|ghi"
+
+      eventually {
+        withClue("check: projection is consumed up to third") {
+          val concatStr = repository.findById(entityId).futureValue
+          concatStr should matchPattern {
+            case Some(ConcatStr(_, "abc|def|ghi")) =>
+          }
+        }
       }
+
       withClue("check: last seen offset is 2L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 2L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(2L)
       }
 
       // re-run projection without failing function
@@ -326,8 +336,8 @@ class CassandraProjectionSpec
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
 
@@ -359,7 +369,7 @@ class CassandraProjectionSpec
         eventually {
           repository.findById(entityId).futureValue.get.text should include("elem-15")
         }
-        offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(10L)
 
         (16 to 22).foreach { n =>
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
@@ -367,7 +377,7 @@ class CassandraProjectionSpec
         eventually {
           repository.findById(entityId).futureValue.get.text should include("elem-22")
         }
-        offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 20L
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(20L)
       }
     }
 
@@ -400,13 +410,13 @@ class CassandraProjectionSpec
         eventually {
           repository.findById(entityId).futureValue.get.text should include("elem-15")
         }
-        offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 10L
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(10L)
 
         (16 to 17).foreach { n =>
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         eventually {
-          offsetStore.readOffset[Long](projectionId).futureValue.get shouldBe 17L
+          offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(17L)
         }
         repository.findById(entityId).futureValue.get.text should include("elem-17")
 
@@ -432,8 +442,8 @@ class CassandraProjectionSpec
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
 
@@ -474,8 +484,8 @@ class CassandraProjectionSpec
       statusProbe.expectNoMessage()
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
 
@@ -602,8 +612,8 @@ class CassandraProjectionSpec
         }
       }
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
   }
@@ -632,8 +642,8 @@ class CassandraProjectionSpec
         }
       }
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
   }
@@ -690,8 +700,8 @@ class CassandraProjectionSpec
       stopProbe.receiveMessage()
 
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
   }
@@ -718,8 +728,8 @@ class CassandraProjectionSpec
         }
       }
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
 
@@ -742,13 +752,17 @@ class CassandraProjectionSpec
           eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
         }
       }
-      withClue("check: projection is consumed up to third") {
-        val concatStr = repository.findById(entityId).futureValue.get
-        concatStr.text shouldBe "abc|def|ghi"
+      eventually {
+        withClue("check: projection is consumed up to third") {
+          val concatStr = repository.findById(entityId).futureValue
+          concatStr should matchPattern {
+            case Some(ConcatStr(_, "abc|def|ghi")) =>
+          }
+        }
       }
       withClue("check: last seen offset is 4L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 4L // offset saved before handler for at-most-once
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(4L) // offset saved before handler for at-most-once
       }
 
       // re-run projection without failing function
@@ -765,8 +779,8 @@ class CassandraProjectionSpec
       }
 
       withClue("check: all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.get
-        offset shouldBe 6L
+        val offset = offsetStore.readOffset[Long](projectionId).futureValue
+        offset shouldBe Some(6L)
       }
     }
   }
