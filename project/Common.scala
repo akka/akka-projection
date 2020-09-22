@@ -67,6 +67,9 @@ object Common extends AutoPlugin {
     bintrayPackage := "akka-projection",
     bintrayRepository := (if (isSnapshot.value) "snapshots" else "maven"),
 
-    mimaPreviousArtifacts := Set(organization.value %% moduleName.value % "1.0.0"))
+    mimaPreviousArtifacts := Set(
+      organization.value %% moduleName.value % previousStableVersion.value
+        .getOrElse(throw new Error("Unable to determine previous version"))
+    ),
     
 }
