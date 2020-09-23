@@ -182,7 +182,7 @@ public class JdbcProjectionTest extends JUnitSuite {
   @NotNull
   private JavaPartialFunction<TestSubscriber.SubscriberEvent, Object> expectErrorMessage(
       String msg) {
-    return new JavaPartialFunction<>() {
+    return new JavaPartialFunction<TestSubscriber.SubscriberEvent, Object>() {
       public String apply(TestSubscriber.SubscriberEvent in, boolean isCheck) {
         if (in instanceof TestSubscriber.OnError) {
           TestSubscriber.OnError err = (TestSubscriber.OnError) in;
