@@ -10,6 +10,7 @@ import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.japi.function.Function;
+import akka.japi.pf.Match;
 import akka.projection.Projection;
 import akka.projection.ProjectionContext;
 import akka.projection.ProjectionId;
@@ -180,12 +181,16 @@ public class JdbcProjectionTest extends JUnitSuite {
     return "fail on envelope with offset: [" + offset + "]";
   }
 
-  private PartialFunction<TestSubscriber.SubscriberEvent, Object> expectErrorMessage(String msg) {
-    return akka.japi.pf.Match.<TestSubscriber.SubscriberEvent, Object, TestSubscriber.OnError>match(
-            TestSubscriber.OnError.class,
-            err -> err.cause().getMessage().equals(msg),
-            event -> null)
-        .build();
+  private void expectNextUntilErrorMessage(TestSubscriber.Probe<Done> probe, String msg) {
+    probe.request(1);
+    PartialFunction<TestSubscriber.SubscriberEvent, Boolean> pf =
+        Match.<TestSubscriber.SubscriberEvent, Boolean, TestSubscriber.OnError>match(
+                TestSubscriber.OnError.class,
+                err -> err.cause().getMessage().equals(msg),
+                event -> true)
+            .match(TestSubscriber.OnNext.class, event -> false)
+            .build();
+    if (!probe.expectEventPF(pf)) expectNextUntilErrorMessage(probe, msg);
   }
 
   private JdbcHandler<Envelope, PureJdbcSession> concatHandler(StringBuffer str) {
@@ -273,8 +278,7 @@ public class JdbcProjectionTest extends JUnitSuite {
           probe.request(3);
           probe.expectNextN(3);
           assertEquals("abc|def|ghi|", str.toString());
-          probe.request(1);
-          probe.expectEventPF(expectErrorMessage(failMessage(4)));
+          expectNextUntilErrorMessage(probe, failMessage(4));
         });
   }
 
@@ -326,8 +330,7 @@ public class JdbcProjectionTest extends JUnitSuite {
           probe.request(2);
           probe.expectNextN(2);
           assertEquals("abc|def|ghi|", str.toString());
-          probe.request(1);
-          probe.expectEventPF(expectErrorMessage(failMessage(4)));
+          expectNextUntilErrorMessage(probe, failMessage(4));
         });
 
     assertStoredOffset(projectionId, 3L);
