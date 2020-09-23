@@ -9,7 +9,6 @@ import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
-import akka.japi.JavaPartialFunction;
 import akka.japi.function.Function;
 import akka.projection.Projection;
 import akka.projection.ProjectionContext;
@@ -19,18 +18,20 @@ import akka.projection.jdbc.internal.JdbcOffsetStore;
 import akka.projection.jdbc.internal.JdbcSettings;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
-import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
-import akka.stream.impl.ActorSubscriberMessage;
+import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.stream.javadsl.FlowWithContext;
 import akka.stream.javadsl.Source;
 import akka.stream.testkit.TestSubscriber;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import org.jetbrains.annotations.NotNull;
-import org.junit.*;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
 import org.scalatestplus.junit.JUnitSuite;
 import scala.Option;
+import scala.PartialFunction;
 import scala.concurrent.Await;
 import scala.concurrent.Future;
 
@@ -179,18 +180,12 @@ public class JdbcProjectionTest extends JUnitSuite {
     return "fail on envelope with offset: [" + offset + "]";
   }
 
-  @NotNull
-  private JavaPartialFunction<TestSubscriber.SubscriberEvent, Object> expectErrorMessage(
-      String msg) {
-    return new JavaPartialFunction<TestSubscriber.SubscriberEvent, Object>() {
-      public String apply(TestSubscriber.SubscriberEvent in, boolean isCheck) {
-        if (in instanceof TestSubscriber.OnError) {
-          TestSubscriber.OnError err = (TestSubscriber.OnError) in;
-          if (err.cause().getMessage().equals(msg)) return null;
-        }
-        throw noMatch();
-      }
-    };
+  private PartialFunction<TestSubscriber.SubscriberEvent, Object> expectErrorMessage(String msg) {
+    return akka.japi.pf.Match.<TestSubscriber.SubscriberEvent, Object, TestSubscriber.OnError>match(
+            TestSubscriber.OnError.class,
+            err -> err.cause().getMessage().equals(msg),
+            event -> null)
+        .build();
   }
 
   private JdbcHandler<Envelope, PureJdbcSession> concatHandler(StringBuffer str) {
