@@ -327,6 +327,12 @@ public class JdbcProjectionTest extends JUnitSuite {
     projectionTestKit.runWithTestSink(
         projection,
         (probe) -> {
+          /*
+           * We only want to process 3 elements through the handler, but given buffering within the projections
+           * at-least-once impl. we actually process +1 element than we requested with the TestSink.probe.
+           *
+           * See https://github.com/akka/akka-projection/issues/462 for a possible solution.
+           */
           probe.request(2);
           probe.expectNextN(2);
           assertEquals("abc|def|ghi|", str.toString());
