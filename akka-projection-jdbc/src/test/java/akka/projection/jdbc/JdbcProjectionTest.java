@@ -10,6 +10,7 @@ import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.japi.function.Function;
+import akka.japi.pf.Match;
 import akka.projection.Projection;
 import akka.projection.ProjectionContext;
 import akka.projection.ProjectionId;
@@ -18,15 +19,20 @@ import akka.projection.jdbc.internal.JdbcOffsetStore;
 import akka.projection.jdbc.internal.JdbcSettings;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
-import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
+import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.stream.javadsl.FlowWithContext;
 import akka.stream.javadsl.Source;
+import akka.stream.testkit.TestSubscriber;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import org.junit.*;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
 import org.scalatestplus.junit.JUnitSuite;
 import scala.Option;
+import scala.PartialFunction;
 import scala.concurrent.Await;
 import scala.concurrent.Future;
 
@@ -175,6 +181,18 @@ public class JdbcProjectionTest extends JUnitSuite {
     return "fail on envelope with offset: [" + offset + "]";
   }
 
+  private void expectNextUntilErrorMessage(TestSubscriber.Probe<Done> probe, String msg) {
+    probe.request(1);
+    PartialFunction<TestSubscriber.SubscriberEvent, Boolean> pf =
+        Match.<TestSubscriber.SubscriberEvent, Boolean, TestSubscriber.OnError>match(
+                TestSubscriber.OnError.class,
+                err -> err.cause().getMessage().equals(msg),
+                event -> true)
+            .match(TestSubscriber.OnNext.class, event -> false)
+            .build();
+    if (!probe.expectEventPF(pf)) expectNextUntilErrorMessage(probe, msg);
+  }
+
   private JdbcHandler<Envelope, PureJdbcSession> concatHandler(StringBuffer str) {
     return concatHandler(str, __ -> false);
   }
@@ -250,16 +268,18 @@ public class JdbcProjectionTest extends JUnitSuite {
             projectionId,
             sourceProvider(entityId),
             jdbcSessionCreator,
-            // fail on forth offset
+            // fail on fourth offset
             () -> concatHandler(str, offset -> offset == 4),
             testKit.system());
 
-    try {
-      projectionTestKit.run(projection, () -> assertEquals("abc|def|ghi|", str.toString()));
-      Assert.fail("Expected exception");
-    } catch (RuntimeException e) {
-      assertEquals(failMessage(4), e.getMessage());
-    }
+    projectionTestKit.runWithTestSink(
+        projection,
+        (probe) -> {
+          probe.request(3);
+          probe.expectNextN(3);
+          assertEquals("abc|def|ghi|", str.toString());
+          expectNextUntilErrorMessage(probe, failMessage(4));
+        });
   }
 
   @Test
@@ -299,21 +319,25 @@ public class JdbcProjectionTest extends JUnitSuite {
                 projectionId,
                 sourceProvider(entityId),
                 jdbcSessionCreator,
-                // fail on forth offset
+                // fail on fourth offset
                 () -> concatHandler(str, offset -> offset == 4),
                 testKit.system())
             .withSaveOffset(1, Duration.ZERO);
 
-    try {
-      projectionTestKit.run(
-          projection,
-          () -> {
-            assertEquals("abc|def|ghi|", str.toString());
-          });
-      Assert.fail("Expected exception");
-    } catch (RuntimeException e) {
-      assertEquals(failMessage(4), e.getMessage());
-    }
+    projectionTestKit.runWithTestSink(
+        projection,
+        (probe) -> {
+          /*
+           * We only want to process 3 elements through the handler, but given buffering within the projections
+           * at-least-once impl. we actually process +1 element than we requested with the TestSink.probe.
+           *
+           * See https://github.com/akka/akka-projection/issues/462 for a possible solution.
+           */
+          probe.request(2);
+          probe.expectNextN(2);
+          assertEquals("abc|def|ghi|", str.toString());
+          expectNextUntilErrorMessage(probe, failMessage(4));
+        });
 
     assertStoredOffset(projectionId, 3L);
 
