@@ -54,6 +54,7 @@ object KafkaToSlickIntegrationSpec {
   val user1 = "user-id-1"
   val user2 = "user-id-2"
   val user3 = "user-id-3"
+  val user4 = "user-id-4"
 
   val userEvents = Seq(
     UserEvent(user1, EventType.Login),
@@ -207,7 +208,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
 
     // https://github.com/akka/akka-projection/issues/382
     "resume a projection from the last saved offset plus one" in {
-      val topicName = createTopic(suffix = 2, partitions = 3, replication = 1)
+      val topicName = createTopic(suffix = 2, partitions = 4, replication = 1)
       val groupId = createGroupId()
       val projectionId = ProjectionId(groupId, "UserEventCountProjection-1")
 
@@ -228,6 +229,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
               val eventType = envelope.value()
               val userEvent = UserEvent(userId, eventType)
               // do something with the record, payload in record.value
+              println(s"# process ${envelope.offset()}: $userId $eventType") // FIXME
               repository.incrementCount(projectionId, userEvent.eventType)
             })
       }
@@ -237,11 +239,28 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
         assertAllOffsetsObserved(projectionId, topicName)
       }
 
+      // publish some more events
+      Source(
+        List(UserEvent(user1, EventType.Login), UserEvent(user4, EventType.Login), UserEvent(user4, EventType.Search)))
+        .map(e => new ProducerRecord(topicName, partitionForUser(e.userId), e.userId, e.eventType))
+        .runWith(Producer.plainSink(producerDefaults.withProducer(testProducer)))
+        .futureValue
+
       // re-run it in order to read back persisted offsets
       projectionTestKit.run(slickProjection(), remainingOrDefault) {
-        assertEventTypeCount(projectionId)
-        assertAllOffsetsObserved(projectionId, topicName)
+        val count = dbConfig.db.run(repository.findByEventType(projectionId, EventType.Login)).futureValue.value.count
+        count shouldBe (userEvents.count(_.eventType == EventType.Login) + 2)
+
+        val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId).futureValue.value
+        offset shouldBe MergeableOffset(
+          Map(
+            s"$topicName-0" -> (userEvents.count(_.userId == user1) + 1 - 1), // one more for user1
+            s"$topicName-1" -> (userEvents.count(_.userId == user2) - 1),
+            s"$topicName-2" -> (userEvents.count(_.userId == user3) - 1),
+            s"$topicName-3" -> (2 - 1) // two new for user4
+          ))
       }
+
     }
   }
 
@@ -276,13 +295,18 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
   def produceEvents(topicName: String): Unit = {
     val produceFs = for {
       (userId, events) <- userEvents.groupBy(_.userId)
-      partition = userId match { // deterministically produce events across available partitions
-        case `user1` => 0
-        case `user2` => 1
-        case `user3` => 2
-      }
+      partition = partitionForUser(userId)
     } yield produceEvents(topicName, events, partition)
     Await.result(Future.sequence(produceFs), remainingOrDefault)
+  }
+
+  def partitionForUser(userId: String): Int = {
+    userId match { // deterministically produce events across available partitions
+      case `user1` => 0
+      case `user2` => 1
+      case `user3` => 2
+      case `user4` => 3
+    }
   }
 
   def produceEvents(topic: String, range: immutable.Seq[UserEvent], partition: Int = 0): Future[Done] =
