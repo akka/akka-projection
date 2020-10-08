@@ -19,7 +19,6 @@ import akka.actor.typed.scaladsl.adapter._
 import akka.kafka.scaladsl.Producer
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
-import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.kafka.KafkaSpecBase
 import akka.projection.kafka.scaladsl.KafkaSourceProvider
@@ -235,18 +234,10 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
             })
       }
 
-//      projectionTestKit.run(slickProjection(), remainingOrDefault) {
-//        assertEventTypeCount(projectionId)
-//        assertAllOffsetsObserved(projectionId, topicName)
-//      }
-
-      val projection1 = testKit.spawn(ProjectionBehavior(slickProjection()))
-      eventually {
+      projectionTestKit.run(slickProjection(), remainingOrDefault) {
         assertEventTypeCount(projectionId)
         assertAllOffsetsObserved(projectionId, topicName)
       }
-      projection1 ! ProjectionBehavior.Stop
-      testKit.createTestProbe().expectTerminated(projection1)
 
       // publish some more events
       Source(
@@ -256,22 +247,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
         .futureValue
 
       // re-run it in order to read back persisted offsets
-//      projectionTestKit.run(slickProjection(), remainingOrDefault) {
-//        val count = dbConfig.db.run(repository.findByEventType(projectionId, EventType.Login)).futureValue.value.count
-//        count shouldBe (userEvents.count(_.eventType == EventType.Login) + 2)
-//
-//        val offset = offsetStore.readOffset[MergeableOffset[Long]](projectionId).futureValue.value
-//        offset shouldBe MergeableOffset(
-//          Map(
-//            s"$topicName-0" -> (userEvents.count(_.userId == user1) + 1 - 1), // one more for user1
-//            s"$topicName-1" -> (userEvents.count(_.userId == user2) - 1),
-//            s"$topicName-2" -> (userEvents.count(_.userId == user3) - 1),
-//            s"$topicName-3" -> (2 - 1) // two new for user4
-//          ))
-//      }
-
-      val projection2 = testKit.spawn(ProjectionBehavior(slickProjection()))
-      eventually {
+      projectionTestKit.run(slickProjection(), remainingOrDefault) {
         val count = dbConfig.db.run(repository.findByEventType(projectionId, EventType.Login)).futureValue.value.count
         count shouldBe (userEvents.count(_.eventType == EventType.Login) + 2)
 
@@ -284,8 +260,6 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
             s"$topicName-3" -> (2 - 1) // two new for user4
           ))
       }
-      projection2 ! ProjectionBehavior.Stop
-      testKit.createTestProbe().expectTerminated(projection2)
 
     }
   }
