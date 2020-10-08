@@ -55,13 +55,7 @@ artifact=akka-cluster-sharding-typed_$scala.binary.version$
 version=$akka.version$
 }
 
-Add the `EventGeneratorApp` to your project:
-
-Scala
-:  @@snip [EventGeneratorApp.scala](/examples/src/test/scala/docs/guide/EventGeneratorApp.scala) { #guideEventGeneratorApp }
-
-Java
-:  @@snip [EventGeneratorApp.java](/examples/src/test/java/jdocs/guide/EventGeneratorApp.java) { #guideEventGeneratorApp }
+Add the @ref:[EventGeneratorApp](event-generator-app.md) to your project.
 
 Run `EventGeneratorApp`:
 

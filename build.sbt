@@ -131,6 +131,7 @@ lazy val docs = project
         // Misc
         "extref.samples.base_url" -> "https://developer.lightbend.com/start/?group=akka&amp;project=%s"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
+    paradoxRoots := List("index.html", "getting-started/event-generator-app.html"),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,
     publishRsyncArtifacts += (makeSite.value -> "www/"),

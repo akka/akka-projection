@@ -28,7 +28,7 @@ Before running the app we must first run the `EventGeneratorApp` in `cluster` mo
 Shopping cart events are tagged in a similar way to the sharded entities themselves.
 Given a sequence of tags from `0..n` a hash is generated using the sharding entity key, the shopping cart id.
 The hash is modded `%` by the number of tags in the sequence to choose a tag from the sequence.
-See the @ref:[Tagging Events in EventSourcedBehavior](../running.md#tagging-events-in-eventsourcedbehavior) section of the documentation for an example of how events can be tagged with Akka Persistence, or look at the source of the `EventGeneratorApp` in the previous @ref:[Running the Projection](running.md) section.
+See the @ref:[Tagging Events in EventSourcedBehavior](../running.md#tagging-events-in-eventsourcedbehavior) section of the documentation for an example of how events can be tagged with Akka Persistence.
 
 The same `EventGeneratorApp` from the previous @ref:[Running the Projection](running.md) section can be used to generate events for this app with an additional argument `cluster`.
 Run the app:

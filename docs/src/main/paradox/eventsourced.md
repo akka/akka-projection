@@ -43,6 +43,8 @@ use the same plugin as you have configured for the write side that is used by th
 
 This source is consuming all events from the `ShoppingCart` `EventSourcedBehavior` that are tagged with `"cart-1"`.
 
+The tags are assigned as described in @ref:[Tagging Events in EventSourcedBehavior](running.md#tagging-events-in-eventsourcedbehavior).
+
 The @scala[`EventEnvelope[ShoppingCart.Event]`]@java[`EventEnvelope<ShoppingCart.Event>`] is what the `Projection`
 handler will process. It contains the `Event` and additional meta data, such as the offset that will be stored
 by the `Projection`. See @apidoc[akka.projection.eventsourced.EventEnvelope] for full details of what the

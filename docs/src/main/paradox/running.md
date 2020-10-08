@@ -32,7 +32,7 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/examples/src/test/java/jdocs/eventsourced/ShoppingCart.java) { #slicingTags #tagging }
 
-In the above example, we created a @scala[`Vector[String]`]@java[`List<String>`] of tags from *carts-0* to *carts-4*. Each entity instance will tag its events using one of those tags. The tag is selected based on the modulo of the entity id's hash code (stable identifier) and the total number of tags. As a matter of fact, this will create a journal sliced with different tags (ie: from *carts-0* to *carts-4*).
+In the above example, we created a @scala[`Vector[String]`]@java[`List<String>`] of tags from *carts-0* to *carts-4*. Each entity instance will tag its events using one of those tags. The tag is selected based on the modulo of the entity id's hash code (stable identifier) and the total number of tags. As a matter of fact, this will create a journal sliced with different tags (ie: from *carts-0* to *carts-4*). @scala[Note the `.withTagger` in the initialization of the `EventSourcedBehavior`.]
 
 The number of tags should be more than the number of nodes that you want to distribute the load over. It's not easy
 to change this afterwards without system downtime. Fewer tags than the number of nodes will result in not hosting a
@@ -42,6 +42,8 @@ to more nodes later if needed. As a rule of thumb, the number of tags should be 
 planned maximum number of cluster nodes. It doesn't have to be exact.
 
 We will use those tags to query the journal and create as many Projections instances, and distribute them in the cluster.
+
+See also the [Akka reference documentation for tagging](https://doc.akka.io/docs/akka/current/typed/persistence.html#tagging).
 
 ### Event Sourced Provider per tag
 

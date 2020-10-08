@@ -135,7 +135,7 @@ object ShoppingCart {
   final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
 
   //#slicingTags
-  val tags = Vector("carts-0", "carts-1", "carts-2", "carts-3", "carts-4")
+  val tags = Vector.tabulate(5)(i => s"carts-$i")
   //#slicingTags
 
   //#tagging
@@ -148,7 +148,6 @@ object ShoppingCart {
       ShoppingCart(entityContext.entityId, selectedTag)
     }.withRole("write-model"))
   }
-  //#tagging
 
   def apply(cartId: String, projectionTag: String): Behavior[Command] = {
     EventSourcedBehavior
@@ -165,6 +164,7 @@ object ShoppingCart {
       .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
       .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }
+  //#tagging
 
   private def openShoppingCart(cartId: String, state: State, command: Command): ReplyEffect[Event, State] =
     command match {
