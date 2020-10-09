@@ -7,6 +7,7 @@ package akka.projection.cassandra.internal
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -28,11 +29,11 @@ import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
-import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.projection.scaladsl.SourceProvider
+import akka.stream.RestartSettings
 import akka.stream.scaladsl.Source
 
 /**
@@ -42,7 +43,7 @@ import akka.stream.scaladsl.Source
     override val projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     settingsOpt: Option[ProjectionSettings],
-    restartBackoffOpt: Option[RestartBackoffSettings],
+    restartBackoffOpt: Option[RestartSettings],
     val offsetStrategy: OffsetStrategy,
     handlerStrategy: HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope])
@@ -59,7 +60,7 @@ import akka.stream.scaladsl.Source
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
-      restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
+      restartBackoffOpt: Option[RestartSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
       handlerStrategy: HandlerStrategy = this.handlerStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): CassandraProjectionImpl[Offset, Envelope] =
@@ -83,8 +84,7 @@ import akka.stream.scaladsl.Source
     }
   }
 
-  override def withRestartBackoffSettings(
-      restartBackoff: RestartBackoffSettings): CassandraProjectionImpl[Offset, Envelope] =
+  override def withRestartBackoffSettings(restartBackoff: RestartSettings): CassandraProjectionImpl[Offset, Envelope] =
     copy(restartBackoffOpt = Some(restartBackoff))
 
   /**

@@ -1,0 +1,11 @@
+# Changing internals to akka.stream.RestartSettings
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.internal.ProjectionSettings.apply")
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.internal.ProjectionSettings.restartBackoff")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.internal.ProjectionSettings.copy")
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.internal.ProjectionSettings.copy$default$1")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.internal.ProjectionSettings.this")
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.internal.RestartBackoffSettings$")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.internal.SettingsImpl.withRestartBackoffSettings")
+ProblemFilters.exclude[ReversedMissingMethodProblem]("akka.projection.internal.SettingsImpl.withRestartBackoffSettings")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.internal.ProjectionSettings.apply")
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.internal.RestartBackoffSettings")

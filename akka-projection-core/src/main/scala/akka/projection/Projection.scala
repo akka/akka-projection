@@ -102,9 +102,8 @@ private[projection] object RunningProjection {
   case object AbortProjectionException extends RuntimeException("Projection aborted.") with NoStackTrace
 
   def withBackoff(source: () => Source[Done, _], settings: ProjectionSettings): Source[Done, _] = {
-    val backoff = settings.restartBackoff
     RestartSource
-      .onFailuresWithBackoff(backoff.minBackoff, backoff.maxBackoff, backoff.randomFactor, backoff.maxRestarts) { () =>
+      .onFailuresWithBackoff(settings.restartBackoff) { () =>
         source()
           .recoverWithRetries(1, {
             case AbortProjectionException => Source.empty // don't restart
