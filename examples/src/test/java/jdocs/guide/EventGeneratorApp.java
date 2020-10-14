@@ -174,6 +174,9 @@ class Guardian {
 
   /**
    * An Actor that persists shopping cart events for a particular persistence id (cart id) and tag.
+   * This is not how real Event Sourced actors should be be implemented. Please look at
+   * https://doc.akka.io/docs/akka/current/typed/persistence.html for more information about
+   * `EventSourcedBehavior`.
    */
   static class CartPersistentBehavior
       extends EventSourcedBehavior<

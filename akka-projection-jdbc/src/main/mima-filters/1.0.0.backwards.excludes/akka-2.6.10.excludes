@@ -1,0 +1,4 @@
+# Changing internals to akka.stream.RestartSettings
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.jdbc.internal.JdbcProjectionImpl.withRestartBackoffSettings")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.slick.internal.SlickProjectionImpl.withRestartBackoffSettings")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.testkit.internal.TestProjectionImpl.withRestartBackoffSettings")

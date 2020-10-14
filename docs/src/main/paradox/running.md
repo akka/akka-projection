@@ -32,7 +32,7 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/examples/src/test/java/jdocs/eventsourced/ShoppingCart.java) { #slicingTags #tagging }
 
-In the above example, we created a @scala[`Vector[String]`]@java[`List<String>`] of tags from *carts-0* to *carts-4*. Each entity instance will tag its events using one of those tags. The tag is selected based on the modulo of the entity id's hash code (stable identifier) and the total number of tags. As a matter of fact, this will create a journal sliced with different tags (ie: from *carts-0* to *carts-4*).
+In the above example, we created a @scala[`Vector[String]`]@java[`List<String>`] of tags from *carts-0* to *carts-4*. Each entity instance will tag its events using one of those tags. The tag is selected based on the modulo of the entity id's hash code (stable identifier) and the total number of tags. As a matter of fact, this will create a journal sliced with different tags (ie: from *carts-0* to *carts-4*). @scala[Note the `.withTagger` in the initialization of the `EventSourcedBehavior`.]
 
 The number of tags should be more than the number of nodes that you want to distribute the load over. It's not easy
 to change this afterwards without system downtime. Fewer tags than the number of nodes will result in not hosting a
@@ -52,6 +52,8 @@ The [JDBC plugin](https://doc.akka.io/docs/akka-persistence-jdbc/current/) and
 [Spanner plugin](https://doc.akka.io/docs/akka-persistence-spanner/current/)
 don't have this constraint.
 @@@
+
+See also the [Akka reference documentation for tagging](https://doc.akka.io/docs/akka/current/typed/persistence.html#tagging).
 
 ### Event Sourced Provider per tag
 

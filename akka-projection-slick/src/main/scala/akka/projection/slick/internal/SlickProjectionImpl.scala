@@ -29,13 +29,13 @@ import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
-import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.scaladsl.AtLeastOnceFlowProjection
 import akka.projection.scaladsl.AtLeastOnceProjection
 import akka.projection.scaladsl.ExactlyOnceProjection
 import akka.projection.scaladsl.GroupedProjection
 import akka.projection.scaladsl.SourceProvider
+import akka.stream.RestartSettings
 import akka.stream.scaladsl.Source
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
@@ -49,7 +49,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     sourceProvider: SourceProvider[Offset, Envelope],
     databaseConfig: DatabaseConfig[P],
     settingsOpt: Option[ProjectionSettings],
-    restartBackoffOpt: Option[RestartBackoffSettings],
+    restartBackoffOpt: Option[RestartSettings],
     val offsetStrategy: OffsetStrategy,
     handlerStrategy: HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
@@ -63,7 +63,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
-      restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
+      restartBackoffOpt: Option[RestartSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
       handlerStrategy: HandlerStrategy = this.handlerStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): SlickProjectionImpl[Offset, Envelope, P] =
@@ -89,8 +89,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     }
   }
 
-  override def withRestartBackoffSettings(
-      restartBackoff: RestartBackoffSettings): SlickProjectionImpl[Offset, Envelope, P] =
+  override def withRestartBackoffSettings(restartBackoff: RestartSettings): SlickProjectionImpl[Offset, Envelope, P] =
     copy(restartBackoffOpt = Some(restartBackoff))
 
   /**
