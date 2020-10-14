@@ -43,6 +43,16 @@ planned maximum number of cluster nodes. It doesn't have to be exact.
 
 We will use those tags to query the journal and create as many Projections instances, and distribute them in the cluster.
 
+@@@ warning
+When using [Akka Persistence Cassandra plugin](https://doc.akka.io/docs/akka-persistence-cassandra/current/) you should
+not use too many tags for each event. Each tag will result in a copy of the event in a separate table and
+that can impact write performance. Typically, you would use 1 tag per event as illustrated here. Additional
+filtering of events can be done in the Projection handler if it doesn't have to act on certain events.
+The [JDBC plugin](https://doc.akka.io/docs/akka-persistence-jdbc/current/) and
+[Spanner plugin](https://doc.akka.io/docs/akka-persistence-spanner/current/)
+don't have this constraint.
+@@@
+
 ### Event Sourced Provider per tag
 
 We can use the @ref:[EventSourcedProvider](eventsourced.md) to consume the `ShoppingCart` events.
