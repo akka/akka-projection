@@ -11,6 +11,7 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
+import akka.stream.RestartSettings
 import akka.util.JavaDurationConverters._
 import com.typesafe.config.Config
 
@@ -19,7 +20,7 @@ import com.typesafe.config.Config
  */
 @InternalApi
 private[projection] final case class ProjectionSettings(
-    restartBackoff: RestartBackoffSettings,
+    restartBackoff: RestartSettings,
     saveOffsetAfterEnvelopes: Int,
     saveOffsetAfterDuration: FiniteDuration,
     groupAfterEnvelopes: Int,
@@ -41,12 +42,18 @@ private[projection] object ProjectionSettings {
     val atLeastOnceConfig = config.getConfig("at-least-once")
     val groupedConfig = config.getConfig("grouped")
     val recoveryStrategyConfig = config.getConfig("recovery-strategy")
+
+    val restartSettings = {
+      val minBackoff = restartBackoffConfig.getDuration("min-backoff", MILLISECONDS).millis
+      val maxBackoff = restartBackoffConfig.getDuration("max-backoff", MILLISECONDS).millis
+      val randomFactor = restartBackoffConfig.getDouble("random-factor")
+      val maxRestarts = restartBackoffConfig.getInt("max-restarts")
+      if (maxRestarts >= 0) RestartSettings(minBackoff, maxBackoff, randomFactor)
+      else RestartSettings(minBackoff, maxBackoff, randomFactor).withMaxRestarts(maxRestarts, minBackoff)
+    }
+
     new ProjectionSettings(
-      RestartBackoffSettings(
-        minBackoff = restartBackoffConfig.getDuration("min-backoff", MILLISECONDS).millis,
-        maxBackoff = restartBackoffConfig.getDuration("max-backoff", MILLISECONDS).millis,
-        randomFactor = restartBackoffConfig.getDouble("random-factor"),
-        maxRestarts = restartBackoffConfig.getInt("max-restarts")),
+      restartSettings,
       atLeastOnceConfig.getInt("save-offset-after-envelopes"),
       atLeastOnceConfig.getDuration("save-offset-after-duration", MILLISECONDS).millis,
       groupedConfig.getInt("group-after-envelopes"),
@@ -75,35 +82,27 @@ private object RecoveryStrategyConfig {
 }
 
 /**
- * INTERNAL API
- */
-@InternalApi private[projection] final case class RestartBackoffSettings(
-    minBackoff: FiniteDuration,
-    maxBackoff: FiniteDuration,
-    randomFactor: Double,
-    maxRestarts: Int)
-
-/**
  * INTERNAL API: mixin to projection impl to not have to implement all overloaded variants in several places
  */
 @InternalApi private[projection] trait SettingsImpl[ProjectionImpl <: Projection[_]] { self: ProjectionImpl =>
-  def withRestartBackoffSettings(restartBackoff: RestartBackoffSettings): ProjectionImpl
+  def withRestartBackoffSettings(restartBackoff: RestartSettings): ProjectionImpl
 
   def withRestartBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double): ProjectionImpl =
-    withRestartBackoffSettings(RestartBackoffSettings(minBackoff, maxBackoff, randomFactor, -1))
+    withRestartBackoffSettings(RestartSettings(minBackoff, maxBackoff, randomFactor))
 
   def withRestartBackoff(
       minBackoff: FiniteDuration,
       maxBackoff: FiniteDuration,
       randomFactor: Double,
       maxRestarts: Int): ProjectionImpl =
-    withRestartBackoffSettings(RestartBackoffSettings(minBackoff, maxBackoff, randomFactor, maxRestarts))
+    withRestartBackoffSettings(
+      RestartSettings(minBackoff, maxBackoff, randomFactor).withMaxRestarts(maxRestarts, minBackoff))
 
   def withRestartBackoff(
       minBackoff: java.time.Duration,
       maxBackoff: java.time.Duration,
       randomFactor: Double): ProjectionImpl =
-    withRestartBackoffSettings(RestartBackoffSettings(minBackoff.asScala, maxBackoff.asScala, randomFactor, -1))
+    withRestartBackoffSettings(RestartSettings(minBackoff.asScala, maxBackoff.asScala, randomFactor))
 
   def withRestartBackoff(
       minBackoff: java.time.Duration,
@@ -111,7 +110,7 @@ private object RecoveryStrategyConfig {
       randomFactor: Double,
       maxRestarts: Int): ProjectionImpl =
     withRestartBackoffSettings(
-      RestartBackoffSettings(minBackoff.asScala, maxBackoff.asScala, randomFactor, maxRestarts))
+      RestartSettings(minBackoff.asScala, maxBackoff.asScala, randomFactor).withMaxRestarts(maxRestarts, minBackoff))
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): ProjectionImpl
 

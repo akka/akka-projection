@@ -30,7 +30,6 @@ import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
-import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.jdbc.JdbcSession
@@ -38,6 +37,7 @@ import akka.projection.jdbc.scaladsl.JdbcHandler
 import akka.projection.scaladsl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
+import akka.stream.RestartSettings
 import akka.stream.scaladsl.Source
 
 /**
@@ -137,7 +137,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     sourceProvider: SourceProvider[Offset, Envelope],
     sessionFactory: () => S,
     settingsOpt: Option[ProjectionSettings],
-    restartBackoffOpt: Option[RestartBackoffSettings],
+    restartBackoffOpt: Option[RestartSettings],
     val offsetStrategy: OffsetStrategy,
     handlerStrategy: HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
@@ -155,7 +155,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
-      restartBackoffOpt: Option[RestartBackoffSettings] = this.restartBackoffOpt,
+      restartBackoffOpt: Option[RestartSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
       handlerStrategy: HandlerStrategy = this.handlerStrategy,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): JdbcProjectionImpl[Offset, Envelope, S] =
@@ -183,8 +183,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     }
   }
 
-  override def withRestartBackoffSettings(
-      restartBackoff: RestartBackoffSettings): JdbcProjectionImpl[Offset, Envelope, S] =
+  override def withRestartBackoffSettings(restartBackoff: RestartSettings): JdbcProjectionImpl[Offset, Envelope, S] =
     copy(restartBackoffOpt = Some(restartBackoff))
 
   /**

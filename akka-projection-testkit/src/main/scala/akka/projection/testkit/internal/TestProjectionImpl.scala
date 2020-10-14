@@ -23,12 +23,12 @@ import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
-import akka.projection.internal.RestartBackoffSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.javadsl
 import akka.projection.testkit.scaladsl.TestOffsetStore
 import akka.projection.testkit.scaladsl.TestProjection
+import akka.stream.RestartSettings
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 
@@ -86,8 +86,7 @@ private[projection] class TestProjectionImpl[Offset, Envelope] private[projectio
     copy(offsetStrategy = strategy)
 
   // FIXME: Should any of the following settings be exposed by the TestProjection?
-  final override def withRestartBackoffSettings(
-      restartBackoff: RestartBackoffSettings): TestProjectionImpl[Offset, Envelope] =
+  final override def withRestartBackoffSettings(restartBackoff: RestartSettings): TestProjectionImpl[Offset, Envelope] =
     this
   override def withSaveOffset(
       afterEnvelopes: Int,
