@@ -2,7 +2,15 @@
 
 The @apidoc[SlickProjection$] has support for storing the offset in a relational database using
 [Slick](http://scala-slick.org) (JDBC). This is only an option for Scala and for Java the
-@ref:[offset can be stored in relational DB with JDBC](jdbc.md).
+@ref:[offset can be stored in relational DB with JDBC](jdbc.md). The JDBC module can also be
+used with Scala.
+
+@@@ warning
+The Slick module in Akka Projections is [community-driven](https://developer.lightbend.com/docs/introduction/getting-help/support-terminology.html#community-driven)
+and not included in Lightbend support.
+Prefer using the @ref[JDBC module](jdbc.md) to implement your projection handler. Slick support in Akka Projections is meant for users 
+migrating from [`Lagom's Slick ReadSideProcessor`](https://www.lagomframework.com/documentation/1.6.x/scala/ReadSideSlick.html).
+@@@
 
 The source of the envelopes can be @ref:[events from Akka Persistence](eventsourced.md) or any other `SourceProvider`
 with supported @ref:[offset types](#offset-types).
@@ -10,11 +18,6 @@ with supported @ref:[offset types](#offset-types).
 The envelope handler returns a `DBIO` that will be run by the projection. This means that the target database
 operations can be run in the same transaction as the storage of the offset, which means that @ref:[exactly-once](#exactly-once)
 processing semantics is supported. It also offers @ref:[at-least-once](#at-least-once) semantics.
-
-@@@ note
-Prefer using the JDBC implementation to implement your projection handler. Slick support in `akka-projection` is meant for users 
-migrating from [`Lagom's Slick ReadSideProcessor`](https://www.lagomframework.com/documentation/1.6.x/scala/ReadSideSlick.html).
-@@@
 
 ## Dependencies
 

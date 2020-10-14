@@ -16,7 +16,7 @@ For the offset storage you can select from:
 
 * @ref:[Offset in Cassandra](cassandra.md)
 * @ref:[Offset in a relational DB with JDBC](jdbc.md)
-* @ref:[Offset in a relational DB with Slick](slick.md)
+* @ref:[Offset in a relational DB with Slick](slick.md) (community-driven module)
 
 Those building blocks are assembled into a `Projection`. You can have many instances of it
 @ref:[automatically distributed and run](running.md) in an Akka Cluster.
@@ -41,7 +41,7 @@ each module describes which dependency you should define in your project.
 * @ref:[Messages from Kafka](kafka.md)
 * @ref:[Offset in Cassandra](cassandra.md)
 * @ref:[Offset in a relational DB with JDBC](jdbc.md)
-* @ref:[Offset in a relational DB with Slick](slick.md)
+* @ref:[Offset in a relational DB with Slick](slick.md) (community-driven module)
 
 All of them share a dependency to `akka-projection-core`: 
 
