@@ -30,7 +30,8 @@ messages or stored data.
 
 @@@
 
-To see a complete example of an Akka Projections implementation review the @ref:[Getting Started Guide](getting-started/index.md).
+To see a complete example of an Akka Projections implementation review the @ref:[Getting Started Guide](getting-started/index.md)
+or the @extref[Microservices with Akka tutorial](platform-guide:microservices-tutorial/).
 
 ## Dependencies
 
