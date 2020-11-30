@@ -129,7 +129,8 @@ lazy val docs = project
         "scaladoc.akka.projection.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
         "javadoc.akka.projection.base_url" -> "", // no Javadoc is published
         // Misc
-        "extref.samples.base_url" -> "https://developer.lightbend.com/start/?group=akka&amp;project=%s"),
+        "extref.samples.base_url" -> "https://developer.lightbend.com/start/?group=akka&amp;project=%s",
+        "extref.platform-guide.base_url" -> "https://developer.lightbend.com/docs/akka-platform-guide/%s"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     paradoxRoots := List("index.html", "getting-started/event-generator-app.html"),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
