@@ -51,7 +51,7 @@ private[projection] object DialectDefaults {
       "LAST_UPDATED" BIGINT NOT NULL
      );""",
       // create index
-      s"""CREATE INDEX "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME");""",
+      s"""CREATE INDEX IF NOT EXISTS "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME");""",
       // add primary key
       s"""ALTER TABLE $table
        ADD CONSTRAINT "PK_PROJECTION_ID" PRIMARY KEY("PROJECTION_NAME","PROJECTION_KEY");
@@ -148,7 +148,7 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
      );
     """,
       // create index
-      s"""CREATE INDEX PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""",
+      s"""CREATE INDEX IF NOT EXISTS PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""",
       // add primary key
       s"""ALTER TABLE $table
        ADD CONSTRAINT PK_PROJECTION_ID PRIMARY KEY(PROJECTION_NAME,PROJECTION_KEY);
