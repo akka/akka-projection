@@ -145,7 +145,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       val kafkaSourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
         KafkaSourceProvider(
           system.toTyped,
-          consumerDefaults(StringDeserializer, StringDeserializer)
+          consumerDefaults
             .withGroupId(groupId),
           Set(topicName))
 
@@ -179,7 +179,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       val kafkaSourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
         KafkaSourceProvider(
           system.toTyped,
-          consumerDefaults(StringDeserializer, StringDeserializer)
+          consumerDefaults
             .withGroupId(groupId),
           Set(topicName))
 
@@ -225,7 +225,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       val kafkaSourceProvider: SourceProvider[MergeableOffset[JLong], ConsumerRecord[String, String]] =
         KafkaSourceProvider(
           system.toTyped,
-          consumerDefaults(StringDeserializer, StringDeserializer)
+          consumerDefaults
             .withGroupId(groupId),
           Set(topicName))
 
