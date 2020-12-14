@@ -33,7 +33,7 @@ final class ContainerSessionProvider extends CqlSessionProvider {
 object ContainerSessionProvider {
   private val disabled = java.lang.Boolean.getBoolean("disable-cassandra-testcontainer")
 
-  private lazy val container: CassandraContainer[_] = new CassandraContainer()
+  private lazy val container: CassandraContainer[_] = new CassandraContainer("cassandra")
 
   lazy val started: Future[Unit] = {
     if (disabled)
