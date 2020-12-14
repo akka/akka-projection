@@ -97,7 +97,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
     // create offset table
     // the container can takes time to be 'ready',
     // we should keep trying to create the table until it succeeds
-    Await.result(akka.pattern.retry(() => offsetStore.createIfNotExists, 20, 3.seconds), 60.seconds)
+    Await.result(akka.pattern.retry(() => offsetStore.createIfNotExists(), 20, 3.seconds), 60.seconds)
   }
 
   override protected def afterAll(): Unit = {
@@ -118,6 +118,11 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
   "The SlickOffsetStore" must {
+
+    s"not fail if createIfNotExists is called more then once" in {
+      // this is already called on setup, should not fail if called again
+      Await.result(offsetStore.createIfNotExists(), 60.seconds)
+    }
 
     s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {
 

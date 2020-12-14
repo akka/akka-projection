@@ -113,7 +113,7 @@ import slick.jdbc.JdbcProfile
 
   val offsetTable = TableQuery[OffsetStoreTable]
 
-  def createIfNotExists: Future[Done] = {
+  def createIfNotExists(): Future[Done] = {
     val prepareSchemaDBIO = SimpleDBIO[Unit] { jdbcContext =>
       val connection = jdbcContext.connection
       dialect.createTableStatements.foreach(sql =>

@@ -48,14 +48,11 @@ private[projection] object DialectDefaults {
       "CURRENT_OFFSET" VARCHAR(255) NOT NULL,
       "MANIFEST" VARCHAR(4) NOT NULL,
       "MERGEABLE" BOOLEAN NOT NULL,
-      "LAST_UPDATED" BIGINT NOT NULL
+      "LAST_UPDATED" BIGINT NOT NULL,
+      PRIMARY KEY("PROJECTION_NAME","PROJECTION_KEY")
      );""",
       // create index
-      s"""CREATE INDEX IF NOT EXISTS "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME");""",
-      // add primary key
-      s"""ALTER TABLE $table
-       ADD CONSTRAINT "PK_PROJECTION_ID" PRIMARY KEY("PROJECTION_NAME","PROJECTION_KEY");
-    """)
+      s"""CREATE INDEX IF NOT EXISTS "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME");""")
 
   def readOffsetQuery(table: String) =
     s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ?"""
@@ -144,15 +141,12 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
       CURRENT_OFFSET VARCHAR(255) NOT NULL,
       MANIFEST VARCHAR(4) NOT NULL,
       MERGEABLE BOOLEAN NOT NULL,
-      LAST_UPDATED BIGINT NOT NULL
+      LAST_UPDATED BIGINT NOT NULL,
+      PRIMARY KEY(PROJECTION_NAME,PROJECTION_KEY)
      );
     """,
       // create index
-      s"""CREATE INDEX IF NOT EXISTS PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""",
-      // add primary key
-      s"""ALTER TABLE $table
-       ADD CONSTRAINT PK_PROJECTION_ID PRIMARY KEY(PROJECTION_NAME,PROJECTION_KEY);
-       """)
+      s"""CREATE INDEX IF NOT EXISTS PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""")
 
   override val readOffsetQuery: String =
     removeQuotes(DialectDefaults.readOffsetQuery(table))

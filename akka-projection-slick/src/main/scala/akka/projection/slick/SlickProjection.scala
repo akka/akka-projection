@@ -362,7 +362,7 @@ object SlickProjection {
    */
   def createOffsetTableIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]): Future[Done] = {
-    createOffsetStore(databaseConfig).createIfNotExists
+    createOffsetStore(databaseConfig).createIfNotExists()
   }
 
   private def createOffsetStore[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(

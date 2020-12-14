@@ -184,7 +184,8 @@ class SlickProjectionSpec
     // create offset table
 
     val creationFut =
-      offsetStore.createIfNotExists
+      offsetStore
+        .createIfNotExists()
         .flatMap(_ => repository.createTable())
 
     Await.result(creationFut, 30.seconds)
