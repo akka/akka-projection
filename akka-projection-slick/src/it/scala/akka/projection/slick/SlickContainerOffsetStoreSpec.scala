@@ -55,7 +55,7 @@ object SlickContainerOffsetStoreSpec {
   class PostgresSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Postgres Database"
-    val container = initContainer(new PostgreSQLContainer)
+    val container = initContainer(new PostgreSQLContainer("postgres"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -68,7 +68,7 @@ object SlickContainerOffsetStoreSpec {
   class MySQLSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "MySQL Database"
-    val container = initContainer(new MySQLContainer)
+    val container = initContainer(new MySQLContainer("mysql"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -82,7 +82,7 @@ object SlickContainerOffsetStoreSpec {
     val name = "MS SQL Server Database"
     override val tag = TestTags.FlakyDb
 
-    val container = initContainer(new MSSQLServerContainer)
+    val container = initContainer(new MSSQLServerContainer("mcr.microsoft.com/mssql/server"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
