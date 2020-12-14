@@ -16,12 +16,13 @@ object Dependencies {
   object Versions {
     val akka = sys.props.getOrElse("build.akka.version", "2.6.10")
     val alpakka = "2.0.2"
-    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.5")
+    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.1.0-M1")
     val slick = "3.3.3"
     val scalaTest = "3.1.1"
     val testContainers = "1.14.3"
     val junit = "4.13.1"
     val h2Driver = "1.4.200"
+    val jackson = "2.10.5" // this should match the version of jackson used by akka-serialization-jackson
   }
 
   object Compile {
@@ -39,6 +40,9 @@ object Dependencies {
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
 
     val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
+
+    // must be provided on classpath when using Apache Kafka 2.6.0+
+    val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jackson
 
     // not really used in lib code, but in example and test
     val h2Driver = "com.h2database" % "h2" % Versions.h2Driver
@@ -166,6 +170,7 @@ object Dependencies {
   val kafka =
     deps ++= Seq(
         Compile.alpakkaKafka,
+        Compile.jackson,
         Test.scalatest,
         Test.akkaTypedTestkit,
         Test.akkaStreamTestkit,

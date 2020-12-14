@@ -21,7 +21,7 @@ class KafkaSourceProviderSpec extends KafkaSpecBase {
     "resume from provided offsets" in assertAllStagesStopped {
       val topic = createTopic()
       val groupId = createGroupId()
-      val settings = consumerDefaults().withGroupId(groupId)
+      val settings = consumerDefaults(StringDeserializer, StringDeserializer).withGroupId(groupId)
 
       Await.result(produce(topic, 1 to 100), remainingOrDefault)
 
@@ -43,7 +43,7 @@ class KafkaSourceProviderSpec extends KafkaSpecBase {
     "resume from beginning offsets when none are provided" in assertAllStagesStopped {
       val topic = createTopic()
       val groupId = createGroupId()
-      val settings = consumerDefaults().withGroupId(groupId)
+      val settings = consumerDefaults(StringDeserializer, StringDeserializer).withGroupId(groupId)
 
       Await.result(produce(topic, 1 to 100), remainingOrDefault)
 
