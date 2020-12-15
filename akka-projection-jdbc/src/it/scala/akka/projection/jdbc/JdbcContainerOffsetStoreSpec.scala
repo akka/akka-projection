@@ -66,23 +66,29 @@ object JdbcContainerOffsetStoreSpec {
 
   object PostgresSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
     val name = "Postgres Database"
-    override def newContainer(): JdbcDatabaseContainer[_] = new PostgreSQLContainer().withInitScript("db/default-init.sql")
+    override def newContainer(): JdbcDatabaseContainer[_] =
+      new PostgreSQLContainer("postgres:13.1").withInitScript("db/default-init.sql")
   }
 
   object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
     val name = "MySQL Database"
-    override def newContainer(): JdbcDatabaseContainer[_] = new MySQLContainer().withDatabaseName(schemaName)
+    override def newContainer(): JdbcDatabaseContainer[_] =
+      new MySQLContainer("mysql:8.0.22").withDatabaseName(schemaName)
   }
 
   object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
     val name = "MS SQL Server Database"
     override val tag: Tag = TestTags.FlakyDb
-    override def newContainer(): JdbcDatabaseContainer[_] = new MSSQLServerContainer().withInitScript("db/default-init.sql")
+    override def newContainer(): JdbcDatabaseContainer[_] =
+      new MSSQLServerContainer("mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04")
+        .withInitScript("db/default-init.sql")
   }
 
   object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
     val name = "Oracle Database"
-    override def newContainer() = new OracleContainer("oracleinanutshell/oracle-xe-11g").withInitScript("db/oracle-init.sql")
+    override def newContainer() =
+      new OracleContainer("oracleinanutshell/oracle-xe-11g:1.0.0")
+        .withInitScript("db/oracle-init.sql")
   }
 
 }

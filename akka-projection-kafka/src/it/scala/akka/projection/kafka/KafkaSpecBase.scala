@@ -8,6 +8,7 @@ import akka.actor.ActorSystem
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.typed.scaladsl.adapter._
+import akka.kafka.testkit.KafkaTestkitTestcontainersSettings
 import akka.kafka.testkit.internal.TestFrameworkInterface
 import akka.kafka.testkit.scaladsl.KafkaSpec
 import akka.kafka.testkit.scaladsl.TestcontainersKafkaPerClassLike
@@ -45,4 +46,7 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
 
   implicit val actorSystem = testKit.system
   implicit val dispatcher = testKit.system.executionContext
+
+  override val testcontainersSettings =
+    KafkaTestkitTestcontainersSettings(system).withConfluentPlatformVersion("6.0.1")
 }

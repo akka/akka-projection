@@ -14,6 +14,7 @@ import akka.stream.alpakka.cassandra.CqlSessionProvider
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.internal.core.metadata.DefaultEndPoint
 import org.testcontainers.containers.CassandraContainer
+import org.testcontainers.utility.DockerImageName
 
 /**
  * Use testcontainers to lazily provide a single CqlSession for all Cassandra tests
@@ -33,7 +34,7 @@ final class ContainerSessionProvider extends CqlSessionProvider {
 object ContainerSessionProvider {
   private val disabled = java.lang.Boolean.getBoolean("disable-cassandra-testcontainer")
 
-  private lazy val container: CassandraContainer[_] = new CassandraContainer()
+  private lazy val container: CassandraContainer[_] = new CassandraContainer(DockerImageName.parse("cassandra:3.11.9"))
 
   lazy val started: Future[Unit] = {
     if (disabled)
