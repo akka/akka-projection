@@ -169,7 +169,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
     s"not fail if createIfNotExists is called more then once" in {
       // this is already called on setup, should not fail if called again
-      Await.result(offsetStore.createIfNotExists(), 60.seconds)
+      offsetStore.createIfNotExists().futureValue
     }
 
     s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {
