@@ -55,7 +55,7 @@ object SlickContainerOffsetStoreSpec {
   class PostgresSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Postgres Database"
-    val container = initContainer(new PostgreSQLContainer("postgres"))
+    val container = initContainer(new PostgreSQLContainer("postgres:13.1"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -68,7 +68,7 @@ object SlickContainerOffsetStoreSpec {
   class MySQLSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "MySQL Database"
-    val container = initContainer(new MySQLContainer("mysql"))
+    val container = initContainer(new MySQLContainer("mysql:8.0.22"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -82,7 +82,7 @@ object SlickContainerOffsetStoreSpec {
     val name = "MS SQL Server Database"
     override val tag = TestTags.FlakyDb
 
-    val container = initContainer(new MSSQLServerContainer("mcr.microsoft.com/mssql/server"))
+    val container = initContainer(new MSSQLServerContainer("mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
@@ -94,7 +94,7 @@ object SlickContainerOffsetStoreSpec {
   class OracleSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Oracle Database"
-    val container = initContainer(new OracleContainer("oracleinanutshell/oracle-xe-11g"))
+    val container = initContainer(new OracleContainer("oracleinanutshell/oracle-xe-11g:1.0.0"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
