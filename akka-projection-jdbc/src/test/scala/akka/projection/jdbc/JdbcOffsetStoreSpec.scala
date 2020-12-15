@@ -15,6 +15,7 @@ import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.Future
 import scala.util.Try
 
+import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.japi.function
@@ -167,9 +168,14 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
 
   "The JdbcOffsetStore" must {
 
-    s"not fail if createIfNotExists is called more then once" in {
+    s"not fail when dropIfExists and createIfNotExists are called [$dialectLabel]" in {
       // this is already called on setup, should not fail if called again
-      offsetStore.createIfNotExists().futureValue
+      val dropAndCreate =
+        for {
+          _ <- offsetStore.dropIfExists()
+          _ <- offsetStore.createIfNotExists()
+        } yield Done
+      dropAndCreate.futureValue
     }
 
     s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {

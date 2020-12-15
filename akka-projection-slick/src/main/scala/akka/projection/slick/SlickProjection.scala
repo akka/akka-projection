@@ -365,6 +365,14 @@ object SlickProjection {
     createOffsetStore(databaseConfig).createIfNotExists()
   }
 
+  /**
+   * For testing purposes the offset table can be dropped programmatically.
+   */
+  def dropOffsetTableIfExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+      implicit system: ActorSystem[_]): Future[Done] = {
+    createOffsetStore(databaseConfig).dropIfExists()
+  }
+
   private def createOffsetStore[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]) =
     new SlickOffsetStore(system, databaseConfig.db, databaseConfig.profile, SlickSettings(system))

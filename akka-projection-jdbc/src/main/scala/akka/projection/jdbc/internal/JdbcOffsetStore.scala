@@ -49,6 +49,16 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
 
   private[projection] implicit val executionContext = settings.executionContext
 
+  def dropIfExists(): Future[Done] = {
+    withConnection(jdbcSessionFactory) { conn =>
+      logger.debug("creating offset-store table, using connection id [{}]", System.identityHashCode(conn))
+      tryWithResource(conn.createStatement()) { stmt =>
+        stmt.execute(settings.dialect.dropTableStatement)
+        Done
+      }
+    }
+  }
+
   def createIfNotExists(): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>
       logger.debug("creating offset-store table, using connection id [{}]", System.identityHashCode(conn))
