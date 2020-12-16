@@ -10,6 +10,7 @@ import java.util.UUID
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
+import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Sequence
@@ -97,7 +98,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
     // create offset table
     // the container can takes time to be 'ready',
     // we should keep trying to create the table until it succeeds
-    Await.result(akka.pattern.retry(() => offsetStore.createIfNotExists, 20, 3.seconds), 60.seconds)
+    Await.result(akka.pattern.retry(() => offsetStore.createIfNotExists(), 20, 3.seconds), 60.seconds)
   }
 
   override protected def afterAll(): Unit = {
@@ -118,6 +119,16 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
 
   "The SlickOffsetStore" must {
+
+    s"not fail when dropIfExists and createIfNotExists are called [$dialectLabel]" in {
+      // this is already called on setup, should not fail if called again
+      val dropAndCreate =
+        for {
+          _ <- offsetStore.dropIfExists()
+          _ <- offsetStore.createIfNotExists()
+        } yield Done
+      dropAndCreate.futureValue
+    }
 
     s"create and update offsets [$dialectLabel]" taggedAs (specConfig.tag) in {
 

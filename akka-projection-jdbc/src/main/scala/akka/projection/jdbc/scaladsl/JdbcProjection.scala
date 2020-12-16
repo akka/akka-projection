@@ -262,4 +262,11 @@ object JdbcProjection {
       implicit system: ActorSystem[_]): Future[Done] =
     JdbcProjectionImpl.createOffsetStore(sessionFactory).createIfNotExists()
 
+  /**
+   * For testing purposes the offset table can be dropped programmatically.
+   */
+  def dropOffsetTableIfExists[S <: JdbcSession](sessionFactory: () => S)(
+      implicit system: ActorSystem[_]): Future[Done] =
+    JdbcProjectionImpl.createOffsetStore(sessionFactory).dropIfExists()
+
 }
