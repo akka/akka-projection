@@ -43,47 +43,45 @@ private[projection] object DialectDefaults {
 
   def createTableStatement(table: String): immutable.Seq[String] =
     immutable.Seq(
-      s"""
-     CREATE TABLE IF NOT EXISTS $table (
-      "PROJECTION_NAME" VARCHAR(255) NOT NULL,
-      "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-      "CURRENT_OFFSET" VARCHAR(255) NOT NULL,
-      "MANIFEST" VARCHAR(4) NOT NULL,
-      "MERGEABLE" BOOLEAN NOT NULL,
-      "LAST_UPDATED" BIGINT NOT NULL,
-      PRIMARY KEY("PROJECTION_NAME","PROJECTION_KEY")
-     );""",
+      s"""CREATE TABLE IF NOT EXISTS $table (
+         |  "PROJECTION_NAME" VARCHAR(255) NOT NULL,
+         |  "PROJECTION_KEY" VARCHAR(255) NOT NULL,
+         |  "CURRENT_OFFSET" VARCHAR(255) NOT NULL,
+         |  "MANIFEST" VARCHAR(4) NOT NULL,
+         |  "MERGEABLE" BOOLEAN NOT NULL,
+         |  "LAST_UPDATED" BIGINT NOT NULL,
+         |  PRIMARY KEY("PROJECTION_NAME", "PROJECTION_KEY")
+         |);""".stripMargin,
       // create index
       s"""CREATE INDEX IF NOT EXISTS "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME");""")
 
   def dropTableStatement(table: String): String =
-    s" DROP TABLE IF EXISTS $table;"
+    s"""DROP TABLE IF EXISTS $table;"""
 
   def readOffsetQuery(table: String) =
-    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ?"""
+    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ?;"""
 
   def clearOffsetStatement(table: String) =
-    s"""DELETE FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+    s"""DELETE FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?;"""
 
   def insertStatement(table: String): String =
     s"""INSERT INTO $table (
-      "PROJECTION_NAME",
-      "PROJECTION_KEY",
-      "CURRENT_OFFSET",
-      "MANIFEST",
-      "MERGEABLE",
-      "LAST_UPDATED"
-    )  VALUES (?,?,?,?,?,?)"""
+       |  "PROJECTION_NAME",
+       |  "PROJECTION_KEY",
+       |  "CURRENT_OFFSET",
+       |  "MANIFEST",
+       |  "MERGEABLE",
+       |  "LAST_UPDATED"
+       |) VALUES (?, ?, ?, ?, ?, ?);""".stripMargin
 
   def updateStatement(table: String): String =
     s"""UPDATE $table
-        SET
-         "CURRENT_OFFSET" = ?,
-         "MANIFEST" = ?,
-         "MERGEABLE" = ?,
-         "LAST_UPDATED" = ?
-        WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?
-        """
+       |SET
+       | "CURRENT_OFFSET" = ?,
+       | "MANIFEST" = ?,
+       | "MERGEABLE" = ?,
+       | "LAST_UPDATED" = ?
+       |WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?;""".stripMargin
 
   object InsertIndices {
     val PROJECTION_NAME = 1
@@ -143,17 +141,15 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
 
   override val createTableStatements =
     immutable.Seq(
-      s"""
-      CREATE TABLE IF NOT EXISTS $table (
-        PROJECTION_NAME VARCHAR(255) NOT NULL,
-        PROJECTION_KEY VARCHAR(255) NOT NULL,
-        CURRENT_OFFSET VARCHAR(255) NOT NULL,
-        MANIFEST VARCHAR(4) NOT NULL,
-        MERGEABLE BOOLEAN NOT NULL,
-        LAST_UPDATED BIGINT NOT NULL,
-        PRIMARY KEY(PROJECTION_NAME,PROJECTION_KEY)
-       );
-    """,
+      s"""CREATE TABLE IF NOT EXISTS $table (
+         |  PROJECTION_NAME VARCHAR(255) NOT NULL,
+         |  PROJECTION_KEY VARCHAR(255) NOT NULL,
+         |  CURRENT_OFFSET VARCHAR(255) NOT NULL,
+         |  MANIFEST VARCHAR(4) NOT NULL,
+         |  MERGEABLE BOOLEAN NOT NULL,
+         |  LAST_UPDATED BIGINT NOT NULL,
+         |  PRIMARY KEY(PROJECTION_NAME, PROJECTION_KEY)
+         |);""".stripMargin,
       // create index
       s"""CREATE INDEX PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""")
 
@@ -184,22 +180,22 @@ private[projection] case class MSSQLServerDialect(schema: Option[String], tableN
   private val table = schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName"""")
 
   override val createTableStatements =
-    immutable.Seq(s"""
-      IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'$table') AND type in (N'U'))
-      begin
-      create table $table (
-        "PROJECTION_NAME" VARCHAR(255) NOT NULL,
-        "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-        "CURRENT_OFFSET" VARCHAR(255) NOT NULL,
-        "MANIFEST" VARCHAR(4) NOT NULL,
-        "MERGEABLE" BIT NOT NULL,
-        "LAST_UPDATED" BIGINT NOT NULL
-        )
-      
-      alter table $table add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
-      
-      create index "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME")
-      end""")
+    immutable.Seq(
+      s"""IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'$table') AND type in (N'U'))
+         |begin
+         |  create table $table (
+         |    "PROJECTION_NAME" VARCHAR(255) NOT NULL,
+         |    "PROJECTION_KEY" VARCHAR(255) NOT NULL,
+         |    "CURRENT_OFFSET" VARCHAR(255) NOT NULL,
+         |    "MANIFEST" VARCHAR(4) NOT NULL,
+         |    "MERGEABLE" BIT NOT NULL,
+         |    "LAST_UPDATED" BIGINT NOT NULL
+         |  )
+         |
+         |  alter table $table add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
+         |
+         |  create index "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME")
+         |end""".stripMargin)
 
   override val dropTableStatement: String = DialectDefaults.dropTableStatement(table)
 
@@ -224,31 +220,29 @@ private[projection] case class OracleDialect(schema: Option[String], tableName: 
 
   override val createTableStatements =
     immutable.Seq(s"""
-BEGIN
-
-execute immediate 'create table $table ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"CURRENT_OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
-execute immediate 'alter table $table add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
-execute immediate 'create index "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME") ';
-EXCEPTION
-    WHEN OTHERS THEN
-      IF SQLCODE = -955 THEN
-        NULL; -- suppresses ORA-00955 exception
-      ELSE
-         RAISE;
-      END IF;
-END; 
-     """)
+         |BEGIN
+         |
+         |  execute immediate 'create table $table ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"CURRENT_OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
+         |  execute immediate 'alter table $table add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
+         |  execute immediate 'create index "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME") ';
+         |  EXCEPTION
+         |    WHEN OTHERS THEN
+         |      IF SQLCODE = -955 THEN
+         |        NULL; -- suppresses ORA-00955 exception
+         |      ELSE
+         |         RAISE;
+         |      END IF;
+         |END;""".stripMargin)
 
   override val dropTableStatement: String =
-    s"""
-BEGIN
-   EXECUTE IMMEDIATE 'DROP TABLE $table';
-EXCEPTION
-   WHEN OTHERS THEN
-      IF SQLCODE != -942 THEN
-         RAISE;
-      END IF;
-END;""".stripMargin
+    s"""BEGIN
+       |   EXECUTE IMMEDIATE 'DROP TABLE $table';
+       |EXCEPTION
+       |   WHEN OTHERS THEN
+       |      IF SQLCODE != -942 THEN
+       |         RAISE;
+       |      END IF;
+       |END;""".stripMargin
 
   override val readOffsetQuery: String = DialectDefaults.readOffsetQuery(table)
 
