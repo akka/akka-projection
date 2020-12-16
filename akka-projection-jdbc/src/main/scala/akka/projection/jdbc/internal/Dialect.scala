@@ -59,10 +59,10 @@ private[projection] object DialectDefaults {
     s"""DROP TABLE IF EXISTS $table;"""
 
   def readOffsetQuery(table: String) =
-    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ?;"""
+    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ?"""
 
   def clearOffsetStatement(table: String) =
-    s"""DELETE FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?;"""
+    s"""DELETE FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
 
   def insertStatement(table: String): String =
     s"""INSERT INTO $table (
@@ -72,7 +72,7 @@ private[projection] object DialectDefaults {
        |  "MANIFEST",
        |  "MERGEABLE",
        |  "LAST_UPDATED"
-       |) VALUES (?, ?, ?, ?, ?, ?);""".stripMargin
+       |) VALUES (?,?,?,?,?,?)""".stripMargin
 
   def updateStatement(table: String): String =
     s"""UPDATE $table
@@ -81,7 +81,7 @@ private[projection] object DialectDefaults {
        | "MANIFEST" = ?,
        | "MERGEABLE" = ?,
        | "LAST_UPDATED" = ?
-       |WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?;""".stripMargin
+       |WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?""".stripMargin
 
   object InsertIndices {
     val PROJECTION_NAME = 1
