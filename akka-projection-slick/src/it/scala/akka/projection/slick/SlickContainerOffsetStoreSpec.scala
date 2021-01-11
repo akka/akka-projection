@@ -61,7 +61,7 @@ object SlickContainerOffsetStoreSpec {
       super.config.withFallback(ConfigFactory.parseString("""
         akka.projection.slick {
            profile = "slick.jdbc.PostgresProfile$"
-           offset-store.legacy-schema = false
+           offset-store.use-lowercase-schema = true
         }
         """))
   }
@@ -76,7 +76,7 @@ object SlickContainerOffsetStoreSpec {
         akka.projection.slick = {
            profile = "slick.jdbc.PostgresProfile$"
            offset-store.table = "AKKA_PROJECTION_OFFSET_STORE"
-           offset-store.legacy-schema = true
+           offset-store.use-lowercase-schema = false
         }
         """).withFallback(super.config)
   }

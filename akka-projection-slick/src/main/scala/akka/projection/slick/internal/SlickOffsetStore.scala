@@ -16,8 +16,8 @@ import akka.dispatch.ExecutionContexts
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
-import akka.projection.jdbc.internal.DefaultDialect
 import akka.projection.jdbc.internal.Dialect
+import akka.projection.jdbc.internal.H2Dialect
 import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.MSSQLServerDialect
 import akka.projection.jdbc.internal.MySQLDialect
@@ -41,20 +41,23 @@ import slick.jdbc.JdbcProfile
   def this(system: ActorSystem[_], db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
     this(system, db, profile, slickSettings, Clock.systemUTC())
 
-  val (dialect, preserveCase): (Dialect, Boolean) =
+  val (dialect, useLowerCase): (Dialect, Boolean) = {
+
+    val useLowerCase = slickSettings.useLowerCase
+
     profile match {
-      case _: slick.jdbc.H2Profile     => (DefaultDialect(slickSettings.schema, slickSettings.table), true)
-      case _: slick.jdbc.OracleProfile => (OracleDialect(slickSettings.schema, slickSettings.table), true)
-
-      // mysql and Sql server are case insensitive, we favor lower case
-      case _: slick.jdbc.SQLServerProfile => (MSSQLServerDialect(slickSettings.schema, slickSettings.table), false)
-      case _: slick.jdbc.MySQLProfile     => (MySQLDialect(slickSettings.schema, slickSettings.table), false)
-
+      case _: slick.jdbc.H2Profile =>
+        (H2Dialect(slickSettings.schema, slickSettings.table, useLowerCase), useLowerCase)
       case _: slick.jdbc.PostgresProfile =>
-        // special case for postgres, if legacy mode we preserve case
-        val useLegacySchema = slickSettings.postgresLegacyMode
-        (PostgresDialect(slickSettings.schema, slickSettings.table, legacy = useLegacySchema), useLegacySchema)
+        (PostgresDialect(slickSettings.schema, slickSettings.table, useLowerCase), useLowerCase)
+      // mysql and Sql server are case insensitive, we favor lower case
+      case _: slick.jdbc.SQLServerProfile => (MSSQLServerDialect(slickSettings.schema, slickSettings.table), true)
+      case _: slick.jdbc.MySQLProfile     => (MySQLDialect(slickSettings.schema, slickSettings.table), true)
+      // oracle must always use quoted + uppercase
+      case _: slick.jdbc.OracleProfile => (OracleDialect(slickSettings.schema, slickSettings.table), false)
+
     }
+  }
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -96,8 +99,8 @@ import slick.jdbc.JdbcProfile
   }
 
   private def adaptCase(str: String): String =
-    if (preserveCase) str
-    else str.toLowerCase
+    if (useLowerCase) str.toLowerCase
+    else str
 
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
 

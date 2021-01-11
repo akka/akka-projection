@@ -32,13 +32,13 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
       throw new IllegalArgumentException(
         s"Dialect type not set. Settings 'akka.projection.jdbc.dialect' currently set to [$dialectToLoad]")
 
-    val useLegacySchema = config.getBoolean("offset-store.legacy-schema")
+    val useLowerCaseSchema = config.getBoolean("offset-store.use-lowercase-schema")
     dialectToLoad match {
-      case "h2-dialect"       => DefaultDialect(schema, table)
+      case "h2-dialect"       => H2Dialect(schema, table, useLowerCaseSchema)
+      case "postgres-dialect" => PostgresDialect(schema, table, useLowerCaseSchema)
       case "mysql-dialect"    => MySQLDialect(schema, table)
       case "mssql-dialect"    => MSSQLServerDialect(schema, table)
       case "oracle-dialect"   => OracleDialect(schema, table)
-      case "postgres-dialect" => PostgresDialect(schema, table, legacy = useLegacySchema)
       case unknown =>
         throw new IllegalArgumentException(
           s"Unknown dialect type: [$unknown]. Check settings 'akka.projection.jdbc.dialect'")

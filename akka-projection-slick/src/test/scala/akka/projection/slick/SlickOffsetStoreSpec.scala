@@ -40,6 +40,7 @@ object SlickOffsetStoreSpec {
       offset-store {
         schema = ""
         table = "akka_projection_offset_store"
+        use-lowercase-schema = true
       }
     }
     """)
@@ -63,10 +64,6 @@ object SlickOffsetStoreSpec {
              connectionPool = disabled
              keepAliveConnection = true
            }
-           offset-store {
-            # TODO RGC: should be same as reference.conf 
-            table = "AKKA_PROJECTION_OFFSET_STORE"
-          }
         }
         """).withFallback(baseConfig)
 

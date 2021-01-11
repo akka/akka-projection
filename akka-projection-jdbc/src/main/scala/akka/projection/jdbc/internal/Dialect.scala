@@ -108,23 +108,29 @@ private[projection] object DialectDefaults {
  * INTERNAL API
  */
 @InternalApi
-private[projection] case class DefaultDialect(schema: Option[String], tableName: String) extends Dialect {
+private[projection] case class H2Dialect(schema: Option[String], tableName: String, lowerCase: Boolean)
+    extends Dialect {
 
-  def this(tableName: String) = this(None, tableName)
+  def this(tableName: String, lowerCase: Boolean) = this(None, tableName, lowerCase)
 
-  private val table = schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName"""")
+  def transform(stmt: String): String =
+    if (lowerCase) stmt.toLowerCase
+    else stmt
 
-  override val createTableStatements: immutable.Seq[String] = DialectDefaults.createTableStatement(table)
+  private val table = transform(schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName""""))
 
-  override val dropTableStatement: String = DialectDefaults.dropTableStatement(table)
+  override val createTableStatements: immutable.Seq[String] =
+    DialectDefaults.createTableStatement(table).map(s => transform(s))
 
-  override val readOffsetQuery: String = DialectDefaults.readOffsetQuery(table)
+  override val dropTableStatement: String = transform(DialectDefaults.dropTableStatement(table))
 
-  override val clearOffsetStatement: String = DialectDefaults.clearOffsetStatement(table)
+  override val readOffsetQuery: String = transform(DialectDefaults.readOffsetQuery(table))
 
-  override def insertStatement(): String = DialectDefaults.insertStatement(table)
+  override val clearOffsetStatement: String = transform(DialectDefaults.clearOffsetStatement(table))
 
-  override def updateStatement(): String = DialectDefaults.updateStatement(table)
+  override def insertStatement(): String = transform(DialectDefaults.insertStatement(table))
+
+  override def updateStatement(): String = transform(DialectDefaults.updateStatement(table))
 
 }
 
@@ -132,14 +138,14 @@ private[projection] case class DefaultDialect(schema: Option[String], tableName:
  * INTERNAL API
  */
 @InternalApi
-private[projection] case class PostgresDialect(schema: Option[String], tableName: String, legacy: Boolean)
+private[projection] case class PostgresDialect(schema: Option[String], tableName: String, lowerCase: Boolean)
     extends Dialect {
 
-  def this(tableName: String, unquoted: Boolean) = this(None, tableName, unquoted)
+  def this(tableName: String, lowerCase: Boolean) = this(None, tableName, lowerCase)
 
   def transform(stmt: String): String =
-    if (legacy) stmt
-    else Dialect.removeQuotes(stmt).toLowerCase
+    if (lowerCase) Dialect.removeQuotes(stmt).toLowerCase
+    else stmt
 
   private val table = {
     schema

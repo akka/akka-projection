@@ -75,7 +75,7 @@ object JdbcContainerOffsetStoreSpec {
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
         akka.projection.jdbc = {
-           offset-store.legacy-schema = true
+           offset-store.use-lowercase-schema = false
         }
         """))
 
