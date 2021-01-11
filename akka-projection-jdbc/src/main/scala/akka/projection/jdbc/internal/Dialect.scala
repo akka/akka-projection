@@ -182,16 +182,16 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
   override val createTableStatements =
     immutable.Seq(
       s"""CREATE TABLE IF NOT EXISTS $table (
-         |  PROJECTION_NAME VARCHAR(255) NOT NULL,
-         |  PROJECTION_KEY VARCHAR(255) NOT NULL,
-         |  CURRENT_OFFSET VARCHAR(255) NOT NULL,
-         |  MANIFEST VARCHAR(4) NOT NULL,
-         |  MERGEABLE BOOLEAN NOT NULL,
-         |  LAST_UPDATED BIGINT NOT NULL,
-         |  PRIMARY KEY(PROJECTION_NAME, PROJECTION_KEY)
+         |  projection_name VARCHAR(255) NOT NULL,
+         |  projection_key VARCHAR(255) NOT NULL,
+         |  current_offset VARCHAR(255) NOT NULL,
+         |  manifest VARCHAR(4) NOT NULL,
+         |  mergeable BOOLEAN NOT NULL,
+         |  last_updated BIGINT NOT NULL,
+         |  PRIMARY KEY(projection_name, projection_key)
          |);""".stripMargin,
       // create index
-      s"""CREATE INDEX PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""")
+      s"""CREATE INDEX projection_name_index ON $table (projection_name);""")
 
   override val dropTableStatement: String =
     Dialect.removeQuotes(DialectDefaults.dropTableStatement(table))
@@ -217,24 +217,24 @@ private[projection] case class MSSQLServerDialect(schema: Option[String], tableN
 
   def this(tableName: String) = this(None, tableName)
 
-  private val table = schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName"""")
+  private val table = schema.map(s => s"""$s.$tableName""").getOrElse(s"""$tableName""")
 
   override val createTableStatements =
     immutable.Seq(
       s"""IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'$table') AND type in (N'U'))
          |begin
          |  create table $table (
-         |    "PROJECTION_NAME" VARCHAR(255) NOT NULL,
-         |    "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-         |    "CURRENT_OFFSET" VARCHAR(255) NOT NULL,
-         |    "MANIFEST" VARCHAR(4) NOT NULL,
-         |    "MERGEABLE" BIT NOT NULL,
-         |    "LAST_UPDATED" BIGINT NOT NULL
+         |    projection_name VARCHAR(255) NOT NULL,
+         |    projection_key VARCHAR(255) NOT NULL,
+         |    current_offset VARCHAR(255) NOT NULL,
+         |    manifest VARCHAR(4) NOT NULL,
+         |    mergeable BIT NOT NULL,
+         |    last_updated BIGINT NOT NULL
          |  )
          |
-         |  alter table $table add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
+         |  alter table $table add constraint pk_projection_id primary key(projection_name, projection_key)
          |
-         |  create index "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME")
+         |  create index projection_name_index on $table (projection_name)
          |end""".stripMargin)
 
   override val dropTableStatement: String = DialectDefaults.dropTableStatement(table)
