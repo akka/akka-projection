@@ -39,7 +39,7 @@ object SlickOffsetStoreSpec {
     akka.projection.slick {
       offset-store {
         schema = ""
-        table = "AKKA_PROJECTION_OFFSET_STORE"
+        table = "akka_projection_offset_store"
       }
     }
     """)
@@ -52,18 +52,23 @@ object SlickOffsetStoreSpec {
 
     val name = "H2 Database"
     val tag = TestTags.InMemoryDb
+    
     override def config: Config =
-      baseConfig.withFallback(ConfigFactory.parseString("""
+      ConfigFactory.parseString("""
         akka.projection.slick {
            profile = "slick.jdbc.H2Profile$"
-           db = {
+           db {
              url = "jdbc:h2:mem:offset-store-test-slick;DB_CLOSE_DELAY=-1"
              driver = org.h2.Driver
              connectionPool = disabled
              keepAliveConnection = true
            }
+           offset-store {
+            # TODO RGC: should be same as reference.conf 
+            table = "AKKA_PROJECTION_OFFSET_STORE"
+          }
         }
-        """))
+        """).withFallback(baseConfig)
 
     override def stopContainer(): Unit = ()
   }

@@ -28,7 +28,7 @@ object SlickContainerOffsetStoreSpec {
     override def config = {
       baseConfig.withFallback(ConfigFactory.parseString(s"""
         akka.projection.slick {
-           db = {
+           db {
              url = "${container.getJdbcUrl}"
              driver = ${container.getDriverClassName}
              user = ${container.getUsername}
@@ -61,8 +61,24 @@ object SlickContainerOffsetStoreSpec {
       super.config.withFallback(ConfigFactory.parseString("""
         akka.projection.slick {
            profile = "slick.jdbc.PostgresProfile$"
+           offset-store.legacy-schema = false
         }
         """))
+  }
+
+  class PostgresLegacySchemaSpecConfig extends ContainerJdbcSpecConfig {
+
+    val name = "Postgres Database"
+    val container = initContainer(new PostgreSQLContainer("postgres:13.1"))
+
+    override def config: Config =
+      ConfigFactory.parseString("""
+        akka.projection.slick = {
+           profile = "slick.jdbc.PostgresProfile$"
+           offset-store.table = "AKKA_PROJECTION_OFFSET_STORE"
+           offset-store.legacy-schema = true
+        }
+        """).withFallback(super.config)
   }
 
   class MySQLSpecConfig extends ContainerJdbcSpecConfig {
@@ -106,7 +122,13 @@ object SlickContainerOffsetStoreSpec {
 }
 
 class PostgresSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.PostgresSpecConfig)
+
+class PostgresSlickOffsetStoreLegacySchemaSpec
+    extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.PostgresLegacySchemaSpecConfig)
+
 class MySQLSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.MySQLSpecConfig)
+
 class MSSQLServerSlickOffsetStoreSpec
     extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.MSSQLServerSpecConfig)
+
 class OracleSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.OracleSpecConfig)

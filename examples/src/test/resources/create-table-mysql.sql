@@ -1,14 +1,14 @@
 
 #create-table-mysql
-create table if not exists AKKA_PROJECTION_OFFSET_STORE (
-  PROJECTION_NAME VARCHAR(255) NOT NULL,
-  PROJECTION_KEY VARCHAR(255) NOT NULL,
-  CURRENT_OFFSET VARCHAR(255) NOT NULL,
-  MANIFEST VARCHAR(4) NOT NULL,
-  MERGEABLE BOOLEAN NOT NULL,
-  LAST_UPDATED BIGINT NOT NULL,
-  primary key(PROJECTION_NAME, PROJECTION_KEY)
+CREATE TABLE IF NOT EXISTS akka_projection_offset_store (
+  projection_name VARCHAR(255) NOT NULL,
+  projection_key VARCHAR(255) NOT NULL,
+  current_offset VARCHAR(255) NOT NULL,
+  manifest VARCHAR(4) NOT NULL,
+  mergeable BOOLEAN NOT NULL,
+  last_updated BIGINT NOT NULL,
+  PRIMARY KEY(projection_name, projection_key)
 );
 
-create index PROJECTION_NAME_INDEX on AKKA_PROJECTION_OFFSET_STORE (PROJECTION_NAME);
+CREATE INDEX projection_name_index ON akka_projection_offset_store (projection_name);
 #create-table-mysql

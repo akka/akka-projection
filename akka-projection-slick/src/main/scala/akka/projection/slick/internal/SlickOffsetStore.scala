@@ -22,6 +22,7 @@ import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.MSSQLServerDialect
 import akka.projection.jdbc.internal.MySQLDialect
 import akka.projection.jdbc.internal.OracleDialect
+import akka.projection.jdbc.internal.PostgresDialect
 import slick.jdbc.JdbcProfile
 
 /**
@@ -40,13 +41,19 @@ import slick.jdbc.JdbcProfile
   def this(system: ActorSystem[_], db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
     this(system, db, profile, slickSettings, Clock.systemUTC())
 
-  val dialect: Dialect =
+  val (dialect, preserveCase): (Dialect, Boolean) =
     profile match {
-      case _: slick.jdbc.MySQLProfile     => MySQLDialect(slickSettings.schema, slickSettings.table)
-      case _: slick.jdbc.PostgresProfile  => DefaultDialect(slickSettings.schema, slickSettings.table)
-      case _: slick.jdbc.H2Profile        => DefaultDialect(slickSettings.schema, slickSettings.table)
-      case _: slick.jdbc.SQLServerProfile => MSSQLServerDialect(slickSettings.schema, slickSettings.table)
-      case _: slick.jdbc.OracleProfile    => OracleDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.H2Profile     => (DefaultDialect(slickSettings.schema, slickSettings.table), true)
+      case _: slick.jdbc.OracleProfile => (OracleDialect(slickSettings.schema, slickSettings.table), true)
+
+      // mysql and Sql server are case insensitive, we favor lower case
+      case _: slick.jdbc.SQLServerProfile => (MSSQLServerDialect(slickSettings.schema, slickSettings.table), false)
+      case _: slick.jdbc.MySQLProfile     => (MySQLDialect(slickSettings.schema, slickSettings.table), false)
+
+      case _: slick.jdbc.PostgresProfile =>
+        // special case for postgres, if legacy mode we preserve case
+        val useLegacySchema = slickSettings.postgresLegacyMode
+        (PostgresDialect(slickSettings.schema, slickSettings.table, legacy = useLegacySchema), useLegacySchema)
     }
 
   private val offsetSerialization = new OffsetSerialization(system)
@@ -88,17 +95,21 @@ import slick.jdbc.JdbcProfile
     offsetTable.filter(row => row.projectionName === projectionId.name && row.projectionKey === projectionId.key).delete
   }
 
+  private def adaptCase(str: String): String =
+    if (preserveCase) str
+    else str.toLowerCase
+
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
 
-    def projectionName = column[String]("PROJECTION_NAME", O.Length(255))
-    def projectionKey = column[String]("PROJECTION_KEY", O.Length(255))
-    def offset = column[String]("CURRENT_OFFSET", O.Length(255))
-    def manifest = column[String]("MANIFEST", O.Length(4))
-    def mergeable = column[Boolean]("MERGEABLE")
-    def lastUpdated = column[Long]("LAST_UPDATED")
+    def projectionName = column[String](adaptCase("PROJECTION_NAME"), O.Length(255))
+    def projectionKey = column[String](adaptCase("PROJECTION_KEY"), O.Length(255))
+    def offset = column[String](adaptCase("CURRENT_OFFSET"), O.Length(255))
+    def manifest = column[String](adaptCase("MANIFEST"), O.Length(4))
+    def mergeable = column[Boolean](adaptCase("MERGEABLE"))
+    def lastUpdated = column[Long](adaptCase("LAST_UPDATED"))
 
-    def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
-    def idx = index("PROJECTION_NAME_INDEX", projectionName)
+    def pk = primaryKey(adaptCase("PK_PROJECTION_ID"), (projectionName, projectionKey))
+    def idx = index(adaptCase("PROJECTION_NAME_INDEX"), projectionName)
 
     def * = (projectionName, projectionKey, offset, manifest, mergeable, lastUpdated).mapTo[OffsetRow]
   }

@@ -65,7 +65,7 @@ object JdbcProjectionSpec {
         dialect = "h2-dialect"
         offset-store {
           schema = ""
-          table = "AKKA_PROJECTION_OFFSET_STORE"
+          table = "akka_projection_offset_store"
         }
         
         blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5

@@ -46,7 +46,8 @@ object JdbcOffsetStoreSpec {
       loglevel = "DEBUG"
       projection.jdbc {
         offset-store {
-          table = "AKKA_PROJECTION_OFFSET_STORE"
+          table = "akka_projection_offset_store"
+          with-lowercase-schema = true
         }
         
         blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
@@ -54,7 +55,7 @@ object JdbcOffsetStoreSpec {
       }
     }
     """)
-    val config: Config
+    def config: Config
     def jdbcSessionFactory(): JdbcSession
 
     def initContainer(): Unit
@@ -101,7 +102,13 @@ object JdbcOffsetStoreSpec {
   }
 }
 
-class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
+class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig) {
+
+  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
+
+  override def selectLastStatement: String =
+    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+}
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)
@@ -118,7 +125,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
 
-  private val settings = JdbcSettings(testKit.system)
+  val settings = JdbcSettings(testKit.system)
   private val offsetStore = new JdbcOffsetStore(system, settings, specConfig.jdbcSessionFactory _, clock)
   private val dialectLabel = specConfig.name
 
@@ -137,10 +144,10 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override protected def afterAll(): Unit =
     specConfig.stopContainer()
 
-  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
+  private val table = settings.schema.map(s => s"$s.${settings.table}").getOrElse(settings.table)
 
   def selectLastStatement: String =
-    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+    s"""SELECT * FROM $table WHERE projection_name = ? AND projection_key = ?"""
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     withConnection(specConfig.jdbcSessionFactory _) { conn =>

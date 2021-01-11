@@ -7,7 +7,15 @@ package akka.projection.jdbc.internal
 import scala.collection.immutable
 
 import akka.annotation.InternalApi
-import akka.projection.jdbc.internal.Dialect.removeQuotes
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] object Dialect {
+
+  def removeQuotes(stmt: String): String = stmt.replace("\"", "")
+}
 
 /**
  * INTERNAL API
@@ -23,15 +31,6 @@ private[projection] trait Dialect {
   def insertStatement(): String
   def updateStatement(): String
 
-}
-
-/**
- * INTERNAL API
- */
-@InternalApi
-private[jdbc] object Dialect {
-  def removeQuotes(stmt: String): String =
-    stmt.replace("\"", "")
 }
 
 /**
@@ -133,6 +132,47 @@ private[projection] case class DefaultDialect(schema: Option[String], tableName:
  * INTERNAL API
  */
 @InternalApi
+private[projection] case class PostgresDialect(schema: Option[String], tableName: String, legacy: Boolean)
+    extends Dialect {
+
+  def this(tableName: String, unquoted: Boolean) = this(None, tableName, unquoted)
+
+  def transform(stmt: String): String =
+    if (legacy) stmt
+    else Dialect.removeQuotes(stmt).toLowerCase
+
+  private val table = {
+    schema
+      .map { s =>
+        transform(s""""$s"."$tableName"""")
+      }
+      .getOrElse(transform(s""""$tableName""""))
+  }
+
+  override val createTableStatements =
+    DialectDefaults.createTableStatement(table).map(s => transform(s))
+
+  override def dropTableStatement: String =
+    transform(DialectDefaults.dropTableStatement(table))
+
+  override val readOffsetQuery: String =
+    transform(DialectDefaults.readOffsetQuery(table))
+
+  override val clearOffsetStatement: String =
+    transform(DialectDefaults.clearOffsetStatement(table))
+
+  override def insertStatement(): String =
+    transform(DialectDefaults.insertStatement(table))
+
+  override def updateStatement(): String =
+    transform(DialectDefaults.updateStatement(table))
+
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
 private[projection] case class MySQLDialect(schema: Option[String], tableName: String) extends Dialect {
 
   def this(tableName: String) = this(None, tableName)
@@ -154,19 +194,19 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
       s"""CREATE INDEX PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""")
 
   override val dropTableStatement: String =
-    removeQuotes(DialectDefaults.dropTableStatement(table))
+    Dialect.removeQuotes(DialectDefaults.dropTableStatement(table))
 
   override val readOffsetQuery: String =
-    removeQuotes(DialectDefaults.readOffsetQuery(table))
+    Dialect.removeQuotes(DialectDefaults.readOffsetQuery(table))
 
   override val clearOffsetStatement: String =
-    removeQuotes(DialectDefaults.clearOffsetStatement(table))
+    Dialect.removeQuotes(DialectDefaults.clearOffsetStatement(table))
 
   override def insertStatement(): String =
-    removeQuotes(DialectDefaults.insertStatement(table))
+    Dialect.removeQuotes(DialectDefaults.insertStatement(table))
 
   override def updateStatement(): String =
-    removeQuotes(DialectDefaults.updateStatement(table))
+    Dialect.removeQuotes(DialectDefaults.updateStatement(table))
 }
 
 /**
