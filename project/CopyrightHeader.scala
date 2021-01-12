@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2021 Lightbend Inc. <https://www.lightbend.com>
  */
 import de.heikoseeberger.sbtheader.CommentCreator
 import de.heikoseeberger.sbtheader.HeaderPlugin
@@ -12,7 +12,7 @@ object CopyrightHeader extends AutoPlugin {
   override def trigger = allRequirements
 
   override def projectSettings =
-    Def.settings(Seq(Compile, Test).flatMap { config =>
+    Def.settings(Seq(Compile, Test, IntegrationTest).flatMap { config =>
       inConfig(config)(
         Seq(
           headerLicense := Some(HeaderLicense.Custom(headerFor(CurrentYear))),
