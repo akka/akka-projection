@@ -102,13 +102,7 @@ object JdbcOffsetStoreSpec {
   }
 }
 
-class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig) {
-
-  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
-
-  override def selectLastStatement: String =
-    s"""SELECT * FROM $table WHERE "projection_name" = ? AND "projection_key" = ?"""
-}
+class H2JdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcOffsetStoreSpec.H2SpecConfig)
 
 abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     extends ScalaTestWithActorTestKit(specConfig.config)
@@ -144,10 +138,12 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
   override protected def afterAll(): Unit =
     specConfig.stopContainer()
 
-  private val table = settings.schema.map(s => s"$s.${settings.table}").getOrElse(settings.table).toLowerCase
+  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
 
-  def selectLastStatement: String =
-    s"""SELECT * FROM $table WHERE projection_name = ? AND projection_key = ?"""
+  def selectLastStatement: String = {
+    // wrapping with quotes always work as long as case is respected
+    s"""SELECT * FROM $table WHERE "projection_name" = ? AND "projection_key" = ?"""
+  }
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     withConnection(specConfig.jdbcSessionFactory _) { conn =>
