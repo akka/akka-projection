@@ -128,7 +128,7 @@ object KafkaDocExample {
   //#wordPublisher
 
   val config: Config = ConfigFactory.parseString("""
-    akka.projection.jdbc = {
+    akka.projection.jdbc {
       dialect = "h2-dialect"
       blocking-jdbc-dispatcher {
         type = Dispatcher

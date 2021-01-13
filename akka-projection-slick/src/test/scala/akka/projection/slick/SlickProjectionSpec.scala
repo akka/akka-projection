@@ -58,7 +58,7 @@ object SlickProjectionSpec {
   def config: Config = ConfigFactory.parseString("""
       akka {
        loglevel = "DEBUG"
-       projection.slick = {
+       projection.slick {
 
          profile = "slick.jdbc.H2Profile$"
 

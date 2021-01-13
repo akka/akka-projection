@@ -26,7 +26,7 @@ class JdbcSettingsSpec extends TestSuite with Matchers with AnyWordSpecLike with
         ConfigFactory.parseString("""
           akka {
             loglevel = "DEBUG"
-            projection.jdbc = {
+            projection.jdbc {
               dialect = "h2-dialect"
               blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = "5"
             }
@@ -44,7 +44,7 @@ class JdbcSettingsSpec extends TestSuite with Matchers with AnyWordSpecLike with
         ConfigFactory.parseString("""
           akka {
             loglevel = "DEBUG"
-            projection.jdbc = {
+            projection.jdbc {
               dialect = "h2-dialect"
               blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = " 5  "
             }
@@ -62,7 +62,7 @@ class JdbcSettingsSpec extends TestSuite with Matchers with AnyWordSpecLike with
         ConfigFactory.parseString("""
           akka {
             loglevel = "DEBUG"
-            projection.jdbc = {
+            projection.jdbc {
               dialect = "h2-dialect"
               blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
             }
@@ -80,7 +80,7 @@ class JdbcSettingsSpec extends TestSuite with Matchers with AnyWordSpecLike with
         ConfigFactory.parseString("""
           akka {
             loglevel = "DEBUG"
-            projection.jdbc = {
+            projection.jdbc {
               dialect = "h2-dialect"
               blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = "this-is-not-valid"
             }
@@ -104,7 +104,7 @@ class JdbcSettingsSpec extends TestSuite with Matchers with AnyWordSpecLike with
         ConfigFactory.parseString("""
           akka {
             loglevel = "DEBUG"
-            projection.jdbc = {
+            projection.jdbc {
               blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
             }
           }
@@ -126,7 +126,7 @@ class JdbcSettingsSpec extends TestSuite with Matchers with AnyWordSpecLike with
         ConfigFactory.parseString("""
           akka {
             loglevel = "DEBUG"
-            projection.jdbc = {
+            projection.jdbc {
               dialect = "h3-dialect"
               blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
             }
@@ -149,7 +149,7 @@ class JdbcSettingsSpec extends TestSuite with Matchers with AnyWordSpecLike with
         ConfigFactory.parseString("""
           akka {
             loglevel = "DEBUG"
-            projection.jdbc = {
+            projection.jdbc {
               dialect = "h2-dialect"
             }
           }
@@ -167,7 +167,7 @@ class JdbcSettingsSpec extends TestSuite with Matchers with AnyWordSpecLike with
         ConfigFactory.parseString("""
           akka {
             loglevel = "DEBUG"
-            projection.jdbc = {
+            projection.jdbc {
               dialect = "h2-dialect"
               
               # user tweaks the dispatcher to be something else

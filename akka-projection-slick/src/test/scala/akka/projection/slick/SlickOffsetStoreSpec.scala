@@ -36,7 +36,7 @@ object SlickOffsetStoreSpec {
     val name: String
     def tag: Tag
     val baseConfig = ConfigFactory.parseString("""
-    akka.projection.slick = {
+    akka.projection.slick {
       offset-store {
         schema = ""
         table = "AKKA_PROJECTION_OFFSET_STORE"
@@ -54,7 +54,7 @@ object SlickOffsetStoreSpec {
     val tag = TestTags.InMemoryDb
     override def config: Config =
       baseConfig.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
+        akka.projection.slick {
            profile = "slick.jdbc.H2Profile$"
            db = {
              url = "jdbc:h2:mem:offset-store-test-slick;DB_CLOSE_DELAY=-1"
