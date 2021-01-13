@@ -7,6 +7,7 @@ package akka.projection.jdbc.internal
 import scala.collection.immutable
 
 import akka.annotation.InternalApi
+import akka.util.Helpers.toRootLowerCase
 
 /**
  * INTERNAL API
@@ -114,7 +115,7 @@ private[projection] case class H2Dialect(schema: Option[String], tableName: Stri
   def this(tableName: String, lowerCase: Boolean) = this(None, tableName, lowerCase)
 
   def transform(stmt: String): String =
-    if (lowerCase) stmt.toLowerCase
+    if (lowerCase) toRootLowerCase(stmt)
     else stmt
 
   private val table = transform(schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName""""))
@@ -144,7 +145,7 @@ private[projection] case class PostgresDialect(schema: Option[String], tableName
   def this(tableName: String, lowerCase: Boolean) = this(None, tableName, lowerCase)
 
   def transform(stmt: String): String =
-    if (lowerCase) Dialect.removeQuotes(stmt).toLowerCase
+    if (lowerCase) toRootLowerCase(Dialect.removeQuotes(stmt))
     else stmt
 
   private val table = {

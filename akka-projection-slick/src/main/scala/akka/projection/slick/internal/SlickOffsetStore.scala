@@ -23,6 +23,7 @@ import akka.projection.jdbc.internal.MSSQLServerDialect
 import akka.projection.jdbc.internal.MySQLDialect
 import akka.projection.jdbc.internal.OracleDialect
 import akka.projection.jdbc.internal.PostgresDialect
+import akka.util.Helpers.toRootLowerCase
 import slick.jdbc.JdbcProfile
 
 /**
@@ -99,7 +100,7 @@ import slick.jdbc.JdbcProfile
   }
 
   private def adaptCase(str: String): String =
-    if (useLowerCase) str.toLowerCase
+    if (useLowerCase) toRootLowerCase(str)
     else str
 
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
