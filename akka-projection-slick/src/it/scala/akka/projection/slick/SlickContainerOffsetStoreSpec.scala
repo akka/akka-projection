@@ -27,7 +27,7 @@ object SlickContainerOffsetStoreSpec {
 
     override def config = {
       baseConfig.withFallback(ConfigFactory.parseString(s"""
-        akka.projection.slick = {
+        akka.projection.slick {
            db = {
              url = "${container.getJdbcUrl}"
              driver = ${container.getDriverClassName}
@@ -59,7 +59,7 @@ object SlickContainerOffsetStoreSpec {
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
+        akka.projection.slick {
            profile = "slick.jdbc.PostgresProfile$"
         }
         """))
@@ -72,7 +72,7 @@ object SlickContainerOffsetStoreSpec {
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
+        akka.projection.slick {
            profile = "slick.jdbc.MySQLProfile$"
         }
         """))
@@ -86,7 +86,7 @@ object SlickContainerOffsetStoreSpec {
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
+        akka.projection.slick {
            profile = "slick.jdbc.SQLServerProfile$"
         }
         """))
@@ -98,7 +98,7 @@ object SlickContainerOffsetStoreSpec {
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick = {
+        akka.projection.slick {
            profile = "slick.jdbc.OracleProfile$"
         }
         """))

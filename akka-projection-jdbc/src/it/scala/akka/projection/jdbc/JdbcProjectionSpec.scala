@@ -61,7 +61,7 @@ object JdbcProjectionSpec {
   val config: Config = ConfigFactory.parseString(s"""
     akka {
       loglevel = "DEBUG"
-      projection.jdbc = {
+      projection.jdbc {
         dialect = "h2-dialect"
         offset-store {
           schema = ""

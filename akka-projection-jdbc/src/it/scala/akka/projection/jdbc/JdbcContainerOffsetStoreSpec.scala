@@ -28,7 +28,7 @@ object JdbcContainerOffsetStoreSpec {
 
     override val config: Config =
       baseConfig.withFallback(ConfigFactory.parseString(s"""
-        akka.projection.jdbc = {
+        akka.projection.jdbc {
           offset-store.schema = "$schemaName"
           dialect = $dialect
         }

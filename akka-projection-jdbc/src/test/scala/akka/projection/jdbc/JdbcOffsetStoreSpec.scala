@@ -44,7 +44,7 @@ object JdbcOffsetStoreSpec {
     
     akka {
       loglevel = "DEBUG"
-      projection.jdbc = {
+      projection.jdbc {
         offset-store {
           table = "AKKA_PROJECTION_OFFSET_STORE"
         }
@@ -81,7 +81,7 @@ object JdbcOffsetStoreSpec {
 
     override val config: Config =
       baseConfig.withFallback(ConfigFactory.parseString("""
-        akka.projection.jdbc = {
+        akka.projection.jdbc {
           dialect = "h2-dialect"
         }
         """))
