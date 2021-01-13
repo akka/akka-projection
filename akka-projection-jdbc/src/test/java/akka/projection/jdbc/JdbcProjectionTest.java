@@ -54,7 +54,7 @@ public class JdbcProjectionTest extends JUnitSuite {
   static {
     configuration.put("akka.projection.jdbc.dialect", "h2-dialect");
     configuration.put("akka.projection.jdbc.offset-store.schema", "");
-    configuration.put("akka.projection.jdbc.offset-store.table", "AKKA_PROJECTION_OFFSET_STORE");
+    configuration.put("akka.projection.jdbc.offset-store.table", "akka_projection_offset_store");
     configuration.put(
         "akka.projection.jdbc.blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size", 5);
   }

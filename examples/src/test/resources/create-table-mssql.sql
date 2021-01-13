@@ -1,18 +1,18 @@
 
 #create-table-mssql
-IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'"AKKA_PROJECTION_OFFSET_STORE"') AND type in (N'U'))
-begin
-create table "AKKA_PROJECTION_OFFSET_STORE" (
-  "PROJECTION_NAME" VARCHAR(255) NOT NULL,
-  "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-  "CURRENT_OFFSET" VARCHAR(255) NOT NULL,
-  "MANIFEST" VARCHAR(4) NOT NULL,
-  "MERGEABLE" BIT NOT NULL,
-  "LAST_UPDATED" BIGINT NOT NULL
+IF NOT EXISTS (SELECT 1 FROM SYS.OBJECTS WHERE OBJECT_ID = OBJECT_ID(N'akka_projection_offset_store') AND TYPE IN (N'U'))
+BEGIN
+CREATE TABLE akka_projection_offset_store (
+  projection_name VARCHAR(255) NOT NULL,
+  projection_key VARCHAR(255) NOT NULL,
+  current_offset VARCHAR(255) NOT NULL,
+  manifest VARCHAR(4) NOT NULL,
+  mergeable BIT NOT NULL,
+  last_updated BIGINT NOT NULL
 )
 
-alter table "AKKA_PROJECTION_OFFSET_STORE" add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
+ALTER TABLE akka_projection_offset_store ADD CONSTRAINT pk_projection_id PRIMARY KEY(projection_name, projection_key)
 
-create index "PROJECTION_NAME_INDEX" on "AKKA_PROJECTION_OFFSET_STORE" ("PROJECTION_NAME")
-end
+CREATE INDEX projection_name_index ON akka_projection_offset_store (projection_name)
+END
 #create-table-mssql

@@ -162,7 +162,7 @@ See also @ref:[error handling](error.md).
 The database schema for the offset storage table:
 
 PostgreSQL
-:  @@snip [create-table-default.sql](/examples/src/test/resources/create-table-default.sql) { #create-table-default }
+:  @@snip [create-table-postgres.sql](/examples/src/test/resources/create-table-postgres.sql) { #create-table-postgres }
 
 MySQL
 :  @@snip [create-table-mysql.sql](/examples/src/test/resources/create-table-mysql.sql) { #create-table-mysql }
@@ -174,7 +174,7 @@ Oracle
 :  @@snip [create-table-oracle.sql](/examples/src/test/resources/create-table-oracle.sql) { #create-table-oracle }
 
 H2
-:  @@snip [create-table-default.sql](/examples/src/test/resources/create-table-default.sql) { #create-table-default }
+:  @@snip [create-table-h2.sql](/examples/src/test/resources/create-table-h2.sql) { #create-table-h2 }
 
 The schema can be created using the method `SlickProjection.createOffsetTableIfNotExists`. This is particularly useful when writting tests. For production enviornments, we recommend creating the schema before deploying the application.
 

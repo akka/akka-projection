@@ -63,16 +63,11 @@ object SlickProjectionSpec {
          profile = "slick.jdbc.H2Profile$"
 
           # TODO: configure connection pool and slick async executor
-          db = {
+          db {
             url = "jdbc:h2:mem:slick-projection-test;DB_CLOSE_DELAY=-1"
             driver = org.h2.Driver
             connectionPool = disabled
             keepAliveConnection = true
-          }
-         
-          offset-store {
-            schema = ""
-            table = "AKKA_PROJECTION_OFFSET_STORE"
           }
        }
       }

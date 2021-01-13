@@ -16,12 +16,14 @@ import akka.dispatch.ExecutionContexts
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization
-import akka.projection.jdbc.internal.DefaultDialect
 import akka.projection.jdbc.internal.Dialect
+import akka.projection.jdbc.internal.H2Dialect
 import akka.projection.jdbc.internal.JdbcSessionUtil
 import akka.projection.jdbc.internal.MSSQLServerDialect
 import akka.projection.jdbc.internal.MySQLDialect
 import akka.projection.jdbc.internal.OracleDialect
+import akka.projection.jdbc.internal.PostgresDialect
+import akka.util.Helpers.toRootLowerCase
 import slick.jdbc.JdbcProfile
 
 /**
@@ -40,14 +42,23 @@ import slick.jdbc.JdbcProfile
   def this(system: ActorSystem[_], db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
     this(system, db, profile, slickSettings, Clock.systemUTC())
 
-  val dialect: Dialect =
+  val (dialect, useLowerCase): (Dialect, Boolean) = {
+
+    val useLowerCase = slickSettings.useLowerCase
+
     profile match {
-      case _: slick.jdbc.MySQLProfile     => MySQLDialect(slickSettings.schema, slickSettings.table)
-      case _: slick.jdbc.PostgresProfile  => DefaultDialect(slickSettings.schema, slickSettings.table)
-      case _: slick.jdbc.H2Profile        => DefaultDialect(slickSettings.schema, slickSettings.table)
-      case _: slick.jdbc.SQLServerProfile => MSSQLServerDialect(slickSettings.schema, slickSettings.table)
-      case _: slick.jdbc.OracleProfile    => OracleDialect(slickSettings.schema, slickSettings.table)
+      case _: slick.jdbc.H2Profile =>
+        (H2Dialect(slickSettings.schema, slickSettings.table, useLowerCase), useLowerCase)
+      case _: slick.jdbc.PostgresProfile =>
+        (PostgresDialect(slickSettings.schema, slickSettings.table, useLowerCase), useLowerCase)
+      // mysql and Sql server are case insensitive, we favor lower case
+      case _: slick.jdbc.SQLServerProfile => (MSSQLServerDialect(slickSettings.schema, slickSettings.table), true)
+      case _: slick.jdbc.MySQLProfile     => (MySQLDialect(slickSettings.schema, slickSettings.table), true)
+      // oracle must always use quoted + uppercase
+      case _: slick.jdbc.OracleProfile => (OracleDialect(slickSettings.schema, slickSettings.table), false)
+
     }
+  }
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -88,17 +99,21 @@ import slick.jdbc.JdbcProfile
     offsetTable.filter(row => row.projectionName === projectionId.name && row.projectionKey === projectionId.key).delete
   }
 
+  private def adaptCase(str: String): String =
+    if (useLowerCase) toRootLowerCase(str)
+    else str
+
   class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
 
-    def projectionName = column[String]("PROJECTION_NAME", O.Length(255))
-    def projectionKey = column[String]("PROJECTION_KEY", O.Length(255))
-    def offset = column[String]("CURRENT_OFFSET", O.Length(255))
-    def manifest = column[String]("MANIFEST", O.Length(4))
-    def mergeable = column[Boolean]("MERGEABLE")
-    def lastUpdated = column[Long]("LAST_UPDATED")
+    def projectionName = column[String](adaptCase("PROJECTION_NAME"), O.Length(255))
+    def projectionKey = column[String](adaptCase("PROJECTION_KEY"), O.Length(255))
+    def offset = column[String](adaptCase("CURRENT_OFFSET"), O.Length(255))
+    def manifest = column[String](adaptCase("MANIFEST"), O.Length(4))
+    def mergeable = column[Boolean](adaptCase("MERGEABLE"))
+    def lastUpdated = column[Long](adaptCase("LAST_UPDATED"))
 
-    def pk = primaryKey("PK_PROJECTION_ID", (projectionName, projectionKey))
-    def idx = index("PROJECTION_NAME_INDEX", projectionName)
+    def pk = primaryKey(adaptCase("PK_PROJECTION_ID"), (projectionName, projectionKey))
+    def idx = index(adaptCase("PROJECTION_NAME_INDEX"), projectionName)
 
     def * = (projectionName, projectionKey, offset, manifest, mergeable, lastUpdated).mapTo[OffsetRow]
   }

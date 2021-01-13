@@ -7,7 +7,16 @@ package akka.projection.jdbc.internal
 import scala.collection.immutable
 
 import akka.annotation.InternalApi
-import akka.projection.jdbc.internal.Dialect.removeQuotes
+import akka.util.Helpers.toRootLowerCase
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] object Dialect {
+
+  def removeQuotes(stmt: String): String = stmt.replace("\"", "")
+}
 
 /**
  * INTERNAL API
@@ -23,15 +32,6 @@ private[projection] trait Dialect {
   def insertStatement(): String
   def updateStatement(): String
 
-}
-
-/**
- * INTERNAL API
- */
-@InternalApi
-private[jdbc] object Dialect {
-  def removeQuotes(stmt: String): String =
-    stmt.replace("\"", "")
 }
 
 /**
@@ -109,23 +109,70 @@ private[projection] object DialectDefaults {
  * INTERNAL API
  */
 @InternalApi
-private[projection] case class DefaultDialect(schema: Option[String], tableName: String) extends Dialect {
+private[projection] case class H2Dialect(schema: Option[String], tableName: String, lowerCase: Boolean)
+    extends Dialect {
 
-  def this(tableName: String) = this(None, tableName)
+  def this(tableName: String, lowerCase: Boolean) = this(None, tableName, lowerCase)
 
-  private val table = schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName"""")
+  def transform(stmt: String): String =
+    if (lowerCase) toRootLowerCase(stmt)
+    else stmt
 
-  override val createTableStatements: immutable.Seq[String] = DialectDefaults.createTableStatement(table)
+  private val table = transform(schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName""""))
 
-  override val dropTableStatement: String = DialectDefaults.dropTableStatement(table)
+  override val createTableStatements: immutable.Seq[String] =
+    DialectDefaults.createTableStatement(table).map(s => transform(s))
 
-  override val readOffsetQuery: String = DialectDefaults.readOffsetQuery(table)
+  override val dropTableStatement: String = transform(DialectDefaults.dropTableStatement(table))
 
-  override val clearOffsetStatement: String = DialectDefaults.clearOffsetStatement(table)
+  override val readOffsetQuery: String = transform(DialectDefaults.readOffsetQuery(table))
 
-  override def insertStatement(): String = DialectDefaults.insertStatement(table)
+  override val clearOffsetStatement: String = transform(DialectDefaults.clearOffsetStatement(table))
 
-  override def updateStatement(): String = DialectDefaults.updateStatement(table)
+  override def insertStatement(): String = transform(DialectDefaults.insertStatement(table))
+
+  override def updateStatement(): String = transform(DialectDefaults.updateStatement(table))
+
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] case class PostgresDialect(schema: Option[String], tableName: String, lowerCase: Boolean)
+    extends Dialect {
+
+  def this(tableName: String, lowerCase: Boolean) = this(None, tableName, lowerCase)
+
+  def transform(stmt: String): String =
+    if (lowerCase) toRootLowerCase(Dialect.removeQuotes(stmt))
+    else stmt
+
+  private val table = {
+    schema
+      .map { s =>
+        transform(s""""$s"."$tableName"""")
+      }
+      .getOrElse(transform(s""""$tableName""""))
+  }
+
+  override val createTableStatements =
+    DialectDefaults.createTableStatement(table).map(s => transform(s))
+
+  override def dropTableStatement: String =
+    transform(DialectDefaults.dropTableStatement(table))
+
+  override val readOffsetQuery: String =
+    transform(DialectDefaults.readOffsetQuery(table))
+
+  override val clearOffsetStatement: String =
+    transform(DialectDefaults.clearOffsetStatement(table))
+
+  override def insertStatement(): String =
+    transform(DialectDefaults.insertStatement(table))
+
+  override def updateStatement(): String =
+    transform(DialectDefaults.updateStatement(table))
 
 }
 
@@ -142,31 +189,31 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
   override val createTableStatements =
     immutable.Seq(
       s"""CREATE TABLE IF NOT EXISTS $table (
-         |  PROJECTION_NAME VARCHAR(255) NOT NULL,
-         |  PROJECTION_KEY VARCHAR(255) NOT NULL,
-         |  CURRENT_OFFSET VARCHAR(255) NOT NULL,
-         |  MANIFEST VARCHAR(4) NOT NULL,
-         |  MERGEABLE BOOLEAN NOT NULL,
-         |  LAST_UPDATED BIGINT NOT NULL,
-         |  PRIMARY KEY(PROJECTION_NAME, PROJECTION_KEY)
+         |  projection_name VARCHAR(255) NOT NULL,
+         |  projection_key VARCHAR(255) NOT NULL,
+         |  current_offset VARCHAR(255) NOT NULL,
+         |  manifest VARCHAR(4) NOT NULL,
+         |  mergeable BOOLEAN NOT NULL,
+         |  last_updated BIGINT NOT NULL,
+         |  PRIMARY KEY(projection_name, projection_key)
          |);""".stripMargin,
       // create index
-      s"""CREATE INDEX PROJECTION_NAME_INDEX ON $table (PROJECTION_NAME);""")
+      s"""CREATE INDEX projection_name_index ON $table (projection_name);""")
 
   override val dropTableStatement: String =
-    removeQuotes(DialectDefaults.dropTableStatement(table))
+    Dialect.removeQuotes(DialectDefaults.dropTableStatement(table))
 
   override val readOffsetQuery: String =
-    removeQuotes(DialectDefaults.readOffsetQuery(table))
+    Dialect.removeQuotes(DialectDefaults.readOffsetQuery(table))
 
   override val clearOffsetStatement: String =
-    removeQuotes(DialectDefaults.clearOffsetStatement(table))
+    Dialect.removeQuotes(DialectDefaults.clearOffsetStatement(table))
 
   override def insertStatement(): String =
-    removeQuotes(DialectDefaults.insertStatement(table))
+    Dialect.removeQuotes(DialectDefaults.insertStatement(table))
 
   override def updateStatement(): String =
-    removeQuotes(DialectDefaults.updateStatement(table))
+    Dialect.removeQuotes(DialectDefaults.updateStatement(table))
 }
 
 /**
@@ -177,24 +224,24 @@ private[projection] case class MSSQLServerDialect(schema: Option[String], tableN
 
   def this(tableName: String) = this(None, tableName)
 
-  private val table = schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName"""")
+  private val table = schema.map(s => s"""$s.$tableName""").getOrElse(s"""$tableName""")
 
   override val createTableStatements =
     immutable.Seq(
       s"""IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'$table') AND type in (N'U'))
          |begin
          |  create table $table (
-         |    "PROJECTION_NAME" VARCHAR(255) NOT NULL,
-         |    "PROJECTION_KEY" VARCHAR(255) NOT NULL,
-         |    "CURRENT_OFFSET" VARCHAR(255) NOT NULL,
-         |    "MANIFEST" VARCHAR(4) NOT NULL,
-         |    "MERGEABLE" BIT NOT NULL,
-         |    "LAST_UPDATED" BIGINT NOT NULL
+         |    projection_name VARCHAR(255) NOT NULL,
+         |    projection_key VARCHAR(255) NOT NULL,
+         |    current_offset VARCHAR(255) NOT NULL,
+         |    manifest VARCHAR(4) NOT NULL,
+         |    mergeable BIT NOT NULL,
+         |    last_updated BIGINT NOT NULL
          |  )
          |
-         |  alter table $table add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY")
+         |  alter table $table add constraint pk_projection_id primary key(projection_name, projection_key)
          |
-         |  create index "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME")
+         |  create index projection_name_index on $table (projection_name)
          |end""".stripMargin)
 
   override val dropTableStatement: String = DialectDefaults.dropTableStatement(table)

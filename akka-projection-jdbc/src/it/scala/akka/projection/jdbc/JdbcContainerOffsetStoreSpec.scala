@@ -26,7 +26,7 @@ object JdbcContainerOffsetStoreSpec {
 
     final val schemaName = "test_schema"
 
-    override val config: Config =
+    override def config: Config =
       baseConfig.withFallback(ConfigFactory.parseString(s"""
         akka.projection.jdbc {
           offset-store.schema = "$schemaName"
@@ -69,6 +69,19 @@ object JdbcContainerOffsetStoreSpec {
     override def newContainer(): JdbcDatabaseContainer[_] =
       new PostgreSQLContainer("postgres:13.1").withInitScript("db/default-init.sql")
   }
+  object PostgresLegacySchemaSpecConfig extends ContainerJdbcSpecConfig("postgres-dialect") {
+    val name = "Postgres Database"
+
+    override def config: Config =
+      super.config.withFallback(ConfigFactory.parseString("""
+        akka.projection.jdbc = {
+           offset-store.use-lowercase-schema = false
+        }
+        """))
+
+    override def newContainer(): JdbcDatabaseContainer[_] =
+      new PostgreSQLContainer("postgres:13.1").withInitScript("db/default-init.sql")
+  }
 
   object MySQLSpecConfig extends ContainerJdbcSpecConfig("mysql-dialect") {
     val name = "MySQL Database"
@@ -94,8 +107,24 @@ object JdbcContainerOffsetStoreSpec {
 }
 
 class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.PostgresSpecConfig)
+
+class PostgresJdbcOffsetStoreLegacySchemaSpec
+    extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.PostgresLegacySchemaSpecConfig) {
+
+  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
+  override def selectLastStatement: String =
+    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+}
+
 class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.MySQLSpecConfig) {
   override def selectLastStatement: String = Dialect.removeQuotes(super.selectLastStatement)
 }
+
 class MSSQLServerJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.MSSQLServerSpecConfig)
-class OracleJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.OracleSpecConfig)
+
+class OracleJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.OracleSpecConfig) {
+
+  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
+  override def selectLastStatement: String =
+    s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
+}
