@@ -20,7 +20,7 @@ class OffsetSchemaSpec extends AnyWordSpecLike with Matchers {
 
     "match the version used in code (H2)" in {
       val fromDialect = asFileContent((opt, s) => H2Dialect(opt, s, lowerCase = true), "h2")
-      val fromSqlFile = Source.fromResource("create-table-default.sql").mkString
+      val fromSqlFile = Source.fromResource("create-table-h2.sql").mkString
       normalize(fromSqlFile) shouldBe normalize(fromDialect)
     }
 
