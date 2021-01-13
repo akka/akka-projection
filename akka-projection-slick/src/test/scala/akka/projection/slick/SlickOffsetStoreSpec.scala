@@ -53,7 +53,7 @@ object SlickOffsetStoreSpec {
 
     val name = "H2 Database"
     val tag = TestTags.InMemoryDb
-    
+
     override def config: Config =
       ConfigFactory.parseString("""
         akka.projection.slick {
