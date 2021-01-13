@@ -3,6 +3,7 @@ import akka.projections.Dependencies
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
     .configs(IntegrationTest)
+    .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.core)
     .settings(
@@ -14,6 +15,7 @@ lazy val core =
 lazy val coreTest =
   Project(id = "akka-projection-core-test", base = file("akka-projection-core-test"))
     .configs(IntegrationTest)
+    .settings(headerSettings(IntegrationTest))
     .disablePlugins(MimaPlugin)
     .settings(Defaults.itSettings)
     .settings(Dependencies.coreTest)
@@ -24,6 +26,7 @@ lazy val coreTest =
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
     .configs(IntegrationTest)
+    .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.testKit)
     .dependsOn(core)
@@ -32,6 +35,7 @@ lazy val testkit =
 lazy val jdbc =
   Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
     .configs(IntegrationTest.extend(Test))
+    .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.jdbc)
     .dependsOn(core)
@@ -42,6 +46,7 @@ lazy val jdbc =
 lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
     .configs(IntegrationTest.extend(Test))
+    .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.slick)
     .dependsOn(jdbc)
@@ -53,6 +58,7 @@ lazy val slick =
 lazy val cassandra =
   Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
     .configs(IntegrationTest)
+    .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.cassandra)
     .dependsOn(core)
@@ -73,6 +79,7 @@ lazy val eventsourced =
 lazy val kafka =
   Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
     .configs(IntegrationTest)
+    .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.kafka)
     .dependsOn(core)
@@ -81,6 +88,7 @@ lazy val kafka =
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
+  .settings(headerSettings(IntegrationTest))
   .disablePlugins(MimaPlugin)
   .settings(Defaults.itSettings)
   .settings(Dependencies.examples)
