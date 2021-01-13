@@ -12,7 +12,7 @@ object CopyrightHeader extends AutoPlugin {
   override def trigger = allRequirements
 
   override def projectSettings =
-    Def.settings(Seq(Compile, Test, IntegrationTest).flatMap { config =>
+    Def.settings(Seq(Compile, Test).flatMap { config =>
       inConfig(config)(
         Seq(
           headerLicense := Some(HeaderLicense.Custom(headerFor(CurrentYear))),
