@@ -47,6 +47,5 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
   implicit val actorSystem = testKit.system
   implicit val dispatcher = testKit.system.executionContext
 
-  override val testcontainersSettings =
-    KafkaTestkitTestcontainersSettings(system).withConfluentPlatformVersion("6.0.1")
+  override val testcontainersSettings = KafkaTestkitTestcontainersSettings(system)
 }
