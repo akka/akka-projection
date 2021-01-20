@@ -230,7 +230,7 @@ H2
 The schema can be created using the method `JdbcProjection.createOffsetTableIfNotExists`. This is particularly useful when writting tests. For production enviornments, we recommend creating the schema before deploying the application.
 
 @@@ warning { title=Important }
-As of version 1.0.1, the schema for PostgresSQL have changed. It now defaults to lowercase un-quoted table and column names. 
+As of version 1.0.1, the schema for PostgreSQL has changed. It now defaults to lowercase un-quoted table and column names. 
 If you have a schema in production, we recommend applying an ALTER table script to change it accordingly. 
 
 Alternatively, you can fallback to the legacy format by setting the property `akka.projection.jdbc.offset-store.use-lowercase-schema` to `false`.
