@@ -233,7 +233,7 @@ The schema can be created using the method `JdbcProjection.createOffsetTableIfNo
 As of version 1.1.0, the schema for PostgreSQL and H2 databases has changed. It now defaults to lowercase table and column names.
 If you have a schema in production, we recommend applying an ALTER table script to change it accordingly.
 
-Alternatively, you can fallback to the uppercase format. You will also need to set `akka.projection.jdbc.offset-store.table` to uppercase, as this setting is now defaulting to lowercase.
+Alternatively, you can fallback to the uppercase format. You will also need to set `akka.projection.jdbc.offset-store.table` as an uppercase value, as this setting is now defaulting to lowercase.
 
 ```hocon
 akka.projection.jdbc.offset-store {
