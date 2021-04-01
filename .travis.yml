@@ -26,57 +26,11 @@ jobs:
     - stage: check
       env: CMD="verifyCodeStyle"
       name: "Code style check. Run locally with: sbt verifyCodeStyle"
-    - env: CMD="++2.12.11 IntegrationTest/compile"
-      name: "Compile all code with 2.12"
-    - env: CMD="IntegrationTest/compile"
-      name: "Compile all code with 2.13"
-    - env: CMD="unidoc; docs/paradox"
-      name: "Create API and reference documentation"
-
-    - stage: test
-      env:
-        - CMD="test"
-      name: "Run unit tests with Scala 2.13 and AdoptOpenJDK 8"
-    - env:
-        - JDK="adopt@~1.11-0"
-        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="test"
-      name: "Run unit tests with Scala 2.13 and AdoptOpenJDK 11"
-    - env:
-        - CMD="it:test"
-      name: "Run all integration tests with Scala 2.13 and AdoptOpenJDK 8"
-    - env:
-        - JDK="adopt@~1.11-0"
-        - _JAVA_OPTIONS="-XX:+UnlockExperimentalVMOptions -XX:+UseJVMCICompiler"
-        - CMD="it:test"
-      name: "Run all integration tests with Scala 2.13 and AdoptOpenJDK 11"
-
-    - stage: whitesource
-      name: WhiteSource
-      script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt -jvm-opts .jvmopts-travis whitesourceCheckPolicies whitesourceUpdate
-
-    - stage: publish
-      env: CMD="+publish"
-      name: "Publish artifacts to Bintray"
-    - script: openssl aes-256-cbc -K $encrypted_8fb0ea6dc959_key -iv $encrypted_8fb0ea6dc959_iv -in .travis/travis_gustav.enc -out .travis/id_rsa -d && eval "$(ssh-agent -s)" && chmod 600 .travis/id_rsa && ssh-add .travis/id_rsa && sbt -jvm-opts .jvmopts-travis docs/publishRsync
-      name: "Publish API and reference documentation"
 
 stages:
   # runs on master commits and PRs
   - name: check
     if: NOT tag =~ ^v
-
-  # runs on master commits and PRs
-  - name: test
-    if: NOT tag =~ ^v
-
-  # runs on main repo master commits and version-tagged commits
-  - name: whitesource
-    if: repo = akka/akka-projection AND ( ( branch = master AND type = push ) OR tag =~ ^v)
-
-  # runs on main repo master commits and version-tagged commits
-  - name: publish
-    if: repo = akka/akka-projection AND ( ( branch = master AND type = push ) OR tag =~ ^v )
 
 after_failure:
   - docker-compose logs
