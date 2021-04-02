@@ -43,6 +43,8 @@ jobs:
 
       - name: Run all integration tests with Scala ${{ matrix.scala-version }} and Java ${{ matrix.java-version }}
         run: sbt "++${{ matrix.scala-version }} akka-projection-slick/it:test" ${{ matrix.sbt-opts }}
+        env: # Disable Ryuk resource reaper since we always spin up fresh VMs
+          TESTCONTAINERS_RYUK_DISABLED: true
 
       - name: Print logs on failure
         if: ${{ failure() }}
