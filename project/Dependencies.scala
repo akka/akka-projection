@@ -19,7 +19,7 @@ object Dependencies {
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.7")
     val slick = "3.3.3"
     val scalaTest = "3.1.1"
-    val testContainers = "1.15.1"
+    val testContainers = "1.15.2"
     val junit = "4.13.2"
     val h2Driver = "1.4.200"
     val jackson = "2.10.5.1" // this should match the version of jackson used by akka-serialization-jackson
@@ -59,7 +59,7 @@ object Dependencies {
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
     val h2Driver = Compile.h2Driver % allTestConfig
-    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.18" % allTestConfig
+    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.19" % allTestConfig
     val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.22" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
@@ -83,7 +83,7 @@ object Dependencies {
   }
 
   object Examples {
-    val hibernate = "org.hibernate" % "hibernate-core" % "5.4.26.Final"
+    val hibernate = "org.hibernate" % "hibernate-core" % "5.4.29.Final"
 
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
