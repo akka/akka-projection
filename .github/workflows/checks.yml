@@ -35,7 +35,7 @@ jobs:
       - name: Code style check and binary-compatibility check
         run: sbt "verifyCodeStyle; mimaReportBinaryIssues"
 
-  check-code-compililation:
+  check-code-compilation:
     name: Check Code Compilation
     runs-on: ubuntu-18.04
     steps:
