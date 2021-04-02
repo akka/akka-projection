@@ -110,6 +110,7 @@ object SlickContainerOffsetStoreSpec {
   class OracleSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Oracle Database"
+    System.setProperty("oracle.jdbc.timezoneAsRegion", "false")
     val container = initContainer(new OracleContainer("oracleinanutshell/oracle-xe-11g:1.0.0"))
 
     override def config: Config =

@@ -99,7 +99,9 @@ object JdbcContainerOffsetStoreSpec {
 
   object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
     val name = "Oracle Database"
-    override def newContainer() =
+
+    System.setProperty("oracle.jdbc.timezoneAsRegion", "false")
+    override def newContainer() = 
       new OracleContainer("oracleinanutshell/oracle-xe-11g:1.0.0")
         .withInitScript("db/oracle-init.sql")
   }
