@@ -1,4 +1,4 @@
-name: Integration Tests
+name: Integration Tests for Cassandra
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    name: Build and Test Integration
+    name: Build and Test Integration for Cassandra
     runs-on: ubuntu-18.04
     strategy:
       fail-fast: false
@@ -38,7 +38,7 @@ jobs:
         uses: coursier/cache-action@v5
 
       - name: Run all integration tests with Scala ${{ matrix.scala-version }} and Java ${{ matrix.java-version }}
-        run: sbt "++${{ matrix.scala-version }} it:test" ${{ matrix.sbt-opts }}
+        run: sbt "++${{ matrix.scala-version }} akka-projection-cassandra/it:test" ${{ matrix.sbt-opts }}
 
       - name: Print logs on failure
         if: ${{ failure() }}
