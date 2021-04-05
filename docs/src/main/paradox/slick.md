@@ -176,7 +176,7 @@ Oracle
 H2
 :  @@snip [create-table-h2.sql](/examples/src/test/resources/create-table-h2.sql) { #create-table-h2 }
 
-The schema can be created using the method `SlickProjection.createOffsetTableIfNotExists`. This is particularly useful when writting tests. For production enviornments, we recommend creating the schema before deploying the application.
+The schema can be created and dropped using the methods `SlickProjection.createOffsetTableIfNotExists` and `SlickProjection.dropOffsetTableIfExists`. This is particularly useful when writting tests. For production enviornments, we recommend creating the schema before deploying the application.
 
 @@@ warning { title=Important }
 As of version 1.1.0, the schema for PostgreSQL and H2 databases has changed. It now defaults to lowercase table and column names.
