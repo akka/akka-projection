@@ -110,6 +110,11 @@ object SlickContainerOffsetStoreSpec {
   class OracleSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Oracle Database"
+
+    // related to https://github.com/testcontainers/testcontainers-java/issues/2313
+    // otherwise we get ORA-01882: timezone region not found
+    System.setProperty("oracle.jdbc.timezoneAsRegion", "false")
+    
     val container = initContainer(new OracleContainer("oracleinanutshell/oracle-xe-11g:1.0.0"))
 
     override def config: Config =
