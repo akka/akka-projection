@@ -17,8 +17,8 @@ object AkkaSnapshotRepositories extends AutoPlugin {
         Seq(
           // akka/akka Snapshots
           "akka-snapshot-repository".at("https://repo.akka.io/snapshots"),
-          // other libraries in the Akka ecosystem use Bintray's snapshot repo
-          Resolver.bintrayRepo("akka", "snapshots"))
+          // akka/alpakka-kafka use Sonatype's snapshot repo
+          Resolver.sonatypeRepo("snapshots"))
       case None => Seq.empty
     })
   }
