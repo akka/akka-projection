@@ -241,7 +241,6 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
               val eventType = envelope.value()
               val userEvent = UserEvent(userId, eventType)
               // do something with the record, payload in record.value
-              println(s"# process ${envelope.offset()}: $userId $eventType") // FIXME
               repository.incrementCount(projectionId, userEvent.eventType)
             })
       }

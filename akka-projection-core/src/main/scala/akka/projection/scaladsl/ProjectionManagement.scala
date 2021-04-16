@@ -8,6 +8,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.TimeoutException
+import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.actor.typed.ActorRef
@@ -19,6 +21,7 @@ import akka.actor.typed.scaladsl.AskPattern._
 import akka.annotation.ApiMayChange
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
+import akka.util.JavaDurationConverters._
 import akka.util.Timeout
 
 @ApiMayChange object ProjectionManagement extends ExtensionId[ProjectionManagement] {
@@ -30,9 +33,11 @@ import akka.util.Timeout
 @ApiMayChange class ProjectionManagement(system: ActorSystem[_]) extends Extension {
   private implicit val sys: ActorSystem[_] = system
   private implicit val askTimeout: Timeout = {
-    import akka.util.JavaDurationConverters._
-    system.settings.config.getDuration("akka.projection.management.operation-timeout").asScala
+    system.settings.config.getDuration("akka.projection.management.ask-timeout").asScala
   }
+  private val operationTimeout: FiniteDuration =
+    system.settings.config.getDuration("akka.projection.management.operation-timeout").asScala
+  private val retryAttempts: Int = math.max(1, (operationTimeout / askTimeout.duration).toInt)
   private implicit val ec: ExecutionContext = system.executionContext
 
   import ProjectionBehavior.Internal._
@@ -61,9 +66,11 @@ import akka.util.Timeout
    * Get the latest stored offset for the `projectionId`.
    */
   def getOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
-    topic(projectionId.name)
-      .ask[CurrentOffset[Offset]](replyTo => Topic.Publish(GetOffset(projectionId, replyTo)))
-      .map(currentOffset => currentOffset.offset)
+    def askGetOffset(): Future[Option[Offset]] =
+      topic(projectionId.name)
+        .ask[CurrentOffset[Offset]](replyTo => Topic.Publish(GetOffset(projectionId, replyTo)))
+        .map(currentOffset => currentOffset.offset)
+    retry(() => askGetOffset())
   }
 
   /**
@@ -84,7 +91,22 @@ import akka.util.Timeout
     setOffset(projectionId, None)
 
   private def setOffset[Offset](projectionId: ProjectionId, offset: Option[Offset]): Future[Done] = {
-    topic(projectionId.name)
-      .ask(replyTo => Topic.Publish(SetOffset(projectionId, offset, replyTo)))
+    def askSetOffset(): Future[Done] = {
+      topic(projectionId.name)
+        .ask(replyTo => Topic.Publish(SetOffset(projectionId, offset, replyTo)))
+    }
+    retry(() => askSetOffset())
+  }
+
+  private def retry[T](operation: () => Future[T]): Future[T] = {
+    def attempt(remaining: Int): Future[T] = {
+      operation().recoverWith {
+        case e: TimeoutException =>
+          if (remaining > 0) attempt(remaining - 1)
+          else Future.failed(e)
+      }
+    }
+
+    attempt(retryAttempts)
   }
 }
