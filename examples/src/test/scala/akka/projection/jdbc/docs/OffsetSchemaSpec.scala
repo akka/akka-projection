@@ -19,37 +19,39 @@ class OffsetSchemaSpec extends AnyWordSpecLike with Matchers {
   "Documentation for JDBC OffsetStore Schema" should {
 
     "match the version used in code (H2)" in {
-      val fromDialect = asFileContent((opt, s) => H2Dialect(opt, s, lowerCase = true), "h2")
+      val fromDialect = asFileContent((opt, s) => H2Dialect(opt, s, s"${s}_management", lowerCase = true), "h2")
       val fromSqlFile = Source.fromResource("create-table-h2.sql").mkString
       normalize(fromSqlFile) shouldBe normalize(fromDialect)
     }
 
     "match the version used in code (PostgreSQL)" in {
-      val fromDialect = asFileContent((opt, s) => PostgresDialect(opt, s, lowerCase = true), "postgres")
+      val fromDialect =
+        asFileContent((opt, s) => PostgresDialect(opt, s, s"${s}_management", lowerCase = true), "postgres")
       val fromSqlFile = Source.fromResource("create-table-postgres.sql").mkString
       normalize(fromSqlFile) shouldBe normalize(fromDialect)
     }
 
     "match the version used in code (PostgreSQL uppercase)" in {
-      val fromDialect = asFileContent((opt, s) => PostgresDialect(opt, s, lowerCase = false), "postgres-uppercase")
+      val fromDialect =
+        asFileContent((opt, s) => PostgresDialect(opt, s, s"${s}_management", lowerCase = false), "postgres-uppercase")
       val fromSqlFile = Source.fromResource("create-table-postgres-uppercase.sql").mkString
       normalize(fromSqlFile) shouldBe normalize(fromDialect)
     }
 
     "match the version used in code (MSSQL Server)" in {
-      val fromDialect = asFileContent(MSSQLServerDialect.apply, "mssql")
+      val fromDialect = asFileContent((opt, s) => MSSQLServerDialect(opt, s, s"${s}_management"), "mssql")
       val fromSqlFile = Source.fromResource("create-table-mssql.sql").mkString
       normalize(fromSqlFile) shouldBe normalize(fromDialect)
     }
 
     "match the version used in code (MySQL)" in {
-      val fromDialect = asFileContent(MySQLDialect.apply, "mysql")
+      val fromDialect = asFileContent((opt, s) => MySQLDialect(opt, s, s"${s}_management"), "mysql")
       val fromSqlFile = Source.fromResource("create-table-mysql.sql").mkString
       normalize(fromSqlFile) shouldBe normalize(fromDialect)
     }
 
     "match the version used in code (Oracle)" in {
-      val fromDialect = asFileContent(OracleDialect.apply, "oracle")
+      val fromDialect = asFileContent((opt, s) => OracleDialect(opt, s, s"${s}_management"), "oracle")
       val fromSqlFile = Source.fromResource("create-table-oracle.sql").mkString
       normalize(fromSqlFile) shouldBe normalize(fromDialect)
     }

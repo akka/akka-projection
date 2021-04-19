@@ -29,6 +29,7 @@ import akka.projection.testkit.internal.TestClock
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.TestTags
+import akka.projection.internal.ManagementState
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -382,6 +383,18 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
       withClue("check - read offset") {
         offsetStore.readOffset[Long](projectionId).futureValue shouldBe None
       }
+    }
+
+    s"read and save paused [$dialectLabel]" taggedAs (specConfig.tag) in {
+      val projectionId = genRandomProjectionId()
+
+      offsetStore.readManagementState(projectionId).futureValue shouldBe None
+
+      offsetStore.savePaused(projectionId, paused = true).futureValue
+      offsetStore.readManagementState(projectionId).futureValue shouldBe Some(ManagementState(paused = true))
+
+      offsetStore.savePaused(projectionId, paused = false).futureValue
+      offsetStore.readManagementState(projectionId).futureValue shouldBe Some(ManagementState(paused = false))
     }
   }
 }

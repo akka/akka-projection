@@ -16,7 +16,7 @@ import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
-import akka.projection.ProjectionOffsetManagement
+import akka.projection.RunningProjectionManagement
 import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
@@ -228,7 +228,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
    * INTERNAL API
    * Return a RunningProjection
    */
-  override private[projection] def run()(implicit system: ActorSystem[_]) =
+  override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
     new JdbcInternalProjectionState(settingsOrDefaults).newRunningInstance()
 
   /**
@@ -252,6 +252,9 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     implicit val executionContext: ExecutionContext = system.executionContext
     override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
 
+    override def readPaused(): Future[Boolean] =
+      offsetStore.readManagementState(projectionId).map(_.exists(_.paused))
+
     override def readOffsets(): Future[Option[Offset]] =
       offsetStore.readOffset(projectionId)
 
@@ -265,7 +268,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
   private class JdbcRunningProjection(source: Source[Done, _], projectionState: JdbcInternalProjectionState)(
       implicit system: ActorSystem[_])
       extends RunningProjection
-      with ProjectionOffsetManagement[Offset] {
+      with RunningProjectionManagement[Offset] {
 
     private val streamDone = source.run()
 
@@ -277,18 +280,22 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       streamDone
     }
 
-    // ProjectionOffsetManagement
+    // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
       offsetStore.readOffset(projectionId)
     }
 
-    // ProjectionOffsetManagement
+    // RunningProjectionManagement
     override def setOffset(offset: Option[Offset]): Future[Done] = {
       offset match {
         case Some(o) => offsetStore.saveOffset(projectionId, o)
         case None    => offsetStore.clearOffset(projectionId)
       }
     }
+
+    // RunningProjectionManagement
+    override def setPaused(paused: Boolean): Future[Done] =
+      offsetStore.savePaused(projectionId, paused)
   }
 
 }

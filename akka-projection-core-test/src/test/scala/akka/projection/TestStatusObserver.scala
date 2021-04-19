@@ -10,6 +10,7 @@ object TestStatusObserver {
   sealed trait Status
 
   case object Started extends Status
+  case object Paused extends Status
   case object Failed extends Status
   case object Stopped extends Status
 
@@ -42,6 +43,11 @@ class TestStatusObserver[Envelope](
   override def started(projectionId: ProjectionId): Unit = {
     if (lifecycle)
       probe ! Started
+  }
+
+  override def paused(projectionId: ProjectionId): Unit = {
+    if (lifecycle)
+      probe ! Paused
   }
 
   override def failed(projectionId: ProjectionId, cause: Throwable): Unit = {

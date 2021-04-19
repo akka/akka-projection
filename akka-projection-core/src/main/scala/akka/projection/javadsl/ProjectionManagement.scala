@@ -48,4 +48,10 @@ import akka.projection.scaladsl
   def clearOffset(projectionId: ProjectionId): CompletionStage[Done] =
     delegate.clearOffset(projectionId).toJava
 
+  def pauseProjection(projectionId: ProjectionId): CompletionStage[Done] =
+    delegate.pauseProjection(projectionId).toJava
+
+  def resumeProjection(projectionId: ProjectionId): CompletionStage[Done] =
+    delegate.resumeProjection(projectionId).toJava
+
 }

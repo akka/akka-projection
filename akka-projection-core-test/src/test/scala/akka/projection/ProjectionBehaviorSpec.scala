@@ -135,7 +135,7 @@ object ProjectionBehaviorSpec {
         testProbe: TestProbe[ProbeMessage],
         failToStop: Boolean)(implicit _system: ActorSystem[_])
         extends TestRunningProjection(source, killSwitch)
-        with ProjectionOffsetManagement[Int] {
+        with RunningProjectionManagement[Int] {
       import system.executionContext
 
       override protected def run(): Future[Done] = {
@@ -186,8 +186,11 @@ object ProjectionBehaviorSpec {
               }
             }
         }
-
       }
+
+      // RunningProjectionManagement
+      override def setPaused(paused: Boolean): Future[Done] =
+        offsetStore.savePaused(projectionId, paused)
     }
   }
 }

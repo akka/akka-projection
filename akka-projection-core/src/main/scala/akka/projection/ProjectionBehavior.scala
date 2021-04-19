@@ -35,17 +35,23 @@ object ProjectionBehavior {
 
     object Stopped extends Command
 
-    sealed trait OffsetManagementCommand extends Command
+    sealed trait ProjectionManagementCommand extends Command
     final case class GetOffset[Offset](projectionId: ProjectionId, replyTo: ActorRef[CurrentOffset[Offset]])
-        extends OffsetManagementCommand
+        extends ProjectionManagementCommand
     final case class CurrentOffset[Offset](projectionId: ProjectionId, offset: Option[Offset])
     final case class GetOffsetResult[Offset](offset: Option[Offset], replyTo: ActorRef[CurrentOffset[Offset]])
-        extends OffsetManagementCommand
-    final case class OffsetOperationException(op: Command, cause: Throwable) extends OffsetManagementCommand
+        extends ProjectionManagementCommand
+    final case class OffsetOperationException(op: Command, cause: Throwable) extends ProjectionManagementCommand
 
     final case class SetOffset[Offset](projectionId: ProjectionId, offset: Option[Offset], replyTo: ActorRef[Done])
-        extends OffsetManagementCommand
-    final case class SetOffsetResult[Offset](replyTo: ActorRef[Done]) extends OffsetManagementCommand
+        extends ProjectionManagementCommand
+    final case class SetOffsetResult[Offset](replyTo: ActorRef[Done]) extends ProjectionManagementCommand
+
+    // FIXME serialization
+    final case class SetPaused(projectionId: ProjectionId, paused: Boolean, replyTo: ActorRef[Done])
+        extends ProjectionManagementCommand
+    final case class SetPausedResult(replyTo: ActorRef[Done]) extends ProjectionManagementCommand
+    final case class PauseOperationException(op: Command, cause: Throwable) extends ProjectionManagementCommand
   }
 
   /**
@@ -72,7 +78,7 @@ object ProjectionBehavior {
           ctx.log.debug2("Started actor handler [{}] for projection [{}]", ref, projection.projectionId)
         }
         val running = projection.run()(ctx.system)
-        if (running.isInstanceOf[ProjectionOffsetManagement[_]])
+        if (running.isInstanceOf[RunningProjectionManagement[_]])
           ProjectionManagement(ctx.system).register(projection.projectionId, ctx.self)
         new ProjectionBehavior(ctx, projection, stashBuffer).started(running)
       }
@@ -105,7 +111,7 @@ object ProjectionBehavior {
 
       case getOffset: GetOffset[Offset] =>
         running match {
-          case mgmt: ProjectionOffsetManagement[Offset] =>
+          case mgmt: RunningProjectionManagement[Offset] =>
             if (getOffset.projectionId == projectionId) {
               context.pipeToSelf(mgmt.getOffset()) {
                 case Success(offset) => GetOffsetResult(offset, getOffset.replyTo)
@@ -121,9 +127,9 @@ object ProjectionBehavior {
 
       case setOffset: SetOffset[Offset] =>
         running match {
-          case mgmt: ProjectionOffsetManagement[Offset] =>
+          case mgmt: RunningProjectionManagement[Offset] =>
             if (setOffset.projectionId == projectionId) {
-              context.log.debug2(
+              context.log.info2(
                 "Offset will be changed to [{}] for projection [{}]. The Projection will be restarted.",
                 setOffset.offset,
                 projectionId)
@@ -139,9 +145,28 @@ object ProjectionBehavior {
         context.log.warn2("Operation [{}] failed with: {}", op, exc)
         Behaviors.same
 
+      case setPaused: SetPaused =>
+        running match {
+          case mgmt: RunningProjectionManagement[_] =>
+            if (setPaused.projectionId == projectionId) {
+              context.log.info(
+                "Paused will be changed to [{}] for projection [{}]. The Projection processing will be {}.",
+                setPaused.paused,
+                projectionId,
+                if (setPaused.paused) "paused" else "resumed")
+              context.pipeToSelf(running.stop())(_ => Stopped)
+              settingPaused(setPaused, mgmt)
+            } else {
+              Behaviors.same // not for this projectionId
+            }
+          case _ => Behaviors.unhandled
+        }
+
     }
 
-  private def settingOffset(setOffset: SetOffset[Offset], mgmt: ProjectionOffsetManagement[Offset]): Behavior[Command] =
+  private def settingOffset(
+      setOffset: SetOffset[Offset],
+      mgmt: RunningProjectionManagement[Offset]): Behavior[Command] =
     Behaviors.receiveMessage {
       case Stopped =>
         context.log.debug("Projection [{}] stopped", projectionId)
@@ -188,4 +213,36 @@ object ProjectionBehavior {
     result.replyTo ! CurrentOffset(projectionId, result.offset)
     Behaviors.same
   }
+
+  private def settingPaused(setPaused: SetPaused, mgmt: RunningProjectionManagement[_]): Behavior[Command] =
+    Behaviors.receiveMessage {
+      case Stopped =>
+        context.log.debug("Projection [{}] stopped", projectionId)
+
+        context.pipeToSelf(mgmt.setPaused(setPaused.paused)) {
+          case Success(_)   => SetPausedResult(setPaused.replyTo)
+          case Failure(exc) => PauseOperationException(setPaused, exc)
+        }
+
+        Behaviors.same
+
+      case SetPausedResult(replyTo) =>
+        context.log.info(
+          "Starting projection [{}] in {} mode.",
+          projection.projectionId,
+          if (setPaused.paused) "paused" else "resumed")
+        val running = projection.run()(context.system)
+        replyTo ! Done
+        stashBuffer.unstashAll(started(running))
+
+      case PauseOperationException(op, exc) =>
+        context.log.warn2("Operation [{}] failed.", op, exc)
+        // start anyway, but no reply
+        val running = projection.run()(context.system)
+        stashBuffer.unstashAll(started(running))
+
+      case other =>
+        stashBuffer.stash(other)
+        Behaviors.same
+    }
 }

@@ -5,7 +5,6 @@
 package akka.projection.internal.metrics.tools
 
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
 
 import scala.collection.immutable
 import scala.concurrent.Await
@@ -34,6 +33,7 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.testkit.internal.TestInMemoryOffsetStoreImpl
 import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
@@ -133,7 +133,7 @@ object InternalProjectionStateMetricsSpec {
 
     private val projectionSettings = ProjectionSettings(system)
 
-    val offsetStore = new OffsetStore[Long]()
+    val offsetStore = new TestInMemoryOffsetStoreImpl[Long]()
 
     val adaptedHandlerStrategy: HandlerStrategy = offsetStrategy match {
       case ExactlyOnce(_) =>
@@ -143,7 +143,7 @@ object InternalProjectionStateMetricsSpec {
               new Handler[Envelope] {
                 override def process(envelope: Envelope): Future[Done] = handlerFactory().process(envelope).flatMap {
                   _ =>
-                    offsetStore.saveOffset(envelope.offset)
+                    offsetStore.saveOffset(projectionId, envelope.offset)
                 }
               }
             SingleHandlerStrategy(adaptedHandler)
@@ -153,7 +153,7 @@ object InternalProjectionStateMetricsSpec {
               new Handler[immutable.Seq[Envelope]] {
                 override def process(envelopes: immutable.Seq[Envelope]): Future[Done] =
                   handlerFactory().process(envelopes).flatMap { _ =>
-                    offsetStore.saveOffset(envelopes.last.offset)
+                    offsetStore.saveOffset(projectionId, envelopes.last.offset)
                   }
               }
             GroupedHandlerStrategy(adaptedHandler, afterEnvelopes, orAfterDuration)
@@ -177,16 +177,6 @@ object InternalProjectionStateMetricsSpec {
 
   }
 
-  class OffsetStore[Offset]() {
-    val _offset = new AtomicReference[Option[Offset]](None)
-    def readOffsets(): Future[Option[Offset]] = Future.successful(_offset.get)
-
-    def saveOffset(offset: Offset): Future[Done] = {
-      _offset.set(Some(offset))
-      Future.successful(Done)
-    }
-  }
-
   class InMemInternalProjectionState[Offset, Env](
       projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Env],
@@ -194,7 +184,7 @@ object InternalProjectionStateMetricsSpec {
       handlerStrategy: HandlerStrategy,
       statusObserver: StatusObserver[Env],
       settings: ProjectionSettings,
-      offsetStore: OffsetStore[Offset])(implicit val system: ActorSystem[_])
+      offsetStore: TestInMemoryOffsetStoreImpl[Offset])(implicit val system: ActorSystem[_])
       extends InternalProjectionState[Offset, Env](
         projectionId,
         sourceProvider,
@@ -206,10 +196,13 @@ object InternalProjectionStateMetricsSpec {
 
     override implicit def executionContext: ExecutionContext = system.executionContext
 
+    override def readPaused(): Future[Boolean] =
+      offsetStore.readManagementState(projectionId).map(_.exists(_.paused))
+
     override def readOffsets(): Future[Option[Offset]] = offsetStore.readOffsets()
 
     override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] =
-      offsetStore.saveOffset(offset)
+      offsetStore.saveOffset(projectionId, offset)
 
     def newRunningInstance(): RunningProjection =
       new TestRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)

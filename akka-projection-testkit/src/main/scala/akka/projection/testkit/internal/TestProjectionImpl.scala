@@ -159,6 +159,9 @@ private[projection] class TestInternalProjectionState[Offset, Envelope](
 
   override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
 
+  override def readPaused(): Future[Boolean] =
+    offsetStore.readManagementState(projectionId).map(_.exists(_.paused))
+
   override def readOffsets(): Future[Option[Offset]] = offsetStore.readOffsets()
 
   override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] =
@@ -166,6 +169,7 @@ private[projection] class TestInternalProjectionState[Offset, Envelope](
 
   def newRunningInstance(): RunningProjection =
     new TestRunningProjection(mappedSource(), killSwitch)
+
 }
 
 /**

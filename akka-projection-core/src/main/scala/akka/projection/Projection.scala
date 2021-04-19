@@ -130,7 +130,8 @@ private[projection] trait RunningProjection {
  * INTERNAL API
  */
 @InternalApi
-private[projection] trait ProjectionOffsetManagement[Offset] {
+private[projection] trait RunningProjectionManagement[Offset] {
   def getOffset(): Future[Option[Offset]]
   def setOffset(offset: Option[Offset]): Future[Done]
+  def setPaused(paused: Boolean): Future[Done]
 }

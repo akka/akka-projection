@@ -8,8 +8,11 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 
 import akka.Done
+import akka.annotation.DoNotInherit
 import akka.projection.ProjectionId
+import akka.projection.internal.ManagementState
 
+@DoNotInherit
 trait TestOffsetStore[Offset] {
 
   /**
@@ -25,4 +28,8 @@ trait TestOffsetStore[Offset] {
   def readOffsets(): CompletionStage[Optional[Offset]]
 
   def saveOffset(projectionId: ProjectionId, offset: Offset): CompletionStage[Done]
+
+  def readManagementState(projectionId: ProjectionId): CompletionStage[Optional[ManagementState]]
+
+  def savePaused(projectionId: ProjectionId, paused: Boolean): CompletionStage[Done]
 }

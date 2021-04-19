@@ -1550,5 +1550,51 @@ class SlickProjectionSpec
         concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr"
       }
     }
+
+    "pause projection" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val eventHandler = new SlickHandler[Envelope] {
+        override def process(envelope: Envelope): slick.dbio.DBIO[Done] =
+          repository.concatToText(envelope.id, envelope.message)
+      }
+
+      val projection =
+        SlickProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider(entityId, complete = false),
+            databaseConfig = dbConfig,
+            () => eventHandler)
+
+      withClue("check - offset is empty") {
+        val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
+        offsetOpt shouldBe empty
+      }
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      val concatStr1 = dbConfig.db.run(repository.findById(entityId)).futureValue.get
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).pauseProjection(projectionId).futureValue shouldBe Done
+      ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
+
+      Thread.sleep(500)
+      // not updated because paused
+      concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      ProjectionManagement(system).resumeProjection(projectionId)
+
+      eventually {
+        val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr"
+      }
+    }
   }
 }

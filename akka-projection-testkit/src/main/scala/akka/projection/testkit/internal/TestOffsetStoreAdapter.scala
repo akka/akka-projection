@@ -12,6 +12,7 @@ import scala.concurrent.Future
 import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
+import akka.projection.internal.ManagementState
 import akka.projection.testkit.scaladsl.TestOffsetStore
 import com.github.ghik.silencer.silent
 
@@ -30,4 +31,12 @@ import com.github.ghik.silencer.silent
 
   override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] =
     delegate.saveOffset(projectionId, offset).toScala
+
+  override def readManagementState(projectionId: ProjectionId): Future[Option[ManagementState]] = {
+    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
+    delegate.readManagementState(projectionId).toScala.map(_.asScala)
+  }
+
+  override def savePaused(projectionId: ProjectionId, paused: Boolean): Future[Done] =
+    delegate.savePaused(projectionId, paused).toScala
 }

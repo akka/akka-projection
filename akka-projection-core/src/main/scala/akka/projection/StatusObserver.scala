@@ -20,6 +20,12 @@ abstract class StatusObserver[-Envelope] {
   def started(projectionId: ProjectionId): Unit
 
   /**
+   * Called when a projection is started in paused mode
+   * [[StatusObserver.started]] is still called when the projection is paused.
+   */
+  def paused(projectionId: ProjectionId): Unit
+
+  /**
    * Called when a projection failed.
    *
    * The projection will be restarted unless the projection restart backoff settings

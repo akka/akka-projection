@@ -28,6 +28,10 @@ import akka.util.ccompat.JavaConverters._
 @InternalStableApi
 trait Telemetry {
 
+  /** Invoked when a projection is started in paused mode.
+   */
+  def paused(): Unit
+
   /** Invoked when a projection is stopped. The reason for stopping is unspecified, can be a
    * graceful stop or a failure (see [[Telemetry.failed]]).
    */
@@ -120,6 +124,8 @@ trait Telemetry {
  * INTERNAL API
  */
 @InternalApi private[projection] object NoopTelemetry extends Telemetry {
+  override def paused(): Unit = {}
+
   override def failed(cause: Throwable): Unit = {}
 
   override def stopped(): Unit = {}
@@ -145,6 +151,7 @@ trait Telemetry {
 
   val telemetries = telemetryFqcns.map(fqcn => TelemetryProvider.create(projectionId, system, fqcn))
 
+  override def paused(): Unit = telemetries.foreach(_.paused())
   override def stopped(): Unit = telemetries.foreach(_.stopped())
   override def failed(cause: Throwable): Unit = telemetries.foreach(_.failed(cause))
   override def beforeProcess[Envelope](envelope: Envelope, creationTimeInMillis: Long): AnyRef =

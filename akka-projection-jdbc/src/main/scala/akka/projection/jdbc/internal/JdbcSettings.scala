@@ -24,6 +24,8 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
 
   val table: String = config.getString("offset-store.table")
 
+  val managementTable: String = config.getString("offset-store.management-table")
+
   val verboseLoggingEnabled: Boolean = config.getBoolean("debug.verbose-offset-store-logging")
 
   val dialect: Dialect = {
@@ -34,11 +36,11 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
 
     val useLowerCaseSchema = config.getBoolean("offset-store.use-lowercase-schema")
     dialectToLoad match {
-      case "h2-dialect"       => H2Dialect(schema, table, useLowerCaseSchema)
-      case "postgres-dialect" => PostgresDialect(schema, table, useLowerCaseSchema)
-      case "mysql-dialect"    => MySQLDialect(schema, table)
-      case "mssql-dialect"    => MSSQLServerDialect(schema, table)
-      case "oracle-dialect"   => OracleDialect(schema, table)
+      case "h2-dialect"       => H2Dialect(schema, table, managementTable, useLowerCaseSchema)
+      case "postgres-dialect" => PostgresDialect(schema, table, managementTable, useLowerCaseSchema)
+      case "mysql-dialect"    => MySQLDialect(schema, managementTable, table)
+      case "mssql-dialect"    => MSSQLServerDialect(schema, managementTable, table)
+      case "oracle-dialect"   => OracleDialect(schema, managementTable, table)
       case unknown =>
         throw new IllegalArgumentException(
           s"Unknown dialect type: [$unknown]. Check settings 'akka.projection.jdbc.dialect'")

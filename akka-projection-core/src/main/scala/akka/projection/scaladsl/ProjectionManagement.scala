@@ -43,22 +43,24 @@ import akka.util.Timeout
   import ProjectionBehavior.Internal._
 
   private val topics =
-    new ConcurrentHashMap[String, ActorRef[Topic.Command[OffsetManagementCommand]]]()
+    new ConcurrentHashMap[String, ActorRef[Topic.Command[ProjectionManagementCommand]]]()
 
   private def topicName(projectionName: String): String =
     "projection-" + projectionName
 
-  private def topic(projectionName: String): ActorRef[Topic.Command[OffsetManagementCommand]] = {
+  private def topic(projectionName: String): ActorRef[Topic.Command[ProjectionManagementCommand]] = {
     topics.computeIfAbsent(projectionName, _ => {
       val name = topicName(projectionName)
-      system.systemActorOf(Topic[OffsetManagementCommand](name), name)
+      system.systemActorOf(Topic[ProjectionManagementCommand](name), name)
     })
   }
 
   /**
    * ProjectionBehavior registers when started
    */
-  private[projection] def register(projectionId: ProjectionId, projection: ActorRef[OffsetManagementCommand]): Unit = {
+  private[projection] def register(
+      projectionId: ProjectionId,
+      projection: ActorRef[ProjectionManagementCommand]): Unit = {
     topic(projectionId.name) ! Topic.Subscribe(projection)
   }
 
@@ -108,5 +110,19 @@ import akka.util.Timeout
     }
 
     attempt(retryAttempts)
+  }
+
+  def pauseProjection(projectionId: ProjectionId): Future[Done] =
+    setPauseProjection(projectionId, paused = true)
+
+  def resumeProjection(projectionId: ProjectionId): Future[Done] =
+    setPauseProjection(projectionId, paused = false)
+
+  private def setPauseProjection(projectionId: ProjectionId, paused: Boolean): Future[Done] = {
+    def askSetPaused(): Future[Done] = {
+      topic(projectionId.name)
+        .ask(replyTo => Topic.Publish(SetPaused(projectionId, paused, replyTo)))
+    }
+    retry(() => askSetPaused())
   }
 }
