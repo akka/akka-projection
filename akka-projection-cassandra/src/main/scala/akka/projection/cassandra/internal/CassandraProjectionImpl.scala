@@ -181,8 +181,9 @@ import akka.stream.scaladsl.Source
 
     private val offsetStore = new CassandraOffsetStore(system)
 
-    override def readPaused(): Future[Boolean] =
-      ??? // FIXME #25 not implemented yet
+    override def readPaused(): Future[Boolean] = {
+      Future.successful(false) // FIXME #25 not implemented yet
+    }
 
     override def readOffsets(): Future[Option[Offset]] =
       offsetStore.readOffset(projectionId)
@@ -230,7 +231,7 @@ import akka.stream.scaladsl.Source
 
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =
-      ??? // FIXME #25 not implemented yet
+      Future.successful(Done) // FIXME #25 not implemented yet
 
   }
 
