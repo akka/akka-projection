@@ -13,6 +13,7 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.projection.internal.ActorHandlerInit
+import akka.projection.internal.ManagementState
 import akka.projection.internal.ProjectionSettings
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
@@ -133,5 +134,6 @@ private[projection] trait RunningProjection {
 private[projection] trait RunningProjectionManagement[Offset] {
   def getOffset(): Future[Option[Offset]]
   def setOffset(offset: Option[Offset]): Future[Done]
+  def getManagementState(): Future[Option[ManagementState]]
   def setPaused(paused: Boolean): Future[Done]
 }

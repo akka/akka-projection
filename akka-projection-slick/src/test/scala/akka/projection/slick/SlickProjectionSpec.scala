@@ -1575,6 +1575,11 @@ class SlickProjectionSpec
 
       // not using ProjectionTestKit because want to test ProjectionManagement
       spawn(ProjectionBehavior(projection))
+
+      val mgmt = ProjectionManagement(system)
+
+      mgmt.isProjectionPaused(projectionId).futureValue shouldBe false
+
       eventually {
         offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
       }
@@ -1582,14 +1587,18 @@ class SlickProjectionSpec
       val concatStr1 = dbConfig.db.run(repository.findById(entityId)).futureValue.get
       concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
 
-      ProjectionManagement(system).pauseProjection(projectionId).futureValue shouldBe Done
-      ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
+      mgmt.pauseProjection(projectionId).futureValue shouldBe Done
+      mgmt.clearOffset(projectionId).futureValue shouldBe Done
+
+      mgmt.isProjectionPaused(projectionId).futureValue shouldBe true
 
       Thread.sleep(500)
       // not updated because paused
       concatStr1.text shouldBe "abc|def|ghi|jkl|mno|pqr"
 
-      ProjectionManagement(system).resumeProjection(projectionId)
+      mgmt.resumeProjection(projectionId)
+
+      mgmt.isProjectionPaused(projectionId).futureValue shouldBe false
 
       eventually {
         val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.get

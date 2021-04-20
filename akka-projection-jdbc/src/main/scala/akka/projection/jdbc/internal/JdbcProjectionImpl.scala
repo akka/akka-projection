@@ -28,6 +28,7 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
+import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
@@ -292,6 +293,10 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
         case None    => offsetStore.clearOffset(projectionId)
       }
     }
+
+    // RunningProjectionManagement
+    override def getManagementState(): Future[Option[ManagementState]] =
+      offsetStore.readManagementState(projectionId)
 
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =

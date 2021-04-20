@@ -16,6 +16,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.StashBuffer
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
+import akka.projection.internal.ManagementState
 import akka.projection.scaladsl.ProjectionManagement
 
 @ApiMayChange
@@ -41,16 +42,19 @@ object ProjectionBehavior {
     final case class CurrentOffset[Offset](projectionId: ProjectionId, offset: Option[Offset])
     final case class GetOffsetResult[Offset](offset: Option[Offset], replyTo: ActorRef[CurrentOffset[Offset]])
         extends ProjectionManagementCommand
-    final case class OffsetOperationException(op: Command, cause: Throwable) extends ProjectionManagementCommand
+    final case class ManagementOperationException(op: Command, cause: Throwable) extends ProjectionManagementCommand
 
     final case class SetOffset[Offset](projectionId: ProjectionId, offset: Option[Offset], replyTo: ActorRef[Done])
         extends ProjectionManagementCommand
     final case class SetOffsetResult[Offset](replyTo: ActorRef[Done]) extends ProjectionManagementCommand
 
+    final case class IsPaused(projectionId: ProjectionId, replyTo: ActorRef[Boolean])
+        extends ProjectionManagementCommand
     final case class SetPaused(projectionId: ProjectionId, paused: Boolean, replyTo: ActorRef[Done])
         extends ProjectionManagementCommand
+    final case class GetManagementStateResult(state: Option[ManagementState], replyTo: ActorRef[Boolean])
+        extends ProjectionManagementCommand
     final case class SetPausedResult(replyTo: ActorRef[Done]) extends ProjectionManagementCommand
-    final case class PauseOperationException(op: Command, cause: Throwable) extends ProjectionManagementCommand
   }
 
   /**
@@ -114,7 +118,7 @@ object ProjectionBehavior {
             if (getOffset.projectionId == projectionId) {
               context.pipeToSelf(mgmt.getOffset()) {
                 case Success(offset) => GetOffsetResult(offset, getOffset.replyTo)
-                case Failure(exc)    => OffsetOperationException(getOffset, exc)
+                case Failure(exc)    => ManagementOperationException(getOffset, exc)
               }
             }
             Behaviors.same
@@ -140,8 +144,25 @@ object ProjectionBehavior {
           case _ => Behaviors.unhandled
         }
 
-      case OffsetOperationException(op, exc) =>
+      case ManagementOperationException(op, exc) =>
         context.log.warn2("Operation [{}] failed with: {}", op, exc)
+        Behaviors.same
+
+      case isPaused: IsPaused =>
+        running match {
+          case mgmt: RunningProjectionManagement[_] =>
+            if (isPaused.projectionId == projectionId) {
+              context.pipeToSelf(mgmt.getManagementState()) {
+                case Success(state) => GetManagementStateResult(state, isPaused.replyTo)
+                case Failure(exc)   => ManagementOperationException(isPaused, exc)
+              }
+            }
+            Behaviors.same
+          case _ => Behaviors.unhandled
+        }
+
+      case GetManagementStateResult(state, replyTo) =>
+        replyTo ! state.exists(_.paused)
         Behaviors.same
 
       case setPaused: SetPaused =>
@@ -171,7 +192,7 @@ object ProjectionBehavior {
 
         context.pipeToSelf(mgmt.setOffset(setOffset.offset)) {
           case Success(_)   => SetOffsetResult(setOffset.replyTo)
-          case Failure(exc) => OffsetOperationException(setOffset, exc)
+          case Failure(exc) => ManagementOperationException(setOffset, exc)
         }
 
         Behaviors.same
@@ -185,7 +206,7 @@ object ProjectionBehavior {
         replyTo ! Done
         stashBuffer.unstashAll(started(running))
 
-      case OffsetOperationException(op, exc) =>
+      case ManagementOperationException(op, exc) =>
         context.log.warn2("Operation [{}] failed.", op, exc)
         // start anyway, but no reply
         val running = projection.run()(context.system)
@@ -219,7 +240,7 @@ object ProjectionBehavior {
 
         context.pipeToSelf(mgmt.setPaused(setPaused.paused)) {
           case Success(_)   => SetPausedResult(setPaused.replyTo)
-          case Failure(exc) => PauseOperationException(setPaused, exc)
+          case Failure(exc) => ManagementOperationException(setPaused, exc)
         }
 
         Behaviors.same
@@ -233,7 +254,7 @@ object ProjectionBehavior {
         replyTo ! Done
         stashBuffer.unstashAll(started(running))
 
-      case PauseOperationException(op, exc) =>
+      case ManagementOperationException(op, exc) =>
         context.log.warn2("Operation [{}] failed.", op, exc)
         // start anyway, but no reply
         val running = projection.run()(context.system)

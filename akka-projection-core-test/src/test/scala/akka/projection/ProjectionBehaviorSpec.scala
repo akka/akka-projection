@@ -18,6 +18,7 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.HandlerStrategy
+import akka.projection.internal.ManagementState
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.SingleHandlerStrategy
@@ -189,8 +190,13 @@ object ProjectionBehaviorSpec {
       }
 
       // RunningProjectionManagement
+      override def getManagementState(): Future[Option[ManagementState]] =
+        offsetStore.readManagementState(projectionId)
+
+      // RunningProjectionManagement
       override def setPaused(paused: Boolean): Future[Done] =
         offsetStore.savePaused(projectionId, paused)
+
     }
   }
 }

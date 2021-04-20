@@ -1346,19 +1346,28 @@ class JdbcProjectionSpec
 
       // not using ProjectionTestKit because want to test ProjectionManagement
       spawn(ProjectionBehavior(projection))
+
+      val mgmt = ProjectionManagement(system)
+
+      mgmt.isProjectionPaused(projectionId).futureValue shouldBe false
+
       eventually {
         offsetShouldBe(6L)
       }
       projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
 
-      ProjectionManagement(system).pauseProjection(projectionId).futureValue shouldBe Done
-      ProjectionManagement(system).clearOffset(projectionId).futureValue shouldBe Done
+      mgmt.pauseProjection(projectionId).futureValue shouldBe Done
+      mgmt.clearOffset(projectionId).futureValue shouldBe Done
+
+      mgmt.isProjectionPaused(projectionId).futureValue shouldBe true
 
       Thread.sleep(500)
       // not updated because paused
       projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
 
-      ProjectionManagement(system).resumeProjection(projectionId)
+      mgmt.resumeProjection(projectionId)
+
+      mgmt.isProjectionPaused(projectionId).futureValue shouldBe false
 
       eventually {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6|e1|e2|e3|e4|e5|e6")

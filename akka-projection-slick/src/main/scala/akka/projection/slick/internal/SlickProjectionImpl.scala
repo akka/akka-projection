@@ -27,6 +27,7 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
+import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
@@ -224,6 +225,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
           databaseConfig.db.run(dbio).map(_ => Done)
       }
     }
+
+    // RunningProjectionManagement
+    override def getManagementState(): Future[Option[ManagementState]] =
+      offsetStore.readManagementState(projectionId)
 
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =

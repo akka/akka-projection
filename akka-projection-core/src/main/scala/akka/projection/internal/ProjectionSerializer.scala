@@ -37,12 +37,14 @@ import akka.serialization.SerializerWithStringManifest
   private val GetOffsetManifest = "a"
   private val CurrentOffsetManifest = "b"
   private val SetOffsetManifest = "c"
-  private val SetPausedManifest = "d"
+  private val IsPausedManifest = "d"
+  private val SetPausedManifest = "e"
 
   override def manifest(o: AnyRef): String = o match {
     case _: GetOffset[_]     => GetOffsetManifest
     case _: CurrentOffset[_] => CurrentOffsetManifest
     case _: SetOffset[_]     => SetOffsetManifest
+    case _: IsPaused         => IsPausedManifest
     case _: SetPaused        => SetPausedManifest
     case _ =>
       throw new IllegalArgumentException(s"Can't serialize object of type ${o.getClass} in [${getClass.getName}]")
@@ -52,6 +54,7 @@ import akka.serialization.SerializerWithStringManifest
     case m: GetOffset[_]     => getOffsetToBinary(m)
     case m: CurrentOffset[_] => currentOffsetToBinary(m)
     case m: SetOffset[_]     => setOffsetToBinary(m)
+    case m: IsPaused         => isPausedToBinary(m)
     case m: SetPaused        => setPausedToBinary(m)
     case _ =>
       throw new IllegalArgumentException(s"Cannot serialize object of type [${o.getClass.getName}]")
@@ -95,6 +98,13 @@ import akka.serialization.SerializerWithStringManifest
       .build()
   }
 
+  private def isPausedToBinary(m: IsPaused): Array[Byte] = {
+    val b = ProjectionMessages.IsPaused.newBuilder()
+    b.setProjectionId(projectionIdToProto(m.projectionId))
+    b.setReplyTo(resolver.toSerializationFormat(m.replyTo))
+    b.build().toByteArray()
+  }
+
   private def setPausedToBinary(m: SetPaused): Array[Byte] = {
     val b = ProjectionMessages.SetPaused.newBuilder()
     b.setProjectionId(projectionIdToProto(m.projectionId))
@@ -111,6 +121,7 @@ import akka.serialization.SerializerWithStringManifest
     case GetOffsetManifest     => getOffsetFromBinary(bytes)
     case CurrentOffsetManifest => currentOffsetFromBinary(bytes)
     case SetOffsetManifest     => setOffsetFromBinary(bytes)
+    case IsPausedManifest      => isPausedFromBinary(bytes)
     case SetPausedManifest     => setPausedFromBinary(bytes)
     case _ =>
       throw new NotSerializableException(
@@ -137,6 +148,13 @@ import akka.serialization.SerializerWithStringManifest
       projectionId = projectionIdFromProto(setOffset.getProjectionId),
       replyTo = resolver.resolveActorRef[Done](setOffset.getReplyTo),
       offset = if (setOffset.hasOffset) Some(offsetFromProto(setOffset.getOffset)) else None)
+  }
+
+  private def isPausedFromBinary(bytes: Array[Byte]): AnyRef = {
+    val isPaused = ProjectionMessages.IsPaused.parseFrom(bytes)
+    IsPaused(
+      projectionId = projectionIdFromProto(isPaused.getProjectionId),
+      replyTo = resolver.resolveActorRef[Boolean](isPaused.getReplyTo))
   }
 
   private def setPausedFromBinary(bytes: Array[Byte]): AnyRef = {

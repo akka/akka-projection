@@ -112,6 +112,15 @@ import akka.util.Timeout
     attempt(retryAttempts)
   }
 
+  def isProjectionPaused(projectionId: ProjectionId): Future[Boolean] = {
+    def askIsPaused(): Future[Boolean] = {
+      topic(projectionId.name)
+        .ask(replyTo => Topic.Publish(IsPaused(projectionId, replyTo)))
+    }
+
+    retry(() => askIsPaused())
+  }
+
   def pauseProjection(projectionId: ProjectionId): Future[Done] =
     setPauseProjection(projectionId, paused = true)
 

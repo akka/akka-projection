@@ -30,6 +30,7 @@ class ProjectionSerializerSpec extends ScalaTestWithActorTestKit with AnyWordSpe
       "CurrentOffset None" -> CurrentOffset(projectionId, None),
       "SetOffset Some" -> SetOffset(projectionId, Some(17), ref),
       "SetOffset None" -> SetOffset(projectionId, None, ref),
+      "IsPaused" -> IsPaused(projectionId, ref),
       "SetPaused true" -> SetPaused(projectionId, paused = true, ref),
       "SetPaused false" -> SetPaused(projectionId, paused = false, ref)).foreach {
       case (scenario, item) =>
