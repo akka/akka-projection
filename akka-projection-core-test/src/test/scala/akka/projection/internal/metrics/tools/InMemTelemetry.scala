@@ -28,9 +28,6 @@ class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends
 
   startedInvocations.incrementAndGet()
 
-  override def paused(): Unit =
-    pausedInvocations.incrementAndGet()
-
   override def failed(cause: Throwable): Unit = {
     failureInvocations.incrementAndGet()
     lastFailureThrowable.set(cause)
@@ -96,7 +93,6 @@ class InMemInstruments() {
   val lastErrorThrowable = new AtomicReference[Throwable](null)
 
   val startedInvocations = new AtomicInteger(0)
-  val pausedInvocations = new AtomicInteger(0)
 
   val stoppedInvocations = new AtomicInteger(0)
   val failureInvocations = new AtomicInteger(0)

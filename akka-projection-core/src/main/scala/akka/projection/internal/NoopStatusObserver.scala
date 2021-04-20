@@ -19,8 +19,6 @@ import akka.projection.StatusObserver
 
   override def started(projectionId: ProjectionId): Unit = ()
 
-  override def paused(projectionId: ProjectionId): Unit = ()
-
   override def failed(projectionId: ProjectionId, cause: Throwable): Unit = ()
 
   override def stopped(projectionId: ProjectionId): Unit = ()

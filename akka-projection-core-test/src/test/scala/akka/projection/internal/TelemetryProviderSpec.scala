@@ -78,8 +78,6 @@ object FakeTelemetry {
 }
 class FakeTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry {
 
-  override def paused(): Unit = {}
-
   override def failed(cause: Throwable): Unit = {}
 
   override def stopped(): Unit = {}

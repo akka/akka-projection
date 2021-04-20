@@ -389,8 +389,6 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
           case true =>
             logger.info("Projection [{}] started in paused mode.", projectionId)
             // paused stream, no elements
-            statusObserver.paused(projectionId)
-            telemetry.paused()
             Future.successful(Source.never[Envelope])
         })
         .via(killSwitch.flow)
