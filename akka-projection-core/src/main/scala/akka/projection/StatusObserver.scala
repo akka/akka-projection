@@ -5,6 +5,7 @@
 package akka.projection
 
 import akka.annotation.ApiMayChange
+import akka.util.unused
 
 /**
  * Track status of a projection by implementing a `StatusObserver` and install it using
@@ -23,7 +24,7 @@ abstract class StatusObserver[-Envelope] {
    * Called when a projection is started in paused mode
    * [[StatusObserver.started]] is still called when the projection is paused.
    */
-  def paused(projectionId: ProjectionId): Unit
+  def paused(@unused projectionId: ProjectionId): Unit = ()
 
   /**
    * Called when a projection failed.

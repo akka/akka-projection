@@ -256,7 +256,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
   def savePaused(projectionId: ProjectionId, paused: Boolean): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>
       if (verboseLogging)
-        logger.debug(
+        logger.debugN(
           "saving paused [{}] for [{}], using connection id [{}]",
           paused,
           projectionId,
@@ -285,7 +285,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
           }
 
         if (verboseLogging) {
-          logger.debug(
+          logger.debugN(
             s"tried to update paused [{}] for [{}], statement result [{}]",
             paused,
             projectionId,
@@ -303,7 +303,7 @@ private[projection] class JdbcOffsetStore[S <: JdbcSession](
             val triedInsertResult = stmt.executeUpdate()
 
             if (verboseLogging)
-              logger.debug(
+              logger.debugN(
                 "tried to insert paused [{}] for [{}], batch result [{}]",
                 paused,
                 projectionId,

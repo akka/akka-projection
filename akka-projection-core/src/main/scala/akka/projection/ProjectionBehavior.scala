@@ -47,7 +47,6 @@ object ProjectionBehavior {
         extends ProjectionManagementCommand
     final case class SetOffsetResult[Offset](replyTo: ActorRef[Done]) extends ProjectionManagementCommand
 
-    // FIXME serialization
     final case class SetPaused(projectionId: ProjectionId, paused: Boolean, replyTo: ActorRef[Done])
         extends ProjectionManagementCommand
     final case class SetPausedResult(replyTo: ActorRef[Done]) extends ProjectionManagementCommand
@@ -149,7 +148,7 @@ object ProjectionBehavior {
         running match {
           case mgmt: RunningProjectionManagement[_] =>
             if (setPaused.projectionId == projectionId) {
-              context.log.info(
+              context.log.infoN(
                 "Paused will be changed to [{}] for projection [{}]. The Projection processing will be {}.",
                 setPaused.paused,
                 projectionId,
@@ -227,7 +226,7 @@ object ProjectionBehavior {
         Behaviors.same
 
       case SetPausedResult(replyTo) =>
-        context.log.info(
+        context.log.info2(
           "Starting projection [{}] in {} mode.",
           projection.projectionId,
           if (setPaused.paused) "paused" else "resumed")
