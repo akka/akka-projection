@@ -1,0 +1,5 @@
+# issue #25 pause/resume
+ProblemFilters.exclude[Problem]("akka.projection.ProjectionBehavior$Internal$*")
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.ProjectionOffsetManagement")
+ProblemFilters.exclude[ReversedMissingMethodProblem]("akka.projection.internal.InternalProjectionState.readPaused")
+ProblemFilters.exclude[ReversedMissingMethodProblem]("akka.projection.internal.Telemetry.paused")

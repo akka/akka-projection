@@ -1,0 +1,5 @@
+# issue #25 pause/resume
+ProblemFilters.exclude[ReversedMissingMethodProblem]("akka.projection.testkit.javadsl.TestOffsetStore.readManagementState")
+ProblemFilters.exclude[ReversedMissingMethodProblem]("akka.projection.testkit.javadsl.TestOffsetStore.savePaused")
+ProblemFilters.exclude[ReversedMissingMethodProblem]("akka.projection.testkit.scaladsl.TestOffsetStore.readManagementState")
+ProblemFilters.exclude[ReversedMissingMethodProblem]("akka.projection.testkit.scaladsl.TestOffsetStore.savePaused")
