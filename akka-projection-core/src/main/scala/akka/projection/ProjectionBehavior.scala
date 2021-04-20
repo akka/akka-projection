@@ -148,11 +148,10 @@ object ProjectionBehavior {
         running match {
           case mgmt: RunningProjectionManagement[_] =>
             if (setPaused.projectionId == projectionId) {
-              context.log.infoN(
-                "Paused will be changed to [{}] for projection [{}]. The Projection processing will be {}.",
-                setPaused.paused,
-                projectionId,
-                if (setPaused.paused) "paused" else "resumed")
+              context.log.info2(
+                "Running state will be changed to [{}] for projection [{}].",
+                if (setPaused.paused) "paused" else "resumed",
+                projectionId)
               context.pipeToSelf(running.stop())(_ => Stopped)
               settingPaused(setPaused, mgmt)
             } else {
