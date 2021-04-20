@@ -388,7 +388,7 @@ private[projection] case class MSSQLServerDialect(
 
   override val createManagementTableStatements =
     immutable.Seq(
-      s"""IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'$table') AND type in (N'U'))
+      s"""IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'$managementTable') AND type in (N'U'))
          |begin
          |  create table $managementTable (
          |    projection_name VARCHAR(255) NOT NULL,
@@ -462,7 +462,7 @@ private[projection] case class OracleDialect(schema: Option[String], tableName: 
          |BEGIN
          |
          |  execute immediate 'create table $managementTable ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"PAUSED" CHAR(1) NOT NULL check ("PAUSED" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
-         |  execute immediate 'alter table $managementTable add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
+         |  execute immediate 'alter table $managementTable add constraint "PK_PROJECTION_MANAGEMENT_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
          |  EXCEPTION
          |    WHEN OTHERS THEN
          |      IF SQLCODE = -955 THEN
