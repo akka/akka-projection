@@ -21,7 +21,7 @@ object AkkaDisciplinePlugin extends AutoPlugin {
   val nonFatalWarningsFor = Set("docs")
 
   lazy val silencerSettings = {
-    val silencerVersion = "1.7.1"
+    val silencerVersion = "1.7.3"
     Seq(
       libraryDependencies ++= Seq(
           compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
