@@ -302,7 +302,6 @@ object CassandraProjectionDocExample {
   }
 
   object IllustratePauseResume {
-    import akka.projection.scaladsl.ProjectionManagement
     import system.executionContext
     def someDataMigration() = Future.successful(Done)
     //#pause-resume
