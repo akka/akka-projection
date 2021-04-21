@@ -30,6 +30,29 @@ Scala
 Java
 :  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #update-offset }
 
+## Pause and resume
+
+With the @apidoc[ProjectionManagement] API you can pause and resume processing of a projection. For example,
+this can be useful when performing some data migration and projection processing cannot run while the migration
+is in progress.
+
+Scala
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #pause-resume }
+
+Java
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #pause-resume }
+
+
+The paused/resumed state is stored and, and it is read when the Projections are started, for example in case of rebalance or system restart.
+
+To retrieve the paused state:
+
+Scala
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #is-paused }
+
+Java
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #is-paused }
+
 ## Status tracking
 
 The status of a `Projection` can be tracked by implementing a @apidoc[StatusObserver] and enable it with 

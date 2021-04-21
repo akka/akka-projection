@@ -51,9 +51,8 @@ import akka.projection.scaladsl
   /**
    * Is the given Projection paused or not?
    */
-  def isProjectionPaused(projectionId: ProjectionId): CompletionStage[Boolean] = {
-    delegate.isProjectionPaused(projectionId).toJava
-  }
+  def isProjectionPaused(projectionId: ProjectionId): CompletionStage[java.lang.Boolean] =
+    delegate.isProjectionPaused(projectionId).map(java.lang.Boolean.valueOf).toJava
 
   /**
    * Pause the given Projection. Processing will be stopped.
@@ -61,7 +60,7 @@ import akka.projection.scaladsl
    * [[ProjectionManagement.resumeProjection]].
    * The Projection can be resumed with [[ProjectionManagement.resumeProjection]].
    *
-   * The paused/resumed state is stored and is read when the Projections are started, for example
+   * The paused/resumed state is stored, and it is read when the Projections are started, for example
    * in case of rebalance or system restart.
    */
   def pauseProjection(projectionId: ProjectionId): CompletionStage[Done] =
@@ -70,7 +69,7 @@ import akka.projection.scaladsl
   /**
    * Resume a paused Projection. Processing will be start from previously stored offset.
    *
-   * The paused/resumed state is stored and is read when the Projections are started, for example
+   * The paused/resumed state is stored, and it is read when the Projections are started, for example
    * in case of rebalance or system restart.
    */
   def resumeProjection(projectionId: ProjectionId): CompletionStage[Done] =

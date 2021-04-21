@@ -301,4 +301,31 @@ object CassandraProjectionDocExample {
     //#update-offset
   }
 
+  object IllustratePauseResume {
+    import akka.projection.scaladsl.ProjectionManagement
+    import system.executionContext
+    def someDataMigration() = Future.successful(Done)
+    //#pause-resume
+    import akka.projection.scaladsl.ProjectionManagement
+    import akka.projection.ProjectionId
+
+    val projectionId = ProjectionId("shopping-carts", "carts-1")
+    val mgmt = ProjectionManagement(system)
+    val done = for {
+      _: Future[Done] <- mgmt.pauseProjection(projectionId)
+      _ <- someDataMigration()
+      _: Future[Done] <- mgmt.resumeProjection(projectionId)
+    } yield Done
+    //#pause-resume
+  }
+
+  object IllustrateIsPaused {
+    import akka.projection.scaladsl.ProjectionManagement
+    import akka.projection.ProjectionId
+    //#is-paused
+    val projectionId = ProjectionId("shopping-carts", "carts-1")
+    val paused: Future[Boolean] = ProjectionManagement(system).isProjectionPaused(projectionId)
+    //#is-paused
+  }
+
 }

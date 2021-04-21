@@ -130,7 +130,7 @@ import akka.util.Timeout
    * [[ProjectionManagement.resumeProjection]].
    * The Projection can be resumed with [[ProjectionManagement.resumeProjection]].
    *
-   * The paused/resumed state is stored and is read when the Projections are started, for example
+   * The paused/resumed state is stored and, and it is read when the Projections are started, for example
    * in case of rebalance or system restart.
    */
   def pauseProjection(projectionId: ProjectionId): Future[Done] =
@@ -139,7 +139,7 @@ import akka.util.Timeout
   /**
    * Resume a paused Projection. Processing will be start from previously stored offset.
    *
-   * The paused/resumed state is stored and is read when the Projections are started, for example
+   * The paused/resumed state is stored and, and it is read when the Projections are started, for example
    * in case of rebalance or system restart.
    */
   def resumeProjection(projectionId: ProjectionId): Future[Done] =

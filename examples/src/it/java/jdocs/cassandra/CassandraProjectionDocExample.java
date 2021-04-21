@@ -390,4 +390,30 @@ public interface CassandraProjectionDocExample {
         });
     // #update-offset
   }
+
+  public static void illustrateIsPaused() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+    // #is-paused
+
+    ProjectionId projectionId = ProjectionId.of("shopping-carts", "carts-1");
+    CompletionStage<Boolean> paused =
+        ProjectionManagement.get(system).isProjectionPaused(projectionId);
+    // #is-paused
+  }
+
+  public static void illustratPauseResume() {
+    ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
+    // #pause-resume
+
+    ProjectionId projectionId = ProjectionId.of("shopping-carts", "carts-1");
+    ProjectionManagement mgmt = ProjectionManagement.get(system);
+    CompletionStage<Done> pauseDone = mgmt.pauseProjection(projectionId);
+    CompletionStage<Done> migrationDone = pauseDone.thenCompose(notUsed -> someDataMigration());
+    CompletionStage<Done> resumeDone = migrationDone.thenCompose(notUsed -> mgmt.pauseProjection(projectionId));
+    // #pause-resume
+  }
+
+  static CompletionStage<Done> someDataMigration() {
+    return CompletableFuture.completedFuture(Done.getInstance());
+  }
 }
