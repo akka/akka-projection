@@ -359,6 +359,67 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       testProbe.expectMessage(StartObserved)
     }
 
+    "support pause/resume" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+
+      testProbe.expectMessage(StartObserved)
+
+      val isPausedProbe = createTestProbe[Boolean]()
+      projectionRef ! IsPaused(TestProjectionId, isPausedProbe.ref)
+      isPausedProbe.expectMessage(false)
+
+      val doneProbe = createTestProbe[Done]()
+      projectionRef ! SetPaused(TestProjectionId, paused = true, doneProbe.ref)
+      testProbe.expectMessage(StopObserved)
+      doneProbe.expectMessage(Done)
+      testProbe.expectMessage(StartObserved)
+
+      projectionRef ! IsPaused(TestProjectionId, isPausedProbe.ref)
+      isPausedProbe.expectMessage(true)
+
+      projectionRef ! SetPaused(TestProjectionId, paused = false, doneProbe.ref)
+      testProbe.expectMessage(StopObserved)
+      doneProbe.expectMessage(Done)
+      testProbe.expectMessage(StartObserved)
+
+      projectionRef ! IsPaused(TestProjectionId, isPausedProbe.ref)
+      isPausedProbe.expectMessage(false)
+    }
+
+    "handle pause/resume operations sequentially" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+
+      testProbe.expectMessage(StartObserved)
+
+      val isPausedProbe = createTestProbe[Boolean]()
+      val pauseProbe = createTestProbe[Done]()
+      val resumeProbe = createTestProbe[Done]()
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+      val setOffsetProbe = createTestProbe[Done]()
+
+      projectionRef ! IsPaused(TestProjectionId, isPausedProbe.ref)
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      projectionRef ! SetPaused(TestProjectionId, paused = true, pauseProbe.ref)
+      projectionRef ! SetOffset(TestProjectionId, Some(3), setOffsetProbe.ref)
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      projectionRef ! SetPaused(TestProjectionId, paused = false, resumeProbe.ref)
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+
+      isPausedProbe.expectMessage(false)
+      currentOffsetProbe.expectMessage(CurrentOffset[Int](TestProjectionId, None))
+      testProbe.expectMessage(StopObserved)
+      pauseProbe.expectMessage(Done)
+      testProbe.expectMessage(StartObserved)
+      testProbe.expectMessage(StopObserved)
+      setOffsetProbe.expectMessage(Done)
+      testProbe.expectMessage(StartObserved)
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(3)))
+      testProbe.expectMessage(StopObserved)
+      resumeProbe.expectMessage(Done)
+      testProbe.expectMessage(StartObserved)
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(3)))
+    }
+
     "work with ProjectionManagement extension" in {
       val projectionId1 = ProjectionId("test-projection-ext", "1")
       val (testProbe1, _, srcRef1) = setupTestProjection(projectionId1, earlyMgmtCommand = () => {
