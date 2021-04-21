@@ -312,9 +312,9 @@ object CassandraProjectionDocExample {
     val projectionId = ProjectionId("shopping-carts", "carts-1")
     val mgmt = ProjectionManagement(system)
     val done = for {
-      _: Future[Done] <- mgmt.pause(projectionId)
+      _ <- mgmt.pause(projectionId)
       _ <- someDataMigration()
-      _: Future[Done] <- mgmt.resume(projectionId)
+      _ <- mgmt.resume(projectionId)
     } yield Done
     //#pause-resume
   }
