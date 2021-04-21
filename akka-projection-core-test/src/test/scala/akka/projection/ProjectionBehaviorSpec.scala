@@ -164,7 +164,7 @@ object ProjectionBehaviorSpec {
         offsetStore.lastOffset() match {
           case Some(0) => Future.successful(None)
           case Some(n) => Future.successful(Some(n))
-          case _       => Future.failed(new IllegalStateException("No offset has been stored"))
+          case None    => Future.successful(None)
         }
       }
 
@@ -191,12 +191,16 @@ object ProjectionBehaviorSpec {
     }
   }
 }
-class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
+class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
+  akka.projection.management.ask-timeout = 200 ms
+  """) with AnyWordSpecLike with LogCapturing {
 
   import ProjectionBehavior.Internal._
   import ProjectionBehaviorSpec._
 
-  private def setupTestProjection(projectionId: ProjectionId = TestProjectionId)
+  private def setupTestProjection(
+      projectionId: ProjectionId = TestProjectionId,
+      earlyMgmtCommand: () => Unit = () => ())
       : (TestProbe[ProbeMessage], ActorRef[ProjectionBehavior.Command], AtomicReference[ActorRef[Int]]) = {
     val srcRef = new AtomicReference[ActorRef[Int]]()
     import akka.actor.typed.scaladsl.adapter._
@@ -209,6 +213,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
     val testProbe = testKit.createTestProbe[ProbeMessage]()
     val projectionRef =
       testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, projectionId)))
+    earlyMgmtCommand()
     eventually {
       srcRef.get() should not be null
     }
@@ -347,10 +352,14 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
     "work with ProjectionManagement extension" in {
       val projectionId1 = ProjectionId("test-projection-ext", "1")
-      val projectionId2 = ProjectionId("test-projection-ext", "2")
+      val (testProbe1, _, srcRef1) = setupTestProjection(projectionId1, earlyMgmtCommand = () => {
+        // immediate request should work (via retries)
+        ProjectionManagement(system).getOffset[Int](projectionId1).futureValue shouldBe None
+      })
 
-      val (testProbe1, _, srcRef1) = setupTestProjection(projectionId1)
+      val projectionId2 = ProjectionId("test-projection-ext", "2")
       val (testProbe2, _, srcRef2) = setupTestProjection(projectionId2)
+
       srcRef1.get() ! 1
       srcRef1.get() ! 2
       testProbe1.expectMessage(StartObserved)
