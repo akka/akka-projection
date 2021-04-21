@@ -178,22 +178,12 @@ import akka.stream.scaladsl.Source
         settings) {
 
     override implicit def executionContext: ExecutionContext = system.executionContext
-    override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+    override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
 
     private val offsetStore = new CassandraOffsetStore(system)
 
     override def readPaused(): Future[Boolean] = {
-      offsetStore
-        .readManagementState(projectionId)
-        .map(_.exists(_.paused))
-        .recover {
-          case exc =>
-            // FIXME when releasing 1.2.0 this can be removed
-            logger.info(
-              "Create the [akka_projection_management] table if you have updated to version 1.1.1 or later. See schema at https://doc.akka.io/docs/akka-projection/current/cassandra.html#schema cause: {}",
-              exc)
-            false
-        }
+      offsetStore.readManagementState(projectionId).map(_.exists(_.paused))
     }
 
     override def readOffsets(): Future[Option[Offset]] =
