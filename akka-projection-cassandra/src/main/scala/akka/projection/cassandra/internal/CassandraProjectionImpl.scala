@@ -178,7 +178,7 @@ import akka.stream.scaladsl.Source
         settings) {
 
     override implicit def executionContext: ExecutionContext = system.executionContext
-    override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+    override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
 
     private val offsetStore = new CassandraOffsetStore(system)
 
