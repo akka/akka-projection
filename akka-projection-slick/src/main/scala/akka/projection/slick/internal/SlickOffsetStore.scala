@@ -111,7 +111,7 @@ import slick.jdbc.JdbcProfile
     if (useLowerCase) toRootLowerCase(str)
     else str
 
-  class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, slickSettings.table) {
+  class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, slickSettings.schema, dialect.tableName) {
 
     def projectionName = column[String](adaptCase("PROJECTION_NAME"), O.Length(255))
     def projectionKey = column[String](adaptCase("PROJECTION_KEY"), O.Length(255))
@@ -139,7 +139,7 @@ import slick.jdbc.JdbcProfile
   case class ManagementStateRow(projectionName: String, projectionKey: String, paused: Boolean, lastUpdated: Long)
 
   class ManagementTable(tag: Tag)
-      extends Table[ManagementStateRow](tag, slickSettings.schema, slickSettings.managementTable) {
+      extends Table[ManagementStateRow](tag, slickSettings.schema, dialect.managementTableName) {
 
     def projectionName = column[String](adaptCase("PROJECTION_NAME"), O.Length(255))
     def projectionKey = column[String](adaptCase("PROJECTION_KEY"), O.Length(255))

@@ -9,6 +9,8 @@ import scala.collection.immutable
 import akka.annotation.InternalApi
 import akka.util.Helpers.toRootLowerCase
 
+import java.util.Locale
+
 /**
  * INTERNAL API
  */
@@ -23,6 +25,9 @@ private[projection] object Dialect {
  */
 @InternalApi
 private[projection] trait Dialect {
+
+  def tableName: String
+  def managementTableName: String
 
   def createTableStatements: immutable.Seq[String]
   def dropTableStatement: String
@@ -413,10 +418,14 @@ private[projection] case class MSSQLServerDialect(
  * INTERNAL API
  */
 @InternalApi
-private[projection] case class OracleDialect(schema: Option[String], tableName: String, managementTableName: String)
+private[projection] case class OracleDialect(schema: Option[String], _tableName: String, _managementTableName: String)
     extends Dialect {
 
   def this(tableName: String, managementTableName: String) = this(None, tableName, managementTableName)
+
+  override val tableName: String = _tableName.toUpperCase(Locale.ROOT)
+
+  override val managementTableName: String = _managementTableName.toUpperCase(Locale.ROOT)
 
   private val table = schema.map(s => s""""$s"."$tableName"""").getOrElse(s""""$tableName"""")
 
