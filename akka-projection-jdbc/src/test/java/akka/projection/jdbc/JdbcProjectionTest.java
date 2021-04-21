@@ -55,7 +55,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     configuration.put("akka.projection.jdbc.dialect", "h2-dialect");
     configuration.put("akka.projection.jdbc.offset-store.schema", "");
     configuration.put("akka.projection.jdbc.offset-store.table", "akka_projection_offset_store");
-    configuration.put("akka.projection.jdbc.dispatcher", "database.dispatcher");
+    configuration.put("akka.projection.jdbc.use-dispatcher", "database.dispatcher");
     configuration.put("database.dispatcher.executor", "thread-pool-executor");
     configuration.put("database.dispatcher.throughput", 1);
     configuration.put("database.dispatcher.thread-pool-executor.fixed-pool-size", 5);

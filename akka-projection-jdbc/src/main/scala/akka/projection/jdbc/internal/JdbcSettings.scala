@@ -57,7 +57,7 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
 private[projection] object JdbcSettings {
 
   val configPath = "akka.projection.jdbc"
-  val dispatcherPath: String = configPath + ".dispatcher"
+  val dispatcherPath: String = configPath + ".use-dispatcher"
 
   private def checkDispatcherConfig(system: ActorSystem[_]) = {
 
