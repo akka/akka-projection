@@ -112,6 +112,9 @@ import akka.util.Timeout
     attempt(retryAttempts)
   }
 
+  /**
+   * Is the given Projection paused or not?
+   */
   def isProjectionPaused(projectionId: ProjectionId): Future[Boolean] = {
     def askIsPaused(): Future[Boolean] = {
       topic(projectionId.name)
@@ -121,9 +124,24 @@ import akka.util.Timeout
     retry(() => askIsPaused())
   }
 
+  /**
+   * Pause the given Projection. Processing will be stopped.
+   * While the Projection is paused other management operations can be performed, such as
+   * [[ProjectionManagement.resumeProjection]].
+   * The Projection can be resumed with [[ProjectionManagement.resumeProjection]].
+   *
+   * The paused/resumed state is stored and is read when the Projections are started, for example
+   * in case of rebalance or system restart.
+   */
   def pauseProjection(projectionId: ProjectionId): Future[Done] =
     setPauseProjection(projectionId, paused = true)
 
+  /**
+   * Resume a paused Projection. Processing will be start from previously stored offset.
+   *
+   * The paused/resumed state is stored and is read when the Projections are started, for example
+   * in case of rebalance or system restart.
+   */
   def resumeProjection(projectionId: ProjectionId): Future[Done] =
     setPauseProjection(projectionId, paused = false)
 
