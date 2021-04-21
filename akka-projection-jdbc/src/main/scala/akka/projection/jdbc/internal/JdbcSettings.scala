@@ -57,10 +57,11 @@ private[projection] case class JdbcSettings(config: Config, executionContext: Ex
 private[projection] object JdbcSettings {
 
   val configPath = "akka.projection.jdbc"
-  val dispatcherConfigPath = configPath + ".blocking-jdbc-dispatcher"
+  val dispatcherPath: String = configPath + ".dispatcher"
 
   private def checkDispatcherConfig(system: ActorSystem[_]) = {
 
+    val dispatcherConfigPath = system.settings.config.getString(dispatcherPath)
     val config = system.settings.config.getConfig(dispatcherConfigPath)
     val pathToPoolSize = "thread-pool-executor.fixed-pool-size"
 
@@ -96,6 +97,7 @@ private[projection] object JdbcSettings {
 
   def apply(system: ActorSystem[_]): JdbcSettings = {
     checkDispatcherConfig(system)
+    val dispatcherConfigPath = system.settings.config.getString(dispatcherPath)
     val blockingDbDispatcher = system.dispatchers.lookup(DispatcherSelector.fromConfig(dispatcherConfigPath))
     JdbcSettings(system.settings.config.getConfig(configPath), blockingDbDispatcher)
   }
