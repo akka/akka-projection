@@ -397,7 +397,7 @@ public interface CassandraProjectionDocExample {
 
     ProjectionId projectionId = ProjectionId.of("shopping-carts", "carts-1");
     CompletionStage<Boolean> paused =
-        ProjectionManagement.get(system).isProjectionPaused(projectionId);
+        ProjectionManagement.get(system).isPaused(projectionId);
     // #is-paused
   }
 
@@ -407,9 +407,9 @@ public interface CassandraProjectionDocExample {
 
     ProjectionId projectionId = ProjectionId.of("shopping-carts", "carts-1");
     ProjectionManagement mgmt = ProjectionManagement.get(system);
-    CompletionStage<Done> pauseDone = mgmt.pauseProjection(projectionId);
+    CompletionStage<Done> pauseDone = mgmt.pause(projectionId);
     CompletionStage<Done> migrationDone = pauseDone.thenCompose(notUsed -> someDataMigration());
-    CompletionStage<Done> resumeDone = migrationDone.thenCompose(notUsed -> mgmt.pauseProjection(projectionId));
+    CompletionStage<Done> resumeDone = migrationDone.thenCompose(notUsed -> mgmt.pause(projectionId));
     // #pause-resume
   }
 

@@ -1349,25 +1349,25 @@ class JdbcProjectionSpec
 
       val mgmt = ProjectionManagement(system)
 
-      mgmt.isProjectionPaused(projectionId).futureValue shouldBe false
+      mgmt.isPaused(projectionId).futureValue shouldBe false
 
       eventually {
         offsetShouldBe(6L)
       }
       projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
 
-      mgmt.pauseProjection(projectionId).futureValue shouldBe Done
+      mgmt.pause(projectionId).futureValue shouldBe Done
       mgmt.clearOffset(projectionId).futureValue shouldBe Done
 
-      mgmt.isProjectionPaused(projectionId).futureValue shouldBe true
+      mgmt.isPaused(projectionId).futureValue shouldBe true
 
       Thread.sleep(500)
       // not updated because paused
       projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
 
-      mgmt.resumeProjection(projectionId)
+      mgmt.resume(projectionId)
 
-      mgmt.isProjectionPaused(projectionId).futureValue shouldBe false
+      mgmt.isPaused(projectionId).futureValue shouldBe false
 
       eventually {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6|e1|e2|e3|e4|e5|e6")

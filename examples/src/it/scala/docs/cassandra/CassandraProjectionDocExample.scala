@@ -312,9 +312,9 @@ object CassandraProjectionDocExample {
     val projectionId = ProjectionId("shopping-carts", "carts-1")
     val mgmt = ProjectionManagement(system)
     val done = for {
-      _: Future[Done] <- mgmt.pauseProjection(projectionId)
+      _: Future[Done] <- mgmt.pause(projectionId)
       _ <- someDataMigration()
-      _: Future[Done] <- mgmt.resumeProjection(projectionId)
+      _: Future[Done] <- mgmt.resume(projectionId)
     } yield Done
     //#pause-resume
   }
@@ -324,7 +324,7 @@ object CassandraProjectionDocExample {
     import akka.projection.ProjectionId
     //#is-paused
     val projectionId = ProjectionId("shopping-carts", "carts-1")
-    val paused: Future[Boolean] = ProjectionManagement(system).isProjectionPaused(projectionId)
+    val paused: Future[Boolean] = ProjectionManagement(system).isPaused(projectionId)
     //#is-paused
   }
 
