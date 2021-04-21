@@ -109,7 +109,7 @@ import com.datastax.oss.driver.api.core.cql.Statement
     session
       .prepare(
         s"INSERT INTO $keyspace.$managementTable (projection_name, partition, projection_key, paused, last_updated) VALUES (?, ?, ?, ?, ?)")
-      .map(_.bind(projectionId.name, partition, projectionId.key, paused, Instant.now(clock)))
+      .map(_.bind(projectionId.name, partition, projectionId.key, paused: java.lang.Boolean, Instant.now(clock)))
       .flatMap(execute)
   }
 
