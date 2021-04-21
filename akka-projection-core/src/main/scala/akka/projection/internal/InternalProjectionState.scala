@@ -55,6 +55,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
   private var telemetry: Telemetry = NoopTelemetry
   private[projection] def getTelemetry() = telemetry
 
+  def readPaused(): Future[Boolean]
   def readOffsets(): Future[Option[Offset]]
   def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done]
   val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
@@ -370,20 +371,26 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
   }
 
   def mappedSource(): Source[Done, Future[Done]] = {
-
     val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
     telemetry = TelemetryProvider.start(projectionId, system)
 
     val source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed] =
       Source
-        .futureSource(
-          handlerLifecycle
-            .tryStart()
-            .flatMap { _ =>
-              sourceProvider
-                .source(() => readOffsets())
-            })
+        .futureSource(readPaused().flatMap {
+          case false =>
+            logger.debug("Projection [{}] started in resumed mode.", projectionId)
+            handlerLifecycle
+              .tryStart()
+              .flatMap { _ =>
+                sourceProvider
+                  .source(() => readOffsets())
+              }
+          case true =>
+            logger.info("Projection [{}] started in paused mode.", projectionId)
+            // paused stream, no elements
+            Future.successful(Source.never[Envelope])
+        })
         .via(killSwitch.flow)
         .map { env =>
           statusObserver.beforeProcess(projectionId, env)
@@ -457,3 +464,9 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
       }
   }
 }
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] final case class ManagementState(paused: Boolean)

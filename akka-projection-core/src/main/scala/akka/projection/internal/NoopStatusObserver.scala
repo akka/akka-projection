@@ -17,17 +17,17 @@ import akka.projection.StatusObserver
   // Java access
   def getInstance[Envelope]: StatusObserver[Envelope] = NoopStatusObserver
 
-  def started(projectionId: ProjectionId): Unit = ()
+  override def started(projectionId: ProjectionId): Unit = ()
 
-  def failed(projectionId: ProjectionId, cause: Throwable): Unit = ()
+  override def failed(projectionId: ProjectionId, cause: Throwable): Unit = ()
 
-  def stopped(projectionId: ProjectionId): Unit = ()
+  override def stopped(projectionId: ProjectionId): Unit = ()
 
   override def beforeProcess(projectionId: ProjectionId, envelope: Any): Unit = ()
 
   override def afterProcess(projectionId: ProjectionId, envelope: Any): Unit = ()
 
-  def offsetProgress(projectionId: ProjectionId, env: Any): Unit = ()
+  override def offsetProgress(projectionId: ProjectionId, env: Any): Unit = ()
 
   override def error(
       projectionId: ProjectionId,

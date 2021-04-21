@@ -1324,5 +1324,54 @@ class JdbcProjectionSpec
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6|e4|e5|e6")
       }
     }
+
+    "pause projection" in {
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
+
+      val projection =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(entityId),
+            jdbcSessionFactory,
+            handler = () =>
+              JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
+                sess.withConnection { conn =>
+                  TestRepository(conn).concatToText(envelope.id, envelope.message)
+                }
+              })
+
+      offsetShouldBeEmpty()
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+
+      val mgmt = ProjectionManagement(system)
+
+      mgmt.isPaused(projectionId).futureValue shouldBe false
+
+      eventually {
+        offsetShouldBe(6L)
+      }
+      projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
+
+      mgmt.pause(projectionId).futureValue shouldBe Done
+      mgmt.clearOffset(projectionId).futureValue shouldBe Done
+
+      mgmt.isPaused(projectionId).futureValue shouldBe true
+
+      Thread.sleep(500)
+      // not updated because paused
+      projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
+
+      mgmt.resume(projectionId)
+
+      mgmt.isPaused(projectionId).futureValue shouldBe false
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6|e1|e2|e3|e4|e5|e6")
+      }
+    }
   }
 }

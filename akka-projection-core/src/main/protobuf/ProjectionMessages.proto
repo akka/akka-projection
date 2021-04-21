@@ -34,3 +34,14 @@ message Offset {
   required string manifest = 1;
   required string value = 2;
 }
+
+message IsPaused {
+  required ProjectionId projectionId = 1;
+  required string replyTo = 2;
+}
+
+message SetPaused {
+  required ProjectionId projectionId = 1;
+  required string replyTo = 2;
+  optional bool paused = 3;
+}

@@ -1100,5 +1100,47 @@ class CassandraProjectionSpec
         concatStr.text shouldBe "abc|def|ghi|jkl|mno|pqr|jkl|mno|pqr"
       }
     }
+
+    "pause projection" in {
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val projection =
+        CassandraProjection
+          .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId, complete = false), () => concatHandler())
+          .withSaveOffset(1, Duration.Zero)
+
+      // not using ProjectionTestKit because want to test ProjectionManagement
+      spawn(ProjectionBehavior(projection))
+
+      val mgmt = ProjectionManagement(system)
+
+      mgmt.isPaused(projectionId).futureValue shouldBe false
+
+      eventually {
+        offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(6L)
+      }
+
+      ProjectionManagement(system).getOffset(projectionId).futureValue shouldBe Some(6L)
+
+      repository.findById(entityId).futureValue.get.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      mgmt.pause(projectionId).futureValue shouldBe Done
+      mgmt.clearOffset(projectionId).futureValue shouldBe Done
+
+      mgmt.isPaused(projectionId).futureValue shouldBe true
+
+      Thread.sleep(500)
+      // not updated because paused
+      repository.findById(entityId).futureValue.get.text shouldBe "abc|def|ghi|jkl|mno|pqr"
+
+      mgmt.resume(projectionId)
+
+      mgmt.isPaused(projectionId).futureValue shouldBe false
+
+      eventually {
+        repository.findById(entityId).futureValue.get.text shouldBe "abc|def|ghi|jkl|mno|pqr|abc|def|ghi|jkl|mno|pqr"
+      }
+    }
   }
 }

@@ -15,7 +15,7 @@ import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
-import akka.projection.ProjectionOffsetManagement
+import akka.projection.RunningProjectionManagement
 import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
@@ -27,6 +27,7 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
+import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
@@ -177,9 +178,13 @@ import akka.stream.scaladsl.Source
         settings) {
 
     override implicit def executionContext: ExecutionContext = system.executionContext
-    override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+    override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
 
     private val offsetStore = new CassandraOffsetStore(system)
+
+    override def readPaused(): Future[Boolean] = {
+      offsetStore.readManagementState(projectionId).map(_.exists(_.paused))
+    }
 
     override def readOffsets(): Future[Option[Offset]] =
       offsetStore.readOffset(projectionId)
@@ -198,7 +203,7 @@ import akka.stream.scaladsl.Source
       offsetStore: CassandraOffsetStore,
       projectionState: CassandraInternalProjectionState)(implicit system: ActorSystem[_])
       extends RunningProjection
-      with ProjectionOffsetManagement[Offset] {
+      with RunningProjectionManagement[Offset] {
 
     private val streamDone = source.run()
 
@@ -210,12 +215,12 @@ import akka.stream.scaladsl.Source
       streamDone
     }
 
-    // ProjectionOffsetManagement
+    // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
       offsetStore.readOffset(projectionId)
     }
 
-    // ProjectionOffsetManagement
+    // RunningProjectionManagement
     override def setOffset(offset: Option[Offset]): Future[Done] = {
       offset match {
         case Some(o) =>
@@ -224,6 +229,14 @@ import akka.stream.scaladsl.Source
           offsetStore.clearOffset(projectionId)
       }
     }
+
+    // RunningProjectionManagement
+    override def getManagementState(): Future[Option[ManagementState]] =
+      offsetStore.readManagementState(projectionId)
+
+    // RunningProjectionManagement
+    override def setPaused(paused: Boolean): Future[Done] =
+      offsetStore.savePaused(projectionId, paused)
 
   }
 

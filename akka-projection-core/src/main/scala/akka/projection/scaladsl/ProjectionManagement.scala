@@ -43,22 +43,24 @@ import akka.util.Timeout
   import ProjectionBehavior.Internal._
 
   private val topics =
-    new ConcurrentHashMap[String, ActorRef[Topic.Command[OffsetManagementCommand]]]()
+    new ConcurrentHashMap[String, ActorRef[Topic.Command[ProjectionManagementCommand]]]()
 
   private def topicName(projectionName: String): String =
     "projection-" + projectionName
 
-  private def topic(projectionName: String): ActorRef[Topic.Command[OffsetManagementCommand]] = {
+  private def topic(projectionName: String): ActorRef[Topic.Command[ProjectionManagementCommand]] = {
     topics.computeIfAbsent(projectionName, _ => {
       val name = topicName(projectionName)
-      system.systemActorOf(Topic[OffsetManagementCommand](name), name)
+      system.systemActorOf(Topic[ProjectionManagementCommand](name), name)
     })
   }
 
   /**
    * ProjectionBehavior registers when started
    */
-  private[projection] def register(projectionId: ProjectionId, projection: ActorRef[OffsetManagementCommand]): Unit = {
+  private[projection] def register(
+      projectionId: ProjectionId,
+      projection: ActorRef[ProjectionManagementCommand]): Unit = {
     topic(projectionId.name) ! Topic.Subscribe(projection)
   }
 
@@ -108,5 +110,46 @@ import akka.util.Timeout
     }
 
     attempt(retryAttempts)
+  }
+
+  /**
+   * Is the given Projection paused or not?
+   */
+  def isPaused(projectionId: ProjectionId): Future[Boolean] = {
+    def askIsPaused(): Future[Boolean] = {
+      topic(projectionId.name)
+        .ask(replyTo => Topic.Publish(IsPaused(projectionId, replyTo)))
+    }
+
+    retry(() => askIsPaused())
+  }
+
+  /**
+   * Pause the given Projection. Processing will be stopped.
+   * While the Projection is paused other management operations can be performed, such as
+   * [[ProjectionManagement.resume]].
+   * The Projection can be resumed with [[ProjectionManagement.resume]].
+   *
+   * The paused/resumed state is stored and, and it is read when the Projections are started, for example
+   * in case of rebalance or system restart.
+   */
+  def pause(projectionId: ProjectionId): Future[Done] =
+    setPauseProjection(projectionId, paused = true)
+
+  /**
+   * Resume a paused Projection. Processing will be start from previously stored offset.
+   *
+   * The paused/resumed state is stored and, and it is read when the Projections are started, for example
+   * in case of rebalance or system restart.
+   */
+  def resume(projectionId: ProjectionId): Future[Done] =
+    setPauseProjection(projectionId, paused = false)
+
+  private def setPauseProjection(projectionId: ProjectionId, paused: Boolean): Future[Done] = {
+    def askSetPaused(): Future[Done] = {
+      topic(projectionId.name)
+        .ask(replyTo => Topic.Publish(SetPaused(projectionId, paused, replyTo)))
+    }
+    retry(() => askSetPaused())
   }
 }

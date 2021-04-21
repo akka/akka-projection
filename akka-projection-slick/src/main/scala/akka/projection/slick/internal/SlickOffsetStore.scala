@@ -15,6 +15,7 @@ import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.jdbc.internal.Dialect
 import akka.projection.jdbc.internal.H2Dialect
@@ -48,14 +49,21 @@ import slick.jdbc.JdbcProfile
 
     profile match {
       case _: slick.jdbc.H2Profile =>
-        (H2Dialect(slickSettings.schema, slickSettings.table, useLowerCase), useLowerCase)
+        (
+          H2Dialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable, useLowerCase),
+          useLowerCase)
       case _: slick.jdbc.PostgresProfile =>
-        (PostgresDialect(slickSettings.schema, slickSettings.table, useLowerCase), useLowerCase)
+        (
+          PostgresDialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable, useLowerCase),
+          useLowerCase)
       // mysql and Sql server are case insensitive, we favor lower case
-      case _: slick.jdbc.SQLServerProfile => (MSSQLServerDialect(slickSettings.schema, slickSettings.table), true)
-      case _: slick.jdbc.MySQLProfile     => (MySQLDialect(slickSettings.schema, slickSettings.table), true)
+      case _: slick.jdbc.SQLServerProfile =>
+        (MSSQLServerDialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable), true)
+      case _: slick.jdbc.MySQLProfile =>
+        (MySQLDialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable), true)
       // oracle must always use quoted + uppercase
-      case _: slick.jdbc.OracleProfile => (OracleDialect(slickSettings.schema, slickSettings.table), false)
+      case _: slick.jdbc.OracleProfile =>
+        (OracleDialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable), false)
 
     }
   }
@@ -128,6 +136,23 @@ import slick.jdbc.JdbcProfile
 
   val offsetTable = TableQuery[OffsetStoreTable]
 
+  case class ManagementStateRow(projectionName: String, projectionKey: String, paused: Boolean, lastUpdated: Long)
+
+  class ManagementTable(tag: Tag)
+      extends Table[ManagementStateRow](tag, slickSettings.schema, slickSettings.managementTable) {
+
+    def projectionName = column[String](adaptCase("PROJECTION_NAME"), O.Length(255))
+    def projectionKey = column[String](adaptCase("PROJECTION_KEY"), O.Length(255))
+    def paused = column[Boolean](adaptCase("PAUSED"))
+    def lastUpdated = column[Long](adaptCase("LAST_UPDATED"))
+
+    def pk = primaryKey(adaptCase("PK_PROJECTION_MANAGEMENT_ID"), (projectionName, projectionKey))
+
+    def * = (projectionName, projectionKey, paused, lastUpdated).mapTo[ManagementStateRow]
+  }
+
+  val managementTable = TableQuery[ManagementTable]
+
   def createIfNotExists(): Future[Done] = {
     val prepareSchemaDBIO = SimpleDBIO[Unit] { jdbcContext =>
       val connection = jdbcContext.connection
@@ -136,7 +161,14 @@ import slick.jdbc.JdbcProfile
           stmt.execute(sql)
         })
     }
-    db.run(prepareSchemaDBIO).map(_ => Done)(ExecutionContexts.parasitic)
+    val prepareManagementSchemaDBIO = SimpleDBIO[Unit] { jdbcContext =>
+      val connection = jdbcContext.connection
+      dialect.createManagementTableStatements.foreach(sql =>
+        JdbcSessionUtil.tryWithResource(connection.createStatement()) { stmt =>
+          stmt.execute(sql)
+        })
+    }
+    db.run(DBIO.seq(prepareSchemaDBIO, prepareManagementSchemaDBIO)).map(_ => Done)(ExecutionContexts.parasitic)
   }
 
   def dropIfExists(): Future[Done] = {
@@ -146,6 +178,33 @@ import slick.jdbc.JdbcProfile
         stmt.execute(dialect.dropTableStatement)
       }
     }
-    db.run(prepareSchemaDBIO).map(_ => Done)(ExecutionContexts.parasitic)
+    val prepareManagementSchemaDBIO = SimpleDBIO[Unit] { jdbcContext =>
+      val connection = jdbcContext.connection
+      JdbcSessionUtil.tryWithResource(connection.createStatement()) { stmt =>
+        stmt.execute(dialect.dropManagementTableStatement)
+      }
+    }
+    db.run(DBIO.seq(prepareSchemaDBIO, prepareManagementSchemaDBIO)).map(_ => Done)(ExecutionContexts.parasitic)
+  }
+
+  def readManagementState(projectionId: ProjectionId)(
+      implicit ec: ExecutionContext): Future[Option[ManagementState]] = {
+    val action = managementTable
+      .filter(row => row.projectionName === projectionId.name && row.projectionKey === projectionId.key)
+      .result
+      .headOption
+      .map { maybeRow =>
+        maybeRow.map(row => ManagementState(row.paused))
+      }
+
+    db.run(action)
+  }
+
+  def savePaused(projectionId: ProjectionId, paused: Boolean): Future[Done] = {
+    val millisSinceEpoch = clock.instant().toEpochMilli
+    val action =
+      managementTable.insertOrUpdate(ManagementStateRow(projectionId.name, projectionId.key, paused, millisSinceEpoch))
+
+    db.run(action).map(_ => Done)(ExecutionContexts.parasitic)
   }
 }

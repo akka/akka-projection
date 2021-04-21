@@ -19,6 +19,8 @@ private[projection] case class SlickSettings(config: Config) {
 
   val table: String = config.getString("offset-store.table")
 
+  val managementTable: String = config.getString("offset-store.management-table")
+
   lazy val useLowerCase =
     config.getBoolean("offset-store.use-lowercase-schema")
 }

@@ -1,0 +1,2 @@
+# issue #25 pause/resume
+ProblemFilters.exclude[MissingTypesProblem]("akka.projection.slick.internal.SlickProjectionImpl$SlickRunningProjection")

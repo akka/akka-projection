@@ -12,4 +12,16 @@ EXCEPTION
          RAISE;
       END IF;
 END;
+
+BEGIN
+execute immediate 'create table "AKKA_PROJECTION_MANAGEMENT" ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"PAUSED" CHAR(1) NOT NULL check ("PAUSED" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
+execute immediate 'alter table "AKKA_PROJECTION_MANAGEMENT" add constraint "PK_PROJECTION_MANAGEMENT_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
+EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLCODE = -955 THEN
+        NULL; -- suppresses ORA-00955 exception
+      ELSE
+         RAISE;
+      END IF;
+END;
 #create-table-oracle

@@ -15,6 +15,7 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
@@ -37,6 +38,7 @@ import com.datastax.oss.driver.api.core.cql.Statement
 
   val keyspace: String = cassandraSettings.keyspace
   val table: String = cassandraSettings.table
+  val managementTable: String = cassandraSettings.managementTable
   private val cassandraPartitions = 5
 
   def this(system: ActorSystem[_]) =
@@ -87,11 +89,35 @@ import com.datastax.oss.driver.api.core.cql.Statement
       .flatMap(execute)
   }
 
-  def createKeyspaceAndTable(): Future[Done] = {
+  def readManagementState(projectionId: ProjectionId): Future[Option[ManagementState]] = {
+    val partition = idToPartition(projectionId)
     session
-      .executeDDL(
+      .prepare(
+        s"SELECT paused FROM $keyspace.$managementTable WHERE projection_name = ? AND partition = ? AND projection_key = ?")
+      .map(_.bind(projectionId.name, partition, projectionId.key))
+      .flatMap(selectOne)
+      .map { maybeRow =>
+        maybeRow.map(row => ManagementState(paused = row.getBoolean("paused")))
+      }
+  }
+
+  def savePaused(projectionId: ProjectionId, paused: Boolean): Future[Done] = {
+    // Using same partitioning as for offsets.
+    // A partition is calculated to ensure some distribution of projection rows across cassandra nodes, but at the
+    // same time let us query all rows for a single projection_name easily.
+    val partition = idToPartition(projectionId)
+    session
+      .prepare(
+        s"INSERT INTO $keyspace.$managementTable (projection_name, partition, projection_key, paused, last_updated) VALUES (?, ?, ?, ?, ?)")
+      .map(_.bind(projectionId.name, partition, projectionId.key, paused: java.lang.Boolean, Instant.now(clock)))
+      .flatMap(execute)
+  }
+
+  def createKeyspaceAndTable(): Future[Done] = {
+    for {
+      _ <- session.executeDDL(
         s"CREATE KEYSPACE IF NOT EXISTS $keyspace WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 }")
-      .flatMap(_ => session.executeDDL(s"""
+      _ <- session.executeDDL(s"""
         |CREATE TABLE IF NOT EXISTS $keyspace.$table (
         |  projection_name text,
         |  partition int,
@@ -100,7 +126,17 @@ import com.datastax.oss.driver.api.core.cql.Statement
         |  manifest text,
         |  last_updated timestamp,
         |  PRIMARY KEY ((projection_name, partition), projection_key))
-        """.stripMargin.trim))
+        """.stripMargin.trim)
+      _ <- session.executeDDL(s"""
+        |CREATE TABLE IF NOT EXISTS $keyspace.$managementTable (
+        |  projection_name text,
+        |  partition int,
+        |  projection_key text,
+        |  paused boolean,
+        |  last_updated timestamp,
+        |  PRIMARY KEY ((projection_name, partition), projection_key))
+        """.stripMargin.trim)
+    } yield Done
   }
 
   private[cassandra] def idToPartition[Offset](projectionId: ProjectionId): Integer = {
