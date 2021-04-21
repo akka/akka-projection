@@ -20,6 +20,7 @@ import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
+import akka.projection.internal.ManagementState
 import akka.projection.testkit.internal.TestClock
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -233,6 +234,18 @@ class CassandraOffsetStoreSpec
       withClue("check - read offset") {
         offsetStore.readOffset[Long](projectionId).futureValue shouldBe None
       }
+    }
+
+    "read and save paused" in {
+      val projectionId = ProjectionId("projection-pause", "00")
+
+      offsetStore.readManagementState(projectionId).futureValue shouldBe None
+
+      offsetStore.savePaused(projectionId, paused = true).futureValue
+      offsetStore.readManagementState(projectionId).futureValue shouldBe Some(ManagementState(paused = true))
+
+      offsetStore.savePaused(projectionId, paused = false).futureValue
+      offsetStore.readManagementState(projectionId).futureValue shouldBe Some(ManagementState(paused = false))
     }
   }
 }
