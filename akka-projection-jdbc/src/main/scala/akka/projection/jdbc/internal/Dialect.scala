@@ -26,6 +26,7 @@ private[projection] object Dialect {
 @InternalApi
 private[projection] trait Dialect {
 
+  def schema: Option[String]
   def tableName: String
   def managementTableName: String
 
@@ -418,10 +419,12 @@ private[projection] case class MSSQLServerDialect(
  * INTERNAL API
  */
 @InternalApi
-private[projection] case class OracleDialect(schema: Option[String], _tableName: String, _managementTableName: String)
+private[projection] case class OracleDialect(_schema: Option[String], _tableName: String, _managementTableName: String)
     extends Dialect {
 
   def this(tableName: String, managementTableName: String) = this(None, tableName, managementTableName)
+
+  override val schema: Option[String] = _schema.map(s => s.toUpperCase(Locale.ROOT))
 
   override val tableName: String = _tableName.toUpperCase(Locale.ROOT)
 

@@ -132,7 +132,7 @@ class OracleJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetS
   private val dialect: Dialect = OracleDialect(settings.schema, settings.table, settings.managementTable)
 
   private val table =
-    settings.schema.map(s => s""""$s"."${dialect.tableName}"""").getOrElse(s""""${dialect.tableName}"""")
+    dialect.schema.map(s => s""""$s"."${dialect.tableName}"""").getOrElse(s""""${dialect.tableName}"""")
   override def selectLastStatement: String =
     s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
 }
