@@ -12,6 +12,7 @@ import akka.projection.TestTags
 import akka.projection.jdbc.JdbcOffsetStoreSpec.JdbcSpecConfig
 import akka.projection.jdbc.JdbcOffsetStoreSpec.PureJdbcSession
 import akka.projection.jdbc.internal.Dialect
+import akka.projection.jdbc.internal.OracleDialect
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.Tag
@@ -103,7 +104,7 @@ object JdbcContainerOffsetStoreSpec {
     // related to https://github.com/testcontainers/testcontainers-java/issues/2313
     // otherwise we get ORA-01882: timezone region not found
     System.setProperty("oracle.jdbc.timezoneAsRegion", "false")
-    override def newContainer() = 
+    override def newContainer() =
       new OracleContainer("oracleinanutshell/oracle-xe-11g:1.0.0")
         .withInitScript("db/oracle-init.sql")
   }
@@ -128,7 +129,10 @@ class MSSQLServerJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOf
 
 class OracleJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.OracleSpecConfig) {
 
-  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
+  private val dialect: Dialect = OracleDialect(settings.schema, settings.table, settings.managementTable)
+
+  private val table =
+    dialect.schema.map(s => s""""$s"."${dialect.tableName}"""").getOrElse(s""""${dialect.tableName}"""")
   override def selectLastStatement: String =
     s"""SELECT * FROM $table WHERE "PROJECTION_NAME" = ? AND "PROJECTION_KEY" = ?"""
 }

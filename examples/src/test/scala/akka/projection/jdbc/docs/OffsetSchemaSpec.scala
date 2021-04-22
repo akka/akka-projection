@@ -61,7 +61,7 @@ class OffsetSchemaSpec extends AnyWordSpecLike with Matchers {
       val fromDialect =
         asFileContent((opt, s) => OracleDialect(opt, s"${s}_offset_store", s"${s}_management"), "oracle")
       val fromSqlFile = Source.fromResource("create-table-oracle.sql").mkString
-      normalize(fromSqlFile) shouldBe normalize(fromDialect)
+      normalizeCaseSensitive(fromSqlFile) shouldBe normalizeCaseSensitive(fromDialect)
     }
 
   }
@@ -79,8 +79,11 @@ class OffsetSchemaSpec extends AnyWordSpecLike with Matchers {
   }
 
   private def normalize(in: String): String = {
-    in.toLowerCase // ignore case
-      .replaceAll("[\\s]++", " ") // ignore multiple blankspaces
+    normalizeCaseSensitive(in).toLowerCase // ignore case
+  }
+
+  private def normalizeCaseSensitive(in: String): String = {
+    in.replaceAll("[\\s]++", " ") // ignore multiple blankspaces
       .trim // trim edges
   }
 }
