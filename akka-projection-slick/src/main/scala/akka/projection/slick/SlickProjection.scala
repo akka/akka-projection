@@ -356,22 +356,32 @@ object SlickProjection {
   }
 
   /**
-   * For testing purposes the offset table can be created programmatically.
+   * For testing purposes the projection offset and management tables can be created programmatically.
    * For production it's recommended to create the table with DDL statements
    * before the system is started.
    */
-  def createOffsetTableIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+  def createTablesIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]): Future[Done] = {
     createOffsetStore(databaseConfig).createIfNotExists()
   }
 
+  @deprecated("Renamed to createTablesIfNotExists", "1.2.0")
+  def createOffsetTableIfNotExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+      implicit system: ActorSystem[_]): Future[Done] =
+    createTablesIfNotExists(databaseConfig)
+
   /**
-   * For testing purposes the offset table can be dropped programmatically.
+   * For testing purposes the projection offset and management tables can be dropped programmatically.
    */
-  def dropOffsetTableIfExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+  def dropTablesIfExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]): Future[Done] = {
     createOffsetStore(databaseConfig).dropIfExists()
   }
+
+  @deprecated("Renamed to dropTablesIfExists", "1.2.0")
+  def dropOffsetTableIfExists[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
+      implicit system: ActorSystem[_]): Future[Done] =
+    dropTablesIfExists(databaseConfig)
 
   private def createOffsetStore[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]) =

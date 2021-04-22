@@ -127,7 +127,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     val done = for {
-      _ <- SlickProjection.createOffsetTableIfNotExists(dbConfig)
+      _ <- SlickProjection.createTablesIfNotExists(dbConfig)
       _ <- repository.createIfNotExists
     } yield ()
     Await.result(done, 5.seconds)

@@ -277,20 +277,30 @@ object JdbcProjection {
   }
 
   /**
-   * For testing purposes the offset table can be created programmatically.
+   * For testing purposes the projection offset and management tables can be created programmatically.
    * For production it's recommended to create the table with DDL statements
    * before the system is started.
    */
-  def createOffsetTableIfNotExists[S <: JdbcSession](
+  def createTablesIfNotExists[S <: JdbcSession](
       sessionFactory: Supplier[S],
       system: ActorSystem[_]): CompletionStage[Done] =
     JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).createIfNotExists().toJava
 
+  @deprecated("Renamed to createTablesIfNotExists", "1.2.0")
+  def createOffsetTableIfNotExists[S <: JdbcSession](
+      sessionFactory: Supplier[S],
+      system: ActorSystem[_]): CompletionStage[Done] =
+    createTablesIfNotExists(sessionFactory, system)
+
   /**
-   * For testing purposes the offset table can be dropped programmatically.
+   * For testing purposes the projection offset and management tables can be dropped programmatically.
    */
+  def dropTablesIfExists[S <: JdbcSession](sessionFactory: Supplier[S], system: ActorSystem[_]): CompletionStage[Done] =
+    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).dropIfExists().toJava
+
+  @deprecated("Renamed to dropTablesIfExists", "1.2.0")
   def dropOffsetTableIfExists[S <: JdbcSession](
       sessionFactory: Supplier[S],
       system: ActorSystem[_]): CompletionStage[Done] =
-    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).dropIfExists().toJava
+    dropTablesIfExists(sessionFactory, system)
 }

@@ -311,7 +311,7 @@ object KafkaDocExample {
    */
   def main(args: Array[String]): Unit = {
     val sessionProvider = new HibernateSessionFactory
-    JdbcProjection.createOffsetTableIfNotExists(() => sessionProvider.newInstance())
+    JdbcProjection.createTablesIfNotExists(() => sessionProvider.newInstance())
     system
   }
 
