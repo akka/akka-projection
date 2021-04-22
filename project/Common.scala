@@ -6,6 +6,7 @@ import sbt.Keys._
 import sbt._
 import sbt.plugins.JvmPlugin
 import com.typesafe.tools.mima.plugin.MimaKeys._
+import xerial.sbt.Sonatype.autoImport.sonatypeProfileName
 
 object Common extends AutoPlugin {
 
@@ -63,6 +64,7 @@ object Common extends AutoPlugin {
     Test / logBuffered := false,
     mimaPreviousArtifacts := Set(
         organization.value %% moduleName.value % previousStableVersion.value
-          .getOrElse(throw new Error("Unable to determine previous version"))))
+          .getOrElse(throw new Error("Unable to determine previous version"))),
+    sonatypeProfileName := "com.lightbend")
 
 }
