@@ -142,13 +142,17 @@ object CassandraProjection {
       statusObserver = NoopStatusObserver)
 
   /**
-   * For testing purposes the offset table can be created programmatically.
+   * For testing purposes the projection offset and management tables can be created programmatically.
    * For production it's recommended to create the table with DDL statements
    * before the system is started.
    */
-  def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
+  def createTablesIfNotExists()(implicit system: ActorSystem[_]): Future[Done] = {
     val offsetStore = new CassandraOffsetStore(system)
     offsetStore.createKeyspaceAndTable()
   }
+
+  @deprecated("Renamed to createTablesIfNotExists", "1.2.0")
+  def createOffsetTableIfNotExists()(implicit system: ActorSystem[_]): Future[Done] =
+    createTablesIfNotExists()
 
 }

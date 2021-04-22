@@ -39,7 +39,7 @@ class WordCountDocExampleSpec
     Await.result(ContainerSessionProvider.started, 30.seconds)
 
     Await.result(for {
-      _ <- CassandraProjection.createOffsetTableIfNotExists()
+      _ <- CassandraProjection.createTablesIfNotExists()
       _ <- repository.createKeyspaceAndTable()
     } yield Done, 30.seconds)
   }

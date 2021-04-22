@@ -50,7 +50,7 @@ public class WordCountDocExampleTest extends JUnitSuite {
     session =
         CassandraSessionRegistry.get(testKit.system())
             .sessionFor("akka.projection.cassandra.session-config");
-    CassandraProjection.createOffsetTableIfNotExists(testKit.system())
+    CassandraProjection.createTablesIfNotExists(testKit.system())
         .toCompletableFuture()
         .get(10, TimeUnit.SECONDS);
 
