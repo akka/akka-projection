@@ -1,5 +1,7 @@
 import akka.projections.Dependencies
 
+sonatypeProfileName in ThisBuild := "com.lightbend"
+
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
     .configs(IntegrationTest)
