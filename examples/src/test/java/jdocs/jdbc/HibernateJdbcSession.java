@@ -8,7 +8,6 @@ import akka.japi.function.Function;
 import akka.projection.jdbc.JdbcSession;
 // #hibernate-session-imports
 import org.hibernate.Session;
-import org.hibernate.jdbc.ReturningWork;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityTransaction;
 import java.sql.Connection;
@@ -30,18 +29,15 @@ public class HibernateJdbcSession implements JdbcSession {
 
   @Override
   public <Result> Result withConnection(Function<Connection, Result> func) {
-    Session hibernateSession = ((Session) entityManager.getDelegate());
+    Session hibernateSession = entityManager.unwrap(Session.class);
     return hibernateSession.doReturningWork(
-        new ReturningWork<Result>() {
-          @Override
-          public Result execute(Connection connection) throws SQLException {
-            try {
-              return func.apply(connection);
-            } catch (SQLException e) {
-              throw e;
-            } catch (Exception e) {
-              throw new SQLException(e);
-            }
+        connection -> {
+          try {
+            return func.apply(connection);
+          } catch (SQLException e) {
+            throw e;
+          } catch (Exception e) {
+            throw new SQLException(e);
           }
         });
   }
