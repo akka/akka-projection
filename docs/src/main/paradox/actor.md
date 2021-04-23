@@ -34,6 +34,8 @@ the actor with `ask`. The actor is supposed to send a response message to the `r
 processing of the envelope. The @scala[`Try`]@java[`Optional<Throwable> error`] indicates if the processing was
 successful or failed.
 
+The lifecycle of the actor is managed by the `Projection`. The actor is automatically stopped when the `Projection` is stopped.
+
 Another implementation that is loading the current count for a word on demand, and thereafter caches it in the
 in-memory state: 
 
