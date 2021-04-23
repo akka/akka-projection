@@ -1,4 +1,5 @@
 import akka.projections.Dependencies
+import com.geirsson.CiReleasePlugin
 import sbtdynver.DynVerPlugin.autoImport._
 import com.lightbend.paradox.projectinfo.ParadoxProjectInfoPluginKeys._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
@@ -12,7 +13,7 @@ object Common extends AutoPlugin {
 
   override def trigger = allRequirements
 
-  override def requires = JvmPlugin
+  override def requires = JvmPlugin && CiReleasePlugin
 
   override def globalSettings =
     Seq(
