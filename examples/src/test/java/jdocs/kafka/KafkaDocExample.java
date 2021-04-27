@@ -72,7 +72,7 @@ public interface KafkaDocExample {
 
   // #handler
   public class WordCountHandler
-      extends JdbcHandler<ConsumerRecord<String, String>, HibernateJdbcSession> {
+      implements JdbcHandler<ConsumerRecord<String, String>, HibernateJdbcSession> {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final ProjectionId projectionId;
 
@@ -223,7 +223,7 @@ public interface KafkaDocExample {
 
   // #exactly-once-jdbc-handler
   public class WordCountJdbcHandler
-      extends JdbcHandler<ConsumerRecord<String, String>, HibernateJdbcSession> {
+      implements JdbcHandler<ConsumerRecord<String, String>, HibernateJdbcSession> {
     private Logger logger = LoggerFactory.getLogger(getClass());
     private WordRepository wordRepository;
 

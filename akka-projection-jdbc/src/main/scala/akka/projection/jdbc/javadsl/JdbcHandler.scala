@@ -40,7 +40,7 @@ object JdbcHandler {
  * implementation.
  */
 @ApiMayChange
-abstract class JdbcHandler[Envelope, S <: JdbcSession] extends JdbcHandlerLifecycle {
+trait JdbcHandler[Envelope, S <: JdbcSession] extends JdbcHandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`. Each time a new [[JdbcSession]] is passed with a new open transaction.

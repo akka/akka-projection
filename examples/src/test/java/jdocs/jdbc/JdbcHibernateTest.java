@@ -69,7 +69,7 @@ public class JdbcHibernateTest extends JUnitSuite {
 
   private static final JdbcSettings jdbcSettings = JdbcSettings.apply(testKit.system());
   private static final JdbcOffsetStore<HibernateJdbcSession> offsetStore =
-      new JdbcOffsetStore<>(testKit.system(), jdbcSettings, () -> sessionProvider.newInstance());
+      new JdbcOffsetStore<>(testKit.system(), jdbcSettings, sessionProvider::newInstance);
 
   private static final scala.concurrent.duration.Duration awaitTimeout =
       scala.concurrent.duration.Duration.create(3, TimeUnit.SECONDS);
@@ -99,12 +99,7 @@ public class JdbcHibernateTest extends JUnitSuite {
   }
 
   private JdbcHandler<Envelope, HibernateJdbcSession> concatHandler(StringBuffer buffer) {
-    return new JdbcHandler<Envelope, HibernateJdbcSession>() {
-      @Override
-      public void process(HibernateJdbcSession session, Envelope envelope) {
-        buffer.append(envelope.message).append("|");
-      }
-    };
+    return (session, envelope) -> buffer.append(envelope.message).append("|");
   }
 
   private void assertStoredOffset(ProjectionId projectionId, long expectedOffset) {
@@ -135,7 +130,7 @@ public class JdbcHibernateTest extends JUnitSuite {
         JdbcProjection.exactlyOnce(
             projectionId,
             sourceProvider(entityId),
-            () -> sessionProvider.newInstance(),
+            sessionProvider::newInstance,
             () -> concatHandler(buffer),
             testKit.system());
 
