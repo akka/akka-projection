@@ -9,6 +9,9 @@ import akka.annotation.InternalApi
 import akka.projection.jdbc.JdbcHandlerLifecycle
 import akka.projection.jdbc.JdbcSession
 
+import java.util.function.BiConsumer
+import scala.compat.java8.FunctionConverters.enrichAsScalaFromBiConsumer
+
 @ApiMayChange
 object JdbcHandler {
 
@@ -23,8 +26,13 @@ object JdbcHandler {
     override def process(session: S, envelope: Envelope): Unit = handler(session, envelope)
   }
 
+  @Deprecated
+  @deprecated("Use the similar method with Java functional interface as a parameter", "1.2.0")
   def fromFunction[Envelope, S <: JdbcSession](handler: (S, Envelope) => Unit): JdbcHandler[Envelope, S] =
     new HandlerFunction(handler)
+
+  def fromFunction[Envelope, S <: JdbcSession](handler: BiConsumer[S, Envelope]): JdbcHandler[Envelope, S] =
+    new HandlerFunction(handler.asScala)
 }
 
 /**
