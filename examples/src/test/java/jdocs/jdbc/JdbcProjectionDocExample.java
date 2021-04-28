@@ -35,7 +35,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
-@SuppressWarnings({"unused", "InnerClassMayBeStatic"})
 class JdbcProjectionDocExample {
   // #todo
   // TODO
@@ -57,7 +56,11 @@ class JdbcProjectionDocExample {
   }
   // #repository
 
-  public OrderRepository orderRepository = (entityManager, order) -> {};
+  public OrderRepository orderRepository =
+      new OrderRepository() {
+        @Override
+        public void save(EntityManager entityManager, Order order) {}
+      };
 
   // #jdbc-session
   class PlainJdbcSession implements JdbcSession {
@@ -98,8 +101,8 @@ class JdbcProjectionDocExample {
 
   // #handler
   public class ShoppingCartHandler
-      implements JdbcHandler<EventEnvelope<ShoppingCart.Event>, HibernateJdbcSession> {
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+      extends JdbcHandler<EventEnvelope<ShoppingCart.Event>, HibernateJdbcSession> {
+    private Logger logger = LoggerFactory.getLogger(getClass());
 
     @Override
     public void process(HibernateJdbcSession session, EventEnvelope<ShoppingCart.Event> envelope)
@@ -123,8 +126,8 @@ class JdbcProjectionDocExample {
 
   // #grouped-handler
   public class GroupedShoppingCartHandler
-      implements JdbcHandler<List<EventEnvelope<ShoppingCart.Event>>, HibernateJdbcSession> {
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+      extends JdbcHandler<List<EventEnvelope<ShoppingCart.Event>>, HibernateJdbcSession> {
+    private Logger logger = LoggerFactory.getLogger(getClass());
 
     @Override
     public void process(
@@ -165,8 +168,8 @@ class JdbcProjectionDocExample {
         JdbcProjection.exactlyOnce(
             ProjectionId.of("shopping-carts", "carts-1"),
             sourceProvider,
-            sessionProvider::newInstance,
-            ShoppingCartHandler::new,
+            () -> sessionProvider.newInstance(),
+            () -> new ShoppingCartHandler(),
             system);
     // #exactlyOnce
   }
@@ -181,8 +184,8 @@ class JdbcProjectionDocExample {
         JdbcProjection.atLeastOnce(
                 ProjectionId.of("shopping-carts", "carts-1"),
                 sourceProvider,
-                sessionProvider::newInstance,
-                ShoppingCartHandler::new,
+                () -> sessionProvider.newInstance(),
+                () -> new ShoppingCartHandler(),
                 system)
             .withSaveOffset(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     // #atLeastOnce
@@ -198,8 +201,8 @@ class JdbcProjectionDocExample {
         JdbcProjection.groupedWithin(
                 ProjectionId.of("shopping-carts", "carts-1"),
                 sourceProvider,
-                sessionProvider::newInstance,
-                GroupedShoppingCartHandler::new,
+                () -> sessionProvider.newInstance(),
+                () -> new GroupedShoppingCartHandler(),
                 system)
             .withGroup(saveOffsetAfterEnvelopes, saveOffsetAfterDuration);
     // #grouped

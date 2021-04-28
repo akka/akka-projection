@@ -201,11 +201,14 @@ public class JdbcProjectionTest extends JUnitSuite {
 
   private JdbcHandler<Envelope, PureJdbcSession> concatHandler(
       StringBuffer buffer, Predicate<Long> failPredicate) {
-    return (session, envelope) -> {
-      if (failPredicate.test(envelope.offset)) {
-        throw new RuntimeException(failMessage(envelope.offset));
-      } else {
-        buffer.append(envelope.message).append("|");
+    return new JdbcHandler<Envelope, PureJdbcSession>() {
+      @Override
+      public void process(PureJdbcSession session, Envelope envelope) {
+        if (failPredicate.test(envelope.offset)) {
+          throw new RuntimeException(failMessage(envelope.offset));
+        } else {
+          buffer.append(envelope.message).append("|");
+        }
       }
     };
   }
@@ -214,7 +217,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     return new GroupedConcatHandler(buffer, handlerProbe);
   }
 
-  static class GroupedConcatHandler implements JdbcHandler<List<Envelope>, PureJdbcSession> {
+  static class GroupedConcatHandler extends JdbcHandler<List<Envelope>, PureJdbcSession> {
 
     public static final String handlerCalled = "called";
     private final StringBuffer buffer;

@@ -1,2 +1,0 @@
-ProblemFilters.exclude[MissingTypesProblem]("akka.projection.jdbc.javadsl.JdbcHandler$HandlerFunction")
-ProblemFilters.exclude[IncompatibleTemplateDefProblem]("akka.projection.jdbc.javadsl.JdbcHandler")
