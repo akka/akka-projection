@@ -35,6 +35,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+@SuppressWarnings({"unused", "InnerClassMayBeStatic"})
 class JdbcProjectionDocExample {
   // #todo
   // TODO
@@ -56,7 +57,12 @@ class JdbcProjectionDocExample {
   }
   // #repository
 
-  public OrderRepository orderRepository = (entityManager, order) -> {};
+  @SuppressWarnings("Convert2Lambda")
+  public OrderRepository orderRepository =
+      new OrderRepository() {
+        @Override
+        public void save(EntityManager entityManager, Order order) {}
+      };
 
   // #jdbc-session
   class PlainJdbcSession implements JdbcSession {

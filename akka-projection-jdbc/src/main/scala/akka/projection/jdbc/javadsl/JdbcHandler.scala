@@ -10,7 +10,7 @@ import akka.projection.jdbc.JdbcHandlerLifecycle
 import akka.projection.jdbc.JdbcSession
 
 import java.util.function.BiConsumer
-import scala.compat.java8.FunctionConverters.enrichAsScalaFromBiConsumer
+import scala.compat.java8.FunctionConverters.enrichAsJavaBiConsumer
 
 @ApiMayChange
 object JdbcHandler {
@@ -21,18 +21,18 @@ object JdbcHandler {
    * INTERNAL API
    */
   @InternalApi
-  private class HandlerFunction[Envelope, S <: JdbcSession](handler: (S, Envelope) => Unit)
+  private class HandlerFunction[Envelope, S <: JdbcSession](handler: BiConsumer[S, Envelope])
       extends JdbcHandler[Envelope, S] {
-    override def process(session: S, envelope: Envelope): Unit = handler(session, envelope)
+    override def process(session: S, envelope: Envelope): Unit = handler.accept(session, envelope)
   }
 
   @Deprecated
-  @deprecated("Use the similar method with Java functional interface as a parameter", "1.2.0")
+  @deprecated("Use the similar method with Java functional interface as a parameter", "1.2.1")
   def fromFunction[Envelope, S <: JdbcSession](handler: (S, Envelope) => Unit): JdbcHandler[Envelope, S] =
-    new HandlerFunction(handler)
+    new HandlerFunction(handler.asJava)
 
   def fromFunction[Envelope, S <: JdbcSession](handler: BiConsumer[S, Envelope]): JdbcHandler[Envelope, S] =
-    new HandlerFunction(handler.asScala)
+    new HandlerFunction(handler)
 }
 
 /**
