@@ -1,0 +1,1 @@
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.jdbc.javadsl.JdbcHandler#HandlerFunction.this")
