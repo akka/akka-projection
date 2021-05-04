@@ -40,7 +40,11 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -201,16 +205,14 @@ public class JdbcProjectionTest extends JUnitSuite {
 
   private JdbcHandler<Envelope, PureJdbcSession> concatHandler(
       StringBuffer buffer, Predicate<Long> failPredicate) {
-    return new JdbcHandler<Envelope, PureJdbcSession>() {
-      @Override
-      public void process(PureJdbcSession session, Envelope envelope) {
-        if (failPredicate.test(envelope.offset)) {
-          throw new RuntimeException(failMessage(envelope.offset));
-        } else {
-          buffer.append(envelope.message).append("|");
-        }
-      }
-    };
+    return JdbcHandler.fromFunction(
+        (PureJdbcSession session, Envelope envelope) -> {
+          if (failPredicate.test(envelope.offset)) {
+            throw new RuntimeException(failMessage(envelope.offset));
+          } else {
+            buffer.append(envelope.message).append("|");
+          }
+        });
   }
 
   GroupedConcatHandler groupedConcatHandler(StringBuffer buffer, TestProbe<String> handlerProbe) {
