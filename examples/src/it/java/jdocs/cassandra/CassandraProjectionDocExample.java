@@ -409,7 +409,7 @@ public interface CassandraProjectionDocExample {
     ProjectionManagement mgmt = ProjectionManagement.get(system);
     CompletionStage<Done> pauseDone = mgmt.pause(projectionId);
     CompletionStage<Done> migrationDone = pauseDone.thenCompose(notUsed -> someDataMigration());
-    CompletionStage<Done> resumeDone = migrationDone.thenCompose(notUsed -> mgmt.pause(projectionId));
+    CompletionStage<Done> resumeDone = migrationDone.thenCompose(notUsed -> mgmt.resume(projectionId));
     // #pause-resume
   }
 
