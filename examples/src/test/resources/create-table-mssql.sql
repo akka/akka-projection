@@ -13,7 +13,7 @@ CREATE TABLE akka_projection_offset_store (
 
 ALTER TABLE akka_projection_offset_store ADD CONSTRAINT pk_projection_id PRIMARY KEY(projection_name, projection_key)
 
-CREATE INDEX projection_name_index ON akka_projection_offset_store (projection_name)
+CREATE INDEX akka_projection_name_index ON akka_projection_offset_store (projection_name)
 END
 
 IF NOT EXISTS (SELECT 1 FROM SYS.OBJECTS WHERE OBJECT_ID = OBJECT_ID(N'akka_projection_management') AND TYPE IN (N'U'))

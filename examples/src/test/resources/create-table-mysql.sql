@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS akka_projection_offset_store (
   PRIMARY KEY(projection_name, projection_key)
 );
 
-CREATE INDEX projection_name_index ON akka_projection_offset_store (projection_name);
+CREATE INDEX akka_projection_name_index ON akka_projection_offset_store (projection_name);
 
 CREATE TABLE IF NOT EXISTS akka_projection_management (
   projection_name VARCHAR(255) NOT NULL,

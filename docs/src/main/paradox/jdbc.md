@@ -230,6 +230,10 @@ H2
 The schema can be created and dropped using the methods `JdbcProjection.createTablesIfNotExists` and `JdbcProjection.dropTablesIfExists`. This is particularly useful when writting tests. For production enviornments, we recommend creating the schema before deploying the application.
 
 @@@ warning { title=Important }
+As of version 1.2.2, the index name `PROJECTION_NAME_INDEX` has been changed to `AKKA_PROJECTION_NAME_INDEX`
+If you have a schema in production, we recommend applying an ALTER index script to change it accordingly.
+
+@@@ warning { title=Important }
 As of version 1.1.0, the schema for PostgreSQL and H2 databases has changed. It now defaults to lowercase table and column names.
 If you have a schema in production, we recommend applying an ALTER table script to change it accordingly.
 
