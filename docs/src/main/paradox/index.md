@@ -23,5 +23,6 @@
 * [Testing](testing.md)
 * [Classic](classic.md)
 * [Snapshots](snapshots.md)
+* [Durable State](durable-state.md)
 
 @@@

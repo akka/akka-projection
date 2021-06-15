@@ -1,0 +1,46 @@
+# State changes from Akka Persistence Durable State
+
+A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/durable-state/persistence.html). Durable state changes can be [tagged](https://doc.akka.io/docs/akka/current/typed/durable-state/persistence.html#tagging) and then
+consumed with the [changes query](https://doc.akka.io/docs/akka/current/durable-state/persistence-query.html#using-query-with-akka-projections).
+
+Akka Projections has integration with `changes`, which is described here. 
+
+## Dependencies
+
+To use the Durable State module of Akka Projections, add the following dependency in your project:
+
+@@dependency [sbt,Maven,Gradle] {
+  group=com.lightbend.akka
+  artifact=akka-projection-durable-state_$scala.binary.version$
+  version=$project.version$
+}
+
+Akka Projections requires Akka $akka.version$ or later, see @ref:[Akka version](overview.md#akka-version).
+
+@@project-info{ projectId="akka-projection-durable-state" }
+
+### Transitive dependencies
+
+The table below shows the `akka-projection-durable-state` direct dependencies.The second tab shows all libraries it depends on transitively.
+
+@@dependencies{ projectId="akka-projection-durable-state" }
+
+## SourceProvider for changesByTag
+
+A @apidoc[SourceProvider] defines the source of the event envelopes that the `Projection` will process. A `SourceProvider`
+for the `changes` query can be defined with the @apidoc[DurableStateStoreProvider$] like this:
+
+Scala
+:  @@snip [DurableStateStoreDocExample.scala](/examples/src/test/scala/docs/state/DurableStateStoreDocExample.scala) { #imports #sourceProvider }
+
+Java
+:  @@snip [DurableStateStoreDocExample.java](/examples/src/test/java/jdocs/state/DurableStateStoreDocExample.java) { #imports #sourceProvider }
+
+This example is using the [DurableStateStore JDBC plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-jdbc/current/durable-state-store.html).
+You will use the same plugin that you configured for the write side. The one that is used by the `DurableStateBehavior`.
+
+This source is consuming all the changes from the `Account` `DurableStateBehavior` that are tagged with `"bank-accounts-1"`. In a production application, you would need to start as many instances as the number of different tags you used. That way you consume the changes in all entities.
+
+The @scala[`DurableStateChange[AccountEntity.Account]`]@java[`DurableStateChange<AccountEntity.Account>`] is what the `Projection`
+handler will process. It contains the `State` and additional meta data, such as the offset that will be stored
+by the `Projection`. See @apidoc[akka.persistence.query.DurableStateChange] for full details of what it contains. 

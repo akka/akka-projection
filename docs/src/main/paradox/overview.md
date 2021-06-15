@@ -9,6 +9,7 @@ resuming the stream from that position when the projection is restarted.
 As the source you can select from:
 
 * @ref:[Events from Akka Persistence](eventsourced.md)
+* @ref:[State changes from Akka Persistence](durable-state.md)
 * @ref:[Messages from Kafka](kafka.md)
 * Building your own @apidoc[SourceProvider]
 
@@ -39,6 +40,7 @@ Akka Projections consists of several modules for specific technologies. The depe
 each module describes which dependency you should define in your project.
 
 * @ref:[Events from Akka Persistence](eventsourced.md)
+* @ref:[State changes from Akka Persistence](durable-state.md)
 * @ref:[Messages from Kafka](kafka.md)
 * @ref:[Offset in Cassandra](cassandra.md)
 * @ref:[Offset in a relational DB with JDBC](jdbc.md)

@@ -86,6 +86,17 @@ lazy val kafka =
     .dependsOn(testkit % Test)
     .dependsOn(slick % "test->test;it->it")
 
+// provides source providers for durable state changes
+lazy val `durable-state` =
+  Project(id = "akka-projection-durable-state", base = file("akka-projection-durable-state"))
+    .configs(IntegrationTest)
+    .settings(Dependencies.state)
+    .dependsOn(core)
+    .dependsOn(testkit % Test)
+    .settings(
+      // no previous artifact so must disable MiMa until this is released at least once.
+      mimaPreviousArtifacts := Set.empty)
+
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
   .settings(headerSettings(IntegrationTest))
@@ -96,6 +107,7 @@ lazy val examples = project
   .dependsOn(jdbc % "test->test")
   .dependsOn(cassandra % "test->test;test->it")
   .dependsOn(eventsourced)
+  .dependsOn(`durable-state`)
   .dependsOn(kafka % "test->test")
   .dependsOn(testkit % Test)
   .settings(publish / skip := true, scalacOptions += "-feature", javacOptions += "-parameters")
@@ -143,12 +155,14 @@ lazy val docs = project
     paradoxRoots := List("index.html", "getting-started/event-generator-app.html"),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,
+    // TODO remove
+    resolvers in ThisBuild += "Akka Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/"),
     publishRsyncArtifacts += (makeSite.value -> "www/"),
     publishRsyncHost := "akkarepo@gustav.akka.io",
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, coreTest, testkit, jdbc, slick, cassandra, eventsourced, kafka, examples, docs)
+  .aggregate(core, coreTest, testkit, jdbc, slick, cassandra, eventsourced, kafka, `durable-state`, examples, docs)
   .settings(publish / skip := true, whitesourceIgnore := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin, MimaPlugin)
