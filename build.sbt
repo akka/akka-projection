@@ -86,6 +86,13 @@ lazy val kafka =
     .dependsOn(testkit % Test)
     .dependsOn(slick % "test->test;it->it")
 
+// provides source providers for durable state changes
+lazy val state =
+  Project(id = "akka-projection-state", base = file("akka-projection-state"))
+    .settings(Dependencies.state)
+    .dependsOn(core)
+    .dependsOn(testkit % Test)
+
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
   .settings(headerSettings(IntegrationTest))
@@ -148,7 +155,7 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, coreTest, testkit, jdbc, slick, cassandra, eventsourced, kafka, examples, docs)
+  .aggregate(core, coreTest, testkit, jdbc, slick, cassandra, eventsourced, kafka, state, examples, docs)
   .settings(publish / skip := true, whitesourceIgnore := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin, MimaPlugin)

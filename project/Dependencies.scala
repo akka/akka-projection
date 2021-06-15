@@ -127,6 +127,9 @@ object Dependencies {
   val eventsourced =
     deps ++= Seq(Compile.akkaPersistenceQuery)
 
+  val state =
+    deps ++= Seq(Compile.akkaPersistenceQuery)
+
   val jdbc =
     deps ++= Seq(
         Compile.akkaPersistenceQuery,
