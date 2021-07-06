@@ -13,12 +13,12 @@ import akka.persistence.state.scaladsl._
 import akka.stream.scaladsl.Sink
 
 object DurableStateSourceProviderSpec {
-  val InMemPluginId = "akka.persistence.state.inmem"
+  val InMemPluginId = "akka.persistence.query.state.inmem"
   def conf: Config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
     akka.persistence.state.plugin = $InMemPluginId
-    akka.persistence.state.inmem {
-      class = "akka.persistence.state.inmem.InmemDurableStateStoreProvider"
+    akka.persistence.query.state.inmem {
+      class = "akka.persistence.query.state.inmem.InmemDurableStateStoreProvider"
     }
     """)
   final case class Record(id: Int, name: String)
@@ -39,12 +39,14 @@ class DurableStateSourceProviderSpec
 
       whenReady(durableStateStore.upsertObject("persistent-id", 0L, record, tag)) { _ =>
         val sourceProvider =
-          DurableStateSourceProvider.changesByTag[Record](system, "akka.persistence.state.inmem", tag)
+          DurableStateSourceProvider.changesByTag[Record](system, InMemPluginId, tag)
+        // This test depends on source completing, which is not correctly implemented on InMemDurableStateStore at this moment
+        // When does currentChanges get used?
         whenReady(sourceProvider.source(() => Future.successful[Option[Offset]](None))) { source =>
           whenReady(source.runWith(Sink.seq[DurableStateChange[Record]])) { res =>
             res.size should equal(1)
             res(0).value should be(record)
-            res(0).seqNr should be(0L)
+            res(0).revision should be(0L)
           }
         }
       }
