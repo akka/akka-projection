@@ -128,7 +128,10 @@ object Dependencies {
     deps ++= Seq(Compile.akkaPersistenceQuery)
 
   val state =
-    deps ++= Seq(Compile.akkaPersistenceQuery)
+    deps ++= Seq(
+      Compile.akkaPersistenceQuery,
+      Test.logback,
+      Test.scalatest)
 
   val jdbc =
     deps ++= Seq(
