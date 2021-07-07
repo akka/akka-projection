@@ -53,6 +53,7 @@ object Dependencies {
 
     val akkaTypedTestkit = Compile.akkaTypedTestkit % allTestConfig
     val akkaStreamTestkit = Compile.akkaStreamTestkit % allTestConfig
+    val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % "test"
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % allTestConfig
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % allTestConfig
@@ -130,7 +131,8 @@ object Dependencies {
   val state =
     deps ++= Seq(
       Compile.akkaPersistenceQuery,
-      Test.logback,
+      Test.persistenceTestkit,
+      Test.akkaStreamTestkit,
       Test.scalatest)
 
   val jdbc =
