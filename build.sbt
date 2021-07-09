@@ -89,6 +89,7 @@ lazy val kafka =
 // provides source providers for durable state changes
 lazy val state =
   Project(id = "akka-projection-state", base = file("akka-projection-state"))
+    .configs(IntegrationTest)
     .settings(Dependencies.state)
     .dependsOn(core)
     .dependsOn(testkit % Test)
