@@ -24,7 +24,8 @@ public interface DurableStateStoreDocExample {
     // TODO JdbcDurableStateStore.Identifier does not exist yet
     // #sourceProvider
     SourceProvider<Offset, DurableStateChange<Record>> sourceProvider =
-        DurableStateSourceProvider.changesByTag(system, JdbcDurableStateStore.Identifier(), "records-1");
+        DurableStateSourceProvider.changesByTag(
+            system, JdbcDurableStateStore.Identifier(), "records-1");
     // #sourceProvider
 
   }
