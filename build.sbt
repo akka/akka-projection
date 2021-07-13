@@ -155,7 +155,7 @@ lazy val docs = project
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,
     // TODO remove
-    resolvers in ThisBuild += "Akka Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
+    resolvers in ThisBuild += "Akka Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/"),
     publishRsyncArtifacts += (makeSite.value -> "www/"),
     publishRsyncHost := "akkarepo@gustav.akka.io",
     apidocRootPackage := "akka")
