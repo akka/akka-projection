@@ -8,10 +8,10 @@ import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
 
 // #imports
+import akka.persistence.jdbc.state.javadsl.JdbcDurableStateStore;
 import akka.persistence.query.DurableStateChange;
 import akka.persistence.query.Offset;
-import akka.persistence.state.DurableStateStoreRegistry;
-import akka.persistence.state.javadsl.DurableStateSourceProvider;
+import akka.projection.state.javadsl.DurableStateSourceProvider;
 import akka.projection.javadsl.SourceProvider;
 // #imports
 
@@ -21,12 +21,10 @@ public interface DurableStateStoreDocExample {
 
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 
-    // TODO JdbcDurableStateStore.Identifier does not exist yet
     // #sourceProvider
-    SourceProvider<Offset, DurableStateChange<Record>> sourceProvider =
+    SourceProvider<Offset, DurableStateChange<Rewards.State>> sourceProvider =
         DurableStateSourceProvider.changesByTag(
             system, JdbcDurableStateStore.Identifier(), "records-1");
     // #sourceProvider
-
   }
 }

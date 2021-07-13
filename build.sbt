@@ -106,6 +106,7 @@ lazy val examples = project
   .dependsOn(jdbc % "test->test")
   .dependsOn(cassandra % "test->test;test->it")
   .dependsOn(eventsourced)
+  .dependsOn(state)
   .dependsOn(kafka % "test->test")
   .dependsOn(testkit % Test)
   .settings(publish / skip := true, scalacOptions += "-feature", javacOptions += "-parameters")
