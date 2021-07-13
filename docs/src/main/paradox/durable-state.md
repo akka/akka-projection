@@ -36,15 +36,14 @@ Scala
 Java
 :  @@snip [DurableStateStoreDocExample.java](/examples/src/test/java/jdocs/state/DurableStateStoreDocExample.java) { #imports #sourceProvider }
 
-TODO check JDBC link with Debasish 
-This example is using the [DurableStateStore JDBC plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-state/current/jdbc-state-store.html).
+TODO verify link to jdbc state store
+This example is using the [DurableStateStore JDBC plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence/current/jdbc-state-store.html).
 You will use the same plugin as you have configured for the write side that is used by the `DurableStateBehavior`.
 
-TODO check with example for DurableStateChange, probably not a `ShoppingCart`
-This source is consuming all changes from the `ShoppingCart` `DurableStateBehavior` that are tagged with `"cart-1"`.
+This source is consuming all changes from the `Rewards` `DurableStateBehavior` that are tagged with `"user-1"`.
 
 The tags are assigned as described in @ref:[Tagging Changes in DurableStateBehavior](running.md#tagging-changes-in-durablestatebehavior).
 
-The @scala[`DurableStateChange[ShoppingCart]`]@java[`DurableStateChange<ShoppingCart>`] is what the `Projection`
+The @scala[`DurableStateChange[Rewards.State]`]@java[`DurableStateChange<Rewards.State>`] is what the `Projection`
 handler will process. It contains the `State` and additional meta data, such as the offset that will be stored
 by the `Projection`. See @apidoc[akka.projection.state.DurableStateChange] for full details of what it contains. 
