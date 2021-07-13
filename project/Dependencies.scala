@@ -9,12 +9,12 @@ object Dependencies {
   val Scala212 = "2.12.13"
   val ScalaVersions = Seq(Scala213, Scala212)
 
-  val AkkaVersionInDocs = "2.6"
+  val AkkaVersionInDocs = "2.6.15+34-942982a9-SNAPSHOT" // FIXME
   val AlpakkaVersionInDocs = "2.0"
   val AlpakkaKafkaVersionInDocs = "2.0"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.6.14")
+    val akka = sys.props.getOrElse("build.akka.version", "2.6.15+34-942982a9-SNAPSHOT") // FIXME
     val alpakka = "2.0.2"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.7")
     val slick = "3.3.3"
@@ -53,6 +53,7 @@ object Dependencies {
 
     val akkaTypedTestkit = Compile.akkaTypedTestkit % allTestConfig
     val akkaStreamTestkit = Compile.akkaStreamTestkit % allTestConfig
+    val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % "test"
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % allTestConfig
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % allTestConfig
@@ -88,7 +89,8 @@ object Dependencies {
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
     val akkaPersistenceCassandra = "com.typesafe.akka" %% "akka-persistence-cassandra" % "1.0.3"
-    val akkaPersistenceJdbc = "com.lightbend.akka" %% "akka-persistence-jdbc" % "5.0.0"
+    // FIXME SNAPSHOT
+    val akkaPersistenceJdbc = "com.lightbend.akka" %% "akka-persistence-jdbc" % "5.0.1+12-91fdf881-SNAPSHOT"
     val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka
   }
 
@@ -126,6 +128,9 @@ object Dependencies {
 
   val eventsourced =
     deps ++= Seq(Compile.akkaPersistenceQuery)
+
+  val state =
+    deps ++= Seq(Compile.akkaPersistenceQuery, Test.persistenceTestkit, Test.akkaStreamTestkit, Test.scalatest)
 
   val jdbc =
     deps ++= Seq(
