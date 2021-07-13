@@ -9,12 +9,12 @@ object Dependencies {
   val Scala212 = "2.12.13"
   val ScalaVersions = Seq(Scala213, Scala212)
 
-  val AkkaVersionInDocs = "2.6"
+  val AkkaVersionInDocs = "2.6.15+34-942982a9-SNAPSHOT" // FIXME
   val AlpakkaVersionInDocs = "2.0"
   val AlpakkaKafkaVersionInDocs = "2.0"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.6.15+34-942982a9-SNAPSHOT")
+    val akka = sys.props.getOrElse("build.akka.version", "2.6.15+34-942982a9-SNAPSHOT") // FIXME
     val alpakka = "2.0.2"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.7")
     val slick = "3.3.3"

@@ -1,4 +1,6 @@
 import akka.projections.Dependencies
+// FIXME remove switching to final Akka version
+resolvers in ThisBuild += "Akka Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/")
 
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
