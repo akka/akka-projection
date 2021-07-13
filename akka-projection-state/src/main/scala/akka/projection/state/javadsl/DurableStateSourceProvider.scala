@@ -2,7 +2,7 @@
  * Copyright (C) 2020-2021 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.eventsourced.javadsl
+package akka.projection.state.javadsl
 
 import java.util.Optional
 import java.util.concurrent.CompletionStage
