@@ -59,7 +59,7 @@ object Dependencies {
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
     val h2Driver = Compile.h2Driver % allTestConfig
-    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.20" % allTestConfig
+    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.23" % allTestConfig
     val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.23" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
