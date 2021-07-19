@@ -6,6 +6,7 @@ package akka.projection.testkit.scaladsl
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.reflect.ClassTag
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
@@ -131,8 +132,11 @@ final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
   }
 
   private def spawnActorHandler(projection: Projection[_]): Option[ActorRef[_]] = {
+
+    val throwableClassTag = implicitly[ClassTag[Throwable]]
     projection.actorHandlerInit[Any].map { init =>
-      val ref = testKit.spawn(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart))
+      val ref =
+        testKit.spawn(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart)(throwableClassTag))
       init.setActor(ref)
       ref
     }

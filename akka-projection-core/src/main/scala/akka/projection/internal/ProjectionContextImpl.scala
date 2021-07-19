@@ -17,7 +17,10 @@ import akka.projection.ProjectionContext
     envelope: Envelope,
     externalContext: AnyRef,
     groupSize: Int)
-    extends ProjectionContext
+    extends ProjectionContext {
+
+  def withGroupSize(groupSize: Int) = copy(groupSize = groupSize)
+}
 
 /**
  * INTERNAL API

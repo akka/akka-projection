@@ -178,7 +178,7 @@ import akka.stream.scaladsl.Source
         settings) {
 
     override implicit def executionContext: ExecutionContext = system.executionContext
-    override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+    override val logger: LoggingAdapter = Logging(system.classicSystem, classOf[CassandraInternalProjectionState])
 
     private val offsetStore = new CassandraOffsetStore(system)
 
@@ -193,7 +193,10 @@ import akka.stream.scaladsl.Source
       offsetStore.saveOffset(projectionId, offset)
 
     private[projection] def newRunningInstance(): RunningProjection = {
-      new CassandraRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), offsetStore, this)
+      new CassandraRunningProjection(
+        RunningProjection.withBackoff(() => this.mappedSource(), settings),
+        offsetStore,
+        this)
     }
 
   }

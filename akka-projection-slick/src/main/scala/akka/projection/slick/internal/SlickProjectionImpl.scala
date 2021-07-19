@@ -188,7 +188,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       databaseConfig.db.run(offsetStore.saveOffset(projectionId, offset)).map(_ => Done)
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new SlickRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
+      new SlickRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
 
   }
 

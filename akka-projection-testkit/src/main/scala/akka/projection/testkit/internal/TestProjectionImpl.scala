@@ -157,7 +157,8 @@ private[projection] class TestInternalProjectionState[Offset, Envelope](
 
   startOffset.foreach(offset => offsetStore.saveOffset(projectionId, offset))
 
-  override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+  override val logger: LoggingAdapter =
+    Logging(system.classicSystem, classOf[TestInternalProjectionState[Offset, Envelope]])
 
   override def readPaused(): Future[Boolean] =
     offsetStore.readManagementState(projectionId).map(_.exists(_.paused))
