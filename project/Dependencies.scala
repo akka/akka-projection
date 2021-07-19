@@ -46,6 +46,8 @@ object Dependencies {
 
     // not really used in lib code, but in example and test
     val h2Driver = "com.h2database" % "h2" % Versions.h2Driver
+
+    val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0"
   }
 
   object Test {
@@ -119,6 +121,7 @@ object Dependencies {
     deps ++= Seq(
         Compile.akkaTypedTestkit,
         Compile.akkaStreamTestkit,
+        Compile.collectionCompat,
         Test.scalatest,
         Test.scalatestJUnit,
         Test.junit,

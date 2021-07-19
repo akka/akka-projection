@@ -20,17 +20,9 @@ object AkkaDisciplinePlugin extends AutoPlugin {
   // We allow warnings in docs to get the 'snippets' right
   val nonFatalWarningsFor = Set("docs")
 
-  lazy val silencerSettings = {
-    val silencerVersion = "1.7.3"
-    Seq(
-      libraryDependencies ++= Seq(
-          compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
-          ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch)))
-  }
-
   lazy val disciplineSettings =
     if (enabled) {
-      silencerSettings ++ Seq(
+      Seq(
         Compile / scalacOptions ++= (
             if (!nonFatalWarningsFor(name.value)) Seq("-Xfatal-warnings")
             else Seq.empty
@@ -58,8 +50,7 @@ object AkkaDisciplinePlugin extends AutoPlugin {
         // having discipline warnings in console is just an annoyance
         Compile / console / scalacOptions --= disciplineScalacOptions.toSeq)
     } else {
-      // we still need these in opt-out since the annotations are present
-      silencerSettings ++ Seq(Compile / scalacOptions += "-deprecation")
+      Seq(Compile / scalacOptions += "-deprecation")
     }
 
   val testUndicipline = Seq("-Ywarn-dead-code" // '???' used in compile only specs
