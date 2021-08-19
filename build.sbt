@@ -119,7 +119,6 @@ lazy val docs = project
   .settings(
     name := "Akka Projections",
     publish / skip := true,
-    whitesourceIgnore := true,
     makeSite := makeSite.dependsOn(LocalRootProject / ScalaUnidoc / doc).value,
     previewPath := (Paradox / siteSubdirName).value,
     Preprocess / siteSubdirName := s"api/akka-projection/${projectInfoVersion.value}",
@@ -163,7 +162,7 @@ lazy val docs = project
 
 lazy val root = Project(id = "akka-projection", base = file("."))
   .aggregate(core, coreTest, testkit, jdbc, slick, cassandra, eventsourced, kafka, `durable-state`, examples, docs)
-  .settings(publish / skip := true, whitesourceIgnore := true)
+  .settings(publish / skip := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin, MimaPlugin)
 
