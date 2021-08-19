@@ -20,7 +20,6 @@ Variables to be expanded in this template:
 
 ### Preparing release notes in the documentation / announcement
 
-- [ ] For non-patch (minor/major) releases: rename the 'akka-projection-x.x-stable' and 'akka-projection-supported-x.x-stable' reporting projects in [WhiteSource](https://saas.whitesourcesoftware.com/Wss/WSS.html) accordingly (unfortunately this requires permissions that cannot be shared outside of Lightbend)
 - [ ] For non-patch releases: Create a news item draft PR on [akka.github.com](https://github.com/akka/akka.github.com), using the milestone
 - [ ] Move all [unclosed issues](https://github.com/akka/akka-projection/issues?q=is%3Aopen+is%3Aissue+milestone%3A$VERSION$) for this milestone to the next milestone
 - [ ] Close the [milestone](https://github.com/akka/akka-projection/milestones?direction=asc&sort=due_date)
