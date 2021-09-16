@@ -18,3 +18,8 @@ The example used in this guide is based on a more complete application that is p
 
 @@@
 
+## Video Introduction
+
+This video on YouTube gives a short introduction to Akka Projections for processing a stream of events or records from a source to a projected model or external system.
+
+[![Akka Projections introduction](../assets/intro-video.png)](http://www.youtube.com/watch?v=0toyKxomdwo "Watch video on YouTube")
