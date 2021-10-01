@@ -27,11 +27,29 @@ import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Statement
 import org.slf4j.LoggerFactory
 
+object R2dbcOffsetStore {
+  type SeqNr = Long
+  type Pid = String
+
+  final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
+
+  object State {
+    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
+  }
+
+  final case class State(byPid: Map[Pid, Record], latest: immutable.IndexedSeq[Record], oldestTimestamp: Instant) {
+    def latestTimestamp: Instant =
+      if (latest.isEmpty) Instant.EPOCH
+      else latest.head.timestamp
+  }
+}
+
 /**
  * INTERNAL API
  */
 @InternalApi
 private[projection] class R2dbcOffsetStore(
+    projectionId: ProjectionId,
     system: ActorSystem[_],
     settings: R2dbcProjectionSettings,
     r2dbcExecutor: R2dbcExecutor,
@@ -40,8 +58,12 @@ private[projection] class R2dbcOffsetStore(
   private val logger = LoggerFactory.getLogger(this.getClass)
   private val verboseLogging = logger.isDebugEnabled() && settings.verboseLoggingEnabled
 
-  def this(system: ActorSystem[_], settings: R2dbcProjectionSettings, r2dbcExecutor: R2dbcExecutor) =
-    this(system, settings, r2dbcExecutor, Clock.systemUTC())
+  def this(
+      projectionId: ProjectionId,
+      system: ActorSystem[_],
+      settings: R2dbcProjectionSettings,
+      r2dbcExecutor: R2dbcExecutor) =
+    this(projectionId, system, settings, r2dbcExecutor, Clock.systemUTC())
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -74,7 +96,7 @@ private[projection] class R2dbcOffsetStore(
   private val clearOffsetSql: String =
     s"""DELETE FROM $table WHERE projection_name = $$1 AND projection_key = $$2"""
 
-  def readOffset[Offset](projectionId: ProjectionId): Future[Option[Offset]] = {
+  def readOffset[Offset](): Future[Option[Offset]] = {
     val singleOffsets = r2dbcExecutor.select("read offset")(
       conn => {
         if (verboseLogging)
@@ -113,10 +135,10 @@ private[projection] class R2dbcOffsetStore(
   /**
    * Like saveOffset, but in own transaction. Useful for resetting an offset
    */
-  def saveOffset[Offset](projectionId: ProjectionId, offset: Offset): Future[Done] = {
+  def saveOffset[Offset](offset: Offset): Future[Done] = {
     r2dbcExecutor
       .withConnection("save offset") { conn =>
-        saveOffsetInTx(conn, projectionId, offset)
+        saveOffsetInTx(conn, offset)
       }
       .map(_ => Done)(ExecutionContext.parasitic)
   }
@@ -124,7 +146,7 @@ private[projection] class R2dbcOffsetStore(
   /**
    * This method is used together with the users' handler code and run in same transaction.
    */
-  def saveOffsetInTx[Offset](conn: Connection, projectionId: ProjectionId, offset: Offset): Future[Done] = {
+  def saveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
 
     if (verboseLogging)
       logger.debug("saving offset [{}], using connection id [{}]", offset, System.identityHashCode(conn))
@@ -163,7 +185,7 @@ private[projection] class R2dbcOffsetStore(
     Future.successful(Done)
   }
 
-  def clearOffset(projectionId: ProjectionId): Future[Done] = {
+  def clearOffset(): Future[Done] = {
     r2dbcExecutor
       .updateOne("clear offset") { conn =>
         logger.debug(
@@ -181,11 +203,11 @@ private[projection] class R2dbcOffsetStore(
       }
   }
 
-  def readManagementState(projectionId: ProjectionId): Future[Option[ManagementState]] = {
+  def readManagementState(): Future[Option[ManagementState]] = {
     Future.successful(None) // FIXME not implemented yet
   }
 
-  def savePaused(projectionId: ProjectionId, paused: Boolean): Future[Done] = {
+  def savePaused(paused: Boolean): Future[Done] = {
     Future.successful(Done) // FIXME not implemented yet
   }
 

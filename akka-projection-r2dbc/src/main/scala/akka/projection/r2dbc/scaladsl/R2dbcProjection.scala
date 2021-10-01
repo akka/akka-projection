@@ -49,16 +49,13 @@ object R2dbcProjection {
       system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
     val connFactory = connectionFactory(system, settings)
-    val offsetStore = R2dbcProjectionImpl.createOffsetStore(settings, connFactory)
+    val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
     val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
 
     val adaptedHandler =
-      R2dbcProjectionImpl.adaptedHandlerForExactlyOnce(
-        projectionId,
-        sourceProvider,
-        handler,
-        offsetStore,
-        r2dbcExecutor)(system.executionContext, system)
+      R2dbcProjectionImpl.adaptedHandlerForExactlyOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
+        system.executionContext,
+        system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -95,7 +92,7 @@ object R2dbcProjection {
       system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
 
     val connFactory = connectionFactory(system, settings)
-    val offsetStore = R2dbcProjectionImpl.createOffsetStore(settings, connFactory)
+    val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
     val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
 
     val adaptedHandler =
@@ -134,7 +131,7 @@ object R2dbcProjection {
       handler: () => Handler[Envelope])(implicit system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
 
     val connFactory = connectionFactory(system, settings)
-    val offsetStore = R2dbcProjectionImpl.createOffsetStore(settings, connFactory)
+    val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -165,11 +162,11 @@ object R2dbcProjection {
       system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
     val connFactory = connectionFactory(system, settings)
-    val offsetStore = R2dbcProjectionImpl.createOffsetStore(settings, connFactory)
+    val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
     val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
 
     val adaptedHandler =
-      R2dbcProjectionImpl.adaptedHandlerForGrouped(projectionId, sourceProvider, handler, offsetStore, r2dbcExecutor)(
+      R2dbcProjectionImpl.adaptedHandlerForGrouped(sourceProvider, handler, offsetStore, r2dbcExecutor)(
         system.executionContext,
         system)
 
@@ -206,7 +203,7 @@ object R2dbcProjection {
       system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
     val connFactory = connectionFactory(system, settings)
-    val offsetStore = R2dbcProjectionImpl.createOffsetStore(settings, connFactory)
+    val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -249,7 +246,7 @@ object R2dbcProjection {
       system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
 
     val connFactory = connectionFactory(system, settings)
-    val offsetStore = R2dbcProjectionImpl.createOffsetStore(settings, connFactory)
+    val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -269,14 +266,16 @@ object R2dbcProjection {
    */
   def createTablesIfNotExists(settings: Option[R2dbcProjectionSettings], connectionFactory: ConnectionFactory)(implicit
       system: ActorSystem[_]): Future[Done] =
-    R2dbcProjectionImpl.createOffsetStore(settings, connectionFactory).createIfNotExists()
+    R2dbcProjectionImpl
+      .createOffsetStore(ProjectionId("createTables", ""), settings, connectionFactory)
+      .createIfNotExists()
 
   /**
    * For testing purposes the projection offset and management tables can be dropped programmatically.
    */
   def dropTablesIfExists(settings: Option[R2dbcProjectionSettings], connectionFactory: ConnectionFactory)(implicit
       system: ActorSystem[_]): Future[Done] =
-    R2dbcProjectionImpl.createOffsetStore(settings, connectionFactory).dropIfExists()
+    R2dbcProjectionImpl.createOffsetStore(ProjectionId("dropTables", ""), settings, connectionFactory).dropIfExists()
 
   private def connectionFactory(
       system: ActorSystem[_],

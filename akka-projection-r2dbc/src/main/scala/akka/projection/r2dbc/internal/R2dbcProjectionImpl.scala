@@ -54,14 +54,14 @@ private[projection] object R2dbcProjectionImpl {
   val log: Logger = LoggerFactory.getLogger(classOf[R2dbcProjectionImpl[_, _]])
 
   private[projection] def createOffsetStore(
+      projectionId: ProjectionId,
       settings: Option[R2dbcProjectionSettings],
       connectionFactory: ConnectionFactory)(implicit system: ActorSystem[_]) = {
     val r2dbcExecutor = new R2dbcExecutor(connectionFactory, log)(system.executionContext, system)
-    new R2dbcOffsetStore(system, settings.getOrElse(R2dbcProjectionSettings(system)), r2dbcExecutor)
+    new R2dbcOffsetStore(projectionId, system, settings.getOrElse(R2dbcProjectionSettings(system)), r2dbcExecutor)
   }
 
   private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope](
-      projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => R2dbcHandler[Envelope],
       offsetStore: R2dbcOffsetStore,
@@ -72,7 +72,7 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           val offset = sourceProvider.extractOffset(envelope)
           r2dbcExecutor.withConnection("exactly-once handler") { conn =>
-            val offsetResult = offsetStore.saveOffsetInTx(conn, projectionId, offset)
+            val offsetResult = offsetStore.saveOffsetInTx(conn, offset)
             offsetResult.flatMap { _ =>
               // run users handler
               val session = new R2dbcSession(conn)
@@ -99,7 +99,6 @@ private[projection] object R2dbcProjectionImpl {
   }
 
   private[projection] def adaptedHandlerForGrouped[Offset, Envelope](
-      projectionId: ProjectionId,
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => R2dbcHandler[immutable.Seq[Envelope]],
       offsetStore: R2dbcOffsetStore,
@@ -110,8 +109,8 @@ private[projection] object R2dbcProjectionImpl {
     new AdaptedR2dbcHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
         val offset = sourceProvider.extractOffset(envelopes.last)
-        r2dbcExecutor.withConnection("groupd handler") { conn =>
-          val offsetResult = offsetStore.saveOffsetInTx(conn, projectionId, offset)
+        r2dbcExecutor.withConnection("grouped handler") { conn =>
+          val offsetResult = offsetStore.saveOffsetInTx(conn, offset)
           offsetResult.flatMap { _ =>
             // run users handler
             val session = new R2dbcSession(conn)
@@ -262,13 +261,13 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
 
     override def readPaused(): Future[Boolean] =
-      offsetStore.readManagementState(projectionId).map(_.exists(_.paused))
+      offsetStore.readManagementState().map(_.exists(_.paused))
 
     override def readOffsets(): Future[Option[Offset]] =
-      offsetStore.readOffset(projectionId)
+      offsetStore.readOffset()
 
     override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] =
-      offsetStore.saveOffset(projectionId, offset)
+      offsetStore.saveOffset(offset)
 
     private[projection] def newRunningInstance(): RunningProjection =
       new JdbcRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
@@ -291,24 +290,24 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
 
     // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
-      offsetStore.readOffset(projectionId)
+      offsetStore.readOffset()
     }
 
     // RunningProjectionManagement
     override def setOffset(offset: Option[Offset]): Future[Done] = {
       offset match {
-        case Some(o) => offsetStore.saveOffset(projectionId, o)
-        case None    => offsetStore.clearOffset(projectionId)
+        case Some(o) => offsetStore.saveOffset(o)
+        case None    => offsetStore.clearOffset()
       }
     }
 
     // RunningProjectionManagement
     override def getManagementState(): Future[Option[ManagementState]] =
-      offsetStore.readManagementState(projectionId)
+      offsetStore.readManagementState()
 
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =
-      offsetStore.savePaused(projectionId, paused)
+      offsetStore.savePaused(paused)
   }
 
 }
