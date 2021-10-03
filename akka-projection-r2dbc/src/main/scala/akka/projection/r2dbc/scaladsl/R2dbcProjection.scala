@@ -96,7 +96,9 @@ object R2dbcProjection {
     val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
 
     val adaptedHandler =
-      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(handler, r2dbcExecutor)(system.executionContext, system)
+      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(handler, offsetStore, r2dbcExecutor)(
+        system.executionContext,
+        system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -132,6 +134,8 @@ object R2dbcProjection {
 
     val connFactory = connectionFactory(system, settings)
     val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
+
+    // FIXME this should also filter duplicates
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -205,6 +209,8 @@ object R2dbcProjection {
     val connFactory = connectionFactory(system, settings)
     val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
 
+    // FIXME this should also filter duplicates
+
     new R2dbcProjectionImpl(
       projectionId,
       r2dbcSettingsOpt = settings,
@@ -247,6 +253,8 @@ object R2dbcProjection {
 
     val connFactory = connectionFactory(system, settings)
     val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, settings, connFactory)
+
+    // FIXME this should also filter duplicates
 
     new R2dbcProjectionImpl(
       projectionId,

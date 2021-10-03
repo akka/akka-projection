@@ -16,6 +16,7 @@ import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
@@ -121,6 +122,40 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.saveOffset(offset2).futureValue
       val readOffset2 = offsetStore.readOffset[TimestampOffset]()
       readOffset2.futureValue shouldBe Some(offset1) // keeping offset1
+    }
+
+    s"filter duplicates" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      tick()
+      val offset1 = TimestampOffset(clock.instant(), Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
+      offsetStore.saveOffset(offset1).futureValue
+      tick()
+      val offset2 = TimestampOffset(clock.instant(), Map("p1" -> 4L, "p3" -> 6L, "p4" -> 9L))
+      offsetStore.saveOffset(offset2).futureValue
+      tick()
+      val offset3 = TimestampOffset(clock.instant(), Map("p5" -> 10L))
+      offsetStore.saveOffset(offset3).futureValue
+
+      offsetStore.isDuplicate(Record("p5", 10, offset3.timestamp)) shouldBe true
+      offsetStore.isDuplicate(Record("p1", 4, offset2.timestamp)) shouldBe true
+      offsetStore.isDuplicate(Record("p3", 6, offset2.timestamp)) shouldBe true
+      offsetStore.isDuplicate(Record("p4", 9, offset2.timestamp)) shouldBe true
+
+      offsetStore.isDuplicate(Record("p1", 3, offset1.timestamp)) shouldBe true
+      offsetStore.isDuplicate(Record("p2", 1, offset1.timestamp)) shouldBe true
+      offsetStore.isDuplicate(Record("p3", 5, offset1.timestamp)) shouldBe true
+
+      offsetStore.isDuplicate(Record("p1", 2, offset1.timestamp.minusMillis(1))) shouldBe true
+      offsetStore.isDuplicate(Record("p0", 2, offset1.timestamp.minusMillis(1))) shouldBe true
+      offsetStore.isDuplicate(Record("p5", 9, offset3.timestamp.minusMillis(1))) shouldBe true
+
+      offsetStore.isDuplicate(Record("p5", 11, offset3.timestamp)) shouldBe false
+      offsetStore.isDuplicate(Record("p5", 12, offset3.timestamp.plusMillis(1))) shouldBe false
+
+      offsetStore.isDuplicate(Record("p6", 1, offset3.timestamp.plusMillis(2))) shouldBe false
+      offsetStore.isDuplicate(Record("p7", 1, offset3.timestamp.minusMillis(1))) shouldBe false
     }
 
     s"evict old records" in {

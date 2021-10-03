@@ -53,6 +53,8 @@ import org.slf4j.LoggerFactory
 private[projection] object R2dbcProjectionImpl {
   val log: Logger = LoggerFactory.getLogger(classOf[R2dbcProjectionImpl[_, _]])
 
+  private val FutureDone: Future[Done] = Future.successful(Done)
+
   private[projection] def createOffsetStore(
       projectionId: ProjectionId,
       settings: Option[R2dbcProjectionSettings],
@@ -70,13 +72,16 @@ private[projection] object R2dbcProjectionImpl {
 
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          val offset = sourceProvider.extractOffset(envelope)
-          r2dbcExecutor.withConnection("exactly-once handler") { conn =>
-            val offsetResult = offsetStore.saveOffsetInTx(conn, offset)
-            offsetResult.flatMap { _ =>
+          if (offsetStore.isEnvelopeDuplicate(envelope)) {
+            FutureDone
+          } else {
+            val offset = sourceProvider.extractOffset(envelope)
+            r2dbcExecutor.withConnection("exactly-once handler") { conn =>
               // run users handler
               val session = new R2dbcSession(conn)
-              delegate.process(session, envelope)
+              delegate.process(session, envelope).flatMap { _ =>
+                offsetStore.saveOffsetInTx(conn, offset)
+              }
             }
           }
         }
@@ -85,14 +90,19 @@ private[projection] object R2dbcProjectionImpl {
 
   private[projection] def adaptedHandlerForAtLeastOnce[Offset, Envelope](
       handlerFactory: () => R2dbcHandler[Envelope],
+      offsetStore: R2dbcOffsetStore,
       r2dbcExecutor: R2dbcExecutor)(implicit ec: ExecutionContext, system: ActorSystem[_]): () => Handler[Envelope] = {
     () =>
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          r2dbcExecutor.withConnection("at-least-once handler") { conn =>
-            // run users handler
-            val session = new R2dbcSession(conn)
-            delegate.process(session, envelope)
+          if (offsetStore.isEnvelopeDuplicate(envelope)) {
+            FutureDone
+          } else {
+            r2dbcExecutor.withConnection("at-least-once handler") { conn =>
+              // run users handler
+              val session = new R2dbcSession(conn)
+              delegate.process(session, envelope)
+            }
           }
         }
       }
@@ -108,13 +118,17 @@ private[projection] object R2dbcProjectionImpl {
 
     new AdaptedR2dbcHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-        val offset = sourceProvider.extractOffset(envelopes.last)
-        r2dbcExecutor.withConnection("grouped handler") { conn =>
-          val offsetResult = offsetStore.saveOffsetInTx(conn, offset)
-          offsetResult.flatMap { _ =>
+        val envelopesWithoutDuplicates = envelopes.iterator.filterNot(offsetStore.isEnvelopeDuplicate).toVector
+        if (envelopesWithoutDuplicates.isEmpty) {
+          FutureDone
+        } else {
+          val offsets = envelopesWithoutDuplicates.map(sourceProvider.extractOffset)
+          r2dbcExecutor.withConnection("grouped handler") { conn =>
             // run users handler
             val session = new R2dbcSession(conn)
-            delegate.process(session, envelopes)
+            delegate.process(session, envelopesWithoutDuplicates).flatMap { _ =>
+              offsetStore.saveOffsetsInTx(conn, offsets)
+            }
           }
         }
       }
@@ -195,9 +209,6 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
   override def withRestartBackoffSettings(restartBackoff: RestartSettings): R2dbcProjectionImpl[Offset, Envelope] =
     copy(restartBackoffOpt = Some(restartBackoff))
 
-  /**
-   * Settings for AtLeastOnceSlickProjection
-   */
   override def withSaveOffset(
       afterEnvelopes: Int,
       afterDuration: FiniteDuration): R2dbcProjectionImpl[Offset, Envelope] =
@@ -205,9 +216,6 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       .asInstanceOf[AtLeastOnce]
       .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)))
 
-  /**
-   * Settings for GroupedSlickProjection
-   */
   override def withGroup(
       groupAfterEnvelopes: Int,
       groupAfterDuration: FiniteDuration): R2dbcProjectionImpl[Offset, Envelope] =
@@ -270,10 +278,10 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       offsetStore.saveOffset(offset)
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new JdbcRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
+      new R2dbcRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
   }
 
-  private class JdbcRunningProjection(source: Source[Done, _], projectionState: R2dbcInternalProjectionState)(implicit
+  private class R2dbcRunningProjection(source: Source[Done, _], projectionState: R2dbcInternalProjectionState)(implicit
       system: ActorSystem[_])
       extends RunningProjection
       with RunningProjectionManagement[Offset] {
@@ -290,7 +298,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
 
     // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
-      offsetStore.readOffset()
+      offsetStore.getOffset()
     }
 
     // RunningProjectionManagement

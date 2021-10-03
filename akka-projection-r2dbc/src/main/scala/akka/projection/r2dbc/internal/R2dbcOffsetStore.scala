@@ -4,15 +4,14 @@
 
 package akka.projection.r2dbc.internal
 
-import java.time.{ Duration => JDuration }
 import java.time.Clock
 import java.time.Instant
+import java.time.{ Duration => JDuration }
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -22,6 +21,7 @@ import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
@@ -53,6 +53,13 @@ object R2dbcOffsetStore {
     def latestTimestamp: Instant =
       if (latest.isEmpty) Instant.EPOCH
       else latest.head.timestamp
+
+    def latestOffset: Option[TimestampOffset] = {
+      if (latest.isEmpty)
+        None
+      else
+        Some(TimestampOffset(latestTimestamp, latest.map(r => r.pid -> r.seqNr).toMap))
+    }
 
     def add(records: immutable.IndexedSeq[Record]): State = {
       records.foldLeft(this) { case (acc, r) =>
@@ -199,6 +206,13 @@ private[projection] class R2dbcOffsetStore(
   def getState(): State =
     state.get()
 
+  def getOffset[Offset](): Future[Option[Offset]] = {
+    getState().latestOffset match {
+      case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
+      case None    => readOffset()
+    }
+  }
+
   def readOffset[Offset](): Future[Option[Offset]] = {
     // look for TimestampOffset first since that is used by akka-persistence-r2dbc,
     // and then fall back to the other more primitive offset types
@@ -235,7 +249,7 @@ private[projection] class R2dbcOffsetStore(
       if (newState == State.empty) {
         None
       } else {
-        Some(TimestampOffset(newState.latestTimestamp, newState.latest.map(r => r.pid -> r.seqNr).toMap))
+        newState.latestOffset
       }
     }
   }
@@ -298,6 +312,20 @@ private[projection] class R2dbcOffsetStore(
         saveTimestampOffsetInTx(conn, records)
       case _ =>
         savePrimitiveOffsetInTx(conn, offset)
+    }
+  }
+
+  def saveOffsetsInTx[Offset](conn: Connection, offsets: immutable.IndexedSeq[Offset]): Future[Done] = {
+    if (offsets.exists(_.isInstanceOf[TimestampOffset])) {
+      val records = offsets.flatMap {
+        case t: TimestampOffset =>
+          t.seen.map { case (pid, seqNr) => Record(pid, seqNr, t.timestamp) }
+        case _ =>
+          Nil
+      }
+      saveTimestampOffsetInTx(conn, records)
+    } else {
+      savePrimitiveOffsetInTx(conn, offsets.last)
     }
   }
 
@@ -381,6 +409,20 @@ private[projection] class R2dbcOffsetStore(
     }
 
     R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContext.parasitic)
+  }
+
+  def isDuplicate(record: Record): Boolean =
+    getState().isDuplicate(record)
+
+  def isEnvelopeDuplicate[Envelope](envelope: Envelope): Boolean = {
+    envelope match {
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
+        val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
+        isDuplicate(
+          R2dbcOffsetStore
+            .Record(eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp))
+      case _ => false
+    }
   }
 
   def deleteOldTimestampOffsets(): Future[Int] = {
