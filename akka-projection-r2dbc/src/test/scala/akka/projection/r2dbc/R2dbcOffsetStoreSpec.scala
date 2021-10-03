@@ -38,7 +38,7 @@ class R2dbcOffsetStoreSpec
   private def createOffsetStore(projectionId: ProjectionId) =
     new R2dbcOffsetStore(projectionId, system, settings, r2dbcExecutor, clock)
 
-  private val table = settings.tableWithSchema
+  private val table = settings.offsetTableWithSchema
 
   private implicit val ec: ExecutionContext = system.executionContext
 
@@ -143,6 +143,16 @@ class R2dbcOffsetStoreSpec
       offsetStore.saveOffset(timeUuidOffset).futureValue
       val offset = offsetStore.readOffset[TimeBasedUUID]()
       offset.futureValue shouldBe Some(timeUuidOffset)
+    }
+
+    s"save and retrieve offsets of unknown custom serializable type" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val customOffset = "abc"
+      offsetStore.saveOffset(customOffset).futureValue
+      val offset = offsetStore.readOffset[TimeBasedUUID]()
+      offset.futureValue shouldBe Some(customOffset)
     }
 
     s"save and retrieve MergeableOffset" in {

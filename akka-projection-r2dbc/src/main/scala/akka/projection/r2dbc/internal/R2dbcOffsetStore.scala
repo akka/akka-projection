@@ -4,18 +4,22 @@
 
 package akka.projection.r2dbc.internal
 
+import java.time.{ Duration => JDuration }
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.r2dbc.internal.R2dbcExecutor
+import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
@@ -35,13 +39,75 @@ object R2dbcOffsetStore {
 
   object State {
     val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
+
+    def apply(records: immutable.IndexedSeq[Record]): State = {
+      if (records.isEmpty) empty
+      else empty.add(records)
+    }
   }
 
+  // FIXME add unit test for this class
   final case class State(byPid: Map[Pid, Record], latest: immutable.IndexedSeq[Record], oldestTimestamp: Instant) {
+    def size: Int = byPid.size
+
     def latestTimestamp: Instant =
       if (latest.isEmpty) Instant.EPOCH
       else latest.head.timestamp
+
+    def add(records: immutable.IndexedSeq[Record]): State = {
+      records.foldLeft(this) { case (acc, r) =>
+        val newByPid =
+          acc.byPid.get(r.pid) match {
+            case Some(existingRecord) =>
+              if (r.seqNr > existingRecord.seqNr)
+                acc.byPid.updated(r.pid, r)
+              else
+                acc.byPid // older or same seqNr (not expected, but handled)
+            case None =>
+              acc.byPid.updated(r.pid, r)
+          }
+        val latestTimestamp = acc.latestTimestamp
+        val newLatest =
+          if (r.timestamp.isAfter(latestTimestamp))
+            Vector(r)
+          else if (r.timestamp == latestTimestamp)
+            acc.latest :+ r
+          else
+            acc.latest // older than existing latest, keep existing latest
+        val newOldestTimestamp =
+          if (acc.oldestTimestamp == Instant.EPOCH)
+            r.timestamp // first record
+          else if (r.timestamp.isBefore(acc.oldestTimestamp))
+            r.timestamp // not expected, but handled
+          else
+            acc.oldestTimestamp // this is the normal case
+
+        acc.copy(byPid = newByPid, latest = newLatest, oldestTimestamp = newOldestTimestamp)
+      }
+    }
+
+    def isDuplicate(record: Record): Boolean = {
+      if (oldestTimestamp != Instant.EPOCH && record.timestamp.isBefore(oldestTimestamp))
+        true // before oldest is considered as a duplicate
+      else
+        byPid.get(record.pid) match {
+          case Some(existingRecord) => record.seqNr <= existingRecord.seqNr
+          case None                 => false
+        }
+    }
+
+    def window: JDuration =
+      JDuration.between(oldestTimestamp, latestTimestamp)
+
+    def evict(until: Instant): State = {
+      if (oldestTimestamp.isBefore(until))
+        State(byPid.valuesIterator.filterNot(_.timestamp.isBefore(until)).toVector)
+      else
+        this
+    }
   }
+
+  val FutureDone: Future[Done] = Future.successful(Done)
 }
 
 /**
@@ -53,31 +119,54 @@ private[projection] class R2dbcOffsetStore(
     system: ActorSystem[_],
     settings: R2dbcProjectionSettings,
     r2dbcExecutor: R2dbcExecutor,
-    clock: Clock) {
+    clock: Clock = Clock.systemUTC()) {
+  import R2dbcOffsetStore._
 
+  // FIXME include projectionId in all log messages
   private val logger = LoggerFactory.getLogger(this.getClass)
   private val verboseLogging = logger.isDebugEnabled() && settings.verboseLoggingEnabled
 
-  def this(
-      projectionId: ProjectionId,
-      system: ActorSystem[_],
-      settings: R2dbcProjectionSettings,
-      r2dbcExecutor: R2dbcExecutor) =
-    this(projectionId, system, settings, r2dbcExecutor, Clock.systemUTC())
+  private val evictWindow = settings.timeWindow.plus(settings.evictInterval)
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
   import offsetSerialization.toStorageRepresentation
 
-  private val table = settings.tableWithSchema
+  private val timestampOffsetTable = settings.timestampOffsetTableWithSchema
+  private val offsetTable = settings.offsetTableWithSchema
 
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
+  private val selectTimestampOffsetSql: String =
+    s"SELECT * FROM $timestampOffsetTable WHERE projection_name = $$1 AND projection_key = $$2"
+
+  // FIXME an alternative would be pk: (projection_name, projection_key, timestamp_offset, persistence_id)
+  // which might be better for the range deletes, but it would would be "append only" with possibly
+  // many rows per persistence_id
+  private val upsertTimestampOffsetSql: String =
+    s"""INSERT INTO $timestampOffsetTable (
+       |  projection_name,
+       |  projection_key,
+       |  persistence_id,
+       |  sequence_number,
+       |  timestamp_offset,
+       |  last_updated
+       |) VALUES ($$1,$$2,$$3,$$4,$$5, transaction_timestamp())
+       |ON CONFLICT (projection_name, projection_key, persistence_id)
+       |DO UPDATE SET
+       | sequence_number = excluded.sequence_number,
+       | timestamp_offset = excluded.timestamp_offset,
+       | last_updated = excluded.last_updated
+       |""".stripMargin
+
+  private val deleteTimestampOffsetSql: String =
+    s"DELETE FROM $timestampOffsetTable WHERE projection_name = $$1 AND projection_key = $$2 AND timestamp_offset < $$3"
+
   private val selectOffsetSql: String =
-    s"""SELECT * FROM $table WHERE projection_name = $$1"""
+    s"SELECT * FROM $offsetTable WHERE projection_name = $$1"
 
   private val upsertOffsetSql: String =
-    s"""INSERT INTO $table (
+    s"""INSERT INTO $offsetTable (
      |  projection_name,
      |  projection_key,
      |  current_offset,
@@ -94,16 +183,71 @@ private[projection] class R2dbcOffsetStore(
      |""".stripMargin
 
   private val clearOffsetSql: String =
-    s"""DELETE FROM $table WHERE projection_name = $$1 AND projection_key = $$2"""
+    s"""DELETE FROM $offsetTable WHERE projection_name = $$1 AND projection_key = $$2"""
+
+  // The OffsetStore instance is used by a single projectionId and there shouldn't be any concurrent
+  // calls to methods that access the `state`. To detect any violations of that concurrency assumption
+  // we use AtomicReference and fail if the CAS fails.
+  private val state = new AtomicReference(State.empty)
+
+  system.scheduler.scheduleWithFixedDelay(
+    settings.deleteInterval,
+    settings.deleteInterval,
+    () => deleteOldTimestampOffsets(),
+    system.executionContext)
+
+  def getState(): State =
+    state.get()
 
   def readOffset[Offset](): Future[Option[Offset]] = {
+    // look for TimestampOffset first since that is used by akka-persistence-r2dbc,
+    // and then fall back to the other more primitive offset types
+    readTimestampOffset().flatMap {
+      case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
+      case None    => readPrimitiveOffset()
+    }
+  }
+
+  private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
+    val oldState = state.get()
+    val recordsFut = r2dbcExecutor.select("read timestamp offset")(
+      conn => {
+        if (verboseLogging)
+          logger.debug(
+            "reading timestamp offset for [{}], using connection id [{}]",
+            projectionId,
+            System.identityHashCode(conn))
+        conn
+          .createStatement(selectTimestampOffsetSql)
+          .bind("$1", projectionId.name)
+          .bind("$2", projectionId.key)
+      },
+      row => {
+        val pid = row.get("persistence_id", classOf[String])
+        val seqNr = row.get("sequence_number", classOf[java.lang.Long])
+        val timestamp = row.get("timestamp_offset", classOf[Instant])
+        Record(pid, seqNr, timestamp)
+      })
+    recordsFut.map { records =>
+      val newState = State(records)
+      if (!state.compareAndSet(oldState, newState))
+        throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
+      if (newState == State.empty) {
+        None
+      } else {
+        Some(TimestampOffset(newState.latestTimestamp, newState.latest.map(r => r.pid -> r.seqNr).toMap))
+      }
+    }
+  }
+
+  private def readPrimitiveOffset[Offset](): Future[Option[Offset]] = {
     val singleOffsets = r2dbcExecutor.select("read offset")(
       conn => {
         if (verboseLogging)
           logger.debug("reading offset for [{}], using connection id [{}]", projectionId, System.identityHashCode(conn))
         conn
           .createStatement(selectOffsetSql)
-          .bind(0, projectionId.name)
+          .bind("$1", projectionId.name)
       },
       row => {
         val offsetStr = row.get("current_offset", classOf[String])
@@ -147,7 +291,71 @@ private[projection] class R2dbcOffsetStore(
    * This method is used together with the users' handler code and run in same transaction.
    */
   def saveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
+    offset match {
+      case t: TimestampOffset =>
+        // TODO possible perf improvement to optimize for the normal case of 1 record
+        val records = t.seen.map { case (pid, seqNr) => Record(pid, seqNr, t.timestamp) }.toVector
+        saveTimestampOffsetInTx(conn, records)
+      case _ =>
+        savePrimitiveOffsetInTx(conn, offset)
+    }
+  }
 
+  private def saveTimestampOffsetInTx[Offset](conn: Connection, records: immutable.IndexedSeq[Record]): Future[Done] = {
+    val oldState = state.get()
+    val filteredRecords = records.filterNot(oldState.isDuplicate)
+    if (filteredRecords.isEmpty) {
+      FutureDone
+    } else {
+
+      if (verboseLogging)
+        logger.debug(
+          "saving timestamp offset [{}], using connection id [{}]",
+          filteredRecords.last.timestamp,
+          System.identityHashCode(conn))
+
+      def bindRecord(stmt: Statement, record: Record): Statement =
+        stmt
+          .bind("$1", projectionId.name)
+          .bind("$2", projectionId.key)
+          .bind("$3", record.pid)
+          .bind("$4", record.seqNr)
+          .bind("$5", record.timestamp)
+
+      // FIXME strange that the batch add doesn't work
+      //    val stmt = conn.createStatement(upsertTimestampOffsetSql)
+      //    records.foreach { rec =>
+      //      if (rec ne records.head)
+      //        stmt.add()
+      //      bindRecord(stmt, rec)
+      //    }
+      //    R2dbcExecutor.updateOneInTx(stmt).map(_ => Done)(ExecutionContext.parasitic)
+
+      val stmts =
+        filteredRecords.map { rec =>
+          val stmt = conn.createStatement(upsertTimestampOffsetSql)
+          bindRecord(stmt, rec)
+        }
+
+      val newState = oldState.add(filteredRecords)
+      // accumulate some more than the timeWindow before evicting
+      val evictedNewState =
+        if (newState.window.compareTo(evictWindow) > 0) {
+          val s = newState.evict(newState.latestTimestamp.minus(settings.timeWindow))
+          logger.debug("Evicted [{}] records, keeping [{}] records.", newState.size - s.size, s.size)
+          s
+        } else
+          newState
+
+      R2dbcExecutor.updateInTx(stmts).map { _ =>
+        if (!state.compareAndSet(oldState, evictedNewState))
+          throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")
+        Done
+      }
+    }
+  }
+
+  private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
     if (verboseLogging)
       logger.debug("saving offset [{}], using connection id [{}]", offset, System.identityHashCode(conn))
 
@@ -173,6 +381,37 @@ private[projection] class R2dbcOffsetStore(
     }
 
     R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContext.parasitic)
+  }
+
+  def deleteOldTimestampOffsets(): Future[Int] = {
+    val currentState = getState()
+    if (currentState.window.compareTo(settings.timeWindow) < 0) {
+      // it haven't filled up the window yet
+      Future.successful(0)
+    } else {
+      val until = currentState.latestTimestamp.minus(settings.timeWindow)
+      val result = r2dbcExecutor.updateOne("delete timestamp offset") { conn =>
+        conn
+          .createStatement(deleteTimestampOffsetSql)
+          .bind("$1", projectionId.name)
+          .bind("$2", projectionId.key)
+          .bind("$3", until)
+      }
+
+      result.failed.foreach { exc =>
+        logger.warn("Failed to delete timestamp offset until [{}] for projection [{}].", until, projectionId.id)
+      }
+      if (logger.isDebugEnabled)
+        result.foreach { rows =>
+          logger.debug(
+            "Deleted [{}] timestamp offset rows until [{}] for projection [{}].",
+            rows,
+            until,
+            projectionId.id)
+        }
+
+      result
+    }
   }
 
   def dropIfExists(): Future[Done] = {

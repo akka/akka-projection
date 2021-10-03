@@ -20,7 +20,7 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
   def testConfigPath: String = "akka.projection.r2dbc"
 
   lazy val r2dbcSettings: R2dbcProjectionSettings =
-    new R2dbcProjectionSettings(typedSystem.settings.config.getConfig(testConfigPath))
+    R2dbcProjectionSettings(typedSystem.settings.config.getConfig(testConfigPath))
 
   lazy val r2dbcExecutor: R2dbcExecutor = {
     new R2dbcExecutor(
@@ -30,10 +30,16 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
 
   override protected def beforeAll(): Unit = {
     Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${r2dbcSettings.table}")),
+      r2dbcExecutor.updateOne("beforeAll delete")(
+        _.createStatement(s"delete from ${r2dbcSettings.offsetTableWithSchema}")),
       10.seconds)
     Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${r2dbcSettings.managementTable}")),
+      r2dbcExecutor.updateOne("beforeAll delete")(
+        _.createStatement(s"delete from ${r2dbcSettings.timestampOffsetTableWithSchema}")),
+      10.seconds)
+    Await.result(
+      r2dbcExecutor.updateOne("beforeAll delete")(
+        _.createStatement(s"delete from ${r2dbcSettings.managementTableWithSchema}")),
       10.seconds)
     super.beforeAll()
   }
