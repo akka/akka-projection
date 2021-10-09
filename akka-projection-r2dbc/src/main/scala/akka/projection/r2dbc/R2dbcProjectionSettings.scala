@@ -22,7 +22,8 @@ object R2dbcProjectionSettings {
       verboseLoggingEnabled = config.getBoolean("debug.verbose-offset-store-logging"),
       timeWindow = config.getDuration("offset-store.time-window"),
       evictInterval = config.getDuration("offset-store.evict-interval"),
-      deleteInterval = config.getDuration("offset-store.delete-interval"))
+      deleteInterval = config.getDuration("offset-store.delete-interval"),
+      acceptNewSequenceNumberAfterAge = config.getDuration("offset-store.accept-new-sequence-number-after-age"))
   }
 
   def apply(system: ActorSystem[_]): R2dbcProjectionSettings =
@@ -39,7 +40,8 @@ final case class R2dbcProjectionSettings(
     verboseLoggingEnabled: Boolean,
     timeWindow: JDuration,
     evictInterval: JDuration,
-    deleteInterval: JDuration) {
+    deleteInterval: JDuration,
+    acceptNewSequenceNumberAfterAge: JDuration) {
   val offsetTableWithSchema: String = schema.map("." + _).getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map("." + _).getOrElse("") + timestampOffsetTable
   val managementTableWithSchema: String = schema.map("." + _).getOrElse("") + managementTable

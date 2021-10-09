@@ -21,6 +21,7 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.RunningProjectionManagement
 import akka.projection.StatusObserver
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
@@ -73,6 +74,11 @@ private[projection] object R2dbcProjectionImpl {
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
           if (offsetStore.isEnvelopeDuplicate(envelope)) {
+            // FIXME change to trace
+            log.debug("Filtering out duplicate: {}", envToString(envelope))
+            FutureDone
+          } else if (!offsetStore.isSequenceNumberAccepted(envelope)) {
+            log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
             FutureDone
           } else {
             val offset = sourceProvider.extractOffset(envelope)
@@ -96,6 +102,11 @@ private[projection] object R2dbcProjectionImpl {
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
           if (offsetStore.isEnvelopeDuplicate(envelope)) {
+            // FIXME change to trace
+            log.debug("Filtering out duplicate: {}", envToString(envelope))
+            FutureDone
+          } else if (!offsetStore.isSequenceNumberAccepted(envelope)) {
+            log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
             FutureDone
           } else {
             r2dbcExecutor.withConnection("at-least-once handler") { conn =>
@@ -118,15 +129,27 @@ private[projection] object R2dbcProjectionImpl {
 
     new AdaptedR2dbcHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-        val envelopesWithoutDuplicates = envelopes.iterator.filterNot(offsetStore.isEnvelopeDuplicate).toVector
-        if (envelopesWithoutDuplicates.isEmpty) {
+        val acceptedEnvelopes = envelopes.iterator.filterNot { env =>
+          if (offsetStore.isEnvelopeDuplicate(env)) {
+            // FIXME change to trace
+            log.debug("Filtering out duplicate: {}", envToString(env))
+            true
+          } else if (!offsetStore.isSequenceNumberAccepted(env)) {
+            log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(env))
+            true
+          } else {
+            false
+          }
+        }.toVector
+
+        if (acceptedEnvelopes.isEmpty) {
           FutureDone
         } else {
-          val offsets = envelopesWithoutDuplicates.map(sourceProvider.extractOffset)
+          val offsets = acceptedEnvelopes.map(sourceProvider.extractOffset)
           r2dbcExecutor.withConnection("grouped handler") { conn =>
             // run users handler
             val session = new R2dbcSession(conn)
-            delegate.process(session, envelopesWithoutDuplicates).flatMap { _ =>
+            delegate.process(session, acceptedEnvelopes).flatMap { _ =>
               offsetStore.saveOffsetsInTx(conn, offsets)
             }
           }
@@ -147,6 +170,15 @@ private[projection] object R2dbcProjectionImpl {
     override def stop(): Future[Done] = Future {
       delegate.stop()
       Done
+    }
+  }
+
+  // TODO add toString to EventEnvelope
+  def envToString[Envelope](envelope: Envelope): AnyRef = new AnyRef {
+    override def toString: String = envelope match {
+      case env: EventEnvelope[_] =>
+        s"EventEnvelope(${env.offset}, ${env.persistenceId}, ${env.sequenceNr})"
+      case env => env.toString
     }
   }
 }

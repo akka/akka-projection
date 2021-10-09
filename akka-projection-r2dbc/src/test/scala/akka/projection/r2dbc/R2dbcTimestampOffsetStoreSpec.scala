@@ -14,9 +14,12 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.ProjectionId
+import akka.projection.eventsourced.EventEnvelope
 import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.Pid
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.SeqNr
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
@@ -39,13 +42,24 @@ class R2dbcTimestampOffsetStoreSpec
   private def createOffsetStore(projectionId: ProjectionId, customSettings: R2dbcProjectionSettings = settings) =
     new R2dbcOffsetStore(projectionId, system, customSettings, r2dbcExecutor)
 
-  private val table = settings.timestampOffsetTableWithSchema
+  def createEnvelope(
+      pid: Pid,
+      seqNr: SeqNr,
+      timestamp: Instant,
+      readAfterMillis: Int,
+      event: String): EventEnvelope[String] =
+    EventEnvelope(
+      TimestampOffset(timestamp, timestamp.plusMillis(readAfterMillis), Map(pid -> seqNr)),
+      pid,
+      seqNr,
+      event,
+      timestamp.toEpochMilli)
 
   private implicit val ec: ExecutionContext = system.executionContext
 
   "The R2dbcOffsetStore for TimestampOffset" must {
 
-    s"update TimestampOffset with one entry" in {
+    "update TimestampOffset with one entry" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -62,7 +76,7 @@ class R2dbcTimestampOffsetStoreSpec
       readOffset2.futureValue shouldBe Some(offset2) // yep, saveOffset overwrites previous
     }
 
-    s"update TimestampOffset with several entries" in {
+    "update TimestampOffset with several entries" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -80,7 +94,7 @@ class R2dbcTimestampOffsetStoreSpec
       readOffset2.futureValue shouldBe Some(offset2)
     }
 
-    s"update TimestampOffset when same timestamp" in {
+    "update TimestampOffset when same timestamp" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -107,7 +121,7 @@ class R2dbcTimestampOffsetStoreSpec
       readOffset3.futureValue shouldBe Some(offset3)
     }
 
-    s"not update when earlier seqNr" in {
+    "not update when earlier seqNr" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -124,7 +138,7 @@ class R2dbcTimestampOffsetStoreSpec
       readOffset2.futureValue shouldBe Some(offset1) // keeping offset1
     }
 
-    s"filter duplicates" in {
+    "filter duplicates" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -148,7 +162,6 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.isDuplicate(Record("p3", 5, offset1.timestamp)) shouldBe true
 
       offsetStore.isDuplicate(Record("p1", 2, offset1.timestamp.minusMillis(1))) shouldBe true
-      offsetStore.isDuplicate(Record("p0", 2, offset1.timestamp.minusMillis(1))) shouldBe true
       offsetStore.isDuplicate(Record("p5", 9, offset3.timestamp.minusMillis(1))) shouldBe true
 
       offsetStore.isDuplicate(Record("p5", 11, offset3.timestamp)) shouldBe false
@@ -158,7 +171,52 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.isDuplicate(Record("p7", 1, offset3.timestamp.minusMillis(1))) shouldBe false
     }
 
-    s"evict old records" in {
+    "accept known sequence numbers and reject unknown" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val startTime = Instant.now()
+      val offset1 = TimestampOffset(startTime, Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
+      offsetStore.saveOffset(offset1).futureValue
+
+      // seqNr 1 is always accepted
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")) shouldBe true
+      // subsequent seqNr is accepted
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p4", 2L, startTime.plusMillis(2), 10, "e4-2")) shouldBe true
+      // but not when gap
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p4", 4L, startTime.plusMillis(3), 10, "e4-4")) shouldBe false
+
+      // +1 to known is accepted
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p1", 4L, startTime.plusMillis(4), 10, "e1-4")) shouldBe true
+      // but not same
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 5L, startTime, 10, "e3-5")) shouldBe false
+      // but not same, even if it's 1
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p2", 1L, startTime, 10, "e2-1")) shouldBe false
+      // and not less
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 4L, startTime, 10, "e3-4")) shouldBe false
+
+      // +1 to known, and then also subsequent are accepted (needed for grouped)
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 6L, startTime.plusMillis(5), 10, "e3-6")) shouldBe true
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 7L, startTime.plusMillis(6), 10, "e3-7")) shouldBe true
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 8L, startTime.plusMillis(7), 10, "e3-8")) shouldBe true
+
+      // reject unknown
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p5", 7L, startTime.plusMillis(8), 10, "e5-7")) shouldBe false
+      // but ok when read later
+      offsetStore.isSequenceNumberAccepted(
+        createEnvelope("p5", 7L, startTime.plusMillis(5), 10000, "e5-7")) shouldBe true
+      // and subsequent seqNr is accepted
+      offsetStore.isSequenceNumberAccepted(createEnvelope("p5", 8L, startTime.plusMillis(9), 10, "e5-8")) shouldBe true
+
+      // it's keeping the seen that are not in the "stored" state
+      offsetStore.getState().seen shouldBe Map("p1" -> 4L, "p3" -> 8L, "p4" -> 2L, "p5" -> 8L)
+      // and they are removed from seen once they have been stored
+      offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(2), Map("p4" -> 2L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L))).futureValue
+      offsetStore.getState().seen shouldBe Map("p1" -> 4L, "p3" -> 8L)
+    }
+
+    "evict old records" in {
       val projectionId = genRandomProjectionId()
       val evictSettings = settings.copy(timeWindow = JDuration.ofSeconds(100), evictInterval = JDuration.ofSeconds(10))
       import evictSettings._
@@ -201,7 +259,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().byPid.keySet shouldBe Set("p7", "p8")
     }
 
-    s"delete old records" in {
+    "delete old records" in {
       val projectionId = genRandomProjectionId()
       val deleteSettings = settings.copy(timeWindow = JDuration.ofSeconds(100))
       import deleteSettings._
@@ -232,7 +290,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().byPid.keySet shouldBe Set("p3", "p4", "p5", "p6", "p7", "p8")
     }
 
-    s"periodically delete old records" in {
+    "periodically delete old records" in {
       val projectionId = genRandomProjectionId()
       val deleteSettings =
         settings.copy(timeWindow = JDuration.ofSeconds(100), deleteInterval = JDuration.ofMillis(500))
@@ -258,7 +316,7 @@ class R2dbcTimestampOffsetStoreSpec
       }
     }
 
-    s"clear offset" in {
+    "clear offset" in {
       pending // FIXME not implemented yet
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
@@ -270,7 +328,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.readOffset[Long]().futureValue shouldBe None
     }
 
-    s"read and save paused" in {
+    "read and save paused" in {
       pending // FIXME not implemented yet
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)

@@ -57,6 +57,17 @@ object R2dbcTimestampOffsetProjectionSpec {
     else sp
   }
 
+  def backtrackingSourceProvider(
+      envelopes: immutable.IndexedSeq[EventEnvelope[String]],
+      complete: Boolean = true): SourceProvider[TimestampOffset, EventEnvelope[String]] = {
+    val sp = TestSourceProvider[TimestampOffset, EventEnvelope[String]](
+      Source(envelopes),
+      _.offset.asInstanceOf[TimestampOffset])
+      .withStartSourceFrom { (lastProcessedOffset, offset) => false } // include all
+    if (complete) sp.withAllowCompletion(true)
+    else sp
+  }
+
 }
 
 class R2dbcTimestampOffsetProjectionSpec
@@ -96,7 +107,8 @@ class R2dbcTimestampOffsetProjectionSpec
   }
 
   private def offsetShouldBe[Offset](expected: Offset)(implicit offsetStore: R2dbcOffsetStore) = {
-    offsetStore.readOffset[TimestampOffset]().futureValue shouldBe Some(expected)
+    val offset = offsetStore.readOffset[TimestampOffset]().futureValue
+    offset shouldBe Some(expected.asInstanceOf[TimestampOffset].copy(readTimestamp = Instant.EPOCH))
   }
 
   private def offsetShouldBeEmpty()(implicit offsetStore: R2dbcOffsetStore) = {
@@ -106,6 +118,11 @@ class R2dbcTimestampOffsetProjectionSpec
   private def projectedValueShouldBe(expected: String)(implicit entityId: String) = {
     val opt = withRepo(_.findById(entityId)).futureValue.map(_.text)
     opt shouldBe Some(expected)
+  }
+
+  private def projectedValueShouldBeEmpty()(implicit entityId: String) = {
+    val opt = withRepo(_.findById(entityId)).futureValue.map(_.text)
+    opt shouldBe None
   }
 
   // TODO: extract this to some utility
@@ -128,6 +145,7 @@ class R2dbcTimestampOffsetProjectionSpec
   class ConcatHandler(failPredicate: EventEnvelope[String] => Boolean = _ => false)
       extends R2dbcHandler[EventEnvelope[String]] {
 
+    private val logger = LoggerFactory.getLogger(getClass)
     private val _attempts = new AtomicInteger()
     def attempts: Int = _attempts.get
 
@@ -136,8 +154,17 @@ class R2dbcTimestampOffsetProjectionSpec
         _attempts.incrementAndGet()
         throw TestException(concatHandlerFail4Msg + s" after $attempts attempts")
       } else {
-        logger.debug(s"handling $envelope using [${session.connectionIdentityHashCode}]")
+        logger.debug(s"handling {} using [{}]", envToString(envelope), session.connectionIdentityHashCode)
         TestRepository(session).concatToText(envelope.persistenceId, envelope.event)
+      }
+    }
+
+    // TODO add toString to EventEnvelope
+    def envToString[Envelope](envelope: Envelope): AnyRef = new AnyRef {
+      override def toString: String = envelope match {
+        case env: EventEnvelope[_] =>
+          s"EventEnvelope(${env.offset}, ${env.persistenceId}, ${env.sequenceNr})"
+        case env => env.toString
       }
     }
   }
@@ -149,7 +176,20 @@ class R2dbcTimestampOffsetProjectionSpec
   }
 
   def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] =
-    EventEnvelope(TimestampOffset(timestamp, Map(pid -> seqNr)), pid, seqNr, event, timestamp.toEpochMilli)
+    createEnvelope(pid, seqNr, timestamp, readAfterMillis = 10, event)
+
+  def createEnvelope(
+      pid: Pid,
+      seqNr: SeqNr,
+      timestamp: Instant,
+      readAfterMillis: Int,
+      event: String): EventEnvelope[String] =
+    EventEnvelope(
+      TimestampOffset(timestamp, timestamp.plusMillis(readAfterMillis), Map(pid -> seqNr)),
+      pid,
+      seqNr,
+      event,
+      timestamp.toEpochMilli)
 
   def createEnvelopes(pid: Pid, numberOfEvents: Int): immutable.IndexedSeq[EventEnvelope[String]] = {
     (1 to numberOfEvents).map { n =>
@@ -157,7 +197,7 @@ class R2dbcTimestampOffsetProjectionSpec
     }
   }
 
-  def createEnvelopesWithDuplicates(pid1: Pid, pid2: Pid) = {
+  def createEnvelopesWithDuplicates(pid1: Pid, pid2: Pid): Vector[EventEnvelope[String]] = {
     val startTime = Instant.now()
     Vector(
       createEnvelope(pid1, 1, startTime, s"e1-1"),
@@ -175,6 +215,32 @@ class R2dbcTimestampOffsetProjectionSpec
       // and then some normal again
       createEnvelope(pid1, 4, startTime.plusMillis(5), s"e1-4"),
       createEnvelope(pid2, 3, startTime.plusMillis(6), s"e2-3"))
+  }
+
+  def createEnvelopesUnknownSequenceNumbers(startTime: Instant, pid1: Pid, pid2: Pid): Vector[EventEnvelope[String]] = {
+    Vector(
+      createEnvelope(pid1, 1, startTime, s"e1-1"),
+      createEnvelope(pid1, 2, startTime.plusMillis(1), s"e1-2"),
+      // first pid2 seqNr is not 1, will be rejected
+      createEnvelope(pid2, 3, startTime.plusMillis(2), s"e2-3"),
+      createEnvelope(pid1, 3, startTime.plusMillis(4), s"e1-3"),
+      // pid2 seqNr 4 missing, will reject 5
+      createEnvelope(pid1, 5, startTime.plusMillis(6), s"e1-5"))
+  }
+
+  def createEnvelopesBacktrackingUnknownSequenceNumbers(
+      startTime: Instant,
+      pid1: Pid,
+      pid2: Pid): Vector[EventEnvelope[String]] = {
+    Vector(
+      // may also contain some duplicates
+      createEnvelope(pid1, 2, startTime.plusMillis(1), readAfterMillis = 10000, s"e1-2"),
+      createEnvelope(pid2, 3, startTime.plusMillis(2), readAfterMillis = 10000, s"e2-3"),
+      createEnvelope(pid1, 3, startTime.plusMillis(4), readAfterMillis = 10000, s"e1-3"),
+      createEnvelope(pid1, 4, startTime.plusMillis(5), readAfterMillis = 10000, s"e1-4"),
+      createEnvelope(pid1, 5, startTime.plusMillis(6), readAfterMillis = 10000, s"e1-5"),
+      createEnvelope(pid2, 4, startTime.plusMillis(7), readAfterMillis = 10000, s"e2-4"),
+      createEnvelope(pid1, 6, startTime.plusMillis(8), readAfterMillis = 10000, s"e1-6"))
   }
 
   "A R2DBC exactly-once projection with TimestampOffset" must {
@@ -250,6 +316,45 @@ class R2dbcTimestampOffsetProjectionSpec
         projectedValueShouldBe("e2-1|e2-2|e2-3")(pid2)
       }
       offsetShouldBe(envelopes.last.offset)
+    }
+
+    "filter out unknown sequence numbers" in {
+      val pid1 = UUID.randomUUID().toString
+      val pid2 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
+
+      val startTime = Instant.now()
+
+      val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
+      val projection1 =
+        R2dbcProjection.exactlyOnce(
+          projectionId,
+          Some(settings),
+          sourceProvider = sourceProvider(envelopes1),
+          handler = () => new ConcatHandler)
+
+      projectionTestKit.run(projection1) {
+        projectedValueShouldBe("e1-1|e1-2|e1-3")(pid1)
+        projectedValueShouldBeEmpty()(pid2)
+      }
+      offsetShouldBe(envelopes1.collectFirst { case env if env.event == "e1-3" => env.offset }.get)
+
+      // simulate backtracking
+      logger.debug("Starting backtracking")
+      val envelopes2 = createEnvelopesBacktrackingUnknownSequenceNumbers(startTime, pid1, pid2)
+      val projection2 =
+        R2dbcProjection.exactlyOnce(
+          projectionId,
+          Some(settings),
+          sourceProvider = backtrackingSourceProvider(envelopes2),
+          handler = () => new ConcatHandler)
+
+      projectionTestKit.run(projection2) {
+        projectedValueShouldBe("e1-1|e1-2|e1-3|e1-4|e1-5|e1-6")(pid1)
+        projectedValueShouldBe("e2-3|e2-4")(pid2)
+      }
+      offsetShouldBe(envelopes2.last.offset)
     }
 
   }
@@ -350,6 +455,10 @@ class R2dbcTimestampOffsetProjectionSpec
       offsetShouldBe(envelopes.last.offset)
     }
 
+    "filter out unknown sequence numbers" in {
+      pending // FIXME see corresponding test for duplicates and above exactly-once
+    }
+
     "handle grouped async projection" in {
       implicit val pid = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
@@ -386,6 +495,10 @@ class R2dbcTimestampOffsetProjectionSpec
     "filter duplicates for grouped async projection" in {
       pending // FIXME
     }
+
+    "filter out unknown sequence numbers for grouped async projection" in {
+      pending // FIXME see corresponding test for duplicates and above exactly-once
+    }
   }
 
   "A R2DBC at-least-once projection with TimestampOffset" must {
@@ -412,6 +525,10 @@ class R2dbcTimestampOffsetProjectionSpec
     }
 
     "filter duplicates" in {
+      pending // FIXME
+    }
+
+    "filter out unknown sequence numbers" in {
       pending // FIXME
     }
 
@@ -446,6 +563,10 @@ class R2dbcTimestampOffsetProjectionSpec
     }
 
     "filter duplicates for async projection" in {
+      pending // FIXME
+    }
+
+    "filter out unknown sequence numbers for async projection" in {
       pending // FIXME
     }
   }
@@ -483,6 +604,10 @@ class R2dbcTimestampOffsetProjectionSpec
     }
 
     "filter duplicates" in {
+      pending // FIXME
+    }
+
+    "filter out unknown sequence numbers" in {
       pending // FIXME
     }
   }

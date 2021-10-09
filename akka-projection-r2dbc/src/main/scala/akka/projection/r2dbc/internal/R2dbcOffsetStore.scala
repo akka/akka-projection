@@ -38,7 +38,7 @@ object R2dbcOffsetStore {
   final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
 
   object State {
-    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
+    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, Map.empty)
 
     def apply(records: immutable.IndexedSeq[Record]): State = {
       if (records.isEmpty) empty
@@ -47,7 +47,11 @@ object R2dbcOffsetStore {
   }
 
   // FIXME add unit test for this class
-  final case class State(byPid: Map[Pid, Record], latest: immutable.IndexedSeq[Record], oldestTimestamp: Instant) {
+  final case class State(
+      byPid: Map[Pid, Record],
+      latest: immutable.IndexedSeq[Record],
+      oldestTimestamp: Instant,
+      seen: Map[Pid, SeqNr]) {
     def size: Int = byPid.size
 
     def latestTimestamp: Instant =
@@ -73,6 +77,8 @@ object R2dbcOffsetStore {
             case None =>
               acc.byPid.updated(r.pid, r)
           }
+        val newSeen =
+          if (newByPid eq acc.byPid) acc.seen else acc.seen.removed(r.pid)
         val latestTimestamp = acc.latestTimestamp
         val newLatest =
           if (r.timestamp.isAfter(latestTimestamp))
@@ -89,18 +95,15 @@ object R2dbcOffsetStore {
           else
             acc.oldestTimestamp // this is the normal case
 
-        acc.copy(byPid = newByPid, latest = newLatest, oldestTimestamp = newOldestTimestamp)
+        acc.copy(byPid = newByPid, latest = newLatest, oldestTimestamp = newOldestTimestamp, seen = newSeen)
       }
     }
 
     def isDuplicate(record: Record): Boolean = {
-      if (oldestTimestamp != Instant.EPOCH && record.timestamp.isBefore(oldestTimestamp))
-        true // before oldest is considered as a duplicate
-      else
-        byPid.get(record.pid) match {
-          case Some(existingRecord) => record.seqNr <= existingRecord.seqNr
-          case None                 => false
-        }
+      byPid.get(record.pid) match {
+        case Some(existingRecord) => record.seqNr <= existingRecord.seqNr
+        case None                 => false
+      }
     }
 
     def window: JDuration =
@@ -226,7 +229,7 @@ private[projection] class R2dbcOffsetStore(
     val oldState = state.get()
     val recordsFut = r2dbcExecutor.select("read timestamp offset")(
       conn => {
-        if (verboseLogging)
+        if (verboseLogging) // FIXME remove verboseLogging and use trace instead
           logger.debug(
             "reading timestamp offset for [{}], using connection id [{}]",
             projectionId,
@@ -244,6 +247,8 @@ private[projection] class R2dbcOffsetStore(
       })
     recordsFut.map { records =>
       val newState = State(records)
+      // FIXME change to trace
+      logger.debug("readTimestampOffset State: {}", newState)
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
       if (newState == State.empty) {
@@ -422,6 +427,34 @@ private[projection] class R2dbcOffsetStore(
           R2dbcOffsetStore
             .Record(eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp))
       case _ => false
+    }
+  }
+
+  def isSequenceNumberAccepted[Envelope](envelope: Envelope): Boolean = {
+    envelope match {
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
+        val pid = eventEnvelope.persistenceId
+        val seqNr = eventEnvelope.sequenceNr
+        val currentState = getState()
+        val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
+
+        val ok =
+          (seqNr == 1L && !currentState.byPid.contains(pid)) ||
+          JDuration
+            .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
+            .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0 ||
+          seqNr == currentState.seen.getOrElse(pid, Long.MinValue) + 1 ||
+          seqNr == currentState.byPid.get(pid).map(_.seqNr).getOrElse(Long.MinValue) + 1
+
+        if (ok) {
+          val newState = currentState.copy(seen = currentState.seen.updated(pid, seqNr))
+          if (!state.compareAndSet(currentState, newState))
+            throw new IllegalStateException(
+              "Unexpected concurrent modification of state from isSequenceNumberAccepted.")
+        }
+        ok
+
+      case _ => true
     }
   }
 
