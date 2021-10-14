@@ -247,8 +247,11 @@ private[projection] class R2dbcOffsetStore(
       })
     recordsFut.map { records =>
       val newState = State(records)
-      // FIXME change to trace
-      logger.debug("readTimestampOffset State: {}", newState)
+      logger.debug(
+        "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
+        newState.byPid.size,
+        newState.oldestTimestamp,
+        newState.latestTimestamp)
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
       if (newState == State.empty) {

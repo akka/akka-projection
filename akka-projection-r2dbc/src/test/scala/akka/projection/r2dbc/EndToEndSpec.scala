@@ -16,6 +16,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
+import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
@@ -44,7 +45,7 @@ object EndToEndSpec {
         buffer-size = 10
       }
     }
-    """.stripMargin)
+    """)
     .withFallback(TestConfig.config)
 
   object Persister {
@@ -55,27 +56,46 @@ object EndToEndSpec {
     final case class Ping(replyTo: ActorRef[Done]) extends Command
     final case class Stop(replyTo: ActorRef[Done]) extends Command
 
-    def apply(pid: PersistenceId): Behavior[Command] =
-      EventSourcedBehavior[Command, Any, String](
-        persistenceId = pid,
-        "",
-        { (_, command) =>
-          command match {
-            case command: Persist =>
-              Effect.persist(command.payload)
-            case command: PersistWithAck =>
-              Effect.persist(command.payload).thenRun(_ => command.replyTo ! Done)
-            case command: PersistAll =>
-              Effect.persist(command.payloads)
-            case Ping(replyTo) =>
-              replyTo ! Done
-              Effect.none
-            case Stop(replyTo) =>
-              replyTo ! Done
-              Effect.stop()
-          }
-        },
-        (_, _) => "")
+    def apply(pid: PersistenceId): Behavior[Command] = {
+      Behaviors.setup { context =>
+        EventSourcedBehavior[Command, Any, String](
+          persistenceId = pid,
+          "",
+          { (_, command) =>
+            command match {
+              case command: Persist =>
+                context.log.debug(
+                  "Persist [{}], pid [{}], seqNr [{}]",
+                  command.payload,
+                  pid.id,
+                  EventSourcedBehavior.lastSequenceNumber(context) + 1)
+                Effect.persist(command.payload)
+              case command: PersistWithAck =>
+                context.log.debug(
+                  "Persist [{}], pid [{}], seqNr [{}]",
+                  command.payload,
+                  pid.id,
+                  EventSourcedBehavior.lastSequenceNumber(context) + 1)
+                Effect.persist(command.payload).thenRun(_ => command.replyTo ! Done)
+              case command: PersistAll =>
+                if (context.log.isDebugEnabled)
+                  context.log.debug(
+                    "PersistAll [{}], pid [{}], seqNr [{}]",
+                    command.payloads.mkString(","),
+                    pid.id,
+                    EventSourcedBehavior.lastSequenceNumber(context) + 1)
+                Effect.persist(command.payloads)
+              case Ping(replyTo) =>
+                replyTo ! Done
+                Effect.none
+              case Stop(replyTo) =>
+                replyTo ! Done
+                Effect.stop()
+            }
+          },
+          (_, _) => "")
+      }
+    }
   }
 
   final case class Processed(projectionId: ProjectionId, envelope: EventEnvelope[String])
