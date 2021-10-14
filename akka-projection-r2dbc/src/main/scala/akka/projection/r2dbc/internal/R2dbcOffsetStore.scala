@@ -134,7 +134,6 @@ private[projection] class R2dbcOffsetStore(
 
   // FIXME include projectionId in all log messages
   private val logger = LoggerFactory.getLogger(this.getClass)
-  private val verboseLogging = logger.isDebugEnabled() && settings.verboseLoggingEnabled
 
   private val evictWindow = settings.timeWindow.plus(settings.evictInterval)
 
@@ -229,11 +228,7 @@ private[projection] class R2dbcOffsetStore(
     val oldState = state.get()
     val recordsFut = r2dbcExecutor.select("read timestamp offset")(
       conn => {
-        if (verboseLogging) // FIXME remove verboseLogging and use trace instead
-          logger.debug(
-            "reading timestamp offset for [{}], using connection id [{}]",
-            projectionId,
-            System.identityHashCode(conn))
+        logger.trace("reading timestamp offset for [{}]", projectionId)
         conn
           .createStatement(selectTimestampOffsetSql)
           .bind("$1", projectionId.name)
@@ -265,8 +260,7 @@ private[projection] class R2dbcOffsetStore(
   private def readPrimitiveOffset[Offset](): Future[Option[Offset]] = {
     val singleOffsets = r2dbcExecutor.select("read offset")(
       conn => {
-        if (verboseLogging)
-          logger.debug("reading offset for [{}], using connection id [{}]", projectionId, System.identityHashCode(conn))
+        logger.trace("reading offset for [{}]", projectionId)
         conn
           .createStatement(selectOffsetSql)
           .bind("$1", projectionId.name)
@@ -292,7 +286,7 @@ private[projection] class R2dbcOffsetStore(
           offsets.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
         }
 
-      if (verboseLogging) logger.debug2("found offset [{}] for [{}]", result, projectionId)
+      logger.trace2("found offset [{}] for [{}]", result, projectionId)
 
       result
     }
@@ -344,11 +338,7 @@ private[projection] class R2dbcOffsetStore(
       FutureDone
     } else {
 
-      if (verboseLogging)
-        logger.debug(
-          "saving timestamp offset [{}], using connection id [{}]",
-          filteredRecords.last.timestamp,
-          System.identityHashCode(conn))
+      logger.trace("saving timestamp offset [{}]", filteredRecords.last.timestamp)
 
       def bindRecord(stmt: Statement, record: Record): Statement =
         stmt
@@ -392,8 +382,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
-    if (verboseLogging)
-      logger.debug("saving offset [{}], using connection id [{}]", offset, System.identityHashCode(conn))
+    logger.trace("saving offset [{}]", offset)
 
     val now = Instant.now(clock).toEpochMilli
 
@@ -505,10 +494,7 @@ private[projection] class R2dbcOffsetStore(
   def clearOffset(): Future[Done] = {
     r2dbcExecutor
       .updateOne("clear offset") { conn =>
-        logger.debug(
-          "clearing offset for [{}], using connection id [{}], using connection id [{}]",
-          projectionId,
-          System.identityHashCode(conn))
+        logger.debug("clearing offset for [{}]", projectionId)
         conn
           .createStatement(clearOffsetSql)
           .bind("$1", projectionId.name)

@@ -114,10 +114,7 @@ object R2dbcProjectionSpec {
     }
 
     private def upsert(concatStr: ConcatStr): Future[Done] = {
-      logger.debug(
-        "TestRepository.upsert: [{}], using connection id [{}]",
-        concatStr,
-        session.connectionIdentityHashCode)
+      logger.debug("TestRepository.upsert: [{}]", concatStr)
 
       val stmtSql =
         s"""|
@@ -138,7 +135,7 @@ object R2dbcProjectionSpec {
     }
 
     def findById(id: String): Future[Option[ConcatStr]] = {
-      logger.debug("TestRepository.findById: [{}], using connection id [{}]", id, session.connectionIdentityHashCode)
+      logger.debug("TestRepository.findById: [{}]", id)
 
       val stmtSql = s"SELECT * FROM $table WHERE id = $$1"
       val stmt = session
@@ -259,7 +256,7 @@ class R2dbcProjectionSpec
         _attempts.incrementAndGet()
         throw TestException(concatHandlerFail4Msg + s" after $attempts attempts")
       } else {
-        logger.debug(s"handling $envelope using [${session.connectionIdentityHashCode}]")
+        logger.debug("handling {}", envelope)
         TestRepository(session).concatToText(envelope.id, envelope.message)
       }
     }

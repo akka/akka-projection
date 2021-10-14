@@ -154,7 +154,7 @@ class R2dbcTimestampOffsetProjectionSpec
         _attempts.incrementAndGet()
         throw TestException(concatHandlerFail4Msg + s" after $attempts attempts")
       } else {
-        logger.debug(s"handling {} using [{}]", envToString(envelope), session.connectionIdentityHashCode)
+        logger.debug(s"handling {}", envToString(envelope))
         TestRepository(session).concatToText(envelope.persistenceId, envelope.event)
       }
     }

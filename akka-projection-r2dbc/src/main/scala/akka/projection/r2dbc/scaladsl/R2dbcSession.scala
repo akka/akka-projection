@@ -31,6 +31,4 @@ final class R2dbcSession(connection: Connection)(implicit ec: ExecutionContext, 
   def select[A](statement: Statement)(mapRow: Row => A): Future[immutable.IndexedSeq[A]] =
     R2dbcExecutor.selectInTx(statement, mapRow)
 
-  def connectionIdentityHashCode: Int =
-    System.identityHashCode(connection)
 }
