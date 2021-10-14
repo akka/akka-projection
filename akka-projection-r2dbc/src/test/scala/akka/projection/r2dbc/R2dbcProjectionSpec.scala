@@ -126,8 +126,8 @@ object R2dbcProjectionSpec {
          |""".stripMargin
       val stmt = session
         .createStatement(stmtSql)
-        .bind("$1", concatStr.id)
-        .bind("$2", concatStr.text)
+        .bind(0, concatStr.id)
+        .bind(1, concatStr.text)
 
       R2dbcExecutor
         .updateOneInTx(stmt)
@@ -140,7 +140,7 @@ object R2dbcProjectionSpec {
       val stmtSql = s"SELECT * FROM $table WHERE id = $$1"
       val stmt = session
         .createStatement(stmtSql)
-        .bind("$1", id)
+        .bind(0, id)
 
       R2dbcExecutor.selectOneInTx(
         stmt,

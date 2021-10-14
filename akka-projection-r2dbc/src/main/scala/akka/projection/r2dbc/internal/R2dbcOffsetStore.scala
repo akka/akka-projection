@@ -231,8 +231,8 @@ private[projection] class R2dbcOffsetStore(
         logger.trace("reading timestamp offset for [{}]", projectionId)
         conn
           .createStatement(selectTimestampOffsetSql)
-          .bind("$1", projectionId.name)
-          .bind("$2", projectionId.key)
+          .bind(0, projectionId.name)
+          .bind(1, projectionId.key)
       },
       row => {
         val pid = row.get("persistence_id", classOf[String])
@@ -263,7 +263,7 @@ private[projection] class R2dbcOffsetStore(
         logger.trace("reading offset for [{}]", projectionId)
         conn
           .createStatement(selectOffsetSql)
-          .bind("$1", projectionId.name)
+          .bind(0, projectionId.name)
       },
       row => {
         val offsetStr = row.get("current_offset", classOf[String])
@@ -342,11 +342,11 @@ private[projection] class R2dbcOffsetStore(
 
       def bindRecord(stmt: Statement, record: Record): Statement =
         stmt
-          .bind("$1", projectionId.name)
-          .bind("$2", projectionId.key)
-          .bind("$3", record.pid)
-          .bind("$4", record.seqNr)
-          .bind("$5", record.timestamp)
+          .bind(0, projectionId.name)
+          .bind(1, projectionId.key)
+          .bind(2, record.pid)
+          .bind(3, record.seqNr)
+          .bind(4, record.timestamp)
 
       // FIXME strange that the batch add doesn't work
       //    val stmt = conn.createStatement(upsertTimestampOffsetSql)
@@ -392,12 +392,12 @@ private[projection] class R2dbcOffsetStore(
     def upsertStmt(singleOffset: SingleOffset): Statement = {
       conn
         .createStatement(upsertOffsetSql)
-        .bind("$1", singleOffset.id.name)
-        .bind("$2", singleOffset.id.key)
-        .bind("$3", singleOffset.offsetStr)
-        .bind("$4", singleOffset.manifest)
-        .bind("$5", java.lang.Boolean.valueOf(singleOffset.mergeable))
-        .bind("$6", now)
+        .bind(0, singleOffset.id.name)
+        .bind(1, singleOffset.id.key)
+        .bind(2, singleOffset.offsetStr)
+        .bind(3, singleOffset.manifest)
+        .bind(4, java.lang.Boolean.valueOf(singleOffset.mergeable))
+        .bind(5, now)
     }
 
     val statements = storageReps match {
@@ -460,9 +460,9 @@ private[projection] class R2dbcOffsetStore(
       val result = r2dbcExecutor.updateOne("delete timestamp offset") { conn =>
         conn
           .createStatement(deleteTimestampOffsetSql)
-          .bind("$1", projectionId.name)
-          .bind("$2", projectionId.key)
-          .bind("$3", until)
+          .bind(0, projectionId.name)
+          .bind(1, projectionId.key)
+          .bind(2, until)
       }
 
       result.failed.foreach { exc =>
@@ -497,8 +497,8 @@ private[projection] class R2dbcOffsetStore(
         logger.debug("clearing offset for [{}]", projectionId)
         conn
           .createStatement(clearOffsetSql)
-          .bind("$1", projectionId.name)
-          .bind("$2", projectionId.key)
+          .bind(0, projectionId.name)
+          .bind(1, projectionId.key)
       }
       .map { n =>
         logger.debug(s"clearing offset for [{}] - executed statement returned [{}]", projectionId, n)

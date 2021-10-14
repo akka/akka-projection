@@ -51,8 +51,8 @@ class R2dbcOffsetStoreSpec
         conn =>
           conn
             .createStatement(selectLastSql)
-            .bind("$1", projectionId.name)
-            .bind("$2", projectionId.key),
+            .bind(0, projectionId.name)
+            .bind(1, projectionId.key),
         row => Instant.ofEpochMilli(row.get("last_updated", classOf[java.lang.Long])))
       .futureValue
       .getOrElse(throw new RuntimeException(s"no records found for $projectionId"))
