@@ -125,7 +125,6 @@ class EndToEndSpec
   private implicit val ec: ExecutionContext = system.executionContext
 
   private val settings = R2dbcProjectionSettings(testKit.system)
-  private val query = PersistenceQuery(testKit.system).readJournalFor[R2dbcReadJournal](R2dbcReadJournal.Identifier)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -136,7 +135,7 @@ class EndToEndSpec
       projectionName: String,
       nrOfProjections: Int,
       processedProbe: ActorRef[Processed]): Vector[ActorRef[ProjectionBehavior.Command]] = {
-    val sliceRanges = query.sliceRanges(nrOfProjections)
+    val sliceRanges = EventSourcedProvider2.sliceRanges(system, R2dbcReadJournal.Identifier, nrOfProjections)
 
     sliceRanges.map { range =>
       val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")

@@ -18,7 +18,6 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.persistence.query.PersistenceQuery
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
 import akka.projection.ProjectionBehavior
@@ -103,7 +102,6 @@ class ChaosSpec
   private implicit val ec: ExecutionContext = system.executionContext
 
   private val settings = R2dbcProjectionSettings(testKit.system)
-  private val query = PersistenceQuery(testKit.system).readJournalFor[R2dbcReadJournal](R2dbcReadJournal.Identifier)
   private val log = LoggerFactory.getLogger(getClass)
 
   private val seed = System.currentTimeMillis()
@@ -152,7 +150,8 @@ class ChaosSpec
         runningProjections.get(projectionIndex) match {
           case Some(ref) => ref
           case None =>
-            val range = query.sliceRanges(numberOfProjections)(projectionIndex)
+            val range = EventSourcedProvider2.sliceRanges(system, R2dbcReadJournal.Identifier, numberOfProjections)(
+              projectionIndex)
 
             val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
             log.debug("Starting projection index [{}] with projectionId [{}]", projectionIndex, projectionId)

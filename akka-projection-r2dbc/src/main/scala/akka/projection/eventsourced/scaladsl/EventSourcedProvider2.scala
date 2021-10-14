@@ -4,6 +4,7 @@
 
 package akka.projection.eventsourced.scaladsl
 
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -36,9 +37,13 @@ object EventSourcedProvider2 {
     new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityTypeHint, minSlice, maxSlice, system)
   }
 
-  // FIXME these should also be here
-  //def sliceForPersistenceId(persistenceId: String): Int
-  //def sliceRanges(numberOfRanges: Int): immutable.Seq[Range]
+  def sliceForPersistenceId(system: ActorSystem[_], readJournalPluginId: String, persistenceId: String): Int =
+    PersistenceQuery(system)
+      .readJournalFor[EventsBySliceQuery](readJournalPluginId)
+      .sliceForPersistenceId(persistenceId)
+
+  def sliceRanges(system: ActorSystem[_], readJournalPluginId: String, numberOfRanges: Int): immutable.Seq[Range] =
+    PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId).sliceRanges(numberOfRanges)
 
   private class EventsBySlicesSourceProvider[Event](
       eventsBySlicesQuery: EventsBySliceQuery,
