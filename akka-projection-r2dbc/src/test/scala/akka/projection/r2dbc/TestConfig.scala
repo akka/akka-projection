@@ -14,7 +14,7 @@ object TestConfig {
     val dialectConfig = dialect match {
       case "postgres" =>
         ConfigFactory.parseString("""
-          akka.projection.r2dbc.connection-factory {
+          akka.persistence.r2dbc.connection-factory {
             driver = "postgres"
             host = "localhost"
             port = 5432
@@ -25,7 +25,7 @@ object TestConfig {
           """)
       case "yugabyte" =>
         ConfigFactory.parseString("""
-          akka.projection.r2dbc.connection-factory {
+          akka.persistence.r2dbc.connection-factory {
             driver = "postgres"
             host = "localhost"
             port = 5433
