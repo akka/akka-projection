@@ -33,7 +33,8 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
     lazy val r2dbcSettings: R2dbcSettings =
       new R2dbcSettings(typedSystem.settings.config.getConfig("akka.persistence.r2dbc"))
     Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${r2dbcSettings.journalTable}")),
+      r2dbcExecutor.updateOne("beforeAll delete")(
+        _.createStatement(s"delete from ${r2dbcSettings.journalTableWithSchema}")),
       10.seconds)
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(
