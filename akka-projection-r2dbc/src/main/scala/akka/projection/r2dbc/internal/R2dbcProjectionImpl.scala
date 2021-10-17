@@ -58,10 +58,10 @@ private[projection] object R2dbcProjectionImpl {
 
   private[projection] def createOffsetStore(
       projectionId: ProjectionId,
-      settings: Option[R2dbcProjectionSettings],
+      settings: R2dbcProjectionSettings,
       connectionFactory: ConnectionFactory)(implicit system: ActorSystem[_]) = {
     val r2dbcExecutor = new R2dbcExecutor(connectionFactory, log)(system.executionContext, system)
-    new R2dbcOffsetStore(projectionId, system, settings.getOrElse(R2dbcProjectionSettings(system)), r2dbcExecutor)
+    new R2dbcOffsetStore(projectionId, system, settings, r2dbcExecutor)
   }
 
   private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope](
@@ -189,7 +189,7 @@ private[projection] object R2dbcProjectionImpl {
 @InternalApi
 private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     val projectionId: ProjectionId,
-    r2dbcSettingsOpt: Option[R2dbcProjectionSettings],
+    r2dbcSettings: R2dbcProjectionSettings,
     settingsOpt: Option[ProjectionSettings],
     sourceProvider: SourceProvider[Offset, Envelope],
     restartBackoffOpt: Option[RestartSettings],
@@ -216,7 +216,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       statusObserver: StatusObserver[Envelope] = this.statusObserver): R2dbcProjectionImpl[Offset, Envelope] =
     new R2dbcProjectionImpl(
       projectionId,
-      r2dbcSettingsOpt,
+      r2dbcSettings,
       settingsOpt,
       sourceProvider,
       restartBackoffOpt,
