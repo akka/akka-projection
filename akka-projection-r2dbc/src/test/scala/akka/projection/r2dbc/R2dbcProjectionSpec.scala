@@ -450,8 +450,8 @@ class R2dbcProjectionSpec
       implicit val offsetStore = createOffsetStore(projectionId)
 
       case class ProbeMessage(str: String, offset: Long)
-      val verificationProbe = testKit.createTestProbe[ProbeMessage]("verification")
-      val processProbe = testKit.createTestProbe[ProbeMessage]("processing")
+      val verificationProbe = createTestProbe[ProbeMessage]("verification")
+      val processProbe = createTestProbe[ProbeMessage]("processing")
 
       val testVerification = (offset: Long) => {
         verificationProbe.ref ! ProbeMessage("verification", offset)
@@ -546,7 +546,7 @@ class R2dbcProjectionSpec
       implicit val offsetStore = createOffsetStore(projectionId)
 
       val handlerCalled = "called"
-      val handlerProbe = testKit.createTestProbe[String]("calls-to-handler")
+      val handlerProbe = createTestProbe[String]("calls-to-handler")
 
       val projection =
         R2dbcProjection

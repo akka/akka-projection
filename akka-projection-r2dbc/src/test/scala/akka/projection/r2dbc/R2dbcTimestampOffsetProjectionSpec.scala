@@ -20,6 +20,7 @@ import akka.Done
 import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.ProjectionBehavior
@@ -243,6 +244,26 @@ class R2dbcTimestampOffsetProjectionSpec
       createEnvelope(pid1, 6, startTime.plusMillis(8), readAfterMillis = 10000, s"e1-6"))
   }
 
+  def groupedHandler(probe: ActorRef[String]): R2dbcHandler[Seq[EventEnvelope[String]]] = {
+    R2dbcHandler[immutable.Seq[EventEnvelope[String]]] { (session, envelopes) =>
+      probe ! "called"
+      if (envelopes.isEmpty)
+        Future.successful(Done)
+      else {
+        val repo = TestRepository(session)
+        val results = envelopes.groupBy(_.persistenceId).map { case (pid, envs) =>
+          repo.findById(pid).flatMap { existing =>
+            val newConcatStr = envs.foldLeft(existing.getOrElse(ConcatStr(pid, ""))) { (acc, env) =>
+              acc.concat(env.event)
+            }
+            repo.update(pid, newConcatStr.text)
+          }
+        }
+        Future.sequence(results).map(_ => Done)
+      }
+    }
+  }
+
   "A R2DBC exactly-once projection with TimestampOffset" must {
 
     "persist projection and offset in the same write operation (transactional)" in {
@@ -365,8 +386,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
       implicit val offsetStore = createOffsetStore(projectionId)
 
-      val handlerCalled = "called"
-      val handlerProbe = testKit.createTestProbe[String]("calls-to-handler")
+      val handlerProbe = createTestProbe[String]("calls-to-handler")
 
       val envelopes = createEnvelopes(pid, 6)
 
@@ -376,22 +396,7 @@ class R2dbcTimestampOffsetProjectionSpec
             projectionId,
             Some(settings),
             sourceProvider = sourceProvider(envelopes),
-            handler = () =>
-              R2dbcHandler[immutable.Seq[EventEnvelope[String]]] { (session, envelopes) =>
-                handlerProbe.ref ! handlerCalled
-                if (envelopes.isEmpty)
-                  Future.successful(Done)
-                else {
-                  val repo = TestRepository(session)
-                  val id = envelopes.head.persistenceId
-                  repo.findById(id).flatMap { existing =>
-                    val newConcatStr = envelopes.foldLeft(existing.getOrElse(ConcatStr(id, ""))) { (acc, env) =>
-                      acc.concat(env.event)
-                    }
-                    repo.update(id, newConcatStr.text)
-                  }
-                }
-              })
+            handler = () => groupedHandler(handlerProbe.ref))
           .withGroup(3, 3.seconds)
 
       offsetShouldBeEmpty()
@@ -400,8 +405,8 @@ class R2dbcTimestampOffsetProjectionSpec
       }
 
       // handler probe is called twice
-      handlerProbe.expectMessage(handlerCalled)
-      handlerProbe.expectMessage(handlerCalled)
+      handlerProbe.expectMessage("called")
+      handlerProbe.expectMessage("called")
 
       offsetShouldBe(envelopes.last.offset)
     }
@@ -412,8 +417,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
       implicit val offsetStore = createOffsetStore(projectionId)
 
-      val handlerCalled = "called"
-      val handlerProbe = testKit.createTestProbe[String]("calls-to-handler")
+      val handlerProbe = createTestProbe[String]("calls-to-handler")
 
       val envelopes = createEnvelopesWithDuplicates(pid1, pid2)
 
@@ -423,24 +427,7 @@ class R2dbcTimestampOffsetProjectionSpec
             projectionId,
             Some(settings),
             sourceProvider = sourceProvider(envelopes),
-            handler = () =>
-              R2dbcHandler[immutable.Seq[EventEnvelope[String]]] { (session, envelopes) =>
-                handlerProbe.ref ! handlerCalled
-                if (envelopes.isEmpty)
-                  Future.successful(Done)
-                else {
-                  val repo = TestRepository(session)
-                  val results = envelopes.groupBy(_.persistenceId).map { case (pid, envs) =>
-                    repo.findById(pid).flatMap { existing =>
-                      val newConcatStr = envs.foldLeft(existing.getOrElse(ConcatStr(pid, ""))) { (acc, env) =>
-                        acc.concat(env.event)
-                      }
-                      repo.update(pid, newConcatStr.text)
-                    }
-                  }
-                  Future.sequence(results).map(_ => Done)
-                }
-              })
+            handler = () => groupedHandler(handlerProbe.ref))
           .withGroup(3, 3.seconds)
 
       projectionTestKit.run(projection) {
@@ -449,14 +436,55 @@ class R2dbcTimestampOffsetProjectionSpec
       }
 
       // handler probe is called twice
-      handlerProbe.expectMessage(handlerCalled)
-      handlerProbe.expectMessage(handlerCalled)
+      handlerProbe.expectMessage("called")
+      handlerProbe.expectMessage("called")
 
       offsetShouldBe(envelopes.last.offset)
     }
 
     "filter out unknown sequence numbers" in {
-      pending // FIXME see corresponding test for duplicates and above exactly-once
+      val pid1 = UUID.randomUUID().toString
+      val pid2 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
+
+      val handlerProbe = createTestProbe[String]()
+
+      val startTime = Instant.now()
+
+      val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
+      val projection1 =
+        R2dbcProjection
+          .groupedWithin(
+            projectionId,
+            Some(settings),
+            sourceProvider = backtrackingSourceProvider(envelopes1),
+            handler = () => groupedHandler(handlerProbe.ref))
+          .withGroup(3, 3.seconds)
+
+      projectionTestKit.run(projection1) {
+        projectedValueShouldBe("e1-1|e1-2|e1-3")(pid1)
+        projectedValueShouldBeEmpty()(pid2)
+      }
+      offsetShouldBe(envelopes1.collectFirst { case env if env.event == "e1-3" => env.offset }.get)
+
+      // simulate backtracking
+      logger.debug("Starting backtracking")
+      val envelopes2 = createEnvelopesBacktrackingUnknownSequenceNumbers(startTime, pid1, pid2)
+      val projection2 =
+        R2dbcProjection
+          .groupedWithin(
+            projectionId,
+            Some(settings),
+            sourceProvider = backtrackingSourceProvider(envelopes2),
+            handler = () => groupedHandler(handlerProbe.ref))
+          .withGroup(3, 3.seconds)
+
+      projectionTestKit.run(projection2) {
+        projectedValueShouldBe("e1-1|e1-2|e1-3|e1-4|e1-5|e1-6")(pid1)
+        projectedValueShouldBe("e2-3|e2-4")(pid2)
+      }
+      offsetShouldBe(envelopes2.last.offset)
     }
 
     "handle grouped async projection" in {
