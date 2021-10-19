@@ -61,7 +61,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
   val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
   val abort: Promise[Done] = Promise()
 
-  private def saveOffsetAndReport(
+  protected def saveOffsetAndReport(
       projectionId: ProjectionId,
       projectionContext: ProjectionContextImpl[Offset, Envelope],
       batchSize: Int): Future[Done] = {
@@ -72,9 +72,22 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         } catch {
           case NonFatal(_) => // ignore
         }
-        telemetry.onOffsetStored(batchSize)
+        getTelemetry().onOffsetStored(batchSize)
         done
       }
+  }
+
+  protected def saveOffsetsAndReport(
+      projectionId: ProjectionId,
+      batch: immutable.Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
+
+    // The batch contains multiple projections contexts. Each of these contexts may represent
+    // a single envelope or a group of envelopes. The size of the batch and the size of the
+    // group may differ.
+    val totalNumberOfEnvelopes = batch.map { _.groupSize }.sum
+    val last = batch.last
+
+    saveOffsetAndReport(projectionId, last, totalNumberOfEnvelopes)
   }
 
   /**
@@ -208,12 +221,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         .groupedWithin(afterEnvelopes, orAfterDuration)
         .filterNot(_.isEmpty)
         .mapAsync(parallelism = 1) { batch =>
-          // The batch contains multiple projections contexts. Each of these contexts may represent
-          // a single envelope or a group of envelopes. The size of the batch and the size of the
-          // group may differ.
-          val totalNumberOfEnvelopes = batch.map { _.groupSize }.sum
-          val last = batch.last
-          saveOffsetAndReport(projectionId, last, totalNumberOfEnvelopes)
+          saveOffsetsAndReport(projectionId, batch)
         }
     }
   }
