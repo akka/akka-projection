@@ -41,8 +41,10 @@ object ChaosSpec {
     akka.persistence.r2dbc {
       query {
         refresh-interval = 1s
-        # stress more by using a small buffer (sql limit)
-        buffer-size = 10
+        # Stress more by using a smaller buffer (sql limit) than default.
+        # Note that it shouldn't be set too small since that would prevent progress if more than
+        # this number of events are stored for the same timestamp.
+        buffer-size = 100
       }
     }
     akka.projection {
