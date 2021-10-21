@@ -14,7 +14,6 @@
 
     <logger name="akka.projection.r2dbc" level="DEBUG" />
     <logger name="akka.persistence.r2dbc" level="DEBUG" />
-    <logger name="akka.persistence.r2dbc.internal.DummyConnectionPool" level="INFO" />
 <!--    <logger name="io.r2dbc.postgresql.QUERY" level="DEBUG" />-->
 <!--    <logger name="io.r2dbc.pool" level="DEBUG" />-->
 
