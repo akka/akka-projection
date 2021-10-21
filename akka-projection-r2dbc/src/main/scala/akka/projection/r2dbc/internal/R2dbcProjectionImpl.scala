@@ -8,6 +8,7 @@ import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -16,6 +17,7 @@ import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
@@ -32,16 +34,20 @@ import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetStrategy
+import akka.projection.internal.ProjectionContextImpl
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.r2dbc.R2dbcProjectionSettings
+import akka.projection.r2dbc.internal.R2dbcProjectionImpl.envToString
+import akka.projection.r2dbc.internal.R2dbcProjectionImpl.log
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcSession
 import akka.projection.scaladsl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.RestartSettings
+import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import io.r2dbc.spi.ConnectionFactory
 import org.slf4j.Logger
@@ -94,31 +100,6 @@ private[projection] object R2dbcProjectionImpl {
       }
   }
 
-  private[projection] def adaptedHandlerForAtLeastOnce[Offset, Envelope](
-      handlerFactory: () => R2dbcHandler[Envelope],
-      offsetStore: R2dbcOffsetStore,
-      r2dbcExecutor: R2dbcExecutor)(implicit ec: ExecutionContext, system: ActorSystem[_]): () => Handler[Envelope] = {
-    () =>
-      new AdaptedR2dbcHandler(handlerFactory()) {
-        override def process(envelope: Envelope): Future[Done] = {
-          if (offsetStore.isEnvelopeDuplicate(envelope)) {
-            // FIXME change to trace
-            log.debug("Filtering out duplicate: {}", envToString(envelope))
-            FutureDone
-          } else if (!offsetStore.isSequenceNumberAccepted(envelope)) {
-            log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
-            FutureDone
-          } else {
-            r2dbcExecutor.withConnection("at-least-once handler") { conn =>
-              // run users handler
-              val session = new R2dbcSession(conn)
-              delegate.process(session, envelope)
-            }
-          }
-        }
-      }
-  }
-
   private[projection] def adaptedHandlerForGrouped[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => R2dbcHandler[immutable.Seq[Envelope]],
@@ -158,9 +139,130 @@ private[projection] object R2dbcProjectionImpl {
     }
   }
 
+  private[projection] def adaptedHandlerForAtLeastOnce[Offset, Envelope](
+      handlerFactory: () => R2dbcHandler[Envelope],
+      offsetStore: R2dbcOffsetStore,
+      r2dbcExecutor: R2dbcExecutor)(implicit ec: ExecutionContext, system: ActorSystem[_]): () => Handler[Envelope] = {
+    () =>
+      new AdaptedR2dbcHandler(handlerFactory()) {
+        override def process(envelope: Envelope): Future[Done] = {
+          if (offsetStore.isEnvelopeDuplicate(envelope)) {
+            // FIXME change to trace
+            log.debug("Filtering out duplicate: {}", envToString(envelope))
+            FutureDone
+          } else if (!offsetStore.isSequenceNumberAccepted(envelope)) {
+            log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
+            FutureDone
+          } else {
+            r2dbcExecutor.withConnection("at-least-once handler") { conn =>
+              // run users handler
+              val session = new R2dbcSession(conn)
+              delegate.process(session, envelope)
+            }
+          }
+        }
+      }
+  }
+
+  private[projection] def adaptedHandlerForAtLeastOnceAsync[Offset, Envelope](
+      handlerFactory: () => Handler[Envelope],
+      offsetStore: R2dbcOffsetStore)(implicit ec: ExecutionContext, system: ActorSystem[_]): () => Handler[Envelope] = {
+    () =>
+      new AdaptedHandler(handlerFactory()) {
+        override def process(envelope: Envelope): Future[Done] = {
+          if (offsetStore.isEnvelopeDuplicate(envelope)) {
+            // FIXME change to trace
+            log.debug("Filtering out duplicate: {}", envToString(envelope))
+            FutureDone
+          } else if (!offsetStore.isSequenceNumberAccepted(envelope)) {
+            log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
+            FutureDone
+          } else {
+            delegate.process(envelope)
+          }
+        }
+      }
+  }
+
+  private[projection] def adaptedHandlerForGroupedAsync[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
+      handlerFactory: () => Handler[immutable.Seq[Envelope]],
+      offsetStore: R2dbcOffsetStore)(implicit
+      ec: ExecutionContext,
+      system: ActorSystem[_]): () => Handler[immutable.Seq[Envelope]] = { () =>
+
+    new AdaptedHandler(handlerFactory()) {
+      override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
+        val acceptedEnvelopes = envelopes.iterator.filterNot { env =>
+          if (offsetStore.isEnvelopeDuplicate(env)) {
+            // FIXME change to trace
+            log.debug("Filtering out duplicate: {}", envToString(env))
+            true
+          } else if (!offsetStore.isSequenceNumberAccepted(env)) {
+            log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(env))
+            true
+          } else {
+            false
+          }
+        }.toVector
+
+        if (acceptedEnvelopes.isEmpty) {
+          FutureDone
+        } else {
+          delegate.process(acceptedEnvelopes)
+        }
+      }
+    }
+  }
+
+  private[projection] def adaptedHandlerForFlow[Offset, Envelope](
+      handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _],
+      offsetStore: R2dbcOffsetStore)(implicit
+      ec: ExecutionContext,
+      system: ActorSystem[_]): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
+
+    def isAccepted(env: Envelope): Boolean =
+      if (offsetStore.isEnvelopeDuplicate(env)) {
+        // FIXME change to trace
+        log.debug("Filtering out duplicate: {}", envToString(env))
+        false
+      } else if (!offsetStore.isSequenceNumberAccepted(env)) {
+        log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(env))
+        false
+      } else {
+        true
+      }
+
+    FlowWithContext[Envelope, ProjectionContext]
+      .map { env =>
+        // using `map` to evaluate the isAccepted once, otherwise
+        // with filter it will invoked twice
+        isAccepted(env) -> env
+      }
+      .collect {
+        case (accepted, env) if accepted =>
+          env
+      }
+      .via(handler)
+
+  }
+
   abstract class AdaptedR2dbcHandler[E](val delegate: R2dbcHandler[E])(implicit
       ec: ExecutionContext,
       system: ActorSystem[_])
+      extends Handler[E] {
+
+    override def start(): Future[Done] = Future {
+      delegate.start()
+      Done
+    }
+    override def stop(): Future[Done] = Future {
+      delegate.stop()
+      Done
+    }
+  }
+
+  abstract class AdaptedHandler[E](val delegate: Handler[E])(implicit ec: ExecutionContext, system: ActorSystem[_])
       extends Handler[E] {
 
     override def start(): Future[Done] = Future {
@@ -299,6 +401,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
 
     implicit val executionContext: ExecutionContext = system.executionContext
     override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+    private val log = LoggerFactory.getLogger(this.getClass)
 
     override def readPaused(): Future[Boolean] =
       offsetStore.readManagementState().map(_.exists(_.paused))
@@ -306,8 +409,73 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     override def readOffsets(): Future[Option[Offset]] =
       offsetStore.readOffset()
 
+    // Called from InternalProjectionState.saveOffsetAndReport
     override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] =
       offsetStore.saveOffset(offset)
+
+    override protected def saveOffsetAndReport(
+        projectionId: ProjectionId,
+        projectionContext: ProjectionContextImpl[Offset, Envelope],
+        batchSize: Int): Future[Done] = {
+      import R2dbcProjectionImpl.envToString
+      import R2dbcProjectionImpl.FutureDone
+      val envelope = projectionContext.envelope
+
+      if (offsetStore.isEnvelopeDuplicate(envelope)) {
+        // FIXME change to trace
+        log.debug("saveOffset filtering out duplicate: {}", envToString(envelope))
+        FutureDone
+      } else if (!offsetStore.wasSequenceNumberAccepted(envelope)) {
+        log.debug(
+          "saveOffset filtering out rejected sequence number (might be accepted later): {}",
+          envToString(envelope))
+        FutureDone
+      } else {
+        super.saveOffsetAndReport(projectionId, projectionContext, batchSize)
+      }
+    }
+
+    override protected def saveOffsetsAndReport(
+        projectionId: ProjectionId,
+        batch: Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
+      import R2dbcProjectionImpl.envToString
+      import R2dbcProjectionImpl.FutureDone
+
+      val acceptedContexts = batch.iterator.filterNot { ctx =>
+        val env = ctx.envelope
+        if (offsetStore.isEnvelopeDuplicate(env)) {
+          // FIXME change to trace
+          log.debug("saveOffsets filtering out duplicate: {}", envToString(env))
+          true
+        } else if (!offsetStore.wasSequenceNumberAccepted(env)) {
+          log.debug(
+            "saveOffsets filtering out rejected sequence number (might be accepted later): {}",
+            envToString(env))
+          true
+        } else {
+          false
+        }
+      }.toVector
+
+      if (acceptedContexts.isEmpty) {
+        FutureDone
+      } else {
+        val offsets = acceptedContexts.map(_.offset)
+        offsetStore
+          .saveOffsets(offsets)
+          .map { done =>
+            val batchSize = acceptedContexts.map { _.groupSize }.sum
+            val last = acceptedContexts.last
+            try {
+              statusObserver.offsetProgress(projectionId, last.envelope)
+            } catch {
+              case NonFatal(_) => // ignore
+            }
+            getTelemetry().onOffsetStored(batchSize)
+            done
+          }
+      }
+    }
 
     private[projection] def newRunningInstance(): RunningProjection =
       new R2dbcRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)

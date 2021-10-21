@@ -138,7 +138,8 @@ object R2dbcProjection {
     val connFactory = connectionFactory(system, r2dbcSettings)
     val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, r2dbcSettings, connFactory)
 
-    // FIXME this should also filter duplicates
+    val adaptedHandler =
+      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnceAsync(handler, offsetStore)(system.executionContext, system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -147,7 +148,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = SingleHandlerStrategy(handler),
+      handlerStrategy = SingleHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)
   }
@@ -214,7 +215,10 @@ object R2dbcProjection {
     val connFactory = connectionFactory(system, r2dbcSettings)
     val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, r2dbcSettings, connFactory)
 
-    // FIXME this should also filter duplicates
+    val adaptedHandler =
+      R2dbcProjectionImpl.adaptedHandlerForGroupedAsync(sourceProvider, handler, offsetStore)(
+        system.executionContext,
+        system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -223,7 +227,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(Duration.Zero)),
-      handlerStrategy = GroupedHandlerStrategy(handler),
+      handlerStrategy = GroupedHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)
   }
@@ -260,7 +264,8 @@ object R2dbcProjection {
     val connFactory = connectionFactory(system, r2dbcSettings)
     val offsetStore = R2dbcProjectionImpl.createOffsetStore(projectionId, r2dbcSettings, connFactory)
 
-    // FIXME this should also filter duplicates
+    val adaptedHandler =
+      R2dbcProjectionImpl.adaptedHandlerForFlow(handler, offsetStore)(system.executionContext, system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -269,7 +274,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = FlowHandlerStrategy(handler),
+      handlerStrategy = FlowHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)
   }

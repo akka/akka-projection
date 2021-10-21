@@ -9,6 +9,7 @@ import java.time.Instant
 import java.time.{ Duration => JDuration }
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -38,7 +39,7 @@ object R2dbcOffsetStore {
   final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
 
   object State {
-    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, Map.empty)
+    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
 
     def apply(records: immutable.IndexedSeq[Record]): State = {
       if (records.isEmpty) empty
@@ -47,11 +48,7 @@ object R2dbcOffsetStore {
   }
 
   // FIXME add unit test for this class
-  final case class State(
-      byPid: Map[Pid, Record],
-      latest: immutable.IndexedSeq[Record],
-      oldestTimestamp: Instant,
-      seen: Map[Pid, SeqNr]) {
+  final case class State(byPid: Map[Pid, Record], latest: immutable.IndexedSeq[Record], oldestTimestamp: Instant) {
     def size: Int = byPid.size
 
     def latestTimestamp: Instant =
@@ -77,8 +74,7 @@ object R2dbcOffsetStore {
             case None =>
               acc.byPid.updated(r.pid, r)
           }
-        val newSeen =
-          if (newByPid eq acc.byPid) acc.seen else acc.seen.removed(r.pid)
+
         val latestTimestamp = acc.latestTimestamp
         val newLatest =
           if (r.timestamp.isAfter(latestTimestamp))
@@ -95,7 +91,7 @@ object R2dbcOffsetStore {
           else
             acc.oldestTimestamp // this is the normal case
 
-        acc.copy(byPid = newByPid, latest = newLatest, oldestTimestamp = newOldestTimestamp, seen = newSeen)
+        acc.copy(byPid = newByPid, latest = newLatest, oldestTimestamp = newOldestTimestamp)
       }
     }
 
@@ -199,6 +195,10 @@ private[projection] class R2dbcOffsetStore(
   // we use AtomicReference and fail if the CAS fails.
   private val state = new AtomicReference(State.empty)
 
+  // transient state of seen pid -> seqNr before they have been stored and included in `state`)
+  // this can be updated concurrently with CAS retries
+  private val seen = new AtomicReference(Map.empty[Pid, SeqNr])
+
   system.scheduler.scheduleWithFixedDelay(
     settings.deleteInterval,
     settings.deleteInterval,
@@ -207,6 +207,9 @@ private[projection] class R2dbcOffsetStore(
 
   def getState(): State =
     state.get()
+
+  def getSeen(): Map[Pid, SeqNr] =
+    seen.get()
 
   def getOffset[Offset](): Future[Option[Offset]] = {
     getState().latestOffset match {
@@ -293,7 +296,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   /**
-   * Like saveOffset, but in own transaction. Useful for resetting an offset
+   * Like saveOffsetInTx, but in own transaction. Used by atLeastOnce and for resetting an offset.
    */
   def saveOffset[Offset](offset: Offset): Future[Done] = {
     r2dbcExecutor
@@ -317,6 +320,14 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
+  def saveOffsets[Offset](offsets: immutable.IndexedSeq[Offset]): Future[Done] = {
+    r2dbcExecutor
+      .withConnection("save offsets") { conn =>
+        saveOffsetsInTx(conn, offsets)
+      }
+      .map(_ => Done)(ExecutionContext.parasitic)
+  }
+
   def saveOffsetsInTx[Offset](conn: Connection, offsets: immutable.IndexedSeq[Offset]): Future[Done] = {
     if (offsets.exists(_.isInstanceOf[TimestampOffset])) {
       val records = offsets.flatMap {
@@ -337,8 +348,8 @@ private[projection] class R2dbcOffsetStore(
     if (filteredRecords.isEmpty) {
       FutureDone
     } else {
-
-      logger.trace("saving timestamp offset [{}]", filteredRecords.last.timestamp)
+      // FIXME change to trace
+      logger.debug("saving timestamp offset [{}], {}", filteredRecords.last.timestamp, filteredRecords)
 
       def bindRecord(stmt: Statement, record: Record): Statement =
         stmt
@@ -364,6 +375,7 @@ private[projection] class R2dbcOffsetStore(
         }
 
       val newState = oldState.add(filteredRecords)
+
       // accumulate some more than the timeWindow before evicting
       val evictedNewState =
         if (newState.window.compareTo(evictWindow) > 0) {
@@ -374,11 +386,26 @@ private[projection] class R2dbcOffsetStore(
           newState
 
       R2dbcExecutor.updateInTx(stmts).map { _ =>
-        if (!state.compareAndSet(oldState, evictedNewState))
+        if (state.compareAndSet(oldState, evictedNewState))
+          cleanupSeen(evictedNewState)
+        else
           throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")
         Done
       }
     }
+  }
+
+  @tailrec private def cleanupSeen(newState: State): Unit = {
+    val currentSeen = getSeen()
+    val newSeen =
+      currentSeen.filter { case (seenPid, seenSeqNr) =>
+        newState.byPid.get(seenPid) match {
+          case Some(r) => r.seqNr < seenSeqNr
+          case None    => true
+        }
+      }
+    if (!seen.compareAndSet(currentSeen, newSeen))
+      cleanupSeen(newState) // CAS retry, concurrent update of seen
   }
 
   private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
@@ -422,32 +449,48 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  def isSequenceNumberAccepted[Envelope](envelope: Envelope): Boolean = {
+  @tailrec final def isSequenceNumberAccepted[Envelope](envelope: Envelope): Boolean = {
     envelope match {
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
         val currentState = getState()
+        val currentSeen = getSeen()
         val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
 
         val ok =
-          (seqNr == 1L && !currentState.byPid.contains(pid)) ||
+          (seqNr == 1L && (!currentState.byPid.contains(pid)) && (!currentSeen.contains(pid))) ||
           JDuration
             .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
             .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0 ||
-          seqNr == currentState.seen.getOrElse(pid, Long.MinValue) + 1 ||
+          seqNr == currentSeen.getOrElse(pid, Long.MinValue) + 1 ||
           seqNr == currentState.byPid.get(pid).map(_.seqNr).getOrElse(Long.MinValue) + 1
 
         if (ok) {
-          val newState = currentState.copy(seen = currentState.seen.updated(pid, seqNr))
-          if (!state.compareAndSet(currentState, newState))
-            throw new IllegalStateException(
-              "Unexpected concurrent modification of state from isSequenceNumberAccepted.")
-        }
-        ok
+          val newSeen = currentSeen.updated(pid, seqNr)
+          if (seen.compareAndSet(currentSeen, newSeen))
+            ok
+          else
+            isSequenceNumberAccepted(envelope) // CAS retry, concurrent update of seen
+        } else
+          ok
 
       case _ => true
     }
+  }
+
+  def wasSequenceNumberAccepted[Envelope](envelope: Envelope): Boolean = {
+    envelope match {
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
+        val pid = eventEnvelope.persistenceId
+        val seqNr = eventEnvelope.sequenceNr
+        getSeen().get(pid) match {
+          case Some(`seqNr`) => true
+          case _             => false
+        }
+      case _ => true
+    }
+
   }
 
   def deleteOldTimestampOffsets(): Future[Int] = {
@@ -466,7 +509,11 @@ private[projection] class R2dbcOffsetStore(
       }
 
       result.failed.foreach { exc =>
-        logger.warn("Failed to delete timestamp offset until [{}] for projection [{}].", until, projectionId.id)
+        logger.warn(
+          "Failed to delete timestamp offset until [{}] for projection [{}]: {}",
+          until,
+          projectionId.id,
+          exc.toString)
       }
       if (logger.isDebugEnabled)
         result.foreach { rows =>
