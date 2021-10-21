@@ -169,9 +169,17 @@ class EndToEndSpec
       }
 
       // write some before starting the projections
-      (1 until 50).foreach { n =>
+      var n = 1
+      while (n <= 50) {
         val p = n % numberOfEntities
-        entities(p) ! Persister.Persist(s"e$p-$n")
+        // mix some persist 1 and persist 3 events
+        if (n % 7 == 0) {
+          entities(p) ! Persister.PersistAll((0 until 3).map(i => s"e$p-${n + i}").toList)
+          n += 3
+        } else {
+          entities(p) ! Persister.Persist(s"e$p-$n")
+          n += 1
+        }
       }
 
       val projectionName = UUID.randomUUID().toString
@@ -181,7 +189,7 @@ class EndToEndSpec
       // give them some time to start before writing more events
       Thread.sleep(500)
 
-      (20 to numberOfEvents).foreach { n =>
+      while (n <= numberOfEvents) {
         val p = n % numberOfEntities
         entities(p) ! Persister.Persist(s"e$p-$n")
 
@@ -202,6 +210,8 @@ class EndToEndSpec
           Thread.sleep(50)
         else if (n % 25 == 0)
           Thread.sleep(1500)
+
+        n += 1
       }
 
       val processed = processedProbe.receiveMessages(numberOfEvents, 20.seconds)

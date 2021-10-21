@@ -19,6 +19,7 @@ trait TestData {
   import TestData.entityTypeHintCounter
 
   def nextPid() = s"p-${pidCounter.incrementAndGet()}"
+  // FIXME return PersistenceId instead
   def nextPid(entityTypeHint: String) = s"$entityTypeHint|p-${pidCounter.incrementAndGet()}"
 
   def nextEntityTypeHint() = s"TestEntity-${entityTypeHintCounter.incrementAndGet()}"
