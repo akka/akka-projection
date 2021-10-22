@@ -252,6 +252,7 @@ private[projection] class R2dbcOffsetStore(
         newState.latestTimestamp)
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
+      clearSeen()
       if (newState == State.empty) {
         None
       } else {
@@ -406,6 +407,12 @@ private[projection] class R2dbcOffsetStore(
       }
     if (!seen.compareAndSet(currentSeen, newSeen))
       cleanupSeen(newState) // CAS retry, concurrent update of seen
+  }
+
+  @tailrec private def clearSeen(): Unit = {
+    val currentSeen = getSeen()
+    if (!seen.compareAndSet(currentSeen, Map.empty[Pid, SeqNr]))
+      clearSeen() // CAS retry, concurrent update of seen
   }
 
   private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
