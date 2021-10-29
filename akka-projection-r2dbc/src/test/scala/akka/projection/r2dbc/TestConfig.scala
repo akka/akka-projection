@@ -1,6 +1,7 @@
-/**
+/*
  * Copyright (C) 2021 Lightbend Inc. <https://www.lightbend.com>
  */
+
 package akka.projection.r2dbc
 
 import com.typesafe.config.Config
@@ -39,6 +40,7 @@ object TestConfig {
     // using load here so that connection-factory can be overridden
     ConfigFactory.load(dialectConfig.withFallback(ConfigFactory.parseString("""
     akka.persistence.journal.plugin = "akka.persistence.r2dbc.journal"
+    akka.persistence.state.plugin = "akka.persistence.r2dbc.state"
     akka.persistence.r2dbc {
       query {
         refresh-interval = 1s
