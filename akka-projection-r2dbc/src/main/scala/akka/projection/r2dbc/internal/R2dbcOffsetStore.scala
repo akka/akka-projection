@@ -38,12 +38,6 @@ object R2dbcOffsetStore {
 
   final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
 
-  sealed trait InflightEntry {
-    def seqNr: SeqNr
-  }
-  case class Processing(seqNr: SeqNr) extends InflightEntry
-  case class Recovering(seqNr: SeqNr) extends InflightEntry
-
   object State {
     val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
 
@@ -134,6 +128,7 @@ private[projection] class R2dbcOffsetStore(
     clock: Clock = Clock.systemUTC()) {
 
   import R2dbcOffsetStore._
+  import R2dbcProjectionImpl.envToString
 
   // FIXME include projectionId in all log messages
   private val logger = LoggerFactory.getLogger(this.getClass)
@@ -202,9 +197,10 @@ private[projection] class R2dbcOffsetStore(
   // we use AtomicReference and fail if the CAS fails.
   private val state = new AtomicReference(State.empty)
 
-  // transient state of inflight pid -> seqNr before they have been stored and included in `state`)
-  // this can be updated concurrently with CAS retries
-  private val inflight = new AtomicReference(Map.empty[Pid, InflightEntry])
+  // Transient state of inflight pid -> seqNr (before they have been stored and included in `state`), which is
+  // needed for at-least-once or other projections where the offset is saved afterwards. Not needed for exactly-once.
+  // This can be updated concurrently with CAS retries.
+  private val inflight = new AtomicReference(Map.empty[Pid, SeqNr])
 
   system.scheduler.scheduleWithFixedDelay(
     settings.deleteInterval,
@@ -215,7 +211,7 @@ private[projection] class R2dbcOffsetStore(
   def getState(): State =
     state.get()
 
-  def getInflight(): Map[Pid, InflightEntry] =
+  def getInflight(): Map[Pid, SeqNr] =
     inflight.get()
 
   def getOffset[Offset](): Future[Option[Offset]] = {
@@ -407,9 +403,9 @@ private[projection] class R2dbcOffsetStore(
     val currentInflight = getInflight()
     val newInflight =
       currentInflight.filter {
-        case (inflightPid, inflight) =>
+        case (inflightPid, inflightSeqNr) =>
           newState.byPid.get(inflightPid) match {
-            case Some(r) => r.seqNr < inflight.seqNr
+            case Some(r) => r.seqNr < inflightSeqNr
             case None    => true
           }
         case _ => true
@@ -420,27 +416,8 @@ private[projection] class R2dbcOffsetStore(
 
   @tailrec private def clearInflight(): Unit = {
     val currentInflight = getInflight()
-    if (!inflight.compareAndSet(currentInflight, Map.empty[Pid, InflightEntry]))
+    if (!inflight.compareAndSet(currentInflight, Map.empty[Pid, SeqNr]))
       clearInflight() // CAS retry, concurrent update of inflight
-  }
-
-  /**
-   * When the processing of an event fails, this method is called to remove the event from the inflight map. This is
-   * need for retry scenarios in which
-   */
-  def updateInflightOnError[Envelope](envelope: Envelope): Boolean = {
-    envelope match {
-      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
-        val currentInflight = getInflight()
-        val updatedInflight = currentInflight.map { case (pid, inflight) =>
-          if (pid == eventEnvelope.persistenceId && inflight.seqNr == eventEnvelope.sequenceNr)
-            pid -> Recovering(inflight.seqNr)
-          else
-            pid -> inflight
-        }
-        inflight.compareAndSet(currentInflight, updatedInflight)
-      case _ => false
-    }
   }
 
   private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
@@ -473,66 +450,79 @@ private[projection] class R2dbcOffsetStore(
   def isDuplicate(record: Record): Boolean =
     getState().isDuplicate(record)
 
-  def isEnvelopeDuplicate[Envelope](envelope: Envelope): Boolean = {
-    envelope match {
-      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
-        val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
-        isDuplicate(
-          R2dbcOffsetStore
-            .Record(eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp))
-      case _ => false
-    }
+  def filterAccepted[Envelope](envelopes: immutable.Seq[Envelope]): immutable.Seq[Envelope] = {
+    envelopes
+      .foldLeft((getInflight(), Vector.empty[Envelope])) {
+        case ((inflight, filteredEnvelopes), eventEnvelope: EventEnvelope[_]) =>
+          if (isAccepted(eventEnvelope, inflight))
+            (
+              inflight.updated(eventEnvelope.persistenceId, eventEnvelope.sequenceNr),
+              filteredEnvelopes :+ eventEnvelope.asInstanceOf[Envelope])
+          else
+            (inflight, filteredEnvelopes)
+        case ((inflight, filteredEnvelopes), env) => // not EventEnvelope
+          (inflight, filteredEnvelopes :+ env)
+      }
+      ._2
   }
 
-  @tailrec final def isSequenceNumberAccepted[Envelope](envelope: Envelope): Boolean = {
+  def isAccepted[Envelope](envelope: Envelope): Boolean =
+    isAccepted(envelope, getInflight())
+
+  private def isAccepted[Envelope](envelope: Envelope, currentInflight: Map[Pid, SeqNr]): Boolean = {
     envelope match {
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
         val currentState = getState()
-        val currentInflight = getInflight()
         val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
 
-        val isValidSeqNrForInflight = () => {
-          currentInflight.get(pid) match {
-            // is seqNr the follow up of the inflight one?
-            case Some(Processing(inflightSeqNr)) => seqNr == inflightSeqNr + 1
-            // has entry for pid, but it's Recovering.
-            // That happens after a failure. In that case, we should get back the same seqNr
-            case Some(Recovering(inflightSeqNr)) => seqNr == inflightSeqNr
-            case None                            => false
-          }
-        }
+        val duplicate =
+          isDuplicate(
+            R2dbcOffsetStore
+              .Record(eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp))
 
-        val ok =
-          (seqNr == 1L && (!currentState.byPid.contains(pid)) && (!currentInflight.contains(pid))) ||
-          JDuration
-            .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
-            .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0 ||
-          isValidSeqNrForInflight() ||
-          seqNr == currentState.byPid.get(pid).map(_.seqNr).getOrElse(Long.MinValue) + 1
+        if (duplicate) {
+          logger.debug("Filtering out duplicate: {}", envToString(envelope)) // FIXME change to trace
+          false
+        } else {
+          val ok =
+            (seqNr == 1L && (!currentState.byPid.contains(pid)) && (!currentInflight.contains(pid))) ||
+            JDuration
+              .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
+              .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0 ||
+            seqNr == currentInflight.getOrElse(pid, Long.MinValue) + 1 ||
+            seqNr == currentState.byPid.get(pid).map(_.seqNr).getOrElse(Long.MinValue) + 1
 
-        if (ok) {
-          val newInflight = currentInflight.updated(pid, Processing(seqNr))
-          if (inflight.compareAndSet(currentInflight, newInflight))
-            ok
-          else
-            isSequenceNumberAccepted(envelope) // CAS retry, concurrent update of inflight
-        } else
+          if (!ok)
+            logger.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
+
           ok
+        }
 
       case _ => true
     }
   }
 
-  def wasSequenceNumberAccepted[Envelope](envelope: Envelope): Boolean = {
+  @tailrec final def addInflight[Envelope](envelope: Envelope): Unit = {
+    envelope match {
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
+        val currentInflight = getInflight()
+        val newInflight = currentInflight.updated(eventEnvelope.persistenceId, eventEnvelope.sequenceNr)
+        if (!inflight.compareAndSet(currentInflight, newInflight))
+          addInflight(envelope) // CAS retry, concurrent update of inflight
+      case _ =>
+    }
+  }
+
+  def isInflight[Envelope](envelope: Envelope): Boolean = {
     envelope match {
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
         getInflight().get(pid) match {
-          case Some(inflight) if inflight.seqNr == seqNr => true
-          case _                                         => false
+          case Some(`seqNr`) => true
+          case _             => false
         }
       case _ => true
     }

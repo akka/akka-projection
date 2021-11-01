@@ -17,11 +17,8 @@ import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
-import akka.projection.r2dbc.internal.R2dbcOffsetStore.InflightEntry
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Pid
-import akka.projection.r2dbc.internal.R2dbcOffsetStore.Processing
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
-import akka.projection.r2dbc.internal.R2dbcOffsetStore.Recovering
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.SeqNr
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
@@ -183,48 +180,60 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.saveOffset(offset1).futureValue
 
       // seqNr 1 is always accepted
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")) shouldBe true
-      // but not if already seen, seqNr 1 was accepted
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")) shouldBe false
+      val env1 = createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")
+      offsetStore.isAccepted(env1) shouldBe true
+      // but not if already inflight, seqNr 1 was accepted
+      offsetStore.addInflight(env1)
+      offsetStore.isAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")) shouldBe false
       // subsequent seqNr is accepted
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p4", 2L, startTime.plusMillis(2), 10, "e4-2")) shouldBe true
+      val env2 = createEnvelope("p4", 2L, startTime.plusMillis(2), 10, "e4-2")
+      offsetStore.isAccepted(env2) shouldBe true
+      offsetStore.addInflight(env2)
       // but not when gap
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p4", 4L, startTime.plusMillis(3), 10, "e4-4")) shouldBe false
-      // and not if later already seen, seqNr 2 was accepted
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p4", 4L, startTime.plusMillis(3), 10, "e4-4")) shouldBe false
+      // and not if later already inflight, seqNr 2 was accepted
+      offsetStore.isAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")) shouldBe false
 
       // +1 to known is accepted
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p1", 4L, startTime.plusMillis(4), 10, "e1-4")) shouldBe true
+      val env3 = createEnvelope("p1", 4L, startTime.plusMillis(4), 10, "e1-4")
+      offsetStore.isAccepted(env3) shouldBe true
       // but not same
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 5L, startTime, 10, "e3-5")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p3", 5L, startTime, 10, "e3-5")) shouldBe false
       // but not same, even if it's 1
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p2", 1L, startTime, 10, "e2-1")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p2", 1L, startTime, 10, "e2-1")) shouldBe false
       // and not less
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 4L, startTime, 10, "e3-4")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p3", 4L, startTime, 10, "e3-4")) shouldBe false
+      offsetStore.addInflight(env3)
 
       // +1 to known, and then also subsequent are accepted (needed for grouped)
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 6L, startTime.plusMillis(5), 10, "e3-6")) shouldBe true
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 7L, startTime.plusMillis(6), 10, "e3-7")) shouldBe true
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p3", 8L, startTime.plusMillis(7), 10, "e3-8")) shouldBe true
+      val env4 = createEnvelope("p3", 6L, startTime.plusMillis(5), 10, "e3-6")
+      offsetStore.isAccepted(env4) shouldBe true
+      offsetStore.addInflight(env4)
+      val env5 = createEnvelope("p3", 7L, startTime.plusMillis(6), 10, "e3-7")
+      offsetStore.isAccepted(env5) shouldBe true
+      offsetStore.addInflight(env5)
+      val env6 = createEnvelope("p3", 8L, startTime.plusMillis(7), 10, "e3-8")
+      offsetStore.isAccepted(env6) shouldBe true
+      offsetStore.addInflight(env6)
 
       // reject unknown
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p5", 7L, startTime.plusMillis(8), 10, "e5-7")) shouldBe false
+      val env7 = createEnvelope("p5", 7L, startTime.plusMillis(8), 10, "e5-7")
+      offsetStore.isAccepted(env7) shouldBe false
       // but ok when read later
-      offsetStore.isSequenceNumberAccepted(
-        createEnvelope("p5", 7L, startTime.plusMillis(5), 10000, "e5-7")) shouldBe true
+      val env8 = createEnvelope("p5", 7L, startTime.plusMillis(5), 10000, "e5-7")
+      offsetStore.isAccepted(env8) shouldBe true
+      offsetStore.addInflight(env8)
       // and subsequent seqNr is accepted
-      offsetStore.isSequenceNumberAccepted(createEnvelope("p5", 8L, startTime.plusMillis(9), 10, "e5-8")) shouldBe true
+      val env9 = createEnvelope("p5", 8L, startTime.plusMillis(9), 10, "e5-8")
+      offsetStore.isAccepted(env9) shouldBe true
+      offsetStore.addInflight(env9)
 
       // it's keeping the inflight that are not in the "stored" state
-      offsetStore.getInflight() shouldBe Map(
-        "p1" -> Processing(4L),
-        "p3" -> Processing(8L),
-        "p4" -> Processing(2L),
-        "p5" -> Processing(8L))
-      // and they are removed from seen once they have been stored
+      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8, "p4" -> 2L, "p5" -> 8)
+      // and they are removed from inflight once they have been stored
       offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(2), Map("p4" -> 2L))).futureValue
       offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L))).futureValue
-      offsetStore.getInflight() shouldBe Map("p1" -> Processing(4L), "p3" -> Processing(8L))
+      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8)
     }
 
     "update inflight on error and re-accept element" in {
@@ -238,28 +247,28 @@ class R2dbcTimestampOffsetStoreSpec
       val envelope3 = createEnvelope("p1", 3L, startTime.plusMillis(2), 10, "e1-2")
 
       // seqNr 1 is always accepted
-      offsetStore.isSequenceNumberAccepted(envelope1) shouldBe true
-      offsetStore.getInflight() shouldBe Map("p1" -> Processing(1L))
+      offsetStore.isAccepted(envelope1) shouldBe true
+      offsetStore.addInflight(envelope1)
+      offsetStore.getInflight() shouldBe Map("p1" -> 1L)
       offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(1), Map("p1" -> 1L))).futureValue
       offsetStore.getInflight() shouldBe empty
 
       // seqNr 2 is accepts since it follows seqNr 1 that is stored in state
-      offsetStore.isSequenceNumberAccepted(envelope2) shouldBe true
-      // simulate envelope processing error
-      offsetStore.updateInflightOnError(envelope2)
-      offsetStore.getInflight() shouldBe Map("p1" -> Recovering(2L))
+      offsetStore.isAccepted(envelope2) shouldBe true
+      // simulate envelope processing error by not adding envelope2 to inflight
 
       // seqNr 3 is not accepted, still waiting for seqNr 2
-      offsetStore.isSequenceNumberAccepted(envelope3) shouldBe false
+      offsetStore.isAccepted(envelope3) shouldBe false
 
       // offer seqNr 2 once again
-      offsetStore.isSequenceNumberAccepted(envelope2) shouldBe true
-      // is back to processing
-      offsetStore.getInflight() shouldBe Map("p1" -> Processing(2L))
+      offsetStore.isAccepted(envelope2) shouldBe true
+      offsetStore.addInflight(envelope2)
+      offsetStore.getInflight() shouldBe Map("p1" -> 2L)
 
       // offer seqNr 3  once more
-      offsetStore.isSequenceNumberAccepted(envelope3) shouldBe true
-      offsetStore.getInflight() shouldBe Map("p1" -> Processing(3L))
+      offsetStore.isAccepted(envelope3) shouldBe true
+      offsetStore.addInflight(envelope3)
+      offsetStore.getInflight() shouldBe Map("p1" -> 3L)
 
       // and they are removed from inflight once they have been stored
       offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(2), Map("p1" -> 3L))).futureValue
