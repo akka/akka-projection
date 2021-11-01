@@ -17,8 +17,11 @@ import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.InflightEntry
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Pid
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.Processing
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.Recovering
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.SeqNr
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
@@ -212,12 +215,55 @@ class R2dbcTimestampOffsetStoreSpec
       // and subsequent seqNr is accepted
       offsetStore.isSequenceNumberAccepted(createEnvelope("p5", 8L, startTime.plusMillis(9), 10, "e5-8")) shouldBe true
 
-      // it's keeping the seen that are not in the "stored" state
-      offsetStore.getSeen() shouldBe Map("p1" -> 4L, "p3" -> 8L, "p4" -> 2L, "p5" -> 8L)
+      // it's keeping the inflight that are not in the "stored" state
+      offsetStore.getInflight() shouldBe Map(
+        "p1" -> Processing(4L),
+        "p3" -> Processing(8L),
+        "p4" -> Processing(2L),
+        "p5" -> Processing(8L))
       // and they are removed from seen once they have been stored
       offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(2), Map("p4" -> 2L))).futureValue
       offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L))).futureValue
-      offsetStore.getSeen() shouldBe Map("p1" -> 4L, "p3" -> 8L)
+      offsetStore.getInflight() shouldBe Map("p1" -> Processing(4L), "p3" -> Processing(8L))
+    }
+
+    "update inflight on error and re-accept element" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val startTime = Instant.now()
+
+      val envelope1 = createEnvelope("p1", 1L, startTime.plusMillis(1), 10, "e1-1")
+      val envelope2 = createEnvelope("p1", 2L, startTime.plusMillis(2), 10, "e1-2")
+      val envelope3 = createEnvelope("p1", 3L, startTime.plusMillis(2), 10, "e1-2")
+
+      // seqNr 1 is always accepted
+      offsetStore.isSequenceNumberAccepted(envelope1) shouldBe true
+      offsetStore.getInflight() shouldBe Map("p1" -> Processing(1L))
+      offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(1), Map("p1" -> 1L))).futureValue
+      offsetStore.getInflight() shouldBe empty
+
+      // seqNr 2 is accepts since it follows seqNr 1 that is stored in state
+      offsetStore.isSequenceNumberAccepted(envelope2) shouldBe true
+      // simulate envelope processing error
+      offsetStore.updateInflightOnError(envelope2)
+      offsetStore.getInflight() shouldBe Map("p1" -> Recovering(2L))
+
+      // seqNr 3 is not accepted, still waiting for seqNr 2
+      offsetStore.isSequenceNumberAccepted(envelope3) shouldBe false
+
+      // offer seqNr 2 once again
+      offsetStore.isSequenceNumberAccepted(envelope2) shouldBe true
+      // is back to processing
+      offsetStore.getInflight() shouldBe Map("p1" -> Processing(2L))
+
+      // offer seqNr 3  once more
+      offsetStore.isSequenceNumberAccepted(envelope3) shouldBe true
+      offsetStore.getInflight() shouldBe Map("p1" -> Processing(3L))
+
+      // and they are removed from inflight once they have been stored
+      offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(2), Map("p1" -> 3L))).futureValue
+      offsetStore.getInflight() shouldBe empty
     }
 
     "evict old records" in {
@@ -321,7 +367,6 @@ class R2dbcTimestampOffsetStoreSpec
     }
 
     "clear offset" in {
-      pending // FIXME not implemented yet
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 

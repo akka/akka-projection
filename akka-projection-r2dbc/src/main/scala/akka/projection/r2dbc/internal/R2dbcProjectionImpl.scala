@@ -91,9 +91,11 @@ private[projection] object R2dbcProjectionImpl {
             r2dbcExecutor.withConnection("exactly-once handler") { conn =>
               // run users handler
               val session = new R2dbcSession(conn)
-              delegate.process(session, envelope).flatMap { _ =>
-                offsetStore.saveOffsetInTx(conn, offset)
-              }
+              delegate
+                .process(session, envelope)
+                .flatMap { _ =>
+                  offsetStore.saveOffsetInTx(conn, offset)
+                }
             }
           }
         }
@@ -146,6 +148,7 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
+          log.debug("processing {}", envToString(envelope))
           if (offsetStore.isEnvelopeDuplicate(envelope)) {
             // FIXME change to trace
             log.debug("Filtering out duplicate: {}", envToString(envelope))
@@ -154,10 +157,20 @@ private[projection] object R2dbcProjectionImpl {
             log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
             FutureDone
           } else {
-            r2dbcExecutor.withConnection("at-least-once handler") { conn =>
-              // run users handler
-              val session = new R2dbcSession(conn)
-              delegate.process(session, envelope)
+            val processFuture =
+              r2dbcExecutor.withConnection("at-least-once handler") { conn =>
+                // run users handler
+                val session = new R2dbcSession(conn)
+                try {
+                  delegate.process(session, envelope)
+                } catch {
+                  case NonFatal(e) => Future.failed(e)
+                }
+              }
+            processFuture.recoverWith { case ex =>
+              log.debug("Handler failed to process {}. Removing from inflight map", envToString(envelope))
+              offsetStore.updateInflightOnError(envelope)
+              Future.failed(ex)
             }
           }
         }
@@ -178,7 +191,19 @@ private[projection] object R2dbcProjectionImpl {
             log.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
             FutureDone
           } else {
-            delegate.process(envelope)
+
+            val processFuture =
+              try {
+                delegate.process(envelope)
+              } catch {
+                case NonFatal(e) => Future.failed(e)
+              }
+
+            processFuture.recoverWith { case ex =>
+              log.debug("Handler failed to process {}. Removing from inflight map", envToString(envelope))
+              offsetStore.updateInflightOnError(envelope)
+              Future.failed(ex)
+            }
           }
         }
       }

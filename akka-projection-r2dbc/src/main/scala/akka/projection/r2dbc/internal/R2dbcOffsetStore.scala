@@ -38,6 +38,12 @@ object R2dbcOffsetStore {
 
   final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
 
+  sealed trait InflightEntry {
+    def seqNr: SeqNr
+  }
+  case class Processing(seqNr: SeqNr) extends InflightEntry
+  case class Recovering(seqNr: SeqNr) extends InflightEntry
+
   object State {
     val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
 
@@ -126,6 +132,7 @@ private[projection] class R2dbcOffsetStore(
     settings: R2dbcProjectionSettings,
     r2dbcExecutor: R2dbcExecutor,
     clock: Clock = Clock.systemUTC()) {
+
   import R2dbcOffsetStore._
 
   // FIXME include projectionId in all log messages
@@ -195,9 +202,9 @@ private[projection] class R2dbcOffsetStore(
   // we use AtomicReference and fail if the CAS fails.
   private val state = new AtomicReference(State.empty)
 
-  // transient state of seen pid -> seqNr before they have been stored and included in `state`)
+  // transient state of inflight pid -> seqNr before they have been stored and included in `state`)
   // this can be updated concurrently with CAS retries
-  private val seen = new AtomicReference(Map.empty[Pid, SeqNr])
+  private val inflight = new AtomicReference(Map.empty[Pid, InflightEntry])
 
   system.scheduler.scheduleWithFixedDelay(
     settings.deleteInterval,
@@ -208,8 +215,8 @@ private[projection] class R2dbcOffsetStore(
   def getState(): State =
     state.get()
 
-  def getSeen(): Map[Pid, SeqNr] =
-    seen.get()
+  def getInflight(): Map[Pid, InflightEntry] =
+    inflight.get()
 
   def getOffset[Offset](): Future[Option[Offset]] = {
     getState().latestOffset match {
@@ -252,7 +259,7 @@ private[projection] class R2dbcOffsetStore(
         newState.latestTimestamp)
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
-      clearSeen()
+      clearInflight()
       if (newState == State.empty) {
         None
       } else {
@@ -388,7 +395,7 @@ private[projection] class R2dbcOffsetStore(
 
       R2dbcExecutor.updateInTx(stmts).map { _ =>
         if (state.compareAndSet(oldState, evictedNewState))
-          cleanupSeen(evictedNewState)
+          cleanupInflight(evictedNewState)
         else
           throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")
         Done
@@ -396,23 +403,44 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  @tailrec private def cleanupSeen(newState: State): Unit = {
-    val currentSeen = getSeen()
-    val newSeen =
-      currentSeen.filter { case (seenPid, seenSeqNr) =>
-        newState.byPid.get(seenPid) match {
-          case Some(r) => r.seqNr < seenSeqNr
-          case None    => true
-        }
+  @tailrec private def cleanupInflight(newState: State): Unit = {
+    val currentInflight = getInflight()
+    val newInflight =
+      currentInflight.filter {
+        case (inflightPid, inflight) =>
+          newState.byPid.get(inflightPid) match {
+            case Some(r) => r.seqNr < inflight.seqNr
+            case None    => true
+          }
+        case _ => true
       }
-    if (!seen.compareAndSet(currentSeen, newSeen))
-      cleanupSeen(newState) // CAS retry, concurrent update of seen
+    if (!inflight.compareAndSet(currentInflight, newInflight))
+      cleanupInflight(newState) // CAS retry, concurrent update of inflight
   }
 
-  @tailrec private def clearSeen(): Unit = {
-    val currentSeen = getSeen()
-    if (!seen.compareAndSet(currentSeen, Map.empty[Pid, SeqNr]))
-      clearSeen() // CAS retry, concurrent update of seen
+  @tailrec private def clearInflight(): Unit = {
+    val currentInflight = getInflight()
+    if (!inflight.compareAndSet(currentInflight, Map.empty[Pid, InflightEntry]))
+      clearInflight() // CAS retry, concurrent update of inflight
+  }
+
+  /**
+   * When the processing of an event fails, this method is called to remove the event from the inflight map. This is
+   * need for retry scenarios in which
+   */
+  def updateInflightOnError[Envelope](envelope: Envelope): Boolean = {
+    envelope match {
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
+        val currentInflight = getInflight()
+        val updatedInflight = currentInflight.map { case (pid, inflight) =>
+          if (pid == eventEnvelope.persistenceId && inflight.seqNr == eventEnvelope.sequenceNr)
+            pid -> Recovering(inflight.seqNr)
+          else
+            pid -> inflight
+        }
+        inflight.compareAndSet(currentInflight, updatedInflight)
+      case _ => false
+    }
   }
 
   private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
@@ -462,23 +490,34 @@ private[projection] class R2dbcOffsetStore(
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
         val currentState = getState()
-        val currentSeen = getSeen()
+        val currentInflight = getInflight()
         val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
 
+        val isValidSeqNrForInflight = () => {
+          currentInflight.get(pid) match {
+            // is seqNr the follow up of the inflight one?
+            case Some(Processing(inflightSeqNr)) => seqNr == inflightSeqNr + 1
+            // has entry for pid, but it's Recovering.
+            // That happens after a failure. In that case, we should get back the same seqNr
+            case Some(Recovering(inflightSeqNr)) => seqNr == inflightSeqNr
+            case None                            => false
+          }
+        }
+
         val ok =
-          (seqNr == 1L && (!currentState.byPid.contains(pid)) && (!currentSeen.contains(pid))) ||
+          (seqNr == 1L && (!currentState.byPid.contains(pid)) && (!currentInflight.contains(pid))) ||
           JDuration
             .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
             .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0 ||
-          seqNr == currentSeen.getOrElse(pid, Long.MinValue) + 1 ||
+          isValidSeqNrForInflight() ||
           seqNr == currentState.byPid.get(pid).map(_.seqNr).getOrElse(Long.MinValue) + 1
 
         if (ok) {
-          val newSeen = currentSeen.updated(pid, seqNr)
-          if (seen.compareAndSet(currentSeen, newSeen))
+          val newInflight = currentInflight.updated(pid, Processing(seqNr))
+          if (inflight.compareAndSet(currentInflight, newInflight))
             ok
           else
-            isSequenceNumberAccepted(envelope) // CAS retry, concurrent update of seen
+            isSequenceNumberAccepted(envelope) // CAS retry, concurrent update of inflight
         } else
           ok
 
@@ -491,9 +530,9 @@ private[projection] class R2dbcOffsetStore(
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
-        getSeen().get(pid) match {
-          case Some(`seqNr`) => true
-          case _             => false
+        getInflight().get(pid) match {
+          case Some(inflight) if inflight.seqNr == seqNr => true
+          case _                                         => false
         }
       case _ => true
     }
