@@ -219,8 +219,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.isAccepted(createEnvelope("p3", 4L, startTime, 10, "e3-4")) shouldBe false
       offsetStore.addInflight(env3)
       // and then it's not accepted again
-      // FIXME the || logic in isAccepted is wrong
-      // offsetStore.isAccepted(env3) shouldBe false
+      offsetStore.isAccepted(env3) shouldBe false
 
       // +1 to known, and then also subsequent are accepted (needed for grouped)
       val env4 = createEnvelope("p3", 6L, startTime.plusMillis(5), 10, "e3-6")

@@ -486,30 +486,42 @@ private[projection] class R2dbcOffsetStore(
     val duplicate = isDuplicate(recordWithOffset.record)
 
     if (duplicate) {
-      logger.debug("Filtering out duplicate: {}", recordWithOffset) // FIXME change to trace
+      logger.debug("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid) // FIXME change to trace
       false
     } else if (recordWithOffset.strictSeqNr) {
       // strictSeqNr == true is for event sourced
-      val ok =
-        (seqNr == 1L && (!currentState.byPid.contains(pid)) && (!currentInflight.contains(pid))) ||
-        JDuration
+      val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
+      if (prevSeqNr > 0) {
+        // expecting seqNr to be +1 of previously known
+        val ok = seqNr == prevSeqNr + 1
+        if (!ok)
+          logger.debug(
+            "Filtering out unexpected sequence number [{}] for pid [{}], previous sequence number [{}]",
+            seqNr,
+            pid,
+            prevSeqNr)
+        ok
+      } else if (seqNr == 1) {
+        // always accept first event if no other event for that pid has been seen
+        true
+      } else {
+        // Haven't see seen this pid within the time window. Since events can be missed
+        // when read at the tail we will only accept it if read after the acceptNewSequenceNumberAfterAge
+        // duration. Backtracking will emit it again.
+        val ok = JDuration
           .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
-          .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0 ||
-        seqNr == currentInflight.getOrElse(pid, Long.MinValue) + 1 ||
-        seqNr == currentState.byPid.get(pid).map(_.seqNr).getOrElse(Long.MinValue) + 1
-
-      if (!ok)
-        logger.debug("Filtering out rejected sequence number (might be accepted later): {}", recordWithOffset)
-
-      ok
+          .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0
+        if (!ok)
+          logger.debug("Filtering out unknown sequence number (might be accepted later): {}", recordWithOffset)
+        ok
+      }
     } else {
       // strictSeqNr == false is for durable state where each revision might not be visible
-      val ok =
-        seqNr > currentInflight.getOrElse(pid, 0L) &&
-        seqNr > currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L)
+      val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
+      val ok = seqNr > prevSeqNr
 
       if (!ok)
-        logger.debug("Filtering out rejected sequence number (might be accepted later): {}", recordWithOffset)
+        logger.debug("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
 
       ok
     }
