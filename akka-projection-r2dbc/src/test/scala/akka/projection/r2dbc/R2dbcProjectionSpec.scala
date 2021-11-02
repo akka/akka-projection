@@ -84,6 +84,13 @@ object R2dbcProjectionSpec {
 
   object TestRepository {
     val table = "projection_spec_model"
+
+    val createTableSql: String =
+      s"""|CREATE table IF NOT EXISTS "$table" (
+          |  id VARCHAR(255) NOT NULL,
+          |  concatenated VARCHAR(255) NOT NULL,
+          |  PRIMARY KEY(id)
+          |);""".stripMargin
   }
 
   final case class TestRepository(session: R2dbcSession)(implicit ec: ExecutionContext, system: ActorSystem[_]) {
@@ -147,19 +154,6 @@ object R2dbcProjectionSpec {
         row => ConcatStr(row.get("id", classOf[String]), row.get("concatenated", classOf[String])))
     }
 
-    def createTable(): Future[Done] = {
-      val createTableSql =
-        s"""|
-            |CREATE table IF NOT EXISTS "$table" (
-            |  id VARCHAR(255) NOT NULL,
-            |  concatenated VARCHAR(255) NOT NULL,
-            |  PRIMARY KEY(id)
-            |);""".stripMargin
-
-      val stmt = session.createStatement(createTableSql)
-
-      R2dbcExecutor.updateOneInTx(stmt).map(_ => Done)
-    }
   }
 }
 
@@ -183,13 +177,11 @@ class R2dbcProjectionSpec
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    // FIXME create table doesn't work from here (timeout) and therefore workaround by
-    // adding to create_tables_postgres.sql
-//    Await.result(
-//      r2dbcExecutor.withConnection("beforeAll createTable") { conn =>
-//        TestRepository(session).createTable()
-//      },
-//      10.seconds)
+    Await.result(
+      r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
+        conn.createStatement(TestRepository.createTableSql)
+      },
+      10.seconds)
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
       10.seconds)

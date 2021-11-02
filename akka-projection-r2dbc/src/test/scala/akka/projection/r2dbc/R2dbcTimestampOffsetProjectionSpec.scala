@@ -123,13 +123,11 @@ class R2dbcTimestampOffsetProjectionSpec
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    // FIXME create table doesn't work from here (timeout) and therefore workaround by
-    // adding to create_tables_postgres.sql
-    //    Await.result(
-    //      r2dbcExecutor.withConnection("beforeAll createTable") { conn =>
-    //        TestRepository(session).createTable()
-    //      },
-    //      10.seconds)
+    Await.result(
+      r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
+        conn.createStatement(TestRepository.createTableSql)
+      },
+      10.seconds)
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
       10.seconds)
