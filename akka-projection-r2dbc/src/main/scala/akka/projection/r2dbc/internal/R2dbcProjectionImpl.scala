@@ -62,10 +62,17 @@ private[projection] object R2dbcProjectionImpl {
 
   private[projection] def createOffsetStore(
       projectionId: ProjectionId,
+      sliceRange: Option[Range],
       settings: R2dbcProjectionSettings,
       connectionFactory: ConnectionFactory)(implicit system: ActorSystem[_]) = {
     val r2dbcExecutor = new R2dbcExecutor(connectionFactory, log)(system.executionContext, system)
-    new R2dbcOffsetStore(projectionId, system, settings, r2dbcExecutor)
+    new R2dbcOffsetStore(
+      projectionId,
+      sliceRange.map(_.min).getOrElse(0),
+      sliceRange.map(_.max).getOrElse(R2dbcOffsetStore.MaxNumberOfSlices - 1),
+      system,
+      settings,
+      r2dbcExecutor)
   }
 
   private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope](

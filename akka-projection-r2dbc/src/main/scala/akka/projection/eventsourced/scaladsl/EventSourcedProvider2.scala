@@ -48,10 +48,11 @@ object EventSourcedProvider2 {
   private class EventsBySlicesSourceProvider[Event](
       eventsBySlicesQuery: EventsBySliceQuery,
       entityTypeHint: String,
-      minSlice: Int,
-      maxSlice: Int,
+      override val minSlice: Int,
+      override val maxSlice: Int,
       system: ActorSystem[_])
-      extends SourceProvider[Offset, EventEnvelope[Event]] {
+      extends SourceProvider[Offset, EventEnvelope[Event]]
+      with TimestampOffsetBySlicesSourceProvider {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[Event], NotUsed]] =

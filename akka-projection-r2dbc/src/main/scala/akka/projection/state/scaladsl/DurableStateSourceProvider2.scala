@@ -16,6 +16,7 @@ import akka.persistence.query.Offset
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.scaladsl.DurableStateStoreBySliceQuery
 import akka.persistence.state.DurableStateStoreRegistry
+import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
@@ -56,10 +57,11 @@ object DurableStateSourceProvider2 {
   private class DurableStateStoreQuerySourceProvider2[A](
       durableStateStoreQuery: DurableStateStoreBySliceQuery[A],
       entityTypeHint: String,
-      minSlice: Int,
-      maxSlice: Int,
+      override val minSlice: Int,
+      override val maxSlice: Int,
       system: ActorSystem[_])
-      extends SourceProvider[Offset, DurableStateChange[A]] {
+      extends SourceProvider[Offset, DurableStateChange[A]]
+      with TimestampOffsetBySlicesSourceProvider {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[DurableStateChange[A], NotUsed]] =

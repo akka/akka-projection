@@ -21,6 +21,7 @@ import akka.annotation.InternalApi
 import akka.persistence.query.DurableStateChange
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.r2dbc.internal.R2dbcExecutor
+import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
@@ -37,6 +38,8 @@ import org.slf4j.LoggerFactory
 object R2dbcOffsetStore {
   type SeqNr = Long
   type Pid = String
+
+  val MaxNumberOfSlices = 128 // FIXME define this in akka.persistence.Persistence (not per plugin)
 
   final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
   final case class RecordWithOffset(record: Record, offset: TimestampOffset, strictSeqNr: Boolean)
@@ -125,6 +128,8 @@ object R2dbcOffsetStore {
 @InternalApi
 private[projection] class R2dbcOffsetStore(
     projectionId: ProjectionId,
+    minSlice: Int,
+    maxSlice: Int,
     system: ActorSystem[_],
     settings: R2dbcProjectionSettings,
     r2dbcExecutor: R2dbcExecutor,
@@ -144,10 +149,14 @@ private[projection] class R2dbcOffsetStore(
   private val timestampOffsetTable = settings.timestampOffsetTableWithSchema
   private val offsetTable = settings.offsetTableWithSchema
 
+  // FIXME define this in akka.persistence.Persistence (not per plugin)
+  private val maxNumberOfSlices =
+    MaxNumberOfSlices // FIXME define this in akka.persistence.Persistence (not per plugin)
+
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
   private val selectTimestampOffsetSql: String =
-    s"SELECT * FROM $timestampOffsetTable WHERE projection_name = $$1 AND projection_key = $$2"
+    s"SELECT * FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3"
 
   // FIXME an alternative would be pk: (projection_name, projection_key, timestamp_offset, persistence_id)
   // which might be better for the range deletes, but it would would be "append only" with possibly
@@ -156,20 +165,22 @@ private[projection] class R2dbcOffsetStore(
     s"""INSERT INTO $timestampOffsetTable (
        |  projection_name,
        |  projection_key,
+       |  slice,
        |  persistence_id,
        |  sequence_number,
        |  timestamp_offset,
        |  last_updated
-       |) VALUES ($$1,$$2,$$3,$$4,$$5, transaction_timestamp())
-       |ON CONFLICT (projection_name, projection_key, persistence_id)
+       |) VALUES ($$1,$$2,$$3,$$4,$$5,$$6, transaction_timestamp())
+       |ON CONFLICT (slice, projection_name, persistence_id)
        |DO UPDATE SET
+       | projection_key = excluded.projection_key,
        | sequence_number = excluded.sequence_number,
        | timestamp_offset = excluded.timestamp_offset,
        | last_updated = excluded.last_updated
        |""".stripMargin
 
   private val deleteTimestampOffsetSql: String =
-    s"DELETE FROM $timestampOffsetTable WHERE projection_name = $$1 AND projection_key = $$2 AND timestamp_offset < $$3"
+    s"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3 AND timestamp_offset < $$4"
 
   private val selectOffsetSql: String =
     s"SELECT * FROM $offsetTable WHERE projection_name = $$1"
@@ -239,8 +250,9 @@ private[projection] class R2dbcOffsetStore(
         logger.trace("reading timestamp offset for [{}]", projectionId)
         conn
           .createStatement(selectTimestampOffsetSql)
-          .bind(0, projectionId.name)
-          .bind(1, projectionId.key)
+          .bind(0, minSlice)
+          .bind(1, maxSlice)
+          .bind(2, projectionId.name)
       },
       row => {
         val pid = row.get("persistence_id", classOf[String])
@@ -357,13 +369,21 @@ private[projection] class R2dbcOffsetStore(
       // FIXME change to trace
       logger.debug("saving timestamp offset [{}], {}", filteredRecords.last.timestamp, filteredRecords)
 
-      def bindRecord(stmt: Statement, record: Record): Statement =
+      def bindRecord(stmt: Statement, record: Record): Statement = {
+        val slice = SliceUtils.sliceForPersistenceId(record.pid, maxNumberOfSlices)
+        if (slice < minSlice || slice > maxSlice)
+          throw new IllegalArgumentException(
+            s"This offset store [$projectionId] manages slices " +
+            s"[$minSlice - $maxSlice] but received slice [$slice] for persistenceId [${record.pid}]")
+
         stmt
           .bind(0, projectionId.name)
           .bind(1, projectionId.key)
-          .bind(2, record.pid)
-          .bind(3, record.seqNr)
-          .bind(4, record.timestamp)
+          .bind(2, slice)
+          .bind(3, record.pid)
+          .bind(4, record.seqNr)
+          .bind(5, record.timestamp)
+      }
 
       // FIXME strange that the batch add doesn't work
       //    val stmt = conn.createStatement(upsertTimestampOffsetSql)
@@ -554,17 +574,21 @@ private[projection] class R2dbcOffsetStore(
   def deleteOldTimestampOffsets(): Future[Int] = {
     val currentState = getState()
     if (currentState.window.compareTo(settings.timeWindow) < 0) {
-      // it haven't filled up the window yet
+      // it hasn't filled up the window yet
       Future.successful(0)
     } else {
       val until = currentState.latestTimestamp.minus(settings.timeWindow)
       val result = r2dbcExecutor.updateOne("delete timestamp offset") { conn =>
         conn
           .createStatement(deleteTimestampOffsetSql)
-          .bind(0, projectionId.name)
-          .bind(1, projectionId.key)
-          .bind(2, until)
+          .bind(0, minSlice)
+          .bind(1, maxSlice)
+          .bind(2, projectionId.name)
+          .bind(3, until)
       }
+
+      // FIXME would it be good to keep at least one record per slice that can be used as the
+      // starting point for the slice if the slice ranges are changed?
 
       result.failed.foreach { exc =>
         logger.warn(

@@ -6,12 +6,14 @@ package akka.projection.r2dbc
 
 import java.time.Instant
 import java.time.{ Duration => JDuration }
+import java.util.UUID
 
 import scala.concurrent.ExecutionContext
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
+import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.ProjectionId
@@ -41,7 +43,13 @@ class R2dbcTimestampOffsetStoreSpec
   private val settings = R2dbcProjectionSettings(testKit.system)
 
   private def createOffsetStore(projectionId: ProjectionId, customSettings: R2dbcProjectionSettings = settings) =
-    new R2dbcOffsetStore(projectionId, system, customSettings, r2dbcExecutor)
+    new R2dbcOffsetStore(
+      projectionId,
+      minSlice = 0,
+      maxSlice = R2dbcOffsetStore.MaxNumberOfSlices - 1,
+      system,
+      customSettings,
+      r2dbcExecutor)
 
   def createEnvelope(
       pid: Pid,
@@ -150,6 +158,54 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.saveOffset(offset2).futureValue
       val readOffset2 = offsetStore.readOffset[TimestampOffset]()
       readOffset2.futureValue shouldBe Some(offset1) // keeping offset1
+    }
+
+    "readOffset from given slices" in {
+      val projectionId0 = ProjectionId(UUID.randomUUID().toString, "0-127")
+      val projectionId1 = ProjectionId(projectionId0.name, "0-63")
+      val projectionId2 = ProjectionId(projectionId0.name, "64-127")
+
+      val p1 = "p1"
+      val slice1 = SliceUtils.sliceForPersistenceId(p1, R2dbcOffsetStore.MaxNumberOfSlices)
+      slice1 shouldBe 65
+
+      val p2 = "p2"
+      val slice2 = SliceUtils.sliceForPersistenceId(p2, R2dbcOffsetStore.MaxNumberOfSlices)
+      slice2 shouldBe 66
+
+      val p3 = "p10"
+      val slice3 = SliceUtils.sliceForPersistenceId(p3, R2dbcOffsetStore.MaxNumberOfSlices)
+      slice3 shouldBe 15
+
+      val p4 = "p11"
+      val slice4 = SliceUtils.sliceForPersistenceId(p4, R2dbcOffsetStore.MaxNumberOfSlices)
+      slice4 shouldBe 16
+
+      val offsetStore0 =
+        new R2dbcOffsetStore(projectionId0, minSlice = 0, maxSlice = 127, system, settings, r2dbcExecutor)
+
+      tick()
+      val offset1 = TimestampOffset(clock.instant(), Map(p1 -> 3L))
+      offsetStore0.saveOffset(offset1).futureValue
+      tick()
+      val offset2 = TimestampOffset(clock.instant(), Map(p2 -> 4L))
+      offsetStore0.saveOffset(offset2).futureValue
+      tick()
+      val offset3 = TimestampOffset(clock.instant(), Map(p3 -> 7L))
+      offsetStore0.saveOffset(offset3).futureValue
+      tick()
+      val offset4 = TimestampOffset(clock.instant(), Map(p4 -> 5L))
+      offsetStore0.saveOffset(offset4).futureValue
+
+      val offsetStore1 =
+        new R2dbcOffsetStore(projectionId1, minSlice = 0, maxSlice = 63, system, settings, r2dbcExecutor)
+      offsetStore1.readOffset().futureValue
+      offsetStore1.getState().byPid.keySet shouldBe Set(p3, p4)
+
+      val offsetStore2 =
+        new R2dbcOffsetStore(projectionId2, minSlice = 64, maxSlice = 127, system, settings, r2dbcExecutor)
+      offsetStore2.readOffset().futureValue
+      offsetStore2.getState().byPid.keySet shouldBe Set(p1, p2)
     }
 
     "filter duplicates" in {
