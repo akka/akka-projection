@@ -123,6 +123,8 @@ class EventSourcedEndToEndSpec
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
 
+  private val log = LoggerFactory.getLogger(getClass)
+
   private val settings = R2dbcProjectionSettings(testKit.system)
 
   override protected def beforeAll(): Unit = {
@@ -155,6 +157,12 @@ class EventSourcedEndToEndSpec
     }.toVector
   }
 
+  private def mkEvent(n: Int): String = {
+    val template = "0000000"
+    val s = n.toString
+    "e" + (template + s).takeRight(5)
+  }
+
   "A R2DBC projection with eventsBySlices source" must {
 
     "handle all events exactlyOnce" in {
@@ -173,10 +181,10 @@ class EventSourcedEndToEndSpec
         val p = n % numberOfEntities
         // mix some persist 1 and persist 3 events
         if (n % 7 == 0) {
-          entities(p) ! Persister.PersistAll((0 until 3).map(i => s"e$p-${n + i}").toList)
+          entities(p) ! Persister.PersistAll((0 until 3).map(i => mkEvent(n + i)).toList)
           n += 3
         } else {
-          entities(p) ! Persister.Persist(s"e$p-$n")
+          entities(p) ! Persister.Persist(mkEvent(n))
           n += 1
         }
       }
@@ -190,7 +198,7 @@ class EventSourcedEndToEndSpec
 
       while (n <= numberOfEvents) {
         val p = n % numberOfEntities
-        entities(p) ! Persister.Persist(s"e$p-$n")
+        entities(p) ! Persister.Persist(mkEvent(n))
 
         // stop projections
         if (n == numberOfEvents / 2) {
@@ -213,7 +221,21 @@ class EventSourcedEndToEndSpec
         n += 1
       }
 
-      val processed = processedProbe.receiveMessages(numberOfEvents, 20.seconds)
+      var processed = Vector.empty[Processed]
+      val expectedEvents = (1 to numberOfEvents).map(mkEvent).toVector
+      (1 to numberOfEvents).foreach { _ =>
+        // not using receiveMessages(expectedEvents) for better logging in case of failure
+        try {
+          processed :+= processedProbe.receiveMessage(15.seconds)
+        } catch {
+          case e: AssertionError =>
+            val missing = expectedEvents.diff(processed.map(_.envelope.event))
+            log.error(s"Processed [${processed.size}] events, but expected [$numberOfEvents]. " +
+            s"Missing [${missing.mkString(",")}]. " +
+            s"Received [${processed.map(p => s"(${p.envelope.event}, ${p.envelope.persistenceId}, ${p.envelope.sequenceNr})").mkString(", ")}]. ")
+            throw e
+        }
+      }
 
       val byPid = processed.groupBy(_.envelope.persistenceId)
       byPid.foreach { case (_, processedByPid) =>
