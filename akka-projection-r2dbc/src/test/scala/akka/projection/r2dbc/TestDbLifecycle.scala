@@ -39,6 +39,10 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
       10.seconds)
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(
+        _.createStatement(s"delete from ${r2dbcSettings.durableStateTableWithSchema}")),
+      10.seconds)
+    Await.result(
+      r2dbcExecutor.updateOne("beforeAll delete")(
         _.createStatement(s"delete from ${r2dbcProjectionSettings.offsetTableWithSchema}")),
       10.seconds)
     Await.result(

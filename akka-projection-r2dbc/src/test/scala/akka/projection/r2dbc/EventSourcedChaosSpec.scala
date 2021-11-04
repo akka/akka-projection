@@ -24,7 +24,7 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider2
-import akka.projection.r2dbc.ChaosSpec.FailingTestHandler
+import akka.projection.r2dbc.EventSourcedChaosSpec.FailingTestHandler
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.r2dbc.scaladsl.R2dbcSession
@@ -33,8 +33,8 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
-object ChaosSpec {
-  import akka.projection.r2dbc.EndToEndSpec.Processed
+object EventSourcedChaosSpec {
+  import akka.projection.r2dbc.EventSourcedEndToEndSpec.Processed
 
   val config: Config = ConfigFactory
     .parseString("""
@@ -92,13 +92,13 @@ object ChaosSpec {
   }
 }
 
-class ChaosSpec
-    extends ScalaTestWithActorTestKit(ChaosSpec.config)
+class EventSourcedChaosSpec
+    extends ScalaTestWithActorTestKit(EventSourcedChaosSpec.config)
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData
     with LogCapturing {
-  import EndToEndSpec._
+  import EventSourcedEndToEndSpec._
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext

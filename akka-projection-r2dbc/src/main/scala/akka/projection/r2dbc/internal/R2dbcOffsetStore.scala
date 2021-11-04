@@ -18,6 +18,8 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.persistence.query.DurableStateChange
+import akka.persistence.query.UpdatedDurableState
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.MergeableOffset
@@ -37,6 +39,7 @@ object R2dbcOffsetStore {
   type Pid = String
 
   final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
+  final case class RecordWithOffset(record: Record, offset: TimestampOffset, strictSeqNr: Boolean)
 
   object State {
     val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
@@ -128,7 +131,6 @@ private[projection] class R2dbcOffsetStore(
     clock: Clock = Clock.systemUTC()) {
 
   import R2dbcOffsetStore._
-  import R2dbcProjectionImpl.envToString
 
   // FIXME include projectionId in all log messages
   private val logger = LoggerFactory.getLogger(this.getClass)
@@ -452,81 +454,89 @@ private[projection] class R2dbcOffsetStore(
 
   def filterAccepted[Envelope](envelopes: immutable.Seq[Envelope]): immutable.Seq[Envelope] = {
     envelopes
-      .foldLeft((getInflight(), Vector.empty[Envelope])) {
-        case ((inflight, filteredEnvelopes), eventEnvelope: EventEnvelope[_]) =>
-          if (isAccepted(eventEnvelope, inflight))
-            (
-              inflight.updated(eventEnvelope.persistenceId, eventEnvelope.sequenceNr),
-              filteredEnvelopes :+ eventEnvelope.asInstanceOf[Envelope])
-          else
-            (inflight, filteredEnvelopes)
-        case ((inflight, filteredEnvelopes), env) => // not EventEnvelope
-          (inflight, filteredEnvelopes :+ env)
+      .foldLeft((getInflight(), Vector.empty[Envelope])) { case ((inflight, filteredEnvelopes), envelope) =>
+        createRecordWithOffset(envelope) match {
+          case Some(recordWithOffset) =>
+            if (isAccepted(recordWithOffset, inflight))
+              (
+                inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
+                filteredEnvelopes :+ envelope)
+            else
+              (inflight, filteredEnvelopes)
+          case None =>
+            (inflight, filteredEnvelopes :+ envelope)
+        }
       }
       ._2
   }
 
-  def isAccepted[Envelope](envelope: Envelope): Boolean =
-    isAccepted(envelope, getInflight())
+  def isAccepted[Envelope](envelope: Envelope): Boolean = {
+    createRecordWithOffset(envelope) match {
+      case Some(recordWithOffset) => isAccepted(recordWithOffset, getInflight())
+      case None                   => true
+    }
+  }
 
-  private def isAccepted[Envelope](envelope: Envelope, currentInflight: Map[Pid, SeqNr]): Boolean = {
-    envelope match {
-      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
-        val pid = eventEnvelope.persistenceId
-        val seqNr = eventEnvelope.sequenceNr
-        val currentState = getState()
-        val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
+  private def isAccepted[Envelope](recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Boolean = {
+    val pid = recordWithOffset.record.pid
+    val seqNr = recordWithOffset.record.seqNr
+    val currentState = getState()
+    val timestampOffset = recordWithOffset.offset
 
-        val duplicate =
-          isDuplicate(
-            R2dbcOffsetStore
-              .Record(eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp))
+    val duplicate = isDuplicate(recordWithOffset.record)
 
-        if (duplicate) {
-          logger.debug("Filtering out duplicate: {}", envToString(envelope)) // FIXME change to trace
-          false
-        } else {
-          val ok =
-            (seqNr == 1L && (!currentState.byPid.contains(pid)) && (!currentInflight.contains(pid))) ||
-            JDuration
-              .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
-              .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0 ||
-            seqNr == currentInflight.getOrElse(pid, Long.MinValue) + 1 ||
-            seqNr == currentState.byPid.get(pid).map(_.seqNr).getOrElse(Long.MinValue) + 1
+    if (duplicate) {
+      logger.debug("Filtering out duplicate: {}", recordWithOffset) // FIXME change to trace
+      false
+    } else if (recordWithOffset.strictSeqNr) {
+      // strictSeqNr == true is for event sourced
+      val ok =
+        (seqNr == 1L && (!currentState.byPid.contains(pid)) && (!currentInflight.contains(pid))) ||
+        JDuration
+          .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
+          .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0 ||
+        seqNr == currentInflight.getOrElse(pid, Long.MinValue) + 1 ||
+        seqNr == currentState.byPid.get(pid).map(_.seqNr).getOrElse(Long.MinValue) + 1
 
-          if (!ok)
-            logger.debug("Filtering out rejected sequence number (might be accepted later): {}", envToString(envelope))
+      if (!ok)
+        logger.debug("Filtering out rejected sequence number (might be accepted later): {}", recordWithOffset)
 
-          ok
-        }
+      ok
+    } else {
+      // strictSeqNr == false is for durable state where each revision might not be visible
+      val ok =
+        seqNr > currentInflight.getOrElse(pid, 0L) &&
+        seqNr > currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L)
 
-      case _ => true
+      if (!ok)
+        logger.debug("Filtering out rejected sequence number (might be accepted later): {}", recordWithOffset)
+
+      ok
     }
   }
 
   @tailrec final def addInflight[Envelope](envelope: Envelope): Unit = {
-    envelope match {
-      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
+    createRecordWithOffset(envelope) match {
+      case Some(recordWithOffset) =>
         val currentInflight = getInflight()
-        val newInflight = currentInflight.updated(eventEnvelope.persistenceId, eventEnvelope.sequenceNr)
+        val newInflight = currentInflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr)
         if (!inflight.compareAndSet(currentInflight, newInflight))
           addInflight(envelope) // CAS retry, concurrent update of inflight
-      case _ =>
+      case None =>
     }
   }
 
   def isInflight[Envelope](envelope: Envelope): Boolean = {
-    envelope match {
-      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
-        val pid = eventEnvelope.persistenceId
-        val seqNr = eventEnvelope.sequenceNr
+    createRecordWithOffset(envelope) match {
+      case Some(recordWithOffset) =>
+        val pid = recordWithOffset.record.pid
+        val seqNr = recordWithOffset.record.seqNr
         getInflight().get(pid) match {
           case Some(`seqNr`) => true
           case _             => false
         }
-      case _ => true
+      case None => true
     }
-
   }
 
   def deleteOldTimestampOffsets(): Future[Int] = {
@@ -595,6 +605,30 @@ private[projection] class R2dbcOffsetStore(
 
   def savePaused(paused: Boolean): Future[Done] = {
     Future.successful(Done) // FIXME not implemented yet
+  }
+
+  private def createRecordWithOffset[Envelope](envelope: Envelope): Option[RecordWithOffset] = {
+    envelope match {
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
+        val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
+        Some(
+          RecordWithOffset(
+            Record(eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp),
+            timestampOffset,
+            strictSeqNr = true))
+      case change: UpdatedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
+        val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
+        Some(
+          RecordWithOffset(
+            Record(change.persistenceId, change.revision, timestampOffset.timestamp),
+            timestampOffset,
+            strictSeqNr = false))
+      case change: DurableStateChange[_] if change.offset.isInstanceOf[TimestampOffset] =>
+        // FIXME case DeletedDurableState when that is added
+        throw new IllegalArgumentException(
+          s"DurableStateChange [${change.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-persistence-r2dbc/issues")
+      case _ => None
+    }
   }
 
 }

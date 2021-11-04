@@ -8,7 +8,6 @@ import java.util.UUID
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -17,24 +16,23 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import akka.persistence.query.PersistenceQuery
-import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
+import akka.persistence.query.DurableStateChange
+import akka.persistence.query.UpdatedDurableState
+import akka.persistence.r2dbc.state.scaladsl.R2dbcDurableStateStore
 import akka.persistence.typed.PersistenceId
-import akka.persistence.typed.scaladsl.Effect
-import akka.persistence.typed.scaladsl.EventSourcedBehavior
+import akka.persistence.typed.state.scaladsl.DurableStateBehavior
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
-import akka.projection.eventsourced.EventEnvelope
-import akka.projection.eventsourced.scaladsl.EventSourcedProvider2
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.r2dbc.scaladsl.R2dbcSession
+import akka.projection.state.scaladsl.DurableStateSourceProvider2
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
-object EndToEndSpec {
+object DurableStateEndToEndSpec {
 
   val config: Config = ConfigFactory
     .parseString("""
@@ -48,17 +46,21 @@ object EndToEndSpec {
     """)
     .withFallback(TestConfig.config)
 
-  object Persister {
+  object DurableStatePersister {
+    import akka.persistence.typed.state.scaladsl.Effect
+
     sealed trait Command
     final case class Persist(payload: Any) extends Command
     final case class PersistWithAck(payload: Any, replyTo: ActorRef[Done]) extends Command
-    final case class PersistAll(payloads: List[Any]) extends Command
     final case class Ping(replyTo: ActorRef[Done]) extends Command
     final case class Stop(replyTo: ActorRef[Done]) extends Command
 
+    def apply(pid: String): Behavior[Command] =
+      apply(PersistenceId.ofUniqueId(pid))
+
     def apply(pid: PersistenceId): Behavior[Command] = {
       Behaviors.setup { context =>
-        EventSourcedBehavior[Command, Any, String](
+        DurableStateBehavior[Command, Any](
           persistenceId = pid,
           "",
           { (_, command) =>
@@ -68,23 +70,15 @@ object EndToEndSpec {
                   "Persist [{}], pid [{}], seqNr [{}]",
                   command.payload,
                   pid.id,
-                  EventSourcedBehavior.lastSequenceNumber(context) + 1)
+                  "???" /* FIXME Akka issue #30833 DurableStateBehavior.lastSequenceNumber(context) + 1 */ )
                 Effect.persist(command.payload)
               case command: PersistWithAck =>
                 context.log.debug(
                   "Persist [{}], pid [{}], seqNr [{}]",
                   command.payload,
                   pid.id,
-                  EventSourcedBehavior.lastSequenceNumber(context) + 1)
+                  "???" /* FIXME Akka issue #30833 DurableStateBehavior.lastSequenceNumber(context) + 1 */ )
                 Effect.persist(command.payload).thenRun(_ => command.replyTo ! Done)
-              case command: PersistAll =>
-                if (context.log.isDebugEnabled)
-                  context.log.debug(
-                    "PersistAll [{}], pid [{}], seqNr [{}]",
-                    command.payloads.mkString(","),
-                    pid.id,
-                    EventSourcedBehavior.lastSequenceNumber(context) + 1)
-                Effect.persist(command.payloads)
               case Ping(replyTo) =>
                 replyTo ! Done
                 Effect.none
@@ -92,34 +86,37 @@ object EndToEndSpec {
                 replyTo ! Done
                 Effect.stop()
             }
-          },
-          (_, _) => "")
+          })
       }
     }
   }
 
-  final case class Processed(projectionId: ProjectionId, envelope: EventEnvelope[String])
-
-  class TestHandler(projectionId: ProjectionId, probe: ActorRef[Processed])
-      extends R2dbcHandler[EventEnvelope[String]] {
+  class TestHandler(val projectionId: ProjectionId, val sliceRange: Range)
+      extends R2dbcHandler[DurableStateChange[String]] {
     private val log = LoggerFactory.getLogger(getClass)
 
-    override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
-      log.debug("{} Processed {}", projectionId.key, envelope.event)
-      probe ! Processed(projectionId, envelope)
+    var processed = Vector.empty[DurableStateChange[String]]
+
+    override def process(session: R2dbcSession, envelope: DurableStateChange[String]): Future[Done] = {
+      envelope match {
+        case upd: UpdatedDurableState[String] =>
+          log.debug("{} Processed {} revision {}", projectionId.key, upd.value, upd.revision)
+        case _ =>
+      }
+      processed :+= envelope
       Future.successful(Done)
     }
   }
 
 }
 
-class EndToEndSpec
-    extends ScalaTestWithActorTestKit(EndToEndSpec.config)
+class DurableStateEndToEndSpec
+    extends ScalaTestWithActorTestKit(DurableStateEndToEndSpec.config)
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData
     with LogCapturing {
-  import EndToEndSpec._
+  import DurableStateEndToEndSpec._
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
@@ -130,19 +127,29 @@ class EndToEndSpec
     super.beforeAll()
   }
 
+  private def createHandlers(projectionName: String, nrOfProjections: Int): Map[ProjectionId, TestHandler] = {
+    val sliceRanges =
+      DurableStateSourceProvider2.sliceRanges(system, R2dbcDurableStateStore.Identifier, nrOfProjections)
+    sliceRanges.map { range =>
+      val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
+      projectionId -> new TestHandler(projectionId, range)
+    }.toMap
+  }
+
   private def startProjections(
       entityTypeHint: String,
       projectionName: String,
       nrOfProjections: Int,
-      processedProbe: ActorRef[Processed]): Vector[ActorRef[ProjectionBehavior.Command]] = {
-    val sliceRanges = EventSourcedProvider2.sliceRanges(system, R2dbcReadJournal.Identifier, nrOfProjections)
+      handlers: Map[ProjectionId, TestHandler]): Vector[ActorRef[ProjectionBehavior.Command]] = {
+    val sliceRanges =
+      DurableStateSourceProvider2.sliceRanges(system, R2dbcDurableStateStore.Identifier, nrOfProjections)
 
     sliceRanges.map { range =>
       val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
       val sourceProvider =
-        EventSourcedProvider2.eventsBySlices[String](
+        DurableStateSourceProvider2.changesBySlices[String](
           system,
-          R2dbcReadJournal.Identifier,
+          R2dbcDurableStateStore.Identifier,
           entityTypeHint,
           range.min,
           range.max)
@@ -151,50 +158,49 @@ class EndToEndSpec
           projectionId,
           Some(settings),
           sourceProvider = sourceProvider,
-          handler = () => new TestHandler(projectionId, processedProbe.ref))
+          handler = () => handlers(projectionId))
       spawn(ProjectionBehavior(projection))
     }.toVector
   }
 
-  "A R2DBC projection with eventsBySlices source" must {
+  "A R2DBC projection with changesBySlices source" must {
 
-    "handle all events exactlyOnce" in {
+    "handle latest updated state exactlyOnce" in {
       val numberOfEntities = 20
-      val numberOfEvents = numberOfEntities * 10
+      val numberOfChanges = 10 * numberOfEntities
       val entityTypeHint = nextEntityTypeHint()
 
       val entities = (0 until numberOfEntities).map { n =>
         val persistenceId = PersistenceId(entityTypeHint, s"p$n")
-        spawn(Persister(persistenceId), s"p$n")
+        spawn(DurableStatePersister(persistenceId), s"p$n")
       }
 
+      var revisionPerEntity = Map.empty[Int, Int]
+
       // write some before starting the projections
-      var n = 1
-      while (n <= 50) {
+      (1 to 50).foreach { n =>
         val p = n % numberOfEntities
-        // mix some persist 1 and persist 3 events
-        if (n % 7 == 0) {
-          entities(p) ! Persister.PersistAll((0 until 3).map(i => s"e$p-${n + i}").toList)
-          n += 3
-        } else {
-          entities(p) ! Persister.Persist(s"e$p-$n")
-          n += 1
-        }
+        val revision = revisionPerEntity.getOrElse(p, 0) + 1
+        revisionPerEntity = revisionPerEntity.updated(p, revision)
+        entities(p) ! DurableStatePersister.Persist(s"s$p-$revision")
       }
 
       val projectionName = UUID.randomUUID().toString
-      val processedProbe = createTestProbe[Processed]()
-      var projections = startProjections(entityTypeHint, projectionName, nrOfProjections = 4, processedProbe.ref)
+      val handlers = createHandlers(projectionName, nrOfProjections = 4)
+      val projections = startProjections(entityTypeHint, projectionName, nrOfProjections = 4, handlers)
 
       // give them some time to start before writing more events
       Thread.sleep(500)
 
-      while (n <= numberOfEvents) {
+      var n = 51
+      while (n <= numberOfChanges) {
         val p = n % numberOfEntities
-        entities(p) ! Persister.Persist(s"e$p-$n")
+        val revision = revisionPerEntity.getOrElse(p, 0) + 1
+        revisionPerEntity = revisionPerEntity.updated(p, revision)
+        entities(p) ! DurableStatePersister.Persist(s"s$p-$revision")
 
         // stop projections
-        if (n == numberOfEvents / 2) {
+        if (n == numberOfChanges / 2) {
           val probe = createTestProbe()
           projections.foreach { ref =>
             ref ! ProjectionBehavior.Stop
@@ -203,8 +209,8 @@ class EndToEndSpec
         }
 
         // resume projections again
-        if (n == (numberOfEvents / 2) + 20)
-          startProjections(entityTypeHint, projectionName, nrOfProjections = 4, processedProbe.ref)
+        if (n == (numberOfChanges / 2) + 20)
+          startProjections(entityTypeHint, projectionName, nrOfProjections = 4, handlers)
 
         if (n % 10 == 0)
           Thread.sleep(50)
@@ -214,14 +220,28 @@ class EndToEndSpec
         n += 1
       }
 
-      val processed = processedProbe.receiveMessages(numberOfEvents, 20.seconds)
-
-      val byPid = processed.groupBy(_.envelope.persistenceId)
-      byPid.foreach { case (_, processedByPid) =>
-        // all events of a pid must be processed by the same projection instance
-        processedByPid.map(_.projectionId).toSet.size shouldBe 1
-        // processed events in right order
-        processedByPid.map(_.envelope.sequenceNr).toVector shouldBe (1 to processedByPid.size).toVector
+      handlers.foreach { case (projectionId, handler) =>
+        (0 until numberOfEntities).foreach { p =>
+          val persistenceId = PersistenceId(entityTypeHint, s"p$p")
+          val slice = DurableStateSourceProvider2.sliceForPersistenceId(
+            system,
+            R2dbcDurableStateStore.Identifier,
+            persistenceId.id)
+          withClue(s"projectionId $projectionId, persistenceId $persistenceId, slice $slice: ") {
+            if (handler.sliceRange.contains(slice)) {
+              eventually {
+                val updates = handler.processed.collect {
+                  case upd: UpdatedDurableState[String] if upd.persistenceId == persistenceId.id => upd
+                }
+                val revision = revisionPerEntity(p)
+                updates.last.revision shouldBe revision
+                updates.last.value shouldBe s"s$p-$revision"
+                // processed events in right order
+                updates shouldBe updates.sortBy(_.revision)
+              }
+            }
+          }
+        }
       }
 
       projections.foreach(_ ! ProjectionBehavior.Stop)
