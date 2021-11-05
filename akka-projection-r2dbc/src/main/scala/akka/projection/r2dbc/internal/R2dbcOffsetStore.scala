@@ -596,6 +596,16 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
+  @tailrec final def addInflights[Envelope](envelopes: immutable.Seq[Envelope]): Unit = {
+    val currentInflight = getInflight()
+    val entries = envelopes.iterator.map(createRecordWithOffset).collect { case Some(r) =>
+      r.record.pid -> r.record.seqNr
+    }
+    val newInflight = currentInflight ++ entries
+    if (!inflight.compareAndSet(currentInflight, newInflight))
+      addInflights(envelopes) // CAS retry, concurrent update of inflight
+  }
+
   def isInflight[Envelope](envelope: Envelope): Boolean = {
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) =>

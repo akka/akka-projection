@@ -189,7 +189,7 @@ private[projection] object R2dbcProjectionImpl {
             delegate
               .process(acceptedEnvelopes)
               .map { _ =>
-                acceptedEnvelopes.foreach(offsetStore.addInflight)
+                offsetStore.addInflights(acceptedEnvelopes)
                 Done
               }
           }
