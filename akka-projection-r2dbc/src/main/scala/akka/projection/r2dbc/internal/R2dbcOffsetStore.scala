@@ -165,22 +165,15 @@ private[projection] class R2dbcOffsetStore(
   // which might be better for the range deletes, but it would would be "append only" with possibly
   // many rows per persistence_id
   private val upsertTimestampOffsetSql: String =
-    s"""INSERT INTO $timestampOffsetTable (
-       |  projection_name,
-       |  projection_key,
-       |  slice,
-       |  persistence_id,
-       |  sequence_number,
-       |  timestamp_offset,
-       |  last_updated
-       |) VALUES ($$1,$$2,$$3,$$4,$$5,$$6, transaction_timestamp())
-       |ON CONFLICT (slice, projection_name, persistence_id)
-       |DO UPDATE SET
-       | projection_key = excluded.projection_key,
-       | sequence_number = excluded.sequence_number,
-       | timestamp_offset = excluded.timestamp_offset,
-       | last_updated = excluded.last_updated
-       |""".stripMargin
+    s"INSERT INTO $timestampOffsetTable " +
+    "(projection_name, projection_key, slice, persistence_id, sequence_number, timestamp_offset, last_updated)  " +
+    "VALUES ($1,$2,$3,$4,$5,$6, transaction_timestamp()) " +
+    "ON CONFLICT (slice, projection_name, persistence_id) " +
+    "DO UPDATE SET " +
+    "projection_key = excluded.projection_key, " +
+    "sequence_number = excluded.sequence_number, " +
+    "timestamp_offset = excluded.timestamp_offset, " +
+    "last_updated = excluded.last_updated"
 
   private val deleteTimestampOffsetSql: String =
     s"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3 AND timestamp_offset < $$4"
@@ -189,21 +182,15 @@ private[projection] class R2dbcOffsetStore(
     s"SELECT * FROM $offsetTable WHERE projection_name = $$1"
 
   private val upsertOffsetSql: String =
-    s"""INSERT INTO $offsetTable (
-     |  projection_name,
-     |  projection_key,
-     |  current_offset,
-     |  manifest,
-     |  mergeable,
-     |  last_updated
-     |) VALUES ($$1,$$2,$$3,$$4,$$5,$$6)
-     |ON CONFLICT (projection_name, projection_key)
-     |DO UPDATE SET
-     | current_offset = excluded.current_offset,
-     | manifest = excluded.manifest,
-     | mergeable = excluded.mergeable,
-     | last_updated = excluded.last_updated
-     |""".stripMargin
+    s"INSERT INTO $offsetTable  " +
+    "(projection_name, projection_key, current_offset, manifest, mergeable, last_updated) " +
+    "VALUES ($1,$2,$3,$4,$5,$6) " +
+    "ON CONFLICT (projection_name, projection_key) " +
+    "DO UPDATE SET " +
+    "current_offset = excluded.current_offset, " +
+    "manifest = excluded.manifest, " +
+    "mergeable = excluded.mergeable, " +
+    "last_updated = excluded.last_updated"
 
   private val clearOffsetSql: String =
     s"""DELETE FROM $offsetTable WHERE projection_name = $$1 AND projection_key = $$2"""
