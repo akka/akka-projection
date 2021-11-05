@@ -27,7 +27,7 @@ object DurableStateSourceProvider2 {
   def changesBySlices[A](
       system: ActorSystem[_],
       durableStateStoreQueryPluginId: String,
-      entityTypeHint: String,
+      entityType: String,
       minSlice: Int,
       maxSlice: Int): SourceProvider[Offset, DurableStateChange[A]] = {
 
@@ -35,7 +35,7 @@ object DurableStateSourceProvider2 {
       DurableStateStoreRegistry(system).durableStateStoreFor[DurableStateStoreBySliceQuery[A]](
         durableStateStoreQueryPluginId)
 
-    new DurableStateStoreQuerySourceProvider2(durableStateStoreQuery, entityTypeHint, minSlice, maxSlice, system)
+    new DurableStateStoreQuerySourceProvider2(durableStateStoreQuery, entityType, minSlice, maxSlice, system)
   }
 
   def sliceForPersistenceId(
@@ -56,7 +56,7 @@ object DurableStateSourceProvider2 {
 
   private class DurableStateStoreQuerySourceProvider2[A](
       durableStateStoreQuery: DurableStateStoreBySliceQuery[A],
-      entityTypeHint: String,
+      entityType: String,
       override val minSlice: Int,
       override val maxSlice: Int,
       system: ActorSystem[_])
@@ -68,7 +68,7 @@ object DurableStateSourceProvider2 {
       offset().map { offsetOpt =>
         val offset = offsetOpt.getOrElse(NoOffset)
         durableStateStoreQuery
-          .changesBySlices(entityTypeHint, minSlice, maxSlice, offset)
+          .changesBySlices(entityType, minSlice, maxSlice, offset)
       }
 
     override def extractOffset(stateChange: DurableStateChange[A]): Offset = stateChange.offset

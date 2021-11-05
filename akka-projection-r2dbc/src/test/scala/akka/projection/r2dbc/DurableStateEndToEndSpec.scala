@@ -137,7 +137,7 @@ class DurableStateEndToEndSpec
   }
 
   private def startProjections(
-      entityTypeHint: String,
+      entityType: String,
       projectionName: String,
       nrOfProjections: Int,
       handlers: Map[ProjectionId, TestHandler]): Vector[ActorRef[ProjectionBehavior.Command]] = {
@@ -150,7 +150,7 @@ class DurableStateEndToEndSpec
         DurableStateSourceProvider2.changesBySlices[String](
           system,
           R2dbcDurableStateStore.Identifier,
-          entityTypeHint,
+          entityType,
           range.min,
           range.max)
       val projection = R2dbcProjection
@@ -168,10 +168,10 @@ class DurableStateEndToEndSpec
     "handle latest updated state exactlyOnce" in {
       val numberOfEntities = 20
       val numberOfChanges = 10 * numberOfEntities
-      val entityTypeHint = nextEntityTypeHint()
+      val entityType = nextEntityType()
 
       val entities = (0 until numberOfEntities).map { n =>
-        val persistenceId = PersistenceId(entityTypeHint, s"p$n")
+        val persistenceId = PersistenceId(entityType, s"p$n")
         spawn(DurableStatePersister(persistenceId), s"p$n")
       }
 
@@ -187,7 +187,7 @@ class DurableStateEndToEndSpec
 
       val projectionName = UUID.randomUUID().toString
       val handlers = createHandlers(projectionName, nrOfProjections = 4)
-      val projections = startProjections(entityTypeHint, projectionName, nrOfProjections = 4, handlers)
+      val projections = startProjections(entityType, projectionName, nrOfProjections = 4, handlers)
 
       // give them some time to start before writing more events
       Thread.sleep(500)
@@ -210,7 +210,7 @@ class DurableStateEndToEndSpec
 
         // resume projections again
         if (n == (numberOfChanges / 2) + 20)
-          startProjections(entityTypeHint, projectionName, nrOfProjections = 4, handlers)
+          startProjections(entityType, projectionName, nrOfProjections = 4, handlers)
 
         if (n % 10 == 0)
           Thread.sleep(50)
@@ -222,7 +222,7 @@ class DurableStateEndToEndSpec
 
       handlers.foreach { case (projectionId, handler) =>
         (0 until numberOfEntities).foreach { p =>
-          val persistenceId = PersistenceId(entityTypeHint, s"p$p")
+          val persistenceId = PersistenceId(entityType, s"p$p")
           val slice = DurableStateSourceProvider2.sliceForPersistenceId(
             system,
             R2dbcDurableStateStore.Identifier,

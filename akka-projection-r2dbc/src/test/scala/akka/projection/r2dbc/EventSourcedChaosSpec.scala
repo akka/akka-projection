@@ -125,7 +125,7 @@ class EventSourcedChaosSpec
       val numberOfIterations = system.settings.config.getInt("akka.projection.r2dbc.ChaosSpec.nr-iterations")
       val numberOfEntities = 20 + rnd.nextInt(80)
       val numberOfProjections = 1 << rnd.nextInt(4) // 1 to 8 projections
-      val entityTypeHint = nextEntityTypeHint()
+      val entityType = nextEntityType()
       val failProbability = 0.01
       val stopProbability = 0.01
 
@@ -134,7 +134,7 @@ class EventSourcedChaosSpec
         startedEntities.get(i) match {
           case Some(ref) => ref
           case None =>
-            val persistenceId = PersistenceId(entityTypeHint, s"p$i")
+            val persistenceId = PersistenceId(entityType, s"p$i")
             val ref = spawn(Persister(persistenceId), s"p$i")
             startedEntities = startedEntities.updated(i, ref)
             ref
@@ -159,7 +159,7 @@ class EventSourcedChaosSpec
             log.debug("Starting projection index [{}] with projectionId [{}]", projectionIndex, projectionId)
             val sourceProvider =
               EventSourcedProvider2
-                .eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityTypeHint, range.min, range.max)
+                .eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityType, range.min, range.max)
             val projection = R2dbcProjection
               .exactlyOnce(
                 projectionId,

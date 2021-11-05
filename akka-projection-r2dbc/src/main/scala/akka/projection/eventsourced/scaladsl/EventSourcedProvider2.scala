@@ -31,7 +31,7 @@ object EventSourcedProvider2 {
   def eventsBySlices[Event](
       system: ActorSystem[_],
       readJournalPluginId: String,
-      entityTypeHint: String,
+      entityType: String,
       minSlice: Int,
       maxSlice: Int): SourceProvider[Offset, EventEnvelope[Event]] = {
 
@@ -43,7 +43,7 @@ object EventSourcedProvider2 {
         s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
         s"[$readJournalPluginId] must implement [${classOf[EventTimestampQuery].getName}]")
 
-    new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityTypeHint, minSlice, maxSlice, system)
+    new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
   }
 
   def sliceForPersistenceId(system: ActorSystem[_], readJournalPluginId: String, persistenceId: String): Int =
@@ -56,7 +56,7 @@ object EventSourcedProvider2 {
 
   private class EventsBySlicesSourceProvider[Event](
       eventsBySlicesQuery: EventsBySliceQuery,
-      entityTypeHint: String,
+      entityType: String,
       override val minSlice: Int,
       override val maxSlice: Int,
       system: ActorSystem[_])
@@ -69,7 +69,7 @@ object EventSourcedProvider2 {
       offset().map { offsetOpt =>
         val offset = offsetOpt.getOrElse(NoOffset)
         eventsBySlicesQuery
-          .eventsBySlices(entityTypeHint, minSlice, maxSlice, offset)
+          .eventsBySlices(entityType, minSlice, maxSlice, offset)
           .map(env => EventEnvelope(env))
       }
 
@@ -78,13 +78,13 @@ object EventSourcedProvider2 {
     override def extractCreationTime(envelope: EventEnvelope[Event]): Long = envelope.timestamp
 
     override def timestampOf(
-        entityTypeHint: String,
+        entityType: String,
         persistenceId: String,
         slice: Int,
         sequenceNumber: Long): Future[Option[Instant]] =
       eventsBySlicesQuery match {
         case timestampQuery: EventTimestampQuery =>
-          timestampQuery.timestampOf(entityTypeHint, persistenceId, slice, sequenceNumber)
+          timestampQuery.timestampOf(entityType, persistenceId, slice, sequenceNumber)
         case _ =>
           Future.failed(
             new IllegalStateException(

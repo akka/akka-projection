@@ -97,7 +97,7 @@ object R2dbcTimestampOffsetProjectionSpec {
     override def maxSlice: Int = R2dbcOffsetStore.MaxNumberOfSlices - 1
 
     override def timestampOf(
-        entityTypeHint: String,
+        entityType: String,
         persistenceId: String,
         slice: Int,
         sequenceNumber: Long): Future[Option[Instant]] = {

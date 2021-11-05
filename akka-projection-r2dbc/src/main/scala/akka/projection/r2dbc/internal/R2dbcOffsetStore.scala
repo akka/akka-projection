@@ -569,9 +569,9 @@ private[projection] class R2dbcOffsetStore(
         // when read at the tail we will only accept it if the event with previous seqNr has timestamp
         // before the time window of the offset store.
         // Backtracking will emit missed event again.
-        val entityTypeHint = SliceUtils.extractEntityTypeHintFromPersistenceId(pid)
+        val entityType = SliceUtils.extractEntityTypeFromPersistenceId(pid)
         val slice = SliceUtils.sliceForPersistenceId(pid, maxNumberOfSlices)
-        eventTimestampQuery.timestampOf(entityTypeHint, pid, slice, seqNr - 1).map {
+        eventTimestampQuery.timestampOf(entityType, pid, slice, seqNr - 1).map {
           case Some(previousTimestamp) =>
             if (previousTimestamp.isBefore(currentState.latestTimestamp.minus(settings.timeWindow)))
               true

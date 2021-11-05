@@ -143,17 +143,17 @@ class EventSourcedEndToEndSpec
   private def writeEvent(persistenceId: String, seqNr: Long, timestamp: Instant, event: String): Unit = {
     log.debug("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
     val insertEventSql = s"INSERT INTO ${journalSettings.journalTableWithSchema} " +
-      "(slice, entity_type_hint, persistence_id, sequence_number, db_timestamp, writer, write_timestamp, adapter_manifest, event_ser_id, event_ser_manifest, event_payload) " +
+      "(slice, entity_type, persistence_id, sequence_number, db_timestamp, writer, write_timestamp, adapter_manifest, event_ser_id, event_ser_manifest, event_payload) " +
       "VALUES ($1, $2, $3, $4, $5, '', $6, '', $7, '', $8)"
 
     val slice = SliceUtils.sliceForPersistenceId(persistenceId, journalSettings.maxNumberOfSlices)
-    val entityTypeHint = SliceUtils.extractEntityTypeHintFromPersistenceId(persistenceId)
+    val entityType = SliceUtils.extractEntityTypeFromPersistenceId(persistenceId)
 
     val result = r2dbcExecutor.updateOne("test writeEvent") { connection =>
       connection
         .createStatement(insertEventSql)
         .bind(0, slice)
-        .bind(1, entityTypeHint)
+        .bind(1, entityType)
         .bind(2, persistenceId)
         .bind(3, seqNr)
         .bind(4, timestamp)
@@ -165,7 +165,7 @@ class EventSourcedEndToEndSpec
   }
 
   private def startProjections(
-      entityTypeHint: String,
+      entityType: String,
       projectionName: String,
       nrOfProjections: Int,
       processedProbe: ActorRef[Processed]): Vector[ActorRef[ProjectionBehavior.Command]] = {
@@ -177,7 +177,7 @@ class EventSourcedEndToEndSpec
         EventSourcedProvider2.eventsBySlices[String](
           system,
           R2dbcReadJournal.Identifier,
-          entityTypeHint,
+          entityType,
           range.min,
           range.max)
       val projection = R2dbcProjection
@@ -201,10 +201,10 @@ class EventSourcedEndToEndSpec
     "handle all events exactlyOnce" in {
       val numberOfEntities = 20
       val numberOfEvents = numberOfEntities * 10
-      val entityTypeHint = nextEntityTypeHint()
+      val entityType = nextEntityType()
 
       val entities = (0 until numberOfEntities).map { n =>
-        val persistenceId = PersistenceId(entityTypeHint, s"p$n")
+        val persistenceId = PersistenceId(entityType, s"p$n")
         spawn(Persister(persistenceId), s"p$n")
       }
 
@@ -224,7 +224,7 @@ class EventSourcedEndToEndSpec
 
       val projectionName = UUID.randomUUID().toString
       val processedProbe = createTestProbe[Processed]()
-      val projections = startProjections(entityTypeHint, projectionName, nrOfProjections = 4, processedProbe.ref)
+      val projections = startProjections(entityType, projectionName, nrOfProjections = 4, processedProbe.ref)
 
       // give them some time to start before writing more events
       Thread.sleep(500)
@@ -244,7 +244,7 @@ class EventSourcedEndToEndSpec
 
         // resume projections again
         if (n == (numberOfEvents / 2) + 20)
-          startProjections(entityTypeHint, projectionName, nrOfProjections = 4, processedProbe.ref)
+          startProjections(entityType, projectionName, nrOfProjections = 4, processedProbe.ref)
 
         if (n % 10 == 0)
           Thread.sleep(50)
@@ -282,10 +282,10 @@ class EventSourcedEndToEndSpec
     }
 
     "accept unknown sequence number if previous is old" in {
-      val entityTypeHint = nextEntityTypeHint()
-      val pid1 = nextPid(entityTypeHint)
-      val pid2 = nextPid(entityTypeHint)
-      val pid3 = nextPid(entityTypeHint)
+      val entityType = nextEntityType()
+      val pid1 = nextPid(entityType)
+      val pid2 = nextPid(entityType)
+      val pid3 = nextPid(entityType)
 
       val startTime = Instant.now()
       val oldTime = startTime.minus(projectionSettings.timeWindow).minusSeconds(60)
@@ -293,7 +293,7 @@ class EventSourcedEndToEndSpec
 
       val projectionName = UUID.randomUUID().toString
       val processedProbe = createTestProbe[Processed]()
-      val projection = startProjections(entityTypeHint, projectionName, nrOfProjections = 1, processedProbe.ref).head
+      val projection = startProjections(entityType, projectionName, nrOfProjections = 1, processedProbe.ref).head
 
       processedProbe.receiveMessage().envelope.event shouldBe "e1-1"
 

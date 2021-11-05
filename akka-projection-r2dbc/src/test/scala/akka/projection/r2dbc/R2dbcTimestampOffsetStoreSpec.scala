@@ -37,7 +37,7 @@ object R2dbcTimestampOffsetStoreSpec {
       with EventTimestampQuery {
 
     override def timestampOf(
-        entityTypeHint: String,
+        entityType: String,
         persistenceId: String,
         slice: Int,
         sequenceNumber: SeqNr): Future[Option[Instant]] =
