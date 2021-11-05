@@ -21,8 +21,7 @@ object R2dbcProjectionSettings {
       useConnectionFactory = config.getString("use-connection-factory"),
       timeWindow = config.getDuration("offset-store.time-window"),
       evictInterval = config.getDuration("offset-store.evict-interval"),
-      deleteInterval = config.getDuration("offset-store.delete-interval"),
-      acceptNewSequenceNumberAfterAge = config.getDuration("offset-store.accept-new-sequence-number-after-age"))
+      deleteInterval = config.getDuration("offset-store.delete-interval"))
   }
 
   def apply(system: ActorSystem[_]): R2dbcProjectionSettings =
@@ -38,8 +37,7 @@ final case class R2dbcProjectionSettings(
     useConnectionFactory: String,
     timeWindow: JDuration,
     evictInterval: JDuration,
-    deleteInterval: JDuration,
-    acceptNewSequenceNumberAfterAge: JDuration) {
+    deleteInterval: JDuration) {
   val offsetTableWithSchema: String = schema.map("." + _).getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map("." + _).getOrElse("") + timestampOffsetTable
   val managementTableWithSchema: String = schema.map("." + _).getOrElse("") + managementTable

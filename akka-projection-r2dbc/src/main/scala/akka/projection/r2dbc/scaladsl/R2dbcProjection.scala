@@ -54,7 +54,7 @@ object R2dbcProjection {
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
-        sourceProviderSliceRange(sourceProvider),
+        timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
     val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
@@ -103,7 +103,7 @@ object R2dbcProjection {
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
-        sourceProviderSliceRange(sourceProvider),
+        timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
     val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
@@ -150,7 +150,7 @@ object R2dbcProjection {
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
-        sourceProviderSliceRange(sourceProvider),
+        timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
 
@@ -190,7 +190,7 @@ object R2dbcProjection {
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
-        sourceProviderSliceRange(sourceProvider),
+        timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
     val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
@@ -237,7 +237,7 @@ object R2dbcProjection {
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
-        sourceProviderSliceRange(sourceProvider),
+        timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
 
@@ -291,7 +291,7 @@ object R2dbcProjection {
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
-        sourceProviderSliceRange(sourceProvider),
+        timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
 
@@ -337,10 +337,11 @@ object R2dbcProjection {
     ConnectionFactoryProvider(system).connectionFactoryFor(r2dbcSettings.useConnectionFactory)
   }
 
-  private def sourceProviderSliceRange(sourceProvider: SourceProvider[_, _]): Option[Range] = {
+  private def timestampOffsetBySlicesSourceProvider(
+      sourceProvider: SourceProvider[_, _]): Option[TimestampOffsetBySlicesSourceProvider] = {
     sourceProvider match {
-      case s: TimestampOffsetBySlicesSourceProvider => Some(s.minSlice to s.maxSlice)
-      case _                                        => None // source provider is not using slices
+      case provider: TimestampOffsetBySlicesSourceProvider => Some(provider)
+      case _                                               => None // source provider is not using slices
     }
   }
 

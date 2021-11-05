@@ -20,12 +20,14 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.query.DurableStateChange
 import akka.persistence.query.UpdatedDurableState
+import akka.persistence.query.scaladsl.EventTimestampQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
+import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
@@ -120,6 +122,8 @@ object R2dbcOffsetStore {
   }
 
   val FutureDone: Future[Done] = Future.successful(Done)
+  val FutureTrue: Future[Boolean] = Future.successful(true)
+  val FutureFalse: Future[Boolean] = Future.successful(false)
 }
 
 /**
@@ -128,8 +132,7 @@ object R2dbcOffsetStore {
 @InternalApi
 private[projection] class R2dbcOffsetStore(
     projectionId: ProjectionId,
-    minSlice: Int,
-    maxSlice: Int,
+    sourceProvider: Option[TimestampOffsetBySlicesSourceProvider],
     system: ActorSystem[_],
     settings: R2dbcProjectionSettings,
     r2dbcExecutor: R2dbcExecutor,
@@ -221,6 +224,22 @@ private[projection] class R2dbcOffsetStore(
     () => deleteOldTimestampOffsets(),
     system.executionContext)
 
+  private def timestampOffsetBySlicesSourceProvider: TimestampOffsetBySlicesSourceProvider =
+    sourceProvider match {
+      case Some(provider) => provider
+      case _ =>
+        throw new IllegalArgumentException(
+          s"Expected TimestampOffsetBySlicesSourceProvider to be defined when TimestampOffset is used.")
+    }
+
+  private def eventTimestampQuery: EventTimestampQuery =
+    timestampOffsetBySlicesSourceProvider match {
+      case timestampQuery: EventTimestampQuery => timestampQuery
+      case _ =>
+        throw new IllegalArgumentException(
+          s"Expected TimestampOffsetBySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
+    }
+
   def getState(): State =
     state.get()
 
@@ -245,6 +264,14 @@ private[projection] class R2dbcOffsetStore(
 
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
     val oldState = state.get()
+
+    val (minSlice, maxSlice) = {
+      sourceProvider match {
+        case Some(provider) => (provider.minSlice, provider.maxSlice)
+        case None           => (0, R2dbcOffsetStore.MaxNumberOfSlices - 1)
+      }
+    }
+
     val recordsFut = r2dbcExecutor.select("read timestamp offset")(
       conn => {
         logger.trace("reading timestamp offset for [{}]", projectionId)
@@ -371,6 +398,8 @@ private[projection] class R2dbcOffsetStore(
 
       def bindRecord(stmt: Statement, record: Record): Statement = {
         val slice = SliceUtils.sliceForPersistenceId(record.pid, maxNumberOfSlices)
+        val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+        val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
         if (slice < minSlice || slice > maxSlice)
           throw new IllegalArgumentException(
             s"This offset store [$projectionId] manages slices " +
@@ -472,32 +501,40 @@ private[projection] class R2dbcOffsetStore(
   def isDuplicate(record: Record): Boolean =
     getState().isDuplicate(record)
 
-  def filterAccepted[Envelope](envelopes: immutable.Seq[Envelope]): immutable.Seq[Envelope] = {
+  def filterAccepted[Envelope](envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[Envelope]] = {
     envelopes
-      .foldLeft((getInflight(), Vector.empty[Envelope])) { case ((inflight, filteredEnvelopes), envelope) =>
-        createRecordWithOffset(envelope) match {
-          case Some(recordWithOffset) =>
-            if (isAccepted(recordWithOffset, inflight))
-              (
-                inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
-                filteredEnvelopes :+ envelope)
-            else
-              (inflight, filteredEnvelopes)
-          case None =>
-            (inflight, filteredEnvelopes :+ envelope)
+      .foldLeft(Future.successful(getInflight(), Vector.empty[Envelope])) { (acc, envelope) =>
+        acc.flatMap { case (inflight, filteredEnvelopes) =>
+          createRecordWithOffset(envelope) match {
+            case Some(recordWithOffset) =>
+              isAccepted(recordWithOffset, inflight).map {
+                case true =>
+                  (
+                    inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
+                    filteredEnvelopes :+ envelope)
+                case false =>
+                  (inflight, filteredEnvelopes)
+              }
+            case None =>
+              Future.successful((inflight, filteredEnvelopes :+ envelope))
+          }
         }
       }
-      ._2
+      .map { case (_, filteredEnvelopes) =>
+        filteredEnvelopes
+      }
   }
 
-  def isAccepted[Envelope](envelope: Envelope): Boolean = {
+  def isAccepted[Envelope](envelope: Envelope): Future[Boolean] = {
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) => isAccepted(recordWithOffset, getInflight())
-      case None                   => true
+      case None                   => FutureTrue
     }
   }
 
-  private def isAccepted[Envelope](recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Boolean = {
+  private def isAccepted[Envelope](
+      recordWithOffset: RecordWithOffset,
+      currentInflight: Map[Pid, SeqNr]): Future[Boolean] = {
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
     val currentState = getState()
@@ -507,43 +544,57 @@ private[projection] class R2dbcOffsetStore(
 
     if (duplicate) {
       logger.debug("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid) // FIXME change to trace
-      false
+      FutureFalse
     } else if (recordWithOffset.strictSeqNr) {
       // strictSeqNr == true is for event sourced
       val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
       if (prevSeqNr > 0) {
         // expecting seqNr to be +1 of previously known
         val ok = seqNr == prevSeqNr + 1
-        if (!ok)
-          logger.debug(
-            "Filtering out unexpected sequence number [{}] for pid [{}], previous sequence number [{}]",
+        if (ok) {
+          FutureTrue
+        } else {
+          logger.info(
+            "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]",
             seqNr,
             pid,
             prevSeqNr)
-        ok
+          FutureFalse
+        }
       } else if (seqNr == 1) {
         // always accept first event if no other event for that pid has been seen
-        true
+        FutureTrue
       } else {
         // Haven't see seen this pid within the time window. Since events can be missed
-        // when read at the tail we will only accept it if read after the acceptNewSequenceNumberAfterAge
-        // duration. Backtracking will emit it again.
-        val ok = JDuration
-          .between(timestampOffset.timestamp, timestampOffset.readTimestamp)
-          .compareTo(settings.acceptNewSequenceNumberAfterAge) >= 0
-        if (!ok)
-          logger.debug("Filtering out unknown sequence number (might be accepted later): {}", recordWithOffset)
-        ok
+        // when read at the tail we will only accept it if the event with previous seqNr has timestamp
+        // before the time window of the offset store.
+        // Backtracking will emit missed event again.
+        val entityTypeHint = SliceUtils.extractEntityTypeHintFromPersistenceId(pid)
+        val slice = SliceUtils.sliceForPersistenceId(pid, maxNumberOfSlices)
+        eventTimestampQuery.timestampOf(entityTypeHint, pid, slice, seqNr - 1).map {
+          case Some(previousTimestamp) =>
+            if (previousTimestamp.isBefore(currentState.latestTimestamp.minus(settings.timeWindow)))
+              true
+            else {
+              logger.info("Rejecting unknown sequence number (might be accepted later): {}", recordWithOffset)
+              false
+            }
+          case None =>
+            // previous not found, could have been deleted
+            true
+        }
       }
     } else {
       // strictSeqNr == false is for durable state where each revision might not be visible
       val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
       val ok = seqNr > prevSeqNr
 
-      if (!ok)
+      if (ok) {
+        FutureTrue
+      } else {
         logger.debug("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
-
-      ok
+        FutureFalse
+      }
     }
   }
 
@@ -578,6 +629,8 @@ private[projection] class R2dbcOffsetStore(
       Future.successful(0)
     } else {
       val until = currentState.latestTimestamp.minus(settings.timeWindow)
+      val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+      val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
       val result = r2dbcExecutor.updateOne("delete timestamp offset") { conn =>
         conn
           .createStatement(deleteTimestampOffsetSql)

@@ -24,6 +24,7 @@ import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.RunningProjectionManagement
 import akka.projection.StatusObserver
 import akka.projection.eventsourced.EventEnvelope
+import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
@@ -62,17 +63,11 @@ private[projection] object R2dbcProjectionImpl {
 
   private[projection] def createOffsetStore(
       projectionId: ProjectionId,
-      sliceRange: Option[Range],
+      sourceProvider: Option[TimestampOffsetBySlicesSourceProvider],
       settings: R2dbcProjectionSettings,
       connectionFactory: ConnectionFactory)(implicit system: ActorSystem[_]) = {
     val r2dbcExecutor = new R2dbcExecutor(connectionFactory, log)(system.executionContext, system)
-    new R2dbcOffsetStore(
-      projectionId,
-      sliceRange.map(_.min).getOrElse(0),
-      sliceRange.map(_.max).getOrElse(R2dbcOffsetStore.MaxNumberOfSlices - 1),
-      system,
-      settings,
-      r2dbcExecutor)
+    new R2dbcOffsetStore(projectionId, sourceProvider, system, settings, r2dbcExecutor)
   }
 
   private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope](
@@ -84,19 +79,20 @@ private[projection] object R2dbcProjectionImpl {
 
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          if (!offsetStore.isAccepted(envelope)) {
-            FutureDone
-          } else {
-            val offset = sourceProvider.extractOffset(envelope)
-            r2dbcExecutor.withConnection("exactly-once handler") { conn =>
-              // run users handler
-              val session = new R2dbcSession(conn)
-              delegate
-                .process(session, envelope)
-                .flatMap { _ =>
-                  offsetStore.saveOffsetInTx(conn, offset)
-                }
-            }
+          offsetStore.isAccepted(envelope).flatMap {
+            case true =>
+              val offset = sourceProvider.extractOffset(envelope)
+              r2dbcExecutor.withConnection("exactly-once handler") { conn =>
+                // run users handler
+                val session = new R2dbcSession(conn)
+                delegate
+                  .process(session, envelope)
+                  .flatMap { _ =>
+                    offsetStore.saveOffsetInTx(conn, offset)
+                  }
+              }
+            case false =>
+              FutureDone
           }
         }
       }
@@ -112,17 +108,17 @@ private[projection] object R2dbcProjectionImpl {
 
     new AdaptedR2dbcHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-        val acceptedEnvelopes = offsetStore.filterAccepted(envelopes).toVector
-
-        if (acceptedEnvelopes.isEmpty) {
-          FutureDone
-        } else {
-          val offsets = acceptedEnvelopes.map(sourceProvider.extractOffset)
-          r2dbcExecutor.withConnection("grouped handler") { conn =>
-            // run users handler
-            val session = new R2dbcSession(conn)
-            delegate.process(session, acceptedEnvelopes).flatMap { _ =>
-              offsetStore.saveOffsetsInTx(conn, offsets)
+        offsetStore.filterAccepted(envelopes).flatMap { acceptedEnvelopes =>
+          if (acceptedEnvelopes.isEmpty) {
+            FutureDone
+          } else {
+            val offsets = acceptedEnvelopes.iterator.map(sourceProvider.extractOffset).toVector
+            r2dbcExecutor.withConnection("grouped handler") { conn =>
+              // run users handler
+              val session = new R2dbcSession(conn)
+              delegate.process(session, acceptedEnvelopes).flatMap { _ =>
+                offsetStore.saveOffsetsInTx(conn, offsets)
+              }
             }
           }
         }
@@ -137,19 +133,20 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          if (!offsetStore.isAccepted(envelope)) {
-            FutureDone
-          } else {
-            r2dbcExecutor
-              .withConnection("at-least-once handler") { conn =>
-                // run users handler
-                val session = new R2dbcSession(conn)
-                delegate.process(session, envelope)
-              }
-              .map { _ =>
-                offsetStore.addInflight(envelope)
-                Done
-              }
+          offsetStore.isAccepted(envelope).flatMap {
+            case true =>
+              r2dbcExecutor
+                .withConnection("at-least-once handler") { conn =>
+                  // run users handler
+                  val session = new R2dbcSession(conn)
+                  delegate.process(session, envelope)
+                }
+                .map { _ =>
+                  offsetStore.addInflight(envelope)
+                  Done
+                }
+            case false =>
+              FutureDone
           }
         }
       }
@@ -161,15 +158,16 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          if (!offsetStore.isAccepted(envelope)) {
-            FutureDone
-          } else {
-            delegate
-              .process(envelope)
-              .map { _ =>
-                offsetStore.addInflight(envelope)
-                Done
-              }
+          offsetStore.isAccepted(envelope).flatMap {
+            case true =>
+              delegate
+                .process(envelope)
+                .map { _ =>
+                  offsetStore.addInflight(envelope)
+                  Done
+                }
+            case false =>
+              FutureDone
           }
         }
       }
@@ -184,17 +182,17 @@ private[projection] object R2dbcProjectionImpl {
 
     new AdaptedHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-        val acceptedEnvelopes = offsetStore.filterAccepted(envelopes).toVector
-
-        if (acceptedEnvelopes.isEmpty) {
-          FutureDone
-        } else {
-          delegate
-            .process(acceptedEnvelopes)
-            .map { _ =>
-              acceptedEnvelopes.foreach(offsetStore.addInflight)
-              Done
-            }
+        offsetStore.filterAccepted(envelopes).flatMap { acceptedEnvelopes =>
+          if (acceptedEnvelopes.isEmpty) {
+            FutureDone
+          } else {
+            delegate
+              .process(acceptedEnvelopes)
+              .map { _ =>
+                acceptedEnvelopes.foreach(offsetStore.addInflight)
+                Done
+              }
+          }
         }
       }
     }
@@ -207,18 +205,22 @@ private[projection] object R2dbcProjectionImpl {
       system: ActorSystem[_]): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
 
     FlowWithContext[Envelope, ProjectionContext]
-      .map { env =>
-        // using `map` to evaluate the isAccepted once, otherwise
-        // with filter it will invoked twice
-        offsetStore.isAccepted(env) -> env
+      .mapAsync(1) { env =>
+        offsetStore
+          .isAccepted(env)
+          .map { ok =>
+            if (ok) {
+              offsetStore.addInflight(env)
+              Some(env)
+            } else {
+              None
+            }
+          }
       }
-      .collect {
-        case (accepted, env) if accepted =>
-          offsetStore.addInflight(env)
-          env
+      .collect { case Some(env) =>
+        env
       }
       .via(handler)
-
   }
 
   abstract class AdaptedR2dbcHandler[E](val delegate: R2dbcHandler[E])(implicit
@@ -375,7 +377,6 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
 
     implicit val executionContext: ExecutionContext = system.executionContext
     override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
-    private val log = LoggerFactory.getLogger(this.getClass)
 
     override def readPaused(): Future[Boolean] =
       offsetStore.readManagementState().map(_.exists(_.paused))

@@ -4,6 +4,7 @@
 
 package akka.projection.r2dbc
 
+import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.ExecutionContext
@@ -17,6 +18,8 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import akka.persistence.r2dbc.R2dbcSettings
+import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
@@ -28,6 +31,7 @@ import akka.projection.eventsourced.scaladsl.EventSourcedProvider2
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.r2dbc.scaladsl.R2dbcSession
+import akka.serialization.SerializationExtension
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -39,9 +43,11 @@ object EventSourcedEndToEndSpec {
     .parseString("""
     akka.persistence.r2dbc {
       query {
-        refresh-interval = 1s
+        refresh-interval = 500 millis
         # stress more by using a small buffer (sql limit)
         buffer-size = 10
+
+        backtracking.behind-current-time = 5 seconds
       }
     }
     """)
@@ -125,10 +131,37 @@ class EventSourcedEndToEndSpec
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val settings = R2dbcProjectionSettings(testKit.system)
+  private val journalSettings = new R2dbcSettings(system.settings.config.getConfig("akka.persistence.r2dbc"))
+  private val projectionSettings = R2dbcProjectionSettings(system)
+  private val stringSerializer = SerializationExtension(system).serializerFor(classOf[String])
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
+  }
+
+  // to be able to store events with specific timestamps
+  private def writeEvent(persistenceId: String, seqNr: Long, timestamp: Instant, event: String): Unit = {
+    log.debug("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
+    val insertEventSql = s"INSERT INTO ${journalSettings.journalTableWithSchema} " +
+      "(slice, entity_type_hint, persistence_id, sequence_number, db_timestamp, writer, write_timestamp, adapter_manifest, event_ser_id, event_ser_manifest, event_payload) " +
+      "VALUES ($1, $2, $3, $4, $5, '', $6, '', $7, '', $8)"
+
+    val slice = SliceUtils.sliceForPersistenceId(persistenceId, journalSettings.maxNumberOfSlices)
+    val entityTypeHint = SliceUtils.extractEntityTypeHintFromPersistenceId(persistenceId)
+
+    val result = r2dbcExecutor.updateOne("test writeEvent") { connection =>
+      connection
+        .createStatement(insertEventSql)
+        .bind(0, slice)
+        .bind(1, entityTypeHint)
+        .bind(2, persistenceId)
+        .bind(3, seqNr)
+        .bind(4, timestamp)
+        .bind(5, timestamp.toEpochMilli)
+        .bind(6, stringSerializer.identifier)
+        .bind(7, stringSerializer.toBinary(event))
+    }
+    result.futureValue shouldBe 1
   }
 
   private def startProjections(
@@ -150,7 +183,7 @@ class EventSourcedEndToEndSpec
       val projection = R2dbcProjection
         .exactlyOnce(
           projectionId,
-          Some(settings),
+          Some(projectionSettings),
           sourceProvider = sourceProvider,
           handler = () => new TestHandler(projectionId, processedProbe.ref))
       spawn(ProjectionBehavior(projection))
@@ -246,6 +279,52 @@ class EventSourcedEndToEndSpec
       }
 
       projections.foreach(_ ! ProjectionBehavior.Stop)
+    }
+
+    "accept unknown sequence number if previous is old" in {
+      val entityTypeHint = nextEntityTypeHint()
+      val pid1 = nextPid(entityTypeHint)
+      val pid2 = nextPid(entityTypeHint)
+      val pid3 = nextPid(entityTypeHint)
+
+      val startTime = Instant.now()
+      val oldTime = startTime.minus(projectionSettings.timeWindow).minusSeconds(60)
+      writeEvent(pid1, 1L, startTime, "e1-1")
+
+      val projectionName = UUID.randomUUID().toString
+      val processedProbe = createTestProbe[Processed]()
+      val projection = startProjections(entityTypeHint, projectionName, nrOfProjections = 1, processedProbe.ref).head
+
+      processedProbe.receiveMessage().envelope.event shouldBe "e1-1"
+
+      // old event for pid2, seqN3. will not be picked up by backtracking because outside time window
+      writeEvent(pid2, 3L, oldTime, "e2-3")
+      // pid2, seqNr 3 is unknown when receiving 4 so will lookup timestamp of 3
+      // and accept 4 because 3 was older than time window
+      writeEvent(pid2, 4L, startTime.plusMillis(1), "e2-4")
+      processedProbe.receiveMessage().envelope.event shouldBe "e2-4"
+
+      // pid3, seqNr 6 is unknown when receiving 7 so will lookup 6, but not found
+      // and that will be accepted (could have been deleted)
+      writeEvent(pid3, 7L, startTime.plusMillis(2), "e3-7")
+      processedProbe.receiveMessage().envelope.event shouldBe "e3-7"
+
+      // pid3, seqNr 8 is missing (knows 7) when receiving 9
+      writeEvent(pid3, 9L, startTime.plusMillis(4), "e3-9")
+      processedProbe.expectNoMessage(journalSettings.querySettings.refreshInterval + 500.millis)
+
+      // but backtracking can fill in the gaps
+      // need some progress because backtracking will not exceed the latest offset
+      writeEvent(pid1, 2L, startTime.plusMillis(5), "e1-2")
+      processedProbe.receiveMessage().envelope.event shouldBe "e1-2"
+      // backtracking will pick up pid3 seqNr 8 and 9
+      writeEvent(pid3, 8L, startTime.plusMillis(3), "e3-8")
+      val possibleDelay =
+        journalSettings.querySettings.backtrackingBehindCurrentTime + journalSettings.querySettings.refreshInterval + processedProbe.remainingOrDefault
+      processedProbe.receiveMessage(possibleDelay).envelope.event shouldBe "e3-8"
+      processedProbe.receiveMessage(possibleDelay).envelope.event shouldBe "e3-9"
+
+      projection ! ProjectionBehavior.Stop
     }
   }
 

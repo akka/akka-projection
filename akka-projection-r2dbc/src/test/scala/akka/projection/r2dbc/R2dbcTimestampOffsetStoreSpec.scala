@@ -9,22 +9,42 @@ import java.time.{ Duration => JDuration }
 import java.util.UUID
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.query.UpdatedDurableState
+import akka.persistence.query.scaladsl.EventTimestampQuery
+import akka.persistence.query.scaladsl.EventTimestampQuery
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.EventEnvelope
+import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.MaxNumberOfSlices
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Pid
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.SeqNr
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
+
+object R2dbcTimestampOffsetStoreSpec {
+  class TestTimestampSourceProvider(override val minSlice: Int, override val maxSlice: Int, clock: TestClock)
+      extends TimestampOffsetBySlicesSourceProvider
+      with EventTimestampQuery {
+
+    override def timestampOf(
+        entityTypeHint: String,
+        persistenceId: String,
+        slice: Int,
+        sequenceNumber: SeqNr): Future[Option[Instant]] =
+      Future.successful(Some(clock.instant()))
+
+  }
+}
 
 class R2dbcTimestampOffsetStoreSpec
     extends ScalaTestWithActorTestKit(TestConfig.config)
@@ -32,6 +52,7 @@ class R2dbcTimestampOffsetStoreSpec
     with TestDbLifecycle
     with TestData
     with LogCapturing {
+  import R2dbcTimestampOffsetStoreSpec.TestTimestampSourceProvider
 
   override def typedSystem: ActorSystem[_] = system
 
@@ -42,23 +63,20 @@ class R2dbcTimestampOffsetStoreSpec
 
   private val settings = R2dbcProjectionSettings(testKit.system)
 
-  private def createOffsetStore(projectionId: ProjectionId, customSettings: R2dbcProjectionSettings = settings) =
+  private def createOffsetStore(
+      projectionId: ProjectionId,
+      customSettings: R2dbcProjectionSettings = settings,
+      eventTimestampQueryClock: TestClock = clock) =
     new R2dbcOffsetStore(
       projectionId,
-      minSlice = 0,
-      maxSlice = R2dbcOffsetStore.MaxNumberOfSlices - 1,
+      Some(new TestTimestampSourceProvider(0, MaxNumberOfSlices - 1, eventTimestampQueryClock)),
       system,
       customSettings,
       r2dbcExecutor)
 
-  def createEnvelope(
-      pid: Pid,
-      seqNr: SeqNr,
-      timestamp: Instant,
-      readAfterMillis: Int,
-      event: String): EventEnvelope[String] =
+  def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] =
     EventEnvelope(
-      TimestampOffset(timestamp, timestamp.plusMillis(readAfterMillis), Map(pid -> seqNr)),
+      TimestampOffset(timestamp, timestamp.plusMillis(1000), Map(pid -> seqNr)),
       pid,
       seqNr,
       event,
@@ -68,13 +86,12 @@ class R2dbcTimestampOffsetStoreSpec
       pid: Pid,
       revision: SeqNr,
       timestamp: Instant,
-      readAfterMillis: Int,
       state: String): UpdatedDurableState[String] =
     new UpdatedDurableState(
       pid,
       revision,
       state,
-      TimestampOffset(timestamp, timestamp.plusMillis(readAfterMillis), Map(pid -> revision)),
+      TimestampOffset(timestamp, timestamp.plusMillis(1000), Map(pid -> revision)),
       timestamp.toEpochMilli)
 
   private implicit val ec: ExecutionContext = system.executionContext
@@ -182,7 +199,12 @@ class R2dbcTimestampOffsetStoreSpec
       slice4 shouldBe 16
 
       val offsetStore0 =
-        new R2dbcOffsetStore(projectionId0, minSlice = 0, maxSlice = 127, system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId0,
+          Some(new TestTimestampSourceProvider(0, 127, clock)),
+          system,
+          settings,
+          r2dbcExecutor)
 
       tick()
       val offset1 = TimestampOffset(clock.instant(), Map(p1 -> 3L))
@@ -198,12 +220,22 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore0.saveOffset(offset4).futureValue
 
       val offsetStore1 =
-        new R2dbcOffsetStore(projectionId1, minSlice = 0, maxSlice = 63, system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId1,
+          Some(new TestTimestampSourceProvider(0, 63, clock)),
+          system,
+          settings,
+          r2dbcExecutor)
       offsetStore1.readOffset().futureValue
       offsetStore1.getState().byPid.keySet shouldBe Set(p3, p4)
 
       val offsetStore2 =
-        new R2dbcOffsetStore(projectionId2, minSlice = 64, maxSlice = 127, system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId2,
+          Some(new TestTimestampSourceProvider(64, 127, clock)),
+          system,
+          settings,
+          r2dbcExecutor)
       offsetStore2.readOffset().futureValue
       offsetStore2.getState().byPid.keySet shouldBe Set(p1, p2)
     }
@@ -243,61 +275,64 @@ class R2dbcTimestampOffsetStoreSpec
 
     "accept known sequence numbers and reject unknown" in {
       val projectionId = genRandomProjectionId()
-      val offsetStore = createOffsetStore(projectionId)
+      val eventTimestampQueryClock = new TestClock
+      val offsetStore = createOffsetStore(projectionId, eventTimestampQueryClock = eventTimestampQueryClock)
 
       val startTime = Instant.now()
       val offset1 = TimestampOffset(startTime, Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
       offsetStore.saveOffset(offset1).futureValue
 
       // seqNr 1 is always accepted
-      val env1 = createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")
-      offsetStore.isAccepted(env1) shouldBe true
+      val env1 = createEnvelope("p4", 1L, startTime.plusMillis(1), "e4-1")
+      offsetStore.isAccepted(env1).futureValue shouldBe true
       // but not if already inflight, seqNr 1 was accepted
       offsetStore.addInflight(env1)
-      offsetStore.isAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), "e4-1")).futureValue shouldBe false
       // subsequent seqNr is accepted
-      val env2 = createEnvelope("p4", 2L, startTime.plusMillis(2), 10, "e4-2")
-      offsetStore.isAccepted(env2) shouldBe true
+      val env2 = createEnvelope("p4", 2L, startTime.plusMillis(2), "e4-2")
+      offsetStore.isAccepted(env2).futureValue shouldBe true
       offsetStore.addInflight(env2)
       // but not when gap
-      offsetStore.isAccepted(createEnvelope("p4", 4L, startTime.plusMillis(3), 10, "e4-4")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p4", 4L, startTime.plusMillis(3), "e4-4")).futureValue shouldBe false
       // and not if later already inflight, seqNr 2 was accepted
-      offsetStore.isAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), 10, "e4-1")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p4", 1L, startTime.plusMillis(1), "e4-1")).futureValue shouldBe false
 
       // +1 to known is accepted
-      val env3 = createEnvelope("p1", 4L, startTime.plusMillis(4), 10, "e1-4")
-      offsetStore.isAccepted(env3) shouldBe true
+      val env3 = createEnvelope("p1", 4L, startTime.plusMillis(4), "e1-4")
+      offsetStore.isAccepted(env3).futureValue shouldBe true
       // but not same
-      offsetStore.isAccepted(createEnvelope("p3", 5L, startTime, 10, "e3-5")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p3", 5L, startTime, "e3-5")).futureValue shouldBe false
       // but not same, even if it's 1
-      offsetStore.isAccepted(createEnvelope("p2", 1L, startTime, 10, "e2-1")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p2", 1L, startTime, "e2-1")).futureValue shouldBe false
       // and not less
-      offsetStore.isAccepted(createEnvelope("p3", 4L, startTime, 10, "e3-4")) shouldBe false
+      offsetStore.isAccepted(createEnvelope("p3", 4L, startTime, "e3-4")).futureValue shouldBe false
       offsetStore.addInflight(env3)
       // and then it's not accepted again
-      offsetStore.isAccepted(env3) shouldBe false
+      offsetStore.isAccepted(env3).futureValue shouldBe false
 
       // +1 to known, and then also subsequent are accepted (needed for grouped)
-      val env4 = createEnvelope("p3", 6L, startTime.plusMillis(5), 10, "e3-6")
-      offsetStore.isAccepted(env4) shouldBe true
+      val env4 = createEnvelope("p3", 6L, startTime.plusMillis(5), "e3-6")
+      offsetStore.isAccepted(env4).futureValue shouldBe true
       offsetStore.addInflight(env4)
-      val env5 = createEnvelope("p3", 7L, startTime.plusMillis(6), 10, "e3-7")
-      offsetStore.isAccepted(env5) shouldBe true
+      val env5 = createEnvelope("p3", 7L, startTime.plusMillis(6), "e3-7")
+      offsetStore.isAccepted(env5).futureValue shouldBe true
       offsetStore.addInflight(env5)
-      val env6 = createEnvelope("p3", 8L, startTime.plusMillis(7), 10, "e3-8")
-      offsetStore.isAccepted(env6) shouldBe true
+      val env6 = createEnvelope("p3", 8L, startTime.plusMillis(7), "e3-8")
+      offsetStore.isAccepted(env6).futureValue shouldBe true
       offsetStore.addInflight(env6)
 
       // reject unknown
-      val env7 = createEnvelope("p5", 7L, startTime.plusMillis(8), 10, "e5-7")
-      offsetStore.isAccepted(env7) shouldBe false
-      // but ok when read later
-      val env8 = createEnvelope("p5", 7L, startTime.plusMillis(5), 10000, "e5-7")
-      offsetStore.isAccepted(env8) shouldBe true
+      val env7 = createEnvelope("p5", 7L, startTime.plusMillis(8), "e5-7")
+      offsetStore.isAccepted(env7).futureValue shouldBe false
+      // but ok when previous is old
+      eventTimestampQueryClock.setInstant(startTime.minusSeconds(3600))
+      val env8 = createEnvelope("p5", 7L, startTime.plusMillis(5), "e5-7")
+      offsetStore.isAccepted(env8).futureValue shouldBe true
+      eventTimestampQueryClock.setInstant(startTime)
       offsetStore.addInflight(env8)
       // and subsequent seqNr is accepted
-      val env9 = createEnvelope("p5", 8L, startTime.plusMillis(9), 10, "e5-8")
-      offsetStore.isAccepted(env9) shouldBe true
+      val env9 = createEnvelope("p5", 8L, startTime.plusMillis(9), "e5-8")
+      offsetStore.isAccepted(env9).futureValue shouldBe true
       offsetStore.addInflight(env9)
 
       // it's keeping the inflight that are not in the "stored" state
@@ -314,37 +349,60 @@ class R2dbcTimestampOffsetStoreSpec
 
       val startTime = Instant.now()
 
-      val envelope1 = createEnvelope("p1", 1L, startTime.plusMillis(1), 10, "e1-1")
-      val envelope2 = createEnvelope("p1", 2L, startTime.plusMillis(2), 10, "e1-2")
-      val envelope3 = createEnvelope("p1", 3L, startTime.plusMillis(2), 10, "e1-2")
+      val envelope1 = createEnvelope("p1", 1L, startTime.plusMillis(1), "e1-1")
+      val envelope2 = createEnvelope("p1", 2L, startTime.plusMillis(2), "e1-2")
+      val envelope3 = createEnvelope("p1", 3L, startTime.plusMillis(2), "e1-2")
 
       // seqNr 1 is always accepted
-      offsetStore.isAccepted(envelope1) shouldBe true
+      offsetStore.isAccepted(envelope1).futureValue shouldBe true
       offsetStore.addInflight(envelope1)
       offsetStore.getInflight() shouldBe Map("p1" -> 1L)
       offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(1), Map("p1" -> 1L))).futureValue
       offsetStore.getInflight() shouldBe empty
 
       // seqNr 2 is accepts since it follows seqNr 1 that is stored in state
-      offsetStore.isAccepted(envelope2) shouldBe true
+      offsetStore.isAccepted(envelope2).futureValue shouldBe true
       // simulate envelope processing error by not adding envelope2 to inflight
 
       // seqNr 3 is not accepted, still waiting for seqNr 2
-      offsetStore.isAccepted(envelope3) shouldBe false
+      offsetStore.isAccepted(envelope3).futureValue shouldBe false
 
       // offer seqNr 2 once again
-      offsetStore.isAccepted(envelope2) shouldBe true
+      offsetStore.isAccepted(envelope2).futureValue shouldBe true
       offsetStore.addInflight(envelope2)
       offsetStore.getInflight() shouldBe Map("p1" -> 2L)
 
       // offer seqNr 3  once more
-      offsetStore.isAccepted(envelope3) shouldBe true
+      offsetStore.isAccepted(envelope3).futureValue shouldBe true
       offsetStore.addInflight(envelope3)
       offsetStore.getInflight() shouldBe Map("p1" -> 3L)
 
       // and they are removed from inflight once they have been stored
       offsetStore.saveOffset(TimestampOffset(startTime.plusMillis(2), Map("p1" -> 3L))).futureValue
       offsetStore.getInflight() shouldBe empty
+    }
+
+    "filter accepted" in {
+      val projectionId = genRandomProjectionId()
+      val startTime = Instant.now()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val offset1 = TimestampOffset(startTime, Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
+      offsetStore.saveOffset(offset1).futureValue
+
+      // seqNr 1 is always accepted
+      val env1 = createEnvelope("p4", 1L, startTime.plusMillis(1), "e4-1")
+      // subsequent seqNr is accepted
+      val env2 = createEnvelope("p4", 2L, startTime.plusMillis(2), "e4-2")
+      // but not when gap
+      val env3 = createEnvelope("p4", 4L, startTime.plusMillis(3), "e4-4")
+      // ok when previous is known
+      val env4 = createEnvelope("p1", 4L, startTime.plusMillis(5), "e1-4")
+      // but not when previous is unknown
+      val env5 = createEnvelope("p3", 7L, startTime.plusMillis(5), "e3-7")
+
+      offsetStore.filterAccepted(List(env1, env2, env3, env4, env5)).futureValue shouldBe List(env1, env2, env4)
+
     }
 
     "accept new revisions for durable state" in {
@@ -356,45 +414,51 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.saveOffset(offset1).futureValue
 
       // seqNr 1 is always accepted
-      val env1 = createUpdatedDurableState("p4", 1L, startTime.plusMillis(1), 10, "s4-1")
-      offsetStore.isAccepted(env1) shouldBe true
+      val env1 = createUpdatedDurableState("p4", 1L, startTime.plusMillis(1), "s4-1")
+      offsetStore.isAccepted(env1).futureValue shouldBe true
       // but not if already inflight, seqNr 1 was accepted
       offsetStore.addInflight(env1)
-      offsetStore.isAccepted(createUpdatedDurableState("p4", 1L, startTime.plusMillis(1), 10, "s4-1")) shouldBe false
+      offsetStore
+        .isAccepted(createUpdatedDurableState("p4", 1L, startTime.plusMillis(1), "s4-1"))
+        .futureValue shouldBe false
       // subsequent seqNr is accepted
-      val env2 = createUpdatedDurableState("p4", 2L, startTime.plusMillis(2), 10, "s4-2")
-      offsetStore.isAccepted(env2) shouldBe true
+      val env2 = createUpdatedDurableState("p4", 2L, startTime.plusMillis(2), "s4-2")
+      offsetStore.isAccepted(env2).futureValue shouldBe true
       offsetStore.addInflight(env2)
       // and also ok with gap
-      offsetStore.isAccepted(createUpdatedDurableState("p4", 4L, startTime.plusMillis(3), 10, "s4-4")) shouldBe true
+      offsetStore
+        .isAccepted(createUpdatedDurableState("p4", 4L, startTime.plusMillis(3), "s4-4"))
+        .futureValue shouldBe true
       // and not if later already inflight, seqNr 2 was accepted
-      offsetStore.isAccepted(createUpdatedDurableState("p4", 1L, startTime.plusMillis(1), 10, "s4-1")) shouldBe false
+      offsetStore
+        .isAccepted(createUpdatedDurableState("p4", 1L, startTime.plusMillis(1), "s4-1"))
+        .futureValue shouldBe false
 
       // greater than known is accepted
-      val env3 = createUpdatedDurableState("p1", 4L, startTime.plusMillis(4), 10, "s1-4")
-      offsetStore.isAccepted(env3) shouldBe true
+      val env3 = createUpdatedDurableState("p1", 4L, startTime.plusMillis(4), "s1-4")
+      offsetStore.isAccepted(env3).futureValue shouldBe true
       // but not same
-      offsetStore.isAccepted(createUpdatedDurableState("p3", 5L, startTime, 10, "s3-5")) shouldBe false
+      offsetStore.isAccepted(createUpdatedDurableState("p3", 5L, startTime, "s3-5")).futureValue shouldBe false
       // but not same, even if it's 1
-      offsetStore.isAccepted(createUpdatedDurableState("p2", 1L, startTime, 10, "s2-1")) shouldBe false
+      offsetStore.isAccepted(createUpdatedDurableState("p2", 1L, startTime, "s2-1")).futureValue shouldBe false
       // and not less
-      offsetStore.isAccepted(createUpdatedDurableState("p3", 4L, startTime, 10, "s3-4")) shouldBe false
+      offsetStore.isAccepted(createUpdatedDurableState("p3", 4L, startTime, "s3-4")).futureValue shouldBe false
       offsetStore.addInflight(env3)
 
       // greater than known, and then also subsequent are accepted (needed for grouped)
-      val env4 = createUpdatedDurableState("p3", 8L, startTime.plusMillis(5), 10, "s3-6")
-      offsetStore.isAccepted(env4) shouldBe true
+      val env4 = createUpdatedDurableState("p3", 8L, startTime.plusMillis(5), "s3-6")
+      offsetStore.isAccepted(env4).futureValue shouldBe true
       offsetStore.addInflight(env4)
-      val env5 = createUpdatedDurableState("p3", 9L, startTime.plusMillis(6), 10, "s3-7")
-      offsetStore.isAccepted(env5) shouldBe true
+      val env5 = createUpdatedDurableState("p3", 9L, startTime.plusMillis(6), "s3-7")
+      offsetStore.isAccepted(env5).futureValue shouldBe true
       offsetStore.addInflight(env5)
-      val env6 = createUpdatedDurableState("p3", 20L, startTime.plusMillis(7), 10, "s3-8")
-      offsetStore.isAccepted(env6) shouldBe true
+      val env6 = createUpdatedDurableState("p3", 20L, startTime.plusMillis(7), "s3-8")
+      offsetStore.isAccepted(env6).futureValue shouldBe true
       offsetStore.addInflight(env6)
 
       // accept unknown
-      val env7 = createUpdatedDurableState("p5", 7L, startTime.plusMillis(8), 10, "s5-7")
-      offsetStore.isAccepted(env7) shouldBe true
+      val env7 = createUpdatedDurableState("p5", 7L, startTime.plusMillis(8), "s5-7")
+      offsetStore.isAccepted(env7).futureValue shouldBe true
       offsetStore.addInflight(env7)
 
       // it's keeping the inflight that are not in the "stored" state
