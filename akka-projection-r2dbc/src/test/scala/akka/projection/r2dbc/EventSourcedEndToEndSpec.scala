@@ -143,8 +143,8 @@ class EventSourcedEndToEndSpec
   private def writeEvent(persistenceId: String, seqNr: Long, timestamp: Instant, event: String): Unit = {
     log.debug("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
     val insertEventSql = s"INSERT INTO ${journalSettings.journalTableWithSchema} " +
-      "(slice, entity_type, persistence_id, sequence_number, db_timestamp, writer, write_timestamp, adapter_manifest, event_ser_id, event_ser_manifest, event_payload) " +
-      "VALUES ($1, $2, $3, $4, $5, '', $6, '', $7, '', $8)"
+      "(slice, entity_type, persistence_id, sequence_number, db_timestamp, writer, adapter_manifest, event_ser_id, event_ser_manifest, event_payload) " +
+      "VALUES ($1, $2, $3, $4, $5, '', '', $6, '', $7)"
 
     val slice = SliceUtils.sliceForPersistenceId(persistenceId, journalSettings.maxNumberOfSlices)
     val entityType = SliceUtils.extractEntityTypeFromPersistenceId(persistenceId)
@@ -157,9 +157,8 @@ class EventSourcedEndToEndSpec
         .bind(2, persistenceId)
         .bind(3, seqNr)
         .bind(4, timestamp)
-        .bind(5, timestamp.toEpochMilli)
-        .bind(6, stringSerializer.identifier)
-        .bind(7, stringSerializer.toBinary(event))
+        .bind(5, stringSerializer.identifier)
+        .bind(6, stringSerializer.toBinary(event))
     }
     result.futureValue shouldBe 1
   }
