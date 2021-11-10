@@ -153,8 +153,7 @@ private[projection] class R2dbcOffsetStore(
   private val offsetTable = settings.offsetTableWithSchema
 
   // FIXME define this in akka.persistence.Persistence (not per plugin)
-  private val maxNumberOfSlices =
-    MaxNumberOfSlices // FIXME define this in akka.persistence.Persistence (not per plugin)
+  private val maxNumberOfSlices = MaxNumberOfSlices
 
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
@@ -524,7 +523,6 @@ private[projection] class R2dbcOffsetStore(
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
     val currentState = getState()
-    val timestampOffset = recordWithOffset.offset
 
     val duplicate = isDuplicate(recordWithOffset.record)
 
@@ -555,9 +553,7 @@ private[projection] class R2dbcOffsetStore(
         // when read at the tail we will only accept it if the event with previous seqNr has timestamp
         // before the time window of the offset store.
         // Backtracking will emit missed event again.
-        val entityType = SliceUtils.extractEntityTypeFromPersistenceId(pid)
-        val slice = SliceUtils.sliceForPersistenceId(pid, maxNumberOfSlices)
-        eventTimestampQuery.timestampOf(entityType, pid, slice, seqNr - 1).map {
+        eventTimestampQuery.timestampOf(pid, seqNr - 1).map {
           case Some(previousTimestamp) =>
             if (previousTimestamp.isBefore(currentState.latestTimestamp.minus(settings.timeWindow)))
               true

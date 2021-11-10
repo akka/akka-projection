@@ -23,10 +23,10 @@ import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
-import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.persistence.query.Offset
+import akka.persistence.query
 import akka.persistence.query.scaladsl.EventTimestampQuery
+import akka.persistence.query.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
@@ -81,7 +81,8 @@ object R2dbcTimestampOffsetProjectionSpec {
       testSourceProvider: TestSourceProvider[TimestampOffset, EventEnvelope[String]])
       extends SourceProvider[TimestampOffset, EventEnvelope[String]]
       with TimestampOffsetBySlicesSourceProvider
-      with EventTimestampQuery {
+      with EventTimestampQuery
+      with LoadEventQuery {
 
     override def source(offset: () => Future[Option[TimestampOffset]]): Future[Source[EventEnvelope[String], NotUsed]] =
       testSourceProvider.source(offset)
@@ -96,16 +97,19 @@ object R2dbcTimestampOffsetProjectionSpec {
 
     override def maxSlice: Int = R2dbcOffsetStore.MaxNumberOfSlices - 1
 
-    override def timestampOf(
-        entityType: String,
-        persistenceId: String,
-        slice: Int,
-        sequenceNr: Long): Future[Option[Instant]] = {
+    override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
       Future.successful(envelopes.collectFirst {
         case env
             if env.persistenceId == persistenceId && env.sequenceNr == sequenceNr && env.offset
               .isInstanceOf[TimestampOffset] =>
           env.offset.asInstanceOf[TimestampOffset].timestamp
+      })
+    }
+
+    override def loadEnvelope(persistenceId: String, sequenceNr: Long): Future[Option[query.EventEnvelope]] = {
+      Future.successful(envelopes.collectFirst {
+        case env if env.persistenceId == persistenceId && env.sequenceNr == sequenceNr =>
+          query.EventEnvelope(env.offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp)
       })
     }
   }

@@ -16,6 +16,8 @@ import akka.persistence.query.Offset
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.scaladsl.DurableStateStoreBySliceQuery
 import akka.persistence.state.DurableStateStoreRegistry
+import akka.persistence.state.scaladsl.DurableStateStore
+import akka.persistence.state.scaladsl.GetObjectResult
 import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
@@ -61,7 +63,8 @@ object DurableStateSourceProvider2 {
       override val maxSlice: Int,
       system: ActorSystem[_])
       extends SourceProvider[Offset, DurableStateChange[A]]
-      with TimestampOffsetBySlicesSourceProvider {
+      with TimestampOffsetBySlicesSourceProvider
+      with DurableStateStore[A] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[DurableStateChange[A], NotUsed]] =
@@ -81,5 +84,8 @@ object DurableStateSourceProvider2 {
           throw new IllegalArgumentException(
             s"DurableStateChange [${other.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-persistence-r2dbc/issues")
       }
+
+    override def getObject(persistenceId: String): Future[GetObjectResult[A]] =
+      durableStateStoreQuery.getObject(persistenceId)
   }
 }

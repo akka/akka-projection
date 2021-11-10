@@ -109,7 +109,7 @@ object R2dbcProjection {
     val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
 
     val adaptedHandler =
-      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(handler, offsetStore, r2dbcExecutor)(
+      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
         system.executionContext,
         system)
 
@@ -155,7 +155,9 @@ object R2dbcProjection {
         connFactory)
 
     val adaptedHandler =
-      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnceAsync(handler, offsetStore)(system.executionContext, system)
+      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnceAsync(sourceProvider, handler, offsetStore)(
+        system.executionContext,
+        system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -296,7 +298,7 @@ object R2dbcProjection {
         connFactory)
 
     val adaptedHandler =
-      R2dbcProjectionImpl.adaptedHandlerForFlow(handler, offsetStore)(system.executionContext, system)
+      R2dbcProjectionImpl.adaptedHandlerForFlow(sourceProvider, handler, offsetStore)(system.executionContext, system)
 
     new R2dbcProjectionImpl(
       projectionId,

@@ -13,11 +13,12 @@ import scala.concurrent.Future
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.persistence.query.{ EventEnvelope => QueryEventEnvelope }
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.EventTimestampQuery
-import akka.persistence.query.scaladsl.EventTimestampQuery
+import akka.persistence.query.scaladsl.LoadEventQuery
 import akka.persistence.query.scaladsl.EventsBySliceQuery
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.SourceProvider
@@ -43,6 +44,11 @@ object EventSourcedProvider2 {
         s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
         s"[$readJournalPluginId] must implement [${classOf[EventTimestampQuery].getName}]")
 
+    if (!eventsBySlicesQuery.isInstanceOf[LoadEventQuery])
+      throw new IllegalArgumentException(
+        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
+        s"[$readJournalPluginId] must implement [${classOf[LoadEventQuery].getName}]")
+
     new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
   }
 
@@ -62,7 +68,8 @@ object EventSourcedProvider2 {
       system: ActorSystem[_])
       extends SourceProvider[Offset, EventEnvelope[Event]]
       with TimestampOffsetBySlicesSourceProvider
-      with EventTimestampQuery {
+      with EventTimestampQuery
+      with LoadEventQuery {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[Event], NotUsed]] =
@@ -77,18 +84,24 @@ object EventSourcedProvider2 {
 
     override def extractCreationTime(envelope: EventEnvelope[Event]): Long = envelope.timestamp
 
-    override def timestampOf(
-        entityType: String,
-        persistenceId: String,
-        slice: Int,
-        sequenceNr: Long): Future[Option[Instant]] =
+    override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] =
       eventsBySlicesQuery match {
         case timestampQuery: EventTimestampQuery =>
-          timestampQuery.timestampOf(entityType, persistenceId, slice, sequenceNr)
+          timestampQuery.timestampOf(persistenceId, sequenceNr)
         case _ =>
           Future.failed(
             new IllegalStateException(
               s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[EventTimestampQuery].getName}]"))
+      }
+
+    override def loadEnvelope(persistenceId: String, sequenceNr: Long): Future[Option[QueryEventEnvelope]] =
+      eventsBySlicesQuery match {
+        case laodEventQuery: LoadEventQuery =>
+          laodEventQuery.loadEnvelope(persistenceId, sequenceNr)
+        case _ =>
+          Future.failed(
+            new IllegalStateException(
+              s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[LoadEventQuery].getName}]"))
       }
   }
 }

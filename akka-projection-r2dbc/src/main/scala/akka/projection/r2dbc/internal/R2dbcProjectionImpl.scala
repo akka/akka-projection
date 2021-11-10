@@ -15,7 +15,11 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
+import akka.persistence.query.UpdatedDurableState
+import akka.persistence.query.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
+import akka.persistence.state.scaladsl.DurableStateStore
+import akka.persistence.state.scaladsl.GetObjectResult
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
@@ -70,6 +74,49 @@ private[projection] object R2dbcProjectionImpl {
     new R2dbcOffsetStore(projectionId, sourceProvider, system, settings, r2dbcExecutor)
   }
 
+  def loadEnvelope[Envelope](env: Envelope, sourceProvider: SourceProvider[_, Envelope])(implicit
+      ec: ExecutionContext): Future[Envelope] = {
+    env match {
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.event == null =>
+        val pid = eventEnvelope.persistenceId
+        val seqNr = eventEnvelope.sequenceNr
+        sourceProvider match {
+          case loadEventQuery: LoadEventQuery =>
+            loadEventQuery
+              .loadEnvelope(pid, seqNr)
+              .map {
+                case Some(loadedEnv) =>
+                  log.debug("Loaded event lazily, persistenceId [{}], seqNr [{}]", pid, seqNr)
+                  EventEnvelope(eventEnvelope.offset, pid, seqNr, loadedEnv.event, eventEnvelope.timestamp)
+                    .asInstanceOf[Envelope]
+                case None =>
+                  throw new IllegalStateException(
+                    s"Event not found when loaded lazily, persistenceId [$pid], sequenceNr [$seqNr]")
+              }
+        }
+
+      case upd: UpdatedDurableState[_] if upd.value == null =>
+        val pid = upd.persistenceId
+        val revision = upd.revision
+        sourceProvider match {
+          case x: DurableStateStore[_] =>
+            x.getObject(pid)
+              .map {
+                case GetObjectResult(Some(loadedValue), loadedRevision) =>
+                  log.debug("Loaded durable state lazily, persistenceId [{}], revision [{}]", pid, loadedRevision)
+                  new UpdatedDurableState(pid, loadedRevision, loadedValue, upd.offset, upd.timestamp)
+                    .asInstanceOf[Envelope]
+                case GetObjectResult(None, _) =>
+                  // FIXME use DeletedDurableState here when that is added
+                  throw new IllegalStateException(
+                    s"Durable state not found when loaded lazily, persistenceId [$pid], revision [$revision]")
+              }
+        }
+      case _ =>
+        Future.successful(env)
+    }
+  }
+
   private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => R2dbcHandler[Envelope],
@@ -81,15 +128,17 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              val offset = sourceProvider.extractOffset(envelope)
-              r2dbcExecutor.withConnection("exactly-once handler") { conn =>
-                // run users handler
-                val session = new R2dbcSession(conn)
-                delegate
-                  .process(session, envelope)
-                  .flatMap { _ =>
-                    offsetStore.saveOffsetInTx(conn, offset)
-                  }
+              loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                val offset = sourceProvider.extractOffset(loadedEnvelope)
+                r2dbcExecutor.withConnection("exactly-once handler") { conn =>
+                  // run users handler
+                  val session = new R2dbcSession(conn)
+                  delegate
+                    .process(session, loadedEnvelope)
+                    .flatMap { _ =>
+                      offsetStore.saveOffsetInTx(conn, offset)
+                    }
+                }
               }
             case false =>
               FutureDone
@@ -112,13 +161,16 @@ private[projection] object R2dbcProjectionImpl {
           if (acceptedEnvelopes.isEmpty) {
             FutureDone
           } else {
-            val offsets = acceptedEnvelopes.iterator.map(sourceProvider.extractOffset).toVector
-            r2dbcExecutor.withConnection("grouped handler") { conn =>
-              // run users handler
-              val session = new R2dbcSession(conn)
-              delegate.process(session, acceptedEnvelopes).flatMap { _ =>
-                offsetStore.saveOffsetsInTx(conn, offsets)
-              }
+            Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
+              loadedEnvelopes =>
+                val offsets = loadedEnvelopes.iterator.map(sourceProvider.extractOffset).toVector
+                r2dbcExecutor.withConnection("grouped handler") { conn =>
+                  // run users handler
+                  val session = new R2dbcSession(conn)
+                  delegate.process(session, loadedEnvelopes).flatMap { _ =>
+                    offsetStore.saveOffsetsInTx(conn, offsets)
+                  }
+                }
             }
           }
         }
@@ -127,6 +179,7 @@ private[projection] object R2dbcProjectionImpl {
   }
 
   private[projection] def adaptedHandlerForAtLeastOnce[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => R2dbcHandler[Envelope],
       offsetStore: R2dbcOffsetStore,
       r2dbcExecutor: R2dbcExecutor)(implicit ec: ExecutionContext, system: ActorSystem[_]): () => Handler[Envelope] = {
@@ -135,16 +188,18 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              r2dbcExecutor
-                .withConnection("at-least-once handler") { conn =>
-                  // run users handler
-                  val session = new R2dbcSession(conn)
-                  delegate.process(session, envelope)
-                }
-                .map { _ =>
-                  offsetStore.addInflight(envelope)
-                  Done
-                }
+              loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                r2dbcExecutor
+                  .withConnection("at-least-once handler") { conn =>
+                    // run users handler
+                    val session = new R2dbcSession(conn)
+                    delegate.process(session, loadedEnvelope)
+                  }
+                  .map { _ =>
+                    offsetStore.addInflight(loadedEnvelope)
+                    Done
+                  }
+              }
             case false =>
               FutureDone
           }
@@ -153,6 +208,7 @@ private[projection] object R2dbcProjectionImpl {
   }
 
   private[projection] def adaptedHandlerForAtLeastOnceAsync[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => Handler[Envelope],
       offsetStore: R2dbcOffsetStore)(implicit ec: ExecutionContext, system: ActorSystem[_]): () => Handler[Envelope] = {
     () =>
@@ -160,12 +216,14 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              delegate
-                .process(envelope)
-                .map { _ =>
-                  offsetStore.addInflight(envelope)
-                  Done
-                }
+              loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                delegate
+                  .process(loadedEnvelope)
+                  .map { _ =>
+                    offsetStore.addInflight(loadedEnvelope)
+                    Done
+                  }
+              }
             case false =>
               FutureDone
           }
@@ -186,12 +244,15 @@ private[projection] object R2dbcProjectionImpl {
           if (acceptedEnvelopes.isEmpty) {
             FutureDone
           } else {
-            delegate
-              .process(acceptedEnvelopes)
-              .map { _ =>
-                offsetStore.addInflights(acceptedEnvelopes)
-                Done
-              }
+            Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
+              loadedEnvelopes =>
+                delegate
+                  .process(loadedEnvelopes)
+                  .map { _ =>
+                    offsetStore.addInflights(loadedEnvelopes)
+                    Done
+                  }
+            }
           }
         }
       }
@@ -199,6 +260,7 @@ private[projection] object R2dbcProjectionImpl {
   }
 
   private[projection] def adaptedHandlerForFlow[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
       handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _],
       offsetStore: R2dbcOffsetStore)(implicit
       ec: ExecutionContext,
@@ -208,12 +270,14 @@ private[projection] object R2dbcProjectionImpl {
       .mapAsync(1) { env =>
         offsetStore
           .isAccepted(env)
-          .map { ok =>
+          .flatMap { ok =>
             if (ok) {
-              offsetStore.addInflight(env)
-              Some(env)
+              loadEnvelope(env, sourceProvider).map { loadedEnvelope =>
+                offsetStore.addInflight(loadedEnvelope)
+                Some(loadedEnvelope)
+              }
             } else {
-              None
+              Future.successful(None)
             }
           }
       }
