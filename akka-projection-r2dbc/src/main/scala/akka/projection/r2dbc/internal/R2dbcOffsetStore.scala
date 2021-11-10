@@ -166,12 +166,12 @@ private[projection] class R2dbcOffsetStore(
   // many rows per persistence_id
   private val upsertTimestampOffsetSql: String =
     s"INSERT INTO $timestampOffsetTable " +
-    "(projection_name, projection_key, slice, persistence_id, sequence_number, timestamp_offset, last_updated)  " +
+    "(projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, last_updated)  " +
     "VALUES ($1,$2,$3,$4,$5,$6, transaction_timestamp()) " +
     "ON CONFLICT (slice, projection_name, persistence_id) " +
     "DO UPDATE SET " +
     "projection_key = excluded.projection_key, " +
-    "sequence_number = excluded.sequence_number, " +
+    "seq_nr = excluded.seq_nr, " +
     "timestamp_offset = excluded.timestamp_offset, " +
     "last_updated = excluded.last_updated"
 
@@ -270,7 +270,7 @@ private[projection] class R2dbcOffsetStore(
       },
       row => {
         val pid = row.get("persistence_id", classOf[String])
-        val seqNr = row.get("sequence_number", classOf[java.lang.Long])
+        val seqNr = row.get("seq_nr", classOf[java.lang.Long])
         val timestamp = row.get("timestamp_offset", classOf[Instant])
         Record(pid, seqNr, timestamp)
       })

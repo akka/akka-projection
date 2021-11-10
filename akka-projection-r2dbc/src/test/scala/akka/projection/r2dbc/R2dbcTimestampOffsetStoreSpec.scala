@@ -40,7 +40,7 @@ object R2dbcTimestampOffsetStoreSpec {
         entityType: String,
         persistenceId: String,
         slice: Int,
-        sequenceNumber: SeqNr): Future[Option[Instant]] =
+        sequenceNr: SeqNr): Future[Option[Instant]] =
       Future.successful(Some(clock.instant()))
 
   }

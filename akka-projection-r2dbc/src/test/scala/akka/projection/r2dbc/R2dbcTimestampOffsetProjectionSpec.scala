@@ -100,10 +100,10 @@ object R2dbcTimestampOffsetProjectionSpec {
         entityType: String,
         persistenceId: String,
         slice: Int,
-        sequenceNumber: Long): Future[Option[Instant]] = {
+        sequenceNr: Long): Future[Option[Instant]] = {
       Future.successful(envelopes.collectFirst {
         case env
-            if env.persistenceId == persistenceId && env.sequenceNr == sequenceNumber && env.offset
+            if env.persistenceId == persistenceId && env.sequenceNr == sequenceNr && env.offset
               .isInstanceOf[TimestampOffset] =>
           env.offset.asInstanceOf[TimestampOffset].timestamp
       })

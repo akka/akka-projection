@@ -81,10 +81,10 @@ object EventSourcedProvider2 {
         entityType: String,
         persistenceId: String,
         slice: Int,
-        sequenceNumber: Long): Future[Option[Instant]] =
+        sequenceNr: Long): Future[Option[Instant]] =
       eventsBySlicesQuery match {
         case timestampQuery: EventTimestampQuery =>
-          timestampQuery.timestampOf(entityType, persistenceId, slice, sequenceNumber)
+          timestampQuery.timestampOf(entityType, persistenceId, slice, sequenceNr)
         case _ =>
           Future.failed(
             new IllegalStateException(
