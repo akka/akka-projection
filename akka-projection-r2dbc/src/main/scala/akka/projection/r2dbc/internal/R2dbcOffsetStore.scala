@@ -401,21 +401,6 @@ private[projection] class R2dbcOffsetStore(
           .bind(5, record.timestamp)
       }
 
-      // FIXME strange that the batch add doesn't work
-      //    val stmt = conn.createStatement(upsertTimestampOffsetSql)
-      //    records.foreach { rec =>
-      //      if (rec ne records.head)
-      //        stmt.add()
-      //      bindRecord(stmt, rec)
-      //    }
-      //    R2dbcExecutor.updateOneInTx(stmt).map(_ => Done)(ExecutionContext.parasitic)
-
-      val stmts =
-        filteredRecords.map { rec =>
-          val stmt = conn.createStatement(upsertTimestampOffsetSql)
-          bindRecord(stmt, rec)
-        }
-
       val newState = oldState.add(filteredRecords)
 
       // accumulate some more than the timeWindow before evicting
@@ -427,7 +412,21 @@ private[projection] class R2dbcOffsetStore(
         } else
           newState
 
-      R2dbcExecutor.updateInTx(stmts).map { _ =>
+      val statement = conn.createStatement(upsertTimestampOffsetSql)
+
+      val offsetUpserts =
+        if (filteredRecords.size == 1) {
+          val boundStatement = bindRecord(statement, filteredRecords.head)
+          R2dbcExecutor.updateOneInTx(boundStatement)
+        } else {
+          val boundStatement =
+            filteredRecords.foldLeft(statement) { (stmt, rec) =>
+              bindRecord(stmt, rec).add()
+            }
+          R2dbcExecutor.updateBatchInTx(boundStatement)
+        }
+
+      offsetUpserts.map { _ =>
         if (state.compareAndSet(oldState, evictedNewState))
           cleanupInflight(evictedNewState)
         else
