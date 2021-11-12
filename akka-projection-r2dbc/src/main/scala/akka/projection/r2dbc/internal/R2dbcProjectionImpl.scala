@@ -16,7 +16,8 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.persistence.query.UpdatedDurableState
-import akka.persistence.query.scaladsl.LoadEventQuery
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult
@@ -27,7 +28,6 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.RunningProjectionManagement
 import akka.projection.StatusObserver
-import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
@@ -77,18 +77,17 @@ private[projection] object R2dbcProjectionImpl {
   def loadEnvelope[Envelope](env: Envelope, sourceProvider: SourceProvider[_, Envelope])(implicit
       ec: ExecutionContext): Future[Envelope] = {
     env match {
-      case eventEnvelope: EventEnvelope[_] if eventEnvelope.event == null =>
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.eventOption.isEmpty =>
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
         sourceProvider match {
           case loadEventQuery: LoadEventQuery =>
             loadEventQuery
-              .loadEnvelope(pid, seqNr)
+              .loadEnvelope[Any](pid, seqNr)
               .map {
                 case Some(loadedEnv) =>
                   log.debug("Loaded event lazily, persistenceId [{}], seqNr [{}]", pid, seqNr)
-                  EventEnvelope(eventEnvelope.offset, pid, seqNr, loadedEnv.event, eventEnvelope.timestamp)
-                    .asInstanceOf[Envelope]
+                  loadedEnv.asInstanceOf[Envelope]
                 case None =>
                   throw new IllegalStateException(
                     s"Event not found when loaded lazily, persistenceId [$pid], sequenceNr [$seqNr]")
@@ -315,14 +314,6 @@ private[projection] object R2dbcProjectionImpl {
     }
   }
 
-  // TODO add toString to EventEnvelope
-  def envToString[Envelope](envelope: Envelope): AnyRef = new AnyRef {
-    override def toString: String = envelope match {
-      case env: EventEnvelope[_] =>
-        s"EventEnvelope(${env.offset}, ${env.persistenceId}, ${env.sequenceNr})"
-      case env => env.toString
-    }
-  }
 }
 
 /**

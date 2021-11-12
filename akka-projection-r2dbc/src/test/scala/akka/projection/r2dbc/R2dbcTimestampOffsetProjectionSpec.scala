@@ -24,9 +24,10 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.persistence.query
-import akka.persistence.query.scaladsl.EventTimestampQuery
-import akka.persistence.query.scaladsl.LoadEventQuery
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.EventTimestampQuery
+import akka.persistence.query.typed.scaladsl.LoadEventQuery
+import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
@@ -35,7 +36,6 @@ import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.TestStatusObserver.Err
 import akka.projection.TestStatusObserver.OffsetProgress
-import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
@@ -58,22 +58,25 @@ object R2dbcTimestampOffsetProjectionSpec {
 
   /**
    * This variant of TestStatusObserver is useful when the incoming envelope is the original akka projection
-   * EventEnvelope, but we want to assert on [[Envelope]]. The original [[EventEnvelope]] has too many params that are
-   * not so interesting for the test including the offset timestamp that would make the it harder to test.
+   * EventBySliceEnvelope, but we want to assert on [[Envelope]]. The original [[EventEnvelope]] has too many params
+   * that are not so interesting for the test including the offset timestamp that would make the it harder to test.
    */
   class R2dbcTestStatusObserver(
       statusProbe: ActorRef[TestStatusObserver.Status],
       progressProbe: ActorRef[TestStatusObserver.OffsetProgress[Envelope]])
       extends TestStatusObserver[EventEnvelope[String]](statusProbe.ref) {
     override def offsetProgress(projectionId: ProjectionId, envelope: EventEnvelope[String]): Unit =
-      progressProbe ! OffsetProgress(Envelope(envelope.persistenceId, envelope.sequenceNr, envelope.event))
+      progressProbe ! OffsetProgress(
+        Envelope(envelope.persistenceId, envelope.sequenceNr, envelope.eventOption.getOrElse("None")))
 
     override def error(
         projectionId: ProjectionId,
         envelope: EventEnvelope[String],
         cause: Throwable,
         recoveryStrategy: HandlerRecoveryStrategy): Unit =
-      statusProbe ! Err(Envelope(envelope.persistenceId, envelope.sequenceNr, envelope.event), cause)
+      statusProbe ! Err(
+        Envelope(envelope.persistenceId, envelope.sequenceNr, envelope.eventOption.getOrElse("None")),
+        cause)
   }
 
   class TestTimestampSourceProvider(
@@ -106,10 +109,10 @@ object R2dbcTimestampOffsetProjectionSpec {
       })
     }
 
-    override def loadEnvelope(persistenceId: String, sequenceNr: Long): Future[Option[query.EventEnvelope]] = {
+    override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): Future[Option[EventEnvelope[Event]]] = {
       Future.successful(envelopes.collectFirst {
         case env if env.persistenceId == persistenceId && env.sequenceNr == sequenceNr =>
-          query.EventEnvelope(env.offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp)
+          env.asInstanceOf[EventEnvelope[Event]]
       })
     }
   }
@@ -226,19 +229,11 @@ class R2dbcTimestampOffsetProjectionSpec
         _attempts.incrementAndGet()
         throw TestException(concatHandlerFail4Msg + s" after $attempts attempts")
       } else {
-        logger.debug(s"handling {}", envToString(envelope))
+        logger.debug(s"handling {}", envelope)
         TestRepository(session).concatToText(envelope.persistenceId, envelope.event)
       }
     }
 
-    // TODO add toString to EventEnvelope
-    def envToString[Envelope](envelope: Envelope): AnyRef = new AnyRef {
-      override def toString: String = envelope match {
-        case env: EventEnvelope[_] =>
-          s"EventEnvelope(${env.offset}, ${env.persistenceId}, ${env.sequenceNr})"
-        case env => env.toString
-      }
-    }
   }
 
   private val clock = new TestClock
@@ -247,13 +242,18 @@ class R2dbcTimestampOffsetProjectionSpec
     clock
   }
 
-  def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] =
+  def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] = {
+    val entityType = SliceUtils.extractEntityTypeFromPersistenceId(pid)
+    val slice = SliceUtils.sliceForPersistenceId(pid, R2dbcOffsetStore.MaxNumberOfSlices)
     EventEnvelope(
       TimestampOffset(timestamp, timestamp.plusMillis(1000), Map(pid -> seqNr)),
       pid,
       seqNr,
       event,
-      timestamp.toEpochMilli)
+      timestamp.toEpochMilli,
+      entityType,
+      slice)
+  }
 
   def createEnvelopes(pid: Pid, numberOfEvents: Int): immutable.IndexedSeq[EventEnvelope[String]] = {
     (1 to numberOfEvents).map { n =>
@@ -642,13 +642,14 @@ class R2dbcTimestampOffsetProjectionSpec
 
       val result = new StringBuffer()
 
-      def handler(): Handler[immutable.Seq[EventEnvelope[String]]] = new Handler[immutable.Seq[EventEnvelope[String]]] {
-        override def process(envelopes: immutable.Seq[EventEnvelope[String]]): Future[Done] = {
-          Future {
-            envelopes.foreach(env => result.append(env.event).append("|"))
-          }.map(_ => Done)
+      def handler(): Handler[immutable.Seq[EventEnvelope[String]]] =
+        new Handler[immutable.Seq[EventEnvelope[String]]] {
+          override def process(envelopes: immutable.Seq[EventEnvelope[String]]): Future[Done] = {
+            Future {
+              envelopes.foreach(env => result.append(env.event).append("|"))
+            }.map(_ => Done)
+          }
         }
-      }
 
       val projection =
         R2dbcProjection

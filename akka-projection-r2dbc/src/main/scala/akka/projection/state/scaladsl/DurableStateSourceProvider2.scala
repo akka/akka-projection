@@ -14,7 +14,7 @@ import akka.persistence.query.DurableStateChange
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.UpdatedDurableState
-import akka.persistence.query.scaladsl.DurableStateStoreBySliceQuery
+import akka.persistence.query.typed.scaladsl.DurableStateStoreBySliceQuery
 import akka.persistence.state.DurableStateStoreRegistry
 import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult

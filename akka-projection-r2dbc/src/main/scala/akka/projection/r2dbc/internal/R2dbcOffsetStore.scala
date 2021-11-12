@@ -20,13 +20,13 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.query.DurableStateChange
 import akka.persistence.query.UpdatedDurableState
-import akka.persistence.query.scaladsl.EventTimestampQuery
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization

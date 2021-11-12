@@ -13,14 +13,13 @@ import scala.concurrent.Future
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
-import akka.persistence.query.{ EventEnvelope => QueryEventEnvelope }
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
-import akka.persistence.query.scaladsl.EventTimestampQuery
-import akka.persistence.query.scaladsl.LoadEventQuery
-import akka.persistence.query.scaladsl.EventsBySliceQuery
-import akka.projection.eventsourced.EventEnvelope
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.EventTimestampQuery
+import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
@@ -77,7 +76,6 @@ object EventSourcedProvider2 {
         val offset = offsetOpt.getOrElse(NoOffset)
         eventsBySlicesQuery
           .eventsBySlices(entityType, minSlice, maxSlice, offset)
-          .map(env => EventEnvelope(env))
       }
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
@@ -94,7 +92,7 @@ object EventSourcedProvider2 {
               s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[EventTimestampQuery].getName}]"))
       }
 
-    override def loadEnvelope(persistenceId: String, sequenceNr: Long): Future[Option[QueryEventEnvelope]] =
+    override def loadEnvelope[Evt](persistenceId: String, sequenceNr: Long): Future[Option[EventEnvelope[Evt]]] =
       eventsBySlicesQuery match {
         case laodEventQuery: LoadEventQuery =>
           laodEventQuery.loadEnvelope(persistenceId, sequenceNr)
