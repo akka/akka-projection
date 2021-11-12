@@ -581,7 +581,6 @@ class R2dbcTimestampOffsetStoreSpec
     }
 
     "read and save paused" in {
-      pending // FIXME not implemented yet
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 

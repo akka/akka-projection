@@ -1295,7 +1295,6 @@ class R2dbcProjectionSpec
     }
 
     "pause projection" in {
-      pending // FIXME not implemented yet
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
       implicit val offsetStore = createOffsetStore(projectionId)

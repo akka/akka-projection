@@ -34,6 +34,7 @@ import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import io.r2dbc.spi.Connection
+import io.r2dbc.spi.Row
 import io.r2dbc.spi.Statement
 import org.slf4j.LoggerFactory
 
@@ -151,6 +152,7 @@ private[projection] class R2dbcOffsetStore(
 
   private val timestampOffsetTable = settings.timestampOffsetTableWithSchema
   private val offsetTable = settings.offsetTableWithSchema
+  private val managementTable = settings.managementTableWithSchema
 
   // FIXME define this in akka.persistence.Persistence (not per plugin)
   private val maxNumberOfSlices = MaxNumberOfSlices
@@ -193,6 +195,21 @@ private[projection] class R2dbcOffsetStore(
 
   private val clearOffsetSql: String =
     s"""DELETE FROM $offsetTable WHERE projection_name = $$1 AND projection_key = $$2"""
+
+  private val readManagementStateSql =
+    s"SELECT paused FROM $managementTable WHERE " +
+    "projection_name = $1 AND " +
+    "projection_key = $2 "
+
+  val updateManagementStateSql: String =
+    s"INSERT INTO $managementTable " +
+    "(projection_name, projection_key, paused, last_updated)  " +
+    "VALUES " +
+    "($1,$2,$3,$4) " +
+    "ON CONFLICT (projection_name, projection_key) " +
+    "DO UPDATE SET " +
+    "paused = excluded.paused, " +
+    "last_updated = excluded.last_updated"
 
   // The OffsetStore instance is used by a single projectionId and there shouldn't be any concurrent
   // calls to methods that access the `state`. To detect any violations of that concurrency assumption
@@ -681,11 +698,33 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def readManagementState(): Future[Option[ManagementState]] = {
-    Future.successful(None) // FIXME not implemented yet
+    def createStatement(connection: Connection) =
+      connection
+        .createStatement(readManagementStateSql)
+        .bind(0, projectionId.name)
+        .bind(1, projectionId.key)
+
+    r2dbcExecutor
+      .selectOne("read management state")(
+        conn => createStatement(conn),
+        row => ManagementState(row.get("paused", classOf[java.lang.Boolean])))
   }
 
   def savePaused(paused: Boolean): Future[Done] = {
-    Future.successful(Done) // FIXME not implemented yet
+    r2dbcExecutor
+      .updateOne("update management state") { conn =>
+        conn
+          .createStatement(updateManagementStateSql)
+          .bind(0, projectionId.name)
+          .bind(1, projectionId.key)
+          .bind(2, paused)
+          .bind(3, Instant.now(clock).toEpochMilli)
+      }
+      .flatMap {
+        case i if i == 1 => Future.successful(Done)
+        case n =>
+          Future.failed(new RuntimeException(s"Failed to update management table for $projectionId"))
+      }
   }
 
   private def createRecordWithOffset[Envelope](envelope: Envelope): Option[RecordWithOffset] = {
