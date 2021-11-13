@@ -48,7 +48,7 @@ object Dependencies {
     // not really used in lib code, but in example and test
     val h2Driver = "com.h2database" % "h2" % Versions.h2Driver
 
-    val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0"
+    val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.6.0"
   }
 
   object Test {
