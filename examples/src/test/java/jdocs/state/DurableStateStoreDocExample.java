@@ -7,13 +7,14 @@ package jdocs.state;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
 
-// #imports
+// #changesByTagSourceProvider
 import akka.persistence.jdbc.state.javadsl.JdbcDurableStateStore;
 import akka.persistence.query.DurableStateChange;
 import akka.persistence.query.Offset;
 import akka.projection.state.javadsl.DurableStateSourceProvider;
 import akka.projection.javadsl.SourceProvider;
-// #imports
+
+// #changesByTagSourceProvider
 
 public interface DurableStateStoreDocExample {
 
@@ -21,10 +22,10 @@ public interface DurableStateStoreDocExample {
 
     ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "Example");
 
-    // #sourceProvider
+    // #changesByTagSourceProvider
     SourceProvider<Offset, DurableStateChange<AccountEntity.Account>> sourceProvider =
         DurableStateSourceProvider.changesByTag(
             system, JdbcDurableStateStore.Identifier(), "bank-accounts-1");
-    // #sourceProvider
+    // #changesByTagSourceProvider
   }
 }
