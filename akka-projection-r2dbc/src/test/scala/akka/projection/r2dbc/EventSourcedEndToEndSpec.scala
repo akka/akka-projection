@@ -310,13 +310,9 @@ class EventSourcedEndToEndSpec
 
       // pid3, seqNr 8 is missing (knows 7) when receiving 9
       writeEvent(pid3, 9L, startTime.plusMillis(4), "e3-9")
-      processedProbe.expectNoMessage(journalSettings.querySettings.refreshInterval + 500.millis)
+      processedProbe.expectNoMessage(journalSettings.querySettings.refreshInterval + 2000.millis)
 
-      // but backtracking can fill in the gaps
-      // need some progress because backtracking will not exceed the latest offset
-      writeEvent(pid1, 2L, startTime.plusMillis(5), "e1-2")
-      processedProbe.receiveMessage().envelope.event shouldBe "e1-2"
-      // backtracking will pick up pid3 seqNr 8 and 9
+      // but backtracking can fill in the gaps, backtracking will pick up pid3 seqNr 8 and 9
       writeEvent(pid3, 8L, startTime.plusMillis(3), "e3-8")
       val possibleDelay =
         journalSettings.querySettings.backtrackingBehindCurrentTime + journalSettings.querySettings.refreshInterval + processedProbe.remainingOrDefault
