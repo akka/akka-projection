@@ -31,10 +31,10 @@ A @apidoc[SourceProvider] defines the source of the event envelopes that the `Pr
 for the `eventsByTag` query can be defined with the @apidoc[EventSourcedProvider$] like this:
 
 Scala
-:  @@snip [EventSourcedDocExample.scala](/examples/src/test/scala/docs/eventsourced/EventSourcedDocExample.scala) { #imports #sourceProvider }
+:  @@snip [EventSourcedDocExample.scala](/examples/src/test/scala/docs/eventsourced/EventSourcedDocExample.scala) { #eventsByTagSourceProvider }
 
 Java
-:  @@snip [EventSourcedDocExample.java](/examples/src/test/java/jdocs/eventsourced/EventSourcedDocExample.java) { #imports #sourceProvider }
+:  @@snip [EventSourcedDocExample.java](/examples/src/test/java/jdocs/eventsourced/EventSourcedDocExample.java) { #eventsByTagSourceProvider }
 
 This example is using the [Cassandra plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-cassandra/current/read-journal.html),
 but same code can be used for other Akka Persistence plugins by replacing the `CassandraReadJournal.Identifier`.
@@ -49,3 +49,24 @@ The @scala[`EventEnvelope[ShoppingCart.Event]`]@java[`EventEnvelope<ShoppingCart
 handler will process. It contains the `Event` and additional meta data, such as the offset that will be stored
 by the `Projection`. See @apidoc[akka.projection.eventsourced.EventEnvelope] for full details of what the
 envelope contains. 
+
+## SourceProvider for eventsBySlices
+
+A @apidoc[SourceProvider] defines the source of the event envelopes that the `Projection` will process. A `SourceProvider`
+for the `eventsBySlices` query can be defined with the @apidoc[EventSourcedProvider$] like this:
+
+Scala
+:  @@snip [EventSourcedDocExample.scala](/examples/src/test/scala/docs/eventsourced/EventSourcedDocExample.scala) { #eventsBySlicesSourceProvider }
+
+Java
+:  @@snip [EventSourcedDocExample.java](/examples/src/test/java/jdocs/eventsourced/EventSourcedBySlicesDocExample.java) { #eventsBySlicesSourceProvider }
+
+This example is using the [R2DBC plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-r2dbc/current/query.html).
+You will use the same plugin as you have configured for the write side that is used by the `EventSourcedBehavior`.
+
+This source is consuming all events from the `ShoppingCart` `EventSourcedBehavior` for the given slice range. In a production application, you would need to start as many instances as the number of slice ranges. That way you consume the events from all entities.
+
+The @scala[`EventEnvelope[ShoppingCart.Event]`]@java[`EventEnvelope<ShoppingCart.Event>`] is what the `Projection`
+handler will process. It contains the `Event` and additional meta data, such as the offset that will be stored
+by the `Projection`. See @apidoc[akka.persistence.query.typed.EventEnvelope] for full details of what the
+envelope contains.

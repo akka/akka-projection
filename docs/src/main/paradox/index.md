@@ -10,6 +10,7 @@
 * [Use Cases](use-cases.md)
 * [Getting Started Guide](getting-started/index.md)
 * [Event Sourced](eventsourced.md)
+* [Durable State](durable-state.md)
 * [Kafka](kafka.md)
 * [Cassandra](cassandra.md)
 * [JDBC](jdbc.md)
@@ -23,6 +24,5 @@
 * [Testing](testing.md)
 * [Classic](classic.md)
 * [Snapshots](snapshots.md)
-* [Durable State](durable-state.md)
 
 @@@
