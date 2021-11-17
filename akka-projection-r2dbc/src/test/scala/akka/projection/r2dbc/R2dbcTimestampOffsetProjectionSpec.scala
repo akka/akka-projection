@@ -706,9 +706,9 @@ class R2dbcTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val startTime = Instant.now()
-      val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
-      val sourceProvider1 = createSourceProvider(envelopes1)
-      implicit val offsetStore = createOffsetStore(projectionId, sourceProvider1)
+      val sourceProvider = new TestSourceProviderWithInput()
+      implicit val offsetStore =
+        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
 
       val result1 = new StringBuffer()
       val result2 = new StringBuffer()
@@ -728,10 +728,15 @@ class R2dbcTimestampOffsetProjectionSpec
         }
       }
 
-      val projection1 =
-        R2dbcProjection.groupedWithinAsync(projectionId, Some(settings), sourceProvider1, handler = () => handler())
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          R2dbcProjection.groupedWithinAsync(projectionId, Some(settings), sourceProvider, handler = () => handler())))
+      val input = sourceProvider.input.futureValue
 
-      projectionTestKit.run(projection1) {
+      val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
+      envelopes1.foreach(input ! _)
+
+      eventually {
         result1.toString shouldBe "e1-1|e1-2|e1-3|"
         result2.toString shouldBe "e2-1|"
       }
@@ -739,18 +744,17 @@ class R2dbcTimestampOffsetProjectionSpec
       // simulate backtracking
       logger.debug("Starting backtracking")
       val envelopes2 = createEnvelopesBacktrackingUnknownSequenceNumbers(startTime, pid1, pid2)
-      val sourceProvider2 = createBacktrackingSourceProvider(envelopes2)
-      val projection2 =
-        R2dbcProjection.groupedWithinAsync(projectionId, Some(settings), sourceProvider2, handler = () => handler())
+      envelopes2.foreach(input ! _)
 
-      projectionTestKit.run(projection2) {
-        // FIXME
-//        result1.toString shouldBe "e1-1|e1-2|e1-3|e1-4|e1-5|e1-6|"
+      eventually {
+        result1.toString shouldBe "e1-1|e1-2|e1-3|e1-4|e1-5|e1-6|"
         result2.toString shouldBe "e2-1|e2-2|e2-3|e2-4|"
       }
 
-      offsetShouldBe(envelopes2.last.offset)
-      pending // FIXME still pending because of result1 (see above)
+      eventually {
+        offsetShouldBe(envelopes2.last.offset)
+      }
+      projectionRef ! ProjectionBehavior.Stop
     }
   }
 
