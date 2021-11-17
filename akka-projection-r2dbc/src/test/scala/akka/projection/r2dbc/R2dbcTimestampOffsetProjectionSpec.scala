@@ -667,7 +667,9 @@ class R2dbcTimestampOffsetProjectionSpec
         result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
       }
 
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "filter duplicates for grouped async projection" in {
@@ -703,7 +705,9 @@ class R2dbcTimestampOffsetProjectionSpec
         result1.toString shouldBe "e1-1|e1-2|e1-3|e1-4|"
         result2.toString shouldBe "e2-1|e2-2|e2-3|"
       }
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "filter out unknown sequence numbers for grouped async projection" in {
@@ -780,7 +784,9 @@ class R2dbcTimestampOffsetProjectionSpec
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "filter duplicates" in {
@@ -798,7 +804,9 @@ class R2dbcTimestampOffsetProjectionSpec
         projectedValueShouldBe("e1-1|e1-2|e1-3|e1-4")(pid1)
         projectedValueShouldBe("e2-1|e2-2|e2-3")(pid2)
       }
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "filter out unknown sequence numbers" in {
@@ -807,31 +815,37 @@ class R2dbcTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val startTime = Instant.now()
+      val sourceProvider = new TestSourceProviderWithInput()
+      implicit val offsetStore =
+        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          R2dbcProjection.atLeastOnce(projectionId, Some(settings), sourceProvider, handler = () => new ConcatHandler)))
+      val input = sourceProvider.input.futureValue
+
       val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
-      val sourceProvider1 = createSourceProvider(envelopes1)
-      implicit val offsetStore = createOffsetStore(projectionId, sourceProvider1)
+      envelopes1.foreach(input ! _)
 
-      val projection1 =
-        R2dbcProjection.atLeastOnce(projectionId, Some(settings), sourceProvider1, handler = () => new ConcatHandler)
-
-      projectionTestKit.run(projection1) {
+      eventually {
         projectedValueShouldBe("e1-1|e1-2|e1-3")(pid1)
         projectedValueShouldBe("e2-1")(pid2)
       }
-      offsetShouldBe(envelopes1.collectFirst { case env if env.event == "e1-3" => env.offset }.get)
 
       // simulate backtracking
       logger.debug("Starting backtracking")
       val envelopes2 = createEnvelopesBacktrackingUnknownSequenceNumbers(startTime, pid1, pid2)
-      val sourceProvider2 = createBacktrackingSourceProvider(envelopes2)
-      val projection2 =
-        R2dbcProjection.atLeastOnce(projectionId, Some(settings), sourceProvider2, handler = () => new ConcatHandler)
+      envelopes2.foreach(input ! _)
 
-      projectionTestKit.run(projection2) {
+      eventually {
         projectedValueShouldBe("e1-1|e1-2|e1-3|e1-4|e1-5|e1-6")(pid1)
         projectedValueShouldBe("e2-1|e2-2|e2-3|e2-4")(pid2)
       }
-      offsetShouldBe(envelopes2.last.offset)
+
+      eventually {
+        offsetShouldBe(envelopes2.last.offset)
+      }
+      projectionRef ! ProjectionBehavior.Stop
     }
 
     "re-delivery inflight events after failure with retry recovery strategy" in {
@@ -861,7 +875,9 @@ class R2dbcTimestampOffsetProjectionSpec
 
       bogusEventHandler.attempts shouldBe 1
 
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "handle async projection" in {
@@ -889,7 +905,9 @@ class R2dbcTimestampOffsetProjectionSpec
       projectionTestKit.run(projection) {
         result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
       }
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "re-delivery inflight events after failure with retry recovery strategy for async projection" in {
@@ -931,7 +949,9 @@ class R2dbcTimestampOffsetProjectionSpec
         result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
       }
 
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "filter duplicates for async projection" in {
@@ -965,7 +985,9 @@ class R2dbcTimestampOffsetProjectionSpec
         result1.toString shouldBe "e1-1|e1-2|e1-3|e1-4|"
         result2.toString shouldBe "e2-1|e2-2|e2-3|"
       }
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "filter out unknown sequence numbers for async projection" in {
@@ -973,9 +995,9 @@ class R2dbcTimestampOffsetProjectionSpec
       val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
       val startTime = Instant.now()
-      val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
-      val sourceProvider1 = createSourceProvider(envelopes1)
-      implicit val offsetStore = createOffsetStore(projectionId, sourceProvider1)
+      val sourceProvider = new TestSourceProviderWithInput()
+      implicit val offsetStore =
+        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
 
       val result1 = new StringBuffer()
       val result2 = new StringBuffer()
@@ -993,10 +1015,15 @@ class R2dbcTimestampOffsetProjectionSpec
         }
       }
 
-      val projection1 =
-        R2dbcProjection.atLeastOnceAsync(projectionId, Some(settings), sourceProvider1, handler = () => handler())
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          R2dbcProjection.atLeastOnceAsync(projectionId, Some(settings), sourceProvider, handler = () => handler())))
+      val input = sourceProvider.input.futureValue
 
-      projectionTestKit.run(projection1) {
+      val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
+      envelopes1.foreach(input ! _)
+
+      eventually {
         result1.toString shouldBe "e1-1|e1-2|e1-3|"
         result2.toString shouldBe "e2-1|"
       }
@@ -1004,16 +1031,17 @@ class R2dbcTimestampOffsetProjectionSpec
       // simulate backtracking
       logger.debug("Starting backtracking")
       val envelopes2 = createEnvelopesBacktrackingUnknownSequenceNumbers(startTime, pid1, pid2)
-      val sourceProvider2 = createBacktrackingSourceProvider(envelopes2)
-      val projection2 =
-        R2dbcProjection.atLeastOnceAsync(projectionId, Some(settings), sourceProvider2, handler = () => handler())
+      envelopes2.foreach(input ! _)
 
-      projectionTestKit.run(projection2) {
+      eventually {
         result1.toString shouldBe "e1-1|e1-2|e1-3|e1-4|e1-5|e1-6|"
         result2.toString shouldBe "e2-1|e2-2|e2-3|e2-4|"
       }
 
-      offsetShouldBe(envelopes2.last.offset)
+      eventually {
+        offsetShouldBe(envelopes2.last.offset)
+      }
+      projectionRef ! ProjectionBehavior.Stop
     }
   }
 
@@ -1042,7 +1070,9 @@ class R2dbcTimestampOffsetProjectionSpec
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "filter duplicates" in {
@@ -1068,7 +1098,9 @@ class R2dbcTimestampOffsetProjectionSpec
         projectedValueShouldBe("e1-1|e1-2|e1-3|e1-4")(pid1)
         projectedValueShouldBe("e2-1|e2-2|e2-3")(pid2)
       }
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "filter out unknown sequence numbers" in {
@@ -1077,9 +1109,9 @@ class R2dbcTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val startTime = Instant.now()
-      val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
-      val sourceProvider1 = createSourceProvider(envelopes1)
-      implicit val offsetStore = createOffsetStore(projectionId, sourceProvider1)
+      val sourceProvider = new TestSourceProviderWithInput()
+      implicit val offsetStore =
+        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
 
       val flowHandler =
         FlowWithContext[EventEnvelope[String], ProjectionContext]
@@ -1087,31 +1119,35 @@ class R2dbcTimestampOffsetProjectionSpec
             withRepo(_.concatToText(env.persistenceId, env.event))
           }
 
-      val projection1 =
-        R2dbcProjection
-          .atLeastOnceFlow(projectionId, Some(settings), sourceProvider1, handler = flowHandler)
-          .withSaveOffset(2, 1.minute)
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          R2dbcProjection
+            .atLeastOnceFlow(projectionId, Some(settings), sourceProvider, handler = flowHandler)
+            .withSaveOffset(2, 1.minute)))
+      val input = sourceProvider.input.futureValue
 
-      projectionTestKit.run(projection1) {
+      val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
+      envelopes1.foreach(input ! _)
+
+      eventually {
         projectedValueShouldBe("e1-1|e1-2|e1-3")(pid1)
         projectedValueShouldBe("e2-1")(pid2)
       }
-      offsetShouldBe(envelopes1.collectFirst { case env if env.event == "e1-3" => env.offset }.get)
 
       // simulate backtracking
       logger.debug("Starting backtracking")
       val envelopes2 = createEnvelopesBacktrackingUnknownSequenceNumbers(startTime, pid1, pid2)
-      val sourceProvider2 = createBacktrackingSourceProvider(envelopes2)
-      val projection2 =
-        R2dbcProjection
-          .atLeastOnceFlow(projectionId, Some(settings), sourceProvider2, handler = flowHandler)
-          .withSaveOffset(2, 1.minute)
+      envelopes2.foreach(input ! _)
 
-      projectionTestKit.run(projection2) {
+      eventually {
         projectedValueShouldBe("e1-1|e1-2|e1-3|e1-4|e1-5|e1-6")(pid1)
         projectedValueShouldBe("e2-1|e2-2|e2-3|e2-4")(pid2)
       }
-      offsetShouldBe(envelopes2.last.offset)
+
+      eventually {
+        offsetShouldBe(envelopes2.last.offset)
+      }
+      projectionRef ! ProjectionBehavior.Stop
     }
   }
 
