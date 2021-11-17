@@ -20,7 +20,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.query.TimestampOffset
-import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
+import akka.projection.BySlicesSourceProvider
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.OverflowStrategy
@@ -28,7 +28,7 @@ import akka.stream.scaladsl.Source
 
 class TestSourceProviderWithInput()(implicit val ec: ExecutionContext)
     extends SourceProvider[TimestampOffset, EventEnvelope[String]]
-    with TimestampOffsetBySlicesSourceProvider
+    with BySlicesSourceProvider
     with EventTimestampQuery
     with LoadEventQuery {
 
@@ -80,10 +80,16 @@ class TestSourceProviderWithInput()(implicit val ec: ExecutionContext)
     })
   }
 
-  override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): Future[Option[EventEnvelope[Event]]] = {
-    Future.successful(envelopes.iterator().asScala.collectFirst {
+  override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Event]] = {
+    envelopes.iterator().asScala.collectFirst {
       case env if env.persistenceId == persistenceId && env.sequenceNr == sequenceNr =>
         env.asInstanceOf[EventEnvelope[Event]]
-    })
+    } match {
+      case Some(env) => Future.successful(env)
+      case None =>
+        Future.failed(
+          new NoSuchElementException(
+            s"Event with persistenceId [$persistenceId] and sequenceNr [$sequenceNr] not found."))
+    }
   }
 }

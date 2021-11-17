@@ -26,7 +26,7 @@ import akka.projection.ProjectionId
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.r2dbc.scaladsl.R2dbcSession
-import akka.projection.state.scaladsl.DurableStateSourceProvider2
+import akka.projection.state.scaladsl.DurableStateSourceProvider
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -129,7 +129,7 @@ class DurableStateEndToEndSpec
 
   private def createHandlers(projectionName: String, nrOfProjections: Int): Map[ProjectionId, TestHandler] = {
     val sliceRanges =
-      DurableStateSourceProvider2.sliceRanges(system, R2dbcDurableStateStore.Identifier, nrOfProjections)
+      DurableStateSourceProvider.sliceRanges(system, R2dbcDurableStateStore.Identifier, nrOfProjections)
     sliceRanges.map { range =>
       val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
       projectionId -> new TestHandler(projectionId, range)
@@ -142,12 +142,12 @@ class DurableStateEndToEndSpec
       nrOfProjections: Int,
       handlers: Map[ProjectionId, TestHandler]): Vector[ActorRef[ProjectionBehavior.Command]] = {
     val sliceRanges =
-      DurableStateSourceProvider2.sliceRanges(system, R2dbcDurableStateStore.Identifier, nrOfProjections)
+      DurableStateSourceProvider.sliceRanges(system, R2dbcDurableStateStore.Identifier, nrOfProjections)
 
     sliceRanges.map { range =>
       val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
       val sourceProvider =
-        DurableStateSourceProvider2.changesBySlices[String](
+        DurableStateSourceProvider.changesBySlices[String](
           system,
           R2dbcDurableStateStore.Identifier,
           entityType,
@@ -223,7 +223,7 @@ class DurableStateEndToEndSpec
       handlers.foreach { case (projectionId, handler) =>
         (0 until numberOfEntities).foreach { p =>
           val persistenceId = PersistenceId(entityType, s"p$p")
-          val slice = DurableStateSourceProvider2.sliceForPersistenceId(
+          val slice = DurableStateSourceProvider.sliceForPersistenceId(
             system,
             R2dbcDurableStateStore.Identifier,
             persistenceId.id)

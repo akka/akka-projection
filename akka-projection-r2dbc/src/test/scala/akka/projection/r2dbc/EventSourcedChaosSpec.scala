@@ -23,7 +23,7 @@ import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
-import akka.projection.eventsourced.scaladsl.EventSourcedProvider2
+import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.r2dbc.EventSourcedChaosSpec.FailingTestHandler
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
@@ -152,13 +152,13 @@ class EventSourcedChaosSpec
         runningProjections.get(projectionIndex) match {
           case Some(ref) => ref
           case None =>
-            val range = EventSourcedProvider2.sliceRanges(system, R2dbcReadJournal.Identifier, numberOfProjections)(
+            val range = EventSourcedProvider.sliceRanges(system, R2dbcReadJournal.Identifier, numberOfProjections)(
               projectionIndex)
 
             val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
             log.debug("Starting projection index [{}] with projectionId [{}]", projectionIndex, projectionId)
             val sourceProvider =
-              EventSourcedProvider2
+              EventSourcedProvider
                 .eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityType, range.min, range.max)
             val projection = R2dbcProjection
               .exactlyOnce(

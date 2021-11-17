@@ -25,13 +25,14 @@ import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.TimestampOffset
+import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
-import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.internal.OffsetSerialization.SingleOffset
+import akka.projection.javadsl.SourceProvider
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Row
@@ -133,7 +134,7 @@ object R2dbcOffsetStore {
 @InternalApi
 private[projection] class R2dbcOffsetStore(
     projectionId: ProjectionId,
-    sourceProvider: Option[TimestampOffsetBySlicesSourceProvider],
+    sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
     settings: R2dbcProjectionSettings,
     r2dbcExecutor: R2dbcExecutor,
@@ -227,21 +228,27 @@ private[projection] class R2dbcOffsetStore(
     () => deleteOldTimestampOffsets(),
     system.executionContext)
 
-  private def timestampOffsetBySlicesSourceProvider: TimestampOffsetBySlicesSourceProvider =
+  private def timestampOffsetBySlicesSourceProvider: BySlicesSourceProvider =
     sourceProvider match {
       case Some(provider) => provider
-      case _ =>
+      case None =>
         throw new IllegalArgumentException(
-          s"Expected TimestampOffsetBySlicesSourceProvider to be defined when TimestampOffset is used.")
+          s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
 
-  private def eventTimestampQuery: EventTimestampQuery =
+  private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     timestampOffsetBySlicesSourceProvider match {
-      case timestampQuery: EventTimestampQuery => timestampQuery
+      case timestampQuery: EventTimestampQuery =>
+        timestampQuery.timestampOf(persistenceId, sequenceNr)
+      case timestampQuery: akka.persistence.query.typed.javadsl.EventTimestampQuery =>
+        import scala.compat.java8.FutureConverters._
+        import scala.compat.java8.OptionConverters._
+        timestampQuery.timestampOf(persistenceId, sequenceNr).toScala.map(_.asScala)
       case _ =>
         throw new IllegalArgumentException(
-          s"Expected TimestampOffsetBySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
+          s"Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
     }
+  }
 
   def getState(): State =
     state.get()
@@ -259,9 +266,14 @@ private[projection] class R2dbcOffsetStore(
   def readOffset[Offset](): Future[Option[Offset]] = {
     // look for TimestampOffset first since that is used by akka-persistence-r2dbc,
     // and then fall back to the other more primitive offset types
-    readTimestampOffset().flatMap {
-      case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
-      case None    => readPrimitiveOffset()
+    sourceProvider match {
+      case Some(provider) =>
+        readTimestampOffset().flatMap {
+          case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
+          case None    => readPrimitiveOffset()
+        }
+      case None =>
+        readPrimitiveOffset()
     }
   }
 
@@ -570,7 +582,7 @@ private[projection] class R2dbcOffsetStore(
         // when read at the tail we will only accept it if the event with previous seqNr has timestamp
         // before the time window of the offset store.
         // Backtracking will emit missed event again.
-        eventTimestampQuery.timestampOf(pid, seqNr - 1).map {
+        timestampOf(pid, seqNr - 1).map {
           case Some(previousTimestamp) =>
             if (previousTimestamp.isBefore(currentState.latestTimestamp.minus(settings.timeWindow)))
               true
@@ -722,7 +734,7 @@ private[projection] class R2dbcOffsetStore(
       }
       .flatMap {
         case i if i == 1 => Future.successful(Done)
-        case n =>
+        case _ =>
           Future.failed(new RuntimeException(s"Failed to update management table for $projectionId"))
       }
   }

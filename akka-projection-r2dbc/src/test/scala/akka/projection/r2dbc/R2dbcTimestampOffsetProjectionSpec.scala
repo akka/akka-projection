@@ -29,6 +29,7 @@ import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.TimestampOffset
+import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
@@ -36,7 +37,6 @@ import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
 import akka.projection.TestStatusObserver.Err
 import akka.projection.TestStatusObserver.OffsetProgress
-import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
@@ -83,7 +83,7 @@ object R2dbcTimestampOffsetProjectionSpec {
       envelopes: immutable.IndexedSeq[EventEnvelope[String]],
       testSourceProvider: TestSourceProvider[TimestampOffset, EventEnvelope[String]])
       extends SourceProvider[TimestampOffset, EventEnvelope[String]]
-      with TimestampOffsetBySlicesSourceProvider
+      with BySlicesSourceProvider
       with EventTimestampQuery
       with LoadEventQuery {
 
@@ -109,11 +109,17 @@ object R2dbcTimestampOffsetProjectionSpec {
       })
     }
 
-    override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): Future[Option[EventEnvelope[Event]]] = {
-      Future.successful(envelopes.collectFirst {
+    override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Event]] = {
+      envelopes.collectFirst {
         case env if env.persistenceId == persistenceId && env.sequenceNr == sequenceNr =>
           env.asInstanceOf[EventEnvelope[Event]]
-      })
+      } match {
+        case Some(env) => Future.successful(env)
+        case None =>
+          Future.failed(
+            new NoSuchElementException(
+              s"Event with persistenceId [$persistenceId] and sequenceNr [$sequenceNr] not found."))
+      }
     }
   }
 

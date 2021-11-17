@@ -27,7 +27,7 @@ import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
-import akka.projection.eventsourced.scaladsl.EventSourcedProvider2
+import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.r2dbc.scaladsl.R2dbcSession
@@ -168,12 +168,12 @@ class EventSourcedEndToEndSpec
       projectionName: String,
       nrOfProjections: Int,
       processedProbe: ActorRef[Processed]): Vector[ActorRef[ProjectionBehavior.Command]] = {
-    val sliceRanges = EventSourcedProvider2.sliceRanges(system, R2dbcReadJournal.Identifier, nrOfProjections)
+    val sliceRanges = EventSourcedProvider.sliceRanges(system, R2dbcReadJournal.Identifier, nrOfProjections)
 
     sliceRanges.map { range =>
       val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
       val sourceProvider =
-        EventSourcedProvider2.eventsBySlices[String](
+        EventSourcedProvider.eventsBySlices[String](
           system,
           R2dbcReadJournal.Identifier,
           entityType,

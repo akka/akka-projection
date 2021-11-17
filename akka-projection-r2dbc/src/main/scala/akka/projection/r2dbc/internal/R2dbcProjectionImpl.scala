@@ -21,6 +21,7 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult
+import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
@@ -28,7 +29,6 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.RunningProjectionManagement
 import akka.projection.StatusObserver
-import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
@@ -67,7 +67,7 @@ private[projection] object R2dbcProjectionImpl {
 
   private[projection] def createOffsetStore(
       projectionId: ProjectionId,
-      sourceProvider: Option[TimestampOffsetBySlicesSourceProvider],
+      sourceProvider: Option[BySlicesSourceProvider],
       settings: R2dbcProjectionSettings,
       connectionFactory: ConnectionFactory)(implicit system: ActorSystem[_]) = {
     val r2dbcExecutor = new R2dbcExecutor(connectionFactory, log)(system.executionContext, system)
@@ -80,37 +80,41 @@ private[projection] object R2dbcProjectionImpl {
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.eventOption.isEmpty =>
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
-        sourceProvider match {
+        (sourceProvider match {
           case loadEventQuery: LoadEventQuery =>
-            loadEventQuery
-              .loadEnvelope[Any](pid, seqNr)
-              .map {
-                case Some(loadedEnv) =>
-                  log.debug("Loaded event lazily, persistenceId [{}], seqNr [{}]", pid, seqNr)
-                  loadedEnv.asInstanceOf[Envelope]
-                case None =>
-                  throw new IllegalStateException(
-                    s"Event not found when loaded lazily, persistenceId [$pid], sequenceNr [$seqNr]")
-              }
+            loadEventQuery.loadEnvelope[Any](pid, seqNr)
+          case loadEventQuery: akka.persistence.query.typed.javadsl.LoadEventQuery =>
+            import scala.compat.java8.FutureConverters._
+            loadEventQuery.loadEnvelope[Any](pid, seqNr).toScala
+          case _ =>
+            throw new IllegalArgumentException(
+              s"Expected sourceProvider [${sourceProvider.getClass.getName}] " +
+              "to implement LoadEventQuery when used with eventsBySlices.")
+        }).map { loadedEnv =>
+          log.debug("Loaded event lazily, persistenceId [{}], seqNr [{}]", pid, seqNr)
+          loadedEnv.asInstanceOf[Envelope]
         }
 
       case upd: UpdatedDurableState[_] if upd.value == null =>
         val pid = upd.persistenceId
         val revision = upd.revision
-        sourceProvider match {
-          case x: DurableStateStore[_] =>
-            x.getObject(pid)
-              .map {
-                case GetObjectResult(Some(loadedValue), loadedRevision) =>
-                  log.debug("Loaded durable state lazily, persistenceId [{}], revision [{}]", pid, loadedRevision)
-                  new UpdatedDurableState(pid, loadedRevision, loadedValue, upd.offset, upd.timestamp)
-                    .asInstanceOf[Envelope]
-                case GetObjectResult(None, _) =>
-                  // FIXME use DeletedDurableState here when that is added
-                  throw new IllegalStateException(
-                    s"Durable state not found when loaded lazily, persistenceId [$pid], revision [$revision]")
-              }
+        (sourceProvider match {
+          case store: DurableStateStore[_] =>
+            store.getObject(pid)
+          case store: akka.persistence.state.javadsl.DurableStateStore[_] =>
+            import scala.compat.java8.FutureConverters._
+            store.getObject(pid).toScala.map(_.toScala)
+        }).map {
+          case GetObjectResult(Some(loadedValue), loadedRevision) =>
+            log.debug("Loaded durable state lazily, persistenceId [{}], revision [{}]", pid, loadedRevision)
+            new UpdatedDurableState(pid, loadedRevision, loadedValue, upd.offset, upd.timestamp)
+              .asInstanceOf[Envelope]
+          case GetObjectResult(None, _) =>
+            // FIXME use DeletedDurableState here when that is added
+            throw new IllegalStateException(
+              s"Durable state not found when loaded lazily, persistenceId [$pid], revision [$revision]")
         }
+
       case _ =>
         Future.successful(env)
     }

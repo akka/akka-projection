@@ -20,8 +20,8 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.query.TimestampOffset
+import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionId
-import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.MaxNumberOfSlices
@@ -33,14 +33,14 @@ import org.slf4j.LoggerFactory
 
 object R2dbcTimestampOffsetStoreSpec {
   class TestTimestampSourceProvider(override val minSlice: Int, override val maxSlice: Int, clock: TestClock)
-      extends TimestampOffsetBySlicesSourceProvider
+      extends BySlicesSourceProvider
       with EventTimestampQuery
       with LoadEventQuery {
 
     override def timestampOf(persistenceId: String, sequenceNr: SeqNr): Future[Option[Instant]] =
       Future.successful(Some(clock.instant()))
 
-    override def loadEnvelope[Event](persistenceId: String, sequenceNr: SeqNr): Future[Option[EventEnvelope[Event]]] =
+    override def loadEnvelope[Event](persistenceId: String, sequenceNr: SeqNr): Future[EventEnvelope[Event]] =
       throw new IllegalStateException("loadEvent shouldn't be used here")
   }
 }

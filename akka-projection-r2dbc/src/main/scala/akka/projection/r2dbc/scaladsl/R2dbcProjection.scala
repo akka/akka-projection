@@ -13,9 +13,9 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.persistence.r2dbc.ConnectionFactoryProvider
 import akka.persistence.r2dbc.internal.R2dbcExecutor
+import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
-import akka.projection.eventsourced.scaladsl.TimestampOffsetBySlicesSourceProvider
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
@@ -340,10 +340,10 @@ object R2dbcProjection {
   }
 
   private def timestampOffsetBySlicesSourceProvider(
-      sourceProvider: SourceProvider[_, _]): Option[TimestampOffsetBySlicesSourceProvider] = {
+      sourceProvider: SourceProvider[_, _]): Option[BySlicesSourceProvider] = {
     sourceProvider match {
-      case provider: TimestampOffsetBySlicesSourceProvider => Some(provider)
-      case _                                               => None // source provider is not using slices
+      case provider: BySlicesSourceProvider => Some(provider)
+      case _                                => None // source provider is not using slices
     }
   }
 
