@@ -684,16 +684,6 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  def dropIfExists(): Future[Done] = {
-    // FIXME not implemented yet
-    Future.successful(Done)
-  }
-
-  def createIfNotExists(): Future[Done] = {
-    // FIXME not implemented yet
-    Future.successful(Done)
-  }
-
   def clearOffset(): Future[Done] = {
     r2dbcExecutor
       .updateOne("clear offset") { conn =>

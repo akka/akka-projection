@@ -295,27 +295,21 @@ private[projection] object R2dbcProjectionImpl {
       system: ActorSystem[_])
       extends Handler[E] {
 
-    override def start(): Future[Done] = Future {
+    override def start(): Future[Done] =
       delegate.start()
-      Done
-    }
-    override def stop(): Future[Done] = Future {
+
+    override def stop(): Future[Done] =
       delegate.stop()
-      Done
-    }
   }
 
   abstract class AdaptedHandler[E](val delegate: Handler[E])(implicit ec: ExecutionContext, system: ActorSystem[_])
       extends Handler[E] {
 
-    override def start(): Future[Done] = Future {
+    override def start(): Future[Done] =
       delegate.start()
-      Done
-    }
-    override def stop(): Future[Done] = Future {
+
+    override def stop(): Future[Done] =
       delegate.stop()
-      Done
-    }
   }
 
 }

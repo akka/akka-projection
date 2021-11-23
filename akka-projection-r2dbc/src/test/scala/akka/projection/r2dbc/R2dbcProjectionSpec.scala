@@ -1010,14 +1010,16 @@ class R2dbcProjectionSpec
 
       probe ! createdMessage
 
-      override def start(): Unit = {
+      override def start(): Future[Done] = {
         // reset stop message to 'completed' on each new start
         stopMessage = completedMessage
         probe ! startMessage
+        Future.successful(Done)
       }
 
-      override def stop(): Unit = {
+      override def stop(): Future[Done] = {
         probe ! stopMessage
+        Future.successful(Done)
       }
 
       override def process(session: R2dbcSession, envelope: Envelope): Future[Done] = {

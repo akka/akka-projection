@@ -8,7 +8,7 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.annotation.ApiMayChange
-import akka.projection.r2dbc.R2dbcHandlerLifecycle
+import akka.projection.scaladsl.HandlerLifecycle
 
 /**
  * Implement this interface for the Envelope handler for R2DBC Projections.
@@ -21,7 +21,7 @@ import akka.projection.r2dbc.R2dbcHandlerLifecycle
  * the `withRecoveryStrategy` method of a `Projection` implementation.
  */
 @ApiMayChange
-trait R2dbcHandler[Envelope] extends R2dbcHandlerLifecycle {
+trait R2dbcHandler[Envelope] extends HandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`. Each time a new `Connection` is passed with a new open

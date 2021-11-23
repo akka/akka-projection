@@ -5,7 +5,6 @@
 package akka.projection.r2dbc.scaladsl
 
 import scala.collection.immutable
-import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 import akka.Done
@@ -83,9 +82,8 @@ object R2dbcProjection {
    * This means that if the projection is restarted from previously stored offset then some elements may be processed
    * more than once.
    *
-   * The [[R2dbcHandler.process()]] in `handler` will be wrapped in a transaction. It is highly recommended to use a
-   * [[ConnectionFactory]] that provides [[io.r2dbc.spi.Connection]] 's with `setAutoCommit(false)`. The transaction
-   * will be committed after invoking [[R2dbcHandler.process()]].
+   * The [[R2dbcHandler.process()]] in `handler` will be wrapped in a transaction. The transaction will be committed
+   * after invoking [[R2dbcHandler.process()]].
    *
    * The offset is stored after a time window, or limited by a number of envelopes, whatever happens first. This window
    * can be defined with [[AtLeastOnceProjection.withSaveOffset]] of the returned `AtLeastOnceProjection`. The default
@@ -310,29 +308,6 @@ object R2dbcProjection {
       handlerStrategy = FlowHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)
-  }
-
-  /**
-   * For testing purposes the projection offset and management tables can be created programmatically. For production
-   * it's recommended to create the table with DDL statements before the system is started.
-   */
-  def createTablesIfNotExists(settings: Option[R2dbcProjectionSettings], connectionFactory: ConnectionFactory)(implicit
-      system: ActorSystem[_]): Future[Done] = {
-    val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
-    R2dbcProjectionImpl
-      .createOffsetStore(ProjectionId("createTables", ""), None, r2dbcSettings, connectionFactory)
-      .createIfNotExists()
-  }
-
-  /**
-   * For testing purposes the projection offset and management tables can be dropped programmatically.
-   */
-  def dropTablesIfExists(settings: Option[R2dbcProjectionSettings], connectionFactory: ConnectionFactory)(implicit
-      system: ActorSystem[_]): Future[Done] = {
-    val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
-    R2dbcProjectionImpl
-      .createOffsetStore(ProjectionId("dropTables", ""), None, r2dbcSettings, connectionFactory)
-      .dropIfExists()
   }
 
   private def connectionFactory(system: ActorSystem[_], r2dbcSettings: R2dbcProjectionSettings): ConnectionFactory = {

@@ -60,17 +60,6 @@ class R2dbcOffsetStoreSpec
 
   "The R2dbcOffsetStore" must {
 
-    s"not fail when dropIfExists and createIfNotExists are called" in {
-      pending // FIXME not implemented yet
-      val offsetStore = createOffsetStore(ProjectionId("drop", ""))
-      val dropAndCreate =
-        for {
-          _ <- offsetStore.dropIfExists()
-          _ <- offsetStore.createIfNotExists()
-        } yield Done
-      dropAndCreate.futureValue
-    }
-
     s"create and update offsets" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
