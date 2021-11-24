@@ -56,7 +56,9 @@ object R2dbcProjection {
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
-    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
+    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding)(
+      system.executionContext,
+      system)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForExactlyOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
@@ -104,7 +106,9 @@ object R2dbcProjection {
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
-    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
+    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding)(
+      system.executionContext,
+      system)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
@@ -193,7 +197,9 @@ object R2dbcProjection {
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
         connFactory)
-    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log)(system.executionContext, system)
+    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding)(
+      system.executionContext,
+      system)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForGrouped(sourceProvider, handler, offsetStore, r2dbcExecutor)(

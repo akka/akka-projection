@@ -72,7 +72,8 @@ private[projection] object R2dbcProjectionImpl {
       sourceProvider: Option[BySlicesSourceProvider],
       settings: R2dbcProjectionSettings,
       connectionFactory: ConnectionFactory)(implicit system: ActorSystem[_]) = {
-    val r2dbcExecutor = new R2dbcExecutor(connectionFactory, log)(system.executionContext, system)
+    val r2dbcExecutor =
+      new R2dbcExecutor(connectionFactory, log, settings.logDbCallsExceeding)(system.executionContext, system)
     new R2dbcOffsetStore(projectionId, sourceProvider, system, settings, r2dbcExecutor)
   }
 
