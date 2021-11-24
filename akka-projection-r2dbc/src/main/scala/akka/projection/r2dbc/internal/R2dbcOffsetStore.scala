@@ -46,7 +46,11 @@ object R2dbcOffsetStore {
   val MaxNumberOfSlices = 128 // FIXME define this in akka.persistence.Persistence (not per plugin)
 
   final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
-  final case class RecordWithOffset(record: Record, offset: TimestampOffset, strictSeqNr: Boolean)
+  final case class RecordWithOffset(
+      record: Record,
+      offset: TimestampOffset,
+      strictSeqNr: Boolean,
+      envelopeLoaded: Boolean)
 
   object State {
     val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
@@ -556,7 +560,7 @@ private[projection] class R2dbcOffsetStore(
     val duplicate = isDuplicate(recordWithOffset.record)
 
     if (duplicate) {
-      logger.debug("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid) // FIXME change to trace
+      logger.trace("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid)
       FutureFalse
     } else if (recordWithOffset.strictSeqNr) {
       // strictSeqNr == true is for event sourced
@@ -566,13 +570,27 @@ private[projection] class R2dbcOffsetStore(
         val ok = seqNr == prevSeqNr + 1
         if (ok) {
           FutureTrue
-        } else {
+        } else if (recordWithOffset.envelopeLoaded) {
           logger.info(
-            "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]",
+            "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
             seqNr,
             pid,
-            prevSeqNr)
+            prevSeqNr,
+            recordWithOffset.offset)
           FutureFalse
+        } else {
+          logger.warn(
+            "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+            seqNr,
+            pid,
+            prevSeqNr,
+            recordWithOffset.offset)
+          // This will result in projection restart (with normal configuration)
+          Future.failed(
+            new IllegalStateException(
+              s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr] " +
+              "due to unexpected sequence number. " +
+              "Please report this issue at https://github.com/akka/akka-persistence-r2dbc"))
         }
       } else if (seqNr == 1) {
         // always accept first event if no other event for that pid has been seen
@@ -584,11 +602,22 @@ private[projection] class R2dbcOffsetStore(
         // Backtracking will emit missed event again.
         timestampOf(pid, seqNr - 1).map {
           case Some(previousTimestamp) =>
-            if (previousTimestamp.isBefore(currentState.latestTimestamp.minus(settings.timeWindow)))
+            if (previousTimestamp.isBefore(currentState.latestTimestamp.minus(settings.timeWindow))) {
               true
-            else {
+            } else if (recordWithOffset.envelopeLoaded) {
               logger.info("Rejecting unknown sequence number (might be accepted later): {}", recordWithOffset)
               false
+            } else {
+              logger.warn(
+                "Rejecting unknown sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+                seqNr,
+                pid,
+                recordWithOffset.offset)
+              // This will result in projection restart (with normal configuration)
+              throw new IllegalStateException(
+                s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr], " +
+                "due to unknown sequence number. " +
+                "Please report this issue at https://github.com/akka/akka-persistence-r2dbc")
             }
           case None =>
             // previous not found, could have been deleted
@@ -603,7 +632,7 @@ private[projection] class R2dbcOffsetStore(
       if (ok) {
         FutureTrue
       } else {
-        logger.debug("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
+        logger.trace("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
         FutureFalse
       }
     }
@@ -737,14 +766,16 @@ private[projection] class R2dbcOffsetStore(
           RecordWithOffset(
             Record(eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp),
             timestampOffset,
-            strictSeqNr = true))
+            strictSeqNr = true,
+            envelopeLoaded = eventEnvelope.eventOption.isDefined))
       case change: UpdatedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
         Some(
           RecordWithOffset(
             Record(change.persistenceId, change.revision, timestampOffset.timestamp),
             timestampOffset,
-            strictSeqNr = false))
+            strictSeqNr = false,
+            envelopeLoaded = change.value != null))
       case change: DurableStateChange[_] if change.offset.isInstanceOf[TimestampOffset] =>
         // FIXME case DeletedDurableState when that is added
         throw new IllegalArgumentException(

@@ -4,6 +4,8 @@
 
 package akka.projection.r2dbc.internal
 
+import java.util.concurrent.atomic.AtomicLong
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -74,6 +76,8 @@ private[projection] object R2dbcProjectionImpl {
     new R2dbcOffsetStore(projectionId, sourceProvider, system, settings, r2dbcExecutor)
   }
 
+  private val loadEnvelopeCounter = new AtomicLong
+
   def loadEnvelope[Envelope](env: Envelope, sourceProvider: SourceProvider[_, Envelope])(implicit
       ec: ExecutionContext): Future[Envelope] = {
     env match {
@@ -91,7 +95,11 @@ private[projection] object R2dbcProjectionImpl {
               s"Expected sourceProvider [${sourceProvider.getClass.getName}] " +
               "to implement LoadEventQuery when used with eventsBySlices.")
         }).map { loadedEnv =>
-          log.debug("Loaded event lazily, persistenceId [{}], seqNr [{}]", pid, seqNr)
+          val count = loadEnvelopeCounter.incrementAndGet()
+          if (count % 1000 == 0)
+            log.info("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
+          else
+            log.debug("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
           loadedEnv.asInstanceOf[Envelope]
         }
 
@@ -106,7 +114,19 @@ private[projection] object R2dbcProjectionImpl {
             store.getObject(pid).toScala.map(_.toScala)
         }).map {
           case GetObjectResult(Some(loadedValue), loadedRevision) =>
-            log.debug("Loaded durable state lazily, persistenceId [{}], revision [{}]", pid, loadedRevision)
+            val count = loadEnvelopeCounter.incrementAndGet()
+            if (count % 1000 == 0)
+              log.info(
+                "Loaded durable state lazily, persistenceId [{}], revision [{}]. Load count [{}]",
+                pid,
+                loadedRevision,
+                count)
+            else
+              log.debug(
+                "Loaded durable state lazily, persistenceId [{}], revision [{}]. Load count [{}]",
+                pid,
+                loadedRevision,
+                count)
             new UpdatedDurableState(pid, loadedRevision, loadedValue, upd.offset, upd.timestamp)
               .asInstanceOf[Envelope]
           case GetObjectResult(None, _) =>
