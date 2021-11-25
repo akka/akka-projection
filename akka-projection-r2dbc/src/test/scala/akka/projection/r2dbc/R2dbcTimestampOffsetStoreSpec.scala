@@ -629,11 +629,15 @@ class R2dbcTimestampOffsetStoreSpec
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
-      offsetStore.saveOffset(3L).futureValue
-      offsetStore.readOffset[Long]().futureValue shouldBe Some(3L)
+      tick()
+      val offset1 = TimestampOffset(clock.instant(), Map("p1" -> 3L))
+      tick()
+      val offset2 = TimestampOffset(clock.instant(), Map("p2" -> 4L))
+
+      offsetStore.saveOffsets(Vector(offset1, offset2)).futureValue
 
       offsetStore.clearOffset().futureValue
-      offsetStore.readOffset[Long]().futureValue shouldBe None
+      offsetStore.readOffset[TimestampOffset]().futureValue shouldBe None
     }
 
     "read and save paused" in {

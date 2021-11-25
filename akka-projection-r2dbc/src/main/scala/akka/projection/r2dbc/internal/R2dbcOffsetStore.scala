@@ -176,6 +176,9 @@ private[projection] class R2dbcOffsetStore(
   private val deleteTimestampOffsetSql: String =
     s"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3 AND timestamp_offset < $$4"
 
+  private val clearTimestampOffsetSql: String =
+    s"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3"
+
   private val selectOffsetSql: String =
     s"SELECT projection_key, current_offset, manifest, mergeable FROM $offsetTable WHERE projection_name = $$1"
 
@@ -191,7 +194,7 @@ private[projection] class R2dbcOffsetStore(
     "last_updated = excluded.last_updated"
 
   private val clearOffsetSql: String =
-    s"""DELETE FROM $offsetTable WHERE projection_name = $$1 AND projection_key = $$2"""
+    s"DELETE FROM $offsetTable WHERE projection_name = $$1 AND projection_key = $$2"
 
   private val readManagementStateSql =
     s"SELECT paused FROM $managementTable WHERE " +
@@ -317,37 +320,41 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def readPrimitiveOffset[Offset](): Future[Option[Offset]] = {
-    val singleOffsets = r2dbcExecutor.select("read offset")(
-      conn => {
-        logger.trace("reading offset for [{}]", projectionId)
-        conn
-          .createStatement(selectOffsetSql)
-          .bind(0, projectionId.name)
-      },
-      row => {
-        val offsetStr = row.get("current_offset", classOf[String])
-        val manifest = row.get("manifest", classOf[String])
-        val mergeable = row.get("mergeable", classOf[java.lang.Boolean])
-        val key = row.get("projection_key", classOf[String])
+    if (settings.isOffsetTableDefined) {
+      val singleOffsets = r2dbcExecutor.select("read offset")(
+        conn => {
+          logger.trace("reading offset for [{}]", projectionId)
+          conn
+            .createStatement(selectOffsetSql)
+            .bind(0, projectionId.name)
+        },
+        row => {
+          val offsetStr = row.get("current_offset", classOf[String])
+          val manifest = row.get("manifest", classOf[String])
+          val mergeable = row.get("mergeable", classOf[java.lang.Boolean])
+          val key = row.get("projection_key", classOf[String])
 
-        val adaptedProjectionId = ProjectionId(projectionId.name, key)
-        SingleOffset(adaptedProjectionId, manifest, offsetStr, mergeable)
-      })
+          val adaptedProjectionId = ProjectionId(projectionId.name, key)
+          SingleOffset(adaptedProjectionId, manifest, offsetStr, mergeable)
+        })
 
-    singleOffsets.map { offsets =>
-      val result =
-        if (offsets.isEmpty) None
-        else if (offsets.forall(_.mergeable)) {
-          Some(
-            fromStorageRepresentation[MergeableOffset[_], Offset](MultipleOffsets(offsets.toList))
-              .asInstanceOf[Offset])
-        } else {
-          offsets.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
-        }
+      singleOffsets.map { offsets =>
+        val result =
+          if (offsets.isEmpty) None
+          else if (offsets.forall(_.mergeable)) {
+            Some(
+              fromStorageRepresentation[MergeableOffset[_], Offset](MultipleOffsets(offsets.toList))
+                .asInstanceOf[Offset])
+          } else {
+            offsets.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
+          }
 
-      logger.trace2("found offset [{}] for [{}]", result, projectionId)
+        logger.trace2("found offset [{}] for [{}]", result, projectionId)
 
-      result
+        result
+      }
+    } else {
+      Future.successful(None)
     }
   }
 
@@ -497,6 +504,12 @@ private[projection] class R2dbcOffsetStore(
 
   private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
     logger.trace("saving offset [{}]", offset)
+
+    if (!settings.isOffsetTableDefined)
+      Future.failed(
+        new IllegalArgumentException(
+          "Offset table has been disabled config 'akka.projection.r2dbc.offset-store.offset-table', " +
+          s"but trying to save a non-timestamp offset [$offset]"))
 
     val now = Instant.now(clock).toEpochMilli
 
@@ -720,18 +733,49 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def clearOffset(): Future[Done] = {
-    r2dbcExecutor
-      .updateOne("clear offset") { conn =>
-        logger.debug("clearing offset for [{}]", projectionId)
-        conn
-          .createStatement(clearOffsetSql)
-          .bind(0, projectionId.name)
-          .bind(1, projectionId.key)
-      }
-      .map { n =>
-        logger.debug(s"clearing offset for [{}] - executed statement returned [{}]", projectionId, n)
-        Done
-      }
+    clearTimestampOffset().flatMap(_ => clearPrimitiveOffset())
+  }
+
+  private def clearTimestampOffset(): Future[Done] = {
+    sourceProvider match {
+      case Some(provider) =>
+        r2dbcExecutor
+          .updateOne("clear timestamp offset") { conn =>
+            val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+            val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+            logger.debug("clearing timestamp offset for [{}]", projectionId)
+            conn
+              .createStatement(clearTimestampOffsetSql)
+              .bind(0, minSlice)
+              .bind(1, maxSlice)
+              .bind(2, projectionId.name)
+          }
+          .map { n =>
+            logger.debug(s"clearing timestamp offset for [{}] - executed statement returned [{}]", projectionId, n)
+            Done
+          }
+      case None =>
+        FutureDone
+    }
+  }
+
+  private def clearPrimitiveOffset(): Future[Done] = {
+    if (settings.isOffsetTableDefined) {
+      r2dbcExecutor
+        .updateOne("clear offset") { conn =>
+          logger.debug("clearing offset for [{}]", projectionId)
+          conn
+            .createStatement(clearOffsetSql)
+            .bind(0, projectionId.name)
+            .bind(1, projectionId.key)
+        }
+        .map { n =>
+          logger.debug(s"clearing offset for [{}] - executed statement returned [{}]", projectionId, n)
+          Done
+        }
+    } else {
+      FutureDone
+    }
   }
 
   def readManagementState(): Future[Option[ManagementState]] = {
