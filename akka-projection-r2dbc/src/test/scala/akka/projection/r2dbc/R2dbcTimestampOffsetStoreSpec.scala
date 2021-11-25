@@ -102,7 +102,7 @@ class R2dbcTimestampOffsetStoreSpec
 
   "The R2dbcOffsetStore for TimestampOffset" must {
 
-    "update TimestampOffset with one entry" in {
+    "save TimestampOffset with one entry" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -119,7 +119,7 @@ class R2dbcTimestampOffsetStoreSpec
       readOffset2.futureValue shouldBe Some(offset2) // yep, saveOffset overwrites previous
     }
 
-    "update TimestampOffset with several entries" in {
+    "save TimestampOffset with several entries" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -137,7 +137,7 @@ class R2dbcTimestampOffsetStoreSpec
       readOffset2.futureValue shouldBe Some(offset2)
     }
 
-    "update TimestampOffset when same timestamp" in {
+    "save TimestampOffset when same timestamp" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -162,6 +162,58 @@ class R2dbcTimestampOffsetStoreSpec
       val readOffset3 = offsetStore.readOffset[TimestampOffset]()
       // then it should only contain that entry
       readOffset3.futureValue shouldBe Some(offset3)
+    }
+
+    "save batch of TimestampOffsets" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      tick()
+      val offset1 = TimestampOffset(clock.instant(), Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
+      tick()
+      val offset2 = TimestampOffset(clock.instant(), Map("p5" -> 1L))
+      tick()
+      val offset3 = TimestampOffset(clock.instant(), Map("p6" -> 6L))
+      tick()
+      val offset4 = TimestampOffset(clock.instant(), Map("p1" -> 4L, "p3" -> 6L, "p4" -> 9L))
+      val offsetsBatch1 = Vector(offset1, offset2, offset3, offset4)
+
+      offsetStore.saveOffsets(offsetsBatch1).futureValue
+      val readOffset1 = offsetStore.readOffset[TimestampOffset]()
+      readOffset1.futureValue shouldBe Some(offsetsBatch1.last)
+      offsetStore.getState().byPid("p1").seqNr shouldBe 4L
+      offsetStore.getState().byPid("p2").seqNr shouldBe 1L
+      offsetStore.getState().byPid("p3").seqNr shouldBe 6L
+      offsetStore.getState().byPid("p4").seqNr shouldBe 9L
+      offsetStore.getState().byPid("p5").seqNr shouldBe 1L
+      offsetStore.getState().byPid("p6").seqNr shouldBe 6L
+
+      tick()
+      val offset5 = TimestampOffset(clock.instant(), Map("p1" -> 5L))
+      offsetStore.saveOffsets(Vector(offset5)).futureValue
+
+      tick()
+      // duplicate
+      val offset6 = TimestampOffset(clock.instant(), Map("p2" -> 1L))
+      offsetStore.saveOffsets(Vector(offset6)).futureValue
+
+      tick()
+      val offset7 = TimestampOffset(clock.instant(), Map("p1" -> 6L))
+      tick()
+      val offset8 = TimestampOffset(clock.instant(), Map("p1" -> 7L))
+      tick()
+      val offset9 = TimestampOffset(clock.instant(), Map("p1" -> 8L))
+      val offsetsBatch2 = Vector(offset7, offset8, offset9)
+
+      offsetStore.saveOffsets(offsetsBatch2).futureValue
+      val readOffset2 = offsetStore.readOffset[TimestampOffset]()
+      readOffset2.futureValue shouldBe Some(offsetsBatch2.last)
+      offsetStore.getState().byPid("p1").seqNr shouldBe 8L
+      offsetStore.getState().byPid("p2").seqNr shouldBe 1L
+      offsetStore.getState().byPid("p3").seqNr shouldBe 6L
+      offsetStore.getState().byPid("p4").seqNr shouldBe 9L
+      offsetStore.getState().byPid("p5").seqNr shouldBe 1L
+      offsetStore.getState().byPid("p6").seqNr shouldBe 6L
     }
 
     "not update when earlier seqNr" in {

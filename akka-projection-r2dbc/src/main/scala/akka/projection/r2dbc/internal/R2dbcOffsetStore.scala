@@ -84,7 +84,7 @@ object R2dbcOffsetStore {
               if (r.seqNr > existingRecord.seqNr)
                 acc.byPid.updated(r.pid, r)
               else
-                acc.byPid // older or same seqNr (not expected, but handled)
+                acc.byPid // older or same seqNr
             case None =>
               acc.byPid.updated(r.pid, r)
           }
@@ -101,7 +101,7 @@ object R2dbcOffsetStore {
           if (acc.oldestTimestamp == Instant.EPOCH)
             r.timestamp // first record
           else if (r.timestamp.isBefore(acc.oldestTimestamp))
-            r.timestamp // not expected, but handled
+            r.timestamp
           else
             acc.oldestTimestamp // this is the normal case
 
@@ -165,27 +165,19 @@ private[projection] class R2dbcOffsetStore(
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
   private val selectTimestampOffsetSql: String =
-    s"SELECT * FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3"
+    "SELECT persistence_id, seq_nr, timestamp_offset " +
+    s"FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3 "
 
-  // FIXME an alternative would be pk: (projection_name, projection_key, timestamp_offset, persistence_id)
-  // which might be better for the range deletes, but it would would be "append only" with possibly
-  // many rows per persistence_id
-  private val upsertTimestampOffsetSql: String =
+  private val insertTimestampOffsetSql: String =
     s"INSERT INTO $timestampOffsetTable " +
-    "(projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, last_updated)  " +
-    "VALUES ($1,$2,$3,$4,$5,$6, transaction_timestamp()) " +
-    "ON CONFLICT (slice, projection_name, persistence_id) " +
-    "DO UPDATE SET " +
-    "projection_key = excluded.projection_key, " +
-    "seq_nr = excluded.seq_nr, " +
-    "timestamp_offset = excluded.timestamp_offset, " +
-    "last_updated = excluded.last_updated"
+    "(projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)  " +
+    "VALUES ($1,$2,$3,$4,$5,$6, transaction_timestamp())"
 
   private val deleteTimestampOffsetSql: String =
     s"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3 AND timestamp_offset < $$4"
 
   private val selectOffsetSql: String =
-    s"SELECT * FROM $offsetTable WHERE projection_name = $$1"
+    s"SELECT projection_key, current_offset, manifest, mergeable FROM $offsetTable WHERE projection_name = $$1"
 
   private val upsertOffsetSql: String =
     s"INSERT INTO $offsetTable  " +
@@ -408,7 +400,20 @@ private[projection] class R2dbcOffsetStore(
 
   private def saveTimestampOffsetInTx[Offset](conn: Connection, records: immutable.IndexedSeq[Record]): Future[Done] = {
     val oldState = state.get()
-    val filteredRecords = records.filterNot(oldState.isDuplicate)
+    val filteredRecords = {
+      if (records.size <= 1)
+        records.filterNot(oldState.isDuplicate)
+      else {
+        // use last record for each pid
+        records
+          .groupBy(_.pid)
+          .valuesIterator
+          .collect {
+            case recordsByPid if !oldState.isDuplicate(recordsByPid.last) => recordsByPid.last
+          }
+          .toVector
+      }
+    }
     if (filteredRecords.isEmpty) {
       FutureDone
     } else {
@@ -444,13 +449,14 @@ private[projection] class R2dbcOffsetStore(
         } else
           newState
 
-      val statement = conn.createStatement(upsertTimestampOffsetSql)
+      val statement = conn.createStatement(insertTimestampOffsetSql)
 
-      val offsetUpserts =
+      val offsetInserts =
         if (filteredRecords.size == 1) {
           val boundStatement = bindRecord(statement, filteredRecords.head)
           R2dbcExecutor.updateOneInTx(boundStatement)
         } else {
+          // TODO Try Batch without bind parameters for better performance. Risk of sql injection for these parameters is low.
           val boundStatement =
             filteredRecords.foldLeft(statement) { (stmt, rec) =>
               bindRecord(stmt, rec).add()
@@ -458,7 +464,7 @@ private[projection] class R2dbcOffsetStore(
           R2dbcExecutor.updateBatchInTx(boundStatement)
         }
 
-      offsetUpserts.map { _ =>
+      offsetInserts.map { _ =>
         if (state.compareAndSet(oldState, evictedNewState))
           cleanupInflight(evictedNewState)
         else

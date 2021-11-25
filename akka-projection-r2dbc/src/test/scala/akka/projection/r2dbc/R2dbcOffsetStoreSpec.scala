@@ -60,7 +60,7 @@ class R2dbcOffsetStoreSpec
 
   "The R2dbcOffsetStore" must {
 
-    s"create and update offsets" in {
+    s"save and read offsets" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
