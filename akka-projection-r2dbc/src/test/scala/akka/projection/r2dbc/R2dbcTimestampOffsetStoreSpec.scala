@@ -14,17 +14,16 @@ import scala.concurrent.Future
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
-import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.query.TimestampOffset
+import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
-import akka.projection.r2dbc.internal.R2dbcOffsetStore.MaxNumberOfSlices
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Pid
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.SeqNr
@@ -68,14 +67,14 @@ class R2dbcTimestampOffsetStoreSpec
       eventTimestampQueryClock: TestClock = clock) =
     new R2dbcOffsetStore(
       projectionId,
-      Some(new TestTimestampSourceProvider(0, MaxNumberOfSlices - 1, eventTimestampQueryClock)),
+      Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, eventTimestampQueryClock)),
       system,
       customSettings,
       r2dbcExecutor)
 
   def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] = {
-    val entityType = SliceUtils.extractEntityTypeFromPersistenceId(pid)
-    val slice = SliceUtils.sliceForPersistenceId(pid, R2dbcOffsetStore.MaxNumberOfSlices)
+    val entityType = PersistenceId.extractEntityType(pid)
+    val slice = persistenceExt.sliceForPersistenceId(pid)
     EventEnvelope(
       TimestampOffset(timestamp, timestamp.plusMillis(1000), Map(pid -> seqNr)),
       pid,
@@ -239,19 +238,19 @@ class R2dbcTimestampOffsetStoreSpec
       val projectionId2 = ProjectionId(projectionId0.name, "64-127")
 
       val p1 = "p1"
-      val slice1 = SliceUtils.sliceForPersistenceId(p1, R2dbcOffsetStore.MaxNumberOfSlices)
+      val slice1 = persistenceExt.sliceForPersistenceId(p1)
       slice1 shouldBe 65
 
       val p2 = "p2"
-      val slice2 = SliceUtils.sliceForPersistenceId(p2, R2dbcOffsetStore.MaxNumberOfSlices)
+      val slice2 = persistenceExt.sliceForPersistenceId(p2)
       slice2 shouldBe 66
 
       val p3 = "p10"
-      val slice3 = SliceUtils.sliceForPersistenceId(p3, R2dbcOffsetStore.MaxNumberOfSlices)
+      val slice3 = persistenceExt.sliceForPersistenceId(p3)
       slice3 shouldBe 15
 
       val p4 = "p11"
-      val slice4 = SliceUtils.sliceForPersistenceId(p4, R2dbcOffsetStore.MaxNumberOfSlices)
+      val slice4 = persistenceExt.sliceForPersistenceId(p4)
       slice4 shouldBe 16
 
       val offsetStore0 =

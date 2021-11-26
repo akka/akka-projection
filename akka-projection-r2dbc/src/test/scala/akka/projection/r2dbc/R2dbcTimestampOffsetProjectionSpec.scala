@@ -27,8 +27,8 @@ import akka.actor.typed.ActorSystem
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
-import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.TimestampOffset
+import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionBehavior
@@ -81,7 +81,8 @@ object R2dbcTimestampOffsetProjectionSpec {
 
   class TestTimestampSourceProvider(
       envelopes: immutable.IndexedSeq[EventEnvelope[String]],
-      testSourceProvider: TestSourceProvider[TimestampOffset, EventEnvelope[String]])
+      testSourceProvider: TestSourceProvider[TimestampOffset, EventEnvelope[String]],
+      override val maxSlice: Int)
       extends SourceProvider[TimestampOffset, EventEnvelope[String]]
       with BySlicesSourceProvider
       with EventTimestampQuery
@@ -97,8 +98,6 @@ object R2dbcTimestampOffsetProjectionSpec {
       testSourceProvider.extractCreationTime(envelope)
 
     override def minSlice: Int = 0
-
-    override def maxSlice: Int = R2dbcOffsetStore.MaxNumberOfSlices - 1
 
     override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
       Future.successful(envelopes.collectFirst {
@@ -121,32 +120,6 @@ object R2dbcTimestampOffsetProjectionSpec {
               s"Event with persistenceId [$persistenceId] and sequenceNr [$sequenceNr] not found."))
       }
     }
-  }
-
-  def createSourceProvider(
-      envelopes: immutable.IndexedSeq[EventEnvelope[String]],
-      complete: Boolean = true): TestTimestampSourceProvider = {
-    val sp = TestSourceProvider[TimestampOffset, EventEnvelope[String]](
-      Source(envelopes),
-      _.offset.asInstanceOf[TimestampOffset])
-      .withStartSourceFrom { (lastProcessedOffset, offset) =>
-        offset.timestamp.isBefore(lastProcessedOffset.timestamp) ||
-        (offset.timestamp == lastProcessedOffset.timestamp && offset.seen == lastProcessedOffset.seen)
-      }
-      .withAllowCompletion(complete)
-
-    new TestTimestampSourceProvider(envelopes, sp)
-  }
-
-  def createBacktrackingSourceProvider(
-      envelopes: immutable.IndexedSeq[EventEnvelope[String]],
-      complete: Boolean = true): TestTimestampSourceProvider = {
-    val sp = TestSourceProvider[TimestampOffset, EventEnvelope[String]](
-      Source(envelopes),
-      _.offset.asInstanceOf[TimestampOffset])
-      .withStartSourceFrom { (lastProcessedOffset, offset) => false } // include all
-      .withAllowCompletion(complete)
-    new TestTimestampSourceProvider(envelopes, sp)
   }
 
 }
@@ -185,6 +158,32 @@ class R2dbcTimestampOffsetProjectionSpec
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
       10.seconds)
+  }
+
+  def createSourceProvider(
+      envelopes: immutable.IndexedSeq[EventEnvelope[String]],
+      complete: Boolean = true): TestTimestampSourceProvider = {
+    val sp = TestSourceProvider[TimestampOffset, EventEnvelope[String]](
+      Source(envelopes),
+      _.offset.asInstanceOf[TimestampOffset])
+      .withStartSourceFrom { (lastProcessedOffset, offset) =>
+        offset.timestamp.isBefore(lastProcessedOffset.timestamp) ||
+        (offset.timestamp == lastProcessedOffset.timestamp && offset.seen == lastProcessedOffset.seen)
+      }
+      .withAllowCompletion(complete)
+
+    new TestTimestampSourceProvider(envelopes, sp, persistenceExt.numberOfSlices - 1)
+  }
+
+  def createBacktrackingSourceProvider(
+      envelopes: immutable.IndexedSeq[EventEnvelope[String]],
+      complete: Boolean = true): TestTimestampSourceProvider = {
+    val sp = TestSourceProvider[TimestampOffset, EventEnvelope[String]](
+      Source(envelopes),
+      _.offset.asInstanceOf[TimestampOffset])
+      .withStartSourceFrom { (_, _) => false } // include all
+      .withAllowCompletion(complete)
+    new TestTimestampSourceProvider(envelopes, sp, persistenceExt.numberOfSlices - 1)
   }
 
   private def offsetShouldBe[Offset](expected: Offset)(implicit offsetStore: R2dbcOffsetStore) = {
@@ -249,8 +248,8 @@ class R2dbcTimestampOffsetProjectionSpec
   }
 
   def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] = {
-    val entityType = SliceUtils.extractEntityTypeFromPersistenceId(pid)
-    val slice = SliceUtils.sliceForPersistenceId(pid, R2dbcOffsetStore.MaxNumberOfSlices)
+    val entityType = PersistenceId.extractEntityType(pid)
+    val slice = persistenceExt.sliceForPersistenceId(pid)
     EventEnvelope(
       TimestampOffset(timestamp, timestamp.plusMillis(1000), Map(pid -> seqNr)),
       pid,

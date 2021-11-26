@@ -15,7 +15,9 @@ import scala.jdk.CollectionConverters._
 
 import akka.NotUsed
 import akka.actor.typed.ActorRef
+import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
+import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
@@ -26,11 +28,14 @@ import akka.projection.scaladsl.SourceProvider
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
 
-class TestSourceProviderWithInput()(implicit val ec: ExecutionContext)
+class TestSourceProviderWithInput()(implicit val system: ActorSystem[_])
     extends SourceProvider[TimestampOffset, EventEnvelope[String]]
     with BySlicesSourceProvider
     with EventTimestampQuery
     with LoadEventQuery {
+
+  private implicit val ec: ExecutionContext = system.executionContext
+  private val persistenceExt = Persistence(system)
 
   private val _input = new AtomicReference[Promise[ActorRef[EventEnvelope[String]]]](Promise())
 
@@ -69,7 +74,7 @@ class TestSourceProviderWithInput()(implicit val ec: ExecutionContext)
 
   override def minSlice: Int = 0
 
-  override def maxSlice: Int = R2dbcOffsetStore.MaxNumberOfSlices - 1
+  override def maxSlice: Int = persistenceExt.numberOfSlices - 1
 
   override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     Future.successful(envelopes.iterator().asScala.collectFirst {

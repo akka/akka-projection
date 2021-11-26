@@ -18,12 +18,12 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.persistence.Persistence
 import akka.persistence.query.DurableStateChange
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
-import akka.persistence.r2dbc.internal.SliceUtils
 import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
@@ -32,18 +32,14 @@ import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.internal.OffsetSerialization.SingleOffset
-import akka.projection.javadsl.SourceProvider
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import io.r2dbc.spi.Connection
-import io.r2dbc.spi.Row
 import io.r2dbc.spi.Statement
 import org.slf4j.LoggerFactory
 
 object R2dbcOffsetStore {
   type SeqNr = Long
   type Pid = String
-
-  val MaxNumberOfSlices = 128 // FIXME define this in akka.persistence.Persistence (not per plugin)
 
   final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
   final case class RecordWithOffset(
@@ -159,10 +155,9 @@ private[projection] class R2dbcOffsetStore(
   private val offsetTable = settings.offsetTableWithSchema
   private val managementTable = settings.managementTableWithSchema
 
-  // FIXME define this in akka.persistence.Persistence (not per plugin)
-  private val maxNumberOfSlices = MaxNumberOfSlices
-
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
+
+  private val persistenceExt = Persistence(system)
 
   private val selectTimestampOffsetSql: String =
     "SELECT persistence_id, seq_nr, timestamp_offset " +
@@ -282,7 +277,7 @@ private[projection] class R2dbcOffsetStore(
     val (minSlice, maxSlice) = {
       sourceProvider match {
         case Some(provider) => (provider.minSlice, provider.maxSlice)
-        case None           => (0, R2dbcOffsetStore.MaxNumberOfSlices - 1)
+        case None           => (0, persistenceExt.numberOfSlices - 1)
       }
     }
 
@@ -428,7 +423,7 @@ private[projection] class R2dbcOffsetStore(
       logger.debug("saving timestamp offset [{}], {}", filteredRecords.last.timestamp, filteredRecords)
 
       def bindRecord(stmt: Statement, record: Record): Statement = {
-        val slice = SliceUtils.sliceForPersistenceId(record.pid, maxNumberOfSlices)
+        val slice = persistenceExt.sliceForPersistenceId(record.pid)
         val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
         val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
         if (slice < minSlice || slice > maxSlice)
