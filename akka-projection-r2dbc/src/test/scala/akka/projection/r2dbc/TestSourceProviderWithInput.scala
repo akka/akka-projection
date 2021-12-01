@@ -18,12 +18,11 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
 import akka.persistence.Persistence
+import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
-import akka.persistence.r2dbc.query.TimestampOffset
 import akka.projection.BySlicesSourceProvider
-import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
