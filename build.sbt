@@ -127,6 +127,7 @@ lazy val docs = project
     Compile / paradoxProperties ++= Map(
         "project.url" -> "https://doc.akka.io/docs/akka-projection/current/",
         "canonical.base_url" -> "https://doc.akka.io/docs/akka-projection/current",
+        "github.base_url" -> "https://github.com/akka/akka-projection",
         "akka.version" -> Dependencies.Versions.akka,
         // Akka
         "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.AkkaVersionInDocs}/%s",
