@@ -24,6 +24,7 @@ import akka.persistence.query.TimestampOffset
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
+import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
@@ -159,52 +160,51 @@ private[projection] class R2dbcOffsetStore(
 
   private val persistenceExt = Persistence(system)
 
-  private val selectTimestampOffsetSql: String =
-    "SELECT persistence_id, seq_nr, timestamp_offset " +
-    s"FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3 "
+  private val selectTimestampOffsetSql: String = sql"""
+    SELECT persistence_id, seq_nr, timestamp_offset
+    FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
 
-  private val insertTimestampOffsetSql: String =
-    s"INSERT INTO $timestampOffsetTable " +
-    "(projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)  " +
-    "VALUES ($1,$2,$3,$4,$5,$6, transaction_timestamp())"
+  private val insertTimestampOffsetSql: String = sql"""
+    INSERT INTO $timestampOffsetTable
+    (projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)
+    VALUES (?,?,?,?,?,?, transaction_timestamp())"""
 
   private val deleteTimestampOffsetSql: String =
-    s"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3 AND timestamp_offset < $$4"
+    sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset < ?"
 
   private val clearTimestampOffsetSql: String =
-    s"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN $$1 AND $$2 AND projection_name = $$3"
+    sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"
 
   private val selectOffsetSql: String =
-    s"SELECT projection_key, current_offset, manifest, mergeable FROM $offsetTable WHERE projection_name = $$1"
+    sql"SELECT projection_key, current_offset, manifest, mergeable FROM $offsetTable WHERE projection_name = ?"
 
-  private val upsertOffsetSql: String =
-    s"INSERT INTO $offsetTable  " +
-    "(projection_name, projection_key, current_offset, manifest, mergeable, last_updated) " +
-    "VALUES ($1,$2,$3,$4,$5,$6) " +
-    "ON CONFLICT (projection_name, projection_key) " +
-    "DO UPDATE SET " +
-    "current_offset = excluded.current_offset, " +
-    "manifest = excluded.manifest, " +
-    "mergeable = excluded.mergeable, " +
-    "last_updated = excluded.last_updated"
+  private val upsertOffsetSql: String = sql"""
+    INSERT INTO $offsetTable
+    (projection_name, projection_key, current_offset, manifest, mergeable, last_updated)
+    VALUES (?,?,?,?,?,?)
+    ON CONFLICT (projection_name, projection_key)
+    DO UPDATE SET
+    current_offset = excluded.current_offset,
+    manifest = excluded.manifest,
+    mergeable = excluded.mergeable,
+    last_updated = excluded.last_updated"""
 
   private val clearOffsetSql: String =
-    s"DELETE FROM $offsetTable WHERE projection_name = $$1 AND projection_key = $$2"
+    sql"DELETE FROM $offsetTable WHERE projection_name = ? AND projection_key = ?"
 
-  private val readManagementStateSql =
-    s"SELECT paused FROM $managementTable WHERE " +
-    "projection_name = $1 AND " +
-    "projection_key = $2 "
+  private val readManagementStateSql = sql"""
+    SELECT paused FROM $managementTable WHERE
+    projection_name = ? AND
+    projection_key = ? """
 
-  val updateManagementStateSql: String =
-    s"INSERT INTO $managementTable " +
-    "(projection_name, projection_key, paused, last_updated)  " +
-    "VALUES " +
-    "($1,$2,$3,$4) " +
-    "ON CONFLICT (projection_name, projection_key) " +
-    "DO UPDATE SET " +
-    "paused = excluded.paused, " +
-    "last_updated = excluded.last_updated"
+  val updateManagementStateSql: String = sql"""
+    INSERT INTO $managementTable
+    (projection_name, projection_key, paused, last_updated)
+    VALUES (?,?,?,?)
+    ON CONFLICT (projection_name, projection_key)
+    DO UPDATE SET
+    paused = excluded.paused,
+    last_updated = excluded.last_updated"""
 
   // The OffsetStore instance is used by a single projectionId and there shouldn't be any concurrent
   // calls to methods that access the `state`. To detect any violations of that concurrency assumption

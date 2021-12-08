@@ -9,12 +9,12 @@ import java.util.UUID
 
 import scala.concurrent.ExecutionContext
 
-import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
+import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
@@ -43,7 +43,7 @@ class R2dbcOffsetStoreSpec
   private implicit val ec: ExecutionContext = system.executionContext
 
   def selectLastSql: String =
-    s"""SELECT * FROM $table WHERE projection_name = $$1 AND projection_key = $$2"""
+    sql"SELECT * FROM $table WHERE projection_name = ? AND projection_key = ?"
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     r2dbcExecutor

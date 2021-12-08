@@ -20,6 +20,7 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.R2dbcSettings
+import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
@@ -141,9 +142,10 @@ class EventSourcedEndToEndSpec
   // to be able to store events with specific timestamps
   private def writeEvent(persistenceId: String, seqNr: Long, timestamp: Instant, event: String): Unit = {
     log.debug("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
-    val insertEventSql = s"INSERT INTO ${journalSettings.journalTableWithSchema} " +
-      "(slice, entity_type, persistence_id, seq_nr, db_timestamp, writer, adapter_manifest, event_ser_id, event_ser_manifest, event_payload) " +
-      "VALUES ($1, $2, $3, $4, $5, '', '', $6, '', $7)"
+    val insertEventSql = sql"""
+      INSERT INTO ${journalSettings.journalTableWithSchema}
+      (slice, entity_type, persistence_id, seq_nr, db_timestamp, writer, adapter_manifest, event_ser_id, event_ser_manifest, event_payload)
+      VALUES (?, ?, ?, ?, ?, '', '', ?, '', ?)"""
 
     val entityType = PersistenceId.extractEntityType(persistenceId)
     val slice = persistenceExt.sliceForPersistenceId(persistenceId)

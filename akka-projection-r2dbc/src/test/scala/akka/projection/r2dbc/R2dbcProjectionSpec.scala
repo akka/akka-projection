@@ -22,6 +22,7 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.OffsetVerification
@@ -124,13 +125,13 @@ object R2dbcProjectionSpec {
       logger.debug("TestRepository.upsert: [{}]", concatStr)
 
       val stmtSql =
-        s"""|
-         |INSERT INTO "$table" (id, concatenated)  VALUES ($$1, $$2)
-         |ON CONFLICT (id)
-         |DO UPDATE SET
-         |  id = excluded.id,
-         |  concatenated = excluded.concatenated
-         |""".stripMargin
+        sql"""
+          INSERT INTO "$table" (id, concatenated)  VALUES (?, ?)
+          ON CONFLICT (id)
+          DO UPDATE SET
+            id = excluded.id,
+            concatenated = excluded.concatenated
+         """
       val stmt = session
         .createStatement(stmtSql)
         .bind(0, concatStr.id)
@@ -144,7 +145,7 @@ object R2dbcProjectionSpec {
     def findById(id: String): Future[Option[ConcatStr]] = {
       logger.debug("TestRepository.findById: [{}]", id)
 
-      val stmtSql = s"SELECT * FROM $table WHERE id = $$1"
+      val stmtSql = sql"SELECT * FROM $table WHERE id = ?"
       val stmt = session
         .createStatement(stmtSql)
         .bind(0, id)
