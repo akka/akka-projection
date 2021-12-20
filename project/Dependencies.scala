@@ -14,7 +14,7 @@ object Dependencies {
   val AlpakkaKafkaVersionInDocs = "2.0"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.6.17+55-bdb46d16-SNAPSHOT")
+    val akka = sys.props.getOrElse("build.akka.version", "2.6.18")
     val akkaPersistenceJdbc = "5.0.2"
     val alpakka = "2.0.2"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.7")
@@ -68,7 +68,7 @@ object Dependencies {
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
 
-    val logback = "ch.qos.logback" % "logback-classic" % "1.2.3" % allTestConfig
+    val logback = "ch.qos.logback" % "logback-classic" % "1.2.9" % allTestConfig
 
     val cassandraContainer =
       "org.testcontainers" % "cassandra" % Versions.testContainers % allTestConfig
