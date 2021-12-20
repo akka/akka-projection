@@ -233,30 +233,30 @@ class R2dbcTimestampOffsetStoreSpec
     }
 
     "readOffset from given slices" in {
-      val projectionId0 = ProjectionId(UUID.randomUUID().toString, "0-127")
-      val projectionId1 = ProjectionId(projectionId0.name, "0-63")
-      val projectionId2 = ProjectionId(projectionId0.name, "64-127")
+      val projectionId0 = ProjectionId(UUID.randomUUID().toString, "0-1023")
+      val projectionId1 = ProjectionId(projectionId0.name, "0-511")
+      val projectionId2 = ProjectionId(projectionId0.name, "512-1023")
 
       val p1 = "p1"
       val slice1 = persistenceExt.sliceForPersistenceId(p1)
-      slice1 shouldBe 65
+      slice1 shouldBe 449
 
       val p2 = "p2"
       val slice2 = persistenceExt.sliceForPersistenceId(p2)
-      slice2 shouldBe 66
+      slice2 shouldBe 450
 
       val p3 = "p10"
       val slice3 = persistenceExt.sliceForPersistenceId(p3)
-      slice3 shouldBe 15
+      slice3 shouldBe 655
 
       val p4 = "p11"
       val slice4 = persistenceExt.sliceForPersistenceId(p4)
-      slice4 shouldBe 16
+      slice4 shouldBe 656
 
       val offsetStore0 =
         new R2dbcOffsetStore(
           projectionId0,
-          Some(new TestTimestampSourceProvider(0, 127, clock)),
+          Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, clock)),
           system,
           settings,
           r2dbcExecutor)
@@ -277,22 +277,22 @@ class R2dbcTimestampOffsetStoreSpec
       val offsetStore1 =
         new R2dbcOffsetStore(
           projectionId1,
-          Some(new TestTimestampSourceProvider(0, 63, clock)),
+          Some(new TestTimestampSourceProvider(0, 511, clock)),
           system,
           settings,
           r2dbcExecutor)
       offsetStore1.readOffset().futureValue
-      offsetStore1.getState().byPid.keySet shouldBe Set(p3, p4)
+      offsetStore1.getState().byPid.keySet shouldBe Set(p1, p2)
 
       val offsetStore2 =
         new R2dbcOffsetStore(
           projectionId2,
-          Some(new TestTimestampSourceProvider(64, 127, clock)),
+          Some(new TestTimestampSourceProvider(512, 1023, clock)),
           system,
           settings,
           r2dbcExecutor)
       offsetStore2.readOffset().futureValue
-      offsetStore2.getState().byPid.keySet shouldBe Set(p1, p2)
+      offsetStore2.getState().byPid.keySet shouldBe Set(p3, p4)
     }
 
     "filter duplicates" in {
