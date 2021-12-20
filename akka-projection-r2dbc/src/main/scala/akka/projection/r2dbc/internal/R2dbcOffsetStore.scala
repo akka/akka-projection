@@ -7,6 +7,7 @@ package akka.projection.r2dbc.internal
 import java.time.Clock
 import java.time.Instant
 import java.time.{ Duration => JDuration }
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
@@ -216,6 +217,9 @@ private[projection] class R2dbcOffsetStore(
   // This can be updated concurrently with CAS retries.
   private val inflight = new AtomicReference(Map.empty[Pid, SeqNr])
 
+  // To avoid delete requests when no new offsets have been stored since previous delete
+  private val idle = new AtomicBoolean(false)
+
   system.scheduler.scheduleWithFixedDelay(
     settings.deleteInterval,
     settings.deleteInterval,
@@ -272,6 +276,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
+    idle.set(false)
     val oldState = state.get()
 
     val (minSlice, maxSlice) = {
@@ -401,6 +406,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def saveTimestampOffsetInTx[Offset](conn: Connection, records: immutable.IndexedSeq[Record]): Future[Done] = {
+    idle.set(false)
     val oldState = state.get()
     val filteredRecords = {
       if (records.size <= 1)
@@ -687,43 +693,49 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def deleteOldTimestampOffsets(): Future[Int] = {
-    val currentState = getState()
-    if (currentState.window.compareTo(settings.timeWindow) < 0) {
-      // it hasn't filled up the window yet
+    if (idle.getAndSet(true)) {
+      // no new offsets stored since previous delete
       Future.successful(0)
     } else {
-      val until = currentState.latestTimestamp.minus(settings.timeWindow)
-      val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-      val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-      val result = r2dbcExecutor.updateOne("delete timestamp offset") { conn =>
-        conn
-          .createStatement(deleteTimestampOffsetSql)
-          .bind(0, minSlice)
-          .bind(1, maxSlice)
-          .bind(2, projectionId.name)
-          .bind(3, until)
-      }
-
-      // FIXME would it be good to keep at least one record per slice that can be used as the
-      // starting point for the slice if the slice ranges are changed?
-
-      result.failed.foreach { exc =>
-        logger.warn(
-          "Failed to delete timestamp offset until [{}] for projection [{}]: {}",
-          until,
-          projectionId.id,
-          exc.toString)
-      }
-      if (logger.isDebugEnabled)
-        result.foreach { rows =>
-          logger.debug(
-            "Deleted [{}] timestamp offset rows until [{}] for projection [{}].",
-            rows,
-            until,
-            projectionId.id)
+      val currentState = getState()
+      if (currentState.window.compareTo(settings.timeWindow) < 0) {
+        // it hasn't filled up the window yet
+        Future.successful(0)
+      } else {
+        val until = currentState.latestTimestamp.minus(settings.timeWindow)
+        val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+        val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+        val result = r2dbcExecutor.updateOne("delete timestamp offset") { conn =>
+          conn
+            .createStatement(deleteTimestampOffsetSql)
+            .bind(0, minSlice)
+            .bind(1, maxSlice)
+            .bind(2, projectionId.name)
+            .bind(3, until)
         }
 
-      result
+        // FIXME would it be good to keep at least one record per slice that can be used as the
+        // starting point for the slice if the slice ranges are changed?
+
+        result.failed.foreach { exc =>
+          idle.set(false) // try again next tick
+          logger.warn(
+            "Failed to delete timestamp offset until [{}] for projection [{}]: {}",
+            until,
+            projectionId.id,
+            exc.toString)
+        }
+        if (logger.isDebugEnabled)
+          result.foreach { rows =>
+            logger.debug(
+              "Deleted [{}] timestamp offset rows until [{}] for projection [{}].",
+              rows,
+              until,
+              projectionId.id)
+          }
+
+        result
+      }
     }
   }
 
@@ -733,7 +745,8 @@ private[projection] class R2dbcOffsetStore(
 
   private def clearTimestampOffset(): Future[Done] = {
     sourceProvider match {
-      case Some(provider) =>
+      case Some(_) =>
+        idle.set(false)
         r2dbcExecutor
           .updateOne("clear timestamp offset") { conn =>
             val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
