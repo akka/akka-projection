@@ -65,19 +65,8 @@ object EventSourcedProvider {
       entityType: String,
       minSlice: Int,
       maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
-
     val eventsBySlicesQuery =
       PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId)
-
-    if (!eventsBySlicesQuery.isInstanceOf[EventTimestampQuery])
-      throw new IllegalArgumentException(
-        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
-        s"[$readJournalPluginId] must implement [${classOf[EventTimestampQuery].getName}]")
-
-    if (!eventsBySlicesQuery.isInstanceOf[LoadEventQuery])
-      throw new IllegalArgumentException(
-        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
-        s"[$readJournalPluginId] must implement [${classOf[LoadEventQuery].getName}]")
 
     new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
   }
