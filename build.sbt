@@ -127,6 +127,7 @@ lazy val docs = project
     Compile / paradoxProperties ++= Map(
         "project.url" -> "https://doc.akka.io/docs/akka-projection/current/",
         "canonical.base_url" -> "https://doc.akka.io/docs/akka-projection/current",
+        "github.base_url" -> "https://github.com/akka/akka-projection",
         "akka.version" -> Dependencies.Versions.akka,
         // Akka
         "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.AkkaVersionInDocs}/%s",
@@ -154,8 +155,6 @@ lazy val docs = project
     paradoxRoots := List("index.html", "getting-started/event-generator-app.html"),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,
-    // TODO remove
-    resolvers in ThisBuild += "Akka Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/"),
     publishRsyncArtifacts += (makeSite.value -> "www/"),
     publishRsyncHost := "akkarepo@gustav.akka.io",
     apidocRootPackage := "akka")

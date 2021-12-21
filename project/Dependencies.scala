@@ -6,7 +6,7 @@ import sbt._
 object Dependencies {
 
   val Scala213 = "2.13.3"
-  val Scala212 = "2.12.13"
+  val Scala212 = "2.12.15"
   val ScalaVersions = Seq(Scala213, Scala212)
 
   val AkkaVersionInDocs = "2.6.16"
@@ -14,7 +14,7 @@ object Dependencies {
   val AlpakkaKafkaVersionInDocs = "2.0"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.6.16")
+    val akka = sys.props.getOrElse("build.akka.version", "2.6.18")
     val akkaPersistenceJdbc = "5.0.2"
     val alpakka = "2.0.2"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.7")
@@ -63,12 +63,12 @@ object Dependencies {
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
     val h2Driver = Compile.h2Driver % allTestConfig
-    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.20" % allTestConfig
+    val postgresDriver = "org.postgresql" % "postgresql" % "42.2.24" % allTestConfig
     val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.27" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
 
-    val logback = "ch.qos.logback" % "logback-classic" % "1.2.3" % allTestConfig
+    val logback = "ch.qos.logback" % "logback-classic" % "1.2.9" % allTestConfig
 
     val cassandraContainer =
       "org.testcontainers" % "cassandra" % Versions.testContainers % allTestConfig

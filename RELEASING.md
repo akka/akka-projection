@@ -26,4 +26,4 @@ It is possible to release a revised documentation to the already existing releas
     rm -r docs/target/site
     sbt docs/publishRsync
     ```
-1. Do not forget to push the new branch back to GitHub.
+1. Do not forget to revert the `version.sbt` file and push the new branch back to GitHub.
