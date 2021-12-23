@@ -3,11 +3,12 @@
  */
 
 package akka.projection
-import akka.actor.typed.scaladsl.LoggerOps
+
 import scala.util.Failure
 import scala.util.Success
+import scala.reflect.ClassTag
 
-import akka.Done
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
 import akka.actor.typed.SupervisorStrategy
@@ -16,6 +17,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.StashBuffer
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
+import akka.Done
 import akka.projection.internal.ManagementState
 import akka.projection.scaladsl.ProjectionManagement
 
@@ -68,6 +70,8 @@ object ProjectionBehavior {
    */
   def stopMessage(): Command = Stop
 
+  type Thr <: Throwable
+
   /**
    * Scala API: creates a ProjectionBehavior for the passed projections.
    */
@@ -75,8 +79,12 @@ object ProjectionBehavior {
     Behaviors.setup[Command] { ctx =>
       Behaviors.withStash[Command](1000) { stashBuffer =>
         ctx.log.info("Starting projection [{}]", projection.projectionId)
+
+        val throwableClassTag = implicitly[ClassTag[Throwable]]
+
         projection.actorHandlerInit[Any].foreach { init =>
-          val ref = ctx.spawnAnonymous(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart))
+          val ref = ctx.spawnAnonymous(
+            Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart)(throwableClassTag))
           init.setActor(ref)
           ctx.log.debug2("Started actor handler [{}] for projection [{}]", ref, projection.projectionId)
         }
@@ -102,7 +110,7 @@ object ProjectionBehavior {
 
   private def projectionId = projection.projectionId
 
-  private def started(running: RunningProjection): Behavior[Command] =
+  private[projection] def started(running: RunningProjection): Behavior[Command] =
     Behaviors.receiveMessagePartial {
       case Stop =>
         context.log.debug("Projection [{}] is being stopped", projectionId)
@@ -112,9 +120,9 @@ object ProjectionBehavior {
         context.pipeToSelf(stoppedFut)(_ => Stopped)
         stopping()
 
-      case getOffset: GetOffset[Offset] =>
+      case getOffset: GetOffset[Offset] @unchecked =>
         running match {
-          case mgmt: RunningProjectionManagement[Offset] =>
+          case mgmt: RunningProjectionManagement[Offset] @unchecked =>
             if (getOffset.projectionId == projectionId) {
               context.pipeToSelf(mgmt.getOffset()) {
                 case Success(offset) => GetOffsetResult(offset, getOffset.replyTo)
@@ -125,12 +133,12 @@ object ProjectionBehavior {
           case _ => Behaviors.unhandled
         }
 
-      case result: GetOffsetResult[Offset] =>
+      case result: GetOffsetResult[Offset] @unchecked =>
         receiveGetOffsetResult(result)
 
-      case setOffset: SetOffset[Offset] =>
+      case setOffset: SetOffset[Offset] @unchecked =>
         running match {
-          case mgmt: RunningProjectionManagement[Offset] =>
+          case mgmt: RunningProjectionManagement[Offset] @unchecked =>
             if (setOffset.projectionId == projectionId) {
               context.log.info2(
                 "Offset will be changed to [{}] for projection [{}]. The Projection will be restarted.",

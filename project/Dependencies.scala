@@ -7,25 +7,38 @@ object Dependencies {
 
   val Scala213 = "2.13.3"
   val Scala212 = "2.12.15"
-  val ScalaVersions = Seq(Scala213, Scala212)
+  val Scala3 = "3.1.1-RC1"
+  val ScalaVersions = Seq(Scala213, Scala3, Scala212)
 
-  val AkkaVersionInDocs = "2.6.16"
+  val AkkaVersionInDocs = "2.6.18"
   val AlpakkaVersionInDocs = "2.0"
   val AlpakkaKafkaVersionInDocs = "2.0"
 
+    def getScalaVersion() = {
+    // don't mandate patch not specified to allow builds to migrate
+    System.getProperty("akka.build.scalaVersion", "default") match {
+      case twoThirteen if twoThirteen.startsWith("2.13") => Scala213
+      case twoTwelve if twoTwelve.startsWith("2.12")     => Scala212
+      case three if three.startsWith("3.")               => Scala3
+      case "default"                                     => Scala213
+      case other =>
+        throw new IllegalArgumentException(s"Unsupported scala version [$other]. Must be 2.12, 2.13 or 3.x.")
+    }
+  }
   object Versions {
     val akka = sys.props.getOrElse("build.akka.version", "2.6.18")
     val akkaPersistenceJdbc = "5.0.2"
     val alpakka = "2.0.2"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.7")
     val slick = "3.3.3"
-    val scalaTest = "3.1.1"
+    val scalaTest = "3.2.10"
     val testContainers = "1.15.3"
     val junit = "4.13.2"
     val h2Driver = "1.4.200"
     val jackson = "2.11.4" // this should match the version of jackson used by akka-serialization-jackson
   }
 
+  def for3Use2_13(module: ModuleID) = module.cross(CrossVersion.for3Use2_13) 
   object Compile {
     val akkaActorTyped = "com.typesafe.akka" %% "akka-actor-typed" % Versions.akka
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
@@ -36,11 +49,11 @@ object Dependencies {
     val akkaTypedTestkit = "com.typesafe.akka" %% "akka-actor-testkit-typed" % Versions.akka
     val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Versions.akka
 
-    val slick = "com.typesafe.slick" %% "slick" % Versions.slick
+    val slick = for3Use2_13("com.typesafe.slick" %% "slick" % Versions.slick)
 
-    val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
+    val alpakkaCassandra = for3Use2_13("com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka)
 
-    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
+    val alpakkaKafka = for3Use2_13("com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka)
 
     // must be provided on classpath when using Apache Kafka 2.6.0+
     val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jackson
@@ -48,7 +61,7 @@ object Dependencies {
     // not really used in lib code, but in example and test
     val h2Driver = "com.h2database" % "h2" % Versions.h2Driver
 
-    val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0"
+    val collectionCompat = for3Use2_13("org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0")
   }
 
   object Test {
@@ -59,7 +72,7 @@ object Dependencies {
     val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % "test"
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % allTestConfig
-    val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % allTestConfig
+    val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % allTestConfig
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
     val h2Driver = Compile.h2Driver % allTestConfig
@@ -83,7 +96,7 @@ object Dependencies {
       "org.testcontainers" % "oracle-xe" % Versions.testContainers % allTestConfig
 
     val alpakkaKafkaTestkit =
-      "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % allTestConfig
+      for3Use2_13("com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka) % allTestConfig
   }
 
   object Examples {

@@ -60,7 +60,7 @@ object DurableStateSourceProvider {
     override def extractCreationTime(stateChange: DurableStateChange[A]): Long =
       stateChange match {
         case u: UpdatedDurableState[_] => u.timestamp
-        case _                         => 0L // FIXME handle DeletedDurableState when that is added
+        case null                      => 0L // FIXME handle DeletedDurableState when that is added
       }
   }
 
@@ -117,10 +117,10 @@ object DurableStateSourceProvider {
     override def extractCreationTime(stateChange: DurableStateChange[A]): Long =
       stateChange match {
         case u: UpdatedDurableState[_] => u.timestamp
-        case other                     =>
+        case null                      =>
           // FIXME case DeletedDurableState when that is added
           throw new IllegalArgumentException(
-            s"DurableStateChange [${other.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-persistence-r2dbc/issues")
+            "DurableStateChange [DeletedDurableState] not implemented yet. Please report bug at https://github.com/akka/akka-persistence-r2dbc/issues")
       }
 
     override def getObject(persistenceId: String): Future[GetObjectResult[A]] =
