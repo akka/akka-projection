@@ -13,11 +13,20 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigException
 import com.typesafe.config.ConfigValueType
 
+private[projection] trait JdbcSettingsBase {
+  val schema: Option[String]
+  val table: String
+  val managementTable: String
+  val verboseLoggingEnabled: Boolean
+  val dialect: Dialect
+}
+
 /**
  * INTERNAL API
  */
 @InternalApi
-private[projection] case class JdbcSettings(config: Config, executionContext: ExecutionContext) {
+private[projection] case class JdbcSettings(config: Config, executionContext: ExecutionContext)
+    extends JdbcSettingsBase {
 
   val schema: Option[String] =
     Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty)

@@ -19,6 +19,7 @@ import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.TestTags
 import akka.projection.internal.ManagementState
+import akka.projection.jdbc.internal.JdbcSessionUtil.tryWithResource
 import akka.projection.slick.SlickOffsetStoreSpec.SlickSpecConfig
 import akka.projection.slick.internal.SlickOffsetStore
 import akka.projection.slick.internal.SlickSettings
@@ -44,6 +45,7 @@ object SlickOffsetStoreSpec {
         management-table = "akka_projection_management"
         use-lowercase-schema = true
       }
+      debug.verbose-offset-store-logging = true
     }
     """)
     def config: Config
@@ -95,6 +97,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
 
+  private val settings = SlickSettings(slickConfig)
   private val offsetStore =
     new SlickOffsetStore(system, dbConfig.db, dbConfig.profile, SlickSettings(slickConfig), clock)
 
@@ -109,15 +112,35 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
     dbConfig.db.close()
     specConfig.stopContainer()
   }
+  private val table = settings.schema.map(s => s""""$s"."${settings.table}"""").getOrElse(s""""${settings.table}"""")
+
+  def selectLastStatement: String = {
+    // wrapping with quotes always work as long as case is respected
+    s"""SELECT * FROM $table WHERE "projection_name" = ? AND "projection_key" = ?"""
+  }
 
   private def selectLastUpdated(projectionId: ProjectionId): Instant = {
     import dbConfig.profile.api._
-    val action = offsetStore.offsetTable
-      .filter(r => r.projectionName === projectionId.name && r.projectionKey === projectionId.key)
-      .result
-      .headOption
-    val millis = dbConfig.db.run(action).futureValue.get.lastUpdated
-    Instant.ofEpochMilli(millis)
+    val action = SimpleDBIO[Instant] { jdbcContext =>
+      val conn = jdbcContext.connection
+      val statement = selectLastStatement
+
+      // init statement in try-with-resource
+      tryWithResource(conn.prepareStatement(statement)) { stmt =>
+        stmt.setString(1, projectionId.name)
+        stmt.setString(2, projectionId.key)
+
+        // init ResultSet in try-with-resource
+        tryWithResource(stmt.executeQuery()) { resultSet =>
+
+          if (resultSet.next()) {
+            val millisSinceEpoch = resultSet.getLong(6)
+            Instant.ofEpochMilli(millisSinceEpoch)
+          } else throw new RuntimeException(s"no records found for $projectionId")
+        }
+      }
+    }
+    dbConfig.db.run(action).futureValue
   }
 
   private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
