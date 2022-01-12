@@ -21,7 +21,9 @@ object CopyrightHeader extends AutoPlugin {
               HeaderFileType.java -> cStyleComment)))
     })
 
-  val CurrentYear = java.time.Year.now.getValue.toString
+  // We hard-code this so PR's created in year X will not suddenly fail in X+1.
+  // Of course we should remember to update it early in the year.
+  val CurrentYear = "2022"  
   val CopyrightPattern = "Copyright \\([Cc]\\) (\\d{4}(-\\d{4})?) (Lightbend|Typesafe) Inc. <.*>".r
   val CopyrightHeaderPattern = s"(?s).*${CopyrightPattern}.*".r
 
