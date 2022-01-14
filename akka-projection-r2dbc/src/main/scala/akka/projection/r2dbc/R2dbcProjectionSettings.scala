@@ -51,9 +51,9 @@ final case class R2dbcProjectionSettings(
     evictInterval: JDuration,
     deleteInterval: JDuration,
     logDbCallsExceeding: FiniteDuration) {
-  val offsetTableWithSchema: String = schema.map("." + _).getOrElse("") + offsetTable
-  val timestampOffsetTableWithSchema: String = schema.map("." + _).getOrElse("") + timestampOffsetTable
-  val managementTableWithSchema: String = schema.map("." + _).getOrElse("") + managementTable
+  val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
+  val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
+  val managementTableWithSchema: String = schema.map(_ + ".").getOrElse("") + managementTable
 
   def isOffsetTableDefined: Boolean = offsetTable.nonEmpty
 }
