@@ -21,12 +21,13 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.Persistence
 import akka.persistence.query.DurableStateChange
+import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
-import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.persistence.r2dbc.internal.R2dbcExecutor
+import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
@@ -585,26 +586,63 @@ private[projection] class R2dbcOffsetStore(
     } else if (recordWithOffset.strictSeqNr) {
       // strictSeqNr == true is for event sourced
       val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
-      if (prevSeqNr > 0) {
-        // expecting seqNr to be +1 of previously known
-        val ok = seqNr == prevSeqNr + 1
-        if (ok) {
-          FutureTrue
-        } else if (recordWithOffset.envelopeLoaded) {
+
+      def logUnexpected(): Unit = {
+        if (viaPubSub(recordWithOffset.offset))
+          logger.debug(
+            "Rejecting pub-sub envelope, unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+            seqNr,
+            pid,
+            prevSeqNr,
+            recordWithOffset.offset)
+        else if (recordWithOffset.envelopeLoaded)
           logger.info(
             "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
             seqNr,
             pid,
             prevSeqNr,
             recordWithOffset.offset)
-          FutureFalse
-        } else {
+        else
           logger.warn(
             "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
             seqNr,
             pid,
             prevSeqNr,
             recordWithOffset.offset)
+      }
+
+      def logUnknown(): Unit = {
+        if (viaPubSub(recordWithOffset.offset)) {
+          logger.debug(
+            "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
+        } else if (recordWithOffset.envelopeLoaded) {
+          logger.info(
+            "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
+        } else {
+          logger.warn(
+            "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
+        }
+      }
+
+      if (prevSeqNr > 0) {
+        // expecting seqNr to be +1 of previously known
+        val ok = seqNr == prevSeqNr + 1
+        if (ok) {
+          FutureTrue
+        } else if (recordWithOffset.envelopeLoaded) {
+          logUnexpected()
+          FutureFalse
+        } else {
+          logUnexpected()
           // This will result in projection restart (with normal configuration)
           Future.failed(
             new IllegalStateException(
@@ -625,14 +663,10 @@ private[projection] class R2dbcOffsetStore(
             if (previousTimestamp.isBefore(currentState.latestTimestamp.minus(settings.timeWindow))) {
               true
             } else if (recordWithOffset.envelopeLoaded) {
-              logger.info("Rejecting unknown sequence number (might be accepted later): {}", recordWithOffset)
+              logUnknown()
               false
             } else {
-              logger.warn(
-                "Rejecting unknown sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
-                seqNr,
-                pid,
-                recordWithOffset.offset)
+              logUnknown()
               // This will result in projection restart (with normal configuration)
               throw new IllegalStateException(
                 s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr], " +
@@ -655,6 +689,13 @@ private[projection] class R2dbcOffsetStore(
         logger.trace("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
         FutureFalse
       }
+    }
+  }
+
+  private def viaPubSub(offset: Offset): Boolean = {
+    offset match {
+      case t: TimestampOffset => t.timestamp == t.readTimestamp
+      case _                  => false
     }
   }
 
