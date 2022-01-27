@@ -60,7 +60,6 @@ object R2dbcOffsetStore {
     }
   }
 
-  // FIXME add unit test for this class
   final case class State(byPid: Map[Pid, Record], latest: immutable.IndexedSeq[Record], oldestTimestamp: Instant) {
     def size: Int = byPid.size
 
@@ -90,12 +89,21 @@ object R2dbcOffsetStore {
 
         val latestTimestamp = acc.latestTimestamp
         val newLatest =
-          if (r.timestamp.isAfter(latestTimestamp))
+          if (r.timestamp.isAfter(latestTimestamp)) {
             Vector(r)
-          else if (r.timestamp == latestTimestamp)
-            acc.latest :+ r
-          else
+          } else if (r.timestamp == latestTimestamp) {
+            acc.latest.find(_.pid == r.pid) match {
+              case None                 => acc.latest :+ r
+              case Some(existingRecord) =>
+                // keep highest seqNr
+                if (r.seqNr >= existingRecord.seqNr)
+                  acc.latest.filterNot(_.pid == r.pid) :+ r
+                else
+                  acc.latest
+            }
+          } else {
             acc.latest // older than existing latest, keep existing latest
+          }
         val newOldestTimestamp =
           if (acc.oldestTimestamp == Instant.EPOCH)
             r.timestamp // first record
@@ -305,10 +313,11 @@ private[projection] class R2dbcOffsetStore(
     recordsFut.map { records =>
       val newState = State(records)
       logger.debug(
-        "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
+        "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}], records {}",
         newState.byPid.size,
         newState.oldestTimestamp,
-        newState.latestTimestamp)
+        newState.latestTimestamp,
+        records)
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
       clearInflight()
