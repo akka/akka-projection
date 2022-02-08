@@ -1153,7 +1153,6 @@ class R2dbcTimestampOffsetProjectionSpec
   "R2dbcProjection management with TimestampOffset" must {
 
     "restart from beginning when offset is cleared" in {
-      pending // FIXME not implemented yet
       implicit val pid = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
       val envelopes = createEnvelopes(pid, 6)
@@ -1188,7 +1187,6 @@ class R2dbcTimestampOffsetProjectionSpec
     }
 
     "restart from updated offset" in {
-      pending // FIXME not implemented yet
       implicit val pid = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
       val envelopes = createEnvelopes(pid, 6)

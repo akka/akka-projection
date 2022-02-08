@@ -7,6 +7,7 @@ package akka.projection.r2dbc.internal
 import java.time.Clock
 import java.time.Instant
 import java.time.{ Duration => JDuration }
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -28,6 +29,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.internal.Sql.Interpolation
+import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
@@ -179,8 +181,13 @@ private[projection] class R2dbcOffsetStore(
     (projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)
     VALUES (?,?,?,?,?,?, transaction_timestamp())"""
 
-  private val deleteTimestampOffsetSql: String =
+  // delete less than a timestamp
+  private val deleteOldTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset < ?"
+
+  // delete greater than or equal a timestamp
+  private val deleteNewTimestampOffsetSql: String =
+    sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset >= ?"
 
   private val clearTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"
@@ -369,7 +376,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   /**
-   * Like saveOffsetInTx, but in own transaction. Used by atLeastOnce and for resetting an offset.
+   * Like saveOffsetInTx, but in own transaction. Used by atLeastOnce.
    */
   def saveOffset[Offset](offset: Offset): Future[Done] = {
     r2dbcExecutor
@@ -435,27 +442,6 @@ private[projection] class R2dbcOffsetStore(
     if (filteredRecords.isEmpty) {
       FutureDone
     } else {
-      // FIXME change to trace
-      logger.debug("saving timestamp offset [{}], {}", filteredRecords.last.timestamp, filteredRecords)
-
-      def bindRecord(stmt: Statement, record: Record): Statement = {
-        val slice = persistenceExt.sliceForPersistenceId(record.pid)
-        val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-        val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-        if (slice < minSlice || slice > maxSlice)
-          throw new IllegalArgumentException(
-            s"This offset store [$projectionId] manages slices " +
-            s"[$minSlice - $maxSlice] but received slice [$slice] for persistenceId [${record.pid}]")
-
-        stmt
-          .bind(0, projectionId.name)
-          .bind(1, projectionId.key)
-          .bind(2, slice)
-          .bind(3, record.pid)
-          .bind(4, record.seqNr)
-          .bind(5, record.timestamp)
-      }
-
       val newState = oldState.add(filteredRecords)
 
       // accumulate some more than the timeWindow before evicting
@@ -467,21 +453,7 @@ private[projection] class R2dbcOffsetStore(
         } else
           newState
 
-      val statement = conn.createStatement(insertTimestampOffsetSql)
-
-      val offsetInserts =
-        if (filteredRecords.size == 1) {
-          val boundStatement = bindRecord(statement, filteredRecords.head)
-          R2dbcExecutor.updateOneInTx(boundStatement)
-        } else {
-          // TODO Try Batch without bind parameters for better performance. Risk of sql injection for these parameters is low.
-          val boundStatement =
-            filteredRecords.foldLeft(statement) { (stmt, rec) =>
-              stmt.add()
-              bindRecord(stmt, rec)
-            }
-          R2dbcExecutor.updateBatchInTx(boundStatement)
-        }
+      val offsetInserts = insertTimestampOffsetInTx(conn, filteredRecords)
 
       offsetInserts.map { _ =>
         if (state.compareAndSet(oldState, evictedNewState))
@@ -490,6 +462,46 @@ private[projection] class R2dbcOffsetStore(
           throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")
         Done
       }
+    }
+  }
+
+  private def insertTimestampOffsetInTx(conn: Connection, records: immutable.IndexedSeq[Record]): Future[Int] = {
+    def bindRecord(stmt: Statement, record: Record): Statement = {
+      val slice = persistenceExt.sliceForPersistenceId(record.pid)
+      val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+      val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+      if (slice < minSlice || slice > maxSlice)
+        throw new IllegalArgumentException(
+          s"This offset store [$projectionId] manages slices " +
+          s"[$minSlice - $maxSlice] but received slice [$slice] for persistenceId [${record.pid}]")
+
+      stmt
+        .bind(0, projectionId.name)
+        .bind(1, projectionId.key)
+        .bind(2, slice)
+        .bind(3, record.pid)
+        .bind(4, record.seqNr)
+        .bind(5, record.timestamp)
+    }
+
+    require(records.nonEmpty)
+
+    // FIXME change to trace
+    logger.debug("saving timestamp offset [{}], {}", records.last.timestamp, records)
+
+    val statement = conn.createStatement(insertTimestampOffsetSql)
+
+    if (records.size == 1) {
+      val boundStatement = bindRecord(statement, records.head)
+      R2dbcExecutor.updateOneInTx(boundStatement)
+    } else {
+      // TODO Try Batch without bind parameters for better performance. Risk of sql injection for these parameters is low.
+      val boundStatement =
+        records.foldLeft(statement) { (stmt, rec) =>
+          stmt.add()
+          bindRecord(stmt, rec)
+        }
+      R2dbcExecutor.updateBatchInTx(boundStatement)
     }
   }
 
@@ -756,9 +768,9 @@ private[projection] class R2dbcOffsetStore(
         val until = currentState.latestTimestamp.minus(settings.timeWindow)
         val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
         val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-        val result = r2dbcExecutor.updateOne("delete timestamp offset") { conn =>
+        val result = r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
           conn
-            .createStatement(deleteTimestampOffsetSql)
+            .createStatement(deleteOldTimestampOffsetSql)
             .bind(0, minSlice)
             .bind(1, maxSlice)
             .bind(2, projectionId.name)
@@ -790,7 +802,73 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  def clearOffset(): Future[Done] = {
+  /**
+   * Resetting an offset. Deletes newer offsets. Used from ProjectionManagement. Doesn't update in-memory state because
+   * the projection is supposed to be stopped/started for this operation.
+   */
+  def managementSetOffset[Offset](offset: Offset): Future[Done] = {
+    offset match {
+      case t: TimestampOffset =>
+        r2dbcExecutor
+          .withConnection("set offset") { conn =>
+            deleteNewTimestampOffsetsInTx(conn, t.timestamp).flatMap { _ =>
+              val records =
+                if (t.seen.isEmpty)
+                  // we need some persistenceId to be able to store the new offset timestamp
+                  Vector(Record(PersistenceId("mgmt", UUID.randomUUID().toString).id, seqNr = 1L, t.timestamp))
+                else
+                  t.seen.iterator.map { case (pid, seqNr) => Record(pid, seqNr, t.timestamp) }.toVector
+              insertTimestampOffsetInTx(conn, records)
+            }
+          }
+          .map(_ => Done)(ExecutionContext.parasitic)
+
+      case _ =>
+        r2dbcExecutor
+          .withConnection("set offset") { conn =>
+            savePrimitiveOffsetInTx(conn, offset)
+          }
+          .map(_ => Done)(ExecutionContext.parasitic)
+    }
+  }
+
+  private def deleteNewTimestampOffsetsInTx(conn: Connection, timestamp: Instant): Future[Int] = {
+    val currentState = getState()
+    if (timestamp.isAfter(currentState.latestTimestamp)) {
+      // nothing to delete
+      Future.successful(0)
+    } else {
+      val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+      val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+      val result = R2dbcExecutor.updateOneInTx(
+        conn
+          .createStatement(deleteNewTimestampOffsetSql)
+          .bind(0, minSlice)
+          .bind(1, maxSlice)
+          .bind(2, projectionId.name)
+          .bind(3, timestamp))
+
+      // FIXME would it be good to keep at least one record per slice that can be used as the
+      // starting point for the slice if the slice ranges are changed?
+
+      if (logger.isDebugEnabled)
+        result.foreach { rows =>
+          logger.debug(
+            "Deleted [{}] timestamp offset rows >= [{}] for projection [{}].",
+            rows,
+            timestamp,
+            projectionId.id)
+        }
+
+      result
+    }
+  }
+
+  /**
+   * Deletes all offsets. Used from ProjectionManagement. Doesn't update in-memory state because the projection is
+   * supposed to be stopped/started for this operation.
+   */
+  def managementClearOffset(): Future[Done] = {
     clearTimestampOffset().flatMap(_ => clearPrimitiveOffset())
   }
 

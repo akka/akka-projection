@@ -624,6 +624,35 @@ class R2dbcTimestampOffsetStoreSpec
       }
     }
 
+    "set offset" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      tick()
+      val offset1 = TimestampOffset(clock.instant(), Map("p1" -> 10L))
+      tick()
+      val t2 = clock.instant()
+      tick()
+      val t3 = clock.instant()
+      tick()
+      val offset4 = TimestampOffset(clock.instant(), Map("p4" -> 40L))
+
+      offsetStore.saveOffsets(Vector(offset1, offset4)).futureValue
+
+      // offset without any seen pid/seqNr
+      offsetStore.managementSetOffset(TimestampOffset(t2, seen = Map.empty)).futureValue
+      offsetStore.readOffset[TimestampOffset]().futureValue.get.timestamp shouldBe t2
+      offsetStore.getState().latestTimestamp shouldBe t2
+      offsetStore.getState().byPid("p1").seqNr shouldBe 10L
+
+      // offset with seen pid/seqNr
+      offsetStore.managementSetOffset(TimestampOffset(t3, seen = Map("p3" -> 30L))).futureValue
+      offsetStore.readOffset[TimestampOffset]().futureValue.get.timestamp shouldBe t3
+      offsetStore.getState().latestTimestamp shouldBe t3
+      offsetStore.getState().byPid("p1").seqNr shouldBe 10L
+      offsetStore.getState().byPid("p3").seqNr shouldBe 30L
+    }
+
     "clear offset" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
@@ -635,7 +664,7 @@ class R2dbcTimestampOffsetStoreSpec
 
       offsetStore.saveOffsets(Vector(offset1, offset2)).futureValue
 
-      offsetStore.clearOffset().futureValue
+      offsetStore.managementClearOffset().futureValue
       offsetStore.readOffset[TimestampOffset]().futureValue shouldBe None
     }
 

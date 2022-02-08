@@ -533,8 +533,8 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     // RunningProjectionManagement
     override def setOffset(offset: Option[Offset]): Future[Done] = {
       offset match {
-        case Some(o) => offsetStore.saveOffset(o)
-        case None    => offsetStore.clearOffset()
+        case Some(o) => offsetStore.managementSetOffset(o)
+        case None    => offsetStore.managementClearOffset()
       }
     }
 

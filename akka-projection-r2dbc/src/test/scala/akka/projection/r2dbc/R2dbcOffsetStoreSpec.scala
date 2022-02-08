@@ -188,6 +188,17 @@ class R2dbcOffsetStoreSpec
       instant3 shouldBe instant2
     }
 
+    s"set offset" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      offsetStore.saveOffset(3L).futureValue
+      offsetStore.readOffset[Long]().futureValue shouldBe Some(3L)
+
+      offsetStore.managementSetOffset(2L).futureValue
+      offsetStore.readOffset[Long]().futureValue shouldBe Some(2L)
+    }
+
     s"clear offset" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
@@ -195,7 +206,7 @@ class R2dbcOffsetStoreSpec
       offsetStore.saveOffset(3L).futureValue
       offsetStore.readOffset[Long]().futureValue shouldBe Some(3L)
 
-      offsetStore.clearOffset().futureValue
+      offsetStore.managementClearOffset().futureValue
       offsetStore.readOffset[Long]().futureValue shouldBe None
     }
 
