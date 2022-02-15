@@ -618,7 +618,7 @@ private[projection] class R2dbcOffsetStore(
             prevSeqNr,
             recordWithOffset.offset)
         else if (recordWithOffset.envelopeLoaded)
-          logger.info(
+          logger.debug(
             "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
             seqNr,
             pid,
