@@ -71,15 +71,26 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
     "skip" in {
       val strategy = HandlerRecoveryStrategy.skip
       val statusProbe = createTestProbe[Status]()
+      val onSkipProbe = createTestProbe[Done]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
       val handlerRecovery =
         HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
-        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
+        handlerRecovery.applyRecovery(
+          env3,
+          failOnOffset,
+          failOnOffset,
+          neverCompleted,
+          () => handler.process(env3),
+          onSkip = () => {
+            onSkipProbe.ref ! Done
+            Future.successful(Done)
+          })
       result.futureValue shouldBe Done
       handler.attempts shouldBe 1
       statusProbe.expectMessage(Err(env3, someTestException))
+      onSkipProbe.expectMessage(Done)
     }
 
     "retryAndFail 1" in {
@@ -137,28 +148,49 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
     "retryAndSkip 1" in {
       val strategy = HandlerRecoveryStrategy.retryAndSkip(1, 20.millis)
       val statusProbe = createTestProbe[Status]()
+      val onSkipProbe = createTestProbe[Done]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
       val handlerRecovery =
         HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
-        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
+        handlerRecovery.applyRecovery(
+          env3,
+          failOnOffset,
+          failOnOffset,
+          neverCompleted,
+          () => handler.process(env3),
+          onSkip = () => {
+            onSkipProbe.ref ! Done
+            Future.successful(Done)
+          })
       result.futureValue shouldBe Done
       handler.attempts shouldBe 2
       statusProbe.expectMessage(Err(env3, someTestException))
       statusProbe.expectMessage(Err(env3, someTestException))
       statusProbe.expectNoMessage(20.millis)
+      onSkipProbe.expectMessage(Done)
     }
 
     "retryAndSkip 3" in {
       val strategy = HandlerRecoveryStrategy.retryAndSkip(3, 20.millis)
       val statusProbe = createTestProbe[Status]()
+      val onSkipProbe = createTestProbe[Done]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref)
       val handlerRecovery =
         HandlerRecoveryImpl[Long, Envelope](projectionId, strategy, logger, statusObserver, telemetry)
       val handler = new FailHandler(failOnOffset)
       val result =
-        handlerRecovery.applyRecovery(env3, failOnOffset, failOnOffset, neverCompleted, () => handler.process(env3))
+        handlerRecovery.applyRecovery(
+          env3,
+          failOnOffset,
+          failOnOffset,
+          neverCompleted,
+          () => handler.process(env3),
+          onSkip = () => {
+            onSkipProbe.ref ! Done
+            Future.successful(Done)
+          })
       result.futureValue shouldBe Done
       handler.attempts shouldBe 4
       statusProbe.expectMessage(Err(env3, someTestException))
@@ -166,6 +198,7 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       statusProbe.expectMessage(Err(env3, someTestException))
       statusProbe.expectMessage(Err(env3, someTestException))
       statusProbe.expectNoMessage(20.millis)
+      onSkipProbe.expectMessage(Done)
     }
 
     "abort retryAndFail before first attempt" in {
