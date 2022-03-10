@@ -332,6 +332,9 @@ class SlickProjectionSpec
 
       val bogusEventHandler = new ConcatHandlerFail4()
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
+
       val slickProjectionFailing =
         SlickProjection
           .exactlyOnce(
@@ -340,33 +343,30 @@ class SlickProjectionSpec
             databaseConfig = dbConfig,
             () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+          .withStatusObserver(statusObserver)
 
       withClue("check - offset is empty") {
         val offsetOpt = offsetStore.readOffset[Long](projectionId).futureValue
         offsetOpt shouldBe empty
       }
 
-      withClue("check: projection failed with stream failure") {
-        projectionTestKit.runWithTestSink(slickProjectionFailing) { sinkProbe =>
-          sinkProbe.request(1000)
-          eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
-        }
-      }
-      withClue("check: projection is consumed up to third") {
+      spawn(ProjectionBehavior(slickProjectionFailing))
+      eventually {
         val concatStr = dbConfig.db.run(repository.findById(entityId)).futureValue.value
         concatStr.text shouldBe "abc|def|ghi"
       }
 
-      withClue("check - event handler did failed 4 times") {
-        // 1 + 3 => 1 original attempt and 3 retries
-        bogusEventHandler.attempts shouldBe 1 + 3
-      }
+      statusProbe.expectMessage(TestStatusObserver.Started)
 
-      withClue("check: last seen offset is 3L") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 3L
-      }
+      val someTestException = TestException("err")
+      // 1 + 3 => 1 original attempt and 3 retries
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
 
+      // ultimately, the projection must fail
+      statusProbe.expectMessage(TestStatusObserver.Failed)
     }
 
     "restart from previous offset - fail with DBIOAction.failed" in {

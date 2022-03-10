@@ -495,25 +495,33 @@ class CassandraProjectionSpec
 
       val handler = concatHandlerFail4()
 
-      val projection =
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
+
+      val projectionFailing =
         CassandraProjection
           .atLeastOnce[Long, Envelope](projectionId, sourceProvider(entityId), () => handler)
           .withSaveOffset(2, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+          .withStatusObserver(statusObserver)
 
-      intercept[TestException] {
-        projectionTestKit.run(projection) {
-          withClue("checking: all expected values were concatenated") {
-            val concatStr = repository.findById(entityId).futureValue.get
-            concatStr.text shouldBe "abc|def|ghi"
-          }
-        }
+      spawn(ProjectionBehavior(projectionFailing))
+      eventually {
+        val concatStr = repository.findById(entityId).futureValue.get
+        concatStr.text shouldBe "abc|def|ghi"
       }
 
-      withClue("check - event handler did failed 4 times") {
-        // 1 + 3 => 1 original attempt and 3 retries
-        handler.attempts shouldBe 1 + 3
-      }
+      statusProbe.expectMessage(TestStatusObserver.Started)
+
+      val someTestException = TestException("err")
+      // 1 + 3 => 1 original attempt and 3 retries
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "jkl"), someTestException))
+
+      // ultimately, the projection must fail
+      statusProbe.expectMessage(TestStatusObserver.Failed)
     }
 
     "verify offsets before processing an envelope" in {
