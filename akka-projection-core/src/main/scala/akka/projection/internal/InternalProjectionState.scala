@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2021 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2022 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.internal
@@ -255,7 +255,8 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
             done
           }
         }
-        handlerRecovery.applyRecovery(first.envelope, firstOffset, lastOffset, abort.future, measured)
+        val onSkip = () => saveOffsetsAndReport(projectionId, partitioned)
+        handlerRecovery.applyRecovery(first.envelope, firstOffset, lastOffset, abort.future, measured, onSkip)
       }
 
       sourceProvider match {
@@ -312,7 +313,15 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
                 done
               }
             }
-            handlerRecovery.applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
+
+            val onSkip = () => saveOffsetAndReport(projectionId, context, 1)
+            handlerRecovery.applyRecovery(
+              context.envelope,
+              context.offset,
+              context.offset,
+              abort.future,
+              measured,
+              onSkip)
 
           }
 

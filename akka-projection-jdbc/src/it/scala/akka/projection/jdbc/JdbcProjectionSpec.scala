@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2021 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2022 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.jdbc
@@ -340,6 +340,28 @@ class JdbcProjectionSpec
       offsetShouldBe(6L)
     }
 
+    "store offset for failing events when using RecoveryStrategy.skip" in {
+      implicit val entityId = UUID.randomUUID().toString
+      implicit val projectionId = genRandomProjectionId()
+
+      val bogusEventHandler = new ConcatHandler(_ == 6)
+
+      val projectionFailing =
+        JdbcProjection
+          .exactlyOnce(
+            projectionId,
+            sourceProvider = sourceProvider(entityId),
+            jdbcSessionFactory,
+            handler = () => bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
+
+      offsetShouldBeEmpty()
+      projectionTestKit.run(projectionFailing) {
+        projectedValueShouldBe("e1|e2|e3|e4|e5")
+      }
+      offsetShouldBe(6L)
+    }
+
     "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
       implicit val entityId = UUID.randomUUID().toString
       implicit val projectionId = genRandomProjectionId()
@@ -378,8 +400,10 @@ class JdbcProjectionSpec
       progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 1, "e1")))
       progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 2, "e2")))
       progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 3, "e3")))
-      // Offset 4 is not stored so it is not reported.
+      // Offset 4 is stored even though it failed and was skipped
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 4, "e4")))
       progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 5, "e5")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(entityId, 6, "e6")))
 
       offsetShouldBe(6L)
     }

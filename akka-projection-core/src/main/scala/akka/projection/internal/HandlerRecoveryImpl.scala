@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2021 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2022 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.internal
@@ -29,6 +29,7 @@ import akka.projection.StatusObserver
 @InternalApi private[projection] object HandlerRecoveryImpl {
 
   private val futDone = Future.successful(Done)
+  private val defaultOnSkip = () => futDone
 
   def apply[Offset, Envelope](
       projectionId: ProjectionId,
@@ -54,8 +55,8 @@ import akka.projection.StatusObserver
       firstOffset: Offset, // used for logging
       lastOffset: Offset, // used for logging
       abort: Future[Done], // retries can be aborted by failing this Future
-      futureCallback: () => Future[Done])(implicit system: ActorSystem[_]): Future[Done] = {
-    import HandlerRecoveryImpl.futDone
+      futureCallback: () => Future[Done],
+      onSkip: () => Future[Done] = HandlerRecoveryImpl.defaultOnSkip)(implicit system: ActorSystem[_]): Future[Done] = {
     import HandlerRecoveryStrategy.Internal._
 
     implicit val scheduler: Scheduler = system.classicSystem.scheduler
@@ -127,7 +128,7 @@ import akka.projection.StatusObserver
               projectionId.id,
               offsetLogParameter,
               err)
-            futDone
+            onSkip()
 
           case RetryAndFail(retries, delay) =>
             logger.warning(
@@ -174,7 +175,7 @@ import akka.projection.StatusObserver
                 retries + 1,
                 exception)
             }
-            retried.recoverWith { case _ => futDone }
+            retried.recoverWith { case _ => onSkip() }
         }
     }
   }
