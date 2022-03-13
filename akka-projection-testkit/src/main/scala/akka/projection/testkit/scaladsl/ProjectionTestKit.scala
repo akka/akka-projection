@@ -110,7 +110,7 @@ final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
    * control over the pace in which the elements flow through the Projection.
    *
    * The assertion function receives a `TestSubscriber.Probe` that you can use
-   * request elements.
+   * to request elements.
    *
    * The Projection starts as soon as the first element is requested by the `TestSubscriber.Probe`, new elements will be emitted
    * as requested. The Projection is stopped once the assert function completes.

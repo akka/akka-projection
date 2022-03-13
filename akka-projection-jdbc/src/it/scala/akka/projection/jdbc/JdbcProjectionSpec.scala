@@ -414,6 +414,9 @@ class JdbcProjectionSpec
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
+
       val projectionFailing =
         JdbcProjection
           .exactlyOnce(
@@ -422,15 +425,25 @@ class JdbcProjectionSpec
             jdbcSessionFactory,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
+          .withStatusObserver(statusObserver)
 
       offsetShouldBeEmpty()
-      projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
-        sinkProbe.request(1000)
-        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
+      spawn(ProjectionBehavior(projectionFailing))
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3")
       }
-      projectedValueShouldBe("e1|e2|e3")
-      // 1 + 3 => 1 original attempt and 3 retries
-      bogusEventHandler.attempts shouldBe 1 + 3
+
+      statusProbe.expectMessage(TestStatusObserver.Started)
+
+      val someTestException = TestException("err")
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
+      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
+
+      // ultimately, the projection must fail
+      statusProbe.expectMessage(TestStatusObserver.Failed)
       offsetShouldBe(3L)
     }
 
