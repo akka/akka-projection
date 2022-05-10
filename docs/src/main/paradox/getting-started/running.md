@@ -31,7 +31,7 @@ CREATE KEYSPACE IF NOT EXISTS akka_projection WITH REPLICATION = { 'class' : 'Si
 Create the Cassandra Projection offset store table.
 The DDL can be found in the @ref:[Cassandra Projection, Schema section](../cassandra.md#schema).
 
-Create the `ItemPopularityProjectionHandler` projection table with the DDL below.
+Create the `ItemPopularityProjectionHandler` projection table with the DDL below
 
 ```
 CREATE TABLE IF NOT EXISTS akka_projection.item_popularity (

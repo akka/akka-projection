@@ -33,6 +33,7 @@ import akka.projection.testkit.scaladsl.TestOffsetStore
 import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.OverflowStrategy
 import akka.stream.SharedKillSwitch
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -247,7 +248,12 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
     "stop after receiving stop message" in {
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
-      val src = Source(1 to 2)
+      val streamDoneProbe = testKit.createTestProbe[Done]()
+      val src = Source(1 to 2).concat(Source.maybe).watchTermination()(Keep.left).mapMaterializedValue { done =>
+        streamDoneProbe.ref ! Done
+        done
+      }
+
       val projectionRef = testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe)))
 
       testProbe.expectMessage(StartObserved)
@@ -257,8 +263,31 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
 
       projectionRef ! ProjectionBehavior.Stop
       testProbe.expectMessage(StopObserved)
+      streamDoneProbe.expectMessage(Done)
 
       testProbe.expectTerminated(projectionRef)
+    }
+
+    "stop after stopping actor without stop message" in {
+      val testProbe = testKit.createTestProbe[ProbeMessage]()
+      val streamDoneProbe = testKit.createTestProbe[Done]()
+      val src = Source(1 to 2).concat(Source.maybe).watchTermination()(Keep.left).mapMaterializedValue { done =>
+        streamDoneProbe.ref ! Done
+        done
+      }
+
+      val projectionRef = testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe)))
+
+      testProbe.expectMessage(StartObserved)
+      testProbe.expectMessage(Consumed(1, "1"))
+      testProbe.expectMessage(Consumed(2, "1-2"))
+      // good, things are flowing
+
+      testKit.stop(projectionRef)
+      testProbe.expectMessage(StopObserved)
+      streamDoneProbe.expectMessage(Done)
+
+      createTestProbe().expectTerminated(projectionRef)
 
     }
 
