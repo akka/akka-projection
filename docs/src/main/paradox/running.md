@@ -89,9 +89,13 @@ Java
 
 For this example, we configure as many `ShardedDaemonProcess` as tags and we define the behavior factory to return `ProjectionBehavior` wrapping each time a different `Projection` instance. Finally, the `ShardedDaemon` is configured to use the `ProjectionBehavior.Stop` as its control stop message.
 
+For graceful stop it is recommended to use @scala[`ProjectionBehavior.Stop`]@java[`ProjectionBehavior.stop()`] message.
+
 ### Projection Behavior
 
 The `ProjectionBehavior` is an Actor `Behavior` that knows how to manage the Projection lifecyle. The Projection starts to consume the events as soon as the actor is spawned and will restart the source in case of failures (see @ref:[Projection Settings](projection-settings.md)).
+
+For graceful stop it is recommended to use @scala[`ProjectionBehavior.Stop`]@java[`ProjectionBehavior.stop()`] message.
 
 ## Running with local Actor
 

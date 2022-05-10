@@ -325,7 +325,8 @@ public interface CassandraProjectionDocExample {
         ClusterSingleton.get(system)
             .init(
                 SingletonActor.of(
-                    ProjectionBehavior.create(projection1), projection1.projectionId().id()));
+                    ProjectionBehavior.create(projection1), projection1.projectionId().id())
+                    .withStopMessage(ProjectionBehavior.stopMessage()));
     // #running-with-singleton
   }
 

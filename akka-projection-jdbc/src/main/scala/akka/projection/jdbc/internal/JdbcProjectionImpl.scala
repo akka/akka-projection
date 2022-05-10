@@ -274,10 +274,11 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
     private val streamDone = source.run()
 
     override def stop(): Future[Done] = {
+      println(s"# stop $this") // FIXME
       projectionState.killSwitch.shutdown()
       // if the handler is retrying it will be aborted by this,
       // otherwise the stream would not be completed by the killSwitch until after all retries
-      projectionState.abort.failure(AbortProjectionException)
+      projectionState.abort.tryFailure(AbortProjectionException)
       streamDone
     }
 

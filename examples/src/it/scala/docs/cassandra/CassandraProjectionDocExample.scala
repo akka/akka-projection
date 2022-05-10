@@ -248,7 +248,9 @@ object CassandraProjectionDocExample {
 
     val projection1 = projection("carts-1")
 
-    ClusterSingleton(system).init(SingletonActor(ProjectionBehavior(projection1), projection1.projectionId.id))
+    ClusterSingleton(system).init(
+      SingletonActor(ProjectionBehavior(projection1), projection1.projectionId.id)
+        .withStopMessage(ProjectionBehavior.Stop))
     //#running-with-singleton
 
   }
