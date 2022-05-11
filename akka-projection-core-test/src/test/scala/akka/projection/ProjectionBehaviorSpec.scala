@@ -249,9 +249,9 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
 
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val streamDoneProbe = testKit.createTestProbe[Done]()
-      val src = Source(1 to 2).concat(Source.maybe).watchTermination()(Keep.left).mapMaterializedValue { done =>
-        streamDoneProbe.ref ! Done
-        done
+      val src = Source(1 to 2).concat(Source.maybe).watchTermination()(Keep.right).mapMaterializedValue { done =>
+        done.onComplete(_ => streamDoneProbe.ref ! Done)(system.executionContext)
+        NotUsed
       }
 
       val projectionRef = testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe)))
@@ -271,9 +271,9 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
     "stop after stopping actor without stop message" in {
       val testProbe = testKit.createTestProbe[ProbeMessage]()
       val streamDoneProbe = testKit.createTestProbe[Done]()
-      val src = Source(1 to 2).concat(Source.maybe).watchTermination()(Keep.left).mapMaterializedValue { done =>
-        streamDoneProbe.ref ! Done
-        done
+      val src = Source(1 to 2).concat(Source.maybe).watchTermination()(Keep.right).mapMaterializedValue { done =>
+        done.onComplete(_ => streamDoneProbe.ref ! Done)(system.executionContext)
+        NotUsed
       }
 
       val projectionRef = testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe)))
