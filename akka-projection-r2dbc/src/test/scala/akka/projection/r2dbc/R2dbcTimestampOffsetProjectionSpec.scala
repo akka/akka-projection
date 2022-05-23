@@ -355,12 +355,6 @@ class R2dbcTimestampOffsetProjectionSpec
     }
 
     "skip failing events when using RecoveryStrategy.skip" in {
-      // FIXME for exactlyOnce it is not added to OffsetStore inflight and that is why e5 is not accepted
-      // but the solution should not be to just add it to inflight because that can cause a leak and growing
-      // inflight Map that is not cleared up correctly.
-      // Would be better if the offset was saved for skipped envelopes.
-      pending
-
       implicit val pid1 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
       val envelopes = createEnvelopes(pid1, 6)
@@ -381,13 +375,28 @@ class R2dbcTimestampOffsetProjectionSpec
       offsetShouldBe(envelopes.last.offset)
     }
 
-    "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
-      // FIXME for exactlyOnce it is not added to OffsetStore inflight and that is why e5 is not accepted
-      // but the solution should not be to just add it to inflight because that can cause a leak and growing
-      // inflight Map that is not cleared up correctly.
-      // Would be better if the offset was saved for skipped envelopes.
-      pending
+    "store offset for failing events when using RecoveryStrategy.skip" in {
+      implicit val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      val envelopes = createEnvelopes(pid1, 6)
+      val sourceProvider = createSourceProvider(envelopes)
+      implicit val offsetStore = createOffsetStore(projectionId, sourceProvider)
 
+      val bogusEventHandler = new ConcatHandler(_.sequenceNr == 6)
+
+      val projectionFailing =
+        R2dbcProjection
+          .exactlyOnce(projectionId, Some(settings), sourceProvider, handler = () => bogusEventHandler)
+          .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
+
+      offsetShouldBeEmpty()
+      projectionTestKit.run(projectionFailing) {
+        projectedValueShouldBe("e1|e2|e3|e4|e5")
+      }
+      offsetShouldBe(envelopes.last.offset)
+    }
+
+    "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
       implicit val pid1 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
       val envelopes = createEnvelopes(pid1, 6)
@@ -422,8 +431,10 @@ class R2dbcTimestampOffsetProjectionSpec
       progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(pid1, 1, "e1")))
       progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(pid1, 2, "e2")))
       progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(pid1, 3, "e3")))
-      // Offset 4 is not stored so it is not reported.
+      // Offset 4 is stored even though it failed and was skipped
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(pid1, 4, "e4")))
       progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(pid1, 5, "e5")))
+      progressProbe.expectMessage(TestStatusObserver.OffsetProgress(Envelope(pid1, 6, "e6")))
 
       offsetShouldBe(envelopes.last.offset)
     }

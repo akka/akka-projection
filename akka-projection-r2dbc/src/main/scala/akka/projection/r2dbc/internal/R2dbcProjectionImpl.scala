@@ -25,6 +25,8 @@ import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult
 import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
+import akka.projection.HandlerRecoveryStrategy.Internal.RetryAndSkip
+import akka.projection.HandlerRecoveryStrategy.Internal.Skip
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
@@ -452,6 +454,12 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     implicit val executionContext: ExecutionContext = system.executionContext
     override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
 
+    private val isExactlyOnceWithSkip: Boolean =
+      offsetStrategy match {
+        case ExactlyOnce(Some(Skip)) | ExactlyOnce(Some(_: RetryAndSkip)) => true
+        case _                                                            => false
+      }
+
     override def readPaused(): Future[Boolean] =
       offsetStore.readManagementState().map(_.exists(_.paused))
 
@@ -469,7 +477,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       import R2dbcProjectionImpl.FutureDone
       val envelope = projectionContext.envelope
 
-      if (offsetStore.isInflight(envelope)) {
+      if (offsetStore.isInflight(envelope) || isExactlyOnceWithSkip) {
         super.saveOffsetAndReport(projectionId, projectionContext, batchSize)
       } else {
         FutureDone
@@ -481,10 +489,15 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         batch: Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
       import R2dbcProjectionImpl.FutureDone
 
-      val acceptedContexts = batch.iterator.filter { ctx =>
-        val env = ctx.envelope
-        offsetStore.isInflight(env)
-      }.toVector
+      val acceptedContexts =
+        if (isExactlyOnceWithSkip)
+          batch.toVector
+        else {
+          batch.iterator.filter { ctx =>
+            val env = ctx.envelope
+            offsetStore.isInflight(env)
+          }.toVector
+        }
 
       if (acceptedContexts.isEmpty) {
         FutureDone
