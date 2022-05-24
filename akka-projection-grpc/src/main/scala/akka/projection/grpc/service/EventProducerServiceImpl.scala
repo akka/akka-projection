@@ -14,7 +14,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.projection.grpc.proto.Event
-import akka.projection.grpc.proto.EventReplicationService
+import akka.projection.grpc.proto.EventProducerService
 import akka.projection.grpc.proto.InitReq
 import akka.projection.grpc.proto.Offset
 import akka.projection.grpc.proto.PersistenceIdSeqNr
@@ -31,14 +31,14 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import scalapb.GeneratedMessage
 
-object EventReplicationServiceImpl {
+object EventProducerServiceImpl {
   val log: Logger =
-    LoggerFactory.getLogger(classOf[EventReplicationServiceImpl])
+    LoggerFactory.getLogger(classOf[EventProducerServiceImpl])
 }
 
-class EventReplicationServiceImpl(system: ActorSystem[_])
-    extends EventReplicationService {
-  import EventReplicationServiceImpl.log
+class EventProducerServiceImpl(system: ActorSystem[_])
+    extends EventProducerService {
+  import EventProducerServiceImpl.log
 
   // FIXME config
   private val readJournalPluginId = R2dbcReadJournal.Identifier
@@ -49,23 +49,25 @@ class EventReplicationServiceImpl(system: ActorSystem[_])
 
   private val serialization = SerializationExtension(system)
 
-  override def replicateEvents(
+  override def eventsBySlices(
       in: Source[StreamIn, NotUsed]): Source[StreamOut, NotUsed] = {
     in.prefixAndTail(1).flatMapConcat {
       case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
-        tail.via(runReplication(init, tail))
+        tail.via(runEventsBySlices(init, tail))
       case (Seq(), _) =>
         // if error during recovery in proxy the stream will be completed before init
-        log.warn("Event replication stream closed before init.")
+        log.warn("Event stream closed before init.")
         Source.empty[StreamOut]
       case (Seq(StreamIn(other, _)), _) =>
         throw new IllegalArgumentException(
-          "Expected init message for event replication stream, " +
+          "Expected init message for eventsBySlices stream, " +
           s"but received [${other.getClass.getName}]")
     }
   }
 
-  private def runReplication(init: InitReq, nextReq: Source[StreamIn, NotUsed])
+  private def runEventsBySlices(
+      init: InitReq,
+      nextReq: Source[StreamIn, NotUsed])
       : Flow[StreamIn, StreamOut, NotUsed] = {
     val entityType = init.entityType
     val offset = init.offset match {
@@ -80,7 +82,7 @@ class EventReplicationServiceImpl(system: ActorSystem[_])
     }
 
     log.info(
-      "Starting event replication stream [{}], slices [{} - {}], offset [{}]",
+      "Starting eventsBySlices stream [{}], slices [{} - {}], offset [{}]",
       entityType,
       init.sliceMin,
       init.sliceMax,

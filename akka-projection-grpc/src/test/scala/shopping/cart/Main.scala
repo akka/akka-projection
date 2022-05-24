@@ -7,7 +7,7 @@ import akka.management.scaladsl.AkkaManagement
 import org.slf4j.LoggerFactory
 import scala.util.control.NonFatal
 
-import akka.projection.grpc.service.EventReplicationServiceImpl
+import akka.projection.grpc.service.EventProducerServiceImpl
 
 object Main {
 
@@ -35,13 +35,13 @@ object Main {
       system.settings.config.getString("shopping-cart-service.grpc.interface")
     val grpcPort =
       system.settings.config.getInt("shopping-cart-service.grpc.port")
-    val eventReplicationService = new EventReplicationServiceImpl(system)
+    val eventProducerService = new EventProducerServiceImpl(system)
     val cartService = new ShoppingCartServiceImpl(system)
     ShoppingCartServer.start(
       grpcInterface,
       grpcPort,
       system,
-      eventReplicationService,
+      eventProducerService,
       cartService)
   }
 

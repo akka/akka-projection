@@ -12,8 +12,8 @@ import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
-import akka.projection.grpc.proto.EventReplicationService
-import akka.projection.grpc.proto.EventReplicationServiceHandler
+import akka.projection.grpc.proto.EventProducerService
+import akka.projection.grpc.proto.EventProducerServiceHandler
 
 object ShoppingCartServer {
 
@@ -21,7 +21,7 @@ object ShoppingCartServer {
       interface: String,
       port: Int,
       system: ActorSystem[_],
-      eventReplication: akka.projection.grpc.proto.EventReplicationService,
+      eventProducerService: akka.projection.grpc.proto.EventProducerService,
       shoppingCartService: proto.ShoppingCartService): Unit = {
     implicit val sys: ActorSystem[_] = system
     implicit val ec: ExecutionContext =
@@ -30,10 +30,10 @@ object ShoppingCartServer {
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
         proto.ShoppingCartServiceHandler.partial(shoppingCartService),
-        EventReplicationServiceHandler.partial(eventReplication),
+        EventProducerServiceHandler.partial(eventProducerService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters
         ServerReflection.partial(
-          List(proto.ShoppingCartService, EventReplicationService)))
+          List(proto.ShoppingCartService, EventProducerService)))
 
     val bound =
       Http()

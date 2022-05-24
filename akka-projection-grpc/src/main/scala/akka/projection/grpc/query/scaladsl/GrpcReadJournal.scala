@@ -23,7 +23,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.grpc.proto
 import akka.projection.grpc.proto.Event
-import akka.projection.grpc.proto.EventReplicationServiceClient
+import akka.projection.grpc.proto.EventProducerServiceClient
 import akka.projection.grpc.proto.InitReq
 import akka.projection.grpc.proto.PersistenceIdSeqNr
 import akka.projection.grpc.proto.StreamIn
@@ -32,7 +32,6 @@ import akka.projection.grpc.query.GrpcQuerySettings
 import akka.stream.scaladsl.Source
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
-import org.slf4j.LoggerFactory
 
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.query"
@@ -47,7 +46,6 @@ final class GrpcReadJournal(
     with EventTimestampQuery
     with LoadEventQuery {
 
-  private val log = LoggerFactory.getLogger(getClass)
   private val settings = GrpcQuerySettings(
     system.settings.config.getConfig(cfgPath))
 
@@ -59,7 +57,7 @@ final class GrpcReadJournal(
     GrpcClientSettings
       .connectToServiceAt(settings.host, settings.port)
       .withTls(false)
-  private val client = EventReplicationServiceClient(clientSettings)
+  private val client = EventProducerServiceClient(clientSettings)
 
   override def sliceForPersistenceId(persistenceId: String): Int = {
     persistenceExt.sliceForPersistenceId(persistenceId)
@@ -120,7 +118,7 @@ final class GrpcReadJournal(
     val streamIn = Source
       .single(StreamIn(StreamIn.Message.Init(initReq)))
       .concat(Source.maybe)
-    val streamOut = client.replicateEvents(streamIn)
+    val streamOut = client.eventsBySlices(streamIn)
     streamOut.map {
       case StreamOut(
             StreamOut.Message.Event(

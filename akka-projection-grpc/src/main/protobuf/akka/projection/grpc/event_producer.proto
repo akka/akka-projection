@@ -10,8 +10,8 @@ import "google/protobuf/empty.proto";
 
 option java_package = "akka.projection.grpc.proto";
 
-service EventReplicationService {
-  rpc ReplicateEvents(stream StreamIn) returns (stream StreamOut);
+service EventProducerService {
+  rpc EventsBySlices(stream StreamIn) returns (stream StreamOut);
 }
 
 message StreamIn {
@@ -21,7 +21,7 @@ message StreamIn {
 }
 
 message InitReq {
-  // replication stream for this entity type
+  // event stream for this entity type
   string entity_type = 1;
   // entities are partitioned by a deterministic slice (0-1023),
   // a consumer would handle a slice range from slice_min to slice_max

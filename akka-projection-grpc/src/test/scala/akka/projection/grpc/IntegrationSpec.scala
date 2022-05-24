@@ -26,10 +26,10 @@ import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
-import akka.projection.grpc.proto.EventReplicationService
-import akka.projection.grpc.proto.EventReplicationServiceHandler
+import akka.projection.grpc.proto.EventProducerService
+import akka.projection.grpc.proto.EventProducerServiceHandler
 import akka.projection.grpc.query.scaladsl.GrpcReadJournal
-import akka.projection.grpc.service.EventReplicationServiceImpl
+import akka.projection.grpc.service.EventProducerServiceImpl
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
 import akka.testkit.SocketUtil
@@ -121,13 +121,13 @@ class IntegrationSpec
   private implicit val ec: ExecutionContext = system.executionContext
 
   {
-    val eventReplicationService = new EventReplicationServiceImpl(system)
+    val eventProducerService = new EventProducerServiceImpl(system)
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
-        EventReplicationServiceHandler.partial(eventReplicationService),
+        EventProducerServiceHandler.partial(eventProducerService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters
-        ServerReflection.partial(List(EventReplicationService)))
+        ServerReflection.partial(List(EventProducerService)))
 
     val bound =
       Http()
