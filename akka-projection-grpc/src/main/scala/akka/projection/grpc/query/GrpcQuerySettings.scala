@@ -10,4 +10,7 @@ object GrpcQuerySettings {
     new GrpcQuerySettings(config)
 }
 
-class GrpcQuerySettings(config: Config) {}
+class GrpcQuerySettings(config: Config) {
+  val host: String = config.getString("host")
+  val port: Int = config.getInt("port")
+}

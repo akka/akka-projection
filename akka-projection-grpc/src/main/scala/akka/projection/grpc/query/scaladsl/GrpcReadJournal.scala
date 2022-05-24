@@ -54,9 +54,11 @@ final class GrpcReadJournal(
   private implicit val typedSystem = system.toTyped
   private val persistenceExt = Persistence(system)
 
-  // FIXME config
+  // FIXME real grpc config
   private val clientSettings =
-    GrpcClientSettings.connectToServiceAt("localhost", 8101).withTls(false)
+    GrpcClientSettings
+      .connectToServiceAt(settings.host, settings.port)
+      .withTls(false)
   private val client = EventReplicationServiceClient(clientSettings)
 
   override def sliceForPersistenceId(persistenceId: String): Int = {
