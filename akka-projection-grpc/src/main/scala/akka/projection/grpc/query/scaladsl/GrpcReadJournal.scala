@@ -21,6 +21,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
+import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.proto
 import akka.projection.grpc.proto.Event
 import akka.projection.grpc.proto.EventProducerServiceClient
@@ -52,6 +53,8 @@ final class GrpcReadJournal(
 
   private implicit val typedSystem = system.toTyped
   private val persistenceExt = Persistence(system)
+  private val protoAnySerialization =
+    new ProtoAnySerialization(system.toTyped, settings.protoClassMapping)
 
   // FIXME real grpc config
   private val clientSettings =
@@ -128,7 +131,7 @@ final class GrpcReadJournal(
                 seqNr,
                 slice,
                 Some(protoEventOffset),
-                event,
+                protoEvent,
                 _)),
             _) =>
         val timestamp = protoEventOffset.timestamp.get.asJavaInstant
@@ -137,13 +140,14 @@ final class GrpcReadJournal(
         }.toMap
         val eventOffset = TimestampOffset(timestamp, seen)
 
+        val event =
+          protoEvent.map(protoAnySerialization.decode(_).asInstanceOf[Evt])
+
         new EventEnvelope(
           eventOffset,
           persistenceId,
           seqNr,
-          event.asInstanceOf[Option[
-            Evt
-          ]], // FIXME event is com.google.protobuf.any.Any
+          event,
           timestamp.toEpochMilli,
           eventMetadata = None,
           entityType,

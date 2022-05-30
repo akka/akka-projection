@@ -192,18 +192,18 @@ class IntegrationSpec
       val processedA = processedProbe.receiveMessage()
       processedA.envelope.persistenceId shouldBe pid.id
       processedA.envelope.sequenceNr shouldBe 1L
-      // FIXME processedA.envelope.event shouldBe "A"
+      processedA.envelope.event shouldBe "A"
 
       val processedB = processedProbe.receiveMessage()
       processedB.envelope.persistenceId shouldBe pid.id
       processedB.envelope.sequenceNr shouldBe 2L
-      // FIXME processedA.envelope.event shouldBe "B"
+      processedB.envelope.event shouldBe "B"
 
       entity ! TestEntity.Persist("c")
       val processedC = processedProbe.receiveMessage()
       processedC.envelope.persistenceId shouldBe pid.id
       processedC.envelope.sequenceNr shouldBe 3L
-      // FIXME processedA.envelope.event shouldBe "C"
+      processedC.envelope.event shouldBe "C"
 
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
@@ -222,14 +222,14 @@ class IntegrationSpec
       val processedA = processedProbe.receiveMessage()
       processedA.envelope.persistenceId shouldBe pid.id
       processedA.envelope.sequenceNr shouldBe 1L
-      // FIXME processedA.envelope.event shouldBe "A"
+      processedA.envelope.event shouldBe "A"
 
       // b* is filtered out by the registered transformation
 
       val processedC = processedProbe.receiveMessage()
       processedC.envelope.persistenceId shouldBe pid.id
       processedC.envelope.sequenceNr shouldBe 3L
-      // FIXME processedA.envelope.event shouldBe "C"
+      processedC.envelope.event shouldBe "C"
 
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)

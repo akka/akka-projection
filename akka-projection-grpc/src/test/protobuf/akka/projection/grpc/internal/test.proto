@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "akka.projection.grpc.internal.proto";
+
+package akka.projection.grpc.internal;
+
+
+message TestEvent {
+    string cart_id = 1;
+    string item_id = 2;
+    int32 quantity = 3;
+}
