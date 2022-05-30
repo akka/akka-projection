@@ -30,6 +30,7 @@ import akka.projection.grpc.proto.EventProducerService
 import akka.projection.grpc.proto.EventProducerServiceHandler
 import akka.projection.grpc.query.scaladsl.GrpcReadJournal
 import akka.projection.grpc.service.EventProducerServiceImpl
+import akka.projection.grpc.service.EventProducerServiceImpl.Transformation
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
 import akka.testkit.SocketUtil
@@ -120,8 +121,48 @@ class IntegrationSpec
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
 
-  {
-    val eventProducerService = new EventProducerServiceImpl(system)
+  class TestFixture {
+    val entityType = nextEntityType()
+    val pid = nextPid(entityType)
+    val sliceRange = 0 to 1023
+    val projectionId = randomProjectionId()
+
+    val replyProbe = createTestProbe[Done]()
+    val processedProbe = createTestProbe[Processed]()
+
+    lazy val entity = spawn(TestEntity(pid))
+
+    private def sourceProvider =
+      EventSourcedProvider.eventsBySlices[ProtoAny](
+        system,
+        readJournalPluginId = GrpcReadJournal.Identifier,
+        entityType,
+        sliceRange.min,
+        sliceRange.max)
+
+    lazy val projection = spawn(
+      ProjectionBehavior(
+        R2dbcProjection.atLeastOnceAsync(
+          projectionId,
+          settings = None,
+          sourceProvider = sourceProvider,
+          handler = () => new TestHandler(projectionId, processedProbe.ref))))
+
+  }
+
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+
+    val transformation =
+      Transformation.empty.registerMapper((event: String) => {
+        if (event.contains("*"))
+          Future.successful(None)
+        else
+          Future.successful(Some(event.toUpperCase))
+      })
+
+    val eventProducerService =
+      new EventProducerServiceImpl(system, transformation)
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
@@ -139,53 +180,56 @@ class IntegrationSpec
   }
 
   "A gRPC Projection" must {
-    "receive events" in {
-
-      val entityType = nextEntityType()
-      val pid = nextPid(entityType)
-      val sliceRange = 0 to 1023
-      val projectionId = randomProjectionId()
-
-      val replyProbe = createTestProbe[Done]()
-      val processedProbe = createTestProbe[Processed]()
-
-      val entity = spawn(TestEntity(pid))
+    "receive events" in new TestFixture {
       entity ! TestEntity.Persist("a")
       entity ! TestEntity.Persist("b")
       entity ! TestEntity.Ping(replyProbe.ref)
       replyProbe.receiveMessage()
 
-      val sourceProvider =
-        EventSourcedProvider.eventsBySlices[ProtoAny](
-          system,
-          readJournalPluginId = GrpcReadJournal.Identifier,
-          entityType,
-          sliceRange.min,
-          sliceRange.max)
-
-      val projection = spawn(
-        ProjectionBehavior(
-          R2dbcProjection.atLeastOnceAsync(
-            projectionId,
-            settings = None,
-            sourceProvider = sourceProvider,
-            handler = () => new TestHandler(projectionId, processedProbe.ref))))
+      // start the projection
+      projection
 
       val processedA = processedProbe.receiveMessage()
       processedA.envelope.persistenceId shouldBe pid.id
       processedA.envelope.sequenceNr shouldBe 1L
-      // FIXME processedA.envelope.event shouldBe "a"
+      // FIXME processedA.envelope.event shouldBe "A"
 
       val processedB = processedProbe.receiveMessage()
       processedB.envelope.persistenceId shouldBe pid.id
       processedB.envelope.sequenceNr shouldBe 2L
-      // FIXME processedA.envelope.event shouldBe "b"
+      // FIXME processedA.envelope.event shouldBe "B"
 
       entity ! TestEntity.Persist("c")
       val processedC = processedProbe.receiveMessage()
       processedC.envelope.persistenceId shouldBe pid.id
       processedC.envelope.sequenceNr shouldBe 3L
-      // FIXME processedA.envelope.event shouldBe "c"
+      // FIXME processedA.envelope.event shouldBe "C"
+
+      projection ! ProjectionBehavior.Stop
+      entity ! TestEntity.Stop(replyProbe.ref)
+    }
+
+    "filter out events" in new TestFixture {
+      entity ! TestEntity.Persist("a")
+      entity ! TestEntity.Persist("b*")
+      entity ! TestEntity.Persist("c")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      // start the projection
+      projection
+
+      val processedA = processedProbe.receiveMessage()
+      processedA.envelope.persistenceId shouldBe pid.id
+      processedA.envelope.sequenceNr shouldBe 1L
+      // FIXME processedA.envelope.event shouldBe "A"
+
+      // b* is filtered out by the registered transformation
+
+      val processedC = processedProbe.receiveMessage()
+      processedC.envelope.persistenceId shouldBe pid.id
+      processedC.envelope.sequenceNr shouldBe 3L
+      // FIXME processedA.envelope.event shouldBe "C"
 
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)

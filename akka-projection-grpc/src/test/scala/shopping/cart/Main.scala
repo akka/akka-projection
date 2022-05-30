@@ -1,5 +1,7 @@
 package shopping.cart
 
+import scala.concurrent.Future
+
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.ActorSystem
 import akka.management.cluster.bootstrap.ClusterBootstrap
@@ -8,6 +10,8 @@ import org.slf4j.LoggerFactory
 import scala.util.control.NonFatal
 
 import akka.projection.grpc.service.EventProducerServiceImpl
+import akka.projection.grpc.service.EventProducerServiceImpl.Transformation
+import shopping.cart.ShoppingCart.ItemAdded
 
 object Main {
 
@@ -35,7 +39,15 @@ object Main {
       system.settings.config.getString("shopping-cart-service.grpc.interface")
     val grpcPort =
       system.settings.config.getInt("shopping-cart-service.grpc.port")
-    val eventProducerService = new EventProducerServiceImpl(system)
+
+    val transformation =
+      Transformation.empty.registerMapper((event: ItemAdded) => {
+        Future.successful(
+          Some(proto.ItemAdded(event.cartId, event.itemId, event.quantity)))
+      })
+    val eventProducerService =
+      new EventProducerServiceImpl(system, transformation)
+
     val cartService = new ShoppingCartServiceImpl(system)
     ShoppingCartServer.start(
       grpcInterface,

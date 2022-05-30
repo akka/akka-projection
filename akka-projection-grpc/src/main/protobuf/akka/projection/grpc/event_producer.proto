@@ -62,6 +62,7 @@ message Event {
 // placeholder to be able to track sequence numbers without holes.
 message FilteredEvent {
   string persistence_id = 1;
-  int32 slice = 2;
-  Offset offset = 3;
+  int64 seq_nr = 2;
+  int32 slice = 3;
+  Offset offset = 4;
 }

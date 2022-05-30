@@ -5,6 +5,9 @@ package akka.projection.grpc.service
 
 import java.time.Instant
 
+import scala.concurrent.Future
+import scala.reflect.ClassTag
+
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.persistence.query.NoOffset
@@ -15,6 +18,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.projection.grpc.proto.Event
 import akka.projection.grpc.proto.EventProducerService
+import akka.projection.grpc.proto.FilteredEvent
 import akka.projection.grpc.proto.InitReq
 import akka.projection.grpc.proto.Offset
 import akka.projection.grpc.proto.PersistenceIdSeqNr
@@ -34,9 +38,37 @@ import scalapb.GeneratedMessage
 object EventProducerServiceImpl {
   val log: Logger =
     LoggerFactory.getLogger(classOf[EventProducerServiceImpl])
+
+  object Transformation {
+    val empty: Transformation = new Transformation(
+      mappers = Map.empty,
+      orElse = event =>
+        Future.failed(
+          new IllegalArgumentException(
+            s"Missing transformation for event [${event.getClass}]")))
+  }
+
+  final class Transformation private (
+      val mappers: Map[Class[_], Any => Future[Option[Any]]],
+      val orElse: Any => Future[Option[Any]]) {
+
+    def registerMapper[A: ClassTag, B](
+        f: A => Future[Option[B]]): Transformation = {
+      val clazz = implicitly[ClassTag[A]].runtimeClass
+      new Transformation(
+        mappers.updated(clazz, f.asInstanceOf[Any => Future[Option[Any]]]),
+        orElse)
+    }
+
+    def registerOrElseMapper(f: Any => Future[Option[Any]]): Unit = {
+      new Transformation(mappers, f)
+    }
+  }
 }
 
-class EventProducerServiceImpl(system: ActorSystem[_])
+class EventProducerServiceImpl(
+    system: ActorSystem[_],
+    transformation: EventProducerServiceImpl.Transformation)
     extends EventProducerService {
   import EventProducerServiceImpl.log
 
@@ -92,12 +124,12 @@ class EventProducerServiceImpl(system: ActorSystem[_])
       eventsBySlicesQuery
         .eventsBySlices[Any](entityType, init.sliceMin, init.sliceMax, offset)
 
-    val eventsStreamOut =
+    val eventsStreamOut: Source[StreamOut, NotUsed] =
       events
         .filterNot(
           _.eventOption.isEmpty
         ) // FIXME backtracking events not handled yet
-        .map { env =>
+        .mapAsync(1) { env =>
           val protoOffset = env.offset match {
             case TimestampOffset(timestamp, _, seen) =>
               val protoTimestamp = Timestamp(timestamp)
@@ -110,36 +142,56 @@ class EventProducerServiceImpl(system: ActorSystem[_])
                 s"Unexpected offset type [$other]")
           }
 
-          // FIXME remove too verbose logging here
-          log.debug(
-            "Emitting event from [{}] with seqNr [{}], offset [{}]",
-            env.persistenceId,
-            env.sequenceNr,
-            env.offset)
-
-          val event = env.event match {
-            case scalaPbAny: ScalaPbAny => scalaPbAny
-            case msg: GeneratedMessage =>
-              ScalaPbAny(
-                "type.googleapis.com/" + msg.companion.scalaDescriptor.fullName,
-                msg.toByteString)
-            case other =>
-              // FIXME this is not final solution for serialization
-              val bytes =
-                serialization.serialize(other.asInstanceOf[AnyRef]).get
-              ScalaPbAny(
-                "type.googleapis.com/" + other.getClass.getName,
-                ByteString.copyFrom(bytes))
-          }
-
-          StreamOut(
-            StreamOut.Message.Event(
-              Event(
+          val f = transformation.mappers
+            .getOrElse(env.event.getClass, transformation.orElse)
+          import system.executionContext
+          f(env.event).map {
+            case Some(transformedEvent) =>
+              // FIXME remove too verbose logging here
+              log.debug(
+                "Emitting event from [{}] with seqNr [{}], offset [{}]",
                 env.persistenceId,
                 env.sequenceNr,
-                env.slice,
-                Some(protoOffset),
-                Some(event))))
+                env.offset)
+
+              val protoEvent = transformedEvent match {
+                case scalaPbAny: ScalaPbAny => scalaPbAny
+                case msg: GeneratedMessage =>
+                  ScalaPbAny(
+                    "type.googleapis.com/" + msg.companion.scalaDescriptor.fullName,
+                    msg.toByteString)
+                case other =>
+                  // FIXME this is not final solution for serialization
+                  val bytes =
+                    serialization.serialize(other.asInstanceOf[AnyRef]).get
+                  ScalaPbAny(
+                    "type.googleapis.com/" + other.getClass.getName,
+                    ByteString.copyFrom(bytes))
+              }
+              StreamOut(
+                StreamOut.Message.Event(
+                  Event(
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.slice,
+                    Some(protoOffset),
+                    Some(protoEvent))))
+
+            case None =>
+              // FIXME remove too verbose logging here
+              log.debug(
+                "Filtered event from [{}] with seqNr [{}], offset [{}]",
+                env.persistenceId,
+                env.sequenceNr,
+                env.offset)
+              StreamOut(
+                StreamOut.Message.FilteredEvent(
+                  FilteredEvent(
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.slice,
+                    Some(protoOffset))))
+          }
         }
 
     // FIXME nextReq not handled yet

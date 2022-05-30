@@ -28,6 +28,7 @@ import akka.projection.grpc.proto.InitReq
 import akka.projection.grpc.proto.PersistenceIdSeqNr
 import akka.projection.grpc.proto.StreamIn
 import akka.projection.grpc.proto.StreamOut
+import akka.projection.grpc.proto.FilteredEvent
 import akka.projection.grpc.query.GrpcQuerySettings
 import akka.stream.scaladsl.Source
 import com.google.protobuf.timestamp.Timestamp
@@ -147,9 +148,37 @@ final class GrpcReadJournal(
           eventMetadata = None,
           entityType,
           slice)
+
+      case StreamOut(
+            StreamOut.Message.FilteredEvent(
+              FilteredEvent(
+                persistenceId,
+                seqNr,
+                slice,
+                Some(protoEventOffset),
+                _)),
+            _) =>
+        val timestamp = protoEventOffset.timestamp.get.asJavaInstant
+        val seen = protoEventOffset.seen.map {
+          case PersistenceIdSeqNr(pid, seqNr, _) => pid -> seqNr
+        }.toMap
+        val eventOffset = TimestampOffset(timestamp, seen)
+
+        // Note that envelope is marked with NotUsed in the eventMetadata. That is handled by the R2dbcProjection
+        // implementation to skip the envelope and still store the offset.
+        new EventEnvelope(
+          eventOffset,
+          persistenceId,
+          seqNr,
+          None,
+          timestamp.toEpochMilli,
+          eventMetadata = Some(NotUsed),
+          entityType,
+          slice)
+
       case other =>
-        // FIXME don't include full toString of other
-        throw new IllegalArgumentException(s"Unexpected StreamOut [$other]")
+        throw new IllegalArgumentException(
+          s"Unexpected StreamOut [${other.message.getClass.getName}]")
     }
   }
 
