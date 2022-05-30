@@ -13,6 +13,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
 import akka.Done
+import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
@@ -84,7 +85,7 @@ private[projection] object R2dbcProjectionImpl {
   def loadEnvelope[Envelope](env: Envelope, sourceProvider: SourceProvider[_, Envelope])(implicit
       ec: ExecutionContext): Future[Envelope] = {
     env match {
-      case eventEnvelope: EventEnvelope[_] if eventEnvelope.eventOption.isEmpty =>
+      case eventEnvelope: EventEnvelope[_] if eventEnvelope.eventOption.isEmpty && !skipEnvelope(eventEnvelope) =>
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
         (sourceProvider match {
@@ -154,16 +155,21 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                val offset = sourceProvider.extractOffset(loadedEnvelope)
-                r2dbcExecutor.withConnection("exactly-once handler") { conn =>
-                  // run users handler
-                  val session = new R2dbcSession(conn)
-                  delegate
-                    .process(session, loadedEnvelope)
-                    .flatMap { _ =>
-                      offsetStore.saveOffsetInTx(conn, offset)
-                    }
+              if (skipEnvelope(envelope)) {
+                val offset = sourceProvider.extractOffset(envelope)
+                offsetStore.saveOffset(offset)
+              } else {
+                loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                  val offset = sourceProvider.extractOffset(loadedEnvelope)
+                  r2dbcExecutor.withConnection("exactly-once handler") { conn =>
+                    // run users handler
+                    val session = new R2dbcSession(conn)
+                    delegate
+                      .process(session, loadedEnvelope)
+                      .flatMap { _ =>
+                        offsetStore.saveOffsetInTx(conn, offset)
+                      }
+                  }
                 }
               }
             case false =>
@@ -190,11 +196,16 @@ private[projection] object R2dbcProjectionImpl {
             Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
               loadedEnvelopes =>
                 val offsets = loadedEnvelopes.iterator.map(sourceProvider.extractOffset).toVector
-                r2dbcExecutor.withConnection("grouped handler") { conn =>
-                  // run users handler
-                  val session = new R2dbcSession(conn)
-                  delegate.process(session, loadedEnvelopes).flatMap { _ =>
-                    offsetStore.saveOffsetsInTx(conn, offsets)
+                val filteredEnvelopes = loadedEnvelopes.filterNot(skipEnvelope)
+                if (filteredEnvelopes.isEmpty) {
+                  offsetStore.saveOffsets(offsets)
+                } else {
+                  r2dbcExecutor.withConnection("grouped handler") { conn =>
+                    // run users handler
+                    val session = new R2dbcSession(conn)
+                    delegate.process(session, filteredEnvelopes).flatMap { _ =>
+                      offsetStore.saveOffsetsInTx(conn, offsets)
+                    }
                   }
                 }
             }
@@ -214,17 +225,22 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                r2dbcExecutor
-                  .withConnection("at-least-once handler") { conn =>
-                    // run users handler
-                    val session = new R2dbcSession(conn)
-                    delegate.process(session, loadedEnvelope)
-                  }
-                  .map { _ =>
-                    offsetStore.addInflight(loadedEnvelope)
-                    Done
-                  }
+              if (skipEnvelope(envelope)) {
+                offsetStore.addInflight(envelope)
+                FutureDone
+              } else {
+                loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                  r2dbcExecutor
+                    .withConnection("at-least-once handler") { conn =>
+                      // run users handler
+                      val session = new R2dbcSession(conn)
+                      delegate.process(session, loadedEnvelope)
+                    }
+                    .map { _ =>
+                      offsetStore.addInflight(loadedEnvelope)
+                      Done
+                    }
+                }
               }
             case false =>
               FutureDone
@@ -242,13 +258,18 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                delegate
-                  .process(loadedEnvelope)
-                  .map { _ =>
-                    offsetStore.addInflight(loadedEnvelope)
-                    Done
-                  }
+              if (skipEnvelope(envelope)) {
+                offsetStore.addInflight(envelope)
+                FutureDone
+              } else {
+                loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                  delegate
+                    .process(loadedEnvelope)
+                    .map { _ =>
+                      offsetStore.addInflight(loadedEnvelope)
+                      Done
+                    }
+                }
               }
             case false =>
               FutureDone
@@ -272,12 +293,18 @@ private[projection] object R2dbcProjectionImpl {
           } else {
             Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
               loadedEnvelopes =>
-                delegate
-                  .process(loadedEnvelopes)
-                  .map { _ =>
-                    offsetStore.addInflights(loadedEnvelopes)
-                    Done
-                  }
+                val filteredEnvelopes = loadedEnvelopes.filterNot(skipEnvelope)
+                if (filteredEnvelopes.isEmpty) {
+                  offsetStore.addInflights(loadedEnvelopes)
+                  FutureDone
+                } else {
+                  delegate
+                    .process(filteredEnvelopes)
+                    .map { _ =>
+                      offsetStore.addInflights(loadedEnvelopes)
+                      Done
+                    }
+                }
             }
           }
         }
@@ -298,6 +325,9 @@ private[projection] object R2dbcProjectionImpl {
           .isAccepted(env)
           .flatMap { ok =>
             if (ok) {
+              if (skipEnvelope(env)) {
+                log.info("atLeastOnceFlow doesn't support of skipping envelopes. Envelope [{}] still emitted.", env)
+              }
               loadEnvelope(env, sourceProvider).map { loadedEnvelope =>
                 offsetStore.addInflight(loadedEnvelope)
                 Some(loadedEnvelope)
@@ -333,6 +363,17 @@ private[projection] object R2dbcProjectionImpl {
 
     override def stop(): Future[Done] =
       delegate.stop()
+  }
+
+  private def skipEnvelope[Envelope](env: Envelope): Boolean = {
+    env match {
+      case e: EventEnvelope[_] =>
+        e.eventMetadata match {
+          case Some(NotUsed) => true
+          case _             => false
+        }
+      case _ => false
+    }
   }
 
 }
