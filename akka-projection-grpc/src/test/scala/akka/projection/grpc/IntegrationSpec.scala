@@ -53,8 +53,10 @@ object IntegrationSpec {
       }
     }
     akka.projection.grpc {
-      query {
+      query.client {
+        host = "127.0.0.1"
         port = $grpcPort
+        use-tls = false
       }
     }
     """)

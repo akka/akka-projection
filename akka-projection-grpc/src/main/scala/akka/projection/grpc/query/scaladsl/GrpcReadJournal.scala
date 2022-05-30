@@ -56,11 +56,8 @@ final class GrpcReadJournal(
   private val protoAnySerialization =
     new ProtoAnySerialization(system.toTyped, settings.protoClassMapping)
 
-  // FIXME real grpc config
   private val clientSettings =
-    GrpcClientSettings
-      .connectToServiceAt(settings.host, settings.port)
-      .withTls(false)
+    GrpcClientSettings.fromConfig(settings.grpcClientConfig)
   private val client = EventProducerServiceClient(clientSettings)
 
   override def sliceForPersistenceId(persistenceId: String): Int = {

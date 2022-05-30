@@ -11,8 +11,7 @@ object GrpcQuerySettings {
 }
 
 class GrpcQuerySettings(config: Config) {
-  val host: String = config.getString("host")
-  val port: Int = config.getInt("port")
+  val grpcClientConfig: Config = config.getConfig("client")
 
   val protoClassMapping: Map[String, String] = {
     import scala.jdk.CollectionConverters._
