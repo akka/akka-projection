@@ -34,7 +34,6 @@ import akka.projection.grpc.service.EventProducerServiceImpl.Transformation
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
 import akka.testkit.SocketUtil
-import com.google.protobuf.any.{ Any => ProtoAny }
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -97,14 +96,13 @@ object IntegrationSpec {
 
   final case class Processed(
       projectionId: ProjectionId,
-      envelope: EventEnvelope[
-        ProtoAny]) // FIXME change this to EventEnvelope[String] when serialization is in place
+      envelope: EventEnvelope[String])
 
   class TestHandler(projectionId: ProjectionId, probe: ActorRef[Processed])
-      extends Handler[EventEnvelope[ProtoAny]] {
+      extends Handler[EventEnvelope[String]] {
     private val log = LoggerFactory.getLogger(getClass)
 
-    override def process(envelope: EventEnvelope[ProtoAny]): Future[Done] = {
+    override def process(envelope: EventEnvelope[String]): Future[Done] = {
       log.debug("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
@@ -135,7 +133,7 @@ class IntegrationSpec
     lazy val entity = spawn(TestEntity(pid))
 
     private def sourceProvider =
-      EventSourcedProvider.eventsBySlices[ProtoAny](
+      EventSourcedProvider.eventsBySlices[String](
         system,
         readJournalPluginId = GrpcReadJournal.Identifier,
         entityType,
