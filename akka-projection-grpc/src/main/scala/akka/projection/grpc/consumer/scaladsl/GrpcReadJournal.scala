@@ -60,9 +60,8 @@ final class GrpcReadJournal(
     GrpcClientSettings.fromConfig(settings.grpcClientConfig)
   private val client = EventProducerServiceClient(clientSettings)
 
-  override def sliceForPersistenceId(persistenceId: String): Int = {
+  override def sliceForPersistenceId(persistenceId: String): Int =
     persistenceExt.sliceForPersistenceId(persistenceId)
-  }
 
   override def sliceRanges(numberOfRanges: Int): immutable.Seq[Range] =
     persistenceExt.sliceRanges(numberOfRanges)
