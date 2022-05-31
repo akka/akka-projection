@@ -13,7 +13,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
-import akka.projection.grpc.query.scaladsl.GrpcReadJournal
+import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
 import com.google.protobuf.any.{ Any => ProtoAny }

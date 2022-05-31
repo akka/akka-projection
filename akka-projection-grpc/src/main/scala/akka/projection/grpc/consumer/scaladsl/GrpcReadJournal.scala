@@ -1,7 +1,7 @@
 /**
  * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
  */
-package akka.projection.grpc.query.scaladsl
+package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
 
@@ -22,21 +22,21 @@ import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.grpc.internal.ProtoAnySerialization
-import akka.projection.grpc.proto
-import akka.projection.grpc.proto.Event
-import akka.projection.grpc.proto.EventProducerServiceClient
-import akka.projection.grpc.proto.InitReq
-import akka.projection.grpc.proto.PersistenceIdSeqNr
-import akka.projection.grpc.proto.StreamIn
-import akka.projection.grpc.proto.StreamOut
-import akka.projection.grpc.proto.FilteredEvent
-import akka.projection.grpc.query.GrpcQuerySettings
+import akka.projection.grpc.internal.proto
+import akka.projection.grpc.internal.proto.Event
+import akka.projection.grpc.internal.proto.EventProducerServiceClient
+import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
+import akka.projection.grpc.internal.proto.StreamIn
+import akka.projection.grpc.internal.proto.StreamOut
+import akka.projection.grpc.internal.proto.FilteredEvent
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.stream.scaladsl.Source
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
 
 object GrpcReadJournal {
-  val Identifier = "akka.projection.grpc.query"
+  val Identifier = "akka.projection.grpc.consumer"
 }
 
 final class GrpcReadJournal(

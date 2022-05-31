@@ -1,30 +1,26 @@
 /**
  * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
  */
-package akka.projection.grpc.service
+package akka.projection.grpc.internal
 
 import java.time.Instant
 
-import scala.concurrent.Future
-import scala.reflect.ClassTag
-
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
-import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
-import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
-import akka.projection.grpc.internal.ProtoAnySerialization
-import akka.projection.grpc.proto.Event
-import akka.projection.grpc.proto.EventProducerService
-import akka.projection.grpc.proto.FilteredEvent
-import akka.projection.grpc.proto.InitReq
-import akka.projection.grpc.proto.Offset
-import akka.projection.grpc.proto.PersistenceIdSeqNr
-import akka.projection.grpc.proto.StreamIn
-import akka.projection.grpc.proto.StreamOut
+import akka.projection.grpc.internal.proto.Event
+import akka.projection.grpc.internal.proto.EventProducerService
+import akka.projection.grpc.internal.proto.FilteredEvent
+import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.Offset
+import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
+import akka.projection.grpc.internal.proto.StreamIn
+import akka.projection.grpc.internal.proto.StreamOut
+import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
@@ -32,49 +28,24 @@ import com.google.protobuf.timestamp.Timestamp
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-object EventProducerServiceImpl {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object EventProducerServiceImpl {
   val log: Logger =
     LoggerFactory.getLogger(classOf[EventProducerServiceImpl])
 
-  object Transformation {
-    val empty: Transformation = new Transformation(
-      mappers = Map.empty,
-      orElse = event =>
-        Future.failed(
-          new IllegalArgumentException(
-            s"Missing transformation for event [${event.getClass}]")))
-  }
-
-  final class Transformation private (
-      val mappers: Map[Class[_], Any => Future[Option[Any]]],
-      val orElse: Any => Future[Option[Any]]) {
-
-    def registerMapper[A: ClassTag, B](
-        f: A => Future[Option[B]]): Transformation = {
-      val clazz = implicitly[ClassTag[A]].runtimeClass
-      new Transformation(
-        mappers.updated(clazz, f.asInstanceOf[Any => Future[Option[Any]]]),
-        orElse)
-    }
-
-    def registerOrElseMapper(f: Any => Future[Option[Any]]): Unit = {
-      new Transformation(mappers, f)
-    }
-  }
 }
 
-class EventProducerServiceImpl(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class EventProducerServiceImpl(
     system: ActorSystem[_],
-    transformation: EventProducerServiceImpl.Transformation)
+    eventsBySlicesQuery: EventsBySliceQuery,
+    transformation: EventProducer.Transformation)
     extends EventProducerService {
   import EventProducerServiceImpl.log
-
-  // FIXME config
-  private val readJournalPluginId = R2dbcReadJournal.Identifier
-
-  private val eventsBySlicesQuery =
-    PersistenceQuery(system)
-      .readJournalFor[EventsBySliceQuery](readJournalPluginId)
 
   private val protoAnySerialization =
     new ProtoAnySerialization(system, protoClassMapping = Map.empty)

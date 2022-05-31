@@ -14,7 +14,6 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import akka.grpc.scaladsl.ServerReflection
 import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
@@ -26,11 +25,9 @@ import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
-import akka.projection.grpc.proto.EventProducerService
-import akka.projection.grpc.proto.EventProducerServiceHandler
-import akka.projection.grpc.query.scaladsl.GrpcReadJournal
-import akka.projection.grpc.service.EventProducerServiceImpl
-import akka.projection.grpc.service.EventProducerServiceImpl.Transformation
+import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
+import akka.projection.grpc.producer.scaladsl.EventProducer
+import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
 import akka.testkit.SocketUtil
@@ -52,10 +49,13 @@ object IntegrationSpec {
       }
     }
     akka.projection.grpc {
-      query.client {
+      consumer.client {
         host = "127.0.0.1"
         port = $grpcPort
         use-tls = false
+      }
+      producer {
+        query-plugin-id = "akka.persistence.r2dbc.query"
       }
     }
     """)
@@ -161,14 +161,10 @@ class IntegrationSpec
           Future.successful(Some(event.toUpperCase))
       })
 
-    val eventProducerService =
-      new EventProducerServiceImpl(system, transformation)
+    val eventProducerService = EventProducer.grpcServiceHandler(transformation)
 
     val service: HttpRequest => Future[HttpResponse] =
-      ServiceHandler.concatOrNotFound(
-        EventProducerServiceHandler.partial(eventProducerService),
-        // ServerReflection enabled to support grpcurl without import-path and proto parameters
-        ServerReflection.partial(List(EventProducerService)))
+      ServiceHandler.concatOrNotFound(eventProducerService)
 
     val bound =
       Http()
