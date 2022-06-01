@@ -154,7 +154,7 @@ class IntegrationSpec
     super.beforeAll()
 
     val transformation =
-      Transformation.empty.registerMapper((event: String) => {
+      Transformation.empty.registerAsyncMapper((event: String) => {
         if (event.contains("*"))
           Future.successful(None)
         else

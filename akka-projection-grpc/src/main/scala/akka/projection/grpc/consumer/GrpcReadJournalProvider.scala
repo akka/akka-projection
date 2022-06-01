@@ -15,6 +15,6 @@ final class GrpcReadJournalProvider(
   override val scaladslReadJournal: scaladsl.GrpcReadJournal =
     new scaladsl.GrpcReadJournal(system, config, cfgPath)
 
-  override val javadslReadJournal =
-    null // FIXME
+  override val javadslReadJournal: javadsl.GrpcReadJournal =
+    new javadsl.GrpcReadJournal(scaladslReadJournal)
 }

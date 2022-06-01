@@ -28,7 +28,7 @@ object ShoppingCartServer {
       system.executionContext
 
     val transformation =
-      Transformation.empty.registerMapper((event: ItemAdded) => {
+      Transformation.empty.registerAsyncMapper((event: ItemAdded) => {
         Future.successful(
           Some(proto.ItemAdded(event.cartId, event.itemId, event.quantity)))
       })

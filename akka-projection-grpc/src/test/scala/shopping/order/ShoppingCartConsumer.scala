@@ -16,15 +16,15 @@ import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
-import com.google.protobuf.any.{ Any => ProtoAny }
 import org.slf4j.LoggerFactory
+import shopping.cart.proto.ItemAdded
 
 object ShoppingCartConsumer {
 
-  class EventHandler extends Handler[EventEnvelope[ProtoAny]] {
+  class EventHandler extends Handler[EventEnvelope[ItemAdded]] {
     private val log = LoggerFactory.getLogger(getClass)
 
-    override def process(envelope: EventEnvelope[ProtoAny]): Future[Done] = {
+    override def process(envelope: EventEnvelope[ItemAdded]): Future[Done] = {
       log.info("Consumed event: {}", envelope)
       Future.successful(Done)
     }
@@ -47,7 +47,7 @@ object ShoppingCartConsumer {
         val projectionId = ProjectionId(projectionName, projectionKey)
 
         val sourceProvider =
-          EventSourcedProvider.eventsBySlices[ProtoAny](
+          EventSourcedProvider.eventsBySlices[ItemAdded](
             system,
             readJournalPluginId = GrpcReadJournal.Identifier,
             entityType,

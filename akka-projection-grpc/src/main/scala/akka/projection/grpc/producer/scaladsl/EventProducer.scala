@@ -15,6 +15,9 @@ import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServiceHandler
 import akka.projection.grpc.producer.EventProducerSettings
 
+/**
+ * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
+ */
 object EventProducer {
 
   object Transformation {
@@ -34,7 +37,7 @@ object EventProducer {
       val mappers: Map[Class[_], Any => Future[Option[Any]]],
       val orElse: Any => Future[Option[Any]]) {
 
-    def registerMapper[A: ClassTag, B](
+    def registerAsyncMapper[A: ClassTag, B](
         f: A => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       new Transformation(
@@ -42,8 +45,17 @@ object EventProducer {
         orElse)
     }
 
-    def registerOrElseMapper(f: Any => Future[Option[Any]]): Unit = {
+    def registerMapper[A: ClassTag, B](f: A => Option[B]): Transformation = {
+      registerAsyncMapper[A, B](event => Future.successful(f(event)))
+    }
+
+    def registerAsyncOrElseMapper(
+        f: Any => Future[Option[Any]]): Transformation = {
       new Transformation(mappers, f)
+    }
+
+    def registerOrElseMapper(f: Any => Option[Any]): Transformation = {
+      registerAsyncOrElseMapper(event => Future.successful(f(event)))
     }
   }
 
