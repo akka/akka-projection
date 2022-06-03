@@ -20,7 +20,7 @@
         <akka-grpc-maven-plugin.version>2.1.3</akka-grpc-maven-plugin.version>
         <scala.binary.version>2.13</scala.binary.version>
         <akka-persistence-r2dbc.version>0.7.5</akka-persistence-r2dbc.version>
-        <akka-projection-grpc.version>0.0.0-12-508c46aa-20220601-1552</akka-projection-grpc.version>
+        <akka-projection-grpc.version>0.0.0-16-d0557b5b-20220603-1524</akka-projection-grpc.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
         <!-- Version of the Docker image is derived from git commit.

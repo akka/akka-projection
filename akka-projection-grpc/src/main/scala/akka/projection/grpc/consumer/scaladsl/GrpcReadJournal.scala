@@ -4,6 +4,7 @@
 package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 
 import scala.collection.immutable
 import scala.concurrent.Future
@@ -57,7 +58,12 @@ final class GrpcReadJournal(
     new ProtoAnySerialization(system.toTyped, settings.protoClassMapping)
 
   private val clientSettings =
-    GrpcClientSettings.fromConfig(settings.grpcClientConfig)
+    GrpcClientSettings
+      .fromConfig(settings.grpcClientConfig)
+      .withChannelBuilderOverrides(
+        _.keepAliveWithoutCalls(true)
+          .keepAliveTime(10, TimeUnit.SECONDS)
+          .keepAliveTimeout(5, TimeUnit.SECONDS))
   private val client = EventProducerServiceClient(clientSettings)
 
   override def sliceForPersistenceId(persistenceId: String): Int =
