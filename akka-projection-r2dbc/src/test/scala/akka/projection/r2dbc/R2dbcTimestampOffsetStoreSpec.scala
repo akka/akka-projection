@@ -27,6 +27,7 @@ import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Pid
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.SeqNr
+import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
@@ -45,7 +46,12 @@ object R2dbcTimestampOffsetStoreSpec {
 }
 
 class R2dbcTimestampOffsetStoreSpec
-    extends ScalaTestWithActorTestKit(TestConfig.config)
+    extends ScalaTestWithActorTestKit(
+      ConfigFactory
+        .parseString("""
+    # to be able to test eviction
+    akka.projection.r2dbc.offset-store.keep-number-of-entries = 0
+    """).withFallback(TestConfig.config))
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData

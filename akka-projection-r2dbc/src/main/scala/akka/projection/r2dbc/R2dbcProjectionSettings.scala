@@ -31,6 +31,7 @@ object R2dbcProjectionSettings {
       managementTable = config.getString("offset-store.management-table"),
       useConnectionFactory = config.getString("use-connection-factory"),
       timeWindow = config.getDuration("offset-store.time-window"),
+      keepNumberOfEntries = config.getInt("offset-store.keep-number-of-entries"),
       evictInterval = config.getDuration("offset-store.evict-interval"),
       deleteInterval = config.getDuration("offset-store.delete-interval"),
       logDbCallsExceeding)
@@ -48,6 +49,7 @@ final case class R2dbcProjectionSettings(
     managementTable: String,
     useConnectionFactory: String,
     timeWindow: JDuration,
+    keepNumberOfEntries: Int,
     evictInterval: JDuration,
     deleteInterval: JDuration,
     logDbCallsExceeding: FiniteDuration) {

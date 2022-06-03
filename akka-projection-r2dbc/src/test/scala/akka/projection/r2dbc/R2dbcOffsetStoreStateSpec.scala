@@ -71,10 +71,19 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
         "p4" -> 4L,
         "p5" -> 5L)
 
-      val state2 = state1.evict(t0.plusMillis(2))
+      val state2 = state1.evict(t0.plusMillis(2), keepNumberOfEntries = 1)
       state2.latestOffset.get.seen shouldBe Map("p5" -> 5L)
       state2.oldestTimestamp shouldBe t0.plusMillis(2)
       state2.byPid.map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p3" -> 3L, "p4" -> 4L, "p5" -> 5L)
+
+      // keep all
+      state1.evict(t0.plusMillis(2), keepNumberOfEntries = 100) shouldBe state1
+
+      // keep 4
+      val state3 = state1.evict(t0.plusMillis(2), keepNumberOfEntries = 4)
+      state3.latestOffset.get.seen shouldBe Map("p5" -> 5L)
+      state3.oldestTimestamp shouldBe t0.plusMillis(1)
+      state3.byPid.map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p2" -> 2L, "p3" -> 3L, "p4" -> 4L, "p5" -> 5L)
     }
 
     "find duplicate" in {
