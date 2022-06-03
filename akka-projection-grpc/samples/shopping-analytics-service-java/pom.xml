@@ -19,7 +19,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <akka-grpc-maven-plugin.version>2.1.3</akka-grpc-maven-plugin.version>
         <scala.binary.version>2.13</scala.binary.version>
-        <akka-persistence-r2dbc.version>0.7.4+3-659752e0-SNAPSHOT</akka-persistence-r2dbc.version>
+        <akka-persistence-r2dbc.version>0.7.5</akka-persistence-r2dbc.version>
         <akka-projection-grpc.version>0.0.0-12-508c46aa-20220601-1552</akka-projection-grpc.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
