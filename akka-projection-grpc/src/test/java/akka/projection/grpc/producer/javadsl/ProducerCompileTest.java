@@ -19,11 +19,11 @@ public class ProducerCompileTest {
   public static void start(ActorSystem<?> system) {
     Transformation asyncTransformation =
         Transformation.empty()
-            .registerAsyncMapper(Integer.class, String.class, event -> CompletableFuture.completedFuture(Optional.of(Integer.valueOf(event * 2).toString())))
+            .registerAsyncMapper(Integer.class, event -> CompletableFuture.completedFuture(Optional.of(Integer.valueOf(event * 2).toString())))
             .registerAsyncOrElseMapper(event -> CompletableFuture.completedFuture(Optional.of(event.toString())));
     Transformation transformation =
         Transformation.empty()
-            .registerMapper(Integer.class, String.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
+            .registerMapper(Integer.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
             .registerOrElseMapper(event -> Optional.of(event.toString()));
 
     Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService = EventProducer.grpcServiceHandler(system, transformation);

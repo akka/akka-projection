@@ -28,18 +28,16 @@ final class Transformation private (
 
   def registerAsyncMapper[A, B](
       inputEventClass: Class[A],
-      resultEventClass: Class[B],
       f: JFunction[A, CompletionStage[Optional[B]]]): Transformation = {
-    implicit val ct: ClassTag[A] = ClassTag(inputEventClass.getClass)
+    implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
     new Transformation(delegate.registerAsyncMapper[A, B](event =>
       f.apply(event).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
   }
 
   def registerMapper[A, B](
       inputEventClass: Class[A],
-      resultEventClass: Class[B],
       f: JFunction[A, Optional[B]]): Transformation = {
-    implicit val ct: ClassTag[A] = ClassTag(inputEventClass.getClass)
+    implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
     new Transformation(
       delegate.registerMapper[A, B](event => f.apply(event).asScala))
   }
