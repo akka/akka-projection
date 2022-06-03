@@ -20,6 +20,7 @@ import akka.projection.grpc.internal.proto.Offset
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
+import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
@@ -43,7 +44,8 @@ import org.slf4j.LoggerFactory
 @InternalApi private[akka] class EventProducerServiceImpl(
     system: ActorSystem[_],
     eventsBySlicesQuery: EventsBySliceQuery,
-    transformation: EventProducer.Transformation)
+    transformation: EventProducer.Transformation,
+    settings: EventProducerSettings)
     extends EventProducerService {
   import EventProducerServiceImpl.log
 
@@ -98,7 +100,7 @@ import org.slf4j.LoggerFactory
         .filterNot(
           _.eventOption.isEmpty
         ) // FIXME backtracking events not handled yet
-        .mapAsync(1) { env =>
+        .mapAsync(settings.transformationParallelism) { env =>
           val protoOffset = env.offset match {
             case TimestampOffset(timestamp, _, seen) =>
               val protoTimestamp = Timestamp(timestamp)

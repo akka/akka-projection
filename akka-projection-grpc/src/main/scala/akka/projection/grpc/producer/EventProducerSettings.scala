@@ -17,4 +17,10 @@ object EventProducerSettings {
 class EventProducerSettings(config: Config) {
   val queryPluginId: String = config.getString("query-plugin-id")
 
+  val transformationParallelism: Int =
+    config.getInt("transformation-parallelism")
+  require(
+    transformationParallelism >= 1,
+    "Configuration property [transformation-parallelism] must be >= 1.")
+
 }

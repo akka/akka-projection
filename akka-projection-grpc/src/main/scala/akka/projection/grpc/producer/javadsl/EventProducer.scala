@@ -39,6 +39,9 @@ object EventProducer {
       transformation: Transformation,
       settings: EventProducerSettings)
       : JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
+    require(
+      settings.queryPluginId.nonEmpty,
+      s"Configuration property [akka.projection.grpc.producer.query-plugin-id] must be defined.")
     val eventsBySlicesQuery =
       PersistenceQuery
         .get(system)
@@ -48,7 +51,8 @@ object EventProducer {
       new EventProducerServiceImpl(
         system,
         eventsBySlicesQuery,
-        transformation.delegate)
+        transformation.delegate,
+        settings)
 
     val handler = EventProducerServiceHandler(eventProducerService)(system)
     new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {

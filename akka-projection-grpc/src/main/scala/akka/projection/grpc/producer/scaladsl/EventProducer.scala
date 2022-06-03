@@ -75,12 +75,19 @@ object EventProducer {
       transformation: Transformation,
       settings: EventProducerSettings)(implicit system: ActorSystem[_])
       : PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
+    require(
+      settings.queryPluginId.nonEmpty,
+      s"Configuration property [akka.projection.grpc.producer.query-plugin-id] must be defined.")
     val eventsBySlicesQuery =
       PersistenceQuery(system)
         .readJournalFor[EventsBySliceQuery](settings.queryPluginId)
 
     val eventProducerService =
-      new EventProducerServiceImpl(system, eventsBySlicesQuery, transformation)
+      new EventProducerServiceImpl(
+        system,
+        eventsBySlicesQuery,
+        transformation,
+        settings)
 
     EventProducerServiceHandler.partial(eventProducerService)
   }

@@ -25,6 +25,7 @@ import akka.projection.grpc.TestData
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
+import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
@@ -100,8 +101,13 @@ class EventProducerServiceSpec
       else
         Future.successful(Some(event.toUpperCase))
     })
+  private val settings = EventProducerSettings(system)
   private val eventProducerService =
-    new EventProducerServiceImpl(system, eventsBySlicesQuery, transformation)
+    new EventProducerServiceImpl(
+      system,
+      eventsBySlicesQuery,
+      transformation,
+      settings)
 
   private def runEventsBySlices(streamIn: Source[StreamIn, NotUsed]) = {
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
