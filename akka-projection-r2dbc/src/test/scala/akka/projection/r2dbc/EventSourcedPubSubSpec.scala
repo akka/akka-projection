@@ -42,7 +42,10 @@ object EventSourcedPubSubSpec {
         # simulate lost messages by overflowing the buffer
         buffer-size = 10
 
-        backtracking.behind-current-time = 5 seconds
+        backtracking {
+          behind-current-time = 5 seconds
+          window = 20 seconds
+        }
       }
     }
     """)
@@ -136,7 +139,7 @@ class EventSourcedPubSubSpec
     (1 to numberOfEvents).foreach { _ =>
       // not using receiveMessages(expectedEvents) for better logging in case of failure
       try {
-        processed :+= processedProbe.receiveMessage(15.seconds)
+        processed :+= processedProbe.receiveMessage(25.seconds)
       } catch {
         case e: AssertionError =>
           val missing = expectedEvents.diff(processed.map(_.envelope.event))
