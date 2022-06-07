@@ -22,22 +22,31 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
+import akka.persistence.typed.PersistenceId
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.Event
 import akka.projection.grpc.internal.proto.EventProducerServiceClient
+import akka.projection.grpc.internal.proto.EventTimestampRequest
+import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.LoadEventRequest
+import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
-import akka.projection.grpc.internal.proto.FilteredEvent
-import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.stream.scaladsl.Source
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
+
+  private val log: Logger =
+    LoggerFactory.getLogger(classOf[GrpcReadJournal])
 }
 
 final class GrpcReadJournal(
@@ -48,6 +57,7 @@ final class GrpcReadJournal(
     with EventsBySliceQuery
     with EventTimestampQuery
     with LoadEventQuery {
+  import GrpcReadJournal.log
 
   private val settings = GrpcQuerySettings(
     system.settings.config.getConfig(cfgPath))
@@ -105,6 +115,17 @@ final class GrpcReadJournal(
       maxSlice: Int,
       offset: Offset): Source[EventEnvelope[Evt], NotUsed] = {
 
+    log.debug(
+      "Starting eventsBySlices stream from [{}] [{}], slices [{} - {}], offset [{}]",
+      clientSettings.serviceName,
+      entityType,
+      minSlice,
+      maxSlice,
+      offset match {
+        case t: TimestampOffset => t.timestamp
+        case _                  => offset
+      })
+
     val protoOffset =
       offset match {
         case o: TimestampOffset =>
@@ -126,61 +147,28 @@ final class GrpcReadJournal(
       .concat(Source.maybe)
     val streamOut = client.eventsBySlices(streamIn)
     streamOut.map {
-      case StreamOut(
-            StreamOut.Message.Event(
-              Event(
-                persistenceId,
-                seqNr,
-                slice,
-                Some(protoEventOffset),
-                protoEvent,
-                _)),
-            _) =>
-        val timestamp = protoEventOffset.timestamp.get.asJavaInstant
-        val seen = protoEventOffset.seen.map {
-          case PersistenceIdSeqNr(pid, seqNr, _) => pid -> seqNr
-        }.toMap
-        val eventOffset = TimestampOffset(timestamp, seen)
+      case StreamOut(StreamOut.Message.Event(event), _) =>
+        if (log.isTraceEnabled)
+          log.trace(
+            "Received {}event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
+            if (event.payload.isEmpty) "backtracking " else "",
+            clientSettings.serviceName,
+            event.persistenceId,
+            event.seqNr,
+            timestampOffset(event.offset.get).timestamp)
 
-        val event =
-          protoEvent.map(protoAnySerialization.decode(_).asInstanceOf[Evt])
+        eventToEnvelope(event, entityType)
 
-        new EventEnvelope(
-          eventOffset,
-          persistenceId,
-          seqNr,
-          event,
-          timestamp.toEpochMilli,
-          eventMetadata = None,
-          entityType,
-          slice)
+      case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
+        if (log.isTraceEnabled)
+          log.trace(
+            "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
+            clientSettings.serviceName,
+            filteredEvent.persistenceId,
+            filteredEvent.seqNr,
+            timestampOffset(filteredEvent.offset.get).timestamp)
 
-      case StreamOut(
-            StreamOut.Message.FilteredEvent(
-              FilteredEvent(
-                persistenceId,
-                seqNr,
-                slice,
-                Some(protoEventOffset),
-                _)),
-            _) =>
-        val timestamp = protoEventOffset.timestamp.get.asJavaInstant
-        val seen = protoEventOffset.seen.map {
-          case PersistenceIdSeqNr(pid, seqNr, _) => pid -> seqNr
-        }.toMap
-        val eventOffset = TimestampOffset(timestamp, seen)
-
-        // Note that envelope is marked with NotUsed in the eventMetadata. That is handled by the R2dbcProjection
-        // implementation to skip the envelope and still store the offset.
-        new EventEnvelope(
-          eventOffset,
-          persistenceId,
-          seqNr,
-          None,
-          timestamp.toEpochMilli,
-          eventMetadata = Some(NotUsed),
-          entityType,
-          slice)
+        filteredEventToEnvelope(filteredEvent, entityType)
 
       case other =>
         throw new IllegalArgumentException(
@@ -188,18 +176,87 @@ final class GrpcReadJournal(
     }
   }
 
+  private def eventToEnvelope[Evt](
+      event: Event,
+      entityType: String): EventEnvelope[Evt] = {
+    val eventOffset = timestampOffset(event.offset.get)
+    val evt =
+      event.payload.map(protoAnySerialization.decode(_).asInstanceOf[Evt])
+
+    new EventEnvelope(
+      eventOffset,
+      event.persistenceId,
+      event.seqNr,
+      evt,
+      eventOffset.timestamp.toEpochMilli,
+      eventMetadata = None,
+      entityType,
+      event.slice)
+  }
+
+  private def filteredEventToEnvelope[Evt](
+      filteredEvent: FilteredEvent,
+      entityType: String): EventEnvelope[Evt] = {
+    val eventOffset = timestampOffset(filteredEvent.offset.get)
+
+    // Note that envelope is marked with NotUsed in the eventMetadata. That is handled by the R2dbcProjection
+    // implementation to skip the envelope and still store the offset.
+    new EventEnvelope(
+      eventOffset,
+      filteredEvent.persistenceId,
+      filteredEvent.seqNr,
+      None,
+      eventOffset.timestamp.toEpochMilli,
+      eventMetadata = Some(NotUsed),
+      entityType,
+      filteredEvent.slice)
+  }
+
+  private def timestampOffset(
+      protoOffset: akka.projection.grpc.internal.proto.Offset)
+      : TimestampOffset = {
+    val timestamp = protoOffset.timestamp.get.asJavaInstant
+    val seen = protoOffset.seen.map { case PersistenceIdSeqNr(pid, seqNr, _) =>
+      pid -> seqNr
+    }.toMap
+    TimestampOffset(timestamp, seen)
+  }
+
   // EventTimestampQuery
   override def timestampOf(
       persistenceId: String,
       sequenceNr: Long): Future[Option[Instant]] = {
-    ??? //FIXME do we need this?
+    import system.dispatcher
+    client
+      .eventTimestamp(EventTimestampRequest(persistenceId, sequenceNr))
+      .map(_.timestamp.map(_.asJavaInstant))
   }
 
   //LoadEventQuery
   override def loadEnvelope[Evt](
       persistenceId: String,
       sequenceNr: Long): Future[EventEnvelope[Evt]] = {
-    ??? //FIXME do we need this?
+    log.trace(
+      "Loading event from [{}] persistenceId [{}] with seqNr [{}]",
+      clientSettings.serviceName,
+      persistenceId,
+      sequenceNr)
+    import system.dispatcher
+    val entityType = PersistenceId.extractEntityType(persistenceId)
+    client.loadEvent(LoadEventRequest(persistenceId, sequenceNr)).map {
+      case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
+        eventToEnvelope(event, entityType)
+
+      case LoadEventResponse(
+            LoadEventResponse.Message.FilteredEvent(filteredEvent),
+            _) =>
+        filteredEventToEnvelope(filteredEvent, entityType)
+
+      case other =>
+        throw new IllegalArgumentException(
+          s"Unexpected LoadEventResponse [${other.message.getClass.getName}]")
+
+    }
   }
 
 }

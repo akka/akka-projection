@@ -27,6 +27,13 @@ object EventProducer {
         Future.failed(
           new IllegalArgumentException(
             s"Missing transformation for event [${event.getClass}]")))
+
+    /**
+     * No transformation. Pass through each event as is.
+     */
+    val identity: Transformation = new Transformation(
+      mappers = Map.empty,
+      orElse = event => Future.successful(Option(event)))
   }
 
   /**

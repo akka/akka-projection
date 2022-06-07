@@ -12,6 +12,10 @@ option java_package = "akka.projection.grpc.internal.proto";
 
 service EventProducerService {
   rpc EventsBySlices(stream StreamIn) returns (stream StreamOut);
+
+  rpc EventTimestamp(EventTimestampRequest) returns (EventTimestampResponse);
+
+  rpc LoadEvent(LoadEventRequest) returns (LoadEventResponse);
 }
 
 message StreamIn {
@@ -66,3 +70,26 @@ message FilteredEvent {
   int32 slice = 3;
   Offset offset = 4;
 }
+
+message EventTimestampRequest {
+  string persistence_id = 1;
+  int64 seq_nr = 2;
+}
+
+message EventTimestampResponse {
+  google.protobuf.Timestamp timestamp = 1;
+}
+
+message LoadEventRequest {
+  string persistence_id = 1;
+  int64 seq_nr = 2;
+}
+
+message LoadEventResponse {
+  oneof message {
+    Event event = 1;
+    FilteredEvent filtered_event = 2;
+  }
+}
+
+

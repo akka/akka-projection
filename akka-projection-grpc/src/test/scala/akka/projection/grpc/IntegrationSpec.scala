@@ -9,26 +9,24 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.Behavior
-import akka.actor.typed.scaladsl.Behaviors
 import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.typed.EventEnvelope
-import akka.persistence.typed.PersistenceId
-import akka.persistence.typed.scaladsl.Effect
-import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
+import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
+import akka.projection.r2dbc.scaladsl.R2dbcSession
 import akka.projection.scaladsl.Handler
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
@@ -46,6 +44,8 @@ object IntegrationSpec {
     akka.persistence.r2dbc {
       query {
         refresh-interval = 500 millis
+        # reducing this to have quicker test, triggers backtracking earlier
+        backtracking.behind-current-time = 3 seconds
       }
     }
     akka.projection.grpc {
@@ -58,41 +58,9 @@ object IntegrationSpec {
         query-plugin-id = "akka.persistence.r2dbc.query"
       }
     }
+    akka.actor.testkit.typed.filter-leeway = 10s
     """)
     .withFallback(ConfigFactory.load("persistence.conf"))
-
-  object TestEntity {
-    sealed trait Command
-    final case class Persist(payload: Any) extends Command
-    final case class Ping(replyTo: ActorRef[Done]) extends Command
-    final case class Stop(replyTo: ActorRef[Done]) extends Command
-
-    def apply(pid: PersistenceId): Behavior[Command] = {
-      Behaviors.setup { context =>
-        EventSourcedBehavior[Command, Any, String](
-          persistenceId = pid,
-          "",
-          { (_, command) =>
-            command match {
-              case command: Persist =>
-                context.log.debug(
-                  "Persist [{}], pid [{}], seqNr [{}]",
-                  command.payload,
-                  pid.id,
-                  EventSourcedBehavior.lastSequenceNumber(context) + 1)
-                Effect.persist(command.payload)
-              case Ping(replyTo) =>
-                replyTo ! Done
-                Effect.none
-              case Stop(replyTo) =>
-                replyTo ! Done
-                Effect.stop()
-            }
-          },
-          (_, _) => "")
-      }
-    }
-  }
 
   final case class Processed(
       projectionId: ProjectionId,
@@ -103,6 +71,19 @@ object IntegrationSpec {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(envelope: EventEnvelope[String]): Future[Done] = {
+      log.debug("{} Processed {}", projectionId.key, envelope.event)
+      probe ! Processed(projectionId, envelope)
+      Future.successful(Done)
+    }
+  }
+
+  class TestR2dbcHandler(projectionId: ProjectionId, probe: ActorRef[Processed])
+      extends R2dbcHandler[EventEnvelope[String]] {
+    private val log = LoggerFactory.getLogger(getClass)
+
+    override def process(
+        session: R2dbcSession,
+        envelope: EventEnvelope[String]): Future[Done] = {
       log.debug("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
@@ -140,13 +121,24 @@ class IntegrationSpec
         sliceRange.min,
         sliceRange.max)
 
-    lazy val projection = spawn(
-      ProjectionBehavior(
-        R2dbcProjection.atLeastOnceAsync(
-          projectionId,
-          settings = None,
-          sourceProvider = sourceProvider,
-          handler = () => new TestHandler(projectionId, processedProbe.ref))))
+    def spawnAtLeastOnceProjection(): ActorRef[ProjectionBehavior.Command] =
+      spawn(
+        ProjectionBehavior(
+          R2dbcProjection.atLeastOnceAsync(
+            projectionId,
+            settings = None,
+            sourceProvider = sourceProvider,
+            handler = () => new TestHandler(projectionId, processedProbe.ref))))
+
+    def spawnExactlyOnceProjection(): ActorRef[ProjectionBehavior.Command] =
+      spawn(
+        ProjectionBehavior(
+          R2dbcProjection.exactlyOnce(
+            projectionId,
+            settings = None,
+            sourceProvider = sourceProvider,
+            handler = () =>
+              new TestR2dbcHandler(projectionId, processedProbe.ref))))
 
   }
 
@@ -183,7 +175,7 @@ class IntegrationSpec
       replyProbe.receiveMessage()
 
       // start the projection
-      projection
+      val projection = spawnAtLeastOnceProjection()
 
       val processedA = processedProbe.receiveMessage()
       processedA.envelope.persistenceId shouldBe pid.id
@@ -213,7 +205,7 @@ class IntegrationSpec
       replyProbe.receiveMessage()
 
       // start the projection
-      projection
+      val projection = spawnAtLeastOnceProjection()
 
       val processedA = processedProbe.receiveMessage()
       processedA.envelope.persistenceId shouldBe pid.id
@@ -227,6 +219,61 @@ class IntegrationSpec
       processedC.envelope.sequenceNr shouldBe 3L
       processedC.envelope.event shouldBe "C"
 
+      projection ! ProjectionBehavior.Stop
+      entity ! TestEntity.Stop(replyProbe.ref)
+    }
+
+    "resume from offset" in new TestFixture {
+      entity ! TestEntity.Persist("a")
+      entity ! TestEntity.Persist("b")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      // start the projection
+      val projection = spawnExactlyOnceProjection()
+
+      processedProbe.receiveMessage().envelope.event shouldBe "A"
+      processedProbe.receiveMessage().envelope.event shouldBe "B"
+      processedProbe.expectNoMessage()
+
+      projection ! ProjectionBehavior.Stop
+      processedProbe.expectTerminated(projection)
+      // start new projection
+      val projection2 = spawnExactlyOnceProjection()
+
+      entity ! TestEntity.Persist("c")
+      processedProbe.receiveMessage().envelope.event shouldBe "C"
+
+      processedProbe.expectNoMessage()
+      projection2 ! ProjectionBehavior.Stop
+      entity ! TestEntity.Stop(replyProbe.ref)
+    }
+
+    "deduplicate backtracking events" in new TestFixture {
+      entity ! TestEntity.Persist("a")
+      entity ! TestEntity.Persist("b")
+      entity ! TestEntity.Persist("c")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      def expectedLogMessage(seqNr: Long): String =
+        s"Received backtracking event from [127.0.0.1] persistenceId [${pid.id}] with seqNr [$seqNr]"
+
+      val projection =
+        LoggingTestKit.trace(expectedLogMessage(1)).expect {
+          LoggingTestKit.trace(expectedLogMessage(2)).expect {
+            LoggingTestKit.trace(expectedLogMessage(3)).expect {
+              // start the projection
+              spawnExactlyOnceProjection()
+            }
+          }
+        }
+
+      processedProbe.receiveMessage().envelope.event shouldBe "A"
+      processedProbe.receiveMessage().envelope.event shouldBe "B"
+      processedProbe.receiveMessage().envelope.event shouldBe "C"
+
+      processedProbe.expectNoMessage()
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
     }

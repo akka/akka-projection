@@ -17,6 +17,12 @@ import akka.projection.grpc.producer.scaladsl
 object Transformation {
   val empty: Transformation = new Transformation(
     scaladsl.EventProducer.Transformation.empty)
+
+  /**
+   * No transformation. Pass through each event as is.
+   */
+  val identity: Transformation = new Transformation(
+    scaladsl.EventProducer.Transformation.identity)
 }
 
 /**

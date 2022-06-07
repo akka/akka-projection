@@ -192,14 +192,17 @@ class EventProducerServiceSpec
       testPublisher.sendNext(env3)
 
       val out1 = probe.expectNext()
+      out1.message.isEvent shouldBe true
       out1.getEvent.persistenceId shouldBe env1.persistenceId
       out1.getEvent.seqNr shouldBe env1.sequenceNr
 
       val out2 = probe.expectNext()
+      out2.message.isFilteredEvent shouldBe true
       out2.getFilteredEvent.persistenceId shouldBe env2.persistenceId
       out2.getFilteredEvent.seqNr shouldBe env2.sequenceNr
 
       val out3 = probe.expectNext()
+      out3.message.isEvent shouldBe true
       out3.getEvent.persistenceId shouldBe env3.persistenceId
       out3.getEvent.seqNr shouldBe env3.sequenceNr
     }

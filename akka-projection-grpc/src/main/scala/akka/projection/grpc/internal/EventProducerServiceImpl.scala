@@ -5,17 +5,26 @@ package akka.projection.grpc.internal
 
 import java.time.Instant
 
+import scala.concurrent.Future
+
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
+import akka.grpc.GrpcServiceException
 import akka.persistence.query.NoOffset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.grpc.internal.proto.Event
 import akka.projection.grpc.internal.proto.EventProducerService
+import akka.projection.grpc.internal.proto.EventTimestampRequest
+import akka.projection.grpc.internal.proto.EventTimestampResponse
 import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.LoadEventRequest
+import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.Offset
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
@@ -26,6 +35,7 @@ import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import com.google.protobuf.timestamp.Timestamp
+import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -65,6 +75,10 @@ import org.slf4j.LoggerFactory
         throw new IllegalArgumentException(
           "Expected init message for eventsBySlices stream, " +
           s"but received [${other.getClass.getName}]")
+      case (seq, _) =>
+        // silence warning: match may not be exhaustive
+        throw new IllegalStateException(
+          s"Unexpected Seq prefix with [${seq.size}] elements.")
     }
   }
 
@@ -84,77 +98,152 @@ import org.slf4j.LoggerFactory
         TimestampOffset(timestamp, seen)
     }
 
-    log.info(
+    log.debug(
       "Starting eventsBySlices stream [{}], slices [{} - {}], offset [{}]",
       entityType,
       init.sliceMin,
       init.sliceMax,
-      offset)
+      offset match {
+        case t: TimestampOffset => t.timestamp
+        case _                  => offset
+      })
 
     val events: Source[EventEnvelope[Any], NotUsed] =
       eventsBySlicesQuery
         .eventsBySlices[Any](entityType, init.sliceMin, init.sliceMax, offset)
 
     val eventsStreamOut: Source[StreamOut, NotUsed] =
-      events
-        .filterNot(
-          _.eventOption.isEmpty
-        ) // FIXME backtracking events not handled yet
-        .mapAsync(settings.transformationParallelism) { env =>
-          val protoOffset = env.offset match {
-            case TimestampOffset(timestamp, _, seen) =>
-              val protoTimestamp = Timestamp(timestamp)
-              val protoSeen = seen.iterator.map { case (pid, seqNr) =>
-                PersistenceIdSeqNr(pid, seqNr)
-              }.toSeq
-              Offset(Some(protoTimestamp), protoSeen)
-            case other =>
-              throw new IllegalArgumentException(
-                s"Unexpected offset type [$other]")
-          }
-
-          val f = transformation.mappers
-            .getOrElse(env.event.getClass, transformation.orElse)
-          import system.executionContext
-          f(env.event).map {
-            case Some(transformedEvent) =>
-              // FIXME remove too verbose logging here
-              log.debug(
-                "Emitting event from [{}] with seqNr [{}], offset [{}]",
-                env.persistenceId,
-                env.sequenceNr,
-                env.offset)
-
-              val protoEvent = protoAnySerialization.encode(transformedEvent)
-
-              StreamOut(
-                StreamOut.Message.Event(
-                  Event(
-                    env.persistenceId,
-                    env.sequenceNr,
-                    env.slice,
-                    Some(protoOffset),
-                    Some(protoEvent))))
-
-            case None =>
-              // FIXME remove too verbose logging here
-              log.debug(
-                "Filtered event from [{}] with seqNr [{}], offset [{}]",
-                env.persistenceId,
-                env.sequenceNr,
-                env.offset)
-              StreamOut(
-                StreamOut.Message.FilteredEvent(
-                  FilteredEvent(
-                    env.persistenceId,
-                    env.sequenceNr,
-                    env.slice,
-                    Some(protoOffset))))
-          }
+      events.mapAsync(settings.transformationParallelism) { env =>
+        import system.executionContext
+        transformAndEncodeEvent(env).map {
+          case Some(event) =>
+            log.trace(
+              "Emitting {}event from persistenceId [{}] with seqNr [{}], offset [{}]",
+              if (event.payload.isEmpty) "backtracking " else "",
+              env.persistenceId,
+              env.sequenceNr,
+              env.offset)
+            StreamOut(StreamOut.Message.Event(event))
+          case None =>
+            log.trace(
+              "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}]",
+              env.persistenceId,
+              env.sequenceNr,
+              env.offset)
+            StreamOut(
+              StreamOut.Message.FilteredEvent(
+                FilteredEvent(
+                  env.persistenceId,
+                  env.sequenceNr,
+                  env.slice,
+                  Some(protoOffset(env)))))
         }
+      }
 
     // FIXME nextReq not handled yet
     Flow.fromSinkAndSource(Sink.ignore, eventsStreamOut)
   }
 
+  private def protoOffset(env: EventEnvelope[_]): Offset = {
+    env.offset match {
+      case TimestampOffset(timestamp, _, seen) =>
+        val protoTimestamp = Timestamp(timestamp)
+        val protoSeen = seen.iterator.map { case (pid, seqNr) =>
+          PersistenceIdSeqNr(pid, seqNr)
+        }.toSeq
+        Offset(Some(protoTimestamp), protoSeen)
+      case other =>
+        throw new IllegalArgumentException(s"Unexpected offset type [$other]")
+    }
+  }
+
+  private def transformAndEncodeEvent(
+      env: EventEnvelope[_]): Future[Option[Event]] = {
+    env.eventOption match {
+      case Some(event) =>
+        import system.executionContext
+        val f = transformation.mappers
+          .getOrElse(event.getClass, transformation.orElse)
+
+        f(event).map {
+          _.map { transformedEvent =>
+            val protoEvent = protoAnySerialization.encode(transformedEvent)
+            Event(
+              env.persistenceId,
+              env.sequenceNr,
+              env.slice,
+              Some(protoOffset(env)),
+              Some(protoEvent))
+          }
+        }
+
+      case None =>
+        // Events from backtracking are lazily loaded via `loadEvent` if needed.
+        // Transformation and filter is done via `loadEvent` in that case.
+        Future.successful(
+          Some(
+            Event(
+              env.persistenceId,
+              env.sequenceNr,
+              env.slice,
+              Some(protoOffset(env)),
+              payload = None)))
+    }
+  }
+
+  override def eventTimestamp(
+      req: EventTimestampRequest): Future[EventTimestampResponse] = {
+    eventsBySlicesQuery match {
+      case q: EventTimestampQuery =>
+        import system.executionContext
+        q.timestampOf(req.persistenceId, req.seqNr).map {
+          case Some(instant) => EventTimestampResponse(Some(Timestamp(instant)))
+          case None          => EventTimestampResponse.defaultInstance
+        }
+      case _ =>
+        Future.failed(new UnsupportedOperationException(
+          s"eventTimestamp not supported by [${eventsBySlicesQuery.getClass.getName}]"))
+    }
+  }
+
+  override def loadEvent(req: LoadEventRequest): Future[LoadEventResponse] = {
+    eventsBySlicesQuery match {
+      case q: LoadEventQuery =>
+        import system.executionContext
+        q.loadEnvelope[Any](req.persistenceId, req.seqNr)
+          .flatMap { env =>
+            transformAndEncodeEvent(env).map {
+              case Some(event) =>
+                log.trace(
+                  "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                  env.persistenceId,
+                  env.sequenceNr,
+                  env.offset)
+                LoadEventResponse(LoadEventResponse.Message.Event(event))
+              case None =>
+                log.trace(
+                  "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                  env.persistenceId,
+                  env.sequenceNr,
+                  env.offset)
+                LoadEventResponse(
+                  LoadEventResponse.Message.FilteredEvent(
+                    FilteredEvent(
+                      env.persistenceId,
+                      env.sequenceNr,
+                      env.slice,
+                      Some(protoOffset(env)))))
+            }
+          }
+          .recoverWith { case e: NoSuchElementException =>
+            log.warn(e.getMessage)
+            Future.failed(
+              new GrpcServiceException(
+                Status.NOT_FOUND.withDescription(e.getMessage)))
+          }
+      case _ =>
+        Future.failed(new UnsupportedOperationException(
+          s"loadEvent not supported by [${eventsBySlicesQuery.getClass.getName}]"))
+    }
+  }
 }
