@@ -651,7 +651,8 @@ private[projection] class R2dbcOffsetStore(
             pid,
             recordWithOffset.offset)
         } else if (recordWithOffset.envelopeLoaded) {
-          logger.info(
+          // This may happen rather frequently when using `publish-events`, after reconnecting and such.
+          logger.debug(
             "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
             seqNr,
             pid,
