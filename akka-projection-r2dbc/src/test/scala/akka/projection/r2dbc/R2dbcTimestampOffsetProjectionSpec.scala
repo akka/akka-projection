@@ -260,6 +260,17 @@ class R2dbcTimestampOffsetProjectionSpec
       slice)
   }
 
+  def backtrackingEnvelope(env: EventEnvelope[String]): EventEnvelope[String] =
+    new EventEnvelope[String](
+      env.offset,
+      env.persistenceId,
+      env.sequenceNr,
+      eventOption = None,
+      env.timestamp,
+      env.eventMetadata,
+      env.entityType,
+      env.slice)
+
   def createEnvelopes(pid: Pid, numberOfEvents: Int): immutable.IndexedSeq[EventEnvelope[String]] = {
     (1 to numberOfEvents).map { n =>
       createEnvelope(pid, n, tick().instant(), s"e$n")
@@ -268,6 +279,7 @@ class R2dbcTimestampOffsetProjectionSpec
 
   def createEnvelopesWithDuplicates(pid1: Pid, pid2: Pid): Vector[EventEnvelope[String]] = {
     val startTime = Instant.now()
+
     Vector(
       createEnvelope(pid1, 1, startTime, s"e1-1"),
       createEnvelope(pid1, 2, startTime.plusMillis(1), s"e1-2"),
@@ -1246,6 +1258,8 @@ class R2dbcTimestampOffsetProjectionSpec
       val envelopes = createEnvelopesWithDuplicates(pid1, pid2)
       val sourceProvider = createSourceProvider(envelopes)
       implicit val offsetStore = createOffsetStore(projectionId, sourceProvider)
+
+      info(s"pid1 [$pid1], pid2 [$pid2]")
 
       val flowHandler =
         FlowWithContext[EventEnvelope[String], ProjectionContext]

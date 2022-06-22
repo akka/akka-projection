@@ -526,6 +526,11 @@ private[projection] class R2dbcOffsetStore(
           }
         case _ => true
       }
+    if (newInflight.size >= 10000) {
+      throw new IllegalStateException(
+        s"Too many envelopes in-flight [${newInflight.size}]. " +
+        "Please report this issue at https://github.com/akka/akka-persistence-r2dbc")
+    }
     if (!inflight.compareAndSet(currentInflight, newInflight))
       cleanupInflight(newState) // CAS retry, concurrent update of inflight
   }
@@ -671,6 +676,10 @@ private[projection] class R2dbcOffsetStore(
         val ok = seqNr == prevSeqNr + 1
         if (ok) {
           FutureTrue
+        } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
+          // currentInFlight contains those that have been processed or about to be processed in Flow,
+          // but offset not saved yet => ok to handle as duplicate
+          FutureFalse
         } else if (recordWithOffset.envelopeLoaded) {
           logUnexpected()
           FutureFalse
