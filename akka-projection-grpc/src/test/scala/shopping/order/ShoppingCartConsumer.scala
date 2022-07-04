@@ -1,6 +1,7 @@
-/**
+/*
  * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
  */
+
 package shopping.order
 
 import scala.concurrent.Future

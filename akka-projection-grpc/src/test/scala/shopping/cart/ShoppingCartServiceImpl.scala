@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
+ */
+
 package shopping.cart
 
 import java.util.concurrent.TimeoutException

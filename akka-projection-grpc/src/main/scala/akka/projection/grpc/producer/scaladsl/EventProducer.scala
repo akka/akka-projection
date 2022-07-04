@@ -1,6 +1,7 @@
-/**
+/*
  * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
  */
+
 package akka.projection.grpc.producer.scaladsl
 
 import scala.concurrent.Future
