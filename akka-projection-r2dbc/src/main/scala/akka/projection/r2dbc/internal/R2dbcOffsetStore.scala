@@ -186,22 +186,6 @@ private[projection] class R2dbcOffsetStore(
     (projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)
     VALUES (?,?,?,?,?,?, transaction_timestamp())"""
 
-  private def insertTimestampOffsetBatchSql(pid: Pid, seqNr: SeqNr, offsetTimestamp: Instant): String = {
-    def validateStringParam(name: String, value: String): Unit = {
-      if (value.contains('\''))
-        throw new IllegalArgumentException(s"Illegal $name parameter [$value]")
-    }
-    validateStringParam("projectionId.name", projectionId.name)
-    validateStringParam("projectionId.key", projectionId.key)
-    validateStringParam("pid", pid)
-
-    val slice = persistenceExt.sliceForPersistenceId(pid)
-    sql"""
-      INSERT INTO $timestampOffsetTable
-      (projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)
-      VALUES ('${projectionId.name}','${projectionId.key}',$slice,'$pid',$seqNr,'$offsetTimestamp', transaction_timestamp())"""
-  }
-
   // delete less than a timestamp
   private val deleteOldTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset < ?"
@@ -515,15 +499,19 @@ private[projection] class R2dbcOffsetStore(
     // FIXME change to trace
     logger.debug("saving timestamp offset [{}], {}", records.last.timestamp, records)
 
+    val statement = conn.createStatement(insertTimestampOffsetSql)
+
     if (records.size == 1) {
-      val statement = conn.createStatement(insertTimestampOffsetSql)
       val boundStatement = bindRecord(statement, records.head)
       R2dbcExecutor.updateOneInTx(boundStatement)
     } else {
-      val statements = records.map { rec =>
-        insertTimestampOffsetBatchSql(rec.pid, rec.seqNr, rec.timestamp)
-      }
-      R2dbcExecutor.updateBatchInTx(conn, statements)
+      // TODO Try Batch without bind parameters for better performance. Risk of sql injection for these parameters is low.
+      val boundStatement =
+        records.foldLeft(statement) { (stmt, rec) =>
+          stmt.add()
+          bindRecord(stmt, rec)
+        }
+      R2dbcExecutor.updateBatchInTx(boundStatement)
     }
   }
 
