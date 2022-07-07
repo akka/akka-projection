@@ -22,7 +22,7 @@ object Dependencies {
     val scalaTest = "3.1.1"
     val testContainers = "1.15.3"
     val junit = "4.13.2"
-    val h2Driver = "1.4.200"
+    val h2Driver = "2.1.214"
     val jackson = "2.11.4" // this should match the version of jackson used by akka-serialization-jackson
   }
 
