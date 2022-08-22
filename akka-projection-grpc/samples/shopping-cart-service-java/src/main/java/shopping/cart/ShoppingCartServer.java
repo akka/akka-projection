@@ -1,5 +1,6 @@
 package shopping.cart;
 
+//#startServer
 import akka.actor.typed.ActorSystem;
 import akka.grpc.javadsl.ServerReflection;
 import akka.grpc.javadsl.ServiceHandler;
@@ -15,6 +16,9 @@ import java.util.concurrent.CompletionStage;
 import shopping.cart.proto.ShoppingCartService;
 import shopping.cart.proto.ShoppingCartServiceHandlerFactory;
 
+//#startServer
+
+//#startServer
 public final class ShoppingCartServer {
 
   private ShoppingCartServer() {}
@@ -50,3 +54,4 @@ public final class ShoppingCartServer {
         });
   }
 }
+//#startServer

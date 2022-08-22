@@ -1,19 +1,23 @@
 package shopping.analytics;
 
-import akka.Done;
-import akka.actor.typed.ActorSystem;
+//#initProjections
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
 import akka.japi.Pair;
 import akka.persistence.Persistence;
-import akka.persistence.query.Offset;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
 import akka.projection.grpc.consumer.javadsl.GrpcReadJournal;
-import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
+
+//#initProjections
+
+import akka.Done;
+import akka.actor.typed.ActorSystem;
+import akka.persistence.query.Offset;
+import akka.projection.javadsl.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shopping.cart.proto.CheckedOut;
@@ -28,9 +32,12 @@ import java.util.concurrent.CompletionStage;
 
 import static akka.Done.done;
 
+//#initProjections
 class ShoppingCartEventConsumer {
+  //#initProjections
   private static final Logger log = LoggerFactory.getLogger(ShoppingCartEventConsumer.class);
 
+  //#EventHandler
   static class EventHandler extends Handler<EventEnvelope<Object>> {
     private final ProjectionId projectionId;
 
@@ -90,7 +97,9 @@ class ShoppingCartEventConsumer {
       return CompletableFuture.completedFuture(done());
     }
   }
+  //#EventHandler
 
+  //#initProjections
   public static void init(ActorSystem<?> system) {
     int numberOfProjectionInstances = 4;
     String projectionName = "cart-events";
@@ -126,3 +135,4 @@ class ShoppingCartEventConsumer {
   }
 
 }
+//#initProjections
