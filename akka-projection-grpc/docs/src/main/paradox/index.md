@@ -8,7 +8,7 @@ It provides an implementation of an @extref:[Akka Projection](akka-projection:in
 
 ![overview.png](images/overview.png)
 
-1. Entity stores events in its journal in service A.
+1. An Entity stores events in its journal in service A.
 1. Consumer in service B starts an Akka Projection which locally reads its offset for service A's replication stream.
 1. Service B establishes a replication stream from service A.
 1. Events are read from the journal.
