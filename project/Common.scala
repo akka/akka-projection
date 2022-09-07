@@ -30,7 +30,9 @@ object Common extends AutoPlugin {
           "Contributors",
           "https://gitter.im/akka/dev",
           url("https://github.com/akka/akka-projection/graphs/contributors")),
-      licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
+      licenses := Seq(
+          ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-projection/master/LICENSE"))
+        ), // FIXME change s/master/v1.3.0/ when released
       description := "Akka Projection.")
 
   override lazy val projectSettings = Seq(
