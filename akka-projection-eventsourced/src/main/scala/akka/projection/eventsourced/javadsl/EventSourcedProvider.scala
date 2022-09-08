@@ -9,11 +9,9 @@ import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
-
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -31,6 +29,7 @@ import akka.projection.eventsourced.EventEnvelope
 import akka.projection.javadsl
 import akka.projection.javadsl.SourceProvider
 import akka.stream.javadsl.Source
+import com.typesafe.config.Config
 
 @ApiMayChange
 object EventSourcedProvider {
@@ -81,6 +80,30 @@ object EventSourcedProvider {
 
     val eventsBySlicesQuery =
       PersistenceQuery(system).getReadJournalFor(classOf[EventsBySliceQuery], readJournalPluginId)
+
+    if (!eventsBySlicesQuery.isInstanceOf[EventTimestampQuery])
+      throw new IllegalArgumentException(
+        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
+        s"[$readJournalPluginId] must implement [${classOf[EventTimestampQuery].getName}]")
+
+    if (!eventsBySlicesQuery.isInstanceOf[LoadEventQuery])
+      throw new IllegalArgumentException(
+        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
+        s"[$readJournalPluginId] must implement [${classOf[LoadEventQuery].getName}]")
+
+    new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
+  }
+
+  def eventsBySlices[Event](
+      system: ActorSystem[_],
+      readJournalPluginId: String,
+      readJournalConfig: Config,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+
+    val eventsBySlicesQuery =
+      PersistenceQuery(system).getReadJournalFor(classOf[EventsBySliceQuery], readJournalPluginId, readJournalConfig)
 
     if (!eventsBySlicesQuery.isInstanceOf[EventTimestampQuery])
       throw new IllegalArgumentException(

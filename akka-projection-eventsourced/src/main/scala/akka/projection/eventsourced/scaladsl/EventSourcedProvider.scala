@@ -5,11 +5,9 @@
 package akka.projection.eventsourced.scaladsl
 
 import java.time.Instant
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -24,6 +22,7 @@ import akka.projection.BySlicesSourceProvider
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
+import com.typesafe.config.Config
 
 @ApiMayChange
 object EventSourcedProvider {
@@ -67,6 +66,19 @@ object EventSourcedProvider {
       maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     val eventsBySlicesQuery =
       PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId)
+
+    new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
+  }
+
+  def eventsBySlices[Event](
+      system: ActorSystem[_],
+      readJournalPluginId: String,
+      readJournalConfig: Config,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    val eventsBySlicesQuery =
+      PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId, readJournalConfig)
 
     new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
   }
