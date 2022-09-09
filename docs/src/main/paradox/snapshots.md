@@ -6,7 +6,7 @@ project.description: Snapshot builds of Akka Projection are provided via the Son
 [snapshots-badge]:  https://img.shields.io/nexus/s/com.lightbend.akka/akka-projection-core_2.13?server=https%3A%2F%2Foss.sonatype.org
 [snapshots]:        https://oss.sonatype.org/content/repositories/snapshots/com/lightbend/akka/akka-projection-core_2.13/
 
-Snapshots are published to the Sonatype Snapshot repository after every successful build on master.
+Snapshots are published to the Sonatype Snapshot repository after every successful build on main.
 Add the following to your project build definition to resolve Akka Projection's snapshots:
 
 ## Configure repository

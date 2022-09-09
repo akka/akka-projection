@@ -4,7 +4,7 @@
 
 This example requires a Cassandra database to run. 
 If you do not have a Cassandra database then you can run one locally as a Docker container.
-To run a Cassandra database locally you can use [`docker-compose`](https://docs.docker.com/compose/) to run the [`docker-compose.yaml`](https://raw.githubusercontent.com/akka/akka-projection/master/docker-compose.yml) found in the Projections project root.
+To run a Cassandra database locally you can use [`docker-compose`](https://docs.docker.com/compose/) to run the [`docker-compose.yaml`](https://raw.githubusercontent.com/akka/akka-projection/main/docker-compose.yml) found in the Projections project root.
 The `docker-compose.yml` file references the latest [Cassandra Docker Image](https://hub.docker.com/_/cassandra).
 
 Change directory to the directory of the `docker-compose.yml` file and manage a Cassandra container with the following commands.
