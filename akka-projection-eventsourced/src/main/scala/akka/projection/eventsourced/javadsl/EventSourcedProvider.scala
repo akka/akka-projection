@@ -39,10 +39,15 @@ object EventSourcedProvider {
       system: ActorSystem[_],
       readJournalPluginId: String,
       tag: String): SourceProvider[Offset, EventEnvelope[Event]] = {
-
     val eventsByTagQuery =
       PersistenceQuery(system).getReadJournalFor(classOf[EventsByTagQuery], readJournalPluginId)
+    eventsByTag(system, eventsByTagQuery, tag)
+  }
 
+  def eventsByTag[Event](
+      system: ActorSystem[_],
+      eventsByTagQuery: EventsByTagQuery,
+      tag: String): SourceProvider[Offset, EventEnvelope[Event]] = {
     new EventsByTagSourceProvider(system, eventsByTagQuery, tag)
   }
 
@@ -78,20 +83,17 @@ object EventSourcedProvider {
       entityType: String,
       minSlice: Int,
       maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
-
     val eventsBySlicesQuery =
       PersistenceQuery(system).getReadJournalFor(classOf[EventsBySliceQuery], readJournalPluginId)
+    eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice)
+  }
 
-    if (!eventsBySlicesQuery.isInstanceOf[EventTimestampQuery])
-      throw new IllegalArgumentException(
-        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
-        s"[$readJournalPluginId] must implement [${classOf[EventTimestampQuery].getName}]")
-
-    if (!eventsBySlicesQuery.isInstanceOf[LoadEventQuery])
-      throw new IllegalArgumentException(
-        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
-        s"[$readJournalPluginId] must implement [${classOf[LoadEventQuery].getName}]")
-
+  def eventsBySlices[Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceQuery,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
   }
 
