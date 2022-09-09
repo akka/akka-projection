@@ -22,7 +22,6 @@ import akka.projection.BySlicesSourceProvider
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
-import com.typesafe.config.Config
 
 @ApiMayChange
 object EventSourcedProvider {
@@ -67,18 +66,33 @@ object EventSourcedProvider {
     val eventsBySlicesQuery =
       PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId)
 
-    new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
+    if (!eventsBySlicesQuery.isInstanceOf[EventTimestampQuery])
+      throw new IllegalArgumentException(
+        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
+        s"[$readJournalPluginId] must implement [${classOf[EventTimestampQuery].getName}]")
+
+    if (!eventsBySlicesQuery.isInstanceOf[LoadEventQuery])
+      throw new IllegalArgumentException(
+        s"[${eventsBySlicesQuery.getClass.getName}] with readJournalPluginId " +
+        s"[$readJournalPluginId] must implement [${classOf[LoadEventQuery].getName}]")
+
+    eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice)
   }
 
   def eventsBySlices[Event](
       system: ActorSystem[_],
-      readJournalPluginId: String,
-      readJournalConfig: Config,
+      eventsBySlicesQuery: EventsBySliceQuery,
       entityType: String,
       minSlice: Int,
       maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
-    val eventsBySlicesQuery =
-      PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId, readJournalConfig)
+
+    if (!eventsBySlicesQuery.isInstanceOf[EventTimestampQuery])
+      throw new IllegalArgumentException(
+        s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[EventTimestampQuery].getName}]")
+
+    if (!eventsBySlicesQuery.isInstanceOf[LoadEventQuery])
+      throw new IllegalArgumentException(
+        s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[LoadEventQuery].getName}]")
 
     new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
   }
