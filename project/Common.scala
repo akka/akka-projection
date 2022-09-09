@@ -31,8 +31,8 @@ object Common extends AutoPlugin {
           "https://gitter.im/akka/dev",
           url("https://github.com/akka/akka-projection/graphs/contributors")),
       licenses := Seq(
-          ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-projection/master/LICENSE"))
-        ), // FIXME change s/master/v1.3.0/ when released
+          ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-projection/main/LICENSE"))
+        ), // FIXME change s/main/v1.3.0/ when released
       description := "Akka Projection.")
 
   override lazy val projectSettings = Seq(
@@ -49,7 +49,7 @@ object Common extends AutoPlugin {
         "-sourcepath",
         (baseDirectory in ThisBuild).value.toString,
         "-doc-source-url", {
-          val branch = if (isSnapshot.value) "master" else s"v${version.value}"
+          val branch = if (isSnapshot.value) "main" else s"v${version.value}"
           s"https://github.com/akka/akka-projection/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
         },
         "-skip-packages",
