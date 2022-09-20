@@ -585,6 +585,7 @@ class SlickProjectionSpec
                     case Some(state) if state.envReceived =>
                       acc + (o -> state.copy(verifyCount = state.verifyCount + 1))
                     case None => acc + (o -> VerifyState(1, false))
+                    case _    => throw new IllegalStateException
                   }
                 case e: Envelope =>
                   val o = e.offset
@@ -595,6 +596,7 @@ class SlickProjectionSpec
                     case None        => fail(s"Envelope has not been verified yet for offset $o")
                     case Some(state) => acc + (o -> state.copy(envReceived = true))
                   }
+                case _ => throw new IllegalStateException
               }
           }
           probe.expectNoMessage(10.millis)

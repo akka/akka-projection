@@ -317,6 +317,7 @@ class KafkaToSlickIntegrationSpec extends KafkaSpecBase(ConfigFactory.load().wit
       case `user2` => 1
       case `user3` => 2
       case `user4` => 3
+      case _       => throw new IllegalArgumentException(s"Unexpected userId [$userId]")
     }
   }
 

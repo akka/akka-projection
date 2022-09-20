@@ -65,6 +65,9 @@ import slick.jdbc.JdbcProfile
       case _: slick.jdbc.OracleProfile =>
         (OracleDialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable), false)
 
+      case _ =>
+        throw new IllegalArgumentException(s"Unsupported JdbcProfile [${profile.getClass.getName}]")
+
     }
   }
 

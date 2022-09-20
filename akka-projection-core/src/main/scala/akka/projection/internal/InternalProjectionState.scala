@@ -136,7 +136,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     val atLeastOnceHandlerFlow
         : Flow[ProjectionContextImpl[Offset, Envelope], ProjectionContextImpl[Offset, Envelope], NotUsed] =
       handlerStrategy match {
-        case single: SingleHandlerStrategy[Envelope] =>
+        case single: SingleHandlerStrategy[Envelope] @unchecked =>
           val handler = single.handler()
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
@@ -158,7 +158,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
 
           }
 
-        case grouped: GroupedHandlerStrategy[Envelope] =>
+        case grouped: GroupedHandlerStrategy[Envelope] @unchecked =>
           val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
           val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
           val handler = grouped.handler()
@@ -188,7 +188,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
                 }
             }
 
-        case f: FlowHandlerStrategy[Envelope] =>
+        case f: FlowHandlerStrategy[Envelope] @unchecked =>
           val flow =
             f.flowCtx.asFlow.watchTermination() {
               case (_, futDone) =>
@@ -293,7 +293,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     }
 
     handlerStrategy match {
-      case single: SingleHandlerStrategy[Envelope] =>
+      case single: SingleHandlerStrategy[Envelope] @unchecked =>
         val handler: Handler[Envelope] = single.handler()
         source
           .mapAsync(1) { context =>
@@ -325,7 +325,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
 
           }
 
-      case grouped: GroupedHandlerStrategy[Envelope] =>
+      case grouped: GroupedHandlerStrategy[Envelope] @unchecked =>
         val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
         val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
         val handler = grouped.handler()
@@ -361,7 +361,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
       HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
     handlerStrategy match {
-      case single: SingleHandlerStrategy[Envelope] =>
+      case single: SingleHandlerStrategy[Envelope] @unchecked =>
         val handler = single.handler()
         source
           .mapAsync(parallelism = 1) { context =>
