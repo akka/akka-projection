@@ -6,7 +6,7 @@ import sbt._
 object Dependencies {
 
   val Scala213 = "2.13.3"
-  val Scala212 = "2.12.15"
+  val Scala212 = "2.12.16"
   val ScalaVersions = Seq(Scala213, Scala212)
 
   val AkkaVersionInDocs = "2.6.16"
@@ -63,12 +63,12 @@ object Dependencies {
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
     val h2Driver = Compile.h2Driver % allTestConfig
-    val postgresDriver = "org.postgresql" % "postgresql" % "42.3.1" % allTestConfig
+    val postgresDriver = "org.postgresql" % "postgresql" % "42.3.7" % allTestConfig
     val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.30" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
 
-    val logback = "ch.qos.logback" % "logback-classic" % "1.2.9" % allTestConfig
+    val logback = "ch.qos.logback" % "logback-classic" % "1.2.11" % allTestConfig
 
     val cassandraContainer =
       "org.testcontainers" % "cassandra" % Versions.testContainers % allTestConfig
@@ -87,7 +87,7 @@ object Dependencies {
   }
 
   object Examples {
-    val hibernate = "org.hibernate" % "hibernate-core" % "5.4.33"
+    val hibernate = "org.hibernate" % "hibernate-core" % "5.6.11.Final"
 
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka

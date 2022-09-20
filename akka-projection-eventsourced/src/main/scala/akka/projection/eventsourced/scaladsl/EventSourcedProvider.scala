@@ -32,10 +32,15 @@ object EventSourcedProvider {
       system: ActorSystem[_],
       readJournalPluginId: String,
       tag: String): SourceProvider[Offset, EventEnvelope[Event]] = {
-
     val eventsByTagQuery =
       PersistenceQuery(system).readJournalFor[EventsByTagQuery](readJournalPluginId)
+    eventsByTag(system, eventsByTagQuery, tag)
+  }
 
+  def eventsByTag[Event](
+      system: ActorSystem[_],
+      eventsByTagQuery: EventsByTagQuery,
+      tag: String): SourceProvider[Offset, EventEnvelope[Event]] = {
     new EventsByTagSourceProvider(eventsByTagQuery, tag, system)
   }
 
@@ -67,7 +72,15 @@ object EventSourcedProvider {
       maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     val eventsBySlicesQuery =
       PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId)
+    eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice)
+  }
 
+  def eventsBySlices[Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceQuery,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
   }
 
