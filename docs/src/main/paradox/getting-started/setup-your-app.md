@@ -55,7 +55,7 @@ Java
 :  @@snip [ShoppingCartTags.java](/examples/src/test/java/jdocs/guide/ShoppingCartTags.java) { #guideTags }
 
 Create the `ShoppingCartApp` with an `akka.actor.typed.ActorSystem` (API: @apidoc[akka.actor.typed.ActorSystem]) for Projections to use.
-Create an empty [Guardian Actor](https://doc.akka.io/docs/akka/2.6/typed/actor-lifecycle.html#the-guardian-actor) (the root Actor of the `ActorSystem`).
+Create an empty [Guardian Actor](https://doc.akka.io/docs/akka/current/typed/actor-lifecycle.html#the-guardian-actor) (the root Actor of the `ActorSystem`).
 We will populate this Actor in the following steps of the guide.
 Note that we are using the @scala[`docs.scaladsl`]@java[`jdocs.scaladsl`] package.
 You may use any package, but we include this package in snippets throughout the guide.
