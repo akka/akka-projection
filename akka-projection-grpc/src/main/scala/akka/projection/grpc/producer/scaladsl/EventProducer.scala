@@ -21,6 +21,21 @@ import akka.projection.grpc.producer.EventProducerSettings
  */
 object EventProducer {
 
+  /**
+   * @param entityType The internal entity type name
+   * @param streamId The public, logical, stream id that consumers use to consume this source
+   * @param transformation Transformations for turning the internal events to public message types
+   * @param settings The event producer settings used (can be shared for multiple sources)
+   */
+  final case class EventProducerSource(
+      entityType: String,
+      streamId: String,
+      transformation: Transformation,
+      settings: EventProducerSettings) {
+    require(entityType.nonEmpty, "Stream id must not be empty")
+    require(streamId.nonEmpty, "Stream id must not be empty")
+  }
+
   object Transformation {
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
@@ -70,33 +85,56 @@ object EventProducer {
   /**
    * The gRPC route that can be included in an Akka HTTP server.
    */
-  def grpcServiceHandler(transformation: Transformation)(
+  def grpcServiceHandler(source: EventProducerSource)(
       implicit system: ActorSystem[_])
-      : PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
-    grpcServiceHandler(transformation, EventProducerSettings(system))
-  }
+      : PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] =
+    grpcServiceHandler(Set(source))
 
   /**
    * The gRPC route that can be included in an Akka HTTP server.
    */
-  def grpcServiceHandler(
-      transformation: Transformation,
-      settings: EventProducerSettings)(implicit system: ActorSystem[_])
+  def grpcServiceHandler(sources: Set[EventProducerSource])(
+      implicit system: ActorSystem[_])
       : PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
-    require(
-      settings.queryPluginId.nonEmpty,
-      s"Configuration property [akka.projection.grpc.producer.query-plugin-id] must be defined.")
-    val eventsBySlicesQuery =
-      PersistenceQuery(system)
-        .readJournalFor[EventsBySliceQuery](settings.queryPluginId)
+
+    val eventsBySlicesQueriesPerStreamId =
+      eventsBySlicesQueriesForStreamIds(sources, system)
 
     val eventProducerService =
       new EventProducerServiceImpl(
         system,
-        eventsBySlicesQuery,
-        transformation,
-        settings)
+        eventsBySlicesQueriesPerStreamId,
+        sources)
 
     EventProducerServiceHandler.partial(eventProducerService)
   }
+
+  /**
+   * INTERNAL API
+   */
+  private[akka] def eventsBySlicesQueriesForStreamIds(
+      sources: Set[EventProducerSource],
+      system: ActorSystem[_]): Map[String, EventsBySliceQuery] = {
+    val streamIds = sources.map(_.streamId)
+    require(
+      streamIds.size == sources.size,
+      s"EventProducerSource set contains duplicate stream id, each stream id must be unique, all stream ids: [${streamIds
+        .mkString(", ")}]")
+
+    val queryPluginsIds = sources.groupBy { eps =>
+      require(
+        eps.settings.queryPluginId.nonEmpty,
+        s"Configuration property [akka.projection.grpc.producer.query-plugin-id] must be defined for stream id [${eps.streamId}].")
+      eps.settings.queryPluginId
+    }
+
+    queryPluginsIds.flatMap { case (queryPluginId, sourcesUsingIt) =>
+      val eventsBySlicesQuery =
+        PersistenceQuery(system)
+          .readJournalFor[EventsBySliceQuery](queryPluginId)
+
+      sourcesUsingIt.map(eps => eps.streamId -> eventsBySlicesQuery)
+    }
+  }
+
 }

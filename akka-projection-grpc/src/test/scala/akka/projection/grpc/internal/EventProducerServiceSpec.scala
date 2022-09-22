@@ -6,11 +6,9 @@ package akka.projection.grpc.internal
 
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
-
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.Promise
-
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -27,6 +25,7 @@ import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.EventProducerSettings
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
@@ -35,6 +34,7 @@ import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.testkit.scaladsl.TestSource
 import akka.testkit.SocketUtil
+import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object EventProducerServiceSpec {
@@ -86,7 +86,7 @@ object EventProducerServiceSpec {
 }
 
 class EventProducerServiceSpec
-    extends ScalaTestWithActorTestKit
+    extends ScalaTestWithActorTestKit(ConfigFactory.load())
     with AnyWordSpecLike
     with TestData
     with LogCapturing {
@@ -94,7 +94,8 @@ class EventProducerServiceSpec
 
   private implicit val sys = system.classicSystem
 
-  private val eventsBySlicesQuery = new TestEventsBySliceQuery
+  private val eventsBySlicesQuery1 = new TestEventsBySliceQuery
+  private val eventsBySlicesQuery2 = new TestEventsBySliceQuery
   private val transformation =
     Transformation.empty.registerAsyncMapper((event: String) => {
       if (event.contains("*"))
@@ -103,12 +104,17 @@ class EventProducerServiceSpec
         Future.successful(Some(event.toUpperCase))
     })
   private val settings = EventProducerSettings(system)
+  val entityType1 = nextEntityType()
+  val streamId1 = "stream_id_" + entityType1
+  val entityType2 = nextEntityType()
+  val streamId2 = "stream_id_" + entityType2
+  private val eventProducerSources = Set(
+    EventProducerSource(entityType1, streamId1, transformation, settings),
+    EventProducerSource(entityType2, streamId2, transformation, settings))
+  val queries =
+    Map(streamId1 -> eventsBySlicesQuery1, streamId2 -> eventsBySlicesQuery2)
   private val eventProducerService =
-    new EventProducerServiceImpl(
-      system,
-      eventsBySlicesQuery,
-      transformation,
-      settings)
+    new EventProducerServiceImpl(system, queries, eventProducerSources)
 
   private def runEventsBySlices(streamIn: Source[StreamIn, NotUsed]) = {
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
@@ -125,6 +131,7 @@ class EventProducerServiceSpec
   }
 
   private def createEnvelope(
+      streamId: String,
       pid: PersistenceId,
       seqNr: Long,
       evt: String): EventEnvelope[String] = {
@@ -136,13 +143,12 @@ class EventProducerServiceSpec
       evt,
       now.toEpochMilli,
       pid.entityTypeHint,
-      eventsBySlicesQuery.sliceForPersistenceId(pid.id))
+      queries(streamId).sliceForPersistenceId(pid.id))
   }
 
   "EventProducerService" must {
     "emit events" in {
-      val entityType = nextEntityType()
-      val initReq = InitReq(entityType, 0, 1023, offset = None)
+      val initReq = InitReq(streamId1, 0, 1023, offset = None)
       val streamIn = Source
         .single(StreamIn(StreamIn.Message.Init(initReq)))
         .concat(Source.maybe)
@@ -151,11 +157,11 @@ class EventProducerServiceSpec
 
       probe.request(100)
       val testPublisher =
-        eventsBySlicesQuery.testPublisher(entityType).futureValue
+        eventsBySlicesQuery1.testPublisher(entityType1).futureValue
 
-      val env1 = createEnvelope(nextPid(entityType), 1L, "e-1")
+      val env1 = createEnvelope(streamId1, nextPid(entityType1), 1L, "e-1")
       testPublisher.sendNext(env1)
-      val env2 = createEnvelope(nextPid(entityType), 2L, "e-2")
+      val env2 = createEnvelope(streamId1, nextPid(entityType1), 2L, "e-2")
       testPublisher.sendNext(env2)
 
       val out1 = probe.expectNext()
@@ -168,8 +174,7 @@ class EventProducerServiceSpec
     }
 
     "emit filtered events" in {
-      val entityType = nextEntityType()
-      val initReq = InitReq(entityType, 0, 1023, offset = None)
+      val initReq = InitReq(streamId2, 0, 1023, offset = None)
       val streamIn = Source
         .single(StreamIn(StreamIn.Message.Init(initReq)))
         .concat(Source.maybe)
@@ -178,18 +183,15 @@ class EventProducerServiceSpec
 
       probe.request(100)
       val testPublisher =
-        eventsBySlicesQuery.testPublisher(entityType).futureValue
+        eventsBySlicesQuery2.testPublisher(entityType2).futureValue
 
-      val pid = nextPid(entityType)
-      val env1 = createEnvelope(pid, 1L, "e-1")
+      val pid = nextPid(entityType2)
+      val env1 = createEnvelope(streamId2, pid, 1L, "e-1")
       testPublisher.sendNext(env1)
-      val env2 = createEnvelope(
-        pid,
-        2L,
-        "e-2*"
-      ) // will be filtered by the transformation
+      // will be filtered by the transformation
+      val env2 = createEnvelope(streamId2, pid, 2L, "e-2*")
       testPublisher.sendNext(env2)
-      val env3 = createEnvelope(pid, 2L, "e-2")
+      val env3 = createEnvelope(streamId2, pid, 2L, "e-2")
       testPublisher.sendNext(env3)
 
       val out1 = probe.expectNext()

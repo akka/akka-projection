@@ -6,11 +6,10 @@ package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.concurrent.Future
-
 import akka.NotUsed
+import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.adapter._
 import akka.grpc.GrpcClientSettings
@@ -25,6 +24,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.consumer.GrpcQuerySettings
+import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.Event
@@ -40,6 +40,8 @@ import akka.projection.grpc.internal.proto.StreamOut
 import akka.stream.scaladsl.Source
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -48,33 +50,71 @@ object GrpcReadJournal {
 
   private val log: Logger =
     LoggerFactory.getLogger(classOf[GrpcReadJournal])
+
+  /**
+   * Construct a gRPC read journal for the given stream-id and explicit `GrpcClientSettings` to control
+   * how to reach the Akka Projection gRPC producer service (host, port etc).
+   */
+  def apply(
+      system: ClassicActorSystemProvider,
+      streamId: String,
+      clientSettings: GrpcClientSettings): GrpcReadJournal = {
+    val extended = system.classicSystem.asInstanceOf[ExtendedActorSystem]
+
+    val configPath = GrpcReadJournal.Identifier
+    val config = ConfigFactory
+      .parseString(s"""akka.projection.grpc.consumer.stream-id=$streamId""")
+      .withFallback(extended.settings.config)
+      .getConfig(configPath)
+
+    val settings = GrpcQuerySettings(config)
+
+    val clientSettingsWithOverrides =
+      // compose with potential user overrides to allow overriding our defaults
+      clientSettings.withChannelBuilderOverrides(
+        channelBuilderOverrides.andThen(clientSettings.channelBuilderOverrides))
+
+    new scaladsl.GrpcReadJournal(
+      extended,
+      settings,
+      clientSettingsWithOverrides)
+  }
+
+  private def channelBuilderOverrides
+      : NettyChannelBuilder => NettyChannelBuilder =
+    _.keepAliveWithoutCalls(true)
+      .keepAliveTime(10, TimeUnit.SECONDS)
+      .keepAliveTimeout(5, TimeUnit.SECONDS)
+
 }
 
-final class GrpcReadJournal(
+final class GrpcReadJournal private (
     system: ExtendedActorSystem,
-    config: Config,
-    cfgPath: String)
+    settings: GrpcQuerySettings,
+    clientSettings: GrpcClientSettings)
     extends ReadJournal
     with EventsBySliceQuery
     with EventTimestampQuery
     with LoadEventQuery {
   import GrpcReadJournal.log
 
-  private val settings = GrpcQuerySettings(
-    system.settings.config.getConfig(cfgPath))
+  private def this(system: ExtendedActorSystem, settings: GrpcQuerySettings) =
+    this(
+      system,
+      settings,
+      GrpcClientSettings
+        .fromConfig(settings.grpcClientConfig)(system)
+        .withChannelBuilderOverrides(GrpcReadJournal.channelBuilderOverrides))
+
+  // entry point when created through Akka Persistence
+  def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
+    this(system, GrpcQuerySettings(config))
 
   private implicit val typedSystem = system.toTyped
   private val persistenceExt = Persistence(system)
   private val protoAnySerialization =
     new ProtoAnySerialization(system.toTyped, settings.protoClassMapping)
 
-  private val clientSettings =
-    GrpcClientSettings
-      .fromConfig(settings.grpcClientConfig)
-      .withChannelBuilderOverrides(
-        _.keepAliveWithoutCalls(true)
-          .keepAliveTime(10, TimeUnit.SECONDS)
-          .keepAliveTimeout(5, TimeUnit.SECONDS))
   private val client = EventProducerServiceClient(clientSettings)
 
   override def sliceForPersistenceId(persistenceId: String): Int =
@@ -111,15 +151,19 @@ final class GrpcReadJournal(
    * events when new events are persisted.
    */
   override def eventsBySlices[Evt](
-      entityType: String,
+      // note that this is actually the producer side defined stream_id
+      // not the normal entity type which is internal to the producing side
+      streamId: String,
       minSlice: Int,
       maxSlice: Int,
       offset: Offset): Source[EventEnvelope[Evt], NotUsed] = {
-
+    require(
+      streamId == settings.streamId,
+      s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
     log.debug(
       "Starting eventsBySlices stream from [{}] [{}], slices [{} - {}], offset [{}]",
       clientSettings.serviceName,
-      entityType,
+      streamId,
       minSlice,
       maxSlice,
       offset match {
@@ -142,11 +186,17 @@ final class GrpcReadJournal(
             s"Expected TimestampOffset or NoOffset, but got [$offset]")
       }
 
-    val initReq = InitReq(entityType, minSlice, maxSlice, protoOffset)
+    val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset)
     val streamIn = Source
       .single(StreamIn(StreamIn.Message.Init(initReq)))
       .concat(Source.maybe)
-    val streamOut = client.eventsBySlices(streamIn)
+    val streamOut =
+      client.eventsBySlices(streamIn).recover { case th: Throwable =>
+        throw new RuntimeException(
+          s"Failure to consume gRPC event stream for [${streamId}]",
+          th)
+      }
+
     streamOut.map {
       case StreamOut(StreamOut.Message.Event(event), _) =>
         if (log.isTraceEnabled)
@@ -158,7 +208,7 @@ final class GrpcReadJournal(
             event.seqNr,
             timestampOffset(event.offset.get).timestamp)
 
-        eventToEnvelope(event, entityType)
+        eventToEnvelope(event, streamId)
 
       case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
         if (log.isTraceEnabled)
@@ -169,7 +219,7 @@ final class GrpcReadJournal(
             filteredEvent.seqNr,
             timestampOffset(filteredEvent.offset.get).timestamp)
 
-        filteredEventToEnvelope(filteredEvent, entityType)
+        filteredEventToEnvelope(filteredEvent, streamId)
 
       case other =>
         throw new IllegalArgumentException(
@@ -179,7 +229,12 @@ final class GrpcReadJournal(
 
   private def eventToEnvelope[Evt](
       event: Event,
-      entityType: String): EventEnvelope[Evt] = {
+      // note that this is actually the producer side defined stream_id
+      // not the normal entity type which is internal to the producing side
+      streamId: String): EventEnvelope[Evt] = {
+    require(
+      streamId == settings.streamId,
+      s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
     val eventOffset = timestampOffset(event.offset.get)
     val evt =
       event.payload.map(protoAnySerialization.decode(_).asInstanceOf[Evt])
@@ -191,7 +246,7 @@ final class GrpcReadJournal(
       evt,
       eventOffset.timestamp.toEpochMilli,
       eventMetadata = None,
-      entityType,
+      PersistenceId.extractEntityType(event.persistenceId),
       event.slice)
   }
 
@@ -229,7 +284,8 @@ final class GrpcReadJournal(
       sequenceNr: Long): Future[Option[Instant]] = {
     import system.dispatcher
     client
-      .eventTimestamp(EventTimestampRequest(persistenceId, sequenceNr))
+      .eventTimestamp(
+        EventTimestampRequest(settings.streamId, persistenceId, sequenceNr))
       .map(_.timestamp.map(_.asJavaInstant))
   }
 
@@ -243,21 +299,22 @@ final class GrpcReadJournal(
       persistenceId,
       sequenceNr)
     import system.dispatcher
-    val entityType = PersistenceId.extractEntityType(persistenceId)
-    client.loadEvent(LoadEventRequest(persistenceId, sequenceNr)).map {
-      case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
-        eventToEnvelope(event, entityType)
+    client
+      .loadEvent(LoadEventRequest(settings.streamId, persistenceId, sequenceNr))
+      .map {
+        case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
+          eventToEnvelope(event, settings.streamId)
 
-      case LoadEventResponse(
-            LoadEventResponse.Message.FilteredEvent(filteredEvent),
-            _) =>
-        filteredEventToEnvelope(filteredEvent, entityType)
+        case LoadEventResponse(
+              LoadEventResponse.Message.FilteredEvent(filteredEvent),
+              _) =>
+          filteredEventToEnvelope(filteredEvent, settings.streamId)
 
-      case other =>
-        throw new IllegalArgumentException(
-          s"Unexpected LoadEventResponse [${other.message.getClass.getName}]")
+        case other =>
+          throw new IllegalArgumentException(
+            s"Unexpected LoadEventResponse [${other.message.getClass.getName}]")
 
-    }
+      }
   }
 
 }

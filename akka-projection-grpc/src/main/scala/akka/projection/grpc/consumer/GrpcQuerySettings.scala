@@ -13,6 +13,10 @@ object GrpcQuerySettings {
 
 class GrpcQuerySettings(config: Config) {
   val grpcClientConfig: Config = config.getConfig("client")
+  val streamId = config.getString("stream-id")
+  require(
+    streamId != "",
+    "Configuration property [stream-id] must be an id exposed by the streaming side (but was empty).")
 
   val protoClassMapping: Map[String, String] = {
     import scala.jdk.CollectionConverters._

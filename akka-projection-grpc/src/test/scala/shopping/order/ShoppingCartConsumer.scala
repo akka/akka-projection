@@ -5,10 +5,10 @@
 package shopping.order
 
 import scala.concurrent.Future
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
+import akka.grpc.GrpcClientSettings
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionBehavior
@@ -38,6 +38,7 @@ object ShoppingCartConsumer {
     val sliceRanges =
       Persistence(system).sliceRanges(numberOfProjectionInstances)
     val entityType = "ShoppingCart"
+    val streamId = "cart"
 
     ShardedDaemonProcess(system).init(
       projectionName,
@@ -50,8 +51,13 @@ object ShoppingCartConsumer {
         val sourceProvider =
           EventSourcedProvider.eventsBySlices[ItemAdded](
             system,
-            readJournalPluginId = GrpcReadJournal.Identifier,
-            entityType,
+            GrpcReadJournal(
+              system,
+              streamId,
+              GrpcClientSettings.fromConfig(
+                system.settings.config
+                  .getConfig("akka.projection.grpc.consumer.client"))),
+            streamId,
             sliceRange.min,
             sliceRange.max)
 

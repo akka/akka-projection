@@ -9,13 +9,13 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
-
 import akka.actor.typed.ActorSystem
 import akka.grpc.scaladsl.ServerReflection
 import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
+import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import shopping.cart.ShoppingCart.ItemAdded
@@ -31,12 +31,18 @@ object ShoppingCartServer {
     implicit val ec: ExecutionContext =
       system.executionContext
 
-    val transformation =
-      Transformation.empty.registerAsyncMapper((event: ItemAdded) => {
-        Future.successful(
-          Some(proto.ItemAdded(event.cartId, event.itemId, event.quantity)))
-      })
-    val eventProducerService = EventProducer.grpcServiceHandler(transformation)
+    val cartSource = EventProducer.EventProducerSource(
+      entityType = "ShoppingCart",
+      streamId = "cart",
+      transformation =
+        Transformation.empty.registerAsyncMapper((event: ItemAdded) => {
+          Future.successful(
+            Some(proto.ItemAdded(event.cartId, event.itemId, event.quantity)))
+        }),
+      EventProducerSettings(system))
+
+    val eventProducerService =
+      EventProducer.grpcServiceHandler(Set(cartSource))
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(

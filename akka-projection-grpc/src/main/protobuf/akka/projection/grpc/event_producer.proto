@@ -25,8 +25,9 @@ message StreamIn {
 }
 
 message InitReq {
-  // event stream for this entity type
-  string entity_type = 1;
+  // the logical stream identifier, mapped to a specific internal entity type by
+  // the producer settings
+  string stream_id = 1;
   // entities are partitioned by a deterministic slice (0-1023),
   // a consumer would handle a slice range from slice_min to slice_max
   int32 slice_min = 2;
@@ -72,8 +73,9 @@ message FilteredEvent {
 }
 
 message EventTimestampRequest {
-  string persistence_id = 1;
-  int64 seq_nr = 2;
+  string stream_id = 1;
+  string persistence_id = 2;
+  int64 seq_nr = 3;
 }
 
 message EventTimestampResponse {
@@ -81,8 +83,11 @@ message EventTimestampResponse {
 }
 
 message LoadEventRequest {
-  string persistence_id = 1;
-  int64 seq_nr = 2;
+  // the logical stream identifier, mapped to a specific internal entity type by
+  // the producer settings
+  string stream_id = 1;
+  string persistence_id = 2;
+  int64 seq_nr = 3;
 }
 
 message LoadEventResponse {

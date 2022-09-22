@@ -11,8 +11,11 @@ import akka.http.javadsl.ServerBinding;
 import akka.http.javadsl.model.HttpRequest;
 import akka.http.javadsl.model.HttpResponse;
 import akka.japi.function.Function;
+import akka.projection.grpc.producer.EventProducerSettings;
 
+import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -27,7 +30,15 @@ public class ProducerCompileTest {
             .registerMapper(Integer.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
             .registerOrElseMapper(event -> Optional.of(event.toString()));
 
-    Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService = EventProducer.grpcServiceHandler(system, transformation);
+    EventProducerSource source = new EventProducerSource(
+        "ShoppingCart",
+        "cart",
+        transformation,
+        EventProducerSettings.apply(system));
+
+    Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService = EventProducer.grpcServiceHandler(system, source);
+    Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerServiceWithMultiple =
+        EventProducer.grpcServiceHandler(system, Collections.singleton(source));
 
     Function<HttpRequest, CompletionStage<HttpResponse>> service =
         ServiceHandler.concatOrNotFound(eventProducerService);

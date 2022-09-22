@@ -8,12 +8,12 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
+import akka.grpc.GrpcClientSettings
 import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
@@ -22,7 +22,10 @@ import akka.persistence.query.PersistenceQuery
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
+import akka.projection.grpc.consumer.scaladsl.EventTimestampQuerySpec.config
+import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
@@ -39,11 +42,6 @@ object LoadEventQuerySpec {
     .parseString(s"""
     akka.http.server.preview.enable-http2 = on
     akka.projection.grpc {
-      consumer.client {
-        host = "127.0.0.1"
-        port = $grpcPort
-        use-tls = false
-      }
       producer {
         query-plugin-id = "akka.persistence.r2dbc.query"
       }
@@ -62,17 +60,22 @@ class LoadEventQuerySpec
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
+  private val entityType = nextEntityType()
+  private val streamId = "stream_id_" + entityType
 
   class TestFixture {
-    val entityType = nextEntityType()
-    val pid = nextPid(entityType)
 
     val replyProbe = createTestProbe[Done]()
+    val pid = nextPid(entityType)
 
     lazy val entity = spawn(TestEntity(pid))
 
-    lazy val grpcReadJournal = PersistenceQuery(system)
-      .readJournalFor[GrpcReadJournal](GrpcReadJournal.Identifier)
+    lazy val grpcReadJournal = GrpcReadJournal(
+      system,
+      streamId,
+      GrpcClientSettings
+        .connectToServiceAt("127.0.0.1", grpcPort)
+        .withTls(false))
   }
 
   override protected def beforeAll(): Unit = {
@@ -86,7 +89,14 @@ class LoadEventQuerySpec
           Future.successful(Some(event.toUpperCase))
       })
 
-    val eventProducerService = EventProducer.grpcServiceHandler(transformation)
+    val eventProducerSource = EventProducerSource(
+      entityType,
+      streamId,
+      transformation,
+      EventProducerSettings(system))
+
+    val eventProducerService =
+      EventProducer.grpcServiceHandler(eventProducerSource)
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(eventProducerService)

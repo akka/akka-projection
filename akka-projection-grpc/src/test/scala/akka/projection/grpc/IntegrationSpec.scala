@@ -7,23 +7,27 @@ package akka.projection.grpc
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
 import akka.Done
+import akka.actor.ExtendedActorSystem
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.grpc.GrpcClientSettings
 import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.typed.PersistenceId
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
+import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
@@ -50,11 +54,6 @@ object IntegrationSpec {
       }
     }
     akka.projection.grpc {
-      consumer.client {
-        host = "127.0.0.1"
-        port = $grpcPort
-        use-tls = false
-      }
       producer {
         query-plugin-id = "akka.persistence.r2dbc.query"
       }
@@ -102,10 +101,25 @@ class IntegrationSpec
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
+  private val numberOfTests = 4
+
+  // needs to be unique per test case and known up front for setting up the producer
+  case class TestSource(
+      entityType: String,
+      streamId: String,
+      pid: PersistenceId)
+  private val testSources = (1 to numberOfTests).map { n =>
+    val entityType = nextEntityType()
+    val streamId = s"stream_id_$n"
+    val pid = nextPid(entityType) // consuming side pid still has entity type
+    TestSource(entityType, streamId, pid)
+  }
+  private val testSourceIterator = testSources.iterator
 
   class TestFixture {
-    val entityType = nextEntityType()
-    val pid = nextPid(entityType)
+    val testSource = testSourceIterator.next()
+    def streamId = testSource.streamId
+    def pid = testSource.pid
     val sliceRange = 0 to 1023
     val projectionId = randomProjectionId()
 
@@ -117,8 +131,15 @@ class IntegrationSpec
     private def sourceProvider =
       EventSourcedProvider.eventsBySlices[String](
         system,
-        readJournalPluginId = GrpcReadJournal.Identifier,
-        entityType,
+        GrpcReadJournal(
+          system,
+          streamId,
+          GrpcClientSettings
+            .connectToServiceAt("127.0.0.1", grpcPort)
+            .withTls(false)),
+        // FIXME: error prone that it needs to be passed both to GrpcReadJournal and here?
+        // but on the consuming side we don't know about the producing side entity types
+        streamId,
         sliceRange.min,
         sliceRange.max)
 
@@ -154,7 +175,17 @@ class IntegrationSpec
           Future.successful(Some(event.toUpperCase))
       })
 
-    val eventProducerService = EventProducer.grpcServiceHandler(transformation)
+    val eventProducerSources = testSources
+      .map(source =>
+        EventProducerSource(
+          source.entityType,
+          source.streamId,
+          transformation,
+          EventProducerSettings(system)))
+      .toSet
+
+    val eventProducerService =
+      EventProducer.grpcServiceHandler(eventProducerSources)
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(eventProducerService)
@@ -196,6 +227,8 @@ class IntegrationSpec
 
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
+      processedProbe.expectTerminated(projection)
+      processedProbe.expectTerminated(entity)
     }
 
     "filter out events" in new TestFixture {
@@ -222,6 +255,9 @@ class IntegrationSpec
 
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
+
+      processedProbe.expectTerminated(projection)
+      processedProbe.expectTerminated(entity)
     }
 
     "resume from offset" in new TestFixture {
@@ -248,6 +284,9 @@ class IntegrationSpec
       processedProbe.expectNoMessage()
       projection2 ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
+
+      processedProbe.expectTerminated(projection2)
+      processedProbe.expectTerminated(entity)
     }
 
     "deduplicate backtracking events" in new TestFixture {
@@ -277,6 +316,9 @@ class IntegrationSpec
       processedProbe.expectNoMessage()
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
+
+      processedProbe.expectTerminated(projection)
+      processedProbe.expectTerminated(entity)
     }
   }
 
