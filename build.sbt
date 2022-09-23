@@ -107,6 +107,9 @@ lazy val grpc =
     .dependsOn(eventsourced)
     .dependsOn(testkit % Test)
     .enablePlugins(AkkaGrpcPlugin)
+    .settings(
+      // no previous artifact so must disable MiMa until this is released at least once.
+      mimaPreviousArtifacts := Set.empty)
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
