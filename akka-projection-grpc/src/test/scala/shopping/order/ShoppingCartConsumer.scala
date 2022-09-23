@@ -42,8 +42,7 @@ object ShoppingCartConsumer {
 
     ShardedDaemonProcess(system).init(
       projectionName,
-      numberOfProjectionInstances,
-      { idx =>
+      numberOfProjectionInstances, { idx =>
         val sliceRange = sliceRanges(idx)
         val projectionKey = s"$entityType-${sliceRange.min}-${sliceRange.max}"
         val projectionId = ProjectionId(projectionName, projectionKey)

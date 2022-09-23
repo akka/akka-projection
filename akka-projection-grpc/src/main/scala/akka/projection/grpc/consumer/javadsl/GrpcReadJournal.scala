@@ -44,26 +44,20 @@ class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
   override def sliceForPersistenceId(persistenceId: String): Int =
     delegate.sliceForPersistenceId(persistenceId)
 
-  override def sliceRanges(
-      numberOfRanges: Int): util.List[Pair[Integer, Integer]] = {
+  override def sliceRanges(numberOfRanges: Int): util.List[Pair[Integer, Integer]] = {
     import akka.util.ccompat.JavaConverters._
     delegate
       .sliceRanges(numberOfRanges)
-      .map(range =>
-        Pair(Integer.valueOf(range.min), Integer.valueOf(range.max)))
+      .map(range => Pair(Integer.valueOf(range.min), Integer.valueOf(range.max)))
       .asJava
   }
 
-  override def timestampOf(
-      persistenceId: String,
-      sequenceNr: Long): CompletionStage[Optional[Instant]] =
+  override def timestampOf(persistenceId: String, sequenceNr: Long): CompletionStage[Optional[Instant]] =
     delegate
       .timestampOf(persistenceId, sequenceNr)
       .map(_.asJava)(ExecutionContexts.parasitic)
       .toJava
 
-  override def loadEnvelope[Event](
-      persistenceId: String,
-      sequenceNr: Long): CompletionStage[EventEnvelope[Event]] =
+  override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): CompletionStage[EventEnvelope[Event]] =
     delegate.loadEnvelope[Event](persistenceId, sequenceNr).toJava
 }

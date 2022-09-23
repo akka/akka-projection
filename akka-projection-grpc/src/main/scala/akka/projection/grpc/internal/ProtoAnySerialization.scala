@@ -31,21 +31,18 @@ import scalapb.GeneratedMessageCompanion
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class ProtoAnySerialization(
-    system: ActorSystem[_],
-    protoClassMapping: Map[String, String]) {
+@InternalApi private[akka] class ProtoAnySerialization(system: ActorSystem[_], protoClassMapping: Map[String, String]) {
   import ProtoAnySerialization._
 
   private val serialization = SerializationExtension(system.classicSystem)
 
-  private val scalaPbCompanions
-      : Map[String, GeneratedMessageCompanion[scalapb.GeneratedMessage]] = {
-    protoClassMapping.flatMap { case (protoName, className) =>
-      system.dynamicAccess
-        .getObjectFor[GeneratedMessageCompanion[scalapb.GeneratedMessage]](
-          className)
-        .toOption
-        .map(companion => protoName -> companion)
+  private val scalaPbCompanions: Map[String, GeneratedMessageCompanion[scalapb.GeneratedMessage]] = {
+    protoClassMapping.flatMap {
+      case (protoName, className) =>
+        system.dynamicAccess
+          .getObjectFor[GeneratedMessageCompanion[scalapb.GeneratedMessage]](className)
+          .toOption
+          .map(companion => protoName -> companion)
     }
   }
 
@@ -64,13 +61,9 @@ import scalapb.GeneratedMessageCompanion
       case scalaPbAny: ScalaPbAny => scalaPbAny
       case pbAny: PbAny           => ScalaPbAny.fromJavaProto(pbAny)
       case msg: scalapb.GeneratedMessage =>
-        ScalaPbAny(
-          GoogleTypeUrlPrefix + msg.companion.scalaDescriptor.fullName,
-          msg.toByteString)
+        ScalaPbAny(GoogleTypeUrlPrefix + msg.companion.scalaDescriptor.fullName, msg.toByteString)
       case msg: GeneratedMessageV3 =>
-        ScalaPbAny(
-          GoogleTypeUrlPrefix + msg.getDescriptorForType.getFullName,
-          msg.toByteString)
+        ScalaPbAny(GoogleTypeUrlPrefix + msg.getDescriptorForType.getFullName, msg.toByteString)
       case other =>
         val otherAnyRef = other.asInstanceOf[AnyRef]
         val bytes = serialization.serialize(otherAnyRef).get

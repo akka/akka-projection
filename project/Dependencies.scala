@@ -14,8 +14,10 @@ object Dependencies {
   val AlpakkaKafkaVersionInDocs = "2.0"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.6.18")
+    val akka = sys.props.getOrElse("build.akka.version", "2.6.20")
+    val akkaHttp = "10.2.10"
     val akkaPersistenceJdbc = "5.0.2"
+    val akkaPersistenceR2dbc = "0.7.7"
     val alpakka = "2.0.2"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.7")
     val slick = "3.3.3"
@@ -29,6 +31,8 @@ object Dependencies {
   object Compile {
     val akkaActorTyped = "com.typesafe.akka" %% "akka-actor-typed" % Versions.akka
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
+    val akkaPersistence = "com.typesafe.akka" %% "akka-persistence" % Versions.akka
+    val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaProtobufV3 = "com.typesafe.akka" %% "akka-protobuf-v3" % Versions.akka
     val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
 
@@ -56,7 +60,13 @@ object Dependencies {
 
     val akkaTypedTestkit = Compile.akkaTypedTestkit % allTestConfig
     val akkaStreamTestkit = Compile.akkaStreamTestkit % allTestConfig
+    val akkaShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % allTestConfig
+    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka % allTestConfig
     val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % "test"
+
+    // FIXME remove semi-circular depenendency
+    val akkaProjectionR2dbc =
+      "com.lightbend.akka" %% "akka-projection-r2dbc" % Versions.akkaPersistenceR2dbc % allTestConfig
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % allTestConfig
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % allTestConfig
@@ -185,6 +195,30 @@ object Dependencies {
         Test.alpakkaKafkaTestkit,
         Test.logback,
         Test.scalatestJUnit)
+
+  val grpc = deps ++= Seq(
+        Compile.akkaActorTyped,
+        Compile.akkaStream,
+        Compile.akkaPersistenceTyped,
+        Compile.akkaPersistenceQuery,
+        Test.akkaProjectionR2dbc,
+        Test.postgresDriver,
+        Test.akkaShardingTyped,
+        Test.akkaStreamTestkit,
+        Test.akkaSerializationJackson,
+        Test.akkaTypedTestkit,
+        Test.logback,
+        Test.scalatest,
+        // akka-management dependencies for the Scala sample. Can be removed when that sample is
+        // removed or moved to a standalone sample as the Java samples.
+        "com.lightbend.akka.management" %% "akka-management" % "1.1.2" % "test",
+        "com.lightbend.akka.management" %% "akka-management-cluster-http" % "1.1.2" % "test",
+        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % "1.1.2" % "test",
+        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % "1.1.2" % "test",
+        "com.typesafe.akka" %% "akka-discovery" % Versions.akka % "test",
+        "com.typesafe.akka" %% "akka-http" % Versions.akkaHttp % "test",
+        "com.typesafe.akka" %% "akka-http-spray-json" % Versions.akkaHttp % "test",
+        "com.typesafe.akka" %% "akka-http2-support" % Versions.akkaHttp % "test")
 
   val examples =
     deps ++= Seq(

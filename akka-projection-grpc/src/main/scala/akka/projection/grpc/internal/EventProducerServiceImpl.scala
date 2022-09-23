@@ -29,7 +29,6 @@ import akka.projection.grpc.internal.proto.Offset
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
-import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.stream.scaladsl.Flow
@@ -39,6 +38,8 @@ import com.google.protobuf.timestamp.Timestamp
 import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.annotation.nowarn
 
 /**
  * INTERNAL API
@@ -62,9 +63,7 @@ import org.slf4j.LoggerFactory
     sources.nonEmpty,
     "Empty set of EventProducerSource passed to EventProducerService, must contain at least one")
   sources.foreach { s =>
-    require(
-      s.streamId.nonEmpty,
-      s"EventProducerSource for [${s.entityType}] contains empty stream id, not allowed")
+    require(s.streamId.nonEmpty, s"EventProducerSource for [${s.entityType}] contains empty stream id, not allowed")
     require(
       eventsBySlicesQueriesPerStreamId.contains(s.streamId),
       s"No events by slices query defined for stream id [${s.streamId}]")
@@ -73,8 +72,7 @@ import org.slf4j.LoggerFactory
   private val protoAnySerialization =
     new ProtoAnySerialization(system, protoClassMapping = Map.empty)
 
-  private val streamIdToSourceMap
-      : Map[String, EventProducer.EventProducerSource] =
+  private val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
     sources.map(s => s.streamId -> s).toMap
 
   log.info(
@@ -83,16 +81,13 @@ import org.slf4j.LoggerFactory
       .map(s => s"(stream id: [${s.streamId}], entity type: [${s.entityType}])")
       .mkString(", "))
 
-  private def eventProducerSourceFor(
-      streamId: String): EventProducer.EventProducerSource =
+  private def eventProducerSourceFor(streamId: String): EventProducer.EventProducerSource =
     streamIdToSourceMap.getOrElse(
       streamId,
       throw new GrpcServiceException(
-        Status.NOT_FOUND.withDescription(
-          s"Stream id [${streamId}] is not available for consumption")))
+        Status.NOT_FOUND.withDescription(s"Stream id [${streamId}] is not available for consumption")))
 
-  override def eventsBySlices(
-      in: Source[StreamIn, NotUsed]): Source[StreamOut, NotUsed] = {
+  override def eventsBySlices(in: Source[StreamIn, NotUsed]): Source[StreamOut, NotUsed] = {
     in.prefixAndTail(1).flatMapConcat {
       case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
         tail.via(runEventsBySlices(init, tail))
@@ -106,15 +101,14 @@ import org.slf4j.LoggerFactory
           s"but received [${other.getClass.getName}]")
       case (seq, _) =>
         // silence warning: match may not be exhaustive
-        throw new IllegalStateException(
-          s"Unexpected Seq prefix with [${seq.size}] elements.")
+        throw new IllegalStateException(s"Unexpected Seq prefix with [${seq.size}] elements.")
     }
   }
 
+  @nowarn("msg=never used")
   private def runEventsBySlices(
       init: InitReq,
-      nextReq: Source[StreamIn, NotUsed])
-      : Flow[StreamIn, StreamOut, NotUsed] = {
+      nextReq: Source[StreamIn, NotUsed]): Flow[StreamIn, StreamOut, NotUsed] = {
     val producerSource = eventProducerSourceFor(init.streamId)
 
     val offset = init.offset match {
@@ -122,8 +116,9 @@ import org.slf4j.LoggerFactory
       case Some(o) =>
         val timestamp =
           o.timestamp.map(_.asJavaInstant).getOrElse(Instant.EPOCH)
-        val seen = o.seen.map { case PersistenceIdSeqNr(pid, seqNr, _) =>
-          pid -> seqNr
+        val seen = o.seen.map {
+          case PersistenceIdSeqNr(pid, seqNr, _) =>
+            pid -> seqNr
         }.toMap
         TimestampOffset(timestamp, seen)
     }
@@ -140,39 +135,31 @@ import org.slf4j.LoggerFactory
       })
 
     val events: Source[EventEnvelope[Any], NotUsed] =
-      eventsBySlicesQueriesPerStreamId(init.streamId).eventsBySlices[Any](
-        producerSource.entityType,
-        init.sliceMin,
-        init.sliceMax,
-        offset)
+      eventsBySlicesQueriesPerStreamId(init.streamId)
+        .eventsBySlices[Any](producerSource.entityType, init.sliceMin, init.sliceMax, offset)
 
     val eventsStreamOut: Source[StreamOut, NotUsed] =
-      events.mapAsync(producerSource.settings.transformationParallelism) {
-        env =>
-          import system.executionContext
-          transformAndEncodeEvent(producerSource.transformation, env).map {
-            case Some(event) =>
-              log.trace(
-                "Emitting {}event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                if (event.payload.isEmpty) "backtracking " else "",
-                env.persistenceId,
-                env.sequenceNr,
-                env.offset)
-              StreamOut(StreamOut.Message.Event(event))
-            case None =>
-              log.trace(
-                "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                env.persistenceId,
-                env.sequenceNr,
-                env.offset)
-              StreamOut(
-                StreamOut.Message.FilteredEvent(
-                  FilteredEvent(
-                    env.persistenceId,
-                    env.sequenceNr,
-                    env.slice,
-                    Some(protoOffset(env)))))
-          }
+      events.mapAsync(producerSource.settings.transformationParallelism) { env =>
+        import system.executionContext
+        transformAndEncodeEvent(producerSource.transformation, env).map {
+          case Some(event) =>
+            log.trace(
+              "Emitting {}event from persistenceId [{}] with seqNr [{}], offset [{}]",
+              if (event.payload.isEmpty) "backtracking " else "",
+              env.persistenceId,
+              env.sequenceNr,
+              env.offset)
+            StreamOut(StreamOut.Message.Event(event))
+          case None =>
+            log.trace(
+              "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}]",
+              env.persistenceId,
+              env.sequenceNr,
+              env.offset)
+            StreamOut(
+              StreamOut.Message.FilteredEvent(
+                FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))
+        }
       }
 
     // FIXME nextReq not handled yet
@@ -183,8 +170,9 @@ import org.slf4j.LoggerFactory
     env.offset match {
       case TimestampOffset(timestamp, _, seen) =>
         val protoTimestamp = Timestamp(timestamp)
-        val protoSeen = seen.iterator.map { case (pid, seqNr) =>
-          PersistenceIdSeqNr(pid, seqNr)
+        val protoSeen = seen.iterator.map {
+          case (pid, seqNr) =>
+            PersistenceIdSeqNr(pid, seqNr)
         }.toSeq
         Offset(Some(protoTimestamp), protoSeen)
       case other =>
@@ -192,9 +180,7 @@ import org.slf4j.LoggerFactory
     }
   }
 
-  private def transformAndEncodeEvent(
-      transformation: Transformation,
-      env: EventEnvelope[_]): Future[Option[Event]] = {
+  private def transformAndEncodeEvent(transformation: Transformation, env: EventEnvelope[_]): Future[Option[Event]] = {
     env.eventOption match {
       case Some(event) =>
         import system.executionContext
@@ -204,12 +190,7 @@ import org.slf4j.LoggerFactory
         f(event).map {
           _.map { transformedEvent =>
             val protoEvent = protoAnySerialization.encode(transformedEvent)
-            Event(
-              env.persistenceId,
-              env.sequenceNr,
-              env.slice,
-              Some(protoOffset(env)),
-              Some(protoEvent))
+            Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), Some(protoEvent))
           }
         }
 
@@ -217,23 +198,17 @@ import org.slf4j.LoggerFactory
         // Events from backtracking are lazily loaded via `loadEvent` if needed.
         // Transformation and filter is done via `loadEvent` in that case.
         Future.successful(
-          Some(
-            Event(
-              env.persistenceId,
-              env.sequenceNr,
-              env.slice,
-              Some(protoOffset(env)),
-              payload = None)))
+          Some(Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), payload = None)))
     }
   }
 
-  override def eventTimestamp(
-      req: EventTimestampRequest): Future[EventTimestampResponse] = {
+  override def eventTimestamp(req: EventTimestampRequest): Future[EventTimestampResponse] = {
     val producerSource = streamIdToSourceMap(req.streamId)
     val entityTypeFromPid = PersistenceId.extractEntityType(req.persistenceId)
     if (entityTypeFromPid != producerSource.entityType) {
-      throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(s"Persistence id is for a type of entity that is not available for consumption (expected type " +
-      s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
+      throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
+        s"Persistence id is for a type of entity that is not available for consumption (expected type " +
+        s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
     }
     eventsBySlicesQueriesPerStreamId(req.streamId) match {
       case q: EventTimestampQuery =>
@@ -243,9 +218,7 @@ import org.slf4j.LoggerFactory
           case None          => EventTimestampResponse.defaultInstance
         }
       case other =>
-        Future.failed(
-          new UnsupportedOperationException(
-            s"eventTimestamp not supported by [${other.getClass.getName}]"))
+        Future.failed(new UnsupportedOperationException(s"eventTimestamp not supported by [${other.getClass.getName}]"))
     }
   }
 
@@ -253,8 +226,9 @@ import org.slf4j.LoggerFactory
     val producerSource = eventProducerSourceFor(req.streamId)
     val entityTypeFromPid = PersistenceId.extractEntityType(req.persistenceId)
     if (entityTypeFromPid != producerSource.entityType)
-      throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(s"Persistence id is for a type of entity that is not available for consumption (expected type " +
-      s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
+      throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
+        s"Persistence id is for a type of entity that is not available for consumption (expected type " +
+        s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
     eventsBySlicesQueriesPerStreamId(req.streamId) match {
       case q: LoadEventQuery =>
         import system.executionContext
@@ -276,23 +250,16 @@ import org.slf4j.LoggerFactory
                   env.offset)
                 LoadEventResponse(
                   LoadEventResponse.Message.FilteredEvent(
-                    FilteredEvent(
-                      env.persistenceId,
-                      env.sequenceNr,
-                      env.slice,
-                      Some(protoOffset(env)))))
+                    FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))
             }
           }
-          .recoverWith { case e: NoSuchElementException =>
-            log.warn(e.getMessage)
-            Future.failed(
-              new GrpcServiceException(
-                Status.NOT_FOUND.withDescription(e.getMessage)))
+          .recoverWith {
+            case e: NoSuchElementException =>
+              log.warn(e.getMessage)
+              Future.failed(new GrpcServiceException(Status.NOT_FOUND.withDescription(e.getMessage)))
           }
       case other =>
-        Future.failed(
-          new UnsupportedOperationException(
-            s"loadEvent not supported by [${other.getClass.getName}]"))
+        Future.failed(new UnsupportedOperationException(s"loadEvent not supported by [${other.getClass.getName}]"))
     }
   }
 }

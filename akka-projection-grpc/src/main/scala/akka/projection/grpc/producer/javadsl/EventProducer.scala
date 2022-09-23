@@ -27,8 +27,9 @@ object EventProducer {
    *
    * @param source The source that should be available from this event producer
    */
-  def grpcServiceHandler(system: ActorSystem[_], source: EventProducerSource)
-      : JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
+  def grpcServiceHandler(
+      system: ActorSystem[_],
+      source: EventProducerSource): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
     grpcServiceHandler(system, Collections.singleton(source))
 
   /**
@@ -38,18 +39,14 @@ object EventProducer {
    */
   def grpcServiceHandler(
       system: ActorSystem[_],
-      sources: java.util.Set[EventProducerSource])
-      : JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
+      sources: java.util.Set[EventProducerSource]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
     val scalaProducerSources = sources.asScala.map(_.asScala).toSet
     val eventsBySlicesQueriesPerStreamId =
       akka.projection.grpc.producer.scaladsl.EventProducer
         .eventsBySlicesQueriesForStreamIds(scalaProducerSources, system)
 
     val eventProducerService =
-      new EventProducerServiceImpl(
-        system,
-        eventsBySlicesQueriesPerStreamId,
-        scalaProducerSources)
+      new EventProducerServiceImpl(system, eventsBySlicesQueriesPerStreamId, scalaProducerSources)
 
     val handler = EventProducerServiceHandler(eventProducerService)(system)
     new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {

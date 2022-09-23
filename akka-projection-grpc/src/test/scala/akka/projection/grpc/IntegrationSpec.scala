@@ -8,7 +8,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import akka.Done
-import akka.actor.ExtendedActorSystem
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -62,12 +61,9 @@ object IntegrationSpec {
     """)
     .withFallback(ConfigFactory.load("persistence.conf"))
 
-  final case class Processed(
-      projectionId: ProjectionId,
-      envelope: EventEnvelope[String])
+  final case class Processed(projectionId: ProjectionId, envelope: EventEnvelope[String])
 
-  class TestHandler(projectionId: ProjectionId, probe: ActorRef[Processed])
-      extends Handler[EventEnvelope[String]] {
+  class TestHandler(projectionId: ProjectionId, probe: ActorRef[Processed]) extends Handler[EventEnvelope[String]] {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(envelope: EventEnvelope[String]): Future[Done] = {
@@ -81,9 +77,7 @@ object IntegrationSpec {
       extends R2dbcHandler[EventEnvelope[String]] {
     private val log = LoggerFactory.getLogger(getClass)
 
-    override def process(
-        session: R2dbcSession,
-        envelope: EventEnvelope[String]): Future[Done] = {
+    override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
       log.debug("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
@@ -104,10 +98,7 @@ class IntegrationSpec
   private val numberOfTests = 4
 
   // needs to be unique per test case and known up front for setting up the producer
-  case class TestSource(
-      entityType: String,
-      streamId: String,
-      pid: PersistenceId)
+  case class TestSource(entityType: String, streamId: String, pid: PersistenceId)
   private val testSources = (1 to numberOfTests).map { n =>
     val entityType = nextEntityType()
     val streamId = s"stream_id_$n"
@@ -159,8 +150,7 @@ class IntegrationSpec
             projectionId,
             settings = None,
             sourceProvider = sourceProvider,
-            handler = () =>
-              new TestR2dbcHandler(projectionId, processedProbe.ref))))
+            handler = () => new TestR2dbcHandler(projectionId, processedProbe.ref))))
 
   }
 
@@ -177,11 +167,7 @@ class IntegrationSpec
 
     val eventProducerSources = testSources
       .map(source =>
-        EventProducerSource(
-          source.entityType,
-          source.streamId,
-          transformation,
-          EventProducerSettings(system)))
+        EventProducerSource(source.entityType, source.streamId, transformation, EventProducerSettings(system)))
       .toSet
 
     val eventProducerService =

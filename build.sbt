@@ -97,6 +97,17 @@ lazy val `durable-state` =
       // no previous artifact so must disable MiMa until this is released at least once.
       mimaPreviousArtifacts := Set.empty)
 
+lazy val grpc =
+  Project(id = "akka-projection-grpc", base = file("akka-projection-grpc"))
+    .configs(IntegrationTest)
+    .settings(headerSettings(IntegrationTest))
+    .settings(Defaults.itSettings)
+    .settings(Dependencies.grpc)
+    .dependsOn(core)
+    .dependsOn(eventsourced)
+    .dependsOn(testkit % Test)
+    .enablePlugins(AkkaGrpcPlugin)
+
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
   .settings(headerSettings(IntegrationTest))

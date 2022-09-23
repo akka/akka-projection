@@ -18,7 +18,6 @@ import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
-import akka.persistence.query.PersistenceQuery
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
@@ -76,18 +75,14 @@ class EventTimestampQuerySpec
     lazy val grpcReadJournal = GrpcReadJournal(
       system,
       streamId,
-      GrpcClientSettings.fromConfig(
-        config.getConfig("akka.projection.grpc.consumer.client")))
+      GrpcClientSettings.fromConfig(config.getConfig("akka.projection.grpc.consumer.client")))
   }
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    val eventProducerSource = EventProducerSource(
-      entityType,
-      streamId,
-      Transformation.identity,
-      EventProducerSettings(system))
+    val eventProducerSource =
+      EventProducerSource(entityType, streamId, Transformation.identity, EventProducerSettings(system))
 
     val eventProducerService =
       EventProducer.grpcServiceHandler(eventProducerSource)

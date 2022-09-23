@@ -7,8 +7,6 @@ package akka.projection.grpc.producer
 import akka.actor.typed.ActorSystem
 import com.typesafe.config.Config
 
-import scala.jdk.CollectionConverters._
-
 object EventProducerSettings {
   def apply(system: ActorSystem[_]): EventProducerSettings =
     apply(system.settings.config.getConfig("akka.projection.grpc.producer"))
@@ -22,12 +20,8 @@ object EventProducerSettings {
   }
 }
 
-case class EventProducerSettings(
-    queryPluginId: String,
-    transformationParallelism: Int) {
+case class EventProducerSettings(queryPluginId: String, transformationParallelism: Int) {
 
-  require(
-    transformationParallelism >= 1,
-    "Configuration property [transformation-parallelism] must be >= 1.")
+  require(transformationParallelism >= 1, "Configuration property [transformation-parallelism] must be >= 1.")
 
 }

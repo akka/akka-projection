@@ -74,14 +74,10 @@ object GrpcReadJournal {
       clientSettings.withChannelBuilderOverrides(
         channelBuilderOverrides.andThen(clientSettings.channelBuilderOverrides))
 
-    new scaladsl.GrpcReadJournal(
-      extended,
-      settings,
-      clientSettingsWithOverrides)
+    new scaladsl.GrpcReadJournal(extended, settings, clientSettingsWithOverrides)
   }
 
-  private def channelBuilderOverrides
-      : NettyChannelBuilder => NettyChannelBuilder =
+  private def channelBuilderOverrides: NettyChannelBuilder => NettyChannelBuilder =
     _.keepAliveWithoutCalls(true)
       .keepAliveTime(10, TimeUnit.SECONDS)
       .keepAliveTimeout(5, TimeUnit.SECONDS)
@@ -157,9 +153,7 @@ final class GrpcReadJournal private (
       minSlice: Int,
       maxSlice: Int,
       offset: Offset): Source[EventEnvelope[Evt], NotUsed] = {
-    require(
-      streamId == settings.streamId,
-      s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
+    require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
     log.debug(
       "Starting eventsBySlices stream from [{}] [{}], slices [{} - {}], offset [{}]",
       clientSettings.serviceName,
@@ -175,15 +169,15 @@ final class GrpcReadJournal private (
       offset match {
         case o: TimestampOffset =>
           val protoTimestamp = Timestamp(o.timestamp)
-          val protoSeen = o.seen.iterator.map { case (pid, seqNr) =>
-            PersistenceIdSeqNr(pid, seqNr)
+          val protoSeen = o.seen.iterator.map {
+            case (pid, seqNr) =>
+              PersistenceIdSeqNr(pid, seqNr)
           }.toSeq
           Some(proto.Offset(Some(protoTimestamp), protoSeen))
         case NoOffset =>
           None
         case _ =>
-          throw new IllegalArgumentException(
-            s"Expected TimestampOffset or NoOffset, but got [$offset]")
+          throw new IllegalArgumentException(s"Expected TimestampOffset or NoOffset, but got [$offset]")
       }
 
     val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset)
@@ -191,10 +185,9 @@ final class GrpcReadJournal private (
       .single(StreamIn(StreamIn.Message.Init(initReq)))
       .concat(Source.maybe)
     val streamOut =
-      client.eventsBySlices(streamIn).recover { case th: Throwable =>
-        throw new RuntimeException(
-          s"Failure to consume gRPC event stream for [${streamId}]",
-          th)
+      client.eventsBySlices(streamIn).recover {
+        case th: Throwable =>
+          throw new RuntimeException(s"Failure to consume gRPC event stream for [${streamId}]", th)
       }
 
     streamOut.map {
@@ -222,8 +215,7 @@ final class GrpcReadJournal private (
         filteredEventToEnvelope(filteredEvent, streamId)
 
       case other =>
-        throw new IllegalArgumentException(
-          s"Unexpected StreamOut [${other.message.getClass.getName}]")
+        throw new IllegalArgumentException(s"Unexpected StreamOut [${other.message.getClass.getName}]")
     }
   }
 
@@ -232,9 +224,7 @@ final class GrpcReadJournal private (
       // note that this is actually the producer side defined stream_id
       // not the normal entity type which is internal to the producing side
       streamId: String): EventEnvelope[Evt] = {
-    require(
-      streamId == settings.streamId,
-      s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
+    require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
     val eventOffset = timestampOffset(event.offset.get)
     val evt =
       event.payload.map(protoAnySerialization.decode(_).asInstanceOf[Evt])
@@ -250,9 +240,7 @@ final class GrpcReadJournal private (
       event.slice)
   }
 
-  private def filteredEventToEnvelope[Evt](
-      filteredEvent: FilteredEvent,
-      entityType: String): EventEnvelope[Evt] = {
+  private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {
     val eventOffset = timestampOffset(filteredEvent.offset.get)
 
     // Note that envelope is marked with NotUsed in the eventMetadata. That is handled by the R2dbcProjection
@@ -268,31 +256,25 @@ final class GrpcReadJournal private (
       filteredEvent.slice)
   }
 
-  private def timestampOffset(
-      protoOffset: akka.projection.grpc.internal.proto.Offset)
-      : TimestampOffset = {
+  private def timestampOffset(protoOffset: akka.projection.grpc.internal.proto.Offset): TimestampOffset = {
     val timestamp = protoOffset.timestamp.get.asJavaInstant
-    val seen = protoOffset.seen.map { case PersistenceIdSeqNr(pid, seqNr, _) =>
-      pid -> seqNr
+    val seen = protoOffset.seen.map {
+      case PersistenceIdSeqNr(pid, seqNr, _) =>
+        pid -> seqNr
     }.toMap
     TimestampOffset(timestamp, seen)
   }
 
   // EventTimestampQuery
-  override def timestampOf(
-      persistenceId: String,
-      sequenceNr: Long): Future[Option[Instant]] = {
+  override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     import system.dispatcher
     client
-      .eventTimestamp(
-        EventTimestampRequest(settings.streamId, persistenceId, sequenceNr))
+      .eventTimestamp(EventTimestampRequest(settings.streamId, persistenceId, sequenceNr))
       .map(_.timestamp.map(_.asJavaInstant))
   }
 
   //LoadEventQuery
-  override def loadEnvelope[Evt](
-      persistenceId: String,
-      sequenceNr: Long): Future[EventEnvelope[Evt]] = {
+  override def loadEnvelope[Evt](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Evt]] = {
     log.trace(
       "Loading event from [{}] persistenceId [{}] with seqNr [{}]",
       clientSettings.serviceName,
@@ -305,14 +287,11 @@ final class GrpcReadJournal private (
         case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
           eventToEnvelope(event, settings.streamId)
 
-        case LoadEventResponse(
-              LoadEventResponse.Message.FilteredEvent(filteredEvent),
-              _) =>
+        case LoadEventResponse(LoadEventResponse.Message.FilteredEvent(filteredEvent), _) =>
           filteredEventToEnvelope(filteredEvent, settings.streamId)
 
         case other =>
-          throw new IllegalArgumentException(
-            s"Unexpected LoadEventResponse [${other.message.getClass.getName}]")
+          throw new IllegalArgumentException(s"Unexpected LoadEventResponse [${other.message.getClass.getName}]")
 
       }
   }

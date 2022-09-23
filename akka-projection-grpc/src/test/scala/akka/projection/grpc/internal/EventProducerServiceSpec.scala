@@ -40,22 +40,16 @@ import org.scalatest.wordspec.AnyWordSpecLike
 object EventProducerServiceSpec {
   val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
 
-  class TestEventsBySliceQuery()(implicit system: ActorSystem[_])
-      extends ReadJournal
-      with EventsBySliceQuery {
+  class TestEventsBySliceQuery()(implicit system: ActorSystem[_]) extends ReadJournal with EventsBySliceQuery {
     private val persistenceExt = Persistence(system)
     private implicit val classicSystem = system.classicSystem
 
     private val testPublisherPromise =
-      new ConcurrentHashMap[
-        String,
-        Promise[TestPublisher.Probe[EventEnvelope[String]]]]()
+      new ConcurrentHashMap[String, Promise[TestPublisher.Probe[EventEnvelope[String]]]]()
 
-    def testPublisher(entityType: String)
-        : Future[TestPublisher.Probe[EventEnvelope[String]]] = {
-      val promise = testPublisherPromise.computeIfAbsent(
-        entityType,
-        _ => Promise[TestPublisher.Probe[EventEnvelope[String]]]())
+    def testPublisher(entityType: String): Future[TestPublisher.Probe[EventEnvelope[String]]] = {
+      val promise =
+        testPublisherPromise.computeIfAbsent(entityType, _ => Promise[TestPublisher.Probe[EventEnvelope[String]]]())
       promise.future
     }
 
@@ -68,9 +62,8 @@ object EventProducerServiceSpec {
       TestSource
         .probe[EventEnvelope[String]]
         .mapMaterializedValue { probe =>
-          val promise = testPublisherPromise.computeIfAbsent(
-            entityType,
-            _ => Promise[TestPublisher.Probe[EventEnvelope[String]]]())
+          val promise =
+            testPublisherPromise.computeIfAbsent(entityType, _ => Promise[TestPublisher.Probe[EventEnvelope[String]]]())
           promise.trySuccess(probe)
           NotUsed
         }
@@ -130,11 +123,7 @@ class EventProducerServiceSpec
     probe
   }
 
-  private def createEnvelope(
-      streamId: String,
-      pid: PersistenceId,
-      seqNr: Long,
-      evt: String): EventEnvelope[String] = {
+  private def createEnvelope(streamId: String, pid: PersistenceId, seqNr: Long, evt: String): EventEnvelope[String] = {
     val now = Instant.now()
     EventEnvelope(
       TimestampOffset(Instant.now, Map(pid.id -> seqNr)),

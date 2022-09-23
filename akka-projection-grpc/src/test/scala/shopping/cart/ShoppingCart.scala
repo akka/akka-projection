@@ -74,11 +74,7 @@ object ShoppingCart {
    * It replies with `StatusReply[Summary]`, which is sent back to the caller when
    * all the events emitted by this command are successfully persisted.
    */
-  final case class AddItem(
-      itemId: String,
-      quantity: Int,
-      replyTo: ActorRef[StatusReply[Summary]])
-      extends Command
+  final case class AddItem(itemId: String, quantity: Int, replyTo: ActorRef[StatusReply[Summary]]) extends Command
 
   /**
    * Summary of the shopping cart state, used in reply messages.
@@ -94,8 +90,7 @@ object ShoppingCart {
     def cartId: String
   }
 
-  final case class ItemAdded(cartId: String, itemId: String, quantity: Int)
-      extends Event
+  final case class ItemAdded(cartId: String, itemId: String, quantity: Int) extends Event
   // end::events[]
 
   // tag::init[]
@@ -113,30 +108,22 @@ object ShoppingCart {
       .withEnforcedReplies[Command, Event, State](
         persistenceId = PersistenceId(EntityKey.name, cartId),
         emptyState = State.empty,
-        commandHandler =
-          (state, command) => handleCommand(cartId, state, command),
+        commandHandler = (state, command) => handleCommand(cartId, state, command),
         eventHandler = (state, event) => handleEvent(state, event))
       .withRetention(RetentionCriteria
         .snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
-      .onPersistFailure(
-        SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
+      .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }
   // end::init[]
 
   // tag::commandHandler[]
-  private def handleCommand(
-      cartId: String,
-      state: State,
-      command: Command): ReplyEffect[Event, State] = {
+  private def handleCommand(cartId: String, state: State, command: Command): ReplyEffect[Event, State] = {
     command match {
       case AddItem(itemId, quantity, replyTo) =>
         if (state.hasItem(itemId))
-          Effect.reply(replyTo)(
-            StatusReply.Error(
-              s"Item '$itemId' was already added to this shopping cart"))
+          Effect.reply(replyTo)(StatusReply.Error(s"Item '$itemId' was already added to this shopping cart"))
         else if (quantity <= 0)
-          Effect.reply(replyTo)(
-            StatusReply.Error("Quantity must be greater than zero"))
+          Effect.reply(replyTo)(StatusReply.Error("Quantity must be greater than zero"))
         else
           Effect
             .persist(ItemAdded(cartId, itemId, quantity))

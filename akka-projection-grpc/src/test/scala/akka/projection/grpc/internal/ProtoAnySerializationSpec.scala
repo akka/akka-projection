@@ -18,10 +18,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import com.google.protobuf.any.{ Any => ScalaPbAny }
 import com.google.protobuf.{ Any => PbAny }
 
-class ProtoAnySerializationSpec
-    extends ScalaTestWithActorTestKit
-    with AnyWordSpecLike
-    with LogCapturing {
+class ProtoAnySerializationSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
 
   private val protoAnySerialization =
     new ProtoAnySerialization(

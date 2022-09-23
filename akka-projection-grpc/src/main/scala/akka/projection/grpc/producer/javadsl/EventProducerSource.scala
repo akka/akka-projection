@@ -18,11 +18,7 @@ final class EventProducerSource(
     transformation: Transformation,
     settings: EventProducerSettings) {
 
-  def asScala
-      : akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource =
-    akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource(
-      entityType,
-      streamId,
-      transformation.delegate,
-      settings)
+  def asScala: akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource =
+    akka.projection.grpc.producer.scaladsl.EventProducer
+      .EventProducerSource(entityType, streamId, transformation.delegate, settings)
 }

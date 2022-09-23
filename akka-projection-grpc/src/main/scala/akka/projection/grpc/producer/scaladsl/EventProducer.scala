@@ -40,16 +40,13 @@ object EventProducer {
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
       orElse = event =>
-        Future.failed(
-          new IllegalArgumentException(
-            s"Missing transformation for event [${event.getClass}]")))
+        Future.failed(new IllegalArgumentException(s"Missing transformation for event [${event.getClass}]")))
 
     /**
      * No transformation. Pass through each event as is.
      */
-    val identity: Transformation = new Transformation(
-      mappers = Map.empty,
-      orElse = event => Future.successful(Option(event)))
+    val identity: Transformation =
+      new Transformation(mappers = Map.empty, orElse = event => Future.successful(Option(event)))
   }
 
   /**
@@ -60,20 +57,16 @@ object EventProducer {
       val mappers: Map[Class[_], Any => Future[Option[Any]]],
       val orElse: Any => Future[Option[Any]]) {
 
-    def registerAsyncMapper[A: ClassTag, B](
-        f: A => Future[Option[B]]): Transformation = {
+    def registerAsyncMapper[A: ClassTag, B](f: A => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
-      new Transformation(
-        mappers.updated(clazz, f.asInstanceOf[Any => Future[Option[Any]]]),
-        orElse)
+      new Transformation(mappers.updated(clazz, f.asInstanceOf[Any => Future[Option[Any]]]), orElse)
     }
 
     def registerMapper[A: ClassTag, B](f: A => Option[B]): Transformation = {
       registerAsyncMapper[A, B](event => Future.successful(f(event)))
     }
 
-    def registerAsyncOrElseMapper(
-        f: Any => Future[Option[Any]]): Transformation = {
+    def registerAsyncOrElseMapper(f: Any => Future[Option[Any]]): Transformation = {
       new Transformation(mappers, f)
     }
 
@@ -86,25 +79,20 @@ object EventProducer {
    * The gRPC route that can be included in an Akka HTTP server.
    */
   def grpcServiceHandler(source: EventProducerSource)(
-      implicit system: ActorSystem[_])
-      : PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] =
+      implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] =
     grpcServiceHandler(Set(source))
 
   /**
    * The gRPC route that can be included in an Akka HTTP server.
    */
   def grpcServiceHandler(sources: Set[EventProducerSource])(
-      implicit system: ActorSystem[_])
-      : PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
+      implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
 
     val eventsBySlicesQueriesPerStreamId =
       eventsBySlicesQueriesForStreamIds(sources, system)
 
     val eventProducerService =
-      new EventProducerServiceImpl(
-        system,
-        eventsBySlicesQueriesPerStreamId,
-        sources)
+      new EventProducerServiceImpl(system, eventsBySlicesQueriesPerStreamId, sources)
 
     EventProducerServiceHandler.partial(eventProducerService)
   }
@@ -128,12 +116,13 @@ object EventProducer {
       eps.settings.queryPluginId
     }
 
-    queryPluginsIds.flatMap { case (queryPluginId, sourcesUsingIt) =>
-      val eventsBySlicesQuery =
-        PersistenceQuery(system)
-          .readJournalFor[EventsBySliceQuery](queryPluginId)
+    queryPluginsIds.flatMap {
+      case (queryPluginId, sourcesUsingIt) =>
+        val eventsBySlicesQuery =
+          PersistenceQuery(system)
+            .readJournalFor[EventsBySliceQuery](queryPluginId)
 
-      sourcesUsingIt.map(eps => eps.streamId -> eventsBySlicesQuery)
+        sourcesUsingIt.map(eps => eps.streamId -> eventsBySlicesQuery)
     }
   }
 

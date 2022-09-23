@@ -34,11 +34,9 @@ object ShoppingCartServer {
     val cartSource = EventProducer.EventProducerSource(
       entityType = "ShoppingCart",
       streamId = "cart",
-      transformation =
-        Transformation.empty.registerAsyncMapper((event: ItemAdded) => {
-          Future.successful(
-            Some(proto.ItemAdded(event.cartId, event.itemId, event.quantity)))
-        }),
+      transformation = Transformation.empty.registerAsyncMapper((event: ItemAdded) => {
+        Future.successful(Some(proto.ItemAdded(event.cartId, event.itemId, event.quantity)))
+      }),
       EventProducerSettings(system))
 
     val eventProducerService =
@@ -59,10 +57,7 @@ object ShoppingCartServer {
     bound.onComplete {
       case Success(binding) =>
         val address = binding.localAddress
-        system.log.info(
-          "Shopping online at gRPC server {}:{}",
-          address.getHostString,
-          address.getPort)
+        system.log.info("Shopping online at gRPC server {}:{}", address.getHostString, address.getPort)
       case Failure(ex) =>
         system.log.error("Failed to bind gRPC endpoint, terminating system", ex)
         system.terminate()

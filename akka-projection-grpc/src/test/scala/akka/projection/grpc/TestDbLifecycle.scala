@@ -24,33 +24,27 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
   def testConfigPath: String = "akka.projection.r2dbc"
 
   lazy val r2dbcProjectionSettings: R2dbcProjectionSettings =
-    R2dbcProjectionSettings(
-      typedSystem.settings.config.getConfig(testConfigPath))
+    R2dbcProjectionSettings(typedSystem.settings.config.getConfig(testConfigPath))
 
   lazy val r2dbcExecutor: R2dbcExecutor = {
     new R2dbcExecutor(
-      ConnectionFactoryProvider(typedSystem).connectionFactoryFor(
-        r2dbcProjectionSettings.useConnectionFactory),
+      ConnectionFactoryProvider(typedSystem).connectionFactoryFor(r2dbcProjectionSettings.useConnectionFactory),
       LoggerFactory.getLogger(getClass),
-      r2dbcProjectionSettings.logDbCallsExceeding)(
-      typedSystem.executionContext,
-      typedSystem)
+      r2dbcProjectionSettings.logDbCallsExceeding)(typedSystem.executionContext, typedSystem)
   }
 
   lazy val persistenceExt: Persistence = Persistence(typedSystem)
 
   override protected def beforeAll(): Unit = {
     lazy val r2dbcSettings: R2dbcSettings =
-      new R2dbcSettings(
-        typedSystem.settings.config.getConfig("akka.persistence.r2dbc"))
+      new R2dbcSettings(typedSystem.settings.config.getConfig("akka.persistence.r2dbc"))
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(
-        _.createStatement(
-          s"delete from ${r2dbcSettings.journalTableWithSchema}")),
+        _.createStatement(s"delete from ${r2dbcSettings.journalTableWithSchema}")),
       10.seconds)
     Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(
-        s"delete from ${r2dbcProjectionSettings.timestampOffsetTableWithSchema}")),
+      r2dbcExecutor.updateOne("beforeAll delete")(
+        _.createStatement(s"delete from ${r2dbcProjectionSettings.timestampOffsetTableWithSchema}")),
       10.seconds)
     super.beforeAll()
   }

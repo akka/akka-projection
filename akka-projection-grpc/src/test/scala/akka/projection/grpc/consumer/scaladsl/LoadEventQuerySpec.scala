@@ -18,11 +18,9 @@ import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
-import akka.persistence.query.PersistenceQuery
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
-import akka.projection.grpc.consumer.scaladsl.EventTimestampQuerySpec.config
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
@@ -89,11 +87,7 @@ class LoadEventQuerySpec
           Future.successful(Some(event.toUpperCase))
       })
 
-    val eventProducerSource = EventProducerSource(
-      entityType,
-      streamId,
-      transformation,
-      EventProducerSettings(system))
+    val eventProducerSource = EventProducerSource(entityType, streamId, transformation, EventProducerSettings(system))
 
     val eventProducerService =
       EventProducer.grpcServiceHandler(eventProducerSource)
@@ -143,9 +137,7 @@ class LoadEventQuerySpec
     "handle missing event as NOT_FOUND" in new TestFixture {
       val status =
         intercept[StatusRuntimeException] {
-          Await.result(
-            grpcReadJournal.loadEnvelope[String](pid.id, sequenceNr = 13L),
-            replyProbe.remainingOrDefault)
+          Await.result(grpcReadJournal.loadEnvelope[String](pid.id, sequenceNr = 13L), replyProbe.remainingOrDefault)
           fail("Expected NOT_FOUND")
         }.getStatus
       status.getCode shouldBe Status.NOT_FOUND.getCode
