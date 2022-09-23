@@ -65,9 +65,12 @@ object Common extends AutoPlugin {
     // -q Suppress stdout for successful tests.
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
     Test / logBuffered := false,
-    mimaPreviousArtifacts := Set(
+    mimaPreviousArtifacts :=
+      // FIXME dynver can't find these in the history-rewrite PR, revert to old logic once PR merged to main
+      Set(organization.value %% moduleName.value % "1.3.0-M1")
+    /* Set(
         organization.value %% moduleName.value % previousStableVersion.value
-          .getOrElse(throw new Error("Unable to determine previous version"))),
+          .getOrElse(throw new Error("Unable to determine previous version"))) */,
     sonatypeProfileName := "com.lightbend")
 
 }

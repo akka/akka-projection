@@ -4,6 +4,8 @@ addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.7.0")
 
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.5.10")
 
+addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.1.3")
+
 // Documentation
 addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.45")
 addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.2")

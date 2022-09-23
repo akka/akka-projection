@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: shoppinganalyticsservice
+  name: shopping-analytics-service
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: shoppinganalyticsservice
+  template:
+    metadata:
+      labels:
+        app: shoppinganalyticsservice
+        actorSystemName: ShoppingAnalyticsService
+      annotations:
+        config.linkerd.io/skip-inbound-ports: 2552,8558
+        config.linkerd.io/skip-outbound-ports: 2552,8558
+    spec:
+      containers:
+        - name: shopping-analytics-service
+          image: docker.io/patriknw/shopping-analytics-service:20220609-090738-4e86f88
+          resources:
+            limits:
+              memory: "1Gi"
+            requests:
+              memory: "1Gi"
+              cpu: "200m"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: management
+            periodSeconds: 10
+            failureThreshold: 3
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet:
+              path: "/alive"
+              port: management
+            periodSeconds: 10
+            failureThreshold: 5
+            initialDelaySeconds: 20
+          ports:
+            # akka-management and bootstrap
+            - name: management
+              containerPort: 8558
+              protocol: TCP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75 -Dakka.projection.grpc.consumer.client.host=shopping-cart-service-svc -Dakka.projection.grpc.consumer.client.port=8080 -Dakka.persistence.r2dbc.connection-factory.host=todo -Dakka.persistence.r2dbc.connection-factory.ssl.enabled=on -Dakka.persistence.r2dbc.connection-factory.ssl.mode=require -Dakka.persistence.r2dbc.connection-factory.password=todo"
+            - name: REQUIRED_CONTACT_POINT_NR
+              value: "1"
