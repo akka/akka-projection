@@ -153,6 +153,10 @@ lazy val docs = project
         "extref.alpakka-kafka.base_url" -> s"https://doc.akka.io/docs/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/%s",
         "scaladoc.akka.kafka.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.AlpakkaKafkaVersionInDocs}/",
         "javadoc.akka.kafka.base_url" -> "",
+        // Akka gRPC
+        "extref.akka-grpc.base_url" -> s"https://doc.akka.io/docs/akka-grpc/${Dependencies.AkkaGrpcVersionInDocs}/%s",
+        // Akka persistence R2DBC plugin
+        "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/docs/akka-persistence-r2dbc/${Dependencies.AkkaPersistenceR2dbcVersionInDocs}/%s",
         // Java
         "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
         // Scala
@@ -171,7 +175,19 @@ lazy val docs = project
     apidocRootPackage := "akka")
 
 lazy val root = Project(id = "akka-projection", base = file("."))
-  .aggregate(core, coreTest, testkit, jdbc, slick, cassandra, eventsourced, kafka, `durable-state`, examples, docs)
+  .aggregate(
+    core,
+    coreTest,
+    testkit,
+    jdbc,
+    slick,
+    cassandra,
+    eventsourced,
+    kafka,
+    `durable-state`,
+    grpc,
+    examples,
+    docs)
   .settings(publish / skip := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin, MimaPlugin)

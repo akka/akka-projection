@@ -20,6 +20,7 @@
 * [Flow](flow.md)
 * [Error](error.md)
 * [Projection Settings](projection-settings.md)
+* [gRPC](grpc.md)
 * [Management](management.md)
 * [Testing](testing.md)
 * [Classic](classic.md)
