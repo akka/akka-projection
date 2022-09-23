@@ -41,35 +41,33 @@ public class ConsumerCompileTest {
   public static void init(ActorSystem<?> system) {
     int numberOfProjectionInstances = 1;
     String projectionName = "cart-events";
-    List<Pair<Integer, Integer>> sliceRanges = Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
+    List<Pair<Integer, Integer>> sliceRanges =
+        Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
     String entityType = "ShoppingCart";
 
-    ShardedDaemonProcess.get(system).init(
-        ProjectionBehavior.Command.class,
-        projectionName,
-        numberOfProjectionInstances,
-        idx -> {
-          Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
-          String projectionKey = entityType + "-" + sliceRange.first() + "-" + sliceRange.second();
-          ProjectionId projectionId = ProjectionId.of(projectionName, projectionKey);
+    ShardedDaemonProcess.get(system)
+        .init(
+            ProjectionBehavior.Command.class,
+            projectionName,
+            numberOfProjectionInstances,
+            idx -> {
+              Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
+              String projectionKey =
+                  entityType + "-" + sliceRange.first() + "-" + sliceRange.second();
+              ProjectionId projectionId = ProjectionId.of(projectionName, projectionKey);
 
-          SourceProvider<Offset, EventEnvelope<String>> sourceProvider = EventSourcedProvider.eventsBySlices(
-              system,
-              GrpcReadJournal.Identifier(),
-              entityType,
-              sliceRange.first(),
-              sliceRange.second());
+              SourceProvider<Offset, EventEnvelope<String>> sourceProvider =
+                  EventSourcedProvider.eventsBySlices(
+                      system,
+                      GrpcReadJournal.Identifier(),
+                      entityType,
+                      sliceRange.first(),
+                      sliceRange.second());
 
-          return ProjectionBehavior.create(
-              R2dbcProjection.atLeastOnceAsync(
-                  projectionId,
-                  Optional.empty(),
-                  sourceProvider,
-                  EventHandler::new,
-                  system));
-
-        },
-        ProjectionBehavior.stopMessage());
+              return ProjectionBehavior.create(
+                  R2dbcProjection.atLeastOnceAsync(
+                      projectionId, Optional.empty(), sourceProvider, EventHandler::new, system));
+            },
+            ProjectionBehavior.stopMessage());
   }
-
 }

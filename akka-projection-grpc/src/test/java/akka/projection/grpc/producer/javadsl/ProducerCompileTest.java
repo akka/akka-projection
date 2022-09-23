@@ -23,20 +23,25 @@ public class ProducerCompileTest {
   public static void start(ActorSystem<?> system) {
     Transformation asyncTransformation =
         Transformation.empty()
-            .registerAsyncMapper(Integer.class, event -> CompletableFuture.completedFuture(Optional.of(Integer.valueOf(event * 2).toString())))
-            .registerAsyncOrElseMapper(event -> CompletableFuture.completedFuture(Optional.of(event.toString())));
+            .registerAsyncMapper(
+                Integer.class,
+                event ->
+                    CompletableFuture.completedFuture(
+                        Optional.of(Integer.valueOf(event * 2).toString())))
+            .registerAsyncOrElseMapper(
+                event -> CompletableFuture.completedFuture(Optional.of(event.toString())));
     Transformation transformation =
         Transformation.empty()
-            .registerMapper(Integer.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
+            .registerMapper(
+                Integer.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
             .registerOrElseMapper(event -> Optional.of(event.toString()));
 
-    EventProducerSource source = new EventProducerSource(
-        "ShoppingCart",
-        "cart",
-        transformation,
-        EventProducerSettings.apply(system));
+    EventProducerSource source =
+        new EventProducerSource(
+            "ShoppingCart", "cart", transformation, EventProducerSettings.apply(system));
 
-    Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService = EventProducer.grpcServiceHandler(system, source);
+    Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService =
+        EventProducer.grpcServiceHandler(system, source);
     Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerServiceWithMultiple =
         EventProducer.grpcServiceHandler(system, Collections.singleton(source));
 
@@ -45,6 +50,5 @@ public class ProducerCompileTest {
 
     CompletionStage<ServerBinding> bound =
         Http.get(system).newServerAt("127.0.0.1", 8080).bind(service);
-
   }
 }
