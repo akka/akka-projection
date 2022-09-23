@@ -4,11 +4,6 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
-import java.time.Instant
-import java.time.{ Duration => JDuration }
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration._
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -18,47 +13,38 @@ import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
+import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
-import akka.projection.grpc.consumer.scaladsl.EventTimestampQuerySpec.config
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
-import akka.testkit.SocketUtil
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
-object EventTimestampQuerySpec {
+import java.time.Instant
+import java.time.{ Duration => JDuration }
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration._
 
-  val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
-
-  val config: Config = ConfigFactory
-    .parseString(s"""
-    akka.http.server.preview.enable-http2 = on
-    akka.projection.grpc {
-      consumer.client {
-        host = "127.0.0.1"
-        port = $grpcPort
-        use-tls = false
-      }
-      producer {
-        query-plugin-id = "akka.persistence.r2dbc.query"
-      }
-    }
-    """)
-    .withFallback(ConfigFactory.load("persistence.conf"))
-}
-
-class EventTimestampQuerySpec
-    extends ScalaTestWithActorTestKit(EventTimestampQuerySpec.config)
+class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
+    extends ScalaTestWithActorTestKit(testContainerConf.config)
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData
+    with BeforeAndAfterAll
     with LogCapturing {
-  import EventTimestampQuerySpec.grpcPort
+
+  def this() = this(new TestContainerConf)
+
+
+  protected override def afterAll(): Unit = {
+    super.afterAll()
+    testContainerConf.stop()
+  }
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
@@ -75,7 +61,7 @@ class EventTimestampQuerySpec
     lazy val grpcReadJournal = GrpcReadJournal(
       system,
       streamId,
-      GrpcClientSettings.fromConfig(config.getConfig("akka.projection.grpc.consumer.client")))
+      GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")))
   }
 
   override protected def beforeAll(): Unit = {
@@ -92,7 +78,7 @@ class EventTimestampQuerySpec
 
     val bound =
       Http()
-        .newServerAt("127.0.0.1", grpcPort)
+        .newServerAt("127.0.0.1", testContainerConf.grpcPort)
         .bind(service)
         .map(_.addToCoordinatedShutdown(3.seconds))
 

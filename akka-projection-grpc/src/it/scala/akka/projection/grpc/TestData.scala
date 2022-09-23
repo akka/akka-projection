@@ -4,11 +4,11 @@
 
 package akka.projection.grpc
 
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicLong
-
 import akka.persistence.typed.PersistenceId
 import akka.projection.ProjectionId
+
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 
 object TestData {
   private val start =
@@ -18,8 +18,8 @@ object TestData {
 }
 
 trait TestData {
-  import TestData.pidCounter
   import TestData.entityTypeCounter
+  import TestData.pidCounter
 
   def nextPid(entityType: String): PersistenceId =
     PersistenceId(entityType, s"p-${pidCounter.incrementAndGet()}")

@@ -1,11 +1,7 @@
 /*
- * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2022 Lightbend Inc. <https://www.lightbend.com>
  */
-
 package akka.projection.grpc
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 import akka.actor.typed.ActorSystem
 import akka.persistence.Persistence
@@ -16,6 +12,9 @@ import akka.projection.r2dbc.R2dbcProjectionSettings
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
 

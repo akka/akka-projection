@@ -62,7 +62,8 @@ object Dependencies {
     val akkaStreamTestkit = Compile.akkaStreamTestkit % allTestConfig
     val akkaShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % allTestConfig
     val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka % allTestConfig
-    val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % "test"
+    val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % allTestConfig
+    val akkaDiscovery = "com.typesafe.akka" %% "akka-discovery" % Versions.akka % allTestConfig
 
     // FIXME remove semi-circular depenendency
     val akkaProjectionR2dbc =
@@ -209,6 +210,8 @@ object Dependencies {
         Test.akkaTypedTestkit,
         Test.logback,
         Test.scalatest,
+        Test.akkaDiscovery,
+        Test.postgresContainer,
         // akka-management dependencies for the Scala sample. Can be removed when that sample is
         // removed or moved to a standalone sample as the Java samples.
         "com.lightbend.akka.management" %% "akka-management" % "1.1.2" % "test",
