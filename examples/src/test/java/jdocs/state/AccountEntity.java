@@ -1,0 +1,11 @@
+/*
+ * Copyright (C) 2020-2022 Lightbend Inc. <https://www.lightbend.com>
+ */
+
+package jdocs.state;
+
+public class AccountEntity {
+
+  /** The state for the {@link ShoppingCart} entity. */
+  public static final class Account implements CborSerializable {}
+}
