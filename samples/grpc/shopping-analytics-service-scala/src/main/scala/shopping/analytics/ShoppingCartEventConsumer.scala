@@ -19,12 +19,13 @@ import shoppingcart.ItemAdded
 import shoppingcart.ItemQuantityAdjusted
 import shoppingcart.ItemRemoved
 
-//#initProjections
 object ShoppingCartEventConsumer {
+  //#initProjections
 
   private val log =
     LoggerFactory.getLogger("shopping.analytics.ShoppingCartEventConsumer")
 
+  //#eventHandler
   private class EventHandler(projectionId: ProjectionId)
       extends Handler[EventEnvelope[AnyRef]] {
     private var totalCount = 0
@@ -96,7 +97,9 @@ object ShoppingCartEventConsumer {
       Future.successful(Done)
     }
   }
+  //#eventHandler
 
+  //#initProjections
   def init(system: ActorSystem[_]): Unit = {
     implicit val sys: ActorSystem[_] = system
     val numberOfProjectionInstances = 4

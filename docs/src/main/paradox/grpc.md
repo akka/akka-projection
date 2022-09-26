@@ -44,10 +44,10 @@ On the consumer side the `Projection` is an ordinary @ref:[SourceProvider for ev
 that is using `eventsBySlices` from the @apidoc[GrpcReadJournal].
 
 Scala
-:  TODO
+:  @@snip [ShoppingCartEventConsumer.scala](/samples/grpc/shopping-analytics-service-scala/src/main/scala/shopping/analytics/ShoppingCartEventConsumer.scala) { #initProjections }
 
 Java
-:  @@snip [R2dbcProjectionDocExample.java](/samples/grpc/shopping-analytics-service-java/src/main/java/shopping/analytics/ShoppingCartEventConsumer.java) { #initProjections }
+:  @@snip [ShoppingCartEventConsumer.java](/samples/grpc/shopping-analytics-service-java/src/main/java/shopping/analytics/ShoppingCartEventConsumer.java) { #initProjections }
 
 The gRPC connection to the producer is defined in the [consumer configuration](#consumer-configuration).
 
@@ -63,30 +63,30 @@ How to implement the `EventHandler` and choose between different processing sema
 Akka Projections gRPC provides the gRPC service implementation that is used by the consumer side. It is created with the @apidoc[EventProducer$]:
 
 Scala
-:  TODO
+:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #eventProducerService }
 
 Java
-:  @@snip [R2dbcProjectionDocExample.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #eventProducerService }
+:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #eventProducerService }
 
 Events can be transformed by application specific code on the producer side. The purpose is to be able to have a
 different public representation from the internal representation (stored in journal). The transformation functions
 are registered when creating the `EventProducer` service. Here is an example of one of those transformation functions:
 
 Scala
-:  TODO
+:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #transformItemAdded }
 
 Java
-:  @@snip [R2dbcProjectionDocExample.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #transformItemAdded }
+:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #transformItemAdded }
 
 To omit an event the transformation function can return @scala[`None`]@java[`Optional.empty()`].
 
 That `EventProducer` service is started in an Akka gRPC server like this:
 
 Scala
-:  TODO
+:  @@snip [ShoppingCartServer.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCartServer.scala) { #startServer }
 
 Java
-:  @@snip [R2dbcProjectionDocExample.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #startServer }
+:  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #startServer }
 
 This example includes an application specific `ShoppingCartService`, which is unrelated to Akka Projections gRPC,
 but it illustrates how to combine the `EventProducer` service with other gRPC services.
