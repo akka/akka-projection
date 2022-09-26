@@ -20,7 +20,6 @@ import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.typed.PersistenceId
-import akka.projection.grpc.TestData
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
