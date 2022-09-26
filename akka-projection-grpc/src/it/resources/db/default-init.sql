@@ -1,4 +1,4 @@
--- FIXME duplicated from akka-projection-grpc/ddl-scripts to be available on IT test classpath
+-- Note: duplicated from akka-projection-grpc/ddl-scripts to be available on IT test classpath
 CREATE TABLE IF NOT EXISTS event_journal(
   slice INT NOT NULL,
   entity_type VARCHAR(255) NOT NULL,

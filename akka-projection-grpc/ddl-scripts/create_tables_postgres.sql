@@ -1,3 +1,4 @@
+-- Note: duplicated in akka-projection-grpc/src/it/resources/db/default-init.sql, update there as well if changing here
 CREATE TABLE IF NOT EXISTS event_journal(
   slice INT NOT NULL,
   entity_type VARCHAR(255) NOT NULL,
