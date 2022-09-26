@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "shopping.cart.proto";
+
+package shoppingcart;
+
+// Events published to Kafka
+
+message ItemAdded {
+    string cartId = 1;
+    string itemId = 2;
+    int32 quantity = 3;
+}
+
+message ItemQuantityAdjusted {
+    string cartId = 1;
+    string itemId = 2;
+    int32 quantity = 3;
+}
+
+message ItemRemoved {
+    string cartId = 1;
+    string itemId = 2;
+}
+
+message CheckedOut {
+    string cartId = 1;
+}

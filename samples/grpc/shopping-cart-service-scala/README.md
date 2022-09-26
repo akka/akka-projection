@@ -1,6 +1,6 @@
 ## Running the sample code
 
-1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally.
+1. Start a local PostgresSQL server on default port 5432 and a Kafka broker on port 9092. The included `docker-compose.yml` starts everything required for running locally.
 
     ```shell
     docker-compose up -d
@@ -10,37 +10,31 @@
     docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
     ```
 
-2. Make sure you have compiled the project
+2. Start a first node:
 
     ```shell
-    mvn compile 
+    sbt -Dconfig.resource=local1.conf run
     ```
 
-3. Start a first node:
+3. (Optional) Start another node with different ports:
 
     ```shell
-    mvn compile exec:exec -DAPP_CONFIG=local1.conf
+    sbt -Dconfig.resource=local2.conf run
     ```
 
-4. (Optional) Start another node with different ports:
+4. (Optional) More can be started:
 
     ```shell
-    mvn compile exec:exec -DAPP_CONFIG=local2.conf
+    sbt -Dconfig.resource=local3.conf run
     ```
 
-5. (Optional) More can be started:
-
-    ```shell
-    mvn compile exec:exec -DAPP_CONFIG=local3.conf
-    ```
-
-6. Check for service readiness
+5. Check for service readiness
 
     ```shell
     curl http://localhost:9101/ready
     ```
 
-7. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
+6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
 
     ```shell
     # add item to cart
@@ -54,6 +48,9 @@
     
     # check out cart
     grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
+    
+    # get item popularity
+    grpcurl -d '{"itemId":"socks"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.GetItemPopularity
     ```
 
     or same `grpcurl` commands to port 8102 to reach node 2.
