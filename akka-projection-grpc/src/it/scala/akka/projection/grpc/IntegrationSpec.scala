@@ -4,9 +4,6 @@
 
 package akka.projection.grpc
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration._
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.LoggingTestKit
@@ -35,8 +32,13 @@ import akka.projection.scaladsl.Handler
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration._
 
 object IntegrationSpec {
 
@@ -59,7 +61,6 @@ object IntegrationSpec {
     }
     akka.actor.testkit.typed.filter-leeway = 10s
     """)
-    .withFallback(ConfigFactory.load("persistence.conf"))
 
   final case class Processed(projectionId: ProjectionId, envelope: EventEnvelope[String])
 
@@ -85,11 +86,12 @@ object IntegrationSpec {
   }
 }
 
-class IntegrationSpec
-    extends ScalaTestWithActorTestKit(IntegrationSpec.config)
+class IntegrationSpec(testContainerConf: TestContainerConf)
+    extends ScalaTestWithActorTestKit(IntegrationSpec.config.withFallback(testContainerConf.config))
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData
+    with BeforeAndAfterAll
     with LogCapturing {
   import IntegrationSpec._
 
@@ -183,6 +185,11 @@ class IntegrationSpec
         .map(_.addToCoordinatedShutdown(3.seconds))
 
     bound.futureValue
+  }
+
+  protected override def afterAll(): Unit = {
+    super.afterAll()
+    testContainerConf.stop()
   }
 
   "A gRPC Projection" must {

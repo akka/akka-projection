@@ -5,11 +5,11 @@
 It can be started with the docker-compose file in the docker folder:
 
 ```
-docker-compose -f docker/docker-compose-postgres.yml up -d
+docker-compose -f docker-files/docker-compose-postgres.yml up -d
 ```
 
 ```
-docker exec -i docker-postgres-db-1 psql -U postgres -t < ddl-scripts/create_tables_postgres.sql
+docker exec -i postgres_db psql -U postgres -t < akka-projection-grpc/ddl-scripts/create_tables_postgres.sql
 ```
 
 2. Change from CapturingAppender to STDOUT in logback-test.xml
@@ -17,7 +17,7 @@ docker exec -i docker-postgres-db-1 psql -U postgres -t < ddl-scripts/create_tab
 3. Start a first shopping cart service:
 
     ```shell
-    sbt -Dconfig.resource=cart-local1.conf "Test/runMain shopping.cart.Main"
+    sbt -Dconfig.resource=cart-local1.conf "akka-projection-grpc/Test/runMain shopping.cart.Main"
     ```
 
 4. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
@@ -29,7 +29,7 @@ docker exec -i docker-postgres-db-1 psql -U postgres -t < ddl-scripts/create_tab
 5. Start a first shopping order service, which will consume the events from the shopping cart service:
 
     ```shell
-    sbt -Dconfig.resource=order-local1.conf "Test/runMain shopping.order.Main"
+    sbt -Dconfig.resource=order-local1.conf "akka-projection-grpc/Test/runMain shopping.order.Main"
     ```
    
 6. You should be able to see "Consumed event" logging in the shopping order service when events are stored in the shopping cart service.

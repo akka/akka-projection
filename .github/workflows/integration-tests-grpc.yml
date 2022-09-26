@@ -1,0 +1,47 @@
+name: Integration Tests for gRPC
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags-ignore: [ v.* ]
+
+jobs:
+  test:
+    name: Build and Test Integration for gRPC
+    runs-on: ubuntu-18.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { java-version: adopt@1.8,      scala-version: 2.13.3,  sbt-opts: '' }
+          - { java-version: adopt@1.11.0-9, scala-version: 2.13.3,  sbt-opts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Setup JDK ${{ matrix.java-version }}
+        uses: olafurpg/setup-scala@v10
+        with:
+          java-version: ${{ matrix.java-version }}
+
+      - name: Cache Coursier cache
+        uses: coursier/cache-action@v5
+
+      - name: Run all integration tests with Scala ${{ matrix.scala-version }} and Java ${{ matrix.java-version }}
+        run: sbt "++${{ matrix.scala-version }} akka-projection-grpc/It/test" ${{ matrix.sbt-opts }}
+        env: # Disable Ryuk resource reaper since we always spin up fresh VMs
+          TESTCONTAINERS_RYUK_DISABLED: true
+
+      - name: Print logs on failure
+        if: ${{ failure() }}
+        run: find . -name "*.log" -exec ./scripts/cat-log.sh {} \;

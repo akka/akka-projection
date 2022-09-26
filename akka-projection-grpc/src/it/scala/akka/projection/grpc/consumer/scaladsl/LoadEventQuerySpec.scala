@@ -4,10 +4,6 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration._
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -18,6 +14,7 @@ import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
+import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
@@ -25,41 +22,35 @@ import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
-import akka.testkit.SocketUtil
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
-object LoadEventQuerySpec {
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration._
 
-  val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
-
-  val config: Config = ConfigFactory
-    .parseString(s"""
-    akka.http.server.preview.enable-http2 = on
-    akka.projection.grpc {
-      producer {
-        query-plugin-id = "akka.persistence.r2dbc.query"
-      }
-    }
-    """)
-    .withFallback(ConfigFactory.load("persistence.conf"))
-}
-
-class LoadEventQuerySpec
-    extends ScalaTestWithActorTestKit(LoadEventQuerySpec.config)
+class LoadEventQuerySpec(testContainerConf: TestContainerConf)
+    extends ScalaTestWithActorTestKit(testContainerConf.config)
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData
+    with BeforeAndAfterAll
     with LogCapturing {
-  import LoadEventQuerySpec.grpcPort
+
+  def this() = this(new TestContainerConf)
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
   private val entityType = nextEntityType()
   private val streamId = "stream_id_" + entityType
+
+  protected override def afterAll(): Unit = {
+    super.afterAll()
+    testContainerConf.stop()
+  }
 
   class TestFixture {
 
@@ -72,7 +63,7 @@ class LoadEventQuerySpec
       system,
       streamId,
       GrpcClientSettings
-        .connectToServiceAt("127.0.0.1", grpcPort)
+        .connectToServiceAt("127.0.0.1", testContainerConf.grpcPort)
         .withTls(false))
   }
 
@@ -97,7 +88,7 @@ class LoadEventQuerySpec
 
     val bound =
       Http()
-        .newServerAt("127.0.0.1", grpcPort)
+        .newServerAt("127.0.0.1", testContainerConf.grpcPort)
         .bind(service)
         .map(_.addToCoordinatedShutdown(3.seconds))
 

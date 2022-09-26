@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>[%date{ISO8601}] [%level] [%logger] [%X{akkaAddress}] [%marker] [%thread] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="CapturingAppender" class="akka.actor.testkit.typed.internal.CapturingAppender"/>
+    <logger name="akka.actor.testkit.typed.internal.CapturingAppenderDelegate">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="akka.projection.grpc" level="DEBUG" />
+    <logger name="akka.projection.r2dbc" level="DEBUG" />
+    <logger name="akka.persistence.r2dbc" level="DEBUG" />
+
+
+    <root level="INFO">
+        <appender-ref ref="CapturingAppender"/>
+<!--        <appender-ref ref="STDOUT"/>-->
+    </root>
+
+</configuration>
