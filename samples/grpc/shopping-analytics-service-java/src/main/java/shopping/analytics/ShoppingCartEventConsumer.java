@@ -104,7 +104,7 @@ class ShoppingCartEventConsumer {
     int numberOfProjectionInstances = 4;
     String projectionName = "cart-events";
     List<Pair<Integer, Integer>> sliceRanges = Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
-    String entityType = "ShoppingCart";
+    String streamId = "cart";
 
     ShardedDaemonProcess.get(system).init(
         ProjectionBehavior.Command.class,
@@ -112,13 +112,13 @@ class ShoppingCartEventConsumer {
         numberOfProjectionInstances,
         idx -> {
           Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
-          String projectionKey = entityType + "-" + sliceRange.first() + "-" + sliceRange.second();
+          String projectionKey = streamId + "-" + sliceRange.first() + "-" + sliceRange.second();
           ProjectionId projectionId = ProjectionId.of(projectionName, projectionKey);
 
           SourceProvider<Offset, EventEnvelope<Object>> sourceProvider = EventSourcedProvider.eventsBySlices(
               system,
               GrpcReadJournal.Identifier(),
-              entityType,
+              streamId,
               sliceRange.first(),
               sliceRange.second());
 

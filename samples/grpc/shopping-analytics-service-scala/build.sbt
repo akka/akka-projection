@@ -2,7 +2,8 @@ name := "shopping-analytics-service"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(
+  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 scalaVersion := "2.13.5"
 
@@ -22,11 +23,13 @@ Test / logBuffered := false
 run / fork := false
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.6.20"
+val AkkaVersion = "2.7.0-M1"
 val AkkaHttpVersion = "10.2.10"
 val AkkaManagementVersion = "1.1.4"
-val AkkaPersistenceR2dbcVersion = "0.7.7"
-val AkkaProjectionVersion = "1.2.5"
+val AkkaPersistenceR2dbcVersion =
+  "1.0.0-M1+1-028f1896-SNAPSHOT" // FIXME released version
+val AkkaProjectionVersion =
+  "1.3.0-M1+39-43a9bd9a+20220926-1715-SNAPSHOT" // FIXME released version
 
 enablePlugins(AkkaGrpcPlugin)
 
@@ -60,12 +63,13 @@ libraryDependencies ++= Seq(
   // 3. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
-  "com.lightbend.akka" %% "akka-persistence-r2bc" % AkkaPersistenceR2dbcVersion,
-  "com.lightbend.akka" %% "akka-projection-r2bc" % AkkaPersistenceR2dbcVersion,
+  "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
   "org.postgresql" % "postgresql" % "42.2.18",
   // 4. Querying or projecting data from Akka Persistence
+  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
+  "com.lightbend.akka" %% "akka-projection-grpc" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-jdbc" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-testkit" % AkkaProjectionVersion % Test)
