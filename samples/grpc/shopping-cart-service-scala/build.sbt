@@ -25,8 +25,9 @@ Global / cancelable := false // ctrl-c
 val AkkaVersion = "2.7.0-M1"
 val AkkaHttpVersion = "10.2.10"
 val AkkaManagementVersion = "1.1.4"
-val AkkaPersistenceR2dbcVersion = "1.0.0-M1+1-028f1896-SNAPSHOT" // FIXME released version
-val AkkaProjectionVersion = "1.3.0-M1+39-43a9bd9a+20220926-1715-SNAPSHOT" // FIXME released version
+val AkkaPersistenceR2dbcVersion = "1.0.0-M2" // FIXME released version
+// FIXME released version
+val AkkaProjectionVersion = sys.props.getOrElse("akka.projection.version", "1.3.0-M1+39-43a9bd9a+20220926-1715-SNAPSHOT")
 
 enablePlugins(AkkaGrpcPlugin)
 

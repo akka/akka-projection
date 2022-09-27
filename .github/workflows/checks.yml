@@ -86,3 +86,51 @@ jobs:
 
       - name: Create all API docs for artifacts/website and all reference docs
         run: sbt "unidoc; docs/paradox"
+
+  check-samples:
+    name: Check Sample Projects
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Set up JDK 11
+        uses: olafurpg/setup-scala@v10
+        with:
+          java-version: adopt@1.11.0-9
+
+      - name: Cache Coursier cache
+        uses: coursier/cache-action@v5
+
+      - name: Snapshot build of projections
+        run: |- 
+          sbt "publishLocal; publishM2"
+          echo "akka_projection_version=$(sbt akka-projection-core/version | tail -n 1 | cut -f 2 -d ' ')" >> $GITHUB_ENV
+
+      - name: Compile Java Projection gRPC sample Shopping Cart
+        run: |-
+          cd samples/grpc/shopping-cart-service-java
+          mvn compile -Dakka.projection.version="${{ env.akka_projection_version }}"
+
+      - name: Compile Java Projection gRPC sample Analytics
+        run: |-
+          cd samples/grpc/shopping-analytics-java
+          mvn compile -Dakka.projection.version="${{ env.akka_projection_version }}"
+
+      - name: Compile Scala Projection gRPC sample Shopping Cart
+        run: |-
+          cd samples/grpc/shopping-cart-service-scala
+          mvn compile -Dakka.projection.version="${{ env.akka_projection_version }}"
+
+      - name: Compile Scala Projection gRPC sample Analytics
+        run: |-
+          cd samples/grpc/shopping-analytics-scala
+          mvn compile -Dakka.projection.version="${{ env.akka_projection_version }}"
