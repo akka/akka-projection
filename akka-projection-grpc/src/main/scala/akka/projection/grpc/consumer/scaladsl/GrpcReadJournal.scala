@@ -11,6 +11,7 @@ import scala.concurrent.Future
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.grpc.GrpcClientSettings
 import akka.persistence.Persistence
@@ -154,7 +155,7 @@ final class GrpcReadJournal private (
       maxSlice: Int,
       offset: Offset): Source[EventEnvelope[Evt], NotUsed] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    log.debug(
+    log.debugN(
       "Starting eventsBySlices stream from [{}] [{}], slices [{} - {}], offset [{}]",
       clientSettings.serviceName,
       streamId,
@@ -193,7 +194,7 @@ final class GrpcReadJournal private (
     streamOut.map {
       case StreamOut(StreamOut.Message.Event(event), _) =>
         if (log.isTraceEnabled)
-          log.trace(
+          log.traceN(
             "Received {}event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
             if (event.payload.isEmpty) "backtracking " else "",
             clientSettings.serviceName,
@@ -205,7 +206,7 @@ final class GrpcReadJournal private (
 
       case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
         if (log.isTraceEnabled)
-          log.trace(
+          log.traceN(
             "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
             clientSettings.serviceName,
             filteredEvent.persistenceId,
@@ -275,7 +276,7 @@ final class GrpcReadJournal private (
 
   //LoadEventQuery
   override def loadEnvelope[Evt](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Evt]] = {
-    log.trace(
+    log.traceN(
       "Loading event from [{}] persistenceId [{}] with seqNr [{}]",
       clientSettings.serviceName,
       persistenceId,

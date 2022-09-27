@@ -41,7 +41,6 @@ object EventProducerServiceSpec {
 
   class TestEventsBySliceQuery()(implicit system: ActorSystem[_]) extends ReadJournal with EventsBySliceQuery {
     private val persistenceExt = Persistence(system)
-    private implicit val classicSystem = system.classicSystem
 
     private val testPublisherPromise =
       new ConcurrentHashMap[String, Promise[TestPublisher.Probe[EventEnvelope[String]]]]()
@@ -58,8 +57,7 @@ object EventProducerServiceSpec {
         maxSlice: Int,
         offset: Offset): Source[EventEnvelope[Event], NotUsed] = {
 
-      TestSource
-        .probe[EventEnvelope[String]]
+      TestSource[EventEnvelope[String]]()
         .mapMaterializedValue { probe =>
           val promise =
             testPublisherPromise.computeIfAbsent(entityType, _ => Promise[TestPublisher.Probe[EventEnvelope[String]]]())
@@ -112,7 +110,7 @@ class EventProducerServiceSpec
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
     eventProducerService
       .eventsBySlices(streamIn)
-      .toMat(TestSink[StreamOut])(Keep.right)
+      .toMat(TestSink[StreamOut]())(Keep.right)
       .mapMaterializedValue { probe =>
         probePromise.trySuccess(probe)
         NotUsed

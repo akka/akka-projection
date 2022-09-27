@@ -8,6 +8,7 @@ import java.time.Instant
 import scala.concurrent.Future
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.grpc.GrpcServiceException
 import akka.persistence.query.NoOffset
@@ -123,7 +124,7 @@ import scala.annotation.nowarn
         TimestampOffset(timestamp, seen)
     }
 
-    log.debug(
+    log.debugN(
       "Starting eventsBySlices stream [{}], [{}], slices [{} - {}], offset [{}]",
       producerSource.streamId,
       producerSource.entityType,
@@ -143,7 +144,7 @@ import scala.annotation.nowarn
         import system.executionContext
         transformAndEncodeEvent(producerSource.transformation, env).map {
           case Some(event) =>
-            log.trace(
+            log.traceN(
               "Emitting {}event from persistenceId [{}] with seqNr [{}], offset [{}]",
               if (event.payload.isEmpty) "backtracking " else "",
               env.persistenceId,
@@ -151,7 +152,7 @@ import scala.annotation.nowarn
               env.offset)
             StreamOut(StreamOut.Message.Event(event))
           case None =>
-            log.trace(
+            log.traceN(
               "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}]",
               env.persistenceId,
               env.sequenceNr,
@@ -236,14 +237,14 @@ import scala.annotation.nowarn
           .flatMap { env =>
             transformAndEncodeEvent(producerSource.transformation, env).map {
               case Some(event) =>
-                log.trace(
+                log.traceN(
                   "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
                   env.persistenceId,
                   env.sequenceNr,
                   env.offset)
                 LoadEventResponse(LoadEventResponse.Message.Event(event))
               case None =>
-                log.trace(
+                log.traceN(
                   "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
                   env.persistenceId,
                   env.sequenceNr,
