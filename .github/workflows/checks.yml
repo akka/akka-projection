@@ -110,35 +110,31 @@ jobs:
       - name: Cache Coursier cache
         uses: coursier/cache-action@v5
 
-      - name: Snapshot build of projections
+      - name: Gather version
         run: |-
-          echo "=== 1"
-          sbt "print akka-projection-core/version" | tail -n 1
-          echo "=== 2"
-          echo $(sbt "print akka-projection-core/version" | tail -n 1)
-          echo "=== 3"
-          VERSION=$(sbt "print akka-projection-core/version" | tail -n 1)
-          echo "$VERSION published locally for use in sample projects"
-          echo "akka_projection_version=$VERSION" >> $GITHUB_ENV
-          echo "=== 4"
+          echo `git describe --tags | sed -e "s/v\(.*\)-\([0-9][0-9]*\).*/\\1-\\2-/"``git rev-parse HEAD | head -c8`-SNAPSHOT > ~/.version
+          cat ~/.version
+
+      - name: Publish artifacts locally
+        run: |-
           sbt "publishLocal; publishM2"
 
       - name: Compile Java Projection gRPC sample Shopping Cart
         run: |-
           cd samples/grpc/shopping-cart-service-java
-          mvn compile -Dakka.projection.version="${{ env.akka_projection_version }}"
+          mvn compile -Dakka.projection.version=`cat ~/.version`
 
       - name: Compile Java Projection gRPC sample Analytics
         run: |-
           cd samples/grpc/shopping-analytics-java
-          mvn compile -Dakka.projection.version="${{ env.akka_projection_version }}"
+          mvn compile -Dakka.projection.version=`cat ~/.version`
 
       - name: Compile Scala Projection gRPC sample Shopping Cart
         run: |-
           cd samples/grpc/shopping-cart-service-scala
-          mvn compile -Dakka.projection.version="${{ env.akka_projection_version }}"
+          mvn compile -Dakka.projection.version=`cat ~/.version`
 
       - name: Compile Scala Projection gRPC sample Analytics
         run: |-
           cd samples/grpc/shopping-analytics-scala
-          mvn compile -Dakka.projection.version="${{ env.akka_projection_version }}"
+          mvn compile -Dakka.projection.version=`cat ~/.version`
