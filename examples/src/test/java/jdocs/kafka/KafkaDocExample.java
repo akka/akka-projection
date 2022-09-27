@@ -255,8 +255,7 @@ public interface KafkaDocExample {
     ProducerSettings<String, String> producerSettings =
         ProducerSettings.create(system, new StringSerializer(), new StringSerializer())
             .withBootstrapServers(bootstrapServers);
-    SendProducer<String, String> sendProducer =
-        new SendProducer<>(producerSettings, system);
+    SendProducer<String, String> sendProducer = new SendProducer<>(producerSettings, system);
     // #sendProducer
 
     // #sendToKafkaProjection
