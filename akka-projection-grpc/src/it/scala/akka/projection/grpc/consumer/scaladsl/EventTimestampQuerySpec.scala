@@ -25,7 +25,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import java.time.Instant
-import java.time.{ Duration => JDuration }
+import java.time.{Duration => JDuration}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._

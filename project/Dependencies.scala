@@ -12,12 +12,14 @@ object Dependencies {
   val AkkaVersionInDocs = "2.7"
   val AlpakkaVersionInDocs = "5.0"
   val AlpakkaKafkaVersionInDocs = "3.1"
+  val AkkaGrpcVersionInDocs = "2.1.3"
+  val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
 
   object Versions {
     val akka = sys.props.getOrElse("build.akka.version", "2.7.0-M2")
     val akkaHttp = "10.2.10"
     val akkaPersistenceJdbc = "5.2.0-M1"
-    val akkaPersistenceR2dbc = "1.0.0-M1"
+    val akkaPersistenceR2dbc = "1.0.0-M2"
     val alpakka = "5.0.0-M1"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.1.0-M1")
     val slick = "3.4.1"

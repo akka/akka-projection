@@ -5,10 +5,9 @@
 package shopping.cart
 
 import java.util.concurrent.TimeoutException
-
 import scala.concurrent.Future
-
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.grpc.GrpcServiceException
 import akka.util.Timeout
@@ -26,7 +25,7 @@ class ShoppingCartServiceImpl(system: ActorSystem[_]) extends proto.ShoppingCart
   private val sharding = ClusterSharding(system)
 
   override def addItem(in: proto.AddItemRequest): Future[proto.Cart] = {
-    logger.info("addItem {} to cart {}", in.itemId, in.cartId)
+    logger.info2("addItem {} to cart {}", in.itemId, in.cartId)
     val entityRef = sharding.entityRefFor(ShoppingCart.EntityKey, in.cartId)
     val reply: Future[ShoppingCart.Summary] =
       entityRef.askWithStatus(ShoppingCart.AddItem(in.itemId, in.quantity, _))

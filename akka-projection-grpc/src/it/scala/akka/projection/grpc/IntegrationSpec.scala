@@ -10,6 +10,7 @@ import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.grpc.GrpcClientSettings
 import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
@@ -68,7 +69,7 @@ object IntegrationSpec {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(envelope: EventEnvelope[String]): Future[Done] = {
-      log.debug("{} Processed {}", projectionId.key, envelope.event)
+      log.debug2("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
     }
@@ -79,7 +80,7 @@ object IntegrationSpec {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
-      log.debug("{} Processed {}", projectionId.key, envelope.event)
+      log.debug2("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
     }
