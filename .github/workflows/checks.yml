@@ -112,14 +112,16 @@ jobs:
 
       - name: Snapshot build of projections
         run: |-
-          echo "==="
+          echo "=== 1"
           sbt "print akka-projection-core/version" | tail -n 1
+          echo "=== 2"
           echo $(sbt "print akka-projection-core/version" | tail -n 1)
-          echo "==="
-          sbt "publishLocal; publishM2"
+          echo "=== 3"
           VERSION=$(sbt "print akka-projection-core/version" | tail -n 1)
           echo "$VERSION published locally for use in sample projects"
           echo "akka_projection_version=$VERSION" >> $GITHUB_ENV
+          echo "=== 4"
+          sbt "publishLocal; publishM2"
 
       - name: Compile Java Projection gRPC sample Shopping Cart
         run: |-
