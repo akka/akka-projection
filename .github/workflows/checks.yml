@@ -113,7 +113,7 @@ jobs:
       - name: Snapshot build of projections
         run: |- 
           sbt "publishLocal; publishM2"
-          VERSION=$(sbt akka-projection-core/version | tail -n 1 | cut -f 2 -d ' ')
+          VERSION=$(sbt "print akka-projection-core/version" | tail -n 1)
           echo "$VERSION published locally for use in sample projects"
           echo "akka_projection_version=$VERSION" >> $GITHUB_ENV
 
