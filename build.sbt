@@ -1,5 +1,8 @@
 import akka.projections.Dependencies
 
+// avoid + in snapshot versions
+ThisBuild / dynverSeparator := "-"
+
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
     .configs(IntegrationTest)
