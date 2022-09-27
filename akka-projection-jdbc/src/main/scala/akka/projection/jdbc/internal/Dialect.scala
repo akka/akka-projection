@@ -65,7 +65,7 @@ private[projection] object DialectDefaults {
          |  PRIMARY KEY("PROJECTION_NAME", "PROJECTION_KEY")
          |);""".stripMargin,
       // create index
-      s"""CREATE INDEX IF NOT EXISTS "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME");""")
+      s"""CREATE INDEX IF NOT EXISTS "AKKA_PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME");""")
 
   def dropTableStatement(table: String): String =
     s"""DROP TABLE IF EXISTS $table;"""
@@ -309,7 +309,7 @@ private[projection] case class MySQLDialect(schema: Option[String], tableName: S
          |  PRIMARY KEY(projection_name, projection_key)
          |);""".stripMargin,
       // create index
-      s"""CREATE INDEX projection_name_index ON $table (projection_name);""")
+      s"""CREATE INDEX akka_projection_name_index ON $table (projection_name);""")
 
   override val dropTableStatement: String =
     Dialect.removeQuotes(DialectDefaults.dropTableStatement(table))
@@ -379,7 +379,7 @@ private[projection] case class MSSQLServerDialect(
          |
          |  alter table $table add constraint pk_projection_id primary key(projection_name, projection_key)
          |
-         |  create index projection_name_index on $table (projection_name)
+         |  create index akka_projection_name_index on $table (projection_name)
          |end""".stripMargin)
 
   override val dropTableStatement: String = DialectDefaults.dropTableStatement(table)
@@ -441,7 +441,7 @@ private[projection] case class OracleDialect(_schema: Option[String], _tableName
          |
          |  execute immediate 'create table $table ("PROJECTION_NAME" VARCHAR2(255) NOT NULL,"PROJECTION_KEY" VARCHAR2(255) NOT NULL,"CURRENT_OFFSET" VARCHAR2(255) NOT NULL,"MANIFEST" VARCHAR2(4) NOT NULL,"MERGEABLE" CHAR(1) NOT NULL check ("MERGEABLE" in (0, 1)),"LAST_UPDATED" NUMBER(19) NOT NULL) ';
          |  execute immediate 'alter table $table add constraint "PK_PROJECTION_ID" primary key("PROJECTION_NAME","PROJECTION_KEY") ';
-         |  execute immediate 'create index "PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME") ';
+         |  execute immediate 'create index "AKKA_PROJECTION_NAME_INDEX" on $table ("PROJECTION_NAME") ';
          |  EXCEPTION
          |    WHEN OTHERS THEN
          |      IF SQLCODE = -955 THEN
