@@ -23,14 +23,13 @@ object AkkaDisciplinePlugin extends AutoPlugin {
   lazy val disciplineSettings =
     if (enabled) {
       Seq(
-        Compile / scalacOptions ++= (
-            if (!nonFatalWarningsFor(name.value)) Seq("-Xfatal-warnings")
-            else Seq.empty
-          ),
         Test / scalacOptions --= testUndicipline,
         Compile / scalacOptions ++= (CrossVersion.partialVersion(scalaVersion.value) match {
             case Some((2, 13)) =>
-              disciplineScalacOptions -- Set(
+              disciplineScalacOptions --
+              (if (nonFatalWarningsFor(name.value)) Seq("-Xfatal-warnings")
+               else Seq.empty) --
+              Set(
                 "-Ywarn-inaccessible",
                 "-Ywarn-infer-any",
                 "-Ywarn-nullary-override",
@@ -38,7 +37,8 @@ object AkkaDisciplinePlugin extends AutoPlugin {
                 "-Ypartial-unification",
                 "-Yno-adapted-args")
             case Some((2, 12)) =>
-              disciplineScalacOptions
+              // no fatal-warnings for 2.12
+              disciplineScalacOptions - "-Xfatal-warnings"
             case _ =>
               Nil
           }).toSeq,
