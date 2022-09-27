@@ -113,7 +113,7 @@ class EventProducerServiceSpec
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
     eventProducerService
       .eventsBySlices(streamIn)
-      .toMat(TestSink.probe[StreamOut])(Keep.right)
+      .toMat(TestSink[StreamOut])(Keep.right)
       .mapMaterializedValue { probe =>
         probePromise.trySuccess(probe)
         NotUsed

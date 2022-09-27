@@ -121,7 +121,7 @@ final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
   def runWithTestSink(projection: Projection[_])(assertFunction: TestSubscriber.Probe[Done] => Unit): Unit = {
     val actorHandler = spawnActorHandler(projection)
     implicit val sys: ActorSystem[_] = system
-    val sinkProbe = projection.mappedSource().runWith(TestSink.probe[Done](testKit.system.classicSystem))
+    val sinkProbe = projection.mappedSource().runWith(TestSink[Done]()(testKit.system.classicSystem))
     try {
       assertFunction(sinkProbe)
     } finally {
