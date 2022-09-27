@@ -111,9 +111,12 @@ jobs:
         uses: coursier/cache-action@v5
 
       - name: Snapshot build of projections
-        run: |- 
-          sbt "publishLocal; publishM2"
+        run: |-
+          echo "==="
           sbt "print akka-projection-core/version" | tail -n 1
+          echo $(sbt "print akka-projection-core/version" | tail -n 1)
+          echo "==="
+          sbt "publishLocal; publishM2"
           VERSION=$(sbt "print akka-projection-core/version" | tail -n 1)
           echo "$VERSION published locally for use in sample projects"
           echo "akka_projection_version=$VERSION" >> $GITHUB_ENV
