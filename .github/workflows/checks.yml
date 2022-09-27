@@ -113,7 +113,9 @@ jobs:
       - name: Snapshot build of projections
         run: |- 
           sbt "publishLocal; publishM2"
-          echo "akka_projection_version=$(sbt akka-projection-core/version | tail -n 1 | cut -f 2 -d ' ')" >> $GITHUB_ENV
+          VERSION=$(sbt akka-projection-core/version | tail -n 1 | cut -f 2 -d ' ')
+          echo "$VERSION published locally for use in sample projects"
+          echo "akka_projection_version=$VERSION" >> $GITHUB_ENV
 
       - name: Compile Java Projection gRPC sample Shopping Cart
         run: |-
