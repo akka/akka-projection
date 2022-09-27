@@ -19,8 +19,8 @@ object Dependencies {
     val akkaPersistenceJdbc = "5.2.0-M1"
     val akkaPersistenceR2dbc = "1.0.0-M1"
     val alpakka = "5.0.0-M1"
-    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.0.7")
-    val slick = "3.3.3"
+    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "2.1.0-M1")
+    val slick = "3.4.1"
     val scalaTest = "3.1.1"
     val testContainers = "1.15.3"
     val junit = "4.13.2"
