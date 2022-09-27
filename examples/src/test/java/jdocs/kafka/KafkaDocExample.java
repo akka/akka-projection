@@ -255,9 +255,8 @@ public interface KafkaDocExample {
     ProducerSettings<String, String> producerSettings =
         ProducerSettings.create(system, new StringSerializer(), new StringSerializer())
             .withBootstrapServers(bootstrapServers);
-    // FIXME classicSystem might not be needed in later Alpakka Kafka version?
     SendProducer<String, String> sendProducer =
-        new SendProducer<>(producerSettings, system.classicSystem());
+        new SendProducer<>(producerSettings, system);
     // #sendProducer
 
     // #sendToKafkaProjection

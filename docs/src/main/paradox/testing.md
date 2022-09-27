@@ -1,6 +1,6 @@
 # Testing
 
-Akka Projections provides a TestKit to ease testing. There are two supported styles of test: running with an assert function and driving it with an Akka Streams TestKit `TestSubscriber.Probe`.
+Akka Projections provides a TestKit to ease testing. There are two supported styles of test: running with an assert function and driving it with an Akka Streams TestKit `TestSink` probe.
 
 ## Dependencies
 
@@ -56,11 +56,11 @@ Scala
 Java
 :  @@snip [TestKitDocExample.java](/examples/src/test/java/jdocs/testkit/TestKitDocExample.java) { #testkit-duration #testkit-run-max-interval }  
 
-## Testing with a TestSubscriber.Probe
+## Testing with a TestSink probe
 
 The [Akka Stream TestKit](https://doc.akka.io/docs/akka/current/stream/stream-testkit.html#using-the-testkit) can be used to drive the pace of envelopes flowing through the Projection.
 
-The Projection starts as soon as the first element is requested by the `TestSubscriber.Probe`, new elements will be emitted as requested. The Projection is stopped once the assert function completes.
+The Projection starts as soon as the first element is requested by the `TestSink` probe, new elements will be emitted as requested. The Projection is stopped once the assert function completes.
 
 Scala
 :  @@snip [TestKitDocExample.scala](/examples/src/test/scala/docs/testkit/TestKitDocExample.scala) { #testkit-sink-probe }
