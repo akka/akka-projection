@@ -8,6 +8,7 @@ import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
@@ -25,7 +26,7 @@ object TestEntity {
         "", { (_, command) =>
           command match {
             case command: Persist =>
-              context.log.debug(
+              context.log.debugN(
                 "Persist [{}], pid [{}], seqNr [{}]",
                 command.payload,
                 pid.id,
