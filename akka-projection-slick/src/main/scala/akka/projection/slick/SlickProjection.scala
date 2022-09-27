@@ -4,6 +4,7 @@
 
 package akka.projection.slick
 
+import scala.annotation.nowarn
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -383,6 +384,7 @@ object SlickProjection {
       implicit system: ActorSystem[_]): Future[Done] =
     dropTablesIfExists(databaseConfig)
 
+  @nowarn("msg=never used")
   private def createOffsetStore[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]) =
     new SlickOffsetStore(system, databaseConfig.db, databaseConfig.profile, SlickSettings(system))

@@ -21,7 +21,7 @@ import akka.util.Timeout
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object TestProjectionSpec {
-  trait Command
+  sealed trait Command
   final case class Handle(envelope: Int, replyTo: ActorRef[Done]) extends Command
 
   def appender(strBuffer: StringBuffer): Behavior[Command] = Behaviors.receiveMessage {

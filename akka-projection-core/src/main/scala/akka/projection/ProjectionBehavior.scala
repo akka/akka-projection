@@ -115,9 +115,9 @@ object ProjectionBehavior {
           context.pipeToSelf(stoppedFut)(_ => Stopped)
           stopping()
 
-        case getOffset: GetOffset[Offset] =>
+        case getOffset: GetOffset[Offset] @unchecked =>
           running match {
-            case mgmt: RunningProjectionManagement[Offset] =>
+            case mgmt: RunningProjectionManagement[Offset] @unchecked =>
               if (getOffset.projectionId == projectionId) {
                 context.pipeToSelf(mgmt.getOffset()) {
                   case Success(offset) => GetOffsetResult(offset, getOffset.replyTo)
@@ -128,12 +128,12 @@ object ProjectionBehavior {
             case _ => Behaviors.unhandled
           }
 
-        case result: GetOffsetResult[Offset] =>
+        case result: GetOffsetResult[Offset] @unchecked =>
           receiveGetOffsetResult(result)
 
-        case setOffset: SetOffset[Offset] =>
+        case setOffset: SetOffset[Offset] @unchecked =>
           running match {
-            case mgmt: RunningProjectionManagement[Offset] =>
+            case mgmt: RunningProjectionManagement[Offset] @unchecked =>
               if (setOffset.projectionId == projectionId) {
                 context.log.info2(
                   "Offset will be changed to [{}] for projection [{}]. The Projection will be restarted.",
