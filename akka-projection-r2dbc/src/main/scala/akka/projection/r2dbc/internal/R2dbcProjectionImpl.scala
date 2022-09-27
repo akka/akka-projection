@@ -5,16 +5,15 @@
 package akka.projection.r2dbc.internal
 
 import java.util.concurrent.atomic.AtomicLong
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
@@ -101,9 +100,9 @@ private[projection] object R2dbcProjectionImpl {
         }).map { loadedEnv =>
           val count = loadEnvelopeCounter.incrementAndGet()
           if (count % 1000 == 0)
-            log.info("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
+            log.infoN("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
           else
-            log.debug("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
+            log.debugN("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
           loadedEnv.asInstanceOf[Envelope]
         }
 
@@ -120,13 +119,13 @@ private[projection] object R2dbcProjectionImpl {
           case GetObjectResult(Some(loadedValue), loadedRevision) =>
             val count = loadEnvelopeCounter.incrementAndGet()
             if (count % 1000 == 0)
-              log.info(
+              log.infoN(
                 "Loaded durable state lazily, persistenceId [{}], revision [{}]. Load count [{}]",
                 pid,
                 loadedRevision,
                 count)
             else
-              log.debug(
+              log.debugN(
                 "Loaded durable state lazily, persistenceId [{}], revision [{}]. Load count [{}]",
                 pid,
                 loadedRevision,
@@ -527,7 +526,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
 
     override protected def saveOffsetsAndReport(
         projectionId: ProjectionId,
-        batch: Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
+        batch: immutable.Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
       import R2dbcProjectionImpl.FutureDone
 
       val acceptedContexts =

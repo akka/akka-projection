@@ -326,7 +326,7 @@ class R2dbcTimestampOffsetProjectionSpec
       createEnvelope(pid1, 6, startTime.plusMillis(9), s"e1-6"))
   }
 
-  def groupedHandler(probe: ActorRef[String]): R2dbcHandler[Seq[EventEnvelope[String]]] = {
+  def groupedHandler(probe: ActorRef[String]): R2dbcHandler[immutable.Seq[EventEnvelope[String]]] = {
     R2dbcHandler[immutable.Seq[EventEnvelope[String]]] { (session, envelopes) =>
       probe ! "called"
       if (envelopes.isEmpty)
@@ -771,8 +771,8 @@ class R2dbcTimestampOffsetProjectionSpec
       val result1 = new StringBuffer()
       val result2 = new StringBuffer()
 
-      def handler(): Handler[Seq[EventEnvelope[String]]] = new Handler[Seq[EventEnvelope[String]]] {
-        override def process(envelopes: Seq[EventEnvelope[String]]): Future[Done] = {
+      def handler(): Handler[immutable.Seq[EventEnvelope[String]]] = new Handler[immutable.Seq[EventEnvelope[String]]] {
+        override def process(envelopes: immutable.Seq[EventEnvelope[String]]): Future[Done] = {
           Future
             .successful {
               envelopes.foreach { envelope =>
@@ -811,8 +811,8 @@ class R2dbcTimestampOffsetProjectionSpec
       val result1 = new StringBuffer()
       val result2 = new StringBuffer()
 
-      def handler(): Handler[Seq[EventEnvelope[String]]] = new Handler[Seq[EventEnvelope[String]]] {
-        override def process(envelopes: Seq[EventEnvelope[String]]): Future[Done] = {
+      def handler(): Handler[immutable.Seq[EventEnvelope[String]]] = new Handler[immutable.Seq[EventEnvelope[String]]] {
+        override def process(envelopes: immutable.Seq[EventEnvelope[String]]): Future[Done] = {
           Future
             .successful {
               envelopes.foreach { envelope =>

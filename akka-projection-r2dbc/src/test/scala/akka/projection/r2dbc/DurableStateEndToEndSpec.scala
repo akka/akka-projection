@@ -5,10 +5,8 @@
 package akka.projection.r2dbc
 
 import java.util.UUID
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -16,6 +14,7 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.query.DurableStateChange
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.r2dbc.state.scaladsl.R2dbcDurableStateStore
@@ -66,14 +65,14 @@ object DurableStateEndToEndSpec {
           { (_, command) =>
             command match {
               case command: Persist =>
-                context.log.debug(
+                context.log.debugN(
                   "Persist [{}], pid [{}], seqNr [{}]",
                   command.payload,
                   pid.id,
                   DurableStateBehavior.lastSequenceNumber(context) + 1)
                 Effect.persist(command.payload)
               case command: PersistWithAck =>
-                context.log.debug(
+                context.log.debugN(
                   "Persist [{}], pid [{}], seqNr [{}]",
                   command.payload,
                   pid.id,
@@ -100,7 +99,7 @@ object DurableStateEndToEndSpec {
     override def process(session: R2dbcSession, envelope: DurableStateChange[String]): Future[Done] = {
       envelope match {
         case upd: UpdatedDurableState[String] =>
-          log.debug("{} Processed {} revision {}", projectionId.key, upd.value, upd.revision)
+          log.debugN("{} Processed {} revision {}", projectionId.key, upd.value, upd.revision)
         case _ =>
       }
       processed :+= envelope

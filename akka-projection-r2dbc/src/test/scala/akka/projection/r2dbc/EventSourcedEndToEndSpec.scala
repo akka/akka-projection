@@ -6,11 +6,9 @@ package akka.projection.r2dbc
 
 import java.time.Instant
 import java.util.UUID
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -18,6 +16,7 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.R2dbcSettings
 import akka.persistence.r2dbc.internal.Sql.Interpolation
@@ -69,14 +68,14 @@ object EventSourcedEndToEndSpec {
           { (_, command) =>
             command match {
               case command: Persist =>
-                context.log.debug(
+                context.log.debugN(
                   "Persist [{}], pid [{}], seqNr [{}]",
                   command.payload,
                   pid.id,
                   EventSourcedBehavior.lastSequenceNumber(context) + 1)
                 Effect.persist(command.payload)
               case command: PersistWithAck =>
-                context.log.debug(
+                context.log.debugN(
                   "Persist [{}], pid [{}], seqNr [{}]",
                   command.payload,
                   pid.id,
@@ -84,7 +83,7 @@ object EventSourcedEndToEndSpec {
                 Effect.persist(command.payload).thenRun(_ => command.replyTo ! Done)
               case command: PersistAll =>
                 if (context.log.isDebugEnabled)
-                  context.log.debug(
+                  context.log.debugN(
                     "PersistAll [{}], pid [{}], seqNr [{}]",
                     command.payloads.mkString(","),
                     pid.id,
@@ -110,7 +109,7 @@ object EventSourcedEndToEndSpec {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
-      log.debug("{} Processed {}", projectionId.key, envelope.event)
+      log.debug2("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
     }
@@ -141,7 +140,7 @@ class EventSourcedEndToEndSpec
 
   // to be able to store events with specific timestamps
   private def writeEvent(persistenceId: String, seqNr: Long, timestamp: Instant, event: String): Unit = {
-    log.debug("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
+    log.debugN("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
     val insertEventSql = sql"""
       INSERT INTO ${journalSettings.journalTableWithSchema}
       (slice, entity_type, persistence_id, seq_nr, db_timestamp, writer, adapter_manifest, event_ser_id, event_ser_manifest, event_payload)
