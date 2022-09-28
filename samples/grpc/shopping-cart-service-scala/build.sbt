@@ -23,8 +23,8 @@ run / fork := false
 Global / cancelable := false // ctrl-c
 
 val AkkaVersion = "2.7.0-M1"
-val AkkaHttpVersion = "10.2.10"
-val AkkaManagementVersion = "1.1.4"
+val AkkaHttpVersion = "10.4.0-M1"
+val AkkaManagementVersion = "1.2.0-M1"
 val AkkaPersistenceR2dbcVersion = "1.0.0-M2"
 // FIXME released version
 val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0-M1+39-43a9bd9a+20220926-1715-SNAPSHOT")
@@ -54,7 +54,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.2.9",
+  "ch.qos.logback" % "logback-classic" % "1.2.11",
   "org.scalatest" %% "scalatest" % "3.1.2" % Test,
   // 2. Using gRPC and/or protobuf
   "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
@@ -63,7 +63,6 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
-  "org.postgresql" % "postgresql" % "42.2.18",
   // 4. Querying and publishing data from Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
   "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaPersistenceR2dbcVersion,

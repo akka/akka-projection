@@ -213,17 +213,7 @@ object Dependencies {
         Test.logback,
         Test.scalatest,
         Test.akkaDiscovery,
-        Test.postgresContainer,
-        // akka-management dependencies for the Scala sample. Can be removed when that sample is
-        // removed or moved to a standalone sample as the Java samples.
-        "com.lightbend.akka.management" %% "akka-management" % "1.1.2" % "test",
-        "com.lightbend.akka.management" %% "akka-management-cluster-http" % "1.1.2" % "test",
-        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % "1.1.2" % "test",
-        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % "1.1.2" % "test",
-        "com.typesafe.akka" %% "akka-discovery" % Versions.akka % "test",
-        "com.typesafe.akka" %% "akka-http" % Versions.akkaHttp % "test",
-        "com.typesafe.akka" %% "akka-http-spray-json" % Versions.akkaHttp % "test",
-        "com.typesafe.akka" %% "akka-http2-support" % Versions.akkaHttp % "test")
+        Test.postgresContainer)
 
   val examples =
     deps ++= Seq(
