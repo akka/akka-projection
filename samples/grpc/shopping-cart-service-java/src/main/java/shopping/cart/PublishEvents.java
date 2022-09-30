@@ -5,7 +5,9 @@ import akka.actor.typed.ActorSystem;
 import akka.http.javadsl.model.HttpRequest;
 import akka.http.javadsl.model.HttpResponse;
 import akka.japi.function.Function;
+import akka.projection.grpc.producer.EventProducerSettings;
 import akka.projection.grpc.producer.javadsl.EventProducer;
+import akka.projection.grpc.producer.javadsl.EventProducerSource;
 import akka.projection.grpc.producer.javadsl.Transformation;
 
 import java.util.Optional;
@@ -24,7 +26,14 @@ public class PublishEvents {
             .registerMapper(ShoppingCart.ItemRemoved.class, event -> Optional.of(transformItemRemoved(event)))
             .registerMapper(ShoppingCart.CheckedOut.class, event -> Optional.of(transformCheckedOut(event)));
 
-    return EventProducer.grpcServiceHandler(system, transformation);
+    EventProducerSource eventProducerSource = new EventProducerSource(
+        "ShoppingCart",
+        "cart",
+        transformation,
+        EventProducerSettings.apply(system)
+    );
+
+    return EventProducer.grpcServiceHandler(system, eventProducerSource);
   }
   //#eventProducerService
 

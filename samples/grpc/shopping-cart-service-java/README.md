@@ -7,7 +7,7 @@
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
-    docker exec -i docker_postgres-db_1 psql -U postgres -t < ddl-scripts/create_tables_postgres.sql
+    docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
     ```
 
 2. Make sure you have compiled the project

@@ -86,3 +86,56 @@ jobs:
 
       - name: Create all API docs for artifacts/website and all reference docs
         run: sbt "unidoc; docs/paradox"
+
+  check-samples:
+    name: Check Sample Projects
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Set up JDK 11
+        uses: olafurpg/setup-scala@v10
+        with:
+          java-version: adopt@1.11.0-9
+
+      - name: Cache Coursier cache
+        uses: coursier/cache-action@v5
+
+      - name: Gather version
+        run: |-
+          echo `git describe --tags | sed -e "s/v\(.*\)-\([0-9][0-9]*\).*/\\1-\\2-/"``git rev-parse HEAD | head -c8`-SNAPSHOT > ~/.version
+          cat ~/.version
+
+      - name: Publish artifacts locally
+        run: |-
+          sbt "publishLocal; publishM2"
+
+      - name: Compile Scala Projection gRPC sample Shopping Cart
+        run: |-
+          cd samples/grpc/shopping-cart-service-scala
+          sbt compile -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Scala Projection gRPC sample Analytics
+        run: |-
+          cd samples/grpc/shopping-analytics-service-scala
+          sbt compile -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Java Projection gRPC sample Shopping Cart
+        run: |-
+          cd samples/grpc/shopping-cart-service-java
+          mvn compile -nsu -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Java Projection gRPC sample Analytics
+        run: |-
+          cd samples/grpc/shopping-analytics-service-java
+          mvn compile -nsu -Dakka-projection.version=`cat ~/.version`
+
