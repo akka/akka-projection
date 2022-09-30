@@ -16,7 +16,7 @@ object Dependencies {
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.7.0-M2")
+    val akka = sys.props.getOrElse("build.akka.version", "2.7.0-M3")
     val akkaPersistenceJdbc = "5.2.0-M1"
     val akkaPersistenceR2dbc = "1.0.0-M2"
     val alpakka = "5.0.0-M1"
