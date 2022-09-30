@@ -20,15 +20,17 @@ Test / parallelExecution := false
 Test / testOptions += Tests.Argument("-oDF")
 Test / logBuffered := false
 
-run / fork := false
+run / fork := true
+// pass along config selection to forked jvm
+run / javaOptions ++= sys.props.get("config.resource").fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.7.0-M1"
+val AkkaVersion = "2.7.0-M3"
 val AkkaHttpVersion = "10.4.0-M1"
 val AkkaManagementVersion = "1.2.0-M1"
 val AkkaPersistenceR2dbcVersion = "1.0.0-M2"
-// FIXME released version
-val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0-M1+39-43a9bd9a+20220926-1715-SNAPSHOT")
+// FIXME final release version
+val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0-M2")
 
 enablePlugins(AkkaGrpcPlugin)
 
