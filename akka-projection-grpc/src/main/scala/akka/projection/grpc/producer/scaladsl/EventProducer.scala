@@ -4,16 +4,19 @@
 
 package akka.projection.grpc.producer.scaladsl
 
+import akka.Done
+
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-
 import akka.actor.typed.ActorSystem
+import akka.annotation.ApiMayChange
+import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
-import akka.projection.grpc.internal.proto.EventProducerServiceHandler
+import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.projection.grpc.producer.EventProducerSettings
 
 /**
@@ -84,17 +87,30 @@ object EventProducer {
 
   /**
    * The gRPC route that can be included in an Akka HTTP server.
+   *
+   * @param sources All sources that should be available from this event producer
    */
   def grpcServiceHandler(sources: Set[EventProducerSource])(
+      implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
+
+    grpcServiceHandler(sources, None)
+  }
+
+  /**
+   * The gRPC route that can be included in an Akka HTTP server.
+   *
+   * @param sources All sources that should be available from this event producer
+   * @param interceptor An optional request interceptor applied to each request to the service
+   */
+  @ApiMayChange
+  def grpcServiceHandler(sources: Set[EventProducerSource], interceptor: Option[EventProducerInterceptor])(
       implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
 
     val eventsBySlicesQueriesPerStreamId =
       eventsBySlicesQueriesForStreamIds(sources, system)
 
-    val eventProducerService =
-      new EventProducerServiceImpl(system, eventsBySlicesQueriesPerStreamId, sources)
-
-    EventProducerServiceHandler.partial(eventProducerService)
+    EventProducerServicePowerApiHandler.partial(
+      new EventProducerServiceImpl(system, eventsBySlicesQueriesPerStreamId, sources, interceptor))
   }
 
   /**
@@ -125,5 +141,20 @@ object EventProducer {
         sourcesUsingIt.map(eps => eps.streamId -> eventsBySlicesQuery)
     }
   }
+
+}
+
+/**
+ * Interceptor allowing for example authentication/authorization of incoming requests to consume a specific stream.
+ */
+@ApiMayChange
+trait EventProducerInterceptor {
+
+  /**
+   * Let's requests through if method returns, can fail request by throwing asynchronously failing the returned
+   * future with a [[akka.grpc.GrpcServiceException]]
+   *
+   */
+  def intercept(streamId: String, requestMetadata: Metadata): Future[Done]
 
 }

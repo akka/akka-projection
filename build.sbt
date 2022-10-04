@@ -112,7 +112,9 @@ lazy val grpc =
     .enablePlugins(AkkaGrpcPlugin)
     .settings(
       // no previous artifact so must disable MiMa until this is released at least once.
-      mimaPreviousArtifacts := Set.empty)
+      mimaPreviousArtifacts := Set.empty,
+      akkaGrpcCodeGeneratorSettings += "server_power_apis"
+    )
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))

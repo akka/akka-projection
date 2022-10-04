@@ -91,6 +91,12 @@ Java
 This example includes an application specific `ShoppingCartService`, which is unrelated to Akka Projections gRPC,
 but it illustrates how to combine the `EventProducer` service with other gRPC services.
 
+## Control access to the producer
+
+Authentication and authorization for the producer can be done by implementing a @apidoc[EventProducerInterceptor] and pass
+it to the `grpcServiceHandler` method during producer bootstrap. The interceptor is invoked with the stream id and 
+gRPC request metadata for each incoming request and can return a suitable error through @apidoc[GrpcServiceException]
+
 ## Performance considerations
 
 ### Lower latency
