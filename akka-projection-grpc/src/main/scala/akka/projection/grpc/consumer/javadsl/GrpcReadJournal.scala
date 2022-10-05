@@ -8,11 +8,10 @@ import java.time.Instant
 import java.util
 import java.util.Optional
 import java.util.concurrent.CompletionStage
-
 import scala.compat.java8.OptionConverters._
 import scala.compat.java8.FutureConverters._
-
 import akka.NotUsed
+import akka.annotation.ApiMayChange
 import akka.dispatch.ExecutionContexts
 import akka.japi.Pair
 import akka.persistence.query.Offset
@@ -24,10 +23,12 @@ import akka.persistence.query.typed.javadsl.LoadEventQuery
 import akka.projection.grpc.consumer.scaladsl
 import akka.stream.javadsl.Source
 
+@ApiMayChange
 object GrpcReadJournal {
   val Identifier: String = scaladsl.GrpcReadJournal.Identifier
 }
 
+@ApiMayChange
 class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     extends ReadJournal
     with EventsBySliceQuery

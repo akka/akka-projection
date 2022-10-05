@@ -4,6 +4,7 @@
 
 package akka.projection.grpc.consumer
 
+import akka.annotation.ApiMayChange
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import com.typesafe.config.Config
@@ -12,6 +13,7 @@ import akka.util.ccompat.JavaConverters._
 import java.util.Optional
 import scala.compat.java8.OptionConverters._
 
+@ApiMayChange
 object GrpcQuerySettings {
   def apply(config: Config): GrpcQuerySettings = {
     val streamId = config.getString("stream-id")
@@ -79,6 +81,7 @@ object GrpcQuerySettings {
   }
 }
 
+@ApiMayChange
 final class GrpcQuerySettings(
     val streamId: String,
     val protoClassMapping: Map[String, String],

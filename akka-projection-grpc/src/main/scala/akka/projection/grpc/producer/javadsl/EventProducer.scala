@@ -9,6 +9,7 @@ import akka.Done
 import java.util.concurrent.CompletionStage
 import scala.compat.java8.FutureConverters._
 import akka.actor.typed.ActorSystem
+import akka.annotation.ApiMayChange
 import akka.dispatch.ExecutionContexts
 import akka.grpc.internal.JavaMetadataImpl
 import akka.grpc.scaladsl.{ Metadata => ScalaMetadata }
@@ -27,6 +28,7 @@ import scala.concurrent.Future
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
  */
+@ApiMayChange
 object EventProducer {
 
   /**

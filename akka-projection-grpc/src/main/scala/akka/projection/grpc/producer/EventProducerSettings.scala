@@ -5,8 +5,10 @@
 package akka.projection.grpc.producer
 
 import akka.actor.typed.ActorSystem
+import akka.annotation.ApiMayChange
 import com.typesafe.config.Config
 
+@ApiMayChange
 object EventProducerSettings {
   def apply(system: ActorSystem[_]): EventProducerSettings =
     apply(system.settings.config.getConfig("akka.projection.grpc.producer"))
@@ -20,8 +22,8 @@ object EventProducerSettings {
   }
 }
 
-case class EventProducerSettings(queryPluginId: String, transformationParallelism: Int) {
-
+@ApiMayChange
+final case class EventProducerSettings(queryPluginId: String, transformationParallelism: Int) {
   require(transformationParallelism >= 1, "Configuration property [transformation-parallelism] must be >= 1.")
 
 }

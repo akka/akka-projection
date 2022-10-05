@@ -13,6 +13,7 @@ import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
+import akka.annotation.ApiMayChange
 import akka.grpc.GrpcClientSettings
 import akka.grpc.scaladsl.SingleResponseRequestBuilder
 import akka.grpc.scaladsl.BytesEntry
@@ -49,6 +50,7 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+@ApiMayChange
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
 
@@ -80,6 +82,7 @@ object GrpcReadJournal {
 
 }
 
+@ApiMayChange
 final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,

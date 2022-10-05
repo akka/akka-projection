@@ -4,17 +4,18 @@
 
 package akka.projection.grpc.producer.javadsl
 
+import akka.annotation.ApiMayChange
+
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.{ Function => JFunction }
-
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.reflect.ClassTag
-
 import akka.dispatch.ExecutionContexts
 import akka.projection.grpc.producer.scaladsl
 
+@ApiMayChange
 object Transformation {
   val empty: Transformation = new Transformation(scaladsl.EventProducer.Transformation.empty)
 
@@ -28,6 +29,7 @@ object Transformation {
  * Transformation of events to the external (public) representation.
  * Events can be excluded by mapping them to `Optional.empty`.
  */
+@ApiMayChange
 final class Transformation private (private[akka] val delegate: scaladsl.EventProducer.Transformation) {
 
   def registerAsyncMapper[A, B](

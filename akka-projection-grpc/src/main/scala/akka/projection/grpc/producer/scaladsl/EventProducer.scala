@@ -22,6 +22,7 @@ import akka.projection.grpc.producer.EventProducerSettings
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
  */
+@ApiMayChange
 object EventProducer {
 
   /**
@@ -30,6 +31,7 @@ object EventProducer {
    * @param transformation Transformations for turning the internal events to public message types
    * @param settings The event producer settings used (can be shared for multiple sources)
    */
+  @ApiMayChange
   final case class EventProducerSource(
       entityType: String,
       streamId: String,
@@ -39,6 +41,7 @@ object EventProducer {
     require(streamId.nonEmpty, "Stream id must not be empty")
   }
 
+  @ApiMayChange
   object Transformation {
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
@@ -56,6 +59,7 @@ object EventProducer {
    * Transformation of events to the external (public) representation.
    * Events can be excluded by mapping them to `None`.
    */
+  @ApiMayChange
   final class Transformation private (
       val mappers: Map[Class[_], Any => Future[Option[Any]]],
       val orElse: Any => Future[Option[Any]]) {
@@ -102,7 +106,6 @@ object EventProducer {
    * @param sources All sources that should be available from this event producer
    * @param interceptor An optional request interceptor applied to each request to the service
    */
-  @ApiMayChange
   def grpcServiceHandler(sources: Set[EventProducerSource], interceptor: Option[EventProducerInterceptor])(
       implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
 
