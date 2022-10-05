@@ -108,10 +108,6 @@
             <artifactId>akka-management-cluster-bootstrap_${scala.binary.version}</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.lightbend.akka.discovery</groupId>
-            <artifactId>akka-discovery-kubernetes-api_${scala.binary.version}</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.lightbend.akka.grpc</groupId>
             <artifactId>akka-grpc-runtime_${scala.binary.version}</artifactId>
         </dependency>
