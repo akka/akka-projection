@@ -7,10 +7,10 @@ package akka.projection.grpc.consumer
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import com.typesafe.config.Config
+import akka.util.ccompat.JavaConverters._
 
 import java.util.Optional
-import scala.jdk.CollectionConverters.MapHasAsScala
-import scala.jdk.OptionConverters.RichOptional
+import scala.compat.java8.OptionConverters._
 
 object GrpcQuerySettings {
   def apply(config: Config): GrpcQuerySettings = {
@@ -75,7 +75,7 @@ object GrpcQuerySettings {
       streamId: String,
       protoClassMapping: java.util.Map[String, String],
       additionalRequestMetadata: Optional[akka.grpc.javadsl.Metadata]): GrpcQuerySettings = {
-    new GrpcQuerySettings(streamId, protoClassMapping.asScala.toMap, additionalRequestMetadata.toScala.map(_.asScala))
+    new GrpcQuerySettings(streamId, protoClassMapping.asScala.toMap, additionalRequestMetadata.asScala.map(_.asScala))
   }
 }
 

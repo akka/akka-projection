@@ -17,12 +17,12 @@ import akka.japi.function.{ Function => JapiFunction }
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
+import akka.util.ccompat.JavaConverters._
 
 import java.util.Collections
 import java.util.Optional
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.concurrent.Future
-import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOptional
 
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
@@ -68,7 +68,7 @@ object EventProducer {
       system,
       eventsBySlicesQueriesPerStreamId,
       scalaProducerSources,
-      interceptor.toScala.map(new InterceptorAdapter(_)))
+      interceptor.asScala.map(new InterceptorAdapter(_)))
 
     val handler = EventProducerServicePowerApiHandler(eventProducerService)(system)
     new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
