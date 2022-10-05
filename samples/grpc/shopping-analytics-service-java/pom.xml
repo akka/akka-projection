@@ -20,8 +20,8 @@
         <akka-grpc-maven-plugin.version>2.2.0-M1</akka-grpc-maven-plugin.version>
         <scala.binary.version>2.13</scala.binary.version>
         <akka-persistence-r2dbc.version>1.0.0-M2</akka-persistence-r2dbc.version>
-        <!-- FIXME released version -->
-        <akka-projection.version>1.3.0-M1+39-43a9bd9a+20220926-1714-SNAPSHOT</akka-projection.version>
+        <!-- FIXME final release version -->
+        <akka-projection.version>1.3.0-M2</akka-projection.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
         <!-- Version of the Docker image is derived from git commit.
@@ -106,10 +106,6 @@
         <dependency>
             <groupId>com.lightbend.akka.management</groupId>
             <artifactId>akka-management-cluster-bootstrap_${scala.binary.version}</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.lightbend.akka.discovery</groupId>
-            <artifactId>akka-discovery-kubernetes-api_${scala.binary.version}</artifactId>
         </dependency>
         <dependency>
             <groupId>com.lightbend.akka.grpc</groupId>
