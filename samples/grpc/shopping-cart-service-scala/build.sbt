@@ -21,7 +21,9 @@ Test / logBuffered := false
 
 run / fork := true
 // pass along config selection to forked jvm
-run / javaOptions ++= sys.props.get("config.resource").fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
+run / javaOptions ++= sys.props
+  .get("config.resource")
+  .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
 val AkkaVersion = "2.7.0-M3"
@@ -29,7 +31,8 @@ val AkkaHttpVersion = "10.4.0-M1"
 val AkkaManagementVersion = "1.2.0-M1"
 val AkkaPersistenceR2dbcVersion = "1.0.0-M2"
 // FIXME final release version
-val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0-M2")
+val AkkaProjectionVersion =
+  sys.props.getOrElse("akka-projection.version", "1.3.0-M2-1-c7838fe8-20221006-0811-SNAPSHOT")
 
 enablePlugins(AkkaGrpcPlugin)
 

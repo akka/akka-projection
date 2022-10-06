@@ -21,7 +21,7 @@
         <scala.binary.version>2.13</scala.binary.version>
         <akka-persistence-r2dbc.version>1.0.0-M2</akka-persistence-r2dbc.version>
         <!-- FIXME final release version -->
-        <akka-projection.version>1.3.0-M2</akka-projection.version>
+        <akka-projection.version>1.3.0-M2-1-c7838fe8-20221006-0811-SNAPSHOT</akka-projection.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
         <!-- Version of the Docker image is derived from git commit.

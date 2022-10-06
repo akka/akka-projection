@@ -4,26 +4,26 @@
 
 package akka.projection.grpc.producer.javadsl
 
-import akka.Done
-
+import java.util.Collections
+import java.util.Optional
 import java.util.concurrent.CompletionStage
+
 import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
+import scala.concurrent.Future
+
+import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.dispatch.ExecutionContexts
 import akka.grpc.internal.JavaMetadataImpl
 import akka.grpc.scaladsl.{ Metadata => ScalaMetadata }
-import akka.projection.grpc.internal.EventProducerServiceImpl
-import akka.japi.function.{ Function => JapiFunction }
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
+import akka.japi.function.{ Function => JapiFunction }
+import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.util.ccompat.JavaConverters._
-
-import java.util.Collections
-import java.util.Optional
-import scala.compat.java8.OptionConverters.RichOptionalGeneric
-import scala.concurrent.Future
 
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.

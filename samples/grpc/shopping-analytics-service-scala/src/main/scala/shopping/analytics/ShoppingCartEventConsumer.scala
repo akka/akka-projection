@@ -2,9 +2,11 @@ package shopping.analytics
 
 //#initProjections
 import scala.concurrent.Future
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
+import akka.grpc.GrpcClientSettings
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionBehavior
@@ -18,6 +20,7 @@ import shoppingcart.CheckedOut
 import shoppingcart.ItemAdded
 import shoppingcart.ItemQuantityAdjusted
 import shoppingcart.ItemRemoved
+import shoppingcart.ShoppingCartEventsProto
 
 object ShoppingCartEventConsumer {
   //#initProjections
@@ -115,9 +118,20 @@ object ShoppingCartEventConsumer {
         val sliceRange = sliceRanges(idx)
         val projectionKey = s"$streamId-${sliceRange.start}-${sliceRange.end}"
         val projectionId = ProjectionId.of(projectionName, projectionKey)
+
+        val eventsBySlicesQuery = GrpcReadJournal(
+          system,
+          streamId,
+          List(
+            ShoppingCartEventsProto.javaDescriptor
+          ), // FIXME should we support the scalaDescriptor?
+          GrpcClientSettings.fromConfig( // FIXME this is rather inconvenient
+            system.settings.config
+              .getConfig("akka.projection.grpc.consumer.client"))(system))
+
         val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
           system,
-          GrpcReadJournal.Identifier,
+          eventsBySlicesQuery,
           streamId,
           sliceRange.start,
           sliceRange.end)

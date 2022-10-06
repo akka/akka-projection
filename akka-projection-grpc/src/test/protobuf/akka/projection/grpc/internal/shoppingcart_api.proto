@@ -1,0 +1,50 @@
+// This is the public API offered by the shopping cart entity.
+
+syntax = "proto3";
+
+package com.example.shoppingcart;
+
+option java_multiple_files = true;
+
+import "google/protobuf/empty.proto";
+
+message AddLineItem {
+  string cart_id = 1;
+  string product_id = 2;
+  string name = 3;
+  int32 quantity = 4;
+}
+
+message AddLineItems {
+  string cart_id = 1;
+  repeated LineItem items = 2;
+}
+
+message RemoveLineItem {
+  string cart_id = 1;
+  string product_id = 2;
+}
+
+message GetShoppingCart {
+  string cart_id = 1;
+}
+
+message LineItem {
+  string product_id = 1;
+  string name = 2;
+  int32 quantity = 3;
+}
+
+message Cart {
+  repeated LineItem items = 1;
+}
+
+service ShoppingCartService {
+  rpc AddItem(AddLineItem) returns (google.protobuf.Empty);
+
+  rpc AddItems(AddLineItems) returns (google.protobuf.Empty);
+
+  rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty);
+
+  rpc GetCart(GetShoppingCart) returns (Cart);
+}
