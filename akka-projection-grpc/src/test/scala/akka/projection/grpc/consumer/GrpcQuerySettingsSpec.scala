@@ -14,9 +14,6 @@ class GrpcQuerySettingsSpec extends AnyWordSpecLike with Matchers {
     "parse from config" in {
       val config = ConfigFactory.parseString(""" 
         stream-id = "my-stream-id"
-        proto-class-mapping {
-          "proto.MyMessage" = "java.MyClass"
-        }
         additional-request-headers {
           "x-auth-header" = "secret"
         }
@@ -24,7 +21,6 @@ class GrpcQuerySettingsSpec extends AnyWordSpecLike with Matchers {
 
       val settings = GrpcQuerySettings(config)
       settings.streamId shouldBe "my-stream-id"
-      settings.protoClassMapping shouldBe (Map("proto.MyMessage" -> "java.MyClass"))
       settings.additionalRequestMetadata.map(_.asList) shouldBe Some(List("x-auth-header" -> StringEntry("secret")))
     }
   }
