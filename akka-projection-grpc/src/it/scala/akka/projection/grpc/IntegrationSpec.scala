@@ -136,11 +136,11 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
         GrpcReadJournal(
           GrpcQuerySettings(
             streamId = streamId,
-            protoClassMapping = Map.empty,
             additionalRequestMetadata = Some(new MetadataBuilder().addText("x-secret", "top_secret").build())),
           GrpcClientSettings
             .connectToServiceAt("127.0.0.1", grpcPort)
-            .withTls(false)),
+            .withTls(false),
+          protobufDescriptors = Nil),
         // FIXME: error prone that it needs to be passed both to GrpcReadJournal and here?
         // but on the consuming side we don't know about the producing side entity types
         streamId,

@@ -6,17 +6,20 @@ package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
 import scala.collection.immutable
 import scala.concurrent.Future
+
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.grpc.GrpcClientSettings
-import akka.grpc.scaladsl.SingleResponseRequestBuilder
 import akka.grpc.scaladsl.BytesEntry
+import akka.grpc.scaladsl.SingleResponseRequestBuilder
 import akka.grpc.scaladsl.StreamResponseRequestBuilder
 import akka.grpc.scaladsl.StringEntry
 import akka.persistence.Persistence
@@ -31,6 +34,7 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
+import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.Event
@@ -44,6 +48,7 @@ import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.stream.scaladsl.Source
+import com.google.protobuf.Descriptors
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
@@ -61,18 +66,35 @@ object GrpcReadJournal {
    * Construct a gRPC read journal for the given settings and explicit `GrpcClientSettings` to control
    * how to reach the Akka Projection gRPC producer service (host, port etc).
    */
-  def apply(settings: GrpcQuerySettings, clientSettings: GrpcClientSettings)(
-      implicit system: ClassicActorSystemProvider) = {
+  def apply(settings: GrpcQuerySettings, clientSettings: GrpcClientSettings, protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])( // FIXME should we support the scalaDescriptor?
+      implicit system: ClassicActorSystemProvider): GrpcReadJournal =
+    apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
 
-    val clientSettingsWithOverrides =
-      // compose with potential user overrides to allow overriding our defaults
-      clientSettings.withChannelBuilderOverrides(
-        channelBuilderOverrides.andThen(clientSettings.channelBuilderOverrides))
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def apply(
+      settings: GrpcQuerySettings,
+      clientSettings: GrpcClientSettings,
+      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
+      protobufPrefer: ProtoAnySerialization.Prefer)(implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
+
+    // FIXME This probably means that one GrpcReadJournal instance is created for each Projection instance,
+    // and therefore one grpc client for each. Is that fine or should the client be shared for same clientSettings?
+
+    val protoAnySerialization =
+      new ProtoAnySerialization(system.classicSystem.toTyped, protobufDescriptors, protobufPrefer)
 
     new scaladsl.GrpcReadJournal(
       system.classicSystem.asInstanceOf[ExtendedActorSystem],
       settings,
-      clientSettingsWithOverrides)
+      withChannelBuilderOverrides(clientSettings),
+      protoAnySerialization)
+  }
+
+  private def withChannelBuilderOverrides(clientSettings: GrpcClientSettings): GrpcClientSettings = {
+    // compose with potential user overrides to allow overriding our defaults
+    clientSettings.withChannelBuilderOverrides(channelBuilderOverrides.andThen(clientSettings.channelBuilderOverrides))
   }
 
   private def channelBuilderOverrides: NettyChannelBuilder => NettyChannelBuilder =
@@ -86,21 +108,33 @@ object GrpcReadJournal {
 final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,
-    clientSettings: GrpcClientSettings)
+    clientSettings: GrpcClientSettings,
+    protoAnySerialization: ProtoAnySerialization)
     extends ReadJournal
     with EventsBySliceQuery
     with EventTimestampQuery
     with LoadEventQuery {
   import GrpcReadJournal.log
 
+  // when used as delegate in javadsl
+  private[akka] def this(
+      system: ExtendedActorSystem,
+      config: Config,
+      cfgPath: String,
+      protoAnyPrefer: ProtoAnySerialization.Prefer) =
+    this(
+      system,
+      GrpcQuerySettings(config),
+      withChannelBuilderOverrides(GrpcClientSettings.fromConfig(config.getConfig("client"))(system)),
+      // FIXME can/should we load descriptors from config?
+      new ProtoAnySerialization(system.toTyped, descriptors = Nil, protoAnyPrefer))
+
   // entry point when created through Akka Persistence
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
-    this(system, GrpcQuerySettings(config), GrpcClientSettings.fromConfig(config.getConfig("client"))(system))
+    this(system, config, cfgPath, ProtoAnySerialization.Prefer.Scala)
 
   private implicit val typedSystem = system.toTyped
   private val persistenceExt = Persistence(system)
-  private val protoAnySerialization =
-    new ProtoAnySerialization(system.toTyped, settings.protoClassMapping)
 
   private val client = EventProducerServiceClient(clientSettings)
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
@@ -238,7 +272,7 @@ final class GrpcReadJournal private (
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
     val eventOffset = timestampOffset(event.offset.get)
     val evt =
-      event.payload.map(protoAnySerialization.decode(_).asInstanceOf[Evt])
+      event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
 
     new EventEnvelope(
       eventOffset,

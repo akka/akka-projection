@@ -59,8 +59,9 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
     lazy val entity = spawn(TestEntity(pid))
 
     lazy val grpcReadJournal = GrpcReadJournal(
-      GrpcQuerySettings(streamId, Map.empty, None),
-      GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")))
+      GrpcQuerySettings(streamId, None),
+      GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")),
+      protobufDescriptors = Nil)
   }
 
   override protected def beforeAll(): Unit = {

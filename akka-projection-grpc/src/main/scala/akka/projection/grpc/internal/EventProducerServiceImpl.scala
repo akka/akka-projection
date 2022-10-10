@@ -77,8 +77,7 @@ import scala.annotation.nowarn
       s"No events by slices query defined for stream id [${s.streamId}]")
   }
 
-  private val protoAnySerialization =
-    new ProtoAnySerialization(system, protoClassMapping = Map.empty)
+  private val protoAnySerialization = new ProtoAnySerialization(system)
 
   private val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
     sources.map(s => s.streamId -> s).toMap
@@ -207,7 +206,7 @@ import scala.annotation.nowarn
 
         f(event).map {
           _.map { transformedEvent =>
-            val protoEvent = protoAnySerialization.encode(transformedEvent)
+            val protoEvent = protoAnySerialization.serialize(transformedEvent)
             Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), Some(protoEvent))
           }
         }

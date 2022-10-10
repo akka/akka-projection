@@ -8,11 +8,15 @@ import java.time.Instant
 import java.util
 import java.util.Optional
 import java.util.concurrent.CompletionStage
-import scala.compat.java8.OptionConverters._
+
 import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
+
 import akka.NotUsed
+import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.dispatch.ExecutionContexts
+import akka.grpc.GrpcClientSettings
 import akka.japi.Pair
 import akka.persistence.query.Offset
 import akka.persistence.query.javadsl.ReadJournal
@@ -20,12 +24,31 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.javadsl.EventTimestampQuery
 import akka.persistence.query.typed.javadsl.EventsBySliceQuery
 import akka.persistence.query.typed.javadsl.LoadEventQuery
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
+import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.stream.javadsl.Source
+import com.google.protobuf.Descriptors
 
 @ApiMayChange
 object GrpcReadJournal {
   val Identifier: String = scaladsl.GrpcReadJournal.Identifier
+
+  /**
+   * Construct a gRPC read journal for the given stream-id and explicit `GrpcClientSettings` to control
+   * how to reach the Akka Projection gRPC producer service (host, port etc).
+   */
+  def create(
+      system: ClassicActorSystemProvider,
+      settings: GrpcQuerySettings,
+      clientSettings: GrpcClientSettings,
+      protobufDescriptors: java.util.List[Descriptors.FileDescriptor]): GrpcReadJournal = {
+    import akka.util.ccompat.JavaConverters._
+    new GrpcReadJournal(scaladsl
+      .GrpcReadJournal(settings, clientSettings, protobufDescriptors.asScala.toList, ProtoAnySerialization.Prefer.Java)(
+        system))
+  }
+
 }
 
 @ApiMayChange

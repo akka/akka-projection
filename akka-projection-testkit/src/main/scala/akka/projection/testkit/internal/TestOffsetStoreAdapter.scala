@@ -4,7 +4,7 @@
 
 package akka.projection.testkit.internal
 
-import scala.jdk.CollectionConverters._
+import akka.util.ccompat.JavaConverters._
 import scala.compat.java8.OptionConverters._
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Future

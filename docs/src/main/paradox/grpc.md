@@ -49,6 +49,9 @@ Scala
 Java
 :  @@snip [ShoppingCartEventConsumer.java](/samples/grpc/shopping-analytics-service-java/src/main/java/shopping/analytics/ShoppingCartEventConsumer.java) { #initProjections }
 
+The Protobuf descriptors are defined when the @apidoc[GrpcReadJournal] is created. The descriptors are used
+when deserializing the received events.
+
 The gRPC connection to the producer is defined in the [consumer configuration](#consumer-configuration).
 
 The @extref:[R2dbcProjection](akka-persistence-r2dbc:projection.html) has support for storing the offset in a relational database using R2DBC.
@@ -123,8 +126,6 @@ The configuration for the `GrpcReadJournal` may look like this:
 @@snip [grpc.conf](/samples/grpc/shopping-analytics-service-java/src/main/resources/grpc.conf) { }
 
 The `client` section in the configuration defines where the producer is running. It is an @extref:[Akka gRPC configuration](akka-grpc:configuration.html#by-configuration) with several connection options.
-
-TODO: Describe `proto-class-mapping`, but we might have a more convenient solution for that https://github.com/lightbend/akka-projection-grpc/issues/13 
 
 ### Reference configuration
 
