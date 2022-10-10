@@ -12,6 +12,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
@@ -120,14 +121,14 @@ object ShoppingCartEventConsumer {
         val projectionId = ProjectionId.of(projectionName, projectionKey)
 
         val eventsBySlicesQuery = GrpcReadJournal(
-          system,
-          streamId,
-          List(
-            ShoppingCartEventsProto.javaDescriptor
-          ), // FIXME should we support the scalaDescriptor?
+          GrpcQuerySettings(streamId, None),
           GrpcClientSettings.fromConfig( // FIXME this is rather inconvenient
             system.settings.config
-              .getConfig("akka.projection.grpc.consumer.client"))(system))
+              .getConfig("akka.projection.grpc.consumer.client")),
+          List(
+            ShoppingCartEventsProto.javaDescriptor
+          ) // FIXME should we support the scalaDescriptor?
+        )
 
         val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
           system,

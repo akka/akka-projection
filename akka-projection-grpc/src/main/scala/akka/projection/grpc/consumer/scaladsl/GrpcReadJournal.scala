@@ -66,10 +66,7 @@ object GrpcReadJournal {
    * Construct a gRPC read journal for the given settings and explicit `GrpcClientSettings` to control
    * how to reach the Akka Projection gRPC producer service (host, port etc).
    */
-  def apply(
-      settings: GrpcQuerySettings,
-      clientSettings: GrpcClientSettings,
-      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
+  def apply(settings: GrpcQuerySettings, clientSettings: GrpcClientSettings, protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])( // FIXME should we support the scalaDescriptor?
       implicit system: ClassicActorSystemProvider): GrpcReadJournal =
     apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
 

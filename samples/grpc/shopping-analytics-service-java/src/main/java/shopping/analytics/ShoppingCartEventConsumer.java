@@ -9,6 +9,7 @@ import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
+import akka.projection.grpc.consumer.GrpcQuerySettings;
 import akka.projection.grpc.consumer.javadsl.GrpcReadJournal;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
@@ -120,11 +121,11 @@ class ShoppingCartEventConsumer {
 
           GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
               system,
-              streamId,
-              List.of(ShoppingCartEvents.getDescriptor()), // FIXME should we support the scalaDescriptor?
+              GrpcQuerySettings.create(streamId, Optional.empty()),
               GrpcClientSettings.fromConfig( // FIXME this is rather inconvenient
                   system.settings().config()
-                      .getConfig("akka.projection.grpc.consumer.client"), system));
+                      .getConfig("akka.projection.grpc.consumer.client"), system),
+              List.of(ShoppingCartEvents.getDescriptor()));
 
           SourceProvider<Offset, EventEnvelope<Object>> sourceProvider = EventSourcedProvider.eventsBySlices(
               system,
