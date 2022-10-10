@@ -35,6 +35,7 @@ import scalapb.options.Scalapb
   final val GoogleTypeUrlPrefix = "type.googleapis.com/"
   final val AkkaSerializationTypeUrlPrefix = "ser.akka.io/"
   final val AkkaTypeUrlManifestSeparator = ':'
+  private final val ProtoAnyTypeUrl = GoogleTypeUrlPrefix + "google.protobuf.Any"
 
   private val log = LoggerFactory.getLogger(classOf[ProtoAnySerialization])
 
@@ -122,6 +123,10 @@ import scalapb.options.Scalapb
 
   def serialize(event: Any): ScalaPbAny = {
     event match {
+      case scalaPbAny: ScalaPbAny if scalaPbAny.typeUrl.startsWith(GoogleTypeUrlPrefix) =>
+        ScalaPbAny(ProtoAnyTypeUrl, scalaPbAny.toByteString)
+      case pbAny: PbAny if pbAny.getTypeUrl.startsWith(GoogleTypeUrlPrefix) =>
+        ScalaPbAny(ProtoAnyTypeUrl, pbAny.toByteString)
       case scalaPbAny: ScalaPbAny => scalaPbAny
       case pbAny: PbAny           => ScalaPbAny.fromJavaProto(pbAny)
       case msg: scalapb.GeneratedMessage =>
@@ -146,7 +151,12 @@ import scalapb.options.Scalapb
 
   def deserialize(scalaPbAny: ScalaPbAny): Any = {
     val typeUrl = scalaPbAny.typeUrl
-    if (typeUrl.startsWith(GoogleTypeUrlPrefix)) {
+    if (typeUrl == ProtoAnyTypeUrl) {
+      if (prefer == Prefer.Scala)
+        ScalaPbAny.parseFrom(scalaPbAny.value.newCodedInput())
+      else
+        PbAny.parseFrom(scalaPbAny.value)
+    } else if (typeUrl.startsWith(GoogleTypeUrlPrefix)) {
       decodeMessage(scalaPbAny)
     } else if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
       val idAndManifest =
@@ -159,7 +169,11 @@ import scalapb.options.Scalapb
           idAndManifest.substring(0, i).toInt -> idAndManifest.substring(i + 1)
 
       serialization.deserialize(scalaPbAny.value.toByteArray, id, manifest).get
+    } else if (prefer == Prefer.Scala) {
+      // when custom typeUrl
+      scalaPbAny
     } else {
+      // when custom typeUrl
       ScalaPbAny.toJavaProto(scalaPbAny)
     }
   }
@@ -263,6 +277,9 @@ import scalapb.options.Scalapb
       } catch {
         case cnfe: ClassNotFoundException =>
           log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
+          None
+        case cce: ClassCastException =>
+          log.debug2("Failed to load class [{}] because: {}", className, cce.getMessage)
           None
       }
     })

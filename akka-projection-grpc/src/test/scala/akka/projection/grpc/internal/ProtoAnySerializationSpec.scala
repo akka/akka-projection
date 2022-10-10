@@ -38,7 +38,8 @@ class ProtoAnySerializationSpec extends ScalaTestWithActorTestKit with AnyWordSp
       List(
         TestProto.javaDescriptor,
         ShoppingcartApiProto.javaDescriptor,
-        com.google.protobuf.timestamp.TimestampProto.javaDescriptor),
+        com.google.protobuf.timestamp.TimestampProto.javaDescriptor,
+        com.google.protobuf.any.AnyProto.javaDescriptor),
       ProtoAnySerialization.Prefer.Scala)
 
   private val akkaSerialization = SerializationExtension(system.classicSystem)
@@ -85,17 +86,58 @@ class ProtoAnySerializationSpec extends ScalaTestWithActorTestKit with AnyWordSp
       deserializedEvent.getValue.toString(StandardCharsets.UTF_8) shouldBe value
     }
 
-    "pass through ScalaPb Any and decode it as Java proto Any" in {
+    "pass through ScalaPb Any and decode it as preferred Any Any" in {
       val value = "hello"
       val typeUrl = "type.my.io/custom"
       val event =
         ScalaPbAny(typeUrl, ByteString.copyFrom(value, StandardCharsets.UTF_8))
-      val pbAny = serializationJava.serialize(event)
+      val pbAny = serializationScala.serialize(event)
       pbAny.typeUrl shouldBe typeUrl
-      val deserializedEvent =
+
+      val deserializedEventScala =
+        serializationScala.deserialize(pbAny).asInstanceOf[ScalaPbAny]
+      deserializedEventScala.typeUrl shouldBe typeUrl
+      deserializedEventScala.value.toString(StandardCharsets.UTF_8) shouldBe value
+
+      val deserializedEventJava =
         serializationJava.deserialize(pbAny).asInstanceOf[PbAny]
+      deserializedEventJava.getTypeUrl shouldBe typeUrl
+      deserializedEventJava.getValue.toString(StandardCharsets.UTF_8) shouldBe value
+    }
+
+    "pass through Java proto Any with Google typeUrl" in {
+      val instant = Instant.now()
+      val value =
+        com.google.protobuf.Timestamp
+          .newBuilder()
+          .setSeconds(instant.getEpochSecond)
+          .setNanos(17)
+          .build()
+      val typeUrl = "type.googleapis.com/google.protobuf.Timestamp"
+      val event = PbAny
+        .newBuilder()
+        .setTypeUrl(typeUrl)
+        .setValue(value.toByteString)
+        .build()
+      val pbAny = serializationJava.serialize(event)
+      pbAny.typeUrl shouldBe "type.googleapis.com/google.protobuf.Any" // wrapped
+      val deserializedEvent = serializationJava.deserialize(pbAny).asInstanceOf[PbAny]
       deserializedEvent.getTypeUrl shouldBe typeUrl
-      deserializedEvent.getValue.toString(StandardCharsets.UTF_8) shouldBe value
+      com.google.protobuf.Timestamp.parseFrom(deserializedEvent.getValue) shouldBe value
+    }
+
+    "pass through ScalaPb Any with Google typeUrl" in {
+      val value = TestEvent("cart1", "item1", 17)
+      val typeUrl = "type.googleapis.com/TestEvent"
+      val event =
+        ScalaPbAny(typeUrl, value.toByteString)
+      val pbAny = serializationScala.serialize(event)
+      pbAny.typeUrl shouldBe "type.googleapis.com/google.protobuf.Any" // wrapped
+
+      val deserializedEvent =
+        serializationScala.deserialize(pbAny).asInstanceOf[ScalaPbAny]
+      deserializedEvent.typeUrl shouldBe typeUrl
+      TestEvent.parseFrom(deserializedEvent.value.toByteArray) shouldBe value
     }
 
     "encode and decode with Akka serialization with string manifest" in {
