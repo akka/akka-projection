@@ -4,6 +4,8 @@
 
 package akka.projection.grpc.internal
 
+import akka.Done
+
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.immutable
@@ -13,6 +15,9 @@ import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
+import akka.grpc.GrpcServiceException
+import akka.grpc.scaladsl.Metadata
+import akka.grpc.scaladsl.MetadataBuilder
 import akka.persistence.Persistence
 import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
@@ -20,13 +25,17 @@ import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.typed.PersistenceId
+import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
+import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
 import akka.stream.scaladsl.Keep
+import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
@@ -34,6 +43,8 @@ import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.testkit.scaladsl.TestSource
 import akka.testkit.SocketUtil
 import com.typesafe.config.ConfigFactory
+import io.grpc.Status
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object EventProducerServiceSpec {
@@ -78,6 +89,7 @@ object EventProducerServiceSpec {
 class EventProducerServiceSpec
     extends ScalaTestWithActorTestKit(ConfigFactory.load())
     with AnyWordSpecLike
+    with Matchers
     with TestData
     with LogCapturing {
   import EventProducerServiceSpec._
@@ -104,12 +116,12 @@ class EventProducerServiceSpec
   val queries =
     Map(streamId1 -> eventsBySlicesQuery1, streamId2 -> eventsBySlicesQuery2)
   private val eventProducerService =
-    new EventProducerServiceImpl(system, queries, eventProducerSources)
+    new EventProducerServiceImpl(system, queries, eventProducerSources, None)
 
   private def runEventsBySlices(streamIn: Source[StreamIn, NotUsed]) = {
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
     eventProducerService
-      .eventsBySlices(streamIn)
+      .eventsBySlices(streamIn, MetadataBuilder.empty)
       .toMat(TestSink[StreamOut]())(Keep.right)
       .mapMaterializedValue { probe =>
         probePromise.trySuccess(probe)
@@ -196,6 +208,81 @@ class EventProducerServiceSpec
       out3.getEvent.seqNr shouldBe env3.sequenceNr
     }
 
+    "intercept and fail requests" in {
+      val interceptedProducerService =
+        new EventProducerServiceImpl(system, queries, eventProducerSources, Some(new EventProducerInterceptor {
+          def intercept(streamId: String, requestMetadata: Metadata): Future[Done] = {
+            if (streamId == "nono-direct")
+              throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-direct"))
+            else if (requestMetadata.getText("nono-meta-direct").isDefined)
+              throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-meta-direct"))
+            else if (streamId == "nono-async")
+              Future.failed(new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-async")))
+            else Future.successful(Done)
+          }
+        }))
+
+      def assertGrpcStatusDenied(
+          fail: Throwable,
+          expectedDescription: String,
+          status: Status = Status.PERMISSION_DENIED) = {
+        fail shouldBe a[GrpcServiceException]
+        fail.asInstanceOf[GrpcServiceException].status.getCode shouldBe (status.getCode)
+        fail.asInstanceOf[GrpcServiceException].status.getDescription shouldBe (expectedDescription)
+      }
+
+      val directStreamIdFail = interceptedProducerService
+        .eventsBySlices(
+          Source
+            .single(StreamIn(StreamIn.Message.Init(InitReq("nono-direct", 0, 1023, offset = None)))),
+          MetadataBuilder.empty)
+        .runWith(Sink.head)
+        .failed
+        .futureValue
+      assertGrpcStatusDenied(directStreamIdFail, "nono-direct")
+
+      val directMetaFail = interceptedProducerService
+        .eventsBySlices(
+          Source
+            .single(StreamIn(StreamIn.Message.Init(InitReq("ok", 0, 1023, offset = None)))),
+          new MetadataBuilder().addText("nono-meta-direct", "value").build())
+        .runWith(Sink.head)
+        .failed
+        .futureValue
+      assertGrpcStatusDenied(directMetaFail, "nono-meta-direct")
+
+      val asyncStreamFail = interceptedProducerService
+        .eventsBySlices(
+          Source
+            .single(StreamIn(StreamIn.Message.Init(InitReq("nono-async", 0, 1023, offset = None)))),
+          MetadataBuilder.empty)
+        .runWith(Sink.head)
+        .failed
+        .futureValue
+      assertGrpcStatusDenied(asyncStreamFail, "nono-async")
+
+      val passThrough = interceptedProducerService
+        .eventsBySlices(
+          Source
+            .single(StreamIn(StreamIn.Message.Init(InitReq("ok", 0, 1023, offset = None)))),
+          MetadataBuilder.empty)
+        .runWith(Sink.head)
+        .failed
+        .futureValue
+      // no such stream id so will still fail, but not from interceptor
+      assertGrpcStatusDenied(passThrough, "Stream id [ok] is not available for consumption", Status.NOT_FOUND)
+
+      // check the other methods as well for good measure
+      val loadFailure =
+        interceptedProducerService.loadEvent(LoadEventRequest("nono-async"), MetadataBuilder.empty).failed.futureValue
+      assertGrpcStatusDenied(loadFailure, "nono-async")
+
+      val timestampFailure = interceptedProducerService
+        .eventTimestamp(EventTimestampRequest("nono-async"), MetadataBuilder.empty)
+        .failed
+        .futureValue
+      assertGrpcStatusDenied(timestampFailure, "nono-async")
+    }
   }
 
 }

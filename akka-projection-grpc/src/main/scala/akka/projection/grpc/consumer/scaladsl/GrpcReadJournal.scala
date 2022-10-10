@@ -13,7 +13,12 @@ import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
+import akka.annotation.ApiMayChange
 import akka.grpc.GrpcClientSettings
+import akka.grpc.scaladsl.SingleResponseRequestBuilder
+import akka.grpc.scaladsl.BytesEntry
+import akka.grpc.scaladsl.StreamResponseRequestBuilder
+import akka.grpc.scaladsl.StringEntry
 import akka.persistence.Persistence
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
@@ -41,11 +46,11 @@ import akka.projection.grpc.internal.proto.StreamOut
 import akka.stream.scaladsl.Source
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+@ApiMayChange
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
 
@@ -53,29 +58,21 @@ object GrpcReadJournal {
     LoggerFactory.getLogger(classOf[GrpcReadJournal])
 
   /**
-   * Construct a gRPC read journal for the given stream-id and explicit `GrpcClientSettings` to control
+   * Construct a gRPC read journal for the given settings and explicit `GrpcClientSettings` to control
    * how to reach the Akka Projection gRPC producer service (host, port etc).
    */
-  def apply(
-      system: ClassicActorSystemProvider,
-      streamId: String,
-      clientSettings: GrpcClientSettings): GrpcReadJournal = {
-    val extended = system.classicSystem.asInstanceOf[ExtendedActorSystem]
-
-    val configPath = GrpcReadJournal.Identifier
-    val config = ConfigFactory
-      .parseString(s"""akka.projection.grpc.consumer.stream-id=$streamId""")
-      .withFallback(extended.settings.config)
-      .getConfig(configPath)
-
-    val settings = GrpcQuerySettings(config)
+  def apply(settings: GrpcQuerySettings, clientSettings: GrpcClientSettings)(
+      implicit system: ClassicActorSystemProvider) = {
 
     val clientSettingsWithOverrides =
       // compose with potential user overrides to allow overriding our defaults
       clientSettings.withChannelBuilderOverrides(
         channelBuilderOverrides.andThen(clientSettings.channelBuilderOverrides))
 
-    new scaladsl.GrpcReadJournal(extended, settings, clientSettingsWithOverrides)
+    new scaladsl.GrpcReadJournal(
+      system.classicSystem.asInstanceOf[ExtendedActorSystem],
+      settings,
+      clientSettingsWithOverrides)
   }
 
   private def channelBuilderOverrides: NettyChannelBuilder => NettyChannelBuilder =
@@ -85,6 +82,7 @@ object GrpcReadJournal {
 
 }
 
+@ApiMayChange
 final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,
@@ -95,17 +93,9 @@ final class GrpcReadJournal private (
     with LoadEventQuery {
   import GrpcReadJournal.log
 
-  private def this(system: ExtendedActorSystem, settings: GrpcQuerySettings) =
-    this(
-      system,
-      settings,
-      GrpcClientSettings
-        .fromConfig(settings.grpcClientConfig)(system)
-        .withChannelBuilderOverrides(GrpcReadJournal.channelBuilderOverrides))
-
   // entry point when created through Akka Persistence
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
-    this(system, GrpcQuerySettings(config))
+    this(system, GrpcQuerySettings(config), GrpcClientSettings.fromConfig(config.getConfig("client"))(system))
 
   private implicit val typedSystem = system.toTyped
   private val persistenceExt = Persistence(system)
@@ -113,6 +103,24 @@ final class GrpcReadJournal private (
     new ProtoAnySerialization(system.toTyped, settings.protoClassMapping)
 
   private val client = EventProducerServiceClient(clientSettings)
+  private val additionalRequestHeaders = settings.additionalRequestMetadata match {
+    case Some(meta) => meta.asList
+    case None       => Seq.empty
+  }
+
+  private def addRequestHeaders[Req, Res](
+      builder: StreamResponseRequestBuilder[Req, Res]): StreamResponseRequestBuilder[Req, Res] =
+    additionalRequestHeaders.foldLeft(builder) {
+      case (acc, (key, StringEntry(str)))  => acc.addHeader(key, str)
+      case (acc, (key, BytesEntry(bytes))) => acc.addHeader(key, bytes)
+    }
+
+  private def addRequestHeaders[Req, Res](
+      builder: SingleResponseRequestBuilder[Req, Res]): SingleResponseRequestBuilder[Req, Res] =
+    additionalRequestHeaders.foldLeft(builder) {
+      case (acc, (key, StringEntry(str)))  => acc.addHeader(key, str)
+      case (acc, (key, BytesEntry(bytes))) => acc.addHeader(key, bytes)
+    }
 
   override def sliceForPersistenceId(persistenceId: String): Int =
     persistenceExt.sliceForPersistenceId(persistenceId)
@@ -185,11 +193,13 @@ final class GrpcReadJournal private (
     val streamIn = Source
       .single(StreamIn(StreamIn.Message.Init(initReq)))
       .concat(Source.maybe)
-    val streamOut =
-      client.eventsBySlices(streamIn).recover {
-        case th: Throwable =>
-          throw new RuntimeException(s"Failure to consume gRPC event stream for [${streamId}]", th)
-      }
+    val streamOut: Source[StreamOut, NotUsed] =
+      addRequestHeaders(client.eventsBySlices())
+        .invoke(streamIn)
+        .recover {
+          case th: Throwable =>
+            throw new RuntimeException(s"Failure to consume gRPC event stream for [${streamId}]", th)
+        }
 
     streamOut.map {
       case StreamOut(StreamOut.Message.Event(event), _) =>
@@ -269,8 +279,8 @@ final class GrpcReadJournal private (
   // EventTimestampQuery
   override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     import system.dispatcher
-    client
-      .eventTimestamp(EventTimestampRequest(settings.streamId, persistenceId, sequenceNr))
+    addRequestHeaders(client.eventTimestamp())
+      .invoke(EventTimestampRequest(settings.streamId, persistenceId, sequenceNr))
       .map(_.timestamp.map(_.asJavaInstant))
   }
 
@@ -282,8 +292,8 @@ final class GrpcReadJournal private (
       persistenceId,
       sequenceNr)
     import system.dispatcher
-    client
-      .loadEvent(LoadEventRequest(settings.streamId, persistenceId, sequenceNr))
+    addRequestHeaders(client.loadEvent())
+      .invoke(LoadEventRequest(settings.streamId, persistenceId, sequenceNr))
       .map {
         case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
           eventToEnvelope(event, settings.streamId)

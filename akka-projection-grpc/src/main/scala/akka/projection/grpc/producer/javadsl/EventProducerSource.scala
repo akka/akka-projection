@@ -4,6 +4,7 @@
 
 package akka.projection.grpc.producer.javadsl
 
+import akka.annotation.ApiMayChange
 import akka.projection.grpc.producer.EventProducerSettings
 
 /**
@@ -12,6 +13,7 @@ import akka.projection.grpc.producer.EventProducerSettings
  * @param transformation Transformations for turning the internal events to public message types
  * @param settings The event producer settings used (can be shared for multiple sources)
  */
+@ApiMayChange
 final class EventProducerSource(
     entityType: String,
     streamId: String,

@@ -12,6 +12,9 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.grpc.GrpcClientSettings
+import akka.grpc.GrpcServiceException
+import akka.grpc.scaladsl.Metadata
+import akka.grpc.scaladsl.MetadataBuilder
 import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
@@ -21,11 +24,13 @@ import akka.persistence.typed.PersistenceId
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
+import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.r2dbc.scaladsl.R2dbcSession
@@ -33,6 +38,7 @@ import akka.projection.scaladsl.Handler
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import io.grpc.Status
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
@@ -96,6 +102,8 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
     with LogCapturing {
   import IntegrationSpec._
 
+  def this() = this(new TestContainerConf)
+
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
   private val numberOfTests = 4
@@ -126,8 +134,10 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       EventSourcedProvider.eventsBySlices[String](
         system,
         GrpcReadJournal(
-          system,
-          streamId,
+          GrpcQuerySettings(
+            streamId = streamId,
+            protoClassMapping = Map.empty,
+            additionalRequestMetadata = Some(new MetadataBuilder().addText("x-secret", "top_secret").build())),
           GrpcClientSettings
             .connectToServiceAt("127.0.0.1", grpcPort)
             .withTls(false)),
@@ -173,8 +183,16 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
         EventProducerSource(source.entityType, source.streamId, transformation, EventProducerSettings(system)))
       .toSet
 
+    val authInterceptor = new EventProducerInterceptor {
+      def intercept(streamId: String, requestMetadata: Metadata): Future[Done] = {
+        if (!requestMetadata.getText("x-secret").contains("top_secret"))
+          throw new GrpcServiceException(Status.PERMISSION_DENIED)
+        else Future.successful(Done)
+      }
+    }
+
     val eventProducerService =
-      EventProducer.grpcServiceHandler(eventProducerSources)
+      EventProducer.grpcServiceHandler(eventProducerSources, Some(authInterceptor))
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(eventProducerService)
@@ -292,7 +310,6 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
 
       def expectedLogMessage(seqNr: Long): String =
         s"Received backtracking event from [127.0.0.1] persistenceId [${pid.id}] with seqNr [$seqNr]"
-
       val projection =
         LoggingTestKit.trace(expectedLogMessage(1)).expect {
           LoggingTestKit.trace(expectedLogMessage(2)).expect {

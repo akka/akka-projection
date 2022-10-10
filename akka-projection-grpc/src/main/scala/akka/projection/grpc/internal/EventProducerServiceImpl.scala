@@ -4,6 +4,8 @@
 
 package akka.projection.grpc.internal
 
+import akka.Done
+
 import java.time.Instant
 import scala.concurrent.Future
 import akka.NotUsed
@@ -11,6 +13,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.grpc.GrpcServiceException
+import akka.grpc.scaladsl.Metadata
 import akka.persistence.query.NoOffset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
@@ -19,7 +22,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.Event
-import akka.projection.grpc.internal.proto.EventProducerService
+import akka.projection.grpc.internal.proto.EventProducerServicePowerApi
 import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.EventTimestampResponse
 import akka.projection.grpc.internal.proto.FilteredEvent
@@ -32,6 +35,7 @@ import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
+import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
@@ -48,7 +52,7 @@ import scala.annotation.nowarn
 @InternalApi private[akka] object EventProducerServiceImpl {
   val log: Logger =
     LoggerFactory.getLogger(classOf[EventProducerServiceImpl])
-
+  private val futureDone = Future.successful(Done)
 }
 
 /**
@@ -57,9 +61,12 @@ import scala.annotation.nowarn
 @InternalApi private[akka] class EventProducerServiceImpl(
     system: ActorSystem[_],
     eventsBySlicesQueriesPerStreamId: Map[String, EventsBySliceQuery],
-    sources: Set[EventProducer.EventProducerSource])
-    extends EventProducerService {
-  import EventProducerServiceImpl.log
+    sources: Set[EventProducer.EventProducerSource],
+    interceptor: Option[EventProducerInterceptor])
+    extends EventProducerServicePowerApi {
+  import EventProducerServiceImpl._
+  import system.executionContext
+
   require(
     sources.nonEmpty,
     "Empty set of EventProducerSource passed to EventProducerService, must contain at least one")
@@ -82,16 +89,22 @@ import scala.annotation.nowarn
       .map(s => s"(stream id: [${s.streamId}], entity type: [${s.entityType}])")
       .mkString(", "))
 
+  private def intercept(streamId: String, metadata: Metadata): Future[Done] =
+    interceptor match {
+      case Some(interceptor) => interceptor.intercept(streamId, metadata)
+      case None              => futureDone
+    }
+
   private def eventProducerSourceFor(streamId: String): EventProducer.EventProducerSource =
     streamIdToSourceMap.getOrElse(
       streamId,
       throw new GrpcServiceException(
         Status.NOT_FOUND.withDescription(s"Stream id [${streamId}] is not available for consumption")))
 
-  override def eventsBySlices(in: Source[StreamIn, NotUsed]): Source[StreamOut, NotUsed] = {
+  override def eventsBySlices(in: Source[StreamIn, NotUsed], metadata: Metadata): Source[StreamOut, NotUsed] = {
     in.prefixAndTail(1).flatMapConcat {
       case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
-        tail.via(runEventsBySlices(init, tail))
+        tail.via(runEventsBySlices(init, tail, metadata))
       case (Seq(), _) =>
         // if error during recovery in proxy the stream will be completed before init
         log.warn("Event stream closed before init.")
@@ -109,62 +122,66 @@ import scala.annotation.nowarn
   @nowarn("msg=never used")
   private def runEventsBySlices(
       init: InitReq,
-      nextReq: Source[StreamIn, NotUsed]): Flow[StreamIn, StreamOut, NotUsed] = {
-    val producerSource = eventProducerSourceFor(init.streamId)
+      nextReq: Source[StreamIn, NotUsed],
+      metadata: Metadata): Flow[StreamIn, StreamOut, NotUsed] = {
+    val futureFlow = intercept(init.streamId, metadata).map { _ =>
+      val producerSource = eventProducerSourceFor(init.streamId)
 
-    val offset = init.offset match {
-      case None => NoOffset
-      case Some(o) =>
-        val timestamp =
-          o.timestamp.map(_.asJavaInstant).getOrElse(Instant.EPOCH)
-        val seen = o.seen.map {
-          case PersistenceIdSeqNr(pid, seqNr, _) =>
-            pid -> seqNr
-        }.toMap
-        TimestampOffset(timestamp, seen)
-    }
-
-    log.debugN(
-      "Starting eventsBySlices stream [{}], [{}], slices [{} - {}], offset [{}]",
-      producerSource.streamId,
-      producerSource.entityType,
-      init.sliceMin,
-      init.sliceMax,
-      offset match {
-        case t: TimestampOffset => t.timestamp
-        case _                  => offset
-      })
-
-    val events: Source[EventEnvelope[Any], NotUsed] =
-      eventsBySlicesQueriesPerStreamId(init.streamId)
-        .eventsBySlices[Any](producerSource.entityType, init.sliceMin, init.sliceMax, offset)
-
-    val eventsStreamOut: Source[StreamOut, NotUsed] =
-      events.mapAsync(producerSource.settings.transformationParallelism) { env =>
-        import system.executionContext
-        transformAndEncodeEvent(producerSource.transformation, env).map {
-          case Some(event) =>
-            log.traceN(
-              "Emitting {}event from persistenceId [{}] with seqNr [{}], offset [{}]",
-              if (event.payload.isEmpty) "backtracking " else "",
-              env.persistenceId,
-              env.sequenceNr,
-              env.offset)
-            StreamOut(StreamOut.Message.Event(event))
-          case None =>
-            log.traceN(
-              "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}]",
-              env.persistenceId,
-              env.sequenceNr,
-              env.offset)
-            StreamOut(
-              StreamOut.Message.FilteredEvent(
-                FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))
-        }
+      val offset = init.offset match {
+        case None => NoOffset
+        case Some(o) =>
+          val timestamp =
+            o.timestamp.map(_.asJavaInstant).getOrElse(Instant.EPOCH)
+          val seen = o.seen.map {
+            case PersistenceIdSeqNr(pid, seqNr, _) =>
+              pid -> seqNr
+          }.toMap
+          TimestampOffset(timestamp, seen)
       }
 
-    // FIXME nextReq not handled yet
-    Flow.fromSinkAndSource(Sink.ignore, eventsStreamOut)
+      log.debugN(
+        "Starting eventsBySlices stream [{}], [{}], slices [{} - {}], offset [{}]",
+        producerSource.streamId,
+        producerSource.entityType,
+        init.sliceMin,
+        init.sliceMax,
+        offset match {
+          case t: TimestampOffset => t.timestamp
+          case _                  => offset
+        })
+
+      val events: Source[EventEnvelope[Any], NotUsed] =
+        eventsBySlicesQueriesPerStreamId(init.streamId)
+          .eventsBySlices[Any](producerSource.entityType, init.sliceMin, init.sliceMax, offset)
+
+      val eventsStreamOut: Source[StreamOut, NotUsed] =
+        events.mapAsync(producerSource.settings.transformationParallelism) { env =>
+          import system.executionContext
+          transformAndEncodeEvent(producerSource.transformation, env).map {
+            case Some(event) =>
+              log.traceN(
+                "Emitting {}event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                if (event.payload.isEmpty) "backtracking " else "",
+                env.persistenceId,
+                env.sequenceNr,
+                env.offset)
+              StreamOut(StreamOut.Message.Event(event))
+            case None =>
+              log.traceN(
+                "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                env.persistenceId,
+                env.sequenceNr,
+                env.offset)
+              StreamOut(
+                StreamOut.Message.FilteredEvent(
+                  FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))
+          }
+        }
+
+      // FIXME nextReq not handled yet
+      Flow.fromSinkAndSource(Sink.ignore, eventsStreamOut)
+    }
+    Flow.futureFlow(futureFlow).mapMaterializedValue(_ => NotUsed)
   }
 
   private def protoOffset(env: EventEnvelope[_]): Offset = {
@@ -203,64 +220,68 @@ import scala.annotation.nowarn
     }
   }
 
-  override def eventTimestamp(req: EventTimestampRequest): Future[EventTimestampResponse] = {
-    val producerSource = streamIdToSourceMap(req.streamId)
-    val entityTypeFromPid = PersistenceId.extractEntityType(req.persistenceId)
-    if (entityTypeFromPid != producerSource.entityType) {
-      throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
-        s"Persistence id is for a type of entity that is not available for consumption (expected type " +
-        s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
-    }
-    eventsBySlicesQueriesPerStreamId(req.streamId) match {
-      case q: EventTimestampQuery =>
-        import system.executionContext
-        q.timestampOf(req.persistenceId, req.seqNr).map {
-          case Some(instant) => EventTimestampResponse(Some(Timestamp(instant)))
-          case None          => EventTimestampResponse.defaultInstance
-        }
-      case other =>
-        Future.failed(new UnsupportedOperationException(s"eventTimestamp not supported by [${other.getClass.getName}]"))
+  override def eventTimestamp(req: EventTimestampRequest, metadata: Metadata): Future[EventTimestampResponse] = {
+    intercept(req.streamId, metadata).flatMap { _ =>
+      val producerSource = streamIdToSourceMap(req.streamId)
+      val entityTypeFromPid = PersistenceId.extractEntityType(req.persistenceId)
+      if (entityTypeFromPid != producerSource.entityType) {
+        throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
+          s"Persistence id is for a type of entity that is not available for consumption (expected type " +
+          s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
+      }
+      eventsBySlicesQueriesPerStreamId(req.streamId) match {
+        case q: EventTimestampQuery =>
+          import system.executionContext
+          q.timestampOf(req.persistenceId, req.seqNr).map {
+            case Some(instant) => EventTimestampResponse(Some(Timestamp(instant)))
+            case None          => EventTimestampResponse.defaultInstance
+          }
+        case other =>
+          Future.failed(
+            new UnsupportedOperationException(s"eventTimestamp not supported by [${other.getClass.getName}]"))
+      }
     }
   }
 
-  override def loadEvent(req: LoadEventRequest): Future[LoadEventResponse] = {
-    val producerSource = eventProducerSourceFor(req.streamId)
-    val entityTypeFromPid = PersistenceId.extractEntityType(req.persistenceId)
-    if (entityTypeFromPid != producerSource.entityType)
-      throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
-        s"Persistence id is for a type of entity that is not available for consumption (expected type " +
-        s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
-    eventsBySlicesQueriesPerStreamId(req.streamId) match {
-      case q: LoadEventQuery =>
-        import system.executionContext
-        q.loadEnvelope[Any](req.persistenceId, req.seqNr)
-          .flatMap { env =>
-            transformAndEncodeEvent(producerSource.transformation, env).map {
-              case Some(event) =>
-                log.traceN(
-                  "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                  env.persistenceId,
-                  env.sequenceNr,
-                  env.offset)
-                LoadEventResponse(LoadEventResponse.Message.Event(event))
-              case None =>
-                log.traceN(
-                  "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                  env.persistenceId,
-                  env.sequenceNr,
-                  env.offset)
-                LoadEventResponse(
-                  LoadEventResponse.Message.FilteredEvent(
+  override def loadEvent(req: LoadEventRequest, metadata: Metadata): Future[LoadEventResponse] = {
+    intercept(req.streamId, metadata).flatMap { _ =>
+      val producerSource = eventProducerSourceFor(req.streamId)
+      val entityTypeFromPid = PersistenceId.extractEntityType(req.persistenceId)
+      if (entityTypeFromPid != producerSource.entityType)
+        throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
+          s"Persistence id is for a type of entity that is not available for consumption (expected type " +
+          s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
+      eventsBySlicesQueriesPerStreamId(req.streamId) match {
+        case q: LoadEventQuery =>
+          import system.executionContext
+          q.loadEnvelope[Any](req.persistenceId, req.seqNr)
+            .flatMap { env =>
+              transformAndEncodeEvent(producerSource.transformation, env).map {
+                case Some(event) =>
+                  log.traceN(
+                    "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.offset)
+                  LoadEventResponse(LoadEventResponse.Message.Event(event))
+                case None =>
+                  log.traceN(
+                    "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.offset)
+                  LoadEventResponse(LoadEventResponse.Message.FilteredEvent(
                     FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))
+              }
             }
-          }
-          .recoverWith {
-            case e: NoSuchElementException =>
-              log.warn(e.getMessage)
-              Future.failed(new GrpcServiceException(Status.NOT_FOUND.withDescription(e.getMessage)))
-          }
-      case other =>
-        Future.failed(new UnsupportedOperationException(s"loadEvent not supported by [${other.getClass.getName}]"))
+            .recoverWith {
+              case e: NoSuchElementException =>
+                log.warn(e.getMessage)
+                Future.failed(new GrpcServiceException(Status.NOT_FOUND.withDescription(e.getMessage)))
+            }
+        case other =>
+          Future.failed(new UnsupportedOperationException(s"loadEvent not supported by [${other.getClass.getName}]"))
+      }
     }
   }
 }

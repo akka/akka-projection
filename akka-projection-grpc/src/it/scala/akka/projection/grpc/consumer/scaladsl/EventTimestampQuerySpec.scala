@@ -17,6 +17,7 @@ import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
@@ -25,7 +26,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import java.time.Instant
-import java.time.{Duration => JDuration}
+import java.time.{ Duration => JDuration }
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -39,7 +40,6 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
     with LogCapturing {
 
   def this() = this(new TestContainerConf)
-
 
   protected override def afterAll(): Unit = {
     super.afterAll()
@@ -59,8 +59,7 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
     lazy val entity = spawn(TestEntity(pid))
 
     lazy val grpcReadJournal = GrpcReadJournal(
-      system,
-      streamId,
+      GrpcQuerySettings(streamId, Map.empty, None),
       GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")))
   }
 

@@ -18,6 +18,7 @@ import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.TestData
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
@@ -60,8 +61,7 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
     lazy val entity = spawn(TestEntity(pid))
 
     lazy val grpcReadJournal = GrpcReadJournal(
-      system,
-      streamId,
+      GrpcQuerySettings(streamId, Map.empty, None),
       GrpcClientSettings
         .connectToServiceAt("127.0.0.1", testContainerConf.grpcPort)
         .withTls(false))
