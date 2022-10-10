@@ -61,10 +61,11 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
     lazy val entity = spawn(TestEntity(pid))
 
     lazy val grpcReadJournal = GrpcReadJournal(
-      GrpcQuerySettings(streamId, Map.empty, None),
+      GrpcQuerySettings(streamId, None),
       GrpcClientSettings
         .connectToServiceAt("127.0.0.1", testContainerConf.grpcPort)
-        .withTls(false))
+        .withTls(false),
+      protobufDescriptors = Nil)
   }
 
   override protected def beforeAll(): Unit = {
