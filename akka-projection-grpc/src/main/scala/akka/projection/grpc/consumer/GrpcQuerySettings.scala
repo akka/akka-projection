@@ -19,7 +19,7 @@ object GrpcQuerySettings {
     val streamId = config.getString("stream-id")
     require(
       streamId != "",
-      "Configuration property [stream-id] must be an id exposed by the streaming side (but was empty).")
+      "Configuration property [stream-id] must be an id exposed by the producing side but was undefined on the consuming side.")
 
     val protoClassMapping: Map[String, String] = {
       import scala.jdk.CollectionConverters._
