@@ -9,6 +9,7 @@ import scala.collection.immutable
 import scala.util.Try
 
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
@@ -205,7 +206,7 @@ import scalapb.options.Scalapb
 
     } catch {
       case cnfe: ClassNotFoundException =>
-        log.debug("Failed to load class [{}] because: {}", className, cnfe.getMessage)
+        log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
         None
       case nsme: NoSuchElementException =>
         // FIXME wrong exception? NoSuchMethodException is thrown from getMethod("parser")
@@ -261,7 +262,7 @@ import scalapb.options.Scalapb
         Some(new ScalaPbResolvedType(companionObject))
       } catch {
         case cnfe: ClassNotFoundException =>
-          log.debug("Failed to load class [{}] because: {}", className, cnfe.getMessage)
+          log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
           None
       }
     })
