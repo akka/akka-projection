@@ -33,7 +33,7 @@ val AkkaManagementVersion = "1.2.0-M1"
 val AkkaPersistenceR2dbcVersion = "1.0.0-M2"
 // FIXME final release version
 val AkkaProjectionVersion =
-  sys.props.getOrElse("akka-projection.version", "1.3.0-M2-4-7237f1b3-SNAPSHOT")
+  sys.props.getOrElse("akka-projection.version", "1.3.0-M2")
 
 enablePlugins(AkkaGrpcPlugin)
 
