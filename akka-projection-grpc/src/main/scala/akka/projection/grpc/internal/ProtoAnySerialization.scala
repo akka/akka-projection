@@ -4,14 +4,8 @@
 
 package akka.projection.grpc.internal
 
-import java.io.ByteArrayOutputStream
-import java.lang
-import java.util.Locale
-
-import scala.annotation.nowarn
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
-import scala.reflect.ClassTag
 import scala.util.Try
 
 import akka.actor.typed.ActorSystem
@@ -21,14 +15,10 @@ import akka.serialization.Serializers
 import akka.util.ccompat.JavaConverters._
 import com.google.common.base.CaseFormat
 import com.google.protobuf.ByteString
-import com.google.protobuf.CodedInputStream
-import com.google.protobuf.CodedOutputStream
 import com.google.protobuf.Descriptors
 import com.google.protobuf.GeneratedMessageV3
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
-import com.google.protobuf.UnsafeByteOperations
-import com.google.protobuf.WireFormat
 import com.google.protobuf.any.{ Any => ScalaPbAny }
 import com.google.protobuf.{ Any => JavaPbAny }
 import com.google.protobuf.{ Any => PbAny }
@@ -44,9 +34,6 @@ import scalapb.options.Scalapb
   final val GoogleTypeUrlPrefix = "type.googleapis.com/"
   final val AkkaSerializationTypeUrlPrefix = "ser.akka.io/"
   final val AkkaTypeUrlManifestSeparator = ':'
-
-  private final val PrimitiveFieldNumber = 1
-  final val PrimitivePrefix = "type.akka.io/"
 
   private val log = LoggerFactory.getLogger(classOf[ProtoAnySerialization])
 
@@ -72,108 +59,6 @@ import scalapb.options.Scalapb
       companion: scalapb.GeneratedMessageCompanion[_])
       extends ResolvedType[T] {
     override def parseFrom(bytes: ByteString): T = companion.parseFrom(bytes.newCodedInput()).asInstanceOf[T]
-  }
-
-  private sealed abstract class Primitive[T: ClassTag] {
-    val name: String = fieldType.name().toLowerCase(Locale.ROOT)
-    val fullName: String = PrimitivePrefix + name
-    final val clazz = implicitly[ClassTag[T]].runtimeClass
-    def write(stream: CodedOutputStream, t: T): Unit
-    def read(stream: CodedInputStream): T
-    def fieldType: WireFormat.FieldType
-    def defaultValue: T
-    val tag: Int = (PrimitiveFieldNumber << 3) | fieldType.getWireType
-  }
-
-  private final object StringPrimitive extends Primitive[String] {
-    override def fieldType = WireFormat.FieldType.STRING
-    override def defaultValue = ""
-    override def write(stream: CodedOutputStream, t: String): Unit =
-      stream.writeString(PrimitiveFieldNumber, t)
-    override def read(stream: CodedInputStream): String = stream.readString()
-  }
-  private final object BytesPrimitive extends Primitive[ByteString] {
-    override def fieldType = WireFormat.FieldType.BYTES
-    override def defaultValue: ByteString = ByteString.EMPTY
-    override def write(stream: CodedOutputStream, t: ByteString): Unit =
-      stream.writeBytes(PrimitiveFieldNumber, t)
-    override def read(stream: CodedInputStream): ByteString = stream.readBytes()
-  }
-
-  private final val Primitives = Seq(
-    StringPrimitive,
-    BytesPrimitive,
-    new Primitive[Integer] {
-      override def fieldType = WireFormat.FieldType.INT32
-      override def defaultValue = 0
-      override def write(stream: CodedOutputStream, t: Integer): Unit =
-        stream.writeInt32(PrimitiveFieldNumber, t)
-      override def read(stream: CodedInputStream): Integer = stream.readInt32()
-    },
-    new Primitive[java.lang.Long] {
-      override def fieldType = WireFormat.FieldType.INT64
-      override def defaultValue = 0L
-      override def write(stream: CodedOutputStream, t: java.lang.Long): Unit =
-        stream.writeInt64(PrimitiveFieldNumber, t)
-      override def read(stream: CodedInputStream): lang.Long = stream.readInt64()
-    },
-    new Primitive[java.lang.Float] {
-      override def fieldType = WireFormat.FieldType.FLOAT
-      override def defaultValue = 0f
-      override def write(stream: CodedOutputStream, t: java.lang.Float): Unit =
-        stream.writeFloat(PrimitiveFieldNumber, t)
-      override def read(stream: CodedInputStream): lang.Float = stream.readFloat()
-    },
-    new Primitive[java.lang.Double] {
-      override def fieldType = WireFormat.FieldType.DOUBLE
-      override def defaultValue = 0d
-      override def write(stream: CodedOutputStream, t: java.lang.Double): Unit =
-        stream.writeDouble(PrimitiveFieldNumber, t)
-      override def read(stream: CodedInputStream): lang.Double = stream.readDouble()
-    },
-    new Primitive[java.lang.Boolean] {
-      override def fieldType = WireFormat.FieldType.BOOL
-      override def defaultValue = false
-      override def write(stream: CodedOutputStream, t: java.lang.Boolean): Unit =
-        stream.writeBool(PrimitiveFieldNumber, t)
-      override def read(stream: CodedInputStream): lang.Boolean = stream.readBool()
-    })
-
-  private final val ClassToPrimitives = Primitives
-    .map(p => p.clazz -> p)
-    .asInstanceOf[Seq[(Any, Primitive[Any])]]
-    .toMap
-  private final val NameToPrimitives = Primitives
-    .map(p => p.fullName -> p)
-    .asInstanceOf[Seq[(String, Primitive[Any])]]
-    .toMap
-
-  private[akka] def encodePrimitiveBytes(bytes: ByteString): ByteString =
-    primitiveToBytes(BytesPrimitive, bytes)
-
-  private[akka] def decodePrimitiveBytes(bytes: ByteString): ByteString =
-    bytesToPrimitive(BytesPrimitive, bytes)
-
-  private def primitiveToBytes[T](primitive: Primitive[T], value: T): ByteString =
-    if (value != primitive.defaultValue) {
-      val baos = new ByteArrayOutputStream()
-      val stream = CodedOutputStream.newInstance(baos)
-      primitive.write(stream, value)
-      stream.flush()
-      UnsafeByteOperations.unsafeWrap(baos.toByteArray)
-    } else ByteString.EMPTY
-
-  @nowarn("msg=deprecated") // Stream.continually
-  private def bytesToPrimitive[T](primitive: Primitive[T], bytes: ByteString) = {
-    val stream = bytes.newCodedInput()
-    if (Stream.continually(stream.readTag()).takeWhile(_ != 0).exists { tag =>
-          if (primitive.tag != tag) {
-            stream.skipField(tag)
-            false
-          } else true
-        }) {
-      primitive.read(stream)
-    } else primitive.defaultValue
   }
 
   /**
@@ -204,9 +89,6 @@ import scalapb.options.Scalapb
             descriptor.getDependencies.asScala.toSeq ++ descriptor.getPublicDependencies.asScala)
         }
     }
-
-  def extractBytes(bytes: ByteString): ByteString =
-    bytesToPrimitive(BytesPrimitive, bytes)
 
 }
 
@@ -414,20 +296,6 @@ import scalapb.options.Scalapb
       case javaPbAny: JavaPbAny   => ScalaPbAny.fromJavaProto(javaPbAny)
       case scalaPbAny: ScalaPbAny => scalaPbAny
 
-      // these are all generated message so needs to go before GeneratedMessage,
-      // but we encode them inside Any just like regular message, we just need to get the type_url right
-      case javaBytes: com.google.protobuf.BytesValue =>
-        ScalaPbAny.fromJavaProto(JavaPbAny.pack(javaBytes))
-
-      case scalaBytes: com.google.protobuf.wrappers.BytesValue =>
-        ScalaPbAny.pack(scalaBytes)
-
-      case javaText: com.google.protobuf.StringValue =>
-        ScalaPbAny.fromJavaProto(JavaPbAny.pack(javaText))
-
-      case scalaText: com.google.protobuf.wrappers.StringValue =>
-        ScalaPbAny.pack(scalaText)
-
       case javaProtoMessage: com.google.protobuf.Message =>
         ScalaPbAny(
           GoogleTypeUrlPrefix + javaProtoMessage.getDescriptorForType.getFullName,
@@ -439,85 +307,37 @@ import scalapb.options.Scalapb
       case null =>
         throw SerializationException(s"Don't know how to serialize object of type null.")
 
-      case _ if ClassToPrimitives.contains(value.getClass) =>
-        val primitive = ClassToPrimitives(value.getClass)
-        ScalaPbAny(primitive.fullName, primitiveToBytes(primitive, value))
-
-      case byteString: ByteString =>
-        ScalaPbAny(BytesPrimitive.fullName, primitiveToBytes(BytesPrimitive, byteString))
-
       case other =>
         throw SerializationException(
           s"Don't know how to serialize object of type ${other.getClass.getName}. " +
-          "Try passing a protobuf or use a primitive type.")
+          "Try passing a protobuf message type.")
     }
-
-  /**
-   * Decodes a Protobuf Any wrapped message into the concrete user message type or a wrapped
-   * primitive into the Java primitive type value. Must only be used where primitive values are expected.
-   */
-  def decodePossiblyPrimitive(any: ScalaPbAny): Any = {
-    val typeUrl = any.typeUrl
-    if (typeUrl.startsWith(PrimitivePrefix)) {
-      NameToPrimitives.get(typeUrl) match {
-        case Some(primitive) =>
-          bytesToPrimitive(primitive, any.value)
-        case None =>
-          throw SerializationException("Unknown primitive type url: " + typeUrl)
-      }
-    } else {
-      decodeMessage(any)
-    }
-  }
 
   /**
    * Decodes a Protobuf Any wrapped message into the concrete user message type.
-   *
-   * Other wrapped primitives are not expected, but the wrapped value is passed through as it is.
    */
   def decodeMessage(any: ScalaPbAny): Any = {
     val typeUrl = any.typeUrl
-    if (typeUrl.equals(BytesPrimitive.fullName)) {
-      // raw byte strings we turn into BytesValue and expect service method to accept
-      val bytes = bytesToPrimitive(BytesPrimitive, any.value)
-      if (prefer == Prefer.Java)
-        com.google.protobuf.BytesValue.of(bytes)
-      else
-        com.google.protobuf.wrappers.BytesValue.of(bytes)
+    // wrapped concrete protobuf message, parse into the right type
+    if (!typeUrl.startsWith(GoogleTypeUrlPrefix)) {
+      log.warn("Message type [{}] does not match type url prefix [{}]", typeUrl: Any, GoogleTypeUrlPrefix)
+    }
+    val typeName = typeUrl.split("/", 2) match {
+      case Array(_, typeName) =>
+        typeName
+      case _ =>
+        log.warn(
+          "Message type [{}] does not have a url prefix, it should have one that matchers the type url prefix [{}]",
+          typeUrl: Any,
+          GoogleTypeUrlPrefix)
+        typeUrl
+    }
 
-    } else if (typeUrl.equals(StringPrimitive.fullName)) {
-      // strings as StringValue
-      val string = bytesToPrimitive(StringPrimitive, any.value)
-      if (prefer == Prefer.Java)
-        com.google.protobuf.StringValue.of(string)
-      else
-        com.google.protobuf.wrappers.StringValue.of(string)
-
-    } else if (typeUrl.startsWith(PrimitivePrefix)) {
-      // pass on as is, the generated types will not match the primitive type if we unwrap/decode
-      any
-    } else {
-      // wrapped concrete protobuf message, parse into the right type
-      if (!typeUrl.startsWith(GoogleTypeUrlPrefix)) {
-        log.warn("Message type [{}] does not match type url prefix [{}]", typeUrl: Any, GoogleTypeUrlPrefix)
-      }
-      val typeName = typeUrl.split("/", 2) match {
-        case Array(_, typeName) =>
-          typeName
-        case _ =>
-          log.warn(
-            "Message type [{}] does not have a url prefix, it should have one that matchers the type url prefix [{}]",
-            typeUrl: Any,
-            GoogleTypeUrlPrefix)
-          typeUrl
-      }
-
-      resolveTypeUrl(typeName) match {
-        case Some(parser) =>
-          parser.parseFrom(any.value)
-        case None =>
-          throw SerializationException("Unable to find descriptor for type: " + typeUrl)
-      }
+    resolveTypeUrl(typeName) match {
+      case Some(parser) =>
+        parser.parseFrom(any.value)
+      case None =>
+        throw SerializationException("Unable to find descriptor for type: " + typeUrl)
     }
   }
 

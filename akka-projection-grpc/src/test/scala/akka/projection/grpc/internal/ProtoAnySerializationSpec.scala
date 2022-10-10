@@ -45,7 +45,7 @@ class ProtoAnySerializationSpec extends ScalaTestWithActorTestKit with AnyWordSp
 
   private val addLineItem = AddLineItem(name = "item", productId = "id", quantity = 10)
 
-  "ProtoAnySerialization with Prefer.Java" must {
+  "ProtoAnySerialization" must {
     "serialize and deserialize Java proto message" in {
       val instant = Instant.now()
       val event =
@@ -63,9 +63,9 @@ class ProtoAnySerializationSpec extends ScalaTestWithActorTestKit with AnyWordSp
 
     "encode and decode ScalaPb proto message" in {
       val event = TestEvent("cart1", "item1", 17)
-      val pbAny = serializationJava.serialize(event)
+      val pbAny = serializationScala.serialize(event)
       pbAny.typeUrl shouldBe "type.googleapis.com/akka.projection.grpc.internal.TestEvent"
-      val deserializedEvent = serializationJava.deserialize(pbAny)
+      val deserializedEvent = serializationScala.deserialize(pbAny)
       deserializedEvent shouldBe event
     }
 
@@ -124,108 +124,9 @@ class ProtoAnySerializationSpec extends ScalaTestWithActorTestKit with AnyWordSp
     "support se/deserializing java protobufs" in {
       val any = serializationJava.encode(addLineItem)
       any.typeUrl should ===("type.googleapis.com/" + AddLineItem.scalaDescriptor.fullName)
-      serializationJava.decodePossiblyPrimitive(any) should ===(addLineItem)
+      serializationJava.decodeMessage(any) should ===(addLineItem)
     }
 
-    def testPrimitive[T](name: String, value: T, defaultValue: T) = {
-      val any = serializationJava.encode(value)
-      any.typeUrl should ===(ProtoAnySerialization.PrimitivePrefix + name)
-      serializationJava.decodePossiblyPrimitive(any) should ===(value)
-
-      val defaultAny = serializationJava.encode(defaultValue)
-      defaultAny.typeUrl should ===(ProtoAnySerialization.PrimitivePrefix + name)
-      defaultAny.value.size() shouldBe 0
-      serializationJava.decodePossiblyPrimitive(defaultAny) should ===(defaultValue)
-    }
-
-    "support se/deserializing strings" in testPrimitive("string", "foo", "")
-    "support se/deserializing ints" in testPrimitive("int32", 10, 0)
-    "support se/deserializing longs" in testPrimitive("int64", 10L, 0L)
-    "support se/deserializing floats" in testPrimitive("float", 0.5f, 0f)
-    "support se/deserializing doubles" in testPrimitive("double", 0.5d, 0d)
-    "support se/deserializing bytes" in testPrimitive("bytes", ByteString.copyFromUtf8("foo"), ByteString.EMPTY)
-    "support se/deserializing booleans" in testPrimitive("bool", true, false)
-
-    "deserialize text into StringValue" in {
-      val plainText = "some text"
-      val any =
-        ScalaPbAny(
-          "type.akka.io/string",
-          ProtoAnySerialization.encodePrimitiveBytes(ByteString.copyFromUtf8(plainText)))
-      // both as top level message
-      val decoded = serializationJava.decodeMessage(any)
-      decoded shouldBe a[com.google.protobuf.StringValue]
-      decoded.asInstanceOf[com.google.protobuf.StringValue].getValue should ===(plainText)
-      val decoded2 = serializationJava.decodePossiblyPrimitive(any)
-      decoded2 shouldBe a[String]
-    }
-
-    "deserialize bytes into BytesValue" in {
-      val bytes = "some texty bytes"
-      val any =
-        ScalaPbAny("type.akka.io/bytes", ProtoAnySerialization.encodePrimitiveBytes(ByteString.copyFromUtf8(bytes)))
-      // both as top level message
-      val decoded = serializationJava.decodeMessage(any)
-      decoded shouldBe a[com.google.protobuf.BytesValue]
-      decoded.asInstanceOf[com.google.protobuf.BytesValue].getValue.toStringUtf8 should ===(bytes)
-      val decoded2 = serializationJava.decodePossiblyPrimitive(any)
-      decoded2 shouldBe a[ByteString]
-    }
-
-    "serialize BytesValue like a regular message" in {
-      val bytes = ByteString.copyFromUtf8("woho!")
-      val encoded = serializationJava.encode(com.google.protobuf.BytesValue.newBuilder().setValue(bytes).build())
-      encoded.typeUrl should ===("type.googleapis.com/google.protobuf.BytesValue")
-      com.google.protobuf.BytesValue.parseFrom(encoded.value).getValue should ===(bytes)
-    }
-
-    "serialize StringValue like a regular message" in {
-      val text = "waha!"
-      val encoded = serializationJava.encode(com.google.protobuf.StringValue.newBuilder().setValue(text).build())
-      encoded.typeUrl should ===("type.googleapis.com/google.protobuf.StringValue")
-      com.google.protobuf.StringValue.parseFrom(encoded.value).getValue should ===(text)
-    }
   }
 
-  "ProtoAnySerialization with Prefer.Scala" must {
-    "deserialize text into StringValue" in {
-      val plainText = "some text"
-      val any =
-        ScalaPbAny(
-          "type.akka.io/string",
-          ProtoAnySerialization.encodePrimitiveBytes(ByteString.copyFromUtf8(plainText)))
-      // both as top level message
-      val decoded = serializationScala.decodeMessage(any)
-      decoded shouldBe a[com.google.protobuf.wrappers.StringValue]
-      decoded.asInstanceOf[com.google.protobuf.wrappers.StringValue].value should ===(plainText)
-      val decoded2 = serializationScala.decodePossiblyPrimitive(any)
-      decoded2 shouldBe a[String]
-    }
-
-    "deserialize bytes into BytesValue" in {
-      val bytes = "some texty bytes"
-      val any =
-        ScalaPbAny("type.akka.io/bytes", ProtoAnySerialization.encodePrimitiveBytes(ByteString.copyFromUtf8(bytes)))
-      // both as top level message
-      val decoded = serializationScala.decodeMessage(any)
-      decoded shouldBe a[com.google.protobuf.wrappers.BytesValue]
-      decoded.asInstanceOf[com.google.protobuf.wrappers.BytesValue].value.toStringUtf8 should ===(bytes)
-      val decoded2 = serializationScala.decodePossiblyPrimitive(any)
-      decoded2 shouldBe a[ByteString]
-    }
-
-    "serialize BytesValue like a regular message" in {
-      val bytes = ByteString.copyFromUtf8("woho!")
-      val encoded = serializationScala.encode(com.google.protobuf.wrappers.BytesValue(bytes))
-      encoded.typeUrl should ===("type.googleapis.com/google.protobuf.BytesValue")
-      com.google.protobuf.wrappers.BytesValue.parseFrom(encoded.value.newCodedInput()).value should ===(bytes)
-    }
-
-    "serialize StringValue like a regular message" in {
-      val text = "waha!"
-      val encoded = serializationScala.encode(com.google.protobuf.wrappers.StringValue(text))
-      encoded.typeUrl should ===("type.googleapis.com/google.protobuf.StringValue")
-      com.google.protobuf.wrappers.StringValue.parseFrom(encoded.value.newCodedInput()).value should ===(text)
-    }
-  }
 }
