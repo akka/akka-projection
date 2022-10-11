@@ -4,10 +4,6 @@
 
 package akka.projection.grpc.consumer
 
-import java.util.Optional
-
-import scala.compat.java8.OptionConverters._
-
 import akka.annotation.ApiMayChange
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
@@ -43,30 +39,32 @@ object GrpcQuerySettings {
   /**
    * Scala API: Programmatic construction of GrpcQuerySettings
    *
-   * @param streamId                  The stream id to consume
-   * @param additionalRequestMetadata Additional request metadata, for authentication/authorization of the request
-   *                                  on the remote side.
+   * @param streamId The stream id to consume
    */
-  def apply(streamId: String, additionalRequestMetadata: Option[Metadata]): GrpcQuerySettings = {
-    new GrpcQuerySettings(streamId, additionalRequestMetadata)
+  def apply(streamId: String): GrpcQuerySettings = {
+    new GrpcQuerySettings(streamId, additionalRequestMetadata = None)
   }
 
   /**
    * Java API: Programmatic construction of GrpcQuerySettings
    *
    * @param streamId The stream id to consume
-   * @param additionalRequestMetadata Additional request metadata, for authentication/authorization of the request
-   *                              on the remote side.
    */
-  def create(streamId: String, additionalRequestMetadata: Optional[akka.grpc.javadsl.Metadata]): GrpcQuerySettings = {
-    new GrpcQuerySettings(streamId, additionalRequestMetadata.asScala.map(_.asScala))
+  def create(streamId: String): GrpcQuerySettings = {
+    new GrpcQuerySettings(streamId, additionalRequestMetadata = None)
   }
 }
 
 @ApiMayChange
-final class GrpcQuerySettings(val streamId: String, val additionalRequestMetadata: Option[Metadata]) {
+final class GrpcQuerySettings private (val streamId: String, val additionalRequestMetadata: Option[Metadata]) {
   require(
     streamId != "",
-    "Configuration property [stream-id] must be an id exposed by the streaming side (but was empty).")
+    "streamId must be an id exposed by the producing side but was undefined on the consuming side.")
+
+  /**
+   * Additional request metadata, for authentication/authorization of the request on the remote side.
+   */
+  def withAdditionalRequestMetadata(metadata: Metadata): GrpcQuerySettings =
+    new GrpcQuerySettings(streamId, Option(metadata))
 
 }

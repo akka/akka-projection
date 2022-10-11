@@ -121,7 +121,7 @@ object ShoppingCartEventConsumer {
         val projectionId = ProjectionId.of(projectionName, projectionKey)
 
         val eventsBySlicesQuery = GrpcReadJournal(
-          GrpcQuerySettings(streamId, None),
+          GrpcQuerySettings(streamId),
           GrpcClientSettings.fromConfig( // FIXME this is rather inconvenient
             system.settings.config
               .getConfig("akka.projection.grpc.consumer.client")),

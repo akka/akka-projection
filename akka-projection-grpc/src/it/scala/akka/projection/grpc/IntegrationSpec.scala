@@ -134,9 +134,8 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       EventSourcedProvider.eventsBySlices[String](
         system,
         GrpcReadJournal(
-          GrpcQuerySettings(
-            streamId = streamId,
-            additionalRequestMetadata = Some(new MetadataBuilder().addText("x-secret", "top_secret").build())),
+          GrpcQuerySettings(streamId).withAdditionalRequestMetadata(
+            new MetadataBuilder().addText("x-secret", "top_secret").build()),
           GrpcClientSettings
             .connectToServiceAt("127.0.0.1", grpcPort)
             .withTls(false),

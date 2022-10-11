@@ -59,7 +59,7 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
     lazy val entity = spawn(TestEntity(pid))
 
     lazy val grpcReadJournal = GrpcReadJournal(
-      GrpcQuerySettings(streamId, None),
+      GrpcQuerySettings(streamId),
       GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")),
       protobufDescriptors = Nil)
   }

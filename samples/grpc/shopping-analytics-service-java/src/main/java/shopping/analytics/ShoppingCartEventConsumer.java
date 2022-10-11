@@ -121,7 +121,7 @@ class ShoppingCartEventConsumer {
 
           GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
               system,
-              GrpcQuerySettings.create(streamId, Optional.empty()),
+              GrpcQuerySettings.create(streamId),
               GrpcClientSettings.fromConfig( // FIXME issue #703 this is rather inconvenient
                   system.settings().config()
                       .getConfig("akka.projection.grpc.consumer.client"), system),
