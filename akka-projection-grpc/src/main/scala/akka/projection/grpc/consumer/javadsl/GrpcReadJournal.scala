@@ -35,6 +35,19 @@ object GrpcReadJournal {
   val Identifier: String = scaladsl.GrpcReadJournal.Identifier
 
   /**
+   * Construct a gRPC read journal from configuration `akka.projection.grpc.consumer`. The `stream-id` must
+   * be defined in the configuration.
+   */
+  def create(
+      system: ClassicActorSystemProvider,
+      protobufDescriptors: java.util.List[Descriptors.FileDescriptor]): GrpcReadJournal =
+    create(
+      system,
+      GrpcQuerySettings(system),
+      GrpcClientSettings.fromConfig(system.classicSystem.settings.config.getConfig(Identifier + ".client"))(system),
+      protobufDescriptors)
+
+  /**
    * Construct a gRPC read journal for the given stream-id and explicit `GrpcClientSettings` to control
    * how to reach the Akka Projection gRPC producer service (host, port etc).
    */

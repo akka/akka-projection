@@ -2,17 +2,16 @@ package shopping.analytics;
 
 //#initProjections
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
-import akka.grpc.GrpcClientSettings;
 import akka.japi.Pair;
 import akka.persistence.Persistence;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
-import akka.projection.grpc.consumer.GrpcQuerySettings;
 import akka.projection.grpc.consumer.javadsl.GrpcReadJournal;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
+import shopping.cart.proto.ShoppingCartEvents;
 
 //#initProjections
 
@@ -26,9 +25,7 @@ import shopping.cart.proto.CheckedOut;
 import shopping.cart.proto.ItemAdded;
 import shopping.cart.proto.ItemQuantityAdjusted;
 import shopping.cart.proto.ItemRemoved;
-import shopping.cart.proto.ShoppingCartEvents;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -108,7 +105,7 @@ class ShoppingCartEventConsumer {
     int numberOfProjectionInstances = 4;
     String projectionName = "cart-events";
     List<Pair<Integer, Integer>> sliceRanges = Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
-    String streamId = "cart";
+    String streamId = system.settings().config().getString("akka.projection.grpc.consumer.stream-id");
 
     ShardedDaemonProcess.get(system).init(
         ProjectionBehavior.Command.class,
@@ -121,10 +118,6 @@ class ShoppingCartEventConsumer {
 
           GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
               system,
-              GrpcQuerySettings.create(streamId),
-              GrpcClientSettings.fromConfig( // FIXME issue #703 this is rather inconvenient
-                  system.settings().config()
-                      .getConfig("akka.projection.grpc.consumer.client"), system),
               List.of(ShoppingCartEvents.getDescriptor()));
 
           SourceProvider<Offset, EventEnvelope<Object>> sourceProvider = EventSourcedProvider.eventsBySlices(

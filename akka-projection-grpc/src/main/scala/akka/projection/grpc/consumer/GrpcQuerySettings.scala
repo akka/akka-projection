@@ -4,13 +4,25 @@
 
 package akka.projection.grpc.consumer
 
+import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
+import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import com.typesafe.config.Config
 
 @ApiMayChange
 object GrpcQuerySettings {
+
+  /**
+   * Scala API: From `Config` `akka.projection.grpc.consumer` configuration section.
+   */
+  def apply(system: ClassicActorSystemProvider): GrpcQuerySettings =
+    apply(system.classicSystem.settings.config.getConfig(GrpcReadJournal.Identifier))
+
+  /**
+   * Scala API: From `Config` corresponding to `akka.projection.grpc.consumer` configuration section.
+   */
   def apply(config: Config): GrpcQuerySettings = {
     val streamId = config.getString("stream-id")
     require(
@@ -37,9 +49,21 @@ object GrpcQuerySettings {
   }
 
   /**
+   * Java API: From `Config` `akka.projection.grpc.consumer` configuration section.
+   */
+  def create(system: ClassicActorSystemProvider): GrpcQuerySettings =
+    apply(system)
+
+  /**
+   * Java API: From `Config` corresponding to `akka.projection.grpc.consumer` configuration section.
+   */
+  def create(config: Config): GrpcQuerySettings =
+    apply(config)
+
+  /**
    * Scala API: Programmatic construction of GrpcQuerySettings
    *
-   * @param streamId The stream id to consume
+   * @param streamId The stream id to consume. It is exposed by the producing side.
    */
   def apply(streamId: String): GrpcQuerySettings = {
     new GrpcQuerySettings(streamId, additionalRequestMetadata = None)
@@ -48,7 +72,7 @@ object GrpcQuerySettings {
   /**
    * Java API: Programmatic construction of GrpcQuerySettings
    *
-   * @param streamId The stream id to consume
+   * @param streamId The stream id to consume. It is exposed by the producing side.
    */
   def create(streamId: String): GrpcQuerySettings = {
     new GrpcQuerySettings(streamId, additionalRequestMetadata = None)
