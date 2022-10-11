@@ -104,7 +104,6 @@ import scalapb.options.Scalapb
   import ProtoAnySerialization._
 
   private val serialization = SerializationExtension(system.classicSystem)
-  val classLoader = system.dynamicAccess.classLoader // FIXME use DynamicAccess
 
   private val allDescriptors = flattenDescriptors(descriptors)
 
@@ -223,15 +222,14 @@ import scalapb.options.Scalapb
         log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
         None
       case nsme: NoSuchElementException =>
-        // FIXME wrong exception? NoSuchMethodException is thrown from getMethod("parser")
+        // Not sure this is exception is thrown. NoSuchMethodException is thrown from getMethod("parser").
+        // It was like this in the original Kalix JVM SDK.
         throw SerializationException(
           s"Found com.google.protobuf.Message class $className to deserialize protobuf ${typeDescriptor.getFullName} but it didn't have a static parser() method on it.",
           nsme)
       case _: NoSuchMethodException =>
-        //        throw SerializationException(
-        //          s"Found com.google.protobuf.Message class $className to deserialize protobuf ${typeDescriptor.getFullName} but it didn't have a static parser() method on it.",
-        //          nsme)
-        // FIXME there seems to be a case where the ScalaPB class can be loaded, but it ofc doesn't have the parser method
+        // NoSuchMethodException may be thrown from getMethod("parser") if the ScalaPB class can be loaded,
+        // but the ScalaPB class doesn't have the parser method.
         None
       case iae @ (_: IllegalAccessException | _: IllegalArgumentException) =>
         throw SerializationException(s"Could not invoke $className.parser()", iae)
@@ -338,15 +336,15 @@ import scalapb.options.Scalapb
     val typeUrl = any.typeUrl
     // wrapped concrete protobuf message, parse into the right type
     if (!typeUrl.startsWith(GoogleTypeUrlPrefix)) {
-      log.warn("Message type [{}] does not match type url prefix [{}]", typeUrl: Any, GoogleTypeUrlPrefix)
+      log.warn2("Message type [{}] does not match type url prefix [{}]", typeUrl, GoogleTypeUrlPrefix)
     }
     val typeName = typeUrl.split("/", 2) match {
       case Array(_, typeName) =>
         typeName
       case _ =>
-        log.warn(
+        log.warn2(
           "Message type [{}] does not have a url prefix, it should have one that matchers the type url prefix [{}]",
-          typeUrl: Any,
+          typeUrl,
           GoogleTypeUrlPrefix)
         typeUrl
     }
@@ -355,7 +353,15 @@ import scalapb.options.Scalapb
       case Some(parser) =>
         parser.parseFrom(any.value)
       case None =>
-        throw SerializationException("Unable to find descriptor for type: " + typeUrl)
+        val errMsg =
+          if (allDescriptors.isEmpty)
+            s"Unable to find Protobuf descriptor for type: [$typeUrl]. " +
+            "No descriptors defined when creating GrpcReadJournal. Note that GrpcReadJournal should be created " +
+            "with the GrpcReadJournal apply/create factory method and not from configuration via GrpcReadJournalProvider " +
+            "when using Protobuf serialization."
+          else
+            s"Unable to find Protobuf descriptor for type: [$typeUrl]."
+        throw SerializationException(errMsg)
     }
   }
 

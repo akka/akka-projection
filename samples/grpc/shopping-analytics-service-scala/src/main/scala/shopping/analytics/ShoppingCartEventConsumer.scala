@@ -125,10 +125,7 @@ object ShoppingCartEventConsumer {
           GrpcClientSettings.fromConfig( // FIXME this is rather inconvenient
             system.settings.config
               .getConfig("akka.projection.grpc.consumer.client")),
-          List(
-            ShoppingCartEventsProto.javaDescriptor
-          ) // FIXME should we support the scalaDescriptor?
-        )
+          List(ShoppingCartEventsProto.javaDescriptor))
 
         val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
           system,

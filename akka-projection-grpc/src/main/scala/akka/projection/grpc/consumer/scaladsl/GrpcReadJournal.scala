@@ -65,8 +65,14 @@ object GrpcReadJournal {
   /**
    * Construct a gRPC read journal for the given settings and explicit `GrpcClientSettings` to control
    * how to reach the Akka Projection gRPC producer service (host, port etc).
+   *
+   * Note that the `protobufDescriptors` is a list of the `javaDescriptor` for the used protobuf messages. It is
+   * defined in the ScalaPB generated `Proto` companion object.
    */
-  def apply(settings: GrpcQuerySettings, clientSettings: GrpcClientSettings, protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])( // FIXME should we support the scalaDescriptor?
+  def apply(
+      settings: GrpcQuerySettings,
+      clientSettings: GrpcClientSettings,
+      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
       implicit system: ClassicActorSystemProvider): GrpcReadJournal =
     apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
 
@@ -79,7 +85,7 @@ object GrpcReadJournal {
       protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
       protobufPrefer: ProtoAnySerialization.Prefer)(implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
 
-    // FIXME This probably means that one GrpcReadJournal instance is created for each Projection instance,
+    // FIXME issue #702 This probably means that one GrpcReadJournal instance is created for each Projection instance,
     // and therefore one grpc client for each. Is that fine or should the client be shared for same clientSettings?
 
     val protoAnySerialization =
@@ -116,7 +122,7 @@ final class GrpcReadJournal private (
     with LoadEventQuery {
   import GrpcReadJournal.log
 
-  // when used as delegate in javadsl
+  // When created as delegate in javadsl from `GrpcReadJournalProvider`.
   private[akka] def this(
       system: ExtendedActorSystem,
       config: Config,
@@ -126,10 +132,9 @@ final class GrpcReadJournal private (
       system,
       GrpcQuerySettings(config),
       withChannelBuilderOverrides(GrpcClientSettings.fromConfig(config.getConfig("client"))(system)),
-      // FIXME can/should we load descriptors from config?
       new ProtoAnySerialization(system.toTyped, descriptors = Nil, protoAnyPrefer))
 
-  // entry point when created through Akka Persistence
+  // When created from `GrpcReadJournalProvider`.
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
     this(system, config, cfgPath, ProtoAnySerialization.Prefer.Scala)
 
