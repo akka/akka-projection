@@ -2,17 +2,16 @@ package shopping.analytics;
 
 //#initProjections
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
-import akka.grpc.GrpcClientSettings;
 import akka.japi.Pair;
 import akka.persistence.Persistence;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
-import akka.projection.grpc.consumer.GrpcQuerySettings;
 import akka.projection.grpc.consumer.javadsl.GrpcReadJournal;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
+import shopping.cart.proto.ShoppingCartEvents;
 
 //#initProjections
 
@@ -26,9 +25,7 @@ import shopping.cart.proto.CheckedOut;
 import shopping.cart.proto.ItemAdded;
 import shopping.cart.proto.ItemQuantityAdjusted;
 import shopping.cart.proto.ItemRemoved;
-import shopping.cart.proto.ShoppingCartEvents;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -108,7 +105,10 @@ class ShoppingCartEventConsumer {
     int numberOfProjectionInstances = 4;
     String projectionName = "cart-events";
     List<Pair<Integer, Integer>> sliceRanges = Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
-    String streamId = "cart";
+
+    GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
+        system,
+        List.of(ShoppingCartEvents.getDescriptor()));
 
     ShardedDaemonProcess.get(system).init(
         ProjectionBehavior.Command.class,
@@ -116,21 +116,13 @@ class ShoppingCartEventConsumer {
         numberOfProjectionInstances,
         idx -> {
           Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
-          String projectionKey = streamId + "-" + sliceRange.first() + "-" + sliceRange.second();
+          String projectionKey = eventsBySlicesQuery.streamId() + "-" + sliceRange.first() + "-" + sliceRange.second();
           ProjectionId projectionId = ProjectionId.of(projectionName, projectionKey);
-
-          GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
-              system,
-              GrpcQuerySettings.create(streamId, Optional.empty()),
-              GrpcClientSettings.fromConfig( // FIXME issue #703 this is rather inconvenient
-                  system.settings().config()
-                      .getConfig("akka.projection.grpc.consumer.client"), system),
-              List.of(ShoppingCartEvents.getDescriptor()));
 
           SourceProvider<Offset, EventEnvelope<Object>> sourceProvider = EventSourcedProvider.eventsBySlices(
               system,
               eventsBySlicesQuery,
-              streamId,
+              eventsBySlicesQuery.streamId(),
               sliceRange.first(),
               sliceRange.second());
 

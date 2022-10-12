@@ -63,6 +63,20 @@ object GrpcReadJournal {
     LoggerFactory.getLogger(classOf[GrpcReadJournal])
 
   /**
+   * Construct a gRPC read journal from configuration `akka.projection.grpc.consumer`. The `stream-id` must
+   * be defined in the configuration.
+   *
+   * Note that the `protobufDescriptors` is a list of the `javaDescriptor` for the used protobuf messages. It is
+   * defined in the ScalaPB generated `Proto` companion object.
+   */
+  def apply(protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
+      implicit system: ClassicActorSystemProvider): GrpcReadJournal =
+    apply(
+      GrpcQuerySettings(system),
+      GrpcClientSettings.fromConfig(system.classicSystem.settings.config.getConfig(Identifier + ".client")),
+      protobufDescriptors)
+
+  /**
    * Construct a gRPC read journal for the given settings and explicit `GrpcClientSettings` to control
    * how to reach the Akka Projection gRPC producer service (host, port etc).
    *
@@ -166,6 +180,13 @@ final class GrpcReadJournal private (
 
   override def sliceRanges(numberOfRanges: Int): immutable.Seq[Range] =
     persistenceExt.sliceRanges(numberOfRanges)
+
+  /**
+   * The identifier of the stream to consume, which is exposed by the producing/publishing side.
+   * It is defined in the [[GrpcQuerySettings]].
+   */
+  def streamId: String =
+    settings.streamId
 
   /**
    * Query events for given slices. A slice is deterministically defined based on the persistence id. The purpose is to

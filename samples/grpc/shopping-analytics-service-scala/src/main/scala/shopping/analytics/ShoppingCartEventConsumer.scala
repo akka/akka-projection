@@ -6,13 +6,11 @@ import scala.concurrent.Future
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
-import akka.grpc.GrpcClientSettings
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
-import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
@@ -110,27 +108,23 @@ object ShoppingCartEventConsumer {
     val projectionName: String = "cart-events"
     val sliceRanges =
       Persistence(system).sliceRanges(numberOfProjectionInstances)
-    val streamId: String = "cart"
+
+    val eventsBySlicesQuery =
+      GrpcReadJournal(List(ShoppingCartEventsProto.javaDescriptor))
 
     ShardedDaemonProcess(system).init(
       projectionName,
       numberOfProjectionInstances,
       { idx =>
         val sliceRange = sliceRanges(idx)
-        val projectionKey = s"$streamId-${sliceRange.start}-${sliceRange.end}"
+        val projectionKey =
+          s"${eventsBySlicesQuery.streamId}-${sliceRange.start}-${sliceRange.end}"
         val projectionId = ProjectionId.of(projectionName, projectionKey)
-
-        val eventsBySlicesQuery = GrpcReadJournal(
-          GrpcQuerySettings(streamId, None),
-          GrpcClientSettings.fromConfig( // FIXME this is rather inconvenient
-            system.settings.config
-              .getConfig("akka.projection.grpc.consumer.client")),
-          List(ShoppingCartEventsProto.javaDescriptor))
 
         val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
           system,
           eventsBySlicesQuery,
-          streamId,
+          eventsBySlicesQuery.streamId,
           sliceRange.start,
           sliceRange.end)
 

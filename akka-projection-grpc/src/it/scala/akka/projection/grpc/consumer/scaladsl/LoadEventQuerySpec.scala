@@ -61,7 +61,7 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
     lazy val entity = spawn(TestEntity(pid))
 
     lazy val grpcReadJournal = GrpcReadJournal(
-      GrpcQuerySettings(streamId, None),
+      GrpcQuerySettings(streamId),
       GrpcClientSettings
         .connectToServiceAt("127.0.0.1", testContainerConf.grpcPort)
         .withTls(false),
