@@ -8,10 +8,9 @@ import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 import akka.Done
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 
-@ApiMayChange object Handler {
+object Handler {
 
   /** Handler that can be define from a simple function */
   private class HandlerFunction[Envelope](handler: Envelope => Future[Done]) extends Handler[Envelope] {
@@ -34,7 +33,7 @@ import akka.annotation.InternalApi
  * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
-@ApiMayChange trait Handler[Envelope] extends HandlerLifecycle {
+trait Handler[Envelope] extends HandlerLifecycle {
 
   /**
    * The `process` method is invoked for each `Envelope`.
@@ -46,7 +45,7 @@ import akka.annotation.InternalApi
 
 }
 
-@ApiMayChange trait HandlerLifecycle {
+trait HandlerLifecycle {
 
   /**
    * Invoked when the projection is starting, before first envelope is processed.

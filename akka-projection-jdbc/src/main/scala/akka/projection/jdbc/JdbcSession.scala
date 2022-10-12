@@ -7,7 +7,6 @@ package akka.projection.jdbc
 import java.sql.Connection
 import java.sql.SQLException
 
-import akka.annotation.ApiMayChange
 import akka.japi.function.{ Function => JFunction }
 
 /**
@@ -26,7 +25,6 @@ import akka.japi.function.{ Function => JFunction }
  * lambda call and therefore can be used (see [[JdbcSession#withConnection]] method). Other JPA implementations may not provide this feature.
  *
  */
-@ApiMayChange
 trait JdbcSession {
 
   /**

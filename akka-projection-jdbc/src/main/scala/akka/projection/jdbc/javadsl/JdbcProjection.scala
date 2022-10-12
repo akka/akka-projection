@@ -11,7 +11,6 @@ import scala.compat.java8.FutureConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.internal.AtLeastOnce
@@ -35,7 +34,6 @@ import akka.projection.jdbc.internal.JdbcHandlerAdapter
 import akka.projection.jdbc.internal.JdbcProjectionImpl
 import akka.stream.javadsl.FlowWithContext
 
-@ApiMayChange
 object JdbcProjection {
 
   /**

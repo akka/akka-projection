@@ -9,7 +9,6 @@ import java.util.concurrent.CompletionStage
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
-import akka.annotation.ApiMayChange
 
 /**
  * This [[Handler]] gives support for spawning an actor of a given `Behavior` to delegate
@@ -19,7 +18,6 @@ import akka.annotation.ApiMayChange
  * `Projection` is started and the `ActorRef` is passed in as a parameter to the `process` method.
  * The Actor is stopped when the `Projection` is stopped.
  */
-@ApiMayChange
 abstract class ActorHandler[Envelope, T](val behavior: Behavior[T]) extends Handler[Envelope] {
 
   /**

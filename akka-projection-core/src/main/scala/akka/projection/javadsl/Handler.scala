@@ -8,10 +8,8 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 
 import akka.Done
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 
-@ApiMayChange
 object Handler {
 
   /**
@@ -41,7 +39,6 @@ object Handler {
  * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
-@ApiMayChange
 abstract class Handler[Envelope] extends HandlerLifecycle {
 
   /**
@@ -69,7 +66,7 @@ abstract class Handler[Envelope] extends HandlerLifecycle {
     CompletableFuture.completedFuture(Done)
 }
 
-@ApiMayChange trait HandlerLifecycle {
+trait HandlerLifecycle {
 
   /**
    * Invoked when the projection is starting, before first envelope is processed.

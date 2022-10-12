@@ -12,7 +12,6 @@ import scala.concurrent.Future
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
@@ -25,7 +24,6 @@ import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
-@ApiMayChange
 object EventSourcedProvider {
 
   def eventsByTag[Event](

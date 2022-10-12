@@ -6,7 +6,6 @@ package akka.projection.testkit.javadsl
 
 import java.util.function.Supplier
 
-import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalApi
 import akka.projection.Projection
@@ -21,7 +20,6 @@ import akka.projection.internal.SourceProviderAdapter
 import akka.projection.testkit.internal.TestInMemoryOffsetStoreImpl
 import akka.projection.testkit.internal.TestProjectionImpl
 
-@ApiMayChange
 object TestProjection {
 
   /**

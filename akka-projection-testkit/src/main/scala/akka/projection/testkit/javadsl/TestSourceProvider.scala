@@ -7,12 +7,10 @@ package akka.projection.testkit.javadsl
 import scala.compat.java8.FunctionConverters._
 
 import akka.NotUsed
-import akka.annotation.ApiMayChange
 import akka.projection.OffsetVerification
 import akka.projection.javadsl.VerifiableSourceProvider
 import akka.projection.testkit.internal.TestSourceProviderImpl
 
-@ApiMayChange
 object TestSourceProvider {
 
   /**

@@ -9,7 +9,6 @@ import java.util.function.Supplier
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
@@ -35,7 +34,6 @@ import akka.stream.javadsl.FlowWithContext
  * Factories of [[akka.projection.Projection]] where the offset is stored in Cassandra. The envelope handler can
  * integrate with anything, such as publishing to a message broker, or updating a read model in Cassandra.
  */
-@ApiMayChange
 object CassandraProjection {
 
   /**

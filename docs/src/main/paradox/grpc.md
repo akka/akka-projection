@@ -4,6 +4,15 @@ Akka Projection gRPC can be used for implementing asynchronous event based servi
 It provides an implementation of an Akka Projection that uses
 @extref:[Akka gRPC](akka-grpc:index.html) as underlying transport between event producer and consumer.
 
+@@@ warning
+
+This module is currently marked as [May Change](https://doc.akka.io/docs/akka/current/common/may-change.html)
+in the sense that the API might be changed based on feedback from initial usage.
+However, the module is ready for usage in production and we will not break serialization format of
+messages or stored data.
+
+@@@
+
 ## Overview
 
 ![overview.png](images/grpc-overview.png)

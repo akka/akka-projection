@@ -5,13 +5,11 @@
 package akka.projection.testkit.scaladsl
 
 import akka.NotUsed
-import akka.annotation.ApiMayChange
 import akka.projection.OffsetVerification
 import akka.projection.scaladsl.VerifiableSourceProvider
 import akka.projection.testkit.internal.TestSourceProviderImpl
 import akka.stream.scaladsl.Source
 
-@ApiMayChange
 object TestSourceProvider {
 
   /**

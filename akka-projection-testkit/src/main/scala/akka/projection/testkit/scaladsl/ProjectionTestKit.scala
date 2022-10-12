@@ -13,18 +13,15 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.Behaviors
-import akka.annotation.ApiMayChange
 import akka.projection.Projection
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 
-@ApiMayChange
 object ProjectionTestKit {
   def apply(system: ActorSystem[_]): ProjectionTestKit =
     new ProjectionTestKit(system)
 }
 
-@ApiMayChange
 final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
 
   private val testKit = ActorTestKit(system)
