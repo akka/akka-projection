@@ -4,13 +4,10 @@
 
 package akka.projection
 
-import akka.annotation.ApiMayChange
-
 /**
  * Track status of a projection by implementing a `StatusObserver` and install it using
  * [[Projection.withStatusObserver]].
  */
-@ApiMayChange
 abstract class StatusObserver[-Envelope] {
 
   /**

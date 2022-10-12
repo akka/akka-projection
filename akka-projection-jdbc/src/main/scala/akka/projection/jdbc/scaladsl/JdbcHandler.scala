@@ -4,7 +4,6 @@
 
 package akka.projection.jdbc.scaladsl
 
-import akka.annotation.ApiMayChange
 import akka.projection.jdbc.JdbcHandlerLifecycle
 import akka.projection.jdbc.JdbcSession
 
@@ -20,7 +19,6 @@ import akka.projection.jdbc.JdbcSession
  * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
-@ApiMayChange
 trait JdbcHandler[Envelope, S <: JdbcSession] extends JdbcHandlerLifecycle {
 
   /**
@@ -33,7 +31,6 @@ trait JdbcHandler[Envelope, S <: JdbcSession] extends JdbcHandlerLifecycle {
 
 }
 
-@ApiMayChange
 object JdbcHandler {
 
   /** JdbcHandler that can be define from a simple function */

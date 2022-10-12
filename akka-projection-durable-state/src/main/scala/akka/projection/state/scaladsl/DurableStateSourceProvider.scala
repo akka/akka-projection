@@ -10,7 +10,6 @@ import scala.concurrent.Future
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.DurableStateChange
@@ -27,7 +26,6 @@ import akka.stream.scaladsl.Source
 /**
  * API may change
  */
-@ApiMayChange
 object DurableStateSourceProvider {
 
   def changesByTag[A](

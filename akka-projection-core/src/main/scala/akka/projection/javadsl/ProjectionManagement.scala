@@ -13,15 +13,14 @@ import scala.compat.java8.OptionConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.projection.ProjectionId
 import akka.projection.scaladsl
 
-@ApiMayChange object ProjectionManagement {
+object ProjectionManagement {
   def get(system: ActorSystem[_]): ProjectionManagement = new ProjectionManagement(system)
 }
 
-@ApiMayChange class ProjectionManagement(system: ActorSystem[_]) {
+class ProjectionManagement(system: ActorSystem[_]) {
   private val delegate = scaladsl.ProjectionManagement(system)
   private implicit val ec: ExecutionContext = system.executionContext
 

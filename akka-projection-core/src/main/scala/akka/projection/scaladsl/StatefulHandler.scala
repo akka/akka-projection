@@ -10,9 +10,8 @@ import scala.util.Failure
 import scala.util.Success
 
 import akka.Done
-import akka.annotation.ApiMayChange
 
-@ApiMayChange abstract class StatefulHandler[State, Envelope](implicit ec: ExecutionContext) extends Handler[Envelope] {
+abstract class StatefulHandler[State, Envelope](implicit ec: ExecutionContext) extends Handler[Envelope] {
 
   private var state: Future[State] = _
 

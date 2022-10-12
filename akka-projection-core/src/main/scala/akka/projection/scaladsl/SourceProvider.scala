@@ -8,11 +8,9 @@ import scala.concurrent.Future
 
 import akka.projection.MergeableOffset
 import akka.NotUsed
-import akka.annotation.ApiMayChange
 import akka.projection.OffsetVerification
 import akka.stream.scaladsl.Source
 
-@ApiMayChange
 trait SourceProvider[Offset, Envelope] {
 
   def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]]
@@ -28,12 +26,10 @@ trait SourceProvider[Offset, Envelope] {
 
 }
 
-@ApiMayChange
 trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
 
   def verifyOffset(offset: Offset): OffsetVerification
 
 }
 
-@ApiMayChange
 trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_], Envelope] extends SourceProvider[Offset, Envelope]

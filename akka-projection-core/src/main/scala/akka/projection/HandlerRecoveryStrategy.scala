@@ -6,19 +6,16 @@ package akka.projection
 
 import scala.concurrent.duration.FiniteDuration
 
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.util.JavaDurationConverters._
 
 /**
  * Error handling strategy when processing an `Envelope` fails. The default is defined in configuration .
  */
-@ApiMayChange
 sealed trait HandlerRecoveryStrategy
 sealed trait StrictRecoveryStrategy extends HandlerRecoveryStrategy
 sealed trait RetryRecoveryStrategy extends HandlerRecoveryStrategy
 
-@ApiMayChange
 object HandlerRecoveryStrategy {
   import Internal._
 

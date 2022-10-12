@@ -4,9 +4,7 @@
 
 package akka.projection.jdbc
 
-import akka.annotation.ApiMayChange
-
-@ApiMayChange trait JdbcHandlerLifecycle {
+trait JdbcHandlerLifecycle {
 
   /**
    * Invoked when the projection is starting, before first envelope is processed.

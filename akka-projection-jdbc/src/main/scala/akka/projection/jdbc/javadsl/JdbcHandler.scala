@@ -4,14 +4,12 @@
 
 package akka.projection.jdbc.javadsl
 
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.projection.jdbc.JdbcHandlerLifecycle
 import akka.projection.jdbc.JdbcSession
 
 import java.util.function.BiConsumer
 
-@ApiMayChange
 object JdbcHandler {
 
   /**
@@ -46,7 +44,6 @@ object JdbcHandler {
  * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
-@ApiMayChange
 abstract class JdbcHandler[Envelope, S <: JdbcSession] extends JdbcHandlerLifecycle {
 
   /**

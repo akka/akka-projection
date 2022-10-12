@@ -6,12 +6,10 @@ package akka.projection
 
 import scala.util.control.NoStackTrace
 
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 
 sealed trait OffsetVerification
 
-@ApiMayChange
 object OffsetVerification {
   case object VerificationSuccess extends OffsetVerification
 

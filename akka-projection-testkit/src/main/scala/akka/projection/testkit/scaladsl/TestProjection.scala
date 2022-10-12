@@ -4,7 +4,6 @@
 
 package akka.projection.testkit.scaladsl
 
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.projection.Projection
 import akka.projection.ProjectionId
@@ -18,7 +17,6 @@ import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.internal.TestInMemoryOffsetStoreImpl
 import akka.projection.testkit.internal.TestProjectionImpl
 
-@ApiMayChange
 object TestProjection {
 
   /**
@@ -53,7 +51,6 @@ object TestProjection {
       startOffset = None)
 }
 
-@ApiMayChange
 trait TestProjection[Offset, Envelope] extends Projection[Envelope] {
   def withStatusObserver(observer: StatusObserver[Envelope]): TestProjection[Offset, Envelope]
 

@@ -8,7 +8,6 @@ import java.time.Duration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.japi.function.Effect
 import akka.japi.function.Procedure
 import akka.projection.Projection
@@ -16,13 +15,11 @@ import akka.projection.testkit.scaladsl
 import akka.stream.testkit.TestSubscriber
 import akka.util.JavaDurationConverters._
 
-@ApiMayChange
 object ProjectionTestKit {
   def create(system: ActorSystem[_]): ProjectionTestKit =
     new ProjectionTestKit(system)
 }
 
-@ApiMayChange
 final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
   private val delegate = scaladsl.ProjectionTestKit(system)
 

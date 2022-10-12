@@ -13,7 +13,6 @@ import scala.reflect.ClassTag
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.event.Logging
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationFailureException
@@ -46,7 +45,6 @@ import slick.jdbc.JdbcProfile
  * Factories of [[akka.projection.Projection]] where the offset is stored in a relational database table using Slick.
  * The envelope handler can integrate with anything, such as publishing to a message broker, or updating a relational read model.
  */
-@ApiMayChange
 object SlickProjection {
 
   /**
@@ -390,7 +388,6 @@ object SlickProjection {
     new SlickOffsetStore(system, databaseConfig.db, databaseConfig.profile, SlickSettings(system))
 }
 
-@ApiMayChange
 object SlickHandler {
 
   /** SlickHandler that can be define from a simple function */
@@ -413,7 +410,6 @@ object SlickHandler {
  * defined in configuration or using the `withRecoveryStrategy` method of a `Projection`
  * implementation.
  */
-@ApiMayChange
 trait SlickHandler[Envelope] extends HandlerLifecycle {
 
   def process(envelope: Envelope): DBIO[Done]

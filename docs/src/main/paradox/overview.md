@@ -22,15 +22,6 @@ For the offset storage you can select from:
 Those building blocks are assembled into a `Projection`. You can have many instances of it
 @ref:[automatically distributed and run](running.md) in an Akka Cluster.
 
-@@@ warning
-
-This module is currently marked as [May Change](https://doc.akka.io/docs/akka/current/common/may-change.html)
-in the sense that the API might be changed based on feedback from initial usage.
-However, the module is ready for usage in production and we will not break serialization format of 
-messages or stored data.
-
-@@@
-
 To see a complete example of an Akka Projections implementation review the @ref:[Getting Started Guide](getting-started/index.md)
 or the @extref[Microservices with Akka tutorial](platform-guide:microservices-tutorial/).
 

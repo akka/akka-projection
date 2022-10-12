@@ -10,7 +10,6 @@ import scala.concurrent.duration.Duration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.cassandra.internal.CassandraOffsetStore
@@ -38,7 +37,6 @@ import akka.stream.scaladsl.FlowWithContext
  * guarantees between the invocations are handled automatically, i.e. no volatile or
  * other concurrency primitives are needed for managing the state.
  */
-@ApiMayChange
 object CassandraProjection {
 
   /**

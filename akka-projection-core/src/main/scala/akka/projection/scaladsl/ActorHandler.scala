@@ -9,7 +9,6 @@ import scala.concurrent.Future
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
-import akka.annotation.ApiMayChange
 import akka.projection.internal.ActorHandlerInit
 
 /**
@@ -20,7 +19,6 @@ import akka.projection.internal.ActorHandlerInit
  * `Projection` is started and the `ActorRef` is passed in as a parameter to the `process` method.
  * The Actor is stopped when the `Projection` is stopped.
  */
-@ApiMayChange
 abstract class ActorHandler[Envelope, T](val behavior: Behavior[T]) extends Handler[Envelope] with ActorHandlerInit[T] {
 
   /**

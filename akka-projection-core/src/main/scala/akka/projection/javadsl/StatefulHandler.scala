@@ -7,9 +7,8 @@ package akka.projection.javadsl
 import java.util.concurrent.CompletionStage
 
 import akka.Done
-import akka.annotation.ApiMayChange
 
-@ApiMayChange abstract class StatefulHandler[State, Envelope] extends Handler[Envelope] {
+abstract class StatefulHandler[State, Envelope] extends Handler[Envelope] {
 
   private var state: CompletionStage[State] = _
 

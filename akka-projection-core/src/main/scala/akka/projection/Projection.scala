@@ -10,7 +10,6 @@ import scala.util.control.NoStackTrace
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.ManagementState
@@ -29,7 +28,6 @@ import akka.stream.scaladsl.Source
  *
  * @tparam Envelope The envelope type of the projection.
  */
-@ApiMayChange
 trait Projection[Envelope] {
 
   def projectionId: ProjectionId

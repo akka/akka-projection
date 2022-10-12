@@ -9,11 +9,9 @@ import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
 import akka.NotUsed
-import akka.annotation.ApiMayChange
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
 
-@ApiMayChange
 abstract class SourceProvider[Offset, Envelope] {
 
   def source(offset: Supplier[CompletionStage[Optional[Offset]]])
@@ -30,12 +28,10 @@ abstract class SourceProvider[Offset, Envelope] {
 
 }
 
-@ApiMayChange
 trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
 
   def verifyOffset(offset: Offset): OffsetVerification
 
 }
 
-@ApiMayChange
 trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_], Envelope] extends SourceProvider[Offset, Envelope]

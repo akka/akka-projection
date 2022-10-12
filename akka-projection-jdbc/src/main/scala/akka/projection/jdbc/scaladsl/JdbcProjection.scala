@@ -10,7 +10,6 @@ import scala.concurrent.duration.Duration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.internal.AtLeastOnce
@@ -29,7 +28,6 @@ import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.FlowWithContext
 
-@ApiMayChange
 object JdbcProjection {
 
   /**

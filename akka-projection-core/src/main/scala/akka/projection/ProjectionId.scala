@@ -6,10 +6,8 @@ package akka.projection
 
 import scala.collection.immutable
 
-import akka.annotation.ApiMayChange
 import akka.util.ccompat.JavaConverters._
 
-@ApiMayChange
 object ProjectionId {
 
   /**
@@ -87,7 +85,6 @@ object ProjectionId {
     keys.asScala.map { key: String => new ProjectionId(name, key) }.asJava
 }
 
-@ApiMayChange
 final class ProjectionId private (val name: String, val key: String) {
 
   require(name != null, "name must not be null")

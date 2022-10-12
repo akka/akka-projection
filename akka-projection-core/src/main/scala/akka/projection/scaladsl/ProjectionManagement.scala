@@ -18,19 +18,18 @@ import akka.actor.typed.Extension
 import akka.actor.typed.ExtensionId
 import akka.actor.typed.pubsub.Topic
 import akka.actor.typed.scaladsl.AskPattern._
-import akka.annotation.ApiMayChange
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.util.JavaDurationConverters._
 import akka.util.Timeout
 
-@ApiMayChange object ProjectionManagement extends ExtensionId[ProjectionManagement] {
+object ProjectionManagement extends ExtensionId[ProjectionManagement] {
   def createExtension(system: ActorSystem[_]): ProjectionManagement = new ProjectionManagement(system)
 
   def get(system: ActorSystem[_]): ProjectionManagement = apply(system)
 }
 
-@ApiMayChange class ProjectionManagement(system: ActorSystem[_]) extends Extension {
+class ProjectionManagement(system: ActorSystem[_]) extends Extension {
   private implicit val sys: ActorSystem[_] = system
   private implicit val askTimeout: Timeout = {
     system.settings.config.getDuration("akka.projection.management.ask-timeout").asScala
