@@ -108,25 +108,23 @@ object ShoppingCartEventConsumer {
     val projectionName: String = "cart-events"
     val sliceRanges =
       Persistence(system).sliceRanges(numberOfProjectionInstances)
-    val streamId =
-      system.settings.config
-        .getString("akka.projection.grpc.consumer.stream-id")
+
+    val eventsBySlicesQuery =
+      GrpcReadJournal(List(ShoppingCartEventsProto.javaDescriptor))
 
     ShardedDaemonProcess(system).init(
       projectionName,
       numberOfProjectionInstances,
       { idx =>
         val sliceRange = sliceRanges(idx)
-        val projectionKey = s"$streamId-${sliceRange.start}-${sliceRange.end}"
+        val projectionKey =
+          s"${eventsBySlicesQuery.streamId}-${sliceRange.start}-${sliceRange.end}"
         val projectionId = ProjectionId.of(projectionName, projectionKey)
-
-        val eventsBySlicesQuery =
-          GrpcReadJournal(List(ShoppingCartEventsProto.javaDescriptor))
 
         val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
           system,
           eventsBySlicesQuery,
-          streamId,
+          eventsBySlicesQuery.streamId,
           sliceRange.start,
           sliceRange.end)
 

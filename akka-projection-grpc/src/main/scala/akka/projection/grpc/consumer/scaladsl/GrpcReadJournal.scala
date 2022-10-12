@@ -182,6 +182,13 @@ final class GrpcReadJournal private (
     persistenceExt.sliceRanges(numberOfRanges)
 
   /**
+   * The identifier of the stream to consume, which is exposed by the producing/publishing side.
+   * It is defined in the [[GrpcQuerySettings]].
+   */
+  def streamId: String =
+    settings.streamId
+
+  /**
    * Query events for given slices. A slice is deterministically defined based on the persistence id. The purpose is to
    * evenly distribute all persistence ids over the slices.
    *

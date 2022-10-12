@@ -49,6 +49,14 @@ public class ConsumerCompileTest {
         Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
     String streamId = "ShoppingCart";
 
+    GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
+        system,
+        GrpcQuerySettings.create(streamId),
+        GrpcClientSettings.fromConfig(
+            system.settings().config()
+                .getConfig("akka.projection.grpc.consumer.client"), system),
+        Collections.singletonList(ShoppingcartApiProto.javaDescriptor()));
+
     ShardedDaemonProcess.get(system)
         .init(
             ProjectionBehavior.Command.class,
@@ -57,22 +65,16 @@ public class ConsumerCompileTest {
             idx -> {
               Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
               String projectionKey =
-                  streamId + "-" + sliceRange.first() + "-" + sliceRange.second();
+                  eventsBySlicesQuery.streamId() + "-" + sliceRange.first() + "-" + sliceRange.second();
               ProjectionId projectionId = ProjectionId.of(projectionName, projectionKey);
 
-              GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
-                  system,
-                  GrpcQuerySettings.create(streamId),
-                  GrpcClientSettings.fromConfig(
-                      system.settings().config()
-                          .getConfig("akka.projection.grpc.consumer.client"), system),
-                  Collections.singletonList(ShoppingcartApiProto.javaDescriptor()));
+
 
               SourceProvider<Offset, EventEnvelope<String>> sourceProvider =
                   EventSourcedProvider.eventsBySlices(
                       system,
-                      GrpcReadJournal.Identifier(),
-                      streamId,
+                      eventsBySlicesQuery,
+                      eventsBySlicesQuery.streamId(),
                       sliceRange.first(),
                       sliceRange.second());
 

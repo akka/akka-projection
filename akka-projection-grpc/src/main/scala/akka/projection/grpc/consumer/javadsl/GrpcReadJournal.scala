@@ -71,6 +71,13 @@ class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     with EventTimestampQuery
     with LoadEventQuery {
 
+  /**
+   * The identifier of the stream to consume, which is exposed by the producing/publishing side.
+   * It is defined in the [[GrpcQuerySettings]].
+   */
+  def streamId(): String =
+    delegate.streamId
+
   override def eventsBySlices[Event](
       entityType: String,
       minSlice: Int,
