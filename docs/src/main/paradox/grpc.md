@@ -73,6 +73,16 @@ There are alternative ways of running the `ProjectionBehavior` as described in @
 
 How to implement the `EventHandler` and choose between different processing semantics is described in the @extref:[R2dbcProjection documentation](akka-persistence-r2dbc:projection.html).
 
+### gRPC client lifecycle
+
+When creating the @apidoc[GrpcReadJournal] a gRPC client is created for the target producer. The same `GrpcReadJournal` 
+instance and its gRPC client should be shared for the same target producer. The code examples above will share the instance
+between different Projection instances running in the same `ActorSystem`. The gRPC clients will automatically be 
+closed when the `ActorSystem` is terminated.
+
+If there is a need to close the gRPC client before `ActorSystem` termination the `close()` method of the @apidoc[GrpcReadJournal]
+can be called. After closing the `GrpcReadJournal` instance cannot be used again.
+
 ## Producer
 
 Akka Projections gRPC provides the gRPC service implementation that is used by the consumer side. It is created with the @apidoc[EventProducer$]:

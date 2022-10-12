@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.Future
 
+import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
@@ -366,5 +367,13 @@ final class GrpcReadJournal private (
 
       }
   }
+
+  /**
+   * Close the gRPC client. It will be automatically closed when the `ActorSystem` is terminated,
+   * so invoking this is only needed when there is a need to close the resource before that.
+   * After closing the `GrpcReadJournal` instance cannot be used again.
+   */
+  def close(): Future[Done] =
+    client.close()
 
 }

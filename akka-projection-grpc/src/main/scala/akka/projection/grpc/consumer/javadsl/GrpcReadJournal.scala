@@ -12,6 +12,7 @@ import java.util.concurrent.CompletionStage
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 
+import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
@@ -104,4 +105,12 @@ class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
 
   override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): CompletionStage[EventEnvelope[Event]] =
     delegate.loadEnvelope[Event](persistenceId, sequenceNr).toJava
+
+  /**
+   * Close the gRPC client. It will be automatically closed when the `ActorSystem` is terminated,
+   * so invoking this is only needed when there is a need to close the resource before that.
+   * After closing the `GrpcReadJournal` instance cannot be used again.
+   */
+  def close(): CompletionStage[Done] =
+    delegate.close().toJava
 }
