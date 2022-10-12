@@ -118,7 +118,13 @@ for low latency use cases.
 
 ### Scalability limitations
 
-TODO
+Each connected consumer will start a `eventsBySlices` query that will periodically poll and read events from the journal.
+That means that the journal database will become a bottleneck, unless it can be scaled out, when number of consumers increase.
+The producer service itself can easily be scaled out to more instances. 
+
+For the case of many consumers of the same event stream a future improvement to reduce the
+database load would be to share results of the queries across the different consumers, since most of them are
+probably reading at the tail of the same event stream.
 
 ## Configuration
 
