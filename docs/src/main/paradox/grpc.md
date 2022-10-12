@@ -50,7 +50,10 @@ Java
 :  @@snip [ShoppingCartEventConsumer.java](/samples/grpc/shopping-analytics-service-java/src/main/java/shopping/analytics/ShoppingCartEventConsumer.java) { #initProjections }
 
 The Protobuf descriptors are defined when the @apidoc[GrpcReadJournal] is created. The descriptors are used
-when deserializing the received events.
+when deserializing the received events. @scala[The `protobufDescriptors` is a list of the `javaDescriptor` for the used protobuf messages.
+It is defined in the ScalaPB generated `Proto` companion object.]
+Note that GrpcReadJournal should be created with the @apidoc[GrpcReadJournal$] @scala[`apply`]@java[`create`] factory method
+and not from configuration via `GrpcReadJournalProvider` when using Protobuf serialization.
 
 The gRPC connection to the producer is defined in the [consumer configuration](#consumer-configuration).
 
