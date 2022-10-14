@@ -99,7 +99,7 @@ object Dependencies {
   }
 
   object Examples {
-    val hibernate = "org.hibernate" % "hibernate-core" % "5.6.11.Final"
+    val hibernate = "org.hibernate" % "hibernate-core" % "5.6.12.Final"
 
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
