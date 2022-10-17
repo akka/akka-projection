@@ -47,7 +47,7 @@ object Common extends AutoPlugin {
         "-doc-version",
         version.value,
         "-sourcepath",
-        (baseDirectory in ThisBuild).value.toString,
+        (ThisBuild / baseDirectory).value.toString,
         "-doc-source-url", {
           val branch = if (isSnapshot.value) "main" else s"v${version.value}"
           s"https://github.com/akka/akka-projection/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"

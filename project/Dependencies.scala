@@ -5,8 +5,8 @@ import sbt._
 
 object Dependencies {
 
-  val Scala213 = "2.13.8"
-  val Scala212 = "2.12.16"
+  val Scala213 = "2.13.10"
+  val Scala212 = "2.12.17"
   val ScalaVersions = Seq(Scala213, Scala212)
 
   val AkkaVersionInDocs = "2.7"
@@ -16,7 +16,7 @@ object Dependencies {
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.7.0-M3")
+    val akka = sys.props.getOrElse("build.akka.version", "2.7.0-M2")
     val akkaPersistenceJdbc = "5.2.0-M1"
     val akkaPersistenceR2dbc = "1.0.0-M2"
     val alpakka = "5.0.0-M1"

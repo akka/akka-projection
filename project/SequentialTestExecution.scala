@@ -19,7 +19,7 @@ object SequentialTestExecution extends AutoPlugin {
 
   override def globalSettings: Seq[Def.Setting[_]] = {
     Seq(
-      tags in test in IntegrationTest := Seq(IntegrationTestTag -> 1),
-      concurrentRestrictions in Global := Seq(Tags.limit(IntegrationTestTag, 1)))
+      IntegrationTest / test / tags := Seq(IntegrationTestTag -> 1),
+      Global / concurrentRestrictions := Seq(Tags.limit(IntegrationTestTag, 1)))
   }
 }
