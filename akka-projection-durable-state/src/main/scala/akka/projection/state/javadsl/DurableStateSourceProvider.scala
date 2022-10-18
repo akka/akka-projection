@@ -16,6 +16,7 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.japi.Pair
+import akka.persistence.query.DeletedDurableState
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.DurableStateChange
@@ -74,7 +75,7 @@ object DurableStateSourceProvider {
     override def extractCreationTime(stateChange: DurableStateChange[A]): Long =
       stateChange match {
         case u: UpdatedDurableState[_] => u.timestamp
-        case _                         => 0L // FIXME handle DeletedDurableState when that is added
+        case d: DeletedDurableState[_] => d.timestamp
       }
   }
 
@@ -141,10 +142,7 @@ object DurableStateSourceProvider {
     override def extractCreationTime(stateChange: DurableStateChange[A]): Long =
       stateChange match {
         case u: UpdatedDurableState[_] => u.timestamp
-        case other                     =>
-          // FIXME case DeletedDurableState when that is added
-          throw new IllegalArgumentException(
-            s"DurableStateChange [${other.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-persistence-r2dbc/issues")
+        case d: DeletedDurableState[_] => d.timestamp
       }
 
     override def getObject(persistenceId: String): CompletionStage[GetObjectResult[A]] =
