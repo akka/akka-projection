@@ -5,7 +5,7 @@ organizationHomepage := Some(url("https://akka.io"))
 licenses := Seq(
   ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
-scalaVersion := "2.13.5"
+scalaVersion := "2.13.10"
 
 Compile / scalacOptions ++= Seq(
   "-target:11",
