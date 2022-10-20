@@ -17,11 +17,11 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <akka-grpc-maven-plugin.version>2.2.0-M2</akka-grpc-maven-plugin.version>
+        <akka-grpc-maven-plugin.version>2.2.0</akka-grpc-maven-plugin.version>
         <scala.binary.version>2.13</scala.binary.version>
-        <akka-persistence-r2dbc.version>1.0.0-M1</akka-persistence-r2dbc.version>
         <!-- FIXME final release version -->
-        <akka-projection.version>1.3.0-M3</akka-projection.version>
+        <akka-persistence-r2dbc.version>1.0.0-M3</akka-persistence-r2dbc.version>
+        <akka-projection.version>1.3.0</akka-projection.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
         <!-- Version of the Docker image is derived from git commit.
