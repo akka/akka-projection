@@ -2,7 +2,8 @@ name := "shopping-analytics-service"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(
+  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 scalaVersion := "2.13.10"
 
@@ -29,8 +30,7 @@ Global / cancelable := false // ctrl-c
 val AkkaVersion = "2.7.0"
 val AkkaHttpVersion = "10.4.0"
 val AkkaManagementVersion = "1.2.0"
-// FIXME final release version
-val AkkaPersistenceR2dbcVersion = "1.0.0-M3"
+val AkkaPersistenceR2dbcVersion = "1.0.0"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.3.0")
 
