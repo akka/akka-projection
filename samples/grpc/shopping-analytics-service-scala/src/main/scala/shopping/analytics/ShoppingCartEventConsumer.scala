@@ -118,15 +118,15 @@ object ShoppingCartEventConsumer {
       { idx =>
         val sliceRange = sliceRanges(idx)
         val projectionKey =
-          s"${eventsBySlicesQuery.streamId}-${sliceRange.start}-${sliceRange.end}"
+          s"${eventsBySlicesQuery.streamId}-${sliceRange.min}-${sliceRange.max}"
         val projectionId = ProjectionId.of(projectionName, projectionKey)
 
         val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
           system,
           eventsBySlicesQuery,
           eventsBySlicesQuery.streamId,
-          sliceRange.start,
-          sliceRange.end)
+          sliceRange.min,
+          sliceRange.max)
 
         ProjectionBehavior(
           R2dbcProjection.atLeastOnceAsync(
