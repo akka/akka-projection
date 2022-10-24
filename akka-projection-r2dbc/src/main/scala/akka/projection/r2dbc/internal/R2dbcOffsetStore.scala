@@ -42,7 +42,11 @@ import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Statement
 import org.slf4j.LoggerFactory
 
-object R2dbcOffsetStore {
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] object R2dbcOffsetStore {
   type SeqNr = Long
   type Pid = String
 
