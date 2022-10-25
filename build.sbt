@@ -2,6 +2,8 @@ import akka.projections.Dependencies
 
 // avoid + in snapshot versions
 ThisBuild / dynverSeparator := "-"
+ThisBuild / version := "1.3.0"
+ThisBuild / isSnapshot := false
 
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
