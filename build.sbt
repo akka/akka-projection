@@ -96,9 +96,6 @@ lazy val `durable-state` =
     .settings(Dependencies.state)
     .dependsOn(core)
     .dependsOn(testkit % Test)
-    .settings(
-      // no previous artifact so must disable MiMa until this is released at least once.
-      mimaPreviousArtifacts := Set.empty)
 
 lazy val grpc =
   Project(id = "akka-projection-grpc", base = file("akka-projection-grpc"))
@@ -110,10 +107,7 @@ lazy val grpc =
     .dependsOn(eventsourced)
     .dependsOn(testkit % Test)
     .enablePlugins(AkkaGrpcPlugin)
-    .settings(
-      // no previous artifact so must disable MiMa until this is released at least once.
-      mimaPreviousArtifacts := Set.empty,
-      akkaGrpcCodeGeneratorSettings += "server_power_apis")
+    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
