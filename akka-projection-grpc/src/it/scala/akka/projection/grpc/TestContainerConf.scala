@@ -38,7 +38,7 @@ class TestContainerConf {
        dialect = "postgres"
        connection-factory {
          driver = "postgres"
-         host = "${container.getContainerIpAddress}"
+         host = "${container.getHost}"
          port = ${container.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT)}
          database = "${container.getDatabaseName}"
          user = "${container.getUsername}"
