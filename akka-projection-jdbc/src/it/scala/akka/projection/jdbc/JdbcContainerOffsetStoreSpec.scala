@@ -16,7 +16,6 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.Tag
 import org.testcontainers.containers._
 import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
-import org.testcontainers.utility.DockerImageName
 
 object JdbcContainerOffsetStoreSpec {
 
@@ -104,10 +103,7 @@ object JdbcContainerOffsetStoreSpec {
     // otherwise we get ORA-01882: timezone region not found
     System.setProperty("oracle.jdbc.timezoneAsRegion", "false")
     override def newContainer() = {
-      val imageName =
-        DockerImageName.parse("oracleinanutshell/oracle-xe-11g:1.0.0").asCompatibleSubstituteFor("gvenzl/oracle-xe")
-
-      new OracleContainer(imageName)
+      new OracleContainer("gvenzl/oracle-xe:18.4.0-slim")
         .withInitScript("db/oracle-init.sql")
     }
   }
