@@ -10,7 +10,7 @@ on:
 jobs:
   test:
     name: Build and Test Integration for Cassandra
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:

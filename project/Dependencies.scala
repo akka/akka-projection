@@ -5,8 +5,8 @@ import sbt._
 
 object Dependencies {
 
-  val Scala213 = "2.13.8"
-  val Scala212 = "2.12.16"
+  val Scala213 = "2.13.10"
+  val Scala212 = "2.12.17"
   val ScalaVersions = Seq(Scala213, Scala212)
 
   val AkkaVersionInDocs = "2.7"
@@ -16,17 +16,18 @@ object Dependencies {
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.7.0-M3")
-    val akkaPersistenceJdbc = "5.2.0-M1"
-    val akkaPersistenceR2dbc = "1.0.0-M2"
-    val alpakka = "5.0.0-M1"
-    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "3.1.0-M1")
+    val akka = sys.props.getOrElse("build.akka.version", "2.7.0")
+    val akkaPersistenceCassandra = "1.1.0"
+    val akkaPersistenceJdbc = "5.2.0"
+    val akkaPersistenceR2dbc = "1.0.0"
+    val alpakka = "5.0.0"
+    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.0")
     val slick = "3.4.1"
     val scalaTest = "3.1.1"
     val testContainers = "1.17.5"
     val junit = "4.13.2"
     val h2Driver = "1.4.200"
-    val jackson = "2.13.4.1" // this should match the version of jackson used by akka-serialization-jackson
+    val jackson = "2.13.4.2" // this should match the version of jackson used by akka-serialization-jackson
   }
 
   object Compile {
@@ -103,7 +104,8 @@ object Dependencies {
 
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
-    val akkaPersistenceCassandra = "com.typesafe.akka" %% "akka-persistence-cassandra" % "1.1.0-M1"
+    val akkaPersistenceCassandra =
+      "com.typesafe.akka" %% "akka-persistence-cassandra" % Versions.akkaPersistenceCassandra
     val akkaPersistenceJdbc = "com.lightbend.akka" %% "akka-persistence-jdbc" % Versions.akkaPersistenceJdbc
     val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka
   }

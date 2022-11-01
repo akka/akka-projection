@@ -32,7 +32,7 @@ object Common extends AutoPlugin {
           url("https://github.com/akka/akka-projection/graphs/contributors")),
       licenses := Seq(
           ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-projection/main/LICENSE"))
-        ), // FIXME change s/main/v1.3.0/ when released
+        ), // FIXME change s/main/v1.3.1/ when released
       description := "Akka Projection.")
 
   override lazy val projectSettings = Seq(
@@ -47,7 +47,7 @@ object Common extends AutoPlugin {
         "-doc-version",
         version.value,
         "-sourcepath",
-        (baseDirectory in ThisBuild).value.toString,
+        (ThisBuild / baseDirectory).value.toString,
         "-doc-source-url", {
           val branch = if (isSnapshot.value) "main" else s"v${version.value}"
           s"https://github.com/akka/akka-projection/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
@@ -66,11 +66,9 @@ object Common extends AutoPlugin {
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
     Test / logBuffered := false,
     mimaPreviousArtifacts :=
-      // FIXME dynver can't find these in the history-rewrite PR, revert to old logic once PR merged to main
-      Set(organization.value %% moduleName.value % "1.3.0-M1")
-    /* Set(
+      Set(
         organization.value %% moduleName.value % previousStableVersion.value
-          .getOrElse(throw new Error("Unable to determine previous version"))) */,
+          .getOrElse(throw new Error("Unable to determine previous version"))),
     sonatypeProfileName := "com.lightbend")
 
 }
