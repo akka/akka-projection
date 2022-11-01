@@ -117,7 +117,8 @@ object SlickContainerOffsetStoreSpec {
 
     import org.testcontainers.utility.DockerImageName
 
-    val imageName = DockerImageName.parse("oracleinanutshell/oracle-xe-11g:1.0.0").asCompatibleSubstituteFor("gvenzl/oracle-xe")
+    val imageName =
+      DockerImageName.parse("oracleinanutshell/oracle-xe-11g:1.0.0").asCompatibleSubstituteFor("gvenzl/oracle-xe")
     val container = initContainer(new OracleContainer(imageName))
 
     override def config: Config =
