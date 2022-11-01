@@ -33,7 +33,9 @@ object Common extends AutoPlugin {
       licenses := Seq(
           ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-projection/main/LICENSE"))
         ), // FIXME change s/main/v1.3.1/ when released
-      description := "Akka Projection.")
+      description := "Akka Projection.",
+      excludeLintKeys += scmInfo,
+      excludeLintKeys += mimaPreviousArtifacts)
 
   override lazy val projectSettings = Seq(
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
