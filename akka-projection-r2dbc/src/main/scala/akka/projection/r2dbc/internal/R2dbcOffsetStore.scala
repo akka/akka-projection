@@ -479,7 +479,7 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  private def insertTimestampOffsetInTx(conn: Connection, records: immutable.IndexedSeq[Record]): Future[Int] = {
+  private def insertTimestampOffsetInTx(conn: Connection, records: immutable.IndexedSeq[Record]): Future[Long] = {
     def bindRecord(stmt: Statement, record: Record): Statement = {
       val slice = persistenceExt.sliceForPersistenceId(record.pid)
       val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
@@ -786,7 +786,7 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  def deleteOldTimestampOffsets(): Future[Int] = {
+  def deleteOldTimestampOffsets(): Future[Long] = {
     if (idle.getAndSet(true)) {
       // no new offsets stored since previous delete
       Future.successful(0)
@@ -863,7 +863,7 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  private def deleteNewTimestampOffsetsInTx(conn: Connection, timestamp: Instant): Future[Int] = {
+  private def deleteNewTimestampOffsetsInTx(conn: Connection, timestamp: Instant): Future[Long] = {
     val currentState = getState()
     if (timestamp.isAfter(currentState.latestTimestamp)) {
       // nothing to delete

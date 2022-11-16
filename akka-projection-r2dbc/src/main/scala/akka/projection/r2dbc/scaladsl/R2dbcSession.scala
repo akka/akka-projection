@@ -19,10 +19,10 @@ final class R2dbcSession(val connection: Connection)(implicit val ec: ExecutionC
   def createStatement(sql: String): Statement =
     connection.createStatement(sql)
 
-  def updateOne(statement: Statement): Future[Int] =
+  def updateOne(statement: Statement): Future[Long] =
     R2dbcExecutor.updateOneInTx(statement)
 
-  def update(statements: immutable.IndexedSeq[Statement]): Future[immutable.IndexedSeq[Int]] =
+  def update(statements: immutable.IndexedSeq[Statement]): Future[immutable.IndexedSeq[Long]] =
     R2dbcExecutor.updateInTx(statements)
 
   def selectOne[A](statement: Statement)(mapRow: Row => A): Future[Option[A]] =

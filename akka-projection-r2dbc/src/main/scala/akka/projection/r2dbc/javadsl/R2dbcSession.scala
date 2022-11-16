@@ -25,11 +25,14 @@ final class R2dbcSession(connection: Connection)(implicit ec: ExecutionContext, 
   def createStatement(sql: String): Statement =
     connection.createStatement(sql)
 
-  def updateOne(statement: Statement): CompletionStage[Integer] =
-    R2dbcExecutor.updateOneInTx(statement).map(Integer.valueOf)(ExecutionContexts.parasitic).toJava
+  def updateOne(statement: Statement): CompletionStage[java.lang.Long] =
+    R2dbcExecutor.updateOneInTx(statement).map(java.lang.Long.valueOf)(ExecutionContexts.parasitic).toJava
 
-  def update(statements: java.util.List[Statement]): CompletionStage[java.util.List[Integer]] =
-    R2dbcExecutor.updateInTx(statements.asScala.toVector).map(results => results.map(Integer.valueOf).asJava).toJava
+  def update(statements: java.util.List[Statement]): CompletionStage[java.util.List[java.lang.Long]] =
+    R2dbcExecutor
+      .updateInTx(statements.asScala.toVector)
+      .map(results => results.map(java.lang.Long.valueOf).asJava)
+      .toJava
 
   def selectOne[A](statement: Statement)(mapRow: Row => A): CompletionStage[Optional[A]] =
     R2dbcExecutor.selectOneInTx(statement, mapRow).map(_.asJava)(ExecutionContexts.parasitic).toJava
