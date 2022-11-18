@@ -15,11 +15,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { java-version: adopt@1.8,  sbt-opts: '' }
-          - { java-version: adopt@1.11, sbt-opts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
+          - { jdkVersion: "1.8.0",  jvmName: "temurin:1.8.0",  extraOpts: '' }
+          - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
+          - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.1.0
         with:
           fetch-depth: 0
 
@@ -33,16 +34,16 @@ jobs:
         run: |-
           cp container-license-acceptance.txt akka-projection-jdbc/src/it/resources/container-license-acceptance.txt
 
-      - name: Setup JDK ${{ matrix.java-version }}
-        uses: olafurpg/setup-scala@v10
-        with:
-          java-version: ${{ matrix.java-version }}
-
       - name: Cache Coursier cache
-        uses: coursier/cache-action@v5        
+        uses: coursier/cache-action@v6.4.0
 
-      - name: Run all integration tests with default Scala and Java ${{ matrix.java-version }}
-        run: sbt "akka-projection-jdbc/it:test" ${{ matrix.sbt-opts }}
+      - name: Set up JDK ${{ matrix.jdkVersion }}
+        uses: coursier/setup-action@v1.3.0
+        with:
+          jvm: ${{ matrix.jvmName }}
+
+      - name: Run all integration tests with default Scala and Java ${{ matrix.jdkVersion }}
+        run: sbt "akka-projection-jdbc/It/test" ${{ matrix.extraOpts }}
         env: # Disable Ryuk resource reaper since we always spin up fresh VMs
           TESTCONTAINERS_RYUK_DISABLED: true
 
