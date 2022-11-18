@@ -3,7 +3,7 @@ name: Dependency License Scanning
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0' # At 00:00 on Sunday
+    - cron: '0 0 * * 6' # At 00:00 on saturdays
 
 jobs:
   fossa:
@@ -12,7 +12,7 @@ jobs:
     if: github.repository == 'akka/akka-projection'
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.1.0
         with:
           # we don't know what commit the last tag was it's safer to get entire repo so previousStableVersion resolves
           fetch-depth: 0
@@ -21,10 +21,9 @@ jobs:
         uses: coursier/cache-action@v6
 
       - name: Set up JDK 11
-        uses: coursier/setup-action@v1
+        uses: coursier/setup-action@v1.3.0
         with:
-          jvm:
-            adopt:11
+          jvm: temurin:1.11
 
       - name: FOSSA policy check
         run: |-
