@@ -31,7 +31,7 @@ class R2dbcOffsetStoreSpec
   override def typedSystem: ActorSystem[_] = system
 
   // test clock for testing of the `last_updated` Instant
-  private val clock = new TestClock
+  private val clock = TestClock.nowMillis()
 
   private val settings = R2dbcProjectionSettings(testKit.system)
 

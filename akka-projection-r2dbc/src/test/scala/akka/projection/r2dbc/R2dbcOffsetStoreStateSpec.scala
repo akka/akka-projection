@@ -16,7 +16,7 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
 
   "R2dbcOffsetStore.State" should {
     "add records and keep track of pids and latest offset" in {
-      val t0 = Instant.now()
+      val t0 = TestClock.nowMillis().instant()
       val state1 = State.empty
         .add(Vector(Record("p1", 1, t0), Record("p1", 2, t0.plusMillis(1)), Record("p1", 3, t0.plusMillis(2))))
       state1.byPid("p1").seqNr shouldBe 3L
@@ -43,7 +43,7 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
 
     // reproducer of issue #173
     "include highest seqNr in seen of latestOffset" in {
-      val t0 = Instant.now()
+      val t0 = TestClock.nowMillis().instant()
       val records =
         Vector(Record("p4", 9, t0), Record("p2", 2, t0), Record("p3", 5, t0), Record("p2", 1, t0), Record("p1", 3, t0))
       val state = State(records)
@@ -53,7 +53,7 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
     }
 
     "evict old" in {
-      val t0 = Instant.now()
+      val t0 = TestClock.nowMillis().instant()
       val state1 = State.empty
         .add(
           Vector(
@@ -87,7 +87,7 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
     }
 
     "find duplicate" in {
-      val t0 = Instant.now()
+      val t0 = TestClock.nowMillis().instant()
       val state =
         State(Vector(Record("p1", 1, t0), Record("p2", 2, t0.plusMillis(1)), Record("p3", 3, t0.plusMillis(2))))
       state.isDuplicate(Record("p1", 1, t0)) shouldBe true

@@ -241,7 +241,7 @@ class R2dbcTimestampOffsetProjectionSpec
 
   }
 
-  private val clock = new TestClock
+  private val clock = TestClock.nowMicros()
   def tick(): TestClock = {
     clock.tick(JDuration.ofMillis(1))
     clock
@@ -278,7 +278,7 @@ class R2dbcTimestampOffsetProjectionSpec
   }
 
   def createEnvelopesWithDuplicates(pid1: Pid, pid2: Pid): Vector[EventEnvelope[String]] = {
-    val startTime = Instant.now()
+    val startTime = TestClock.nowMicros().instant()
 
     Vector(
       createEnvelope(pid1, 1, startTime, s"e1-1"),
@@ -542,7 +542,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val startTime = Instant.now()
+      val startTime = TestClock.nowMicros().instant()
       val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
       val sourceProvider1 = createSourceProvider(envelopes1)
       implicit val offsetStore = createOffsetStore(projectionId, sourceProvider1)
@@ -654,7 +654,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val startTime = Instant.now()
+      val startTime = TestClock.nowMicros().instant()
       val envelopes1 = createEnvelopesUnknownSequenceNumbers(startTime, pid1, pid2)
       val sourceProvider1 = createBacktrackingSourceProvider(envelopes1)
       implicit val offsetStore = createOffsetStore(projectionId, sourceProvider1)
@@ -803,7 +803,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val startTime = Instant.now()
+      val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore =
         new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
@@ -940,7 +940,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val startTime = Instant.now()
+      val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore =
         new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
@@ -1144,7 +1144,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val pid1 = UUID.randomUUID().toString
       val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      val startTime = Instant.now()
+      val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore =
         new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
@@ -1286,7 +1286,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val startTime = Instant.now()
+      val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore =
         new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)

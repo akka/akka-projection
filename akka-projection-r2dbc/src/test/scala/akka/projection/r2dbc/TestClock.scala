@@ -9,15 +9,25 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalUnit
 
 import akka.annotation.InternalApi
 
-/**
- * INTERNAL API
- */
-@InternalApi private[projection] class TestClock extends Clock {
+object TestClock {
+  def nowMillis(): TestClock = new TestClock(ChronoUnit.MILLIS)
+  def nowMicros(): TestClock = new TestClock(ChronoUnit.MICROS)
+}
 
-  @volatile private var _instant = roundToMillis(Instant.now())
+/**
+ * Clock for testing purpose, which is truncated to a resolution (milliseconds or microseconds).
+ *
+ * The reason for truncating to the resolution is that Postgres timestamps has the resolution of microseconds but some
+ * OS/JDK (Linux/JDK17) has Instant resolution of nanoseconds.
+ */
+@InternalApi private[projection] class TestClock(resolution: TemporalUnit) extends Clock {
+
+  @volatile private var _instant = Instant.now().truncatedTo(resolution)
 
   override def getZone: ZoneId = ZoneOffset.UTC
 
@@ -28,18 +38,15 @@ import akka.annotation.InternalApi
     _instant
 
   def setInstant(newInstant: Instant): Unit =
-    _instant = roundToMillis(newInstant)
+    _instant = newInstant.truncatedTo(resolution)
 
+  /**
+   * Increase the clock with this duration (truncated to the resolution)
+   */
   def tick(duration: Duration): Instant = {
-    val newInstant = roundToMillis(_instant.plus(duration))
+    val newInstant = _instant.plus(duration).truncatedTo(resolution)
     _instant = newInstant
     newInstant
-  }
-
-  private def roundToMillis(i: Instant): Instant = {
-    // algo taken from java.time.Clock.tick
-    val epochMilli = i.toEpochMilli
-    Instant.ofEpochMilli(epochMilli - Math.floorMod(epochMilli, 1L))
   }
 
 }

@@ -286,7 +286,7 @@ class EventSourcedEndToEndSpec
       val pid2 = nextPid(entityType)
       val pid3 = nextPid(entityType)
 
-      val startTime = Instant.now()
+      val startTime = TestClock.nowMicros().instant()
       val oldTime = startTime.minus(projectionSettings.timeWindow).minusSeconds(60)
       writeEvent(pid1, 1L, startTime, "e1-1")
 
