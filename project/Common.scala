@@ -30,9 +30,12 @@ object Common extends AutoPlugin {
           "Contributors",
           "https://gitter.im/akka/dev",
           url("https://github.com/akka/akka-projection/graphs/contributors")),
-      licenses := Seq(
-          ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-projection/main/LICENSE"))
-        ), // FIXME change s/main/v1.3.1/ when released
+      licenses := {
+        val tagOrBranch =
+          if (version.value.endsWith("SNAPSHOT")) "main"
+          else "v" + version.value
+        Seq(("BUSL-1.1", url(s"https://raw.githubusercontent.com/akka/akka-projection/${tagOrBranch}/LICENSE")))
+      },
       description := "Akka Projection.",
       excludeLintKeys += scmInfo,
       excludeLintKeys += mimaPreviousArtifacts)
