@@ -504,8 +504,7 @@ class CassandraProjectionSpec
       val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val failProbe = createTestProbe[Promise[Done]]()
-      val handler = ControlledHandlerFailOn4(failProbe.ref)
+      val handler = ImmediateFailOn4()
 
       val statusProbe = createTestProbe[TestStatusObserver.Status]()
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
@@ -518,10 +517,6 @@ class CassandraProjectionSpec
           .withStatusObserver(statusObserver)
 
       spawn(ProjectionBehavior(projectionFailing))
-      // 1 + 3 => 1 original attempt and 3 retries
-      (1 to 4).foreach { _ =>
-        failProbe.receiveMessage().success(Done)
-      }
       eventually {
         val concatStr = repository.findById(entityId).futureValue.get
         concatStr.text shouldBe "abc|def|ghi"

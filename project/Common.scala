@@ -39,7 +39,8 @@ object Common extends AutoPlugin {
       description := "Akka Projection.",
       excludeLintKeys += scmInfo,
       excludeLintKeys += mimaPreviousArtifacts,
-      excludeLintKeys += testOptions)
+      excludeLintKeys += testOptions,
+      excludeLintKeys += logBuffered)
 
   override lazy val projectSettings = Seq(
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
@@ -72,6 +73,7 @@ object Common extends AutoPlugin {
     // -q Suppress stdout for successful tests.
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
     Test / logBuffered := false,
+    IntegrationTest / logBuffered := false,
     mimaPreviousArtifacts :=
       Set(
         organization.value %% moduleName.value % previousStableVersion.value
