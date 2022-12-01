@@ -38,7 +38,8 @@ object Common extends AutoPlugin {
       },
       description := "Akka Projection.",
       excludeLintKeys += scmInfo,
-      excludeLintKeys += mimaPreviousArtifacts)
+      excludeLintKeys += mimaPreviousArtifacts,
+      excludeLintKeys += testOptions)
 
   override lazy val projectSettings = Seq(
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
@@ -65,6 +66,7 @@ object Common extends AutoPlugin {
     apiURL := Some(url(s"https://doc.akka.io/api/akka-projection/${projectInfoVersion.value}")),
     // show full stack traces and test case durations
     Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
+    IntegrationTest / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
     // -a Show stack traces and exception class name for AssertionErrors.
     // -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
     // -q Suppress stdout for successful tests.
