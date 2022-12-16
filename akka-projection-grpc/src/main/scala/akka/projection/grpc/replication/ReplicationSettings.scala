@@ -38,7 +38,9 @@ final class ReplicationSettings[Command] private (
     val streamId: String,
     val otherReplicas: Set[Replica],
     val protobufDescriptors: Seq[Descriptors.FileDescriptor]) {
-
+  require(
+    !otherReplicas.exists(_.replicaId == selfReplicaId),
+    s"selfReplicaId [$selfReplicaId] must not be in 'otherReplicas'")
   // FIXME verify that replica ids align?
 
 }

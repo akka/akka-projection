@@ -70,7 +70,8 @@ object EventProducer {
       system,
       eventsBySlicesQueriesPerStreamId,
       scalaProducerSources,
-      interceptor.asScala.map(new InterceptorAdapter(_)))
+      interceptor.asScala.map(new InterceptorAdapter(_)),
+      includeMetadata = false)
 
     val handler = EventProducerServicePowerApiHandler(eventProducerService)(system)
     new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {

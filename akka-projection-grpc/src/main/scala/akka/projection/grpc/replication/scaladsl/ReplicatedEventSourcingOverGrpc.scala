@@ -6,6 +6,7 @@ package akka.projection.grpc.replication.scaladsl
 
 import akka.Done
 import akka.actor.typed.ActorSystem
+import akka.cluster.sharding.typed.ReplicatedEntity
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityRef
@@ -14,13 +15,14 @@ import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.Persistence
-import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.persistence.query.typed.EventEnvelope
-import akka.persistence.typed.PersistenceId
+import akka.persistence.typed.PublishedEvent
 import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.internal.PublishedEventImpl
+import akka.persistence.typed.internal.ReplicatedEventMetadata
 import akka.persistence.typed.internal.ReplicatedPublishedEventMetaData
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
+import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.persistence.typed.scaladsl.ReplicationContext
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
@@ -36,6 +38,7 @@ import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import com.google.protobuf.Descriptors
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -46,6 +49,8 @@ final class ReplicatedEventSourcingOverGrpc[Command] private (
 
 object ReplicatedEventSourcingOverGrpc {
 
+  private val log = LoggerFactory.getLogger(classOf[ReplicatedEventSourcingOverGrpc[_]])
+
   def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command])(
       replicatedBehaviorFactory: ReplicationContext => EventSourcedBehavior[Command, Event, State])(
       implicit system: ActorSystem[_]): ReplicatedEventSourcingOverGrpc[Command] = {
@@ -55,21 +60,27 @@ object ReplicatedEventSourcingOverGrpc {
 
     // FIXME how do the user wire it up? return the route?
     // set up a publisher
+
+    // FIXME: only pass events with local origin from the producer, not events replicated here in the first place,
+    //        not currently possible because no insight into envelope in transformation
     val eps = EventProducerSource(
       settings.entityTypeKey.name,
       settings.streamId,
       Transformation.identity,
       settings.eventProducerSettings)
-    val eventProducerRoute = EventProducer.grpcServiceHandler(eps)
 
-    // sharding for forwarding events
+    val eventProducerRoute = EventProducer.grpcServiceHandler(Set(eps), None, includeMetadata = true)
+
+    // sharding for hosting the entities and forwarding events
+    val replicatedEntity =
+      ReplicatedEntity(settings.selfReplicaId, Entity(settings.entityTypeKey) { entityContext =>
+        val replicationId =
+          ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
+        ReplicatedEventSourcing.externalReplication(replicationId, allReplicaIds)(replicatedBehaviorFactory)
+      })
+
     val sharding = ClusterSharding(system)
-    val entity = Entity[Command](settings.entityTypeKey) { entityContext =>
-      val replicationId =
-        ReplicationId(settings.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
-      ReplicatedEventSourcing.externalReplication(replicationId, allReplicaIds)(replicatedBehaviorFactory)
-    }
-    sharding.init(entity)
+    sharding.init(replicatedEntity.entity)
 
     // sharded daemon process for consuming event stream from the other dc:s
     settings.otherReplicas.foreach { replica =>
@@ -77,11 +88,11 @@ object ReplicatedEventSourcingOverGrpc {
         settings.entityTypeKey.name,
         replica,
         settings.protobufDescriptors,
-        sharding.entityRefFor(entity.typeKey, _))
+        sharding.entityRefFor(replicatedEntity.entity.typeKey, _))
     }
 
     // FIXME user still has to start the producer, could we opt-out do that as well?
-    new ReplicatedEventSourcingOverGrpc[Command](eventProducerRoute, entity.typeKey)
+    new ReplicatedEventSourcingOverGrpc[Command](eventProducerRoute, replicatedEntity.entity.typeKey)
   }
 
   private def startConsumer[C](
@@ -101,21 +112,32 @@ object ReplicatedEventSourcingOverGrpc {
       idx =>
         val sliceRange = sliceRanges(idx)
         val projectionKey =
-          s"${eventsBySlicesQuery.streamId}-${sliceRange.min}-${sliceRange.max}"
+          s"${eventsBySlicesQuery.streamId}-${replica.replicaId.id}-${sliceRange.min}-${sliceRange.max}"
         val projectionId = ProjectionId.of(projectionName, projectionKey)
 
         val replicationFlow = FlowWithContext[EventEnvelope[_], ProjectionContext].mapAsync(1) { envelope =>
-          val entityRef = entityRefFactory(envelope.persistenceId).asInstanceOf[EntityRef[PublishedEventImpl]]
+          val replicationId = ReplicationId.fromString(envelope.persistenceId)
+
+          val entityRef = entityRefFactory(replicationId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
+          log.info(
+            "[{}], Forwarding event from dc [{}] for [{}]: [{}]",
+            system.name,
+            replicationId.replicaId,
+            replicationId.persistenceId,
+            envelope.event)
           entityRef.ask[Done](
             replyTo =>
               PublishedEventImpl(
-                PersistenceId.ofUniqueId(envelope.persistenceId),
+                replicationId.persistenceId,
                 envelope.sequenceNr,
                 envelope.event,
                 envelope.timestamp,
-                // FIXME actually provide the right metadata here
-                envelope.eventMetadata.map(_.asInstanceOf[ReplicatedPublishedEventMetaData]),
+                envelope.eventMetadata.map {
+                  case rm: ReplicatedEventMetadata => new ReplicatedPublishedEventMetaData(rm.originReplica, rm.version)
+                  case other                       => throw new IllegalArgumentException(s"Unknown type of metadata: [${other.getClass}]")
+                },
                 Some(replyTo)))
+
         }
 
         val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](

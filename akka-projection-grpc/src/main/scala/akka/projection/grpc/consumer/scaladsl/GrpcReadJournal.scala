@@ -46,6 +46,7 @@ import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
+import akka.serialization.SerializationExtension
 import akka.stream.scaladsl.Source
 import com.google.protobuf.Descriptors
 import com.google.protobuf.timestamp.Timestamp
@@ -153,6 +154,7 @@ final class GrpcReadJournal private (
 
   private implicit val typedSystem = system.toTyped
   private val persistenceExt = Persistence(system)
+  private val serialization = SerializationExtension(system)
 
   private val client = EventProducerServiceClient(clientSettings)
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
@@ -300,13 +302,17 @@ final class GrpcReadJournal private (
     val evt =
       event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
 
+    val metadata: Option[Any] = event.metadata.map { protoMeta =>
+      serialization.deserialize(protoMeta.payload.toByteArray, protoMeta.serId, protoMeta.manifest).get
+    }
+
     new EventEnvelope(
       eventOffset,
       event.persistenceId,
       event.seqNr,
       evt,
       eventOffset.timestamp.toEpochMilli,
-      eventMetadata = None,
+      eventMetadata = metadata,
       PersistenceId.extractEntityType(event.persistenceId),
       event.slice,
       filtered = false,

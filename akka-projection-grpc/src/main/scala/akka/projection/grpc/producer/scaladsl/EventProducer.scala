@@ -10,6 +10,7 @@ import scala.concurrent.Future
 import scala.reflect.ClassTag
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
@@ -135,7 +136,26 @@ object EventProducer {
       eventsBySlicesQueriesForStreamIds(sources, system)
 
     EventProducerServicePowerApiHandler.partial(
-      new EventProducerServiceImpl(system, eventsBySlicesQueriesPerStreamId, sources, interceptor))
+      new EventProducerServiceImpl(
+        system,
+        eventsBySlicesQueriesPerStreamId,
+        sources,
+        interceptor,
+        includeMetadata = false))
+  }
+
+  @InternalApi
+  private[akka] def grpcServiceHandler(
+      sources: Set[EventProducerSource],
+      interceptor: Option[EventProducerInterceptor],
+      includeMetadata: Boolean)(
+      implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
+
+    val eventsBySlicesQueriesPerStreamId =
+      eventsBySlicesQueriesForStreamIds(sources, system)
+
+    EventProducerServicePowerApiHandler.partial(
+      new EventProducerServiceImpl(system, eventsBySlicesQueriesPerStreamId, sources, interceptor, includeMetadata))
   }
 
   /**

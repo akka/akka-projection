@@ -107,7 +107,7 @@ lazy val grpc =
     .dependsOn(eventsourced)
     .dependsOn(testkit % Test)
     .enablePlugins(AkkaGrpcPlugin)
-    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
+    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
