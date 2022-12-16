@@ -61,7 +61,7 @@ object Dependencies {
     // must be provided on classpath when using Apache Kafka 2.6.0+
     val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jacksonDatabind
 
-    val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.7.0"
+    val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
 
     // FIXME doesn't these come transitively form akka-persistence-r2dbc?
     val r2dbcSpi = "io.r2dbc" % "r2dbc-spi" % Versions.r2dbc // ApacheV2
