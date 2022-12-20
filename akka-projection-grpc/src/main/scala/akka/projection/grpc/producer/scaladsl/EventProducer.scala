@@ -43,16 +43,22 @@ object EventProducer {
 
   @ApiMayChange
   object Transformation {
+
+    @ApiMayChange
+    trait Mapper[A, B] {
+      def apply(event: A, metadata: Option[Any]): Future[Option[B]]
+    }
+
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
-      orElse = event =>
+      orElse = (event, _) =>
         Future.failed(new IllegalArgumentException(s"Missing transformation for event [${event.getClass}]")))
 
     /**
      * No transformation. Pass through each event as is.
      */
     val identity: Transformation =
-      new Transformation(mappers = Map.empty, orElse = event => Future.successful(Option(event)))
+      new Transformation(mappers = Map.empty, orElse = (event, _) => Future.successful(Option(event)))
   }
 
   /**
@@ -61,12 +67,21 @@ object EventProducer {
    */
   @ApiMayChange
   final class Transformation private (
-      val mappers: Map[Class[_], Any => Future[Option[Any]]],
-      val orElse: Any => Future[Option[Any]]) {
+      private[akka] val mappers: Map[Class[_], Transformation.Mapper[Any, Any]],
+      private[akka] val orElse: Transformation.Mapper[Any, Any]) {
+    import Transformation._
+
+    /**
+     * @param f A function that is fed each event, and the possible additional metadata
+     */
+    def registerLowLevelMapper[A: ClassTag, B](m: Mapper[A, B]): Transformation = {
+      val clazz = implicitly[ClassTag[A]].runtimeClass
+      new Transformation(mappers.updated(clazz, m.asInstanceOf[Mapper[Any, Any]]), orElse)
+    }
 
     def registerAsyncMapper[A: ClassTag, B](f: A => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
-      new Transformation(mappers.updated(clazz, f.asInstanceOf[Any => Future[Option[Any]]]), orElse)
+      new Transformation(mappers.updated(clazz, (event: Any, _) => f(event.asInstanceOf[A])), orElse)
     }
 
     def registerMapper[A: ClassTag, B](f: A => Option[B]): Transformation = {
@@ -74,12 +89,22 @@ object EventProducer {
     }
 
     def registerAsyncOrElseMapper(f: Any => Future[Option[Any]]): Transformation = {
-      new Transformation(mappers, f)
+      new Transformation(mappers, (event: Any, _) => f(event))
     }
 
     def registerOrElseMapper(f: Any => Option[Any]): Transformation = {
       registerAsyncOrElseMapper(event => Future.successful(f(event)))
     }
+
+    def registerLowLevelOrElseMapper(m: Mapper[Any, Any]): Transformation = {
+      new Transformation(mappers, m)
+    }
+
+    private[akka] def apply(event: Any, metadata: Option[Any]): Future[Option[Any]] = {
+      val mapper: Transformation.Mapper[Any, Any] = mappers.getOrElse(event.getClass, orElse)
+      mapper.apply(event, metadata)
+    }
+
   }
 
   /**

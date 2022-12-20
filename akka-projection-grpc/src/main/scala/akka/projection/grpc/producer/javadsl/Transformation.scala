@@ -16,6 +16,13 @@ import akka.dispatch.ExecutionContexts
 import akka.projection.grpc.producer.scaladsl
 
 @ApiMayChange
+@FunctionalInterface
+trait Mapper[A, B] {
+  def apply(event: A, metadata: Optional[Any]): CompletionStage[Optional[B]]
+
+}
+
+@ApiMayChange
 object Transformation {
   val empty: Transformation = new Transformation(scaladsl.EventProducer.Transformation.empty)
 
@@ -45,6 +52,12 @@ final class Transformation private (private[akka] val delegate: scaladsl.EventPr
     new Transformation(delegate.registerMapper[A, B](event => f.apply(event).asScala))
   }
 
+  def registerLowLevelMapper[A, B](inputEventClass: Class[A], mapper: Mapper[A, B]): Transformation = {
+    implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
+    new Transformation(delegate.registerLowLevelMapper[A, B]((event: Any, meta: Option[Any]) =>
+      mapper.apply(event.asInstanceOf[A], meta.asJava).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
+  }
+
   def registerAsyncOrElseMapper(f: AnyRef => CompletionStage[Optional[AnyRef]]): Transformation = {
     new Transformation(
       delegate.registerAsyncOrElseMapper(
@@ -56,5 +69,10 @@ final class Transformation private (private[akka] val delegate: scaladsl.EventPr
 
   def registerOrElseMapper(f: AnyRef => Optional[AnyRef]): Transformation = {
     new Transformation(delegate.registerOrElseMapper(event => f.apply(event.asInstanceOf[AnyRef]).asScala))
+  }
+
+  def registerLowLevelOrElseMapper(mapper: Mapper[Any, Any]): Transformation = {
+    new Transformation(delegate.registerLowLevelOrElseMapper((event: Any, meta: Option[Any]) =>
+      mapper.apply(event, meta.asJava).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
   }
 }
