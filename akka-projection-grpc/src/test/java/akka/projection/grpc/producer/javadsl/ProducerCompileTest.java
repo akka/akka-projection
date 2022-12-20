@@ -35,6 +35,9 @@ public class ProducerCompileTest {
             .registerMapper(
                 Integer.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
             .registerOrElseMapper(event -> Optional.of(event.toString()));
+    Transformation lowLevel = Transformation.empty().registerLowLevelMapper(
+        Integer.class, envelope -> CompletableFuture.completedFuture(envelope.getOptionalEvent())
+    ).registerLowLevelOrElseMapper(envelope -> CompletableFuture.completedFuture(Optional.empty()));
 
     EventProducerSource source =
         new EventProducerSource(
