@@ -39,14 +39,14 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
-object ReplicationIntegrationSpec {
+object ReplicatedEventSourcingOverGrpcIntegrationSpec {
 
   private def config(dc: ReplicaId): Config =
     ConfigFactory.parseString(s"""
        akka.actor.provider = cluster
        akka.actor {
          serialization-bindings {
-           "akka.projection.grpc.replication.ReplicationIntegrationSpec$$LWWHelloWorld$$Event" = jackson-json
+           "akka.projection.grpc.replication.ReplicatedEventSourcingOverGrpcIntegrationSpec$$LWWHelloWorld$$Event" = jackson-json
          }
        }
        akka.http.server.preview.enable-http2 = on
@@ -116,22 +116,24 @@ object ReplicationIntegrationSpec {
   }
 }
 
-class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
+class ReplicatedEventSourcingOverGrpcIntegrationSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
       akka.actor
         .ActorSystem(
           "ReplicationIntegrationSpecA",
-          ReplicationIntegrationSpec.config(ReplicationIntegrationSpec.DCA).withFallback(testContainerConf.config))
+          ReplicatedEventSourcingOverGrpcIntegrationSpec
+            .config(ReplicatedEventSourcingOverGrpcIntegrationSpec.DCA)
+            .withFallback(testContainerConf.config))
         .toTyped)
     with AnyWordSpecLike
     with TestDbLifecycle
     with BeforeAndAfterAll {
-  import ReplicationIntegrationSpec._
+  import ReplicatedEventSourcingOverGrpcIntegrationSpec._
   implicit val ec: ExecutionContext = system.executionContext
 
   def this() = this(new TestContainerConf)
 
-  private val logger = LoggerFactory.getLogger(classOf[ReplicationIntegrationSpec])
+  private val logger = LoggerFactory.getLogger(classOf[ReplicatedEventSourcingOverGrpcIntegrationSpec])
   override def typedSystem: ActorSystem[_] = testKit.system
 
   private val systems = Seq[ActorSystem[_]](
@@ -139,12 +141,12 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     akka.actor
       .ActorSystem(
         "ReplicationIntegrationSpecB",
-        ReplicationIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
+        ReplicatedEventSourcingOverGrpcIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
       .toTyped,
     akka.actor
       .ActorSystem(
         "ReplicationIntegrationSpecC",
-        ReplicationIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
+        ReplicatedEventSourcingOverGrpcIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
       .toTyped)
 
   private val grpcPorts = SocketUtil.temporaryServerAddresses(systems.size, "127.0.0.1").map(_.getPort)
@@ -188,8 +190,8 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       selfReplicaId,
       EventProducerSettings(replicaSystem),
       allReplicas.filterNot(_.replicaId == selfReplicaId).toSet)
-    ReplicatedEventSourcingOverGrpc.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(
-      replicaSystem)
+    ReplicatedEventSourcingOverGrpc.grpcReplication(settings)(
+      ReplicatedEventSourcingOverGrpcIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
   }
 
   "Replication over gRPC" should {
@@ -254,6 +256,37 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
           }
         }
       }
+    }
+
+    "replicate concurrent writes to the other DCs" in {
+      val entityTypeKey = replicatedEventSourcingOverGrpcPerDc.values.head.entityTypeKey
+      Future
+        .sequence(systemPerDc.keys.map { dc =>
+          withClue(s"from ${dc.id}") {
+            logger.info("Updating greeting from dc [{}]", dc.id)
+            ClusterSharding(systemPerDc(dc))
+              .entityRefFor(entityTypeKey, "one")
+              .ask(LWWHelloWorld.SetGreeting(s"hello 2 from ${dc.id}", _))
+          }
+        })
+        .futureValue // all three updated in roughly parallel
+
+      // All 3 should eventually arrive at the same value
+      testKit
+        .createTestProbe()
+        .awaitAssert(
+          {
+            testKitsPerDc.values.map { testKit =>
+              val entityRef = ClusterSharding(testKit.system)
+                .entityRefFor(entityTypeKey, "one")
+
+              entityRef
+                .ask(LWWHelloWorld.Get.apply)
+                .futureValue
+            }.toSet should have size (1)
+          },
+          20.seconds)
+
     }
   }
 
