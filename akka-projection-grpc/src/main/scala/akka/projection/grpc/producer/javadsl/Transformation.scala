@@ -13,6 +13,7 @@ import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.reflect.ClassTag
 import akka.dispatch.ExecutionContexts
+import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.producer.scaladsl
 
 @ApiMayChange
@@ -52,10 +53,12 @@ final class Transformation private (private[akka] val delegate: scaladsl.EventPr
     new Transformation(delegate.registerMapper[A, B](event => f.apply(event).asScala))
   }
 
-  def registerLowLevelMapper[A, B](inputEventClass: Class[A], mapper: Mapper[A, B]): Transformation = {
+  def registerLowLevelMapper[A, B](
+      inputEventClass: Class[A],
+      f: JFunction[EventEnvelope[A], CompletionStage[Optional[B]]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
-    new Transformation(delegate.registerLowLevelMapper[A, B]((event: Any, meta: Option[Any]) =>
-      mapper.apply(event.asInstanceOf[A], meta.asJava).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
+    new Transformation(delegate.registerLowLevelMapper[A, B](envelope =>
+      f.apply(envelope).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
   }
 
   def registerAsyncOrElseMapper(f: AnyRef => CompletionStage[Optional[AnyRef]]): Transformation = {
@@ -71,8 +74,8 @@ final class Transformation private (private[akka] val delegate: scaladsl.EventPr
     new Transformation(delegate.registerOrElseMapper(event => f.apply(event.asInstanceOf[AnyRef]).asScala))
   }
 
-  def registerLowLevelOrElseMapper(mapper: Mapper[Any, Any]): Transformation = {
-    new Transformation(delegate.registerLowLevelOrElseMapper((event: Any, meta: Option[Any]) =>
-      mapper.apply(event, meta.asJava).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
+  def registerLowLevelOrElseMapper(f: JFunction[EventEnvelope[Any], CompletionStage[Optional[Any]]]): Transformation = {
+    new Transformation(delegate.registerLowLevelOrElseMapper(envelope =>
+      f.apply(envelope).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
   }
 }

@@ -200,9 +200,9 @@ import scala.util.Success
 
   private def transformAndEncodeEvent(transformation: Transformation, env: EventEnvelope[_]): Future[Option[Event]] = {
     env.eventOption match {
-      case Some(event) =>
+      case Some(_) =>
         import system.executionContext
-        val mappedFuture: Future[Option[Any]] = transformation(event, env.eventMetadata)
+        val mappedFuture: Future[Option[Any]] = transformation(env.asInstanceOf[EventEnvelope[Any]])
         def toEvent(transformedEvent: Any): Event = {
           val protoEvent = protoAnySerialization.serialize(transformedEvent)
           Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), Some(protoEvent))
