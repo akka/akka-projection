@@ -221,7 +221,7 @@ class ReplicatedEventSourcingOverGrpcIntegrationSpec(testContainerConf: TestCont
           // start producer server
           Http(system)
             .newServerAt("127.0.0.1", grpcPort)
-            .bind(started.service)
+            .bind(started.createSingleServiceHandler())
             .map(_.addToCoordinatedShutdown(3.seconds)(system))(system.executionContext)
             .map(_ => replica.replicaId -> started)
       })
