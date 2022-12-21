@@ -53,11 +53,11 @@ final class Transformation private (private[akka] val delegate: scaladsl.EventPr
     new Transformation(delegate.registerMapper[A, B](event => f.apply(event).asScala))
   }
 
-  def registerLowLevelMapper[A, B](
+  def registerAsyncEnvelopeMapper[A, B](
       inputEventClass: Class[A],
       f: JFunction[EventEnvelope[A], CompletionStage[Optional[B]]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
-    new Transformation(delegate.registerLowLevelMapper[A, B](envelope =>
+    new Transformation(delegate.registerAsyncEnvelopeMapper[A, B](envelope =>
       f.apply(envelope).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
   }
 
@@ -74,8 +74,9 @@ final class Transformation private (private[akka] val delegate: scaladsl.EventPr
     new Transformation(delegate.registerOrElseMapper(event => f.apply(event.asInstanceOf[AnyRef]).asScala))
   }
 
-  def registerLowLevelOrElseMapper(f: JFunction[EventEnvelope[Any], CompletionStage[Optional[Any]]]): Transformation = {
-    new Transformation(delegate.registerLowLevelOrElseMapper(envelope =>
+  def registerAsyncEnvelopeOrElseMapper(
+      f: JFunction[EventEnvelope[Any], CompletionStage[Optional[Any]]]): Transformation = {
+    new Transformation(delegate.registerAsyncEnvelopeOrElseMapper(envelope =>
       f.apply(envelope).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
   }
 }

@@ -45,11 +45,6 @@ object EventProducer {
   @ApiMayChange
   object Transformation {
 
-    @ApiMayChange
-    trait Mapper[A, B] {
-      def apply(event: A, metadata: Option[Any]): Future[Option[B]]
-    }
-
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
       orElse = envelope =>
@@ -74,7 +69,7 @@ object EventProducer {
     /**
      * @param f A function that is fed each event, and the possible additional metadata
      */
-    def registerLowLevelMapper[A: ClassTag, B](f: EventEnvelope[A] => Future[Option[B]]): Transformation = {
+    def registerAsyncEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       new Transformation(mappers.updated(clazz, f.asInstanceOf[EventEnvelope[Any] => Future[Option[Any]]]), orElse)
     }
@@ -98,7 +93,7 @@ object EventProducer {
       registerAsyncOrElseMapper(event => Future.successful(f(event)))
     }
 
-    def registerLowLevelOrElseMapper(m: EventEnvelope[Any] => Future[Option[Any]]): Transformation = {
+    def registerAsyncEnvelopeOrElseMapper(m: EventEnvelope[Any] => Future[Option[Any]]): Transformation = {
       new Transformation(mappers, m)
     }
 

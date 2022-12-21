@@ -44,7 +44,7 @@ class TransformationSpec extends AnyWordSpec with Matchers with ScalaFutures {
 
     "transform low level with metadata" in {
       val transformer =
-        Transformation.empty.registerLowLevelMapper((env: EventEnvelope[String]) =>
+        Transformation.empty.registerAsyncEnvelopeMapper((env: EventEnvelope[String]) =>
           Future.successful(env.eventMetadata))
       transformer(envelope("whatever", Some("meta"))).futureValue should ===(Some("meta"))
     }
@@ -60,7 +60,7 @@ class TransformationSpec extends AnyWordSpec with Matchers with ScalaFutures {
     }
 
     "fallback low level with metadata if no transformer exist for event" in {
-      val transformer = Transformation.empty.registerLowLevelOrElseMapper((env: EventEnvelope[Any]) =>
+      val transformer = Transformation.empty.registerAsyncEnvelopeOrElseMapper((env: EventEnvelope[Any]) =>
         Future.successful(env.eventMetadata))
       transformer(envelope("whatever", Some("meta"))).futureValue should ===(Some("meta"))
     }
