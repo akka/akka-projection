@@ -50,7 +50,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
 /**
- * Created using [[ReplicatedEventSourcingOverGrpc#grpcRepliation]], which starts sharding with the entity and
+ * Created using [[Replication#grpcRepliation]], which starts sharding with the entity and
  * replication stream consumers but not the replication endpoint needed to publish events to other replication places.
  *
  * @param eventProducerService If combining multiple entity types replicated, or combining with direct usage of
@@ -65,16 +65,16 @@ import scala.concurrent.duration.DurationInt
  * @tparam Command The type of commands the Replicated Event Sourced Entity accepts
  */
 @ApiMayChange
-final class ReplicatedEventSourcingOverGrpc[Command] private (
+final class Replication[Command] private (
     val eventProducerService: EventProducerSource,
     val createSingleServiceHandler: () => PartialFunction[HttpRequest, Future[HttpResponse]],
     val entityTypeKey: EntityTypeKey[Command],
     val entityRefFactory: String => EntityRef[Command])
 
 @ApiMayChange
-object ReplicatedEventSourcingOverGrpc {
+object Replication {
 
-  private val log = LoggerFactory.getLogger(classOf[ReplicatedEventSourcingOverGrpc[_]])
+  private val log = LoggerFactory.getLogger(classOf[Replication[_]])
 
   private val filteredEvent = Future.successful(None)
 
@@ -85,7 +85,7 @@ object ReplicatedEventSourcingOverGrpc {
    */
   def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command])(
       replicatedBehaviorFactory: ReplicationContext => EventSourcedBehavior[Command, Event, State])(
-      implicit system: ActorSystem[_]): ReplicatedEventSourcingOverGrpc[Command] = {
+      implicit system: ActorSystem[_]): Replication[Command] = {
     require(
       system.settings.config.getString("akka.actor.provider") == "cluster",
       "Replicated Event Sourcing over gRPC only possible together with Akka cluster (akka.actor.provider = cluster)")
@@ -130,7 +130,7 @@ object ReplicatedEventSourcingOverGrpc {
         entityRefFactory)
     }
 
-    new ReplicatedEventSourcingOverGrpc[Command](
+    new Replication[Command](
       eventProducerService = eps,
       createSingleServiceHandler = () => EventProducer.grpcServiceHandler(Set(eps), None, includeMetadata = true),
       entityTypeKey = replicatedEntity.entity.typeKey,

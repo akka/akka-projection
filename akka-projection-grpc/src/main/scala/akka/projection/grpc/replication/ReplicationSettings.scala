@@ -13,8 +13,14 @@ import com.google.protobuf.Descriptors
 
 import scala.collection.immutable
 import scala.reflect.ClassTag
+import java.util.{ Set => JSet }
+import scala.jdk.CollectionConverters._
 
 object ReplicationSettings {
+
+  /**
+   * Scala API: Settings for replicating an entity over gRPC
+   */
   def apply[Command: ClassTag](
       entityTypeName: String,
       selfReplicaId: ReplicaId,
@@ -29,6 +35,16 @@ object ReplicationSettings {
       otherReplicas,
       Nil // FIXME descriptors from user, do we need them?
     )
+  }
+
+  def create[Command](
+      commandClass: Class[Command],
+      entityTypeName: String,
+      selfReplicaId: ReplicaId,
+      eventProducerSettings: EventProducerSettings,
+      otherReplicas: JSet[Replica]): ReplicationSettings[Command] = {
+    val classTag = ClassTag[Command](commandClass)
+    apply(entityTypeName, selfReplicaId, eventProducerSettings, otherReplicas.asScala.toSet)(classTag)
   }
 }
 
@@ -47,6 +63,7 @@ final class ReplicationSettings[Command] private (
 }
 
 object Replica {
+
   def apply(
       replicaId: ReplicaId,
       numberOfConsumers: Int,
@@ -56,6 +73,15 @@ object Replica {
 
 }
 
+/**
+ * Describes a specific remote replica, how to connect to identify, connect and consume events from it.
+ *
+ *
+ * @param replicaId          The unique logical identifier of the replica
+ * @param numberOfConsumers  How many consumers to start for consuming events from this replica
+ * @param querySettings      Additional query settings for consuming events from the replica
+ * @param grpcClientSettings Settings for how to connect to the replica, host, port, TLS etc.
+ */
 final class Replica private (
     val replicaId: ReplicaId,
     val numberOfConsumers: Int,

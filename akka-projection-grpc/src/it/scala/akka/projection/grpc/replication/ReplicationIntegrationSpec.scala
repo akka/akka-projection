@@ -26,7 +26,7 @@ import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.producer.EventProducerSettings
-import akka.projection.grpc.replication.scaladsl.ReplicatedEventSourcingOverGrpc
+import akka.projection.grpc.replication.scaladsl.Replication
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
@@ -40,7 +40,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
-object ReplicatedEventSourcingOverGrpcIntegrationSpec {
+object ReplicationIntegrationSpec {
 
   private def config(dc: ReplicaId): Config =
     ConfigFactory.parseString(s"""
@@ -117,24 +117,24 @@ object ReplicatedEventSourcingOverGrpcIntegrationSpec {
   }
 }
 
-class ReplicatedEventSourcingOverGrpcIntegrationSpec(testContainerConf: TestContainerConf)
+class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
       akka.actor
         .ActorSystem(
           "ReplicationIntegrationSpecA",
-          ReplicatedEventSourcingOverGrpcIntegrationSpec
-            .config(ReplicatedEventSourcingOverGrpcIntegrationSpec.DCA)
+          ReplicationIntegrationSpec
+            .config(ReplicationIntegrationSpec.DCA)
             .withFallback(testContainerConf.config))
         .toTyped)
     with AnyWordSpecLike
     with TestDbLifecycle
     with BeforeAndAfterAll {
-  import ReplicatedEventSourcingOverGrpcIntegrationSpec._
+  import ReplicationIntegrationSpec._
   implicit val ec: ExecutionContext = system.executionContext
 
   def this() = this(new TestContainerConf)
 
-  private val logger = LoggerFactory.getLogger(classOf[ReplicatedEventSourcingOverGrpcIntegrationSpec])
+  private val logger = LoggerFactory.getLogger(classOf[ReplicationIntegrationSpec])
   override def typedSystem: ActorSystem[_] = testKit.system
 
   private val systems = Seq[ActorSystem[_]](
@@ -142,12 +142,12 @@ class ReplicatedEventSourcingOverGrpcIntegrationSpec(testContainerConf: TestCont
     akka.actor
       .ActorSystem(
         "ReplicationIntegrationSpecB",
-        ReplicatedEventSourcingOverGrpcIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
+        ReplicationIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
       .toTyped,
     akka.actor
       .ActorSystem(
         "ReplicationIntegrationSpecC",
-        ReplicatedEventSourcingOverGrpcIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
+        ReplicationIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
       .toTyped)
 
   private val grpcPorts = SocketUtil.temporaryServerAddresses(systems.size, "127.0.0.1").map(_.getPort)
@@ -164,8 +164,7 @@ class ReplicatedEventSourcingOverGrpcIntegrationSpec(testContainerConf: TestCont
 
   private val testKitsPerDc = Map(DCA -> testKit, DCB -> ActorTestKit(systems(1)), DCC -> ActorTestKit(systems(2)))
   private val systemPerDc = Map(DCA -> system, DCB -> systems(1), DCC -> systems(2))
-  private var replicatedEventSourcingOverGrpcPerDc
-      : Map[ReplicaId, ReplicatedEventSourcingOverGrpc[LWWHelloWorld.Command]] = Map.empty
+  private var replicatedEventSourcingOverGrpcPerDc: Map[ReplicaId, Replication[LWWHelloWorld.Command]] = Map.empty
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -183,16 +182,13 @@ class ReplicatedEventSourcingOverGrpcIntegrationSpec(testContainerConf: TestCont
     }
   }
 
-  def startReplica(
-      replicaSystem: ActorSystem[_],
-      selfReplicaId: ReplicaId): ReplicatedEventSourcingOverGrpc[LWWHelloWorld.Command] = {
+  def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
     val settings = ReplicationSettings[LWWHelloWorld.Command](
       "hello-world",
       selfReplicaId,
       EventProducerSettings(replicaSystem),
       allReplicas.filterNot(_.replicaId == selfReplicaId).toSet)
-    ReplicatedEventSourcingOverGrpc.grpcReplication(settings)(
-      ReplicatedEventSourcingOverGrpcIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
+    Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
   }
 
   "Replication over gRPC" should {

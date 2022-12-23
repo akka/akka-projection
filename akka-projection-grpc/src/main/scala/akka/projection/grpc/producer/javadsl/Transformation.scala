@@ -5,6 +5,7 @@
 package akka.projection.grpc.producer.javadsl
 
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 
 import java.util.Optional
 import java.util.concurrent.CompletionStage
@@ -31,6 +32,13 @@ object Transformation {
    * No transformation. Pass through each event as is.
    */
   val identity: Transformation = new Transformation(scaladsl.EventProducer.Transformation.identity)
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def fromScala(delegate: scaladsl.EventProducer.Transformation): Transformation =
+    new Transformation(delegate)
 }
 
 /**
