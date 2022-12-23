@@ -81,6 +81,10 @@ object ReplicatedEventSourcingOverGrpc {
   def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command])(
       replicatedBehaviorFactory: ReplicationContext => EventSourcedBehavior[Command, Event, State])(
       implicit system: ActorSystem[_]): ReplicatedEventSourcingOverGrpc[Command] = {
+    require(
+      system.settings.config.getString("akka.actor.provider") == "cluster",
+      "Replicated Event Sourcing over gRPC only possible together with Akka cluster (akka.actor.provider = cluster)")
+
     val allReplicaIds = settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId
 
     // set up a publisher
@@ -149,8 +153,6 @@ object ReplicatedEventSourcingOverGrpc {
         s"${eventsBySlicesQuery.streamId}-${remoteReplica.replicaId.id}-${sliceRange.min}-${sliceRange.max}"
       val projectionId = ProjectionId.of(projectionName, projectionKey)
 
-      // FIXME we get a (warning) info log that R2DBCProjection.atLeastOnceFlow doesn't support of skipping envelopes.
-      //       (but we handle that ourselves here) would be good if we could silence that warning
       val replicationFlow = FlowWithContext[EventEnvelope[_], ProjectionContext].mapAsync(1) {
         envelope =>
           envelope.eventMetadata match {
@@ -196,6 +198,8 @@ object ReplicatedEventSourcingOverGrpc {
         sliceRange.min,
         sliceRange.max)
 
+      // FIXME we get a (warning) info log that R2DBCProjection.atLeastOnceFlow doesn't support of skipping envelopes.
+      //       bump r2dbc and toggle the dont-warn-flag programmatically
       ProjectionBehavior(
         // FIXME support more/arbitrary projection impls?
         R2dbcProjection.atLeastOnceFlow(projectionId, None, sourceProvider, replicationFlow))
