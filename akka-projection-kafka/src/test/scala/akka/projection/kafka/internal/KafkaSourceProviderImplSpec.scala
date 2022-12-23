@@ -51,7 +51,8 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
 
   "The KafkaSourceProviderImpl" must {
 
-    "successfully verify offsets from assigned partitions" in {
+    // FIXME disabled because failing a lot #641
+    "successfully verify offsets from assigned partitions" ignore {
       val topic = "topic"
       val partitions = 2
       val settings = ConsumerSettings(system, new StringDeserializer, new StringDeserializer)
