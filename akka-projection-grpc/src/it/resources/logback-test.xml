@@ -12,16 +12,13 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <!--
+    <!-- One of the tests depend on these, don't change -->
     <logger name="akka.projection.grpc" level="TRACE" />
     <logger name="akka.projection.r2dbc" level="DEBUG" />
     <logger name="akka.persistence.r2dbc" level="DEBUG" />
--->
-    <logger name="akka.persistence" level="DEBUG" />
 
     <root level="INFO">
         <appender-ref ref="CapturingAppender"/>
-        <appender-ref ref="STDOUT"/>
     </root>
 
 </configuration>

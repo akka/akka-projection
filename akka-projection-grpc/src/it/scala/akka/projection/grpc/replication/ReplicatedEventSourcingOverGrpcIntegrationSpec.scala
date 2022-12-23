@@ -292,6 +292,7 @@ class ReplicatedEventSourcingOverGrpcIntegrationSpec(testContainerConf: TestCont
   }
 
   protected override def afterAll(): Unit = {
+    logger.info("Shutting down all three DCs")
     systems.foreach { system =>
       ActorTestKit.shutdown(system)
     }
