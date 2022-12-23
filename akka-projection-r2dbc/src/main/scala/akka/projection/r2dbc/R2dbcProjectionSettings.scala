@@ -17,6 +17,21 @@ object R2dbcProjectionSettings {
 
   val DefaultConfigPath = "akka.projection.r2dbc"
 
+  /**
+   * Scala API: Load configuration from `akka.projection.r2dbc`.
+   */
+  def apply(system: ActorSystem[_]): R2dbcProjectionSettings =
+    apply(system.settings.config.getConfig(DefaultConfigPath))
+
+  /**
+   * Java API: Load configuration from `akka.projection.r2dbc`.
+   */
+  def create(system: ActorSystem[_]): R2dbcProjectionSettings =
+    apply(system)
+
+  /**
+   * Scala API: From custom configuration corresponding to `akka.projection.r2dbc`.
+   */
   def apply(config: Config): R2dbcProjectionSettings = {
     val logDbCallsExceeding: FiniteDuration =
       config.getString("log-db-calls-exceeding").toLowerCase(Locale.ROOT) match {
@@ -38,8 +53,12 @@ object R2dbcProjectionSettings {
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"))
   }
 
-  def apply(system: ActorSystem[_]): R2dbcProjectionSettings =
-    apply(system.settings.config.getConfig(DefaultConfigPath))
+  /**
+   * Java API: From custom configuration corresponding to `akka.projection.r2dbc`.
+   */
+  def create(config: Config): R2dbcProjectionSettings =
+    apply(config)
+
 }
 
 final class R2dbcProjectionSettings private (
@@ -76,6 +95,7 @@ final class R2dbcProjectionSettings private (
 
   def withTimeWindow(timeWindow: FiniteDuration): R2dbcProjectionSettings =
     copy(timeWindow = timeWindow.asJava)
+
   def withTimeWindow(timeWindow: JDuration): R2dbcProjectionSettings =
     copy(timeWindow = timeWindow)
 
@@ -84,16 +104,19 @@ final class R2dbcProjectionSettings private (
 
   def withEvictInterval(evictInterval: FiniteDuration): R2dbcProjectionSettings =
     copy(evictInterval = evictInterval.asJava)
+
   def withEvictInterval(evictInterval: JDuration): R2dbcProjectionSettings =
     copy(evictInterval = evictInterval)
 
   def withDeleteInterval(deleteInterval: FiniteDuration): R2dbcProjectionSettings =
     copy(deleteInterval = deleteInterval.asJava)
+
   def withDeleteInterval(deleteInterval: JDuration): R2dbcProjectionSettings =
     copy(deleteInterval = deleteInterval)
 
   def withLogDbCallsExceeding(logDbCallsExceeding: FiniteDuration): R2dbcProjectionSettings =
     copy(logDbCallsExceeding = logDbCallsExceeding)
+
   def withLogDbCallsExceeding(logDbCallsExceeding: JDuration): R2dbcProjectionSettings =
     copy(logDbCallsExceeding = logDbCallsExceeding.asScala)
 
