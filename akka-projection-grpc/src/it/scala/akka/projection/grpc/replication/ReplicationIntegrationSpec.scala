@@ -26,6 +26,7 @@ import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.producer.EventProducerSettings
+import akka.projection.grpc.replication
 import akka.projection.grpc.replication.scaladsl.Replication
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.testkit.SocketUtil
@@ -47,7 +48,7 @@ object ReplicationIntegrationSpec {
        akka.actor.provider = cluster
        akka.actor {
          serialization-bindings {
-           "akka.projection.grpc.replication.ReplicatedEventSourcingOverGrpcIntegrationSpec$$LWWHelloWorld$$Event" = jackson-json
+           "${classOf[replication.ReplicationIntegrationSpec].getName}$$LWWHelloWorld$$Event" = jackson-json
          }
        }
        akka.http.server.preview.enable-http2 = on
