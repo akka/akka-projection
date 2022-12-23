@@ -13,7 +13,15 @@ import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.reflect.ClassTag
 import akka.dispatch.ExecutionContexts
+import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.producer.scaladsl
+
+@ApiMayChange
+@FunctionalInterface
+trait Mapper[A, B] {
+  def apply(event: A, metadata: Optional[Any]): CompletionStage[Optional[B]]
+
+}
 
 @ApiMayChange
 object Transformation {
@@ -45,6 +53,14 @@ final class Transformation private (private[akka] val delegate: scaladsl.EventPr
     new Transformation(delegate.registerMapper[A, B](event => f.apply(event).asScala))
   }
 
+  def registerAsyncEnvelopeMapper[A, B](
+      inputEventClass: Class[A],
+      f: JFunction[EventEnvelope[A], CompletionStage[Optional[B]]]): Transformation = {
+    implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
+    new Transformation(delegate.registerAsyncEnvelopeMapper[A, B](envelope =>
+      f.apply(envelope).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
+  }
+
   def registerAsyncOrElseMapper(f: AnyRef => CompletionStage[Optional[AnyRef]]): Transformation = {
     new Transformation(
       delegate.registerAsyncOrElseMapper(
@@ -56,5 +72,11 @@ final class Transformation private (private[akka] val delegate: scaladsl.EventPr
 
   def registerOrElseMapper(f: AnyRef => Optional[AnyRef]): Transformation = {
     new Transformation(delegate.registerOrElseMapper(event => f.apply(event.asInstanceOf[AnyRef]).asScala))
+  }
+
+  def registerAsyncEnvelopeOrElseMapper(
+      f: JFunction[EventEnvelope[Any], CompletionStage[Optional[Any]]]): Transformation = {
+    new Transformation(delegate.registerAsyncEnvelopeOrElseMapper(envelope =>
+      f.apply(envelope).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
   }
 }

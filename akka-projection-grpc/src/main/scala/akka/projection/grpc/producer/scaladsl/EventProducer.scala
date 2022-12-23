@@ -14,6 +14,7 @@ import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
@@ -43,16 +44,17 @@ object EventProducer {
 
   @ApiMayChange
   object Transformation {
+
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
-      orElse = event =>
-        Future.failed(new IllegalArgumentException(s"Missing transformation for event [${event.getClass}]")))
+      orElse = envelope =>
+        Future.failed(new IllegalArgumentException(s"Missing transformation for event [${envelope.event.getClass}]")))
 
     /**
      * No transformation. Pass through each event as is.
      */
     val identity: Transformation =
-      new Transformation(mappers = Map.empty, orElse = event => Future.successful(Option(event)))
+      new Transformation(mappers = Map.empty, orElse = envelope => Future.successful(envelope.eventOption))
   }
 
   /**
@@ -61,12 +63,22 @@ object EventProducer {
    */
   @ApiMayChange
   final class Transformation private (
-      val mappers: Map[Class[_], Any => Future[Option[Any]]],
-      val orElse: Any => Future[Option[Any]]) {
+      private[akka] val mappers: Map[Class[_], EventEnvelope[Any] => Future[Option[Any]]],
+      private[akka] val orElse: EventEnvelope[Any] => Future[Option[Any]]) {
+
+    /**
+     * @param f A function that is fed each event, and the possible additional metadata
+     */
+    def registerAsyncEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Future[Option[B]]): Transformation = {
+      val clazz = implicitly[ClassTag[A]].runtimeClass
+      new Transformation(mappers.updated(clazz, f.asInstanceOf[EventEnvelope[Any] => Future[Option[Any]]]), orElse)
+    }
 
     def registerAsyncMapper[A: ClassTag, B](f: A => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
-      new Transformation(mappers.updated(clazz, f.asInstanceOf[Any => Future[Option[Any]]]), orElse)
+      new Transformation(
+        mappers.updated(clazz, (envelope: EventEnvelope[Any]) => f(envelope.event.asInstanceOf[A])),
+        orElse)
     }
 
     def registerMapper[A: ClassTag, B](f: A => Option[B]): Transformation = {
@@ -74,12 +86,22 @@ object EventProducer {
     }
 
     def registerAsyncOrElseMapper(f: Any => Future[Option[Any]]): Transformation = {
-      new Transformation(mappers, f)
+      new Transformation(mappers, (envelope: EventEnvelope[Any]) => f(envelope.event))
     }
 
     def registerOrElseMapper(f: Any => Option[Any]): Transformation = {
       registerAsyncOrElseMapper(event => Future.successful(f(event)))
     }
+
+    def registerAsyncEnvelopeOrElseMapper(m: EventEnvelope[Any] => Future[Option[Any]]): Transformation = {
+      new Transformation(mappers, m)
+    }
+
+    private[akka] def apply(envelope: EventEnvelope[Any]): Future[Option[Any]] = {
+      val mapper = mappers.getOrElse(envelope.event.getClass, orElse)
+      mapper.apply(envelope)
+    }
+
   }
 
   /**

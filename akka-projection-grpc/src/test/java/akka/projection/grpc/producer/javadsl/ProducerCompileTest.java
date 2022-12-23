@@ -15,7 +15,6 @@ import akka.projection.grpc.producer.EventProducerSettings;
 
 import java.util.Collections;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -35,6 +34,9 @@ public class ProducerCompileTest {
             .registerMapper(
                 Integer.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
             .registerOrElseMapper(event -> Optional.of(event.toString()));
+    Transformation lowLevel = Transformation.empty().registerAsyncEnvelopeMapper(
+        Integer.class, envelope -> CompletableFuture.completedFuture(envelope.getOptionalEvent())
+    ).registerAsyncEnvelopeOrElseMapper(envelope -> CompletableFuture.completedFuture(Optional.empty()));
 
     EventProducerSource source =
         new EventProducerSource(

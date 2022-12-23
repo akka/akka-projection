@@ -45,6 +45,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
+import scala.util.Success
 
 /**
  * INTERNAL API
@@ -199,16 +200,17 @@ import scala.annotation.nowarn
 
   private def transformAndEncodeEvent(transformation: Transformation, env: EventEnvelope[_]): Future[Option[Event]] = {
     env.eventOption match {
-      case Some(event) =>
+      case Some(_) =>
         import system.executionContext
-        val f = transformation.mappers
-          .getOrElse(event.getClass, transformation.orElse)
-
-        f(event).map {
-          _.map { transformedEvent =>
-            val protoEvent = protoAnySerialization.serialize(transformedEvent)
-            Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), Some(protoEvent))
-          }
+        val mappedFuture: Future[Option[Any]] = transformation(env.asInstanceOf[EventEnvelope[Any]])
+        def toEvent(transformedEvent: Any): Event = {
+          val protoEvent = protoAnySerialization.serialize(transformedEvent)
+          Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), Some(protoEvent))
+        }
+        mappedFuture.value match {
+          case Some(Success(Some(transformedEvent))) => Future.successful(Some(toEvent(transformedEvent)))
+          case Some(Success(None))                   => Future.successful(None)
+          case _                                     => mappedFuture.map(_.map(toEvent))
         }
 
       case None =>

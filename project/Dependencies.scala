@@ -19,7 +19,7 @@ object Dependencies {
     val akka = sys.props.getOrElse("build.akka.version", "2.7.0")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
-    val akkaPersistenceR2dbc = "1.0.0"
+    val akkaPersistenceR2dbc = "1.0.1"
     val alpakka = "5.0.0"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.0")
     val slick = "3.4.1"
@@ -76,7 +76,7 @@ object Dependencies {
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
     val h2Driver = Compile.h2Driver % allTestConfig
-    val postgresDriver = "org.postgresql" % "postgresql" % "42.3.7" % allTestConfig
+    val postgresDriver = "org.postgresql" % "postgresql" % "42.3.8" % allTestConfig
     val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.31" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
