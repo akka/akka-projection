@@ -11,6 +11,7 @@ import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.producer.EventProducerSettings
 import com.google.protobuf.Descriptors
 
+import scala.collection.immutable
 import scala.reflect.ClassTag
 
 object ReplicationSettings {
@@ -26,7 +27,7 @@ object ReplicationSettings {
       eventProducerSettings,
       entityTypeName,
       otherReplicas,
-      Seq.empty // FIXME descriptors from user, do we need them?
+      Nil // FIXME descriptors from user, do we need them?
     )
   }
 }
@@ -37,7 +38,7 @@ final class ReplicationSettings[Command] private (
     val eventProducerSettings: EventProducerSettings,
     val streamId: String,
     val otherReplicas: Set[Replica],
-    val protobufDescriptors: Seq[Descriptors.FileDescriptor]) {
+    val protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor]) {
   require(
     !otherReplicas.exists(_.replicaId == selfReplicaId),
     s"selfReplicaId [$selfReplicaId] must not be in 'otherReplicas'")

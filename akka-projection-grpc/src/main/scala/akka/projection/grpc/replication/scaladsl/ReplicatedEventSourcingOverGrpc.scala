@@ -7,6 +7,8 @@ package akka.projection.grpc.replication.scaladsl
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
+import akka.annotation.ApiMayChange
 import akka.cluster.sharding.typed.ReplicatedEntity
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
@@ -42,6 +44,7 @@ import akka.util.Timeout
 import com.google.protobuf.Descriptors
 import org.slf4j.LoggerFactory
 
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -61,12 +64,14 @@ import scala.concurrent.duration.DurationInt
  *                         sending commands.
  * @tparam Command The type of commands the Replicated Event Sourced Entity accepts
  */
+@ApiMayChange
 final class ReplicatedEventSourcingOverGrpc[Command] private (
     val eventProducerService: EventProducerSource,
     val createSingleServiceHandler: () => PartialFunction[HttpRequest, Future[HttpResponse]],
     val entityTypeKey: EntityTypeKey[Command],
     val entityRefFactory: String => EntityRef[Command])
 
+@ApiMayChange
 object ReplicatedEventSourcingOverGrpc {
 
   private val log = LoggerFactory.getLogger(classOf[ReplicatedEventSourcingOverGrpc[_]])
@@ -136,7 +141,7 @@ object ReplicatedEventSourcingOverGrpc {
       entityTypeKeyName: String,
       selfReplicaId: ReplicaId,
       remoteReplica: Replica,
-      protobufDescriptors: Seq[Descriptors.FileDescriptor],
+      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
       entityRefFactory: String => EntityRef[C])(implicit system: ActorSystem[_]): Unit = {
     implicit val timeout: Timeout = 5.seconds // FIXME from config
     implicit val ec: ExecutionContext = system.executionContext
@@ -161,7 +166,7 @@ object ReplicatedEventSourcingOverGrpc {
               val replicationId = ReplicationId.fromString(envelope.persistenceId)
               val destinationReplicaId = replicationId.withReplica(selfReplicaId)
               val entityRef = entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
-              log.info(
+              log.infoN(
                 "[{}], Forwarding event originating on dc [{}] to [{}] (version: [{}]): [{}]",
                 system.name,
                 replicatedEventMetadata.originReplica,
@@ -185,7 +190,7 @@ object ReplicatedEventSourcingOverGrpc {
               askResult
             case Some(NotUsed) =>
               // Events not originating on sending side should all already be filtered and end up here
-              log.debug("[{}], Ignoring filtered event from [{}]", system.name, remoteReplica.replicaId)
+              log.debugN("[{}], Ignoring filtered event from [{}]", system.name, remoteReplica.replicaId)
               Future.successful(Done)
             case other => throw new IllegalArgumentException(s"Unknown type or missing metadata: [$other]")
           }
