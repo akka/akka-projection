@@ -24,7 +24,7 @@ object R2dbcProjectionSettings {
         case _     => config.getDuration("log-db-calls-exceeding").asScala
       }
 
-    R2dbcProjectionSettings(
+    new R2dbcProjectionSettings(
       schema = Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty),
       offsetTable = config.getString("offset-store.offset-table"),
       timestampOffsetTable = config.getString("offset-store.timestamp-offset-table"),
@@ -34,28 +34,96 @@ object R2dbcProjectionSettings {
       keepNumberOfEntries = config.getInt("offset-store.keep-number-of-entries"),
       evictInterval = config.getDuration("offset-store.evict-interval"),
       deleteInterval = config.getDuration("offset-store.delete-interval"),
-      logDbCallsExceeding)
+      logDbCallsExceeding,
+      warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"))
   }
 
   def apply(system: ActorSystem[_]): R2dbcProjectionSettings =
     apply(system.settings.config.getConfig(DefaultConfigPath))
 }
 
-// FIXME remove case class, and add `with` methods
-final case class R2dbcProjectionSettings(
-    schema: Option[String],
-    offsetTable: String,
-    timestampOffsetTable: String,
-    managementTable: String,
-    useConnectionFactory: String,
-    timeWindow: JDuration,
-    keepNumberOfEntries: Int,
-    evictInterval: JDuration,
-    deleteInterval: JDuration,
-    logDbCallsExceeding: FiniteDuration) {
+final class R2dbcProjectionSettings private (
+    val schema: Option[String],
+    val offsetTable: String,
+    val timestampOffsetTable: String,
+    val managementTable: String,
+    val useConnectionFactory: String,
+    val timeWindow: JDuration,
+    val keepNumberOfEntries: Int,
+    val evictInterval: JDuration,
+    val deleteInterval: JDuration,
+    val logDbCallsExceeding: FiniteDuration,
+    val warnAboutFilteredEventsInFlow: Boolean) {
+
   val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
   val managementTableWithSchema: String = schema.map(_ + ".").getOrElse("") + managementTable
 
   def isOffsetTableDefined: Boolean = offsetTable.nonEmpty
+
+  def withSchema(schema: String): R2dbcProjectionSettings = copy(schema = Some(schema))
+
+  def withOffsetTable(offsetTable: String): R2dbcProjectionSettings = copy(offsetTable = offsetTable)
+
+  def withTimestampOffsetTable(timestampOffsetTable: String): R2dbcProjectionSettings =
+    copy(timestampOffsetTable = timestampOffsetTable)
+
+  def withManagementTable(managementTable: String): R2dbcProjectionSettings =
+    copy(managementTable = managementTable)
+
+  def withUseConnectionFactory(useConnectionFactory: String): R2dbcProjectionSettings =
+    copy(useConnectionFactory = useConnectionFactory)
+
+  def withTimeWindow(timeWindow: FiniteDuration): R2dbcProjectionSettings =
+    copy(timeWindow = timeWindow.asJava)
+  def withTimeWindow(timeWindow: JDuration): R2dbcProjectionSettings =
+    copy(timeWindow = timeWindow)
+
+  def withKeepNumberOfEntries(keepNumberOfEntries: Int): R2dbcProjectionSettings =
+    copy(keepNumberOfEntries = keepNumberOfEntries)
+
+  def withEvictInterval(evictInterval: FiniteDuration): R2dbcProjectionSettings =
+    copy(evictInterval = evictInterval.asJava)
+  def withEvictInterval(evictInterval: JDuration): R2dbcProjectionSettings =
+    copy(evictInterval = evictInterval)
+
+  def withDeleteInterval(deleteInterval: FiniteDuration): R2dbcProjectionSettings =
+    copy(deleteInterval = deleteInterval.asJava)
+  def withDeleteInterval(deleteInterval: JDuration): R2dbcProjectionSettings =
+    copy(deleteInterval = deleteInterval)
+
+  def withLogDbCallsExceeding(logDbCallsExceeding: FiniteDuration): R2dbcProjectionSettings =
+    copy(logDbCallsExceeding = logDbCallsExceeding)
+  def withLogDbCallsExceeding(logDbCallsExceeding: JDuration): R2dbcProjectionSettings =
+    copy(logDbCallsExceeding = logDbCallsExceeding.asScala)
+
+  def withWarnAboutFilteredEventsInFlow(warnAboutFilteredEventsInFlow: Boolean): R2dbcProjectionSettings =
+    copy(warnAboutFilteredEventsInFlow = warnAboutFilteredEventsInFlow)
+
+  private def copy(
+      schema: Option[String] = schema,
+      offsetTable: String = offsetTable,
+      timestampOffsetTable: String = timestampOffsetTable,
+      managementTable: String = managementTable,
+      useConnectionFactory: String = useConnectionFactory,
+      timeWindow: JDuration = timeWindow,
+      keepNumberOfEntries: Int = keepNumberOfEntries,
+      evictInterval: JDuration = evictInterval,
+      deleteInterval: JDuration = deleteInterval,
+      logDbCallsExceeding: FiniteDuration = logDbCallsExceeding,
+      warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow) = new R2dbcProjectionSettings(
+    schema,
+    offsetTable,
+    timestampOffsetTable,
+    managementTable,
+    useConnectionFactory,
+    timeWindow,
+    keepNumberOfEntries,
+    evictInterval,
+    deleteInterval,
+    logDbCallsExceeding,
+    warnAboutFilteredEventsInFlow)
+
+  override def toString =
+    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $keepNumberOfEntries, $evictInterval, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow)"
 }

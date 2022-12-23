@@ -551,7 +551,7 @@ class R2dbcTimestampOffsetStoreSpec
 
     "evict old records" in {
       val projectionId = genRandomProjectionId()
-      val evictSettings = settings.copy(timeWindow = JDuration.ofSeconds(100), evictInterval = JDuration.ofSeconds(10))
+      val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100)).withEvictInterval(JDuration.ofSeconds(10))
       import evictSettings._
       val offsetStore = createOffsetStore(projectionId, evictSettings)
 
@@ -594,7 +594,7 @@ class R2dbcTimestampOffsetStoreSpec
 
     "delete old records" in {
       val projectionId = genRandomProjectionId()
-      val deleteSettings = settings.copy(timeWindow = JDuration.ofSeconds(100))
+      val deleteSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
       import deleteSettings._
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
@@ -626,7 +626,9 @@ class R2dbcTimestampOffsetStoreSpec
     "periodically delete old records" in {
       val projectionId = genRandomProjectionId()
       val deleteSettings =
-        settings.copy(timeWindow = JDuration.ofSeconds(100), deleteInterval = JDuration.ofMillis(500))
+        settings
+          .withTimeWindow(JDuration.ofSeconds(100))
+          .withDeleteInterval(JDuration.ofMillis(500))
       import deleteSettings._
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 

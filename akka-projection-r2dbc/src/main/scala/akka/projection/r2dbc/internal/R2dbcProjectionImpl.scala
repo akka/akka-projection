@@ -313,7 +313,8 @@ private[projection] object R2dbcProjectionImpl {
   private[projection] def adaptedHandlerForFlow[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
       handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _],
-      offsetStore: R2dbcOffsetStore)(implicit
+      offsetStore: R2dbcOffsetStore,
+      settings: R2dbcProjectionSettings)(implicit
       ec: ExecutionContext,
       system: ActorSystem[_]): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
 
@@ -323,7 +324,7 @@ private[projection] object R2dbcProjectionImpl {
           .isAccepted(env)
           .flatMap { ok =>
             if (ok) {
-              if (skipEnvelope(env)) {
+              if (skipEnvelope(env) && settings.warnAboutFilteredEventsInFlow) {
                 log.info("atLeastOnceFlow doesn't support of skipping envelopes. Envelope [{}] still emitted.", env)
               }
               loadEnvelope(env, sourceProvider).map { loadedEnvelope =>
