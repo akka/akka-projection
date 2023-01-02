@@ -9,16 +9,18 @@ import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.producer.EventProducerSettings
+import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider
+import akka.projection.grpc.replication.javadsl.ReplicationProjectionProviderAdapter
 import akka.util.JavaDurationConverters._
 import com.google.protobuf.Descriptors
 import com.typesafe.config.Config
 
-import scala.collection.immutable
-import scala.reflect.ClassTag
-import java.util.{ Set => JSet }
 import java.time.{ Duration => JDuration }
+import java.util.{ Set => JSet }
+import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 object ReplicationSettings {
 
@@ -42,7 +44,8 @@ object ReplicationSettings {
       selfReplicaId: ReplicaId,
       eventProducerSettings: EventProducerSettings,
       otherReplicas: Set[Replica],
-      entityEventReplicationTimeout: FiniteDuration): ReplicationSettings[Command] = {
+      entityEventReplicationTimeout: FiniteDuration,
+      projectionProvider: scaladsl.ReplicationProjectionProvider): ReplicationSettings[Command] = {
     val typeKey = EntityTypeKey[Command](entityTypeName)
     new ReplicationSettings[Command](
       selfReplicaId,
@@ -51,8 +54,8 @@ object ReplicationSettings {
       entityTypeName,
       otherReplicas,
       entityEventReplicationTimeout: FiniteDuration,
-      Nil // FIXME descriptors from user, do we need them?
-    )
+      Nil, // FIXME descriptors from user, do we need them?
+      projectionProvider)
   }
 
   /**
@@ -60,7 +63,9 @@ object ReplicationSettings {
    * Each replica is further expected to have a top level config entry 'akka.grpc.client.[replica-id]' with Akka gRPC
    * client config for reaching the replica from the other replicas.
    */
-  def apply[Command: ClassTag](entityTypeName: String, system: ActorSystem[_]): ReplicationSettings[Command] = {
+  def apply[Command](entityTypeName: String, replicationProjectionProvider: scaladsl.ReplicationProjectionProvider)(
+      implicit system: ActorSystem[_],
+      classTag: ClassTag[Command]): ReplicationSettings[Command] = {
     val config = system.settings.config.getConfig(entityTypeName)
     val selfReplicaId = ReplicaId(config.getString("self-replica-id"))
     val grpcClientFallBack = system.settings.config.getConfig("""akka.grpc.client."*"""")
@@ -86,7 +91,8 @@ object ReplicationSettings {
       allReplicas.filter(_.replicaId != selfReplicaId),
       config
         .getDuration("entity-event-replication-timeout")
-        .asScala)
+        .asScala,
+      replicationProjectionProvider)
   }
 
   /**
@@ -97,9 +103,10 @@ object ReplicationSettings {
   def create[Command](
       commandClass: Class[Command],
       entityTypeName: String,
+      replicationProjectionProvider: ReplicationProjectionProvider,
       system: ActorSystem[_]): ReplicationSettings[Command] = {
     val classTag: ClassTag[Command] = ClassTag(commandClass)
-    apply[Command](entityTypeName, system)(classTag)
+    apply(entityTypeName, ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))(system, classTag)
   }
 
   /**
@@ -116,6 +123,7 @@ object ReplicationSettings {
    *                                      of sending a message across sharding and persisting it in the local replica
    *                                      of an entity. Hitting this timeout means the entire replication stream will
    *                                      back off and restart.
+   * @param replicationProjectionProvider Factory for the projection to use on the consuming side
    */
   def create[Command](
       commandClass: Class[Command],
@@ -123,14 +131,16 @@ object ReplicationSettings {
       selfReplicaId: ReplicaId,
       eventProducerSettings: EventProducerSettings,
       otherReplicas: JSet[Replica],
-      entityEventReplicationTimeout: JDuration): ReplicationSettings[Command] = {
+      entityEventReplicationTimeout: JDuration,
+      replicationProjectionProvider: ReplicationProjectionProvider): ReplicationSettings[Command] = {
     val classTag = ClassTag[Command](commandClass)
     apply(
       entityTypeName,
       selfReplicaId,
       eventProducerSettings,
       otherReplicas.asScala.toSet,
-      entityEventReplicationTimeout.asScala)(classTag)
+      entityEventReplicationTimeout.asScala,
+      ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))(classTag)
   }
 }
 
@@ -141,7 +151,9 @@ final class ReplicationSettings[Command] private (
     val streamId: String,
     val otherReplicas: Set[Replica],
     val entityEventReplicationTimeout: FiniteDuration,
-    val protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor]) {
+    val protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
+    private[akka] val projectionProvider: scaladsl.ReplicationProjectionProvider) {
+
   require(
     !otherReplicas.exists(_.replicaId == selfReplicaId),
     s"selfReplicaId [$selfReplicaId] must not be in 'otherReplicas'")

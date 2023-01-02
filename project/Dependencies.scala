@@ -212,8 +212,6 @@ object Dependencies {
         Compile.akkaPersistenceQuery,
         // Only needed for Replicated Event Sourcing over gRPC
         Compile.akkaClusterShardingTyped % Optional,
-        // Only needed for Replicated Event Sourcing over gRPC
-        Compile.akkaProjectionR2dbc % Optional,
         Test.akkaProjectionR2dbc,
         Test.postgresDriver,
         Test.akkaShardingTyped,

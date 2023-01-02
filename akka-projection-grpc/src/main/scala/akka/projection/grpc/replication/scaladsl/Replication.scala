@@ -38,7 +38,6 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.grpc.replication.Replica
 import akka.projection.grpc.replication.ReplicationSettings
-import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
@@ -150,45 +149,51 @@ object Replication {
         s"${eventsBySlicesQuery.streamId}-${remoteReplica.replicaId.id}-${sliceRange.min}-${sliceRange.max}"
       val projectionId = ProjectionId.of(projectionName, projectionKey)
 
-      val replicationFlow = FlowWithContext[EventEnvelope[_], ProjectionContext].mapAsync(1) {
-        envelope =>
-          envelope.eventMetadata match {
-            case Some(replicatedEventMetadata: ReplicatedEventMetadata)
-                if replicatedEventMetadata.originReplica == remoteReplica.replicaId =>
-              val replicationId = ReplicationId.fromString(envelope.persistenceId)
-              val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
-              val entityRef = entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
-              if (log.isDebugEnabled) {
-                log.debugN(
-                  "[{}], Forwarding event originating on dc [{}] to [{}] (version: [{}]): [{}]",
-                  system.name,
-                  replicatedEventMetadata.originReplica,
-                  destinationReplicaId.persistenceId.id,
-                  replicatedEventMetadata.version,
-                  envelope.event)
+      // FIXME allow parallel processing of N events to different entities here
+      //       (we can't just increase parallelism as individual entities must have at most one element in flight
+      //        or events could be missed because of persisting out of order)
+      val replicationFlow: FlowWithContext[EventEnvelope[_], ProjectionContext, Done, ProjectionContext, NotUsed] =
+        FlowWithContext[EventEnvelope[_], ProjectionContext]
+          .mapAsync(1) {
+            envelope =>
+              envelope.eventMetadata match {
+                case Some(replicatedEventMetadata: ReplicatedEventMetadata)
+                    if replicatedEventMetadata.originReplica == remoteReplica.replicaId =>
+                  val replicationId = ReplicationId.fromString(envelope.persistenceId)
+                  val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
+                  val entityRef =
+                    entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
+                  if (log.isDebugEnabled) {
+                    log.debugN(
+                      "[{}], Forwarding event originating on dc [{}] to [{}] (version: [{}]): [{}]",
+                      system.name,
+                      replicatedEventMetadata.originReplica,
+                      destinationReplicaId.persistenceId.id,
+                      replicatedEventMetadata.version,
+                      envelope.event)
+                  }
+                  val askResult = entityRef.ask[Done](
+                    replyTo =>
+                      PublishedEventImpl(
+                        replicationId.persistenceId,
+                        replicatedEventMetadata.originSequenceNr,
+                        envelope.event,
+                        envelope.timestamp,
+                        Some(
+                          new ReplicatedPublishedEventMetaData(
+                            replicatedEventMetadata.originReplica,
+                            replicatedEventMetadata.version)),
+                        Some(replyTo)))
+                  askResult.failed.foreach(error =>
+                    log.warn(s"Failing replication stream from [${remoteReplica.replicaId.id}]", error))
+                  askResult
+                case Some(NotUsed) =>
+                  // Events not originating on sending side already are filtered/have no payload and end up here
+                  log.debugN("[{}], Ignoring filtered event from [{}]", system.name, remoteReplica.replicaId)
+                  Future.successful(Done)
+                case other => throw new IllegalArgumentException(s"Unknown type or missing metadata: [$other]")
               }
-              val askResult = entityRef.ask[Done](
-                replyTo =>
-                  PublishedEventImpl(
-                    replicationId.persistenceId,
-                    replicatedEventMetadata.originSequenceNr,
-                    envelope.event,
-                    envelope.timestamp,
-                    Some(
-                      new ReplicatedPublishedEventMetaData(
-                        replicatedEventMetadata.originReplica,
-                        replicatedEventMetadata.version)),
-                    Some(replyTo)))
-              askResult.failed.foreach(error =>
-                log.warn(s"Failing replication stream from [${remoteReplica.replicaId.id}]", error))
-              askResult
-            case Some(NotUsed) =>
-              // Events not originating on sending side already are filtered/have no payload and end up here
-              log.debugN("[{}], Ignoring filtered event from [{}]", system.name, remoteReplica.replicaId)
-              Future.successful(Done)
-            case other => throw new IllegalArgumentException(s"Unknown type or missing metadata: [$other]")
           }
-      }
 
       val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
         system,
@@ -196,12 +201,7 @@ object Replication {
         eventsBySlicesQuery.streamId,
         sliceRange.min,
         sliceRange.max)
-
-      // FIXME we get a (warning) info log that R2DBCProjection.atLeastOnceFlow doesn't support of skipping envelopes.
-      //       bump r2dbc and toggle the dont-warn-flag programmatically
-      ProjectionBehavior(
-        // FIXME support more/arbitrary projection impls?
-        R2dbcProjection.atLeastOnceFlow(projectionId, None, sourceProvider, replicationFlow))
+      ProjectionBehavior(settings.projectionProvider(projectionId, sourceProvider, replicationFlow, system))
     })
   }
 

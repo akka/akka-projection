@@ -27,7 +27,9 @@ import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication
 import akka.projection.grpc.replication.scaladsl.Replication
+import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
 import akka.projection.r2dbc.R2dbcProjectionSettings
+import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -178,12 +180,18 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
   }
 
   def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
+
+    // FIXME we get a (warning) info log that R2DBCProjection.atLeastOnceFlow doesn't support of skipping envelopes.
+    //       bump r2dbc and toggle the dont-warn-flag programmatically
+    // Note: inline SAM/functional interface as a parameter does not expand/infer the right way
+    val projectionProvider: ReplicationProjectionProvider = R2dbcProjection.atLeastOnceFlow(_, None, _, _)(_)
     val settings = ReplicationSettings[LWWHelloWorld.Command](
       "hello-world",
       selfReplicaId,
       EventProducerSettings(replicaSystem),
       allReplicas.filterNot(_.replicaId == selfReplicaId).toSet,
-      10.seconds)
+      10.seconds,
+      projectionProvider)
     Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
   }
 

@@ -7,6 +7,7 @@ package akka.projection.grpc.replication
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
+import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
 import com.typesafe.config.ConfigFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -19,7 +20,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
 
   "The ReplicationSettings" should {
     "Parse from config" in {
-      val system = ActorSystem[Unit](
+      implicit val system: ActorSystem[Unit] = ActorSystem[Unit](
         Behaviors.empty,
         "parse-test",
         ConfigFactory.parseString("""
@@ -56,7 +57,10 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
          """))
 
       try {
-        val settings = ReplicationSettings[MyCommand]("my-replicated-entity", system)
+        val settings = ReplicationSettings[MyCommand](
+          "my-replicated-entity",
+          // never actually used, just passed along
+          null: ReplicationProjectionProvider)
         settings.streamId should ===("my-replicated-entity")
         settings.entityEventReplicationTimeout should ===(10.seconds)
         settings.selfReplicaId.id should ===("dca")
