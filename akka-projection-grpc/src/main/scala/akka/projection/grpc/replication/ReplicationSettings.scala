@@ -63,17 +63,20 @@ object ReplicationSettings {
   def apply[Command: ClassTag](entityTypeName: String, system: ActorSystem[_]): ReplicationSettings[Command] = {
     val config = system.settings.config.getConfig(entityTypeName)
     val selfReplicaId = ReplicaId(config.getString("self-replica-id"))
+    val grpcClientFallBack = system.settings.config.getConfig("""akka.grpc.client."*"""")
     val allReplicas = config
       .getConfigList("replicas")
       .asScala
       .toSet
       .map { config: Config =>
         val replicaId = config.getString("replica-id")
+        val clientConfig =
+          config.getConfig("grpc.client").withFallback(grpcClientFallBack)
         Replica(
           ReplicaId(replicaId),
           numberOfConsumers = config.getInt("number-of-consumers"),
           // so akka.grpc.client.[replica-id]
-          grpcClientSettings = GrpcClientSettings.fromConfig(replicaId)(system))
+          grpcClientSettings = GrpcClientSettings.fromConfig(clientConfig)(system))
       }
 
     ReplicationSettings[Command](
@@ -95,8 +98,8 @@ object ReplicationSettings {
       commandClass: Class[Command],
       entityTypeName: String,
       system: ActorSystem[_]): ReplicationSettings[Command] = {
-    implicit val classTag: ClassTag[Command] = ClassTag(commandClass)
-    apply[Command](entityTypeName, system)
+    val classTag: ClassTag[Command] = ClassTag(commandClass)
+    apply[Command](entityTypeName, system)(classTag)
   }
 
   /**

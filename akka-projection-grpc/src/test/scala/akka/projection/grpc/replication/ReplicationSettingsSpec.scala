@@ -29,28 +29,28 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
              {
                replica-id: "dca"
                number-of-consumers: 4
+               grpc.client: {
+                 host = "dca.example.com"
+                 port = 8443
+               }
              },
              {
                replica-id: "dcb"
                number-of-consumers: 4
+               grpc.client: {
+                 host = "dcb.example.com"
+                 port = 8444
+               }
              },
              {
                replica-id: "dcc"
                number-of-consumers: 4
+               grpc.client: {
+                 host = "dcc.example.com"
+                 port = 8445
+               }
              }
            ]
-         }
-         akka.grpc.client.dca {
-           host = "dca.example.com"
-           port = 8443
-         }
-         akka.grpc.client.dcb {
-           host = "dcb.example.com"
-           port = 8444
-         }
-         akka.grpc.client.dcc {
-           host = "dcc.example.com"
-           port = 8445
          }
          """))
 
