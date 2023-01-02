@@ -23,6 +23,7 @@ import akka.projection.grpc.replication.Replica;
 import akka.projection.grpc.replication.ReplicationSettings;
 import akka.projection.grpc.replication.javadsl.Replication;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -42,13 +43,11 @@ public class ReplicationCompileTest {
    otherReplicas.add(Replica.apply(
        ReplicaId.apply("DCB"),
        2,
-       GrpcQuerySettings.create(system),
        GrpcClientSettings.connectToServiceAt("b.example.com", 443, system).withTls(true)
        ));
    otherReplicas.add(Replica.apply(
        ReplicaId.apply("DCC"),
        2,
-       GrpcQuerySettings.create(system),
        GrpcClientSettings.connectToServiceAt("c.example.com", 443, system).withTls(true)
    ));
    ReplicationSettings<MyCommand> settings = ReplicationSettings.create(
@@ -56,7 +55,8 @@ public class ReplicationCompileTest {
        "my-entity",
        ReplicaId.apply("DCA"),
        EventProducerSettings.apply(system),
-       otherReplicas);
+       otherReplicas,
+       Duration.ofSeconds(10));
 
    Replication<MyCommand> replication = Replication.grpcReplication(settings, ReplicationCompileTest::create, system);
 

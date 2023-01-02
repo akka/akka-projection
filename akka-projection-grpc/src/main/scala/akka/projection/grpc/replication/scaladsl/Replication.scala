@@ -20,7 +20,6 @@ import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PublishedEvent
-import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.internal.PublishedEventImpl
 import akka.persistence.typed.internal.ReplicatedEventMetadata
@@ -32,6 +31,7 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
@@ -41,13 +41,10 @@ import akka.projection.grpc.replication.ReplicationSettings
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
-import com.google.protobuf.Descriptors
 import org.slf4j.LoggerFactory
 
-import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
 
 /**
  * Created using [[Replication#grpcRepliation]], which starts sharding with the entity and
@@ -121,14 +118,7 @@ object Replication {
 
     // sharded daemon process for consuming event stream from the other dc:s
     val entityRefFactory: String => EntityRef[Command] = sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
-    settings.otherReplicas.foreach { otherReplica =>
-      startConsumer(
-        settings.entityTypeKey.name,
-        settings.selfReplicaId,
-        otherReplica,
-        settings.protobufDescriptors,
-        entityRefFactory)
-    }
+    settings.otherReplicas.foreach(startConsumer(_, settings, entityRefFactory))
 
     new Replication[Command](
       eventProducerService = eps,
@@ -138,19 +128,21 @@ object Replication {
   }
 
   private def startConsumer[C](
-      entityTypeKeyName: String,
-      selfReplicaId: ReplicaId,
       remoteReplica: Replica,
-      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
+      settings: ReplicationSettings[C],
       entityRefFactory: String => EntityRef[C])(implicit system: ActorSystem[_]): Unit = {
-    implicit val timeout: Timeout = 5.seconds // FIXME from config
+    implicit val timeout: Timeout = settings.entityEventReplicationTimeout
     implicit val ec: ExecutionContext = system.executionContext
 
-    val projectionName = s"${entityTypeKeyName}_${remoteReplica.replicaId.id}"
+    val projectionName = s"${settings.entityTypeKey.name}_${remoteReplica.replicaId.id}"
     val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
 
+    val grpcQuerySettings = {
+      val s = GrpcQuerySettings(settings.streamId)
+      remoteReplica.additionalRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
+    }
     val eventsBySlicesQuery =
-      GrpcReadJournal(remoteReplica.grpcQuerySettings, remoteReplica.grpcClientSettings, protobufDescriptors)
+      GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, settings.protobufDescriptors)
 
     ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, { idx =>
       val sliceRange = sliceRanges(idx)
@@ -164,15 +156,17 @@ object Replication {
             case Some(replicatedEventMetadata: ReplicatedEventMetadata)
                 if replicatedEventMetadata.originReplica == remoteReplica.replicaId =>
               val replicationId = ReplicationId.fromString(envelope.persistenceId)
-              val destinationReplicaId = replicationId.withReplica(selfReplicaId)
+              val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
               val entityRef = entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
-              log.infoN(
-                "[{}], Forwarding event originating on dc [{}] to [{}] (version: [{}]): [{}]",
-                system.name,
-                replicatedEventMetadata.originReplica,
-                destinationReplicaId.persistenceId.id,
-                replicatedEventMetadata.version,
-                envelope.event)
+              if (log.isDebugEnabled) {
+                log.debugN(
+                  "[{}], Forwarding event originating on dc [{}] to [{}] (version: [{}]): [{}]",
+                  system.name,
+                  replicatedEventMetadata.originReplica,
+                  destinationReplicaId.persistenceId.id,
+                  replicatedEventMetadata.version,
+                  envelope.event)
+              }
               val askResult = entityRef.ask[Done](
                 replyTo =>
                   PublishedEventImpl(
@@ -189,7 +183,7 @@ object Replication {
                 log.warn(s"Failing replication stream from [${remoteReplica.replicaId.id}]", error))
               askResult
             case Some(NotUsed) =>
-              // Events not originating on sending side should all already be filtered and end up here
+              // Events not originating on sending side already are filtered/have no payload and end up here
               log.debugN("[{}], Ignoring filtered event from [{}]", system.name, remoteReplica.replicaId)
               Future.successful(Done)
             case other => throw new IllegalArgumentException(s"Unknown type or missing metadata: [$other]")

@@ -24,7 +24,6 @@ import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplicationContext
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
-import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication
 import akka.projection.grpc.replication.scaladsl.Replication
@@ -155,12 +154,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
   private val allDcsAndPorts = Seq(DCA, DCB, DCC).zip(grpcPorts)
   private val allReplicas = allDcsAndPorts.map {
     case (id, port) =>
-      Replica(
-        id,
-        2,
-        // FIXME can we avoid having to list/match stream id here?
-        GrpcQuerySettings("hello-world"),
-        GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
+      Replica(id, 2, GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
   }
 
   private val testKitsPerDc = Map(DCA -> testKit, DCB -> ActorTestKit(systems(1)), DCC -> ActorTestKit(systems(2)))
@@ -188,7 +182,8 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       "hello-world",
       selfReplicaId,
       EventProducerSettings(replicaSystem),
-      allReplicas.filterNot(_.replicaId == selfReplicaId).toSet)
+      allReplicas.filterNot(_.replicaId == selfReplicaId).toSet,
+      10.seconds)
     Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
   }
 
