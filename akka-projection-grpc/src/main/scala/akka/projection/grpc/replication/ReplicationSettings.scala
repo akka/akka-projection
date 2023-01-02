@@ -4,12 +4,14 @@
 
 package akka.projection.grpc.replication
 
+import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.util.JavaDurationConverters._
 import com.google.protobuf.Descriptors
+import com.typesafe.config.Config
 
 import scala.collection.immutable
 import scala.reflect.ClassTag
@@ -51,6 +53,50 @@ object ReplicationSettings {
       entityEventReplicationTimeout: FiniteDuration,
       Nil // FIXME descriptors from user, do we need them?
     )
+  }
+
+  /**
+   * Scala API: Create settings from config, the system config is expected to contain a block with the entity type key name.
+   * Each replica is further expected to have a top level config entry 'akka.grpc.client.[replica-id]' with Akka gRPC
+   * client config for reaching the replica from the other replicas.
+   */
+  def apply[Command: ClassTag](entityTypeName: String, system: ActorSystem[_]): ReplicationSettings[Command] = {
+    val config = system.settings.config.getConfig(entityTypeName)
+    val selfReplicaId = ReplicaId(config.getString("self-replica-id"))
+    val allReplicas = config
+      .getConfigList("replicas")
+      .asScala
+      .toSet
+      .map { config: Config =>
+        val replicaId = config.getString("replica-id")
+        Replica(
+          ReplicaId(replicaId),
+          numberOfConsumers = config.getInt("number-of-consumers"),
+          // so akka.grpc.client.[replica-id]
+          grpcClientSettings = GrpcClientSettings.fromConfig(replicaId)(system))
+      }
+
+    ReplicationSettings[Command](
+      entityTypeName,
+      selfReplicaId,
+      EventProducerSettings(system),
+      allReplicas.filter(_.replicaId != selfReplicaId),
+      config
+        .getDuration("entity-event-replication-timeout")
+        .asScala)
+  }
+
+  /**
+   * Java API: Create settings from config, the system config is expected to contain a block with the entity type key name.
+   * Each replica is further expected to have a top level config entry 'akka.grpc.client.[replica-id]' with Akka gRPC
+   * client config for reaching the replica from the other replicas.
+   */
+  def create[Command](
+      commandClass: Class[Command],
+      entityTypeName: String,
+      system: ActorSystem[_]): ReplicationSettings[Command] = {
+    implicit val classTag: ClassTag[Command] = ClassTag(commandClass)
+    apply[Command](entityTypeName, system)
   }
 
   /**
