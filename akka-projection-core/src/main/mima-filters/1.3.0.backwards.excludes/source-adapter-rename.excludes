@@ -1,0 +1,2 @@
+# internal class renamed
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.internal.SourceProviderAdapter")
