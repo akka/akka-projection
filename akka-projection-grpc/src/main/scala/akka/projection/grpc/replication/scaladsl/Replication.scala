@@ -38,6 +38,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.grpc.replication.Replica
 import akka.projection.grpc.replication.ReplicationSettings
+import akka.projection.grpc.replication.internal.ParallelUpdatesFlow
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
@@ -149,12 +150,9 @@ object Replication {
         s"${eventsBySlicesQuery.streamId}-${remoteReplica.replicaId.id}-${sliceRange.min}-${sliceRange.max}"
       val projectionId = ProjectionId.of(projectionName, projectionKey)
 
-      // FIXME allow parallel processing of N events to different entities here
-      //       (we can't just increase parallelism as individual entities must have at most one element in flight
-      //        or events could be missed because of persisting out of order)
-      val replicationFlow: FlowWithContext[EventEnvelope[_], ProjectionContext, Done, ProjectionContext, NotUsed] =
-        FlowWithContext[EventEnvelope[_], ProjectionContext]
-          .mapAsync(1) {
+      val replicationFlow: FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed] =
+        FlowWithContext[EventEnvelope[AnyRef], ProjectionContext]
+          .via(new ParallelUpdatesFlow[AnyRef](16)({
             envelope =>
               envelope.eventMetadata match {
                 case Some(replicatedEventMetadata: ReplicatedEventMetadata)
@@ -172,18 +170,16 @@ object Replication {
                       replicatedEventMetadata.version,
                       envelope.event)
                   }
-                  val askResult = entityRef.ask[Done](
-                    replyTo =>
-                      PublishedEventImpl(
-                        replicationId.persistenceId,
-                        replicatedEventMetadata.originSequenceNr,
-                        envelope.event,
-                        envelope.timestamp,
-                        Some(
-                          new ReplicatedPublishedEventMetaData(
-                            replicatedEventMetadata.originReplica,
-                            replicatedEventMetadata.version)),
-                        Some(replyTo)))
+                  val askResult = entityRef.ask[Done](replyTo =>
+                    PublishedEventImpl(
+                      replicationId.persistenceId,
+                      replicatedEventMetadata.originSequenceNr,
+                      envelope.event,
+                      envelope.timestamp,
+                      Some(new ReplicatedPublishedEventMetaData(
+                        replicatedEventMetadata.originReplica,
+                        replicatedEventMetadata.version)),
+                      Some(replyTo)))
                   askResult.failed.foreach(error =>
                     log.warn(s"Failing replication stream from [${remoteReplica.replicaId.id}]", error))
                   askResult
@@ -193,7 +189,8 @@ object Replication {
                   Future.successful(Done)
                 case other => throw new IllegalArgumentException(s"Unknown type or missing metadata: [$other]")
               }
-          }
+          }))
+          .map(_ => Done)
 
       val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
         system,

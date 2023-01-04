@@ -39,6 +39,8 @@ object ReplicationSettings {
    *                                      of sending a message across sharding and persisting it in the local replica
    *                                      of an entity. Hitting this timeout means the entire replication stream will
    *                                      back off and restart.
+   * @param parallelUpdates Maximum number of parallel updates sent over sharding to the destination entities
+   * @param replicationProjectionProvider A factory for the projection used to keep track of offsets when consuming replicated events
    */
   def apply[Command: ClassTag](
       entityTypeName: String,
@@ -46,7 +48,8 @@ object ReplicationSettings {
       eventProducerSettings: EventProducerSettings,
       otherReplicas: Set[Replica],
       entityEventReplicationTimeout: FiniteDuration,
-      projectionProvider: scaladsl.ReplicationProjectionProvider): ReplicationSettings[Command] = {
+      parallelUpdates: Int,
+      replicationProjectionProvider: scaladsl.ReplicationProjectionProvider): ReplicationSettings[Command] = {
     val typeKey = EntityTypeKey[Command](entityTypeName)
     new ReplicationSettings[Command](
       selfReplicaId,
@@ -54,8 +57,9 @@ object ReplicationSettings {
       eventProducerSettings,
       entityTypeName,
       otherReplicas,
-      entityEventReplicationTimeout: FiniteDuration,
-      projectionProvider,
+      entityEventReplicationTimeout,
+      parallelUpdates,
+      replicationProjectionProvider,
       None)
   }
 
@@ -93,6 +97,7 @@ object ReplicationSettings {
       config
         .getDuration("entity-event-replication-timeout")
         .asScala,
+      config.getInt("parallel-updates"),
       replicationProjectionProvider)
   }
 
@@ -125,6 +130,7 @@ object ReplicationSettings {
    *                                      of an entity. Hitting this timeout means the entire replication stream will
    *                                      back off and restart.
    * @param replicationProjectionProvider Factory for the projection to use on the consuming side
+   * @param parallelUpdates Maximum number of parallel updates sent over sharding to the destination entities
    */
   def create[Command](
       commandClass: Class[Command],
@@ -133,6 +139,7 @@ object ReplicationSettings {
       eventProducerSettings: EventProducerSettings,
       otherReplicas: JSet[Replica],
       entityEventReplicationTimeout: JDuration,
+      parallelUpdates: Int,
       replicationProjectionProvider: javadsl.ReplicationProjectionProvider): ReplicationSettings[Command] = {
     val classTag = ClassTag[Command](commandClass)
     apply(
@@ -141,6 +148,7 @@ object ReplicationSettings {
       eventProducerSettings,
       otherReplicas.asScala.toSet,
       entityEventReplicationTimeout.asScala,
+      parallelUpdates,
       ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))(classTag)
   }
 }
@@ -153,6 +161,7 @@ final class ReplicationSettings[Command] private (
     val streamId: String,
     val otherReplicas: Set[Replica],
     val entityEventReplicationTimeout: FiniteDuration,
+    val parallelUpdates: Int,
     private[akka] val projectionProvider: scaladsl.ReplicationProjectionProvider,
     private[akka] val producerInterceptor: Option[EventProducerInterceptor]) {
 
@@ -175,6 +184,7 @@ final class ReplicationSettings[Command] private (
       streamId,
       otherReplicas,
       entityEventReplicationTimeout,
+      parallelUpdates,
       projectionProvider,
       producerInterceptor)
 
@@ -201,6 +211,13 @@ final class ReplicationSettings[Command] private (
    */
   def withEntityEventReplicationTimeout(duration: JDuration): ReplicationSettings[Command] =
     copy(entityEventReplicationTimeout = duration.asScala)
+
+  /**
+   * Run up to this many parallel updates over sharding. Note however that updates for the same persistence id
+   * is always sequential.
+   */
+  def withParallelUpdates(parallelUpdates: Int): ReplicationSettings[Command] =
+    copy(parallelUpdates = parallelUpdates)
 
   /**
    * Scala API: Change projection provider
@@ -234,6 +251,7 @@ final class ReplicationSettings[Command] private (
       streamId: String = streamId,
       otherReplicas: Set[Replica] = otherReplicas,
       entityEventReplicationTimeout: FiniteDuration = entityEventReplicationTimeout,
+      parallelUpdates: Int = parallelUpdates,
       projectionProvider: scaladsl.ReplicationProjectionProvider = projectionProvider,
       producerInterceptor: Option[EventProducerInterceptor] = producerInterceptor) =
     new ReplicationSettings[Command](
@@ -243,6 +261,7 @@ final class ReplicationSettings[Command] private (
       streamId,
       otherReplicas,
       entityEventReplicationTimeout,
+      parallelUpdates,
       projectionProvider,
       producerInterceptor)
 

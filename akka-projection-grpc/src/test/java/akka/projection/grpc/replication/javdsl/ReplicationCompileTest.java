@@ -78,6 +78,8 @@ public class ReplicationCompileTest {
        EventProducerSettings.apply(system),
        otherReplicas,
        Duration.ofSeconds(10),
+       // parallel updates
+       8,
        projectionProvider);
 
    Replication<MyCommand> replication = Replication.grpcReplication(settings, ReplicationCompileTest::create, system);

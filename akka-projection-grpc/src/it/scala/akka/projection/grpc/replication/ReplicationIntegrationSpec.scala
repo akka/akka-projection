@@ -162,6 +162,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
   private val testKitsPerDc = Map(DCA -> testKit, DCB -> ActorTestKit(systems(1)), DCC -> ActorTestKit(systems(2)))
   private val systemPerDc = Map(DCA -> system, DCB -> systems(1), DCC -> systems(2))
   private var replicatedEventSourcingOverGrpcPerDc: Map[ReplicaId, Replication[LWWHelloWorld.Command]] = Map.empty
+  private val entityIds = Set("one", "two", "three")
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -191,6 +192,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       EventProducerSettings(replicaSystem),
       allReplicas.filterNot(_.replicaId == selfReplicaId).toSet,
       10.seconds,
+      8,
       projectionProvider)
     Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
   }
@@ -235,24 +237,31 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       val entityTypeKey = replicatedEventSourcingOverGrpcPerDc.values.head.entityTypeKey
       systemPerDc.keys.foreach { dc =>
         withClue(s"from ${dc.id}") {
-          logger.info("Updating greeting from dc [{}]", dc.id)
-          ClusterSharding(systemPerDc(dc))
-            .entityRefFor(entityTypeKey, "one")
-            .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _))
+          Future
+            .sequence(entityIds.map { entityId =>
+              logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
+              ClusterSharding(systemPerDc(dc))
+                .entityRefFor(entityTypeKey, entityId)
+                .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _))
+            })
             .futureValue
 
           testKitsPerDc.values.foreach { testKit =>
             withClue(s"on ${system.name}") {
               val probe = testKit.createTestProbe()
 
-              val entityRef = ClusterSharding(testKit.system)
-                .entityRefFor(entityTypeKey, "one")
+              entityIds.foreach { entityId =>
+                withClue(s"for entity id $entityId") {
+                  val entityRef = ClusterSharding(testKit.system)
+                    .entityRefFor(entityTypeKey, entityId)
 
-              probe.awaitAssert({
-                entityRef
-                  .ask(LWWHelloWorld.Get.apply)
-                  .futureValue should ===(s"hello 1 from ${dc.id}")
-              }, 10.seconds)
+                  probe.awaitAssert({
+                    entityRef
+                      .ask(LWWHelloWorld.Get.apply)
+                      .futureValue should ===(s"hello 1 from ${dc.id}")
+                  }, 10.seconds)
+                }
+              }
             }
           }
         }
@@ -264,10 +273,12 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       Future
         .sequence(systemPerDc.keys.map { dc =>
           withClue(s"from ${dc.id}") {
-            logger.info("Updating greeting from dc [{}]", dc.id)
-            ClusterSharding(systemPerDc(dc))
-              .entityRefFor(entityTypeKey, "one")
-              .ask(LWWHelloWorld.SetGreeting(s"hello 2 from ${dc.id}", _))
+            Future.sequence(entityIds.map { entityId =>
+              logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
+              ClusterSharding(systemPerDc(dc))
+                .entityRefFor(entityTypeKey, entityId)
+                .ask(LWWHelloWorld.SetGreeting(s"hello 2 from ${dc.id}", _))
+            })
           }
         })
         .futureValue // all three updated in roughly parallel
@@ -277,14 +288,18 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         .createTestProbe()
         .awaitAssert(
           {
-            testKitsPerDc.values.map { testKit =>
-              val entityRef = ClusterSharding(testKit.system)
-                .entityRefFor(entityTypeKey, "one")
+            entityIds.foreach { entityId =>
+              withClue(s"for entity id $entityId") {
+                testKitsPerDc.values.map { testKit =>
+                  val entityRef = ClusterSharding(testKit.system)
+                    .entityRefFor(entityTypeKey, entityId)
 
-              entityRef
-                .ask(LWWHelloWorld.Get.apply)
-                .futureValue
-            }.toSet should have size (1)
+                  entityRef
+                    .ask(LWWHelloWorld.Get.apply)
+                    .futureValue
+                }.toSet should have size (1)
+              }
+            }
           },
           20.seconds)
 

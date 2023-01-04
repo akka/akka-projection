@@ -27,6 +27,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
          my-replicated-entity {
            entity-event-replication-timeout = 10s
            self-replica-id = dca
+           parallel-updates = 8
            replicas: [
              {
                replica-id: "dca"
