@@ -9,15 +9,14 @@ import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.producer.EventProducerSettings
-import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider
+import akka.projection.grpc.producer.javadsl.EventProducerInterceptorAdapter
+import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
 import akka.projection.grpc.replication.javadsl.ReplicationProjectionProviderAdapter
 import akka.util.JavaDurationConverters._
-import com.google.protobuf.Descriptors
 import com.typesafe.config.Config
 
 import java.time.{ Duration => JDuration }
 import java.util.{ Set => JSet }
-import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -54,8 +53,8 @@ object ReplicationSettings {
       entityTypeName,
       otherReplicas,
       entityEventReplicationTimeout: FiniteDuration,
-      Nil, // FIXME descriptors from user, do we need them?
-      projectionProvider)
+      projectionProvider,
+      None)
   }
 
   /**
@@ -103,7 +102,7 @@ object ReplicationSettings {
   def create[Command](
       commandClass: Class[Command],
       entityTypeName: String,
-      replicationProjectionProvider: ReplicationProjectionProvider,
+      replicationProjectionProvider: javadsl.ReplicationProjectionProvider,
       system: ActorSystem[_]): ReplicationSettings[Command] = {
     val classTag: ClassTag[Command] = ClassTag(commandClass)
     apply(entityTypeName, ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))(system, classTag)
@@ -132,7 +131,7 @@ object ReplicationSettings {
       eventProducerSettings: EventProducerSettings,
       otherReplicas: JSet[Replica],
       entityEventReplicationTimeout: JDuration,
-      replicationProjectionProvider: ReplicationProjectionProvider): ReplicationSettings[Command] = {
+      replicationProjectionProvider: javadsl.ReplicationProjectionProvider): ReplicationSettings[Command] = {
     val classTag = ClassTag[Command](commandClass)
     apply(
       entityTypeName,
@@ -151,8 +150,8 @@ final class ReplicationSettings[Command] private (
     val streamId: String,
     val otherReplicas: Set[Replica],
     val entityEventReplicationTimeout: FiniteDuration,
-    val protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
-    private[akka] val projectionProvider: scaladsl.ReplicationProjectionProvider) {
+    private[akka] val projectionProvider: scaladsl.ReplicationProjectionProvider,
+    private[akka] val producerInterceptor: Option[EventProducerInterceptor]) {
 
   require(
     !otherReplicas.exists(_.replicaId == selfReplicaId),
@@ -161,6 +160,88 @@ final class ReplicationSettings[Command] private (
     (otherReplicas.map(_.replicaId) + selfReplicaId).size == otherReplicas.size + 1,
     s"selfReplicaId and replica ids of the other replicas must be unique, duplicates found: (${otherReplicas.map(
       _.replicaId) + selfReplicaId}")
+
+  def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command] =
+    copy(selfReplicaId = selfReplicaId)
+
+  def withEntityTypeKey[T](entityTypeKey: EntityTypeKey[T]): ReplicationSettings[T] =
+    new ReplicationSettings[T](
+      selfReplicaId,
+      entityTypeKey,
+      eventProducerSettings,
+      streamId,
+      otherReplicas,
+      entityEventReplicationTimeout,
+      projectionProvider,
+      producerInterceptor)
+
+  def withEventProducerSettings(eventProducerSettings: EventProducerSettings): ReplicationSettings[Command] =
+    copy(eventProducerSettings = eventProducerSettings)
+
+  def withStreamId(streamId: String): ReplicationSettings[Command] =
+    copy(streamId = streamId)
+
+  def withOtherReplicas(replicas: Set[Replica]): ReplicationSettings[Command] =
+    copy(otherReplicas = replicas)
+
+  def withOtherReplicas(replicas: JSet[Replica]): ReplicationSettings[Command] =
+    copy(otherReplicas = replicas.asScala.toSet)
+
+  /**
+   * Scala API: Set the timeout for events being completely processed after arriving to a node in the replication stream
+   */
+  def withEntityEventReplicationTimeout(duration: FiniteDuration): ReplicationSettings[Command] =
+    copy(entityEventReplicationTimeout = duration)
+
+  /**
+   * Scala API: Set the timeout for events being completely processed after arriving to a node in the replication stream
+   */
+  def withEntityEventReplicationTimeout(duration: JDuration): ReplicationSettings[Command] =
+    copy(entityEventReplicationTimeout = duration.asScala)
+
+  /**
+   * Scala API: Change projection provider
+   */
+  def withProjectionProvider(projectionProvider: scaladsl.ReplicationProjectionProvider): ReplicationSettings[Command] =
+    copy(projectionProvider = projectionProvider)
+
+  /**
+   * Java API: Change projection provider
+   */
+  def withProjectionProvider(projectionProvider: javadsl.ReplicationProjectionProvider): ReplicationSettings[Command] =
+    copy(projectionProvider = ReplicationProjectionProviderAdapter.toScala(projectionProvider))
+
+  /**
+   * Scala API: Add an interceptor to the gRPC event producer for example for authentication of incoming requests
+   */
+  def withEventProducerInterceptor(interceptor: EventProducerInterceptor): ReplicationSettings[Command] =
+    copy(producerInterceptor = Some(interceptor))
+
+  /**
+   * Java API: Add an interceptor to the gRPC event producer for example for authentication of incoming requests
+   */
+  def withEventProducerInterceptor(
+      interceptor: akka.projection.grpc.producer.javadsl.EventProducerInterceptor): ReplicationSettings[Command] =
+    copy(producerInterceptor = Some(new EventProducerInterceptorAdapter(interceptor)))
+
+  private def copy(
+      selfReplicaId: ReplicaId = selfReplicaId,
+      entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
+      eventProducerSettings: EventProducerSettings = eventProducerSettings,
+      streamId: String = streamId,
+      otherReplicas: Set[Replica] = otherReplicas,
+      entityEventReplicationTimeout: FiniteDuration = entityEventReplicationTimeout,
+      projectionProvider: scaladsl.ReplicationProjectionProvider = projectionProvider,
+      producerInterceptor: Option[EventProducerInterceptor] = producerInterceptor) =
+    new ReplicationSettings[Command](
+      selfReplicaId,
+      entityTypeKey,
+      eventProducerSettings,
+      streamId,
+      otherReplicas,
+      entityEventReplicationTimeout,
+      projectionProvider,
+      producerInterceptor)
 
 }
 
@@ -185,15 +266,31 @@ final class Replica private (
     val grpcClientSettings: GrpcClientSettings,
     val additionalRequestMetadata: Option[akka.grpc.scaladsl.Metadata]) {
 
+  def withReplicaId(replicaId: ReplicaId): Replica =
+    copy(replicaId = replicaId)
+
+  def withNumberOfConsumers(numberOfConsumers: Int): Replica =
+    copy(numberOfConsumers = numberOfConsumers)
+
+  def withGrpcClientSettings(grpcClientSettings: GrpcClientSettings): Replica =
+    copy(grpcClientSettings = grpcClientSettings)
+
   /**
    * Scala API: Metadata to include in the requests to the remote Akka gRPC projection endpoint
    */
-  def withAdditionalQueryRequestMetadata(metadata: akka.grpc.scaladsl.Metadata) =
-    new Replica(replicaId, numberOfConsumers, grpcClientSettings, Some(metadata))
+  def withAdditionalQueryRequestMetadata(metadata: akka.grpc.scaladsl.Metadata): Replica =
+    copy(additionalRequestMetadata = Some(metadata))
 
   /**
    * Java API: Metadata to include in the requests to the remote Akka gRPC projection endpoint
    */
-  def withAdditionalQueryRequestMetadata(metadata: akka.grpc.javadsl.Metadata) =
-    new Replica(replicaId, numberOfConsumers, grpcClientSettings, Some(metadata.asScala))
+  def withAdditionalQueryRequestMetadata(metadata: akka.grpc.javadsl.Metadata): Replica =
+    copy(additionalRequestMetadata = Some(metadata.asScala))
+
+  private def copy(
+      replicaId: ReplicaId = replicaId,
+      numberOfConsumers: Int = numberOfConsumers,
+      grpcClientSettings: GrpcClientSettings = grpcClientSettings,
+      additionalRequestMetadata: Option[akka.grpc.scaladsl.Metadata] = additionalRequestMetadata) =
+    new Replica(replicaId, numberOfConsumers, grpcClientSettings, additionalRequestMetadata)
 }

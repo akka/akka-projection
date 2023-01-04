@@ -121,7 +121,8 @@ object Replication {
 
     new Replication[Command](
       eventProducerService = eps,
-      createSingleServiceHandler = () => EventProducer.grpcServiceHandler(Set(eps), None, includeMetadata = true),
+      createSingleServiceHandler = () =>
+        EventProducer.grpcServiceHandler(Set(eps), settings.producerInterceptor, includeMetadata = true),
       entityTypeKey = replicatedEntity.entity.typeKey,
       entityRefFactory = entityRefFactory)
   }
@@ -140,8 +141,7 @@ object Replication {
       val s = GrpcQuerySettings(settings.streamId)
       remoteReplica.additionalRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
     }
-    val eventsBySlicesQuery =
-      GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, settings.protobufDescriptors)
+    val eventsBySlicesQuery = GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, Nil)
 
     ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, { idx =>
       val sliceRange = sliceRanges(idx)
