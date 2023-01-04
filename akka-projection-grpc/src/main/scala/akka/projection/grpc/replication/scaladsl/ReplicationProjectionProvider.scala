@@ -7,6 +7,7 @@ package akka.projection.grpc.replication.scaladsl
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.annotation.ApiMayChange
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionContext
@@ -18,6 +19,7 @@ import akka.stream.scaladsl.FlowWithContext
 /**
  * Factory/function for creating the projection where offsets are kept track of for the replication streams
  */
+@ApiMayChange
 trait ReplicationProjectionProvider {
   def apply(
       projectionId: ProjectionId,

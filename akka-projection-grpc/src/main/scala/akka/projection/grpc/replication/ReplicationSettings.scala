@@ -5,6 +5,7 @@
 package akka.projection.grpc.replication
 
 import akka.actor.typed.ActorSystem
+import akka.annotation.ApiMayChange
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
@@ -21,6 +22,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
+@ApiMayChange
 object ReplicationSettings {
 
   /**
@@ -143,6 +145,7 @@ object ReplicationSettings {
   }
 }
 
+@ApiMayChange
 final class ReplicationSettings[Command] private (
     val selfReplicaId: ReplicaId,
     val entityTypeKey: EntityTypeKey[Command],
@@ -260,6 +263,7 @@ object Replica {
  * @param numberOfConsumers  How many consumers to start for consuming events from this replica
  * @param grpcClientSettings Settings for how to connect to the replica, host, port, TLS etc.
  */
+@ApiMayChange
 final class Replica private (
     val replicaId: ReplicaId,
     val numberOfConsumers: Int,
