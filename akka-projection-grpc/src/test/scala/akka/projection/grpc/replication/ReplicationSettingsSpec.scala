@@ -25,6 +25,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
         Behaviors.empty,
         "parse-test",
         ConfigFactory.parseString("""
+         // #config
          my-replicated-entity {
            entity-event-replication-timeout = 10s
            self-replica-id = dca
@@ -56,6 +57,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
              }
            ]
          }
+         // #config
          """))
 
       try {

@@ -35,7 +35,7 @@ in @extref:[Akka Sharded Daemon Process](akka:typed/cluster-sharded-daemon-proce
 
 ## Dependencies
 
-To use the R2DBC module of Akka Projections add the following dependency in your project:
+To use the gRPC module of Akka Projections add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
 group=com.lightbend.akka
@@ -56,16 +56,34 @@ The table below shows `akka-projection-grpc`'s direct dependencies, and the seco
 @@dependencies{ projectId="akka-projection-grpc" }
 
 
-### Serialization of events
 
-FIXME is there anything here?
+### Settings
+
+The @apidoc[akka.projection.grpc.replication.*.ReplicationSettings] @scala[`apply`]@java[`create`] factory methods can 
+accept an entity name, a @apidoc[ReplicationProjectionProvider] and an actor system. The configuration of that system
+is expected to have a top level entry with the entity name containing this structure:
+
+Scala
+:  @@snip [config](/akka-projection-grpc/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
+
+Java
+:  @@snip [config](/akka-projection-grpc/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
+
+The entries in the block refer to the local replica while `replicas` is a list of all replicas, including the node itself, 
+with details about how to reach the replicas across the network. 
+
+The `grpc.client` section for each of the replicas is used for setting up the Akka gRPC client and supports the same discovery, TLS
+and other connection options as when using Akka gRPC directly. For more details see @extref:[Akka gRPC configuration](akka-grpc:client/configuration.html#by-configuration).
+
+It is also possible to set up @apidoc[akka.projection.grpc.replication.*.ReplicationSettings] through APIs only and not rely
+on the configuration file at all.
 
 ### Binding the publisher
 
 Binding the publisher is a manual step to allow arbitrary customization of the Akka HTTP server and combining the endpoint
 with other HTTP and gRPC routes.
 
-When there is only a single replicated entity and no other usage of Akka gRPC Projections in an application a 
+When there is only a single replicated entity and no other usage of Akka gRPC Projections in an application a
 convenience is provided through `createSingleServiceHandler` on @apidoc[akka.projection.grpc.replication.*.Replication] which
 will create a single handler, this can then be bound:
 
@@ -78,6 +96,18 @@ streams.
 FIXME sample snippet
 
 
+### Serialization of events
+
+The events are serialized for being passed over the wire using the same Akka serializer as configured for serializing
+the events for storage. 
+
+Note that the separate replicas increases the risk that two different serialized formats and versions of the serializer
+are running at the same time, extra care must be taken when changing the events and their serialization and deploying
+new versions of the application to the replicas.
+
+FIXME something more here - serialization can fail and stop the replication, but it could also silently lose data in new fields
+before the consuming side has a new version.
+
 ### Sample projects
 
 FIXME should we have one? The shopping cart?
@@ -86,14 +116,10 @@ FIXME should we have one? The shopping cart?
 
 ### From the consumer
 
-The consumer can pass metadata, such as auth headers, in each request to the producer service by specifying @apidoc[akka.grpc.*.Metadata] as `additionalRequestMetadata` when creating each @apidoc[akka.projection.grpc.replication.Replica]
+The consumer can pass metadata, such as auth headers, in each request to the producer service by specifying @apidoc[akka.grpc.*.Metadata] as `additionalRequestMetadata` when creating each @apidoc[akka.projection.grpc.replication.*.Replica]
 
 ### In the producer
 
 Authentication and authorization for the producer can be done by implementing a @apidoc[EventProducerInterceptor] and pass
 it to the `grpcServiceHandler` method during producer bootstrap. The interceptor is invoked with the stream id and
 gRPC request metadata for each incoming request and can return a suitable error through @apidoc[GrpcServiceException]
-
-### TLS
-
-FIXME we should probably recommend TLS (and maybe mTLS) and at least link to how to set that up or maybe show? We have a short section in the akka-guide.

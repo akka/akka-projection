@@ -28,7 +28,7 @@ messages or stored data.
 
 ## Dependencies
 
-To use the R2DBC module of Akka Projections add the following dependency in your project:
+To use the gRPC module of Akka Projections add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
   group=com.lightbend.akka
@@ -167,7 +167,7 @@ The configuration for the `GrpcReadJournal` may look like this:
 
 @@snip [grpc.conf](/samples/grpc/shopping-analytics-service-java/src/main/resources/grpc.conf) { }
 
-The `client` section in the configuration defines where the producer is running. It is an @extref:[Akka gRPC configuration](akka-grpc:configuration.html#by-configuration) with several connection options.
+The `client` section in the configuration defines where the producer is running. It is an @extref:[Akka gRPC configuration](akka-grpc:client/configuration.html#by-configuration) with several connection options.
 
 ### Reference configuration
 
