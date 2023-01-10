@@ -202,7 +202,7 @@ private[akka] object ReplicationImpl {
         sliceRange.min,
         sliceRange.max)
       ProjectionBehavior(settings.projectionProvider(projectionId, sourceProvider, replicationFlow, system))
-    }, shardedDaemonProcessSettings, Some(ProjectionBehavior.Stop))
+    }, shardedDaemonProcessSettings, None) // FIXME why doesn't Some(ProjectionBehavior.Stop) work
   }
 
 }
