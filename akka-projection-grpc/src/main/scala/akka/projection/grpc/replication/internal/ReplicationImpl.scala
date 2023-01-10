@@ -130,7 +130,8 @@ private[akka] object ReplicationImpl {
     implicit val timeout: Timeout = settings.entityEventReplicationTimeout
     implicit val ec: ExecutionContext = system.executionContext
 
-    val projectionName = s"${settings.entityTypeKey.name}_${remoteReplica.replicaId.id}"
+    val projectionName =
+      s"RES_${settings.entityTypeKey.name}_${settings.selfReplicaId.id}_${remoteReplica.replicaId.id}"
     val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
 
     val grpcQuerySettings = {
@@ -141,9 +142,8 @@ private[akka] object ReplicationImpl {
 
     ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, { idx =>
       val sliceRange = sliceRanges(idx)
-      val projectionKey =
-        s"${eventsBySlicesQuery.streamId}-${remoteReplica.replicaId.id}-${sliceRange.min}-${sliceRange.max}"
-      val projectionId = ProjectionId.of(projectionName, projectionKey)
+      val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
+      val projectionId = ProjectionId(projectionName, projectionKey)
 
       val replicationFlow: FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed] =
         FlowWithContext[EventEnvelope[AnyRef], ProjectionContext]
