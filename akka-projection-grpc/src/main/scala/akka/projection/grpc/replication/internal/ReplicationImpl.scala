@@ -6,9 +6,11 @@ package akka.projection.grpc.replication.internal
 
 import akka.Done
 import akka.NotUsed
+import akka.actor.ExtendedActorSystem
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.cluster.ClusterActorRefProvider
 import akka.cluster.sharding.typed.ReplicatedEntity
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
@@ -77,7 +79,7 @@ private[akka] object ReplicationImpl {
       replicatedBehaviorFactory: ReplicationContext => EventSourcedBehavior[Command, Event, State])(
       implicit system: ActorSystem[_]): ReplicationImpl[Command] = {
     require(
-      system.settings.config.getString("akka.actor.provider") == "cluster",
+      system.classicSystem.asInstanceOf[ExtendedActorSystem].provider.isInstanceOf[ClusterActorRefProvider],
       "Replicated Event Sourcing over gRPC only possible together with Akka cluster (akka.actor.provider = cluster)")
 
     val allReplicaIds = settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId
