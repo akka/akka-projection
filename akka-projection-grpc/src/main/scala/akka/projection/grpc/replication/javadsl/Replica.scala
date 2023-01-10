@@ -1,0 +1,47 @@
+/*
+ * Copyright (C) 2009-2022 Lightbend Inc. <https://www.lightbend.com>
+ */
+
+package akka.projection.grpc.replication.javadsl
+
+import akka.annotation.ApiMayChange
+import akka.annotation.DoNotInherit
+import akka.grpc.GrpcClientSettings
+import akka.persistence.typed.ReplicaId
+import akka.projection.grpc.replication.internal.ReplicaImpl
+
+@ApiMayChange
+object Replica {
+
+  /**
+   * Describes a specific remote replica, how to connect to identify, connect and consume events from it.
+   *
+   * @param replicaId          The unique logical identifier of the replica
+   * @param numberOfConsumers  How many consumers to start for consuming events from this replica
+   * @param grpcClientSettings Settings for how to connect to the replica, host, port, TLS etc.
+   */
+  def create(replicaId: ReplicaId, numberOfConsumers: Int, grpcClientSettings: GrpcClientSettings): Replica =
+    new ReplicaImpl(replicaId, numberOfConsumers, grpcClientSettings, None)
+
+}
+
+/**
+ * Not for user extension, construct using Replica#create
+ */
+@ApiMayChange
+@DoNotInherit
+trait Replica {
+
+  def withReplicaId(replicaId: ReplicaId): Replica
+
+  def withNumberOfConsumers(numberOfConsumers: Int): Replica
+
+  def withGrpcClientSettings(grpcClientSettings: GrpcClientSettings): Replica
+
+  /**
+   * Metadata to include in the requests to the remote Akka gRPC projection endpoint
+   */
+  def withAdditionalQueryRequestMetadata(metadata: akka.grpc.javadsl.Metadata): Replica
+
+  def toScala: akka.projection.grpc.replication.scaladsl.Replica
+}

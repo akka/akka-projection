@@ -5,6 +5,7 @@
 package akka.projection.grpc.replication.internal
 
 import akka.Done
+import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionContext
@@ -23,6 +24,10 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
+/**
+ * INTERNAL API
+ */
+@InternalApi
 private[akka] object ParallelUpdatesFlow {
   final class Holder[T](val element: (EventEnvelope[T], ProjectionContext), var completed: Boolean) {
     def persistenceId: String = element._1.persistenceId
@@ -30,12 +35,17 @@ private[akka] object ParallelUpdatesFlow {
   }
 }
 
-// Simpler version of MapAsyncPartitioned until that is ready, better than just mapAsync(1) but second element
-// for the same persistence id will block pulling elements for other pids until the original one has completed
-// FIXME replace with MapAsyncPartitioned once available
+/**
+ * INTERNAL API
+ */
+@InternalApi
 private[akka] final class ParallelUpdatesFlow[T](parallelism: Int)(f: EventEnvelope[T] => Future[Done])
     extends GraphStage[FlowShape[(EventEnvelope[T], ProjectionContext), (EventEnvelope[T], ProjectionContext)]] {
   import ParallelUpdatesFlow._
+
+  // Simpler version of MapAsyncPartitioned until that is ready, better than just mapAsync(1) but second element
+  // for the same persistence id will block pulling elements for other pids until the original one has completed
+  // FIXME replace with MapAsyncPartitioned once available
 
   val in = Inlet[(EventEnvelope[T], ProjectionContext)]("in")
   val out = Outlet[(EventEnvelope[T], ProjectionContext)]("out")

@@ -22,10 +22,10 @@ import akka.persistence.typed.javadsl.ReplicationContext;
 import akka.projection.ProjectionContext;
 import akka.projection.ProjectionId;
 import akka.projection.grpc.producer.EventProducerSettings;
-import akka.projection.grpc.replication.Replica;
-import akka.projection.grpc.replication.ReplicationSettings;
+import akka.projection.grpc.replication.javadsl.Replica;
 import akka.projection.grpc.replication.javadsl.Replication;
 import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider;
+import akka.projection.grpc.replication.javadsl.ReplicationSettings;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.R2dbcProjectionSettings;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
@@ -48,12 +48,12 @@ public class ReplicationCompileTest {
 
   public static void start(ActorSystem<?> system) {
    Set<Replica> otherReplicas = new HashSet<>();
-   otherReplicas.add(Replica.apply(
+   otherReplicas.add(Replica.create(
        ReplicaId.apply("DCB"),
        2,
        GrpcClientSettings.connectToServiceAt("b.example.com", 443, system).withTls(true)
        ));
-   otherReplicas.add(Replica.apply(
+   otherReplicas.add(Replica.create(
        ReplicaId.apply("DCC"),
        2,
        GrpcClientSettings.connectToServiceAt("c.example.com", 443, system).withTls(true)

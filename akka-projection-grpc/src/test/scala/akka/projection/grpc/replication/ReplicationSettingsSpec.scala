@@ -8,6 +8,7 @@ import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
+import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import com.typesafe.config.ConfigFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
