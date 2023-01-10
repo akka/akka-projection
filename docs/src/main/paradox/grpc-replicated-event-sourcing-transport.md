@@ -35,19 +35,33 @@ in @extref:[Akka Sharded Daemon Process](akka:typed/cluster-sharded-daemon-proce
 
 ## Dependencies
 
+The functionality is provided through the `akka-projection-grpc` module.
+
+@@project-info{ projectId="akka-projection-grpc" }
+
 To use the gRPC module of Akka Projections add the following dependency in your project:
+
+Akka Replicated Event Sourcing over gRPC require Akka 2.8.0 or later and can only be run in an Akka cluster since it uses cluster components.
+
+It is currently only possible to use @extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:projection.html) as the
+projection storage and journal for this module.
+
+The full set of dependencies needed:
 
 @@dependency [sbt,Maven,Gradle] {
 group=com.lightbend.akka
 artifact=akka-projection-grpc_$scala.binary.version$
 version=$project.version$
+group2=com.typesafe.akka
+artifact2=akka-cluster-typed_$scala.binary.version$
+version2=2.8.0
+group3=com.typesafe.akka
+artifact3=akka-cluster-sharding-typed_$scala.binary.version$
+version3=2.8.0
+group4=com.lightbend.akka
+artifact4=akka-persistence-r2dbc_$scala.binary.version$
+version4=1.0.1
 }
-
-Akka Replicated Event Sourcing over gRPC require Akka 2.8.0 or later and can only be run in an Akka cluster since it uses cluster components.
-
-The functionality is provided through the `akka-projection-grpc` module. 
-
-@@project-info{ projectId="akka-projection-grpc" }
 
 ### Transitive dependencies
 

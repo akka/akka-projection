@@ -40,6 +40,14 @@ Akka Projections require Akka $akka.version$ or later, see @ref:[Akka version](o
 
 @@project-info{ projectId="akka-projection-grpc" }
 
+It is currently only possible to use @extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:projection.html) as the
+projection storage and journal for this module.
+
+@@dependency [sbt,Maven,Gradle] {
+group=com.lightbend.akka
+artifact=akka-persistence-r2dbc_$scala.binary.version$
+version=$1.0.1$
+}
 
 ### Transitive dependencies
 
