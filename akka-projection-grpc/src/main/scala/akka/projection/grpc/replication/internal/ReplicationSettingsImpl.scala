@@ -20,13 +20,13 @@ import akka.projection.grpc.replication.scaladsl.{ Replica => SReplica }
 import akka.projection.grpc.replication.scaladsl.{ ReplicationProjectionProvider => SReplicationProjectionProvider }
 import akka.projection.grpc.replication.scaladsl.{ ReplicationSettings => SReplicationSettings }
 import akka.util.JavaDurationConverters.JavaDurationOps
+import akka.util.JavaDurationConverters.ScalaDurationOps
 import com.typesafe.config.Config
 
 import java.time.{ Duration => JDuration }
 import java.util.{ Set => JSet }
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
-import scala.jdk.DurationConverters.ScalaDurationOps
 import scala.reflect.ClassTag
 
 /**
@@ -184,7 +184,7 @@ private[akka] final class ReplicationSettingsImpl[Command] private (
 
   override def getOtherReplicas: JSet[JReplica] = otherReplicas.map(_.asInstanceOf[JReplica]).asJava
 
-  override def getEntityEventReplicationTimeout: JDuration = entityEventReplicationTimeout.toJava
+  override def getEntityEventReplicationTimeout: JDuration = entityEventReplicationTimeout.asJava
 
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
