@@ -95,6 +95,13 @@ streams.
 
 FIXME sample snippet
 
+The Akka HTTP server must be running with HTTP/2, this is done through config:
+
+Scala
+:  @@snip [ShoppingCartServer.scala](/samples/grpc/shopping-cart-service-scala/src/main/resources/grpc.conf) { #http2 }
+
+Java
+:  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/resources/grpc.conf) { #http2 }
 
 ### Serialization of events
 
