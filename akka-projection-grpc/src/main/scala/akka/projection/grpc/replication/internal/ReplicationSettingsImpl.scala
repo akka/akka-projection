@@ -49,11 +49,18 @@ private[akka] object ReplicationSettingsImpl {
         val replicaId = config.getString("replica-id")
         val clientConfig =
           config.getConfig("grpc.client").withFallback(grpcClientFallBack)
-        SReplica(
+
+        val consumersOnRole =
+          if (config.hasPath("consumers-on-cluster-role")) Some(config.getString("consumers-on-cluster-role"))
+          else None
+        new ReplicaImpl(
           ReplicaId(replicaId),
           numberOfConsumers = config.getInt("number-of-consumers"),
           // so akka.grpc.client.[replica-id]
-          grpcClientSettings = GrpcClientSettings.fromConfig(clientConfig)(system))
+          grpcClientSettings = GrpcClientSettings.fromConfig(clientConfig)(system),
+          None,
+          consumersOnRole)
+
       }
 
     ReplicationSettingsImpl[Command](

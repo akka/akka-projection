@@ -21,7 +21,7 @@ object Replica {
    * @param grpcClientSettings Settings for how to connect to the replica, host, port, TLS etc.
    */
   def create(replicaId: ReplicaId, numberOfConsumers: Int, grpcClientSettings: GrpcClientSettings): Replica =
-    new ReplicaImpl(replicaId, numberOfConsumers, grpcClientSettings, None)
+    new ReplicaImpl(replicaId, numberOfConsumers, grpcClientSettings, None, None)
 
 }
 
@@ -42,6 +42,11 @@ trait Replica {
    * Metadata to include in the requests to the remote Akka gRPC projection endpoint
    */
   def withAdditionalQueryRequestMetadata(metadata: akka.grpc.javadsl.Metadata): Replica
+
+  /**
+   * Only run consumers for this replica on cluster nodes with this role
+   */
+  def withConsumersOnClusterRole(clusterRole: String): Replica
 
   def toScala: akka.projection.grpc.replication.scaladsl.Replica
 }

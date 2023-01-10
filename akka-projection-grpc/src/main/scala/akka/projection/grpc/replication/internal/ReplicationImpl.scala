@@ -12,6 +12,7 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.cluster.ClusterActorRefProvider
 import akka.cluster.sharding.typed.ReplicatedEntity
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityRef
@@ -140,6 +141,13 @@ private[akka] object ReplicationImpl {
     }
     val eventsBySlicesQuery = GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, Nil)
 
+    val shardedDaemonProcessSettings = {
+      val default = ShardedDaemonProcessSettings(system)
+      remoteReplica.consumersOnClusterRole match {
+        case None       => default
+        case Some(role) => default.withRole(role)
+      }
+    }
     ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, { idx =>
       val sliceRange = sliceRanges(idx)
       val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
@@ -194,7 +202,7 @@ private[akka] object ReplicationImpl {
         sliceRange.min,
         sliceRange.max)
       ProjectionBehavior(settings.projectionProvider(projectionId, sourceProvider, replicationFlow, system))
-    })
+    }, shardedDaemonProcessSettings, Some(ProjectionBehavior.Stop))
   }
 
 }

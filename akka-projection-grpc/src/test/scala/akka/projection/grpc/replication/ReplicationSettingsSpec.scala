@@ -32,25 +32,27 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
            parallel-updates = 8
            replicas: [
              {
-               replica-id: "dca"
-               number-of-consumers: 4
-               grpc.client: {
+               replica-id = "dca"
+               number-of-consumers = 4
+               grpc.client {
                  host = "dca.example.com"
                  port = 8443
                }
              },
              {
-               replica-id: "dcb"
-               number-of-consumers: 4
-               grpc.client: {
+               replica-id = "dcb"
+               number-of-consumers = 4
+               # optional
+               consumers-on-cluster-role = dcb-consumer
+               grpc.client {
                  host = "dcb.example.com"
                  port = 8444
                }
              },
              {
-               replica-id: "dcc"
-               number-of-consumers: 4
-               grpc.client: {
+               replica-id = "dcc"
+               number-of-consumers = 4
+               grpc.client {
                  host = "dcc.example.com"
                  port = 8445
                }
@@ -74,6 +76,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
         val replicaB = settings.otherReplicas.find(_.replicaId.id == "dcb").get
         replicaB.grpcClientSettings.defaultPort should ===(8444)
         replicaB.grpcClientSettings.serviceName should ===("dcb.example.com")
+        replicaB.consumersOnClusterRole should ===(Some("dcb-consumer"))
 
       } finally {
         ActorTestKit.shutdown(system)
