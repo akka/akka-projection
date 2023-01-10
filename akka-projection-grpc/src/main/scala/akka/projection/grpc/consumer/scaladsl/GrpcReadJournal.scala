@@ -4,10 +4,6 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-import scala.collection.immutable
-import scala.concurrent.Future
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -46,7 +42,6 @@ import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
-import akka.serialization.SerializationExtension
 import akka.stream.scaladsl.Source
 import com.google.protobuf.Descriptors
 import com.google.protobuf.timestamp.Timestamp
@@ -54,6 +49,11 @@ import com.typesafe.config.Config
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import scala.collection.immutable
+import scala.concurrent.Future
 
 @ApiMayChange
 object GrpcReadJournal {
@@ -154,7 +154,6 @@ final class GrpcReadJournal private (
 
   private implicit val typedSystem = system.toTyped
   private val persistenceExt = Persistence(system)
-  private val serialization = SerializationExtension(system)
 
   private val client = EventProducerServiceClient(clientSettings)
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
@@ -302,9 +301,7 @@ final class GrpcReadJournal private (
     val evt =
       event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
 
-    val metadata: Option[Any] = event.metadata.map { protoMeta =>
-      serialization.deserialize(protoMeta.payload.toByteArray, protoMeta.serId, protoMeta.manifest).get
-    }
+    val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
 
     new EventEnvelope(
       eventOffset,

@@ -5,9 +5,6 @@
 package akka.projection.grpc.internal
 
 import akka.Done
-
-import java.time.Instant
-import scala.concurrent.Future
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
@@ -22,7 +19,6 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.Event
-import akka.projection.grpc.internal.proto.EventMetadata
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApi
 import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.EventTimestampResponse
@@ -37,18 +33,17 @@ import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
-import akka.serialization.SerializationExtension
-import akka.serialization.SerializerWithStringManifest
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
-import com.google.protobuf.ByteString
 import com.google.protobuf.timestamp.Timestamp
 import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import java.time.Instant
 import scala.annotation.nowarn
+import scala.concurrent.Future
 import scala.util.Success
 
 /**
@@ -84,7 +79,6 @@ import scala.util.Success
   }
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
-  private val serialization = SerializationExtension(system)
 
   private val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
     sources.map(s => s.streamId -> s).toMap
@@ -212,24 +206,19 @@ import scala.util.Success
         val mappedFuture: Future[Option[Any]] = transformation(env.asInstanceOf[EventEnvelope[Any]])
         def toEvent(transformedEvent: Any): Event = {
           val protoEvent = protoAnySerialization.serialize(transformedEvent)
-          val metadata = if (includeMetadata) {
-            env.eventMetadata.map { m =>
-              val serializer = serialization.serializerFor(m.getClass).asInstanceOf[SerializerWithStringManifest]
-              val anyRef = m.asInstanceOf[AnyRef]
-              EventMetadata(
-                ByteString.copyFrom(serializer.toBinary(anyRef)),
-                serializer.identifier,
-                serializer.manifest(anyRef))
-            }
-          } else None
+          val metadata =
+            if (includeMetadata)
+              env.eventMetadata.map(protoAnySerialization.serialize)
+            else None
           Event(
             persistenceId = env.persistenceId,
             seqNr = env.sequenceNr,
             slice = env.slice,
             offset = Some(protoOffset(env)),
             payload = Some(protoEvent),
-            metadata = metadata,
-            source = env.source)
+            source = env.source,
+            metadata = metadata
+          )
         }
         mappedFuture.value match {
           case Some(Success(Some(transformedEvent))) => Future.successful(Some(toEvent(transformedEvent)))
