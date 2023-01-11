@@ -58,7 +58,7 @@ private[akka] final class ReplicationImpl[Command] private (
     val entityTypeKey: EntityTypeKey[Command],
     val entityRefFactory: String => EntityRef[Command])
     extends Replication[Command] {
-  override def toString: String = s"Replication(${eventProducerService.entityType}, ${eventProducerService.entityType})"
+  override def toString: String = s"Replication(${eventProducerService.entityType}, ${eventProducerService.streamId})"
 }
 
 /**
