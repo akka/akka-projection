@@ -4,10 +4,10 @@ Akka Replicated Event Sourcing extends Akka Persistence allowing multiple replic
 writes, for example in different data centers or cloud provider regions. This makes it possible to implement patterns 
 such as active-active and hot standby. 
 
-Originally Akka Replicated Event Sourcing has required cross replica access to the underlying replica database which
-can be hard to open up for security and infra structure reasons.
+Originally, Akka Replicated Event Sourcing has required cross-replica access to the underlying replica database, which
+can be hard to open up for security and infrastructure reasons.
 
-Akka Replicated Event Sourcing over gRPC builds on @ref:[Akka Projection gRPC](grpc.md) and @extref:[Akka gRPC](akka-grpc:index.html)  to instead use gRPC as the cross replica transport for events.
+Akka Replicated Event Sourcing over gRPC builds on @ref:[Akka Projection gRPC](grpc.md) and @extref:[Akka gRPC](akka-grpc:index.html) to instead use gRPC as the cross-replica transport for events.
 
 @@@ warning
 
@@ -26,7 +26,7 @@ Akka Replicated Event Sourcing over gRPC consists of the following three parts:
 
 The Replicated Event Sourced Behavior is run in each replica as a sharded entity using @extref:[Akka Cluster Sharding](akka:typed/cluster-sharding.html).
 
-The events of the replica is published to the other replicas using @ref:[Akka Projection gRPC](grpc.md) endpoints.
+The events of each replica are published to the other replicas using @ref:[Akka Projection gRPC](grpc.md) endpoints.
 
 Each replica consumes a number of parallel slices of the events from each other replica by running Akka Projection gRPC
 in @extref:[Akka Sharded Daemon Process](akka:typed/cluster-sharded-daemon-process.html).
@@ -41,7 +41,7 @@ The functionality is provided through the `akka-projection-grpc` module.
 
 To use the gRPC module of Akka Projections add the following dependency in your project:
 
-Akka Replicated Event Sourcing over gRPC require Akka 2.8.0 or later and can only be run in an Akka cluster since it uses cluster components.
+Akka Replicated Event Sourcing over gRPC requires Akka 2.8.0 or later and can only be run in an Akka cluster since it uses cluster components.
 
 It is currently only possible to use @extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:projection.html) as the
 projection storage and journal for this module.
@@ -103,7 +103,7 @@ will create a single handler, this can then be bound:
 
 FIXME sample snippet
 
-When multiple producers exist, all instances of @apidoc[akka.projection.grpc.producer.EventProducerSettings] needs to
+When multiple producers exist, all instances of @apidoc[akka.projection.grpc.producer.EventProducerSettings] need to
 be passed at once to `EventProducer.grpcServiceHandler` to create a single producer service handling each of the event
 streams.
 
@@ -122,8 +122,8 @@ Java
 The events are serialized for being passed over the wire using the same Akka serializer as configured for serializing
 the events for storage. 
 
-Note that the separate replicas increases the risk that two different serialized formats and versions of the serializer
-are running at the same time, extra care must be taken when changing the events and their serialization and deploying
+Note that having separate replicas increases the risk that two different serialized formats and versions of the serializer
+are running at the same time, so extra care must be taken when changing the events and their serialization and deploying
 new versions of the application to the replicas.
 
 FIXME something more here - serialization can fail and stop the replication, but it could also silently lose data in new fields
@@ -141,6 +141,6 @@ The consumer can pass metadata, such as auth headers, in each request to the pro
 
 ### In the producer
 
-Authentication and authorization for the producer can be done by implementing a @apidoc[EventProducerInterceptor] and pass
+Authentication and authorization for the producer can be done by implementing an @apidoc[EventProducerInterceptor] and passing
 it to the `grpcServiceHandler` method during producer bootstrap. The interceptor is invoked with the stream id and
 gRPC request metadata for each incoming request and can return a suitable error through @apidoc[GrpcServiceException]
