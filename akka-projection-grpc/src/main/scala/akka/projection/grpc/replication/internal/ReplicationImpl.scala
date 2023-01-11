@@ -133,6 +133,10 @@ private[akka] object ReplicationImpl {
 
     val projectionName =
       s"RES_${settings.entityTypeKey.name}_${settings.selfReplicaId.id}_${remoteReplica.replicaId.id}"
+    require(
+      projectionName.size < 255,
+      s"The generated projection name for replica [${remoteReplica.replicaId.id}]: '$projectionName' is too long to fit " +
+      "in the database column, must be at most 255 characters. See if you can shorten replica or entity type names.")
     val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
 
     val grpcQuerySettings = {
