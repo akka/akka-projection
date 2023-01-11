@@ -80,7 +80,7 @@ public class ReplicationCompileTest {
        Duration.ofSeconds(10),
        // parallel updates
        8,
-       projectionProvider);
+       projectionProvider).configureEntity(entity -> entity.withRole("entities"));
 
    Replication<MyCommand> replication = Replication.grpcReplication(settings, ReplicationCompileTest::create, system);
 

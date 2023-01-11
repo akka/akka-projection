@@ -7,6 +7,8 @@ package akka.projection.grpc.replication.javadsl
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
+import akka.cluster.sharding.typed.ShardingEnvelope
+import akka.cluster.sharding.typed.javadsl.Entity
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.producer.EventProducerSettings
@@ -103,8 +105,6 @@ trait ReplicationSettings[Command] {
 
   def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command]
 
-  def withEntityTypeKey[T](entityTypeKey: EntityTypeKey[T]): ReplicationSettings[T]
-
   def withEventProducerSettings(eventProducerSettings: EventProducerSettings): ReplicationSettings[Command]
 
   def withStreamId(streamId: String): ReplicationSettings[Command]
@@ -131,5 +131,13 @@ trait ReplicationSettings[Command] {
    * Add an interceptor to the gRPC event producer for example for authentication of incoming requests
    */
   def withEventProducerInterceptor(interceptor: EventProducerInterceptor): ReplicationSettings[Command]
+
+  /**
+   * Allows for changing the settings of the replicated entity, such as stop message, passivation strategy etc.
+   */
+  def configureEntity(
+      configure: java.util.function.Function[
+        Entity[Command, ShardingEnvelope[Command]],
+        Entity[Command, ShardingEnvelope[Command]]]): ReplicationSettings[Command]
 
 }

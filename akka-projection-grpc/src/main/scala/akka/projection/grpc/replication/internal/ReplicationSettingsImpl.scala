@@ -6,7 +6,10 @@ package akka.projection.grpc.replication.internal
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
+import akka.cluster.sharding.typed.ShardingEnvelope
+import akka.cluster.sharding.typed.javadsl.{ Entity => JEntity }
 import akka.cluster.sharding.typed.javadsl.{ EntityTypeKey => JEntityTypeKey }
+import akka.cluster.sharding.typed.scaladsl.{ Entity => SEntity }
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
@@ -93,7 +96,8 @@ private[akka] object ReplicationSettingsImpl {
       entityEventReplicationTimeout,
       parallelUpdates,
       replicationProjectionProvider,
-      None)
+      None,
+      identity)
   }
 
 }
@@ -111,7 +115,8 @@ private[akka] final class ReplicationSettingsImpl[Command] private (
     val entityEventReplicationTimeout: FiniteDuration,
     val parallelUpdates: Int,
     val projectionProvider: SReplicationProjectionProvider,
-    val eventProducerInterceptor: Option[EventProducerInterceptor])
+    val eventProducerInterceptor: Option[EventProducerInterceptor],
+    val configureEntity: SEntity[Command, ShardingEnvelope[Command]] => SEntity[Command, ShardingEnvelope[Command]])
     extends SReplicationSettings[Command]
     with JReplicationSettings[Command] {
 
@@ -125,30 +130,6 @@ private[akka] final class ReplicationSettingsImpl[Command] private (
 
   override def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettingsImpl[Command] =
     copy(selfReplicaId = selfReplicaId)
-
-  override def withEntityTypeKey[T](entityTypeKey: EntityTypeKey[T]): ReplicationSettingsImpl[T] =
-    new ReplicationSettingsImpl[T](
-      selfReplicaId,
-      entityTypeKey,
-      eventProducerSettings,
-      streamId,
-      otherReplicas,
-      entityEventReplicationTimeout,
-      parallelUpdates,
-      projectionProvider,
-      eventProducerInterceptor)
-
-  override def withEntityTypeKey[T](entityTypeKey: JEntityTypeKey[T]): ReplicationSettingsImpl[T] =
-    new ReplicationSettingsImpl[T](
-      selfReplicaId,
-      entityTypeKey.asScala,
-      eventProducerSettings,
-      streamId,
-      otherReplicas,
-      entityEventReplicationTimeout,
-      parallelUpdates,
-      projectionProvider,
-      eventProducerInterceptor)
 
   override def withEventProducerSettings(
       eventProducerSettings: EventProducerSettings): ReplicationSettingsImpl[Command] =
@@ -187,6 +168,20 @@ private[akka] final class ReplicationSettingsImpl[Command] private (
       interceptor: akka.projection.grpc.producer.javadsl.EventProducerInterceptor): ReplicationSettingsImpl[Command] =
     copy(producerInterceptor = Some(new EventProducerInterceptorAdapter(interceptor)))
 
+  override def configureEntity(
+      configure: SEntity[Command, ShardingEnvelope[Command]] => SEntity[Command, ShardingEnvelope[Command]])
+      : ReplicationSettingsImpl[Command] =
+    copy(configureEntity = configure)
+
+  override def configureEntity(
+      configure: java.util.function.Function[
+        JEntity[Command, ShardingEnvelope[Command]],
+        JEntity[Command, ShardingEnvelope[Command]]]): ReplicationSettingsImpl[Command] = {
+    // FIXME not possible to convert back and forth between scala and java dsls enough here,
+    //       I think we'll need separate settings impls for the dsls after all
+    ???
+  }
+
   override def getEntityTypeKey: JEntityTypeKey[Command] = entityTypeKey.asJava
 
   override def getOtherReplicas: JSet[JReplica] = otherReplicas.map(_.asInstanceOf[JReplica]).asJava
@@ -202,7 +197,9 @@ private[akka] final class ReplicationSettingsImpl[Command] private (
       entityEventReplicationTimeout: FiniteDuration = entityEventReplicationTimeout,
       parallelUpdates: Int = parallelUpdates,
       projectionProvider: SReplicationProjectionProvider = projectionProvider,
-      producerInterceptor: Option[EventProducerInterceptor] = eventProducerInterceptor) =
+      producerInterceptor: Option[EventProducerInterceptor] = eventProducerInterceptor,
+      configureEntity: SEntity[Command, ShardingEnvelope[Command]] => SEntity[Command, ShardingEnvelope[Command]] =
+        configureEntity) =
     new ReplicationSettingsImpl[Command](
       selfReplicaId,
       entityTypeKey,
@@ -212,7 +209,8 @@ private[akka] final class ReplicationSettingsImpl[Command] private (
       entityEventReplicationTimeout,
       parallelUpdates,
       projectionProvider,
-      producerInterceptor)
+      producerInterceptor,
+      configureEntity)
 
   override def toString = s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, $otherReplicas)"
 }

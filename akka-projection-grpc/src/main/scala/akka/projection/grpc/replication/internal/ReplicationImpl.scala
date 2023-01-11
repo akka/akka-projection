@@ -102,12 +102,15 @@ private[akka] object ReplicationImpl {
       settings.eventProducerSettings)
 
     // sharding for hosting the entities and forwarding events
-    val replicatedEntity =
-      ReplicatedEntity(settings.selfReplicaId, Entity(settings.entityTypeKey) { entityContext =>
-        val replicationId =
-          ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
-        ReplicatedEventSourcing.externalReplication(replicationId, allReplicaIds)(replicatedBehaviorFactory)
-      })
+    val replicatedEntity = {
+
+      ReplicatedEntity(settings.selfReplicaId, settings.configureEntity.apply(Entity(settings.entityTypeKey) {
+        entityContext =>
+          val replicationId =
+            ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
+          ReplicatedEventSourcing.externalReplication(replicationId, allReplicaIds)(replicatedBehaviorFactory)
+      }))
+    }
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
