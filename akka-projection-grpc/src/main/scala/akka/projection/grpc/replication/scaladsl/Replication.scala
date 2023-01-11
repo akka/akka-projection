@@ -20,7 +20,7 @@ import akka.projection.grpc.replication.internal.ReplicationSettingsImpl
 import scala.concurrent.Future
 
 /**
- * Created using [[Replication#grpcRepliation]], which starts sharding with the entity and
+ * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
  * replication stream consumers but not the replication endpoint needed to publish events to other replication places.
  *
  * @tparam Command The type of commands the Replicated Event Sourced Entity accepts
@@ -32,8 +32,8 @@ import scala.concurrent.Future
 trait Replication[Command] {
 
   /**
-   * If combining multiple entity types replicated, or combining with direct usage of
-   * Akka Projection gRPC you will have to use the EventProducerService of each of them
+   * If combining multiple replicated entity types, or combining with direct usage of
+   * Akka Projection gRPC, you will have to use the EventProducerService of each of them
    * in a set passed to EventProducer.grpcServiceHandler to create a single gRPC endpoint
    */
   def eventProducerService: EventProducerSource
