@@ -122,8 +122,9 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
       val env = grpcReadJournal
         .loadEnvelope[String](pid.id, sequenceNr = 1L)
         .futureValue
-      env.eventOption.isEmpty shouldBe true
+      env.filtered shouldBe true
       env.eventMetadata shouldBe Some(NotUsed)
+      env.eventOption.isEmpty shouldBe true
     }
 
     "handle missing event as NOT_FOUND" in new TestFixture {

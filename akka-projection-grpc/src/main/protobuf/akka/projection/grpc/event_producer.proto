@@ -60,7 +60,10 @@ message Event {
   int64 seq_nr = 2;
   int32 slice = 3;
   Offset offset = 4;
+  // Actual payload and metadata serialization is deferred to Akka serialization,
+  // the serializer id and manifest are encoded into a custom type_url schema
   google.protobuf.Any payload = 5;
+  string source = 6;
 }
 
 // Events that are filtered out are represented by this
@@ -70,6 +73,7 @@ message FilteredEvent {
   int64 seq_nr = 2;
   int32 slice = 3;
   Offset offset = 4;
+  string source = 5;
 }
 
 message EventTimestampRequest {

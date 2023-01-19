@@ -6,10 +6,8 @@ package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.concurrent.Future
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -36,6 +34,7 @@ import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
+import akka.projection.grpc.internal.EnvelopeSource
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.Event
@@ -267,7 +266,7 @@ final class GrpcReadJournal private (
         if (log.isTraceEnabled)
           log.traceN(
             "Received {}event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
-            if (event.payload.isEmpty) "backtracking " else "",
+            if (event.source == EnvelopeSource.Backtracking) "backtracking " else "",
             clientSettings.serviceName,
             event.persistenceId,
             event.seqNr,
@@ -278,11 +277,12 @@ final class GrpcReadJournal private (
       case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
         if (log.isTraceEnabled)
           log.traceN(
-            "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
+            "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
             clientSettings.serviceName,
             filteredEvent.persistenceId,
             filteredEvent.seqNr,
-            timestampOffset(filteredEvent.offset.get).timestamp)
+            timestampOffset(filteredEvent.offset.get).timestamp,
+            filteredEvent.source)
 
         filteredEventToEnvelope(filteredEvent, streamId)
 
@@ -309,7 +309,9 @@ final class GrpcReadJournal private (
       eventOffset.timestamp.toEpochMilli,
       eventMetadata = None,
       PersistenceId.extractEntityType(event.persistenceId),
-      event.slice)
+      event.slice,
+      filtered = false,
+      source = event.source)
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {
@@ -323,9 +325,12 @@ final class GrpcReadJournal private (
       filteredEvent.seqNr,
       None,
       eventOffset.timestamp.toEpochMilli,
+      // FIXME do we need keep passing this for rolling upgrade or can we switch to None now that we have filtered and source?
       eventMetadata = Some(NotUsed),
       entityType,
-      filteredEvent.slice)
+      filteredEvent.slice,
+      filtered = true,
+      source = filteredEvent.source)
   }
 
   private def timestampOffset(protoOffset: akka.projection.grpc.internal.proto.Offset): TimestampOffset = {
