@@ -45,7 +45,7 @@ object Dependencies {
     val akkaTypedTestkit = "com.typesafe.akka" %% "akka-actor-testkit-typed" % Versions.akka
     val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Versions.akka
 
-    // FIXME remove semi-circular depenendency
+    // FIXME remove semi-circular dependency
     val akkaProjectionR2dbc =
       "com.lightbend.akka" %% "akka-projection-r2dbc" % Versions.akkaPersistenceR2dbc
 

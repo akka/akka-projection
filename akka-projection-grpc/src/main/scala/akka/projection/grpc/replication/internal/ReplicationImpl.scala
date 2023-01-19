@@ -162,42 +162,60 @@ private[akka] object ReplicationImpl {
 
       val replicationFlow: FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed] =
         FlowWithContext[EventEnvelope[AnyRef], ProjectionContext]
+        // FIXME config for parallelism
           .via(new ParallelUpdatesFlow[AnyRef](16)({
             envelope =>
-              envelope.eventMetadata match {
-                case Some(replicatedEventMetadata: ReplicatedEventMetadata)
-                    if replicatedEventMetadata.originReplica == remoteReplica.replicaId =>
-                  val replicationId = ReplicationId.fromString(envelope.persistenceId)
-                  val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
-                  val entityRef =
-                    entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
-                  if (log.isDebugEnabled) {
-                    log.debugN(
-                      "[{}], Forwarding event originating on dc [{}] to [{}] (version: [{}]): [{}]",
-                      system.name,
-                      replicatedEventMetadata.originReplica,
-                      destinationReplicaId.persistenceId.id,
-                      replicatedEventMetadata.version,
-                      envelope.event)
-                  }
-                  val askResult = entityRef.ask[Done](replyTo =>
-                    PublishedEventImpl(
-                      replicationId.persistenceId,
-                      replicatedEventMetadata.originSequenceNr,
-                      envelope.event,
-                      envelope.timestamp,
-                      Some(new ReplicatedPublishedEventMetaData(
+
+              if (!envelope.filtered) {
+                envelope.eventMetadata match {
+                  case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
+                    // skipping events originating from other replicas is handled by filtering but for good measure
+                    require(replicatedEventMetadata.originReplica == remoteReplica.replicaId)
+
+                    val replicationId = ReplicationId.fromString(envelope.persistenceId)
+                    val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
+                    val entityRef =
+                      entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
+                    if (log.isDebugEnabled) {
+                      log.debugN(
+                        "[{}] forwarding event originating on dc [{}] to [{}] (origin seq_nr [{}]): [{}]",
+                        projectionKey,
                         replicatedEventMetadata.originReplica,
-                        replicatedEventMetadata.version)),
-                      Some(replyTo)))
-                  askResult.failed.foreach(error =>
-                    log.warn(s"Failing replication stream from [${remoteReplica.replicaId.id}]", error))
-                  askResult
-                case Some(NotUsed) =>
-                  // Events not originating on sending side already are filtered/have no payload and end up here
-                  log.debugN("[{}], Ignoring filtered event from [{}]", system.name, remoteReplica.replicaId)
-                  Future.successful(Done)
-                case other => throw new IllegalArgumentException(s"Unknown type or missing metadata: [$other]")
+                        destinationReplicaId.persistenceId.id,
+                        envelope.sequenceNr,
+                        replicatedEventMetadata.version)
+                    }
+                    val askResult = entityRef.ask[Done](replyTo =>
+                      PublishedEventImpl(
+                        replicationId.persistenceId,
+                        replicatedEventMetadata.originSequenceNr,
+                        envelope.event,
+                        envelope.timestamp,
+                        Some(new ReplicatedPublishedEventMetaData(
+                          replicatedEventMetadata.originReplica,
+                          replicatedEventMetadata.version)),
+                        Some(replyTo)))
+                    askResult.failed.foreach(error =>
+                      log.warn(
+                        s"Failing replication stream [$projectionName/$projectionKey] from [${remoteReplica.replicaId.id}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
+                        error))
+                    askResult
+
+                  case unexpected =>
+                    throw new IllegalArgumentException(
+                      s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
+                      ", is the remote entity really a Replicated Event Sourced Entity?")
+                }
+              } else {
+                // Events not originating on sending side already are filtered/have no payload and end up here
+                if (log.isDebugEnabled())
+                  log.debugN(
+                    "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
+                    projectionKey,
+                    remoteReplica.replicaId,
+                    envelope.persistenceId,
+                    envelope.sequenceNr)
+                Future.successful(Done)
               }
           }))
           .map(_ => Done)

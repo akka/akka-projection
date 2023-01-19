@@ -6,6 +6,7 @@ package akka.projection.grpc.replication
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
+import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -132,7 +133,8 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         .toTyped)
     with AnyWordSpecLike
     with TestDbLifecycle
-    with BeforeAndAfterAll {
+    with BeforeAndAfterAll
+    with LogCapturing {
   import ReplicationIntegrationSpec._
   implicit val ec: ExecutionContext = system.executionContext
 

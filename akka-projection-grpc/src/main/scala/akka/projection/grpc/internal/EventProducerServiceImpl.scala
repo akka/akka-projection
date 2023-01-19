@@ -216,8 +216,8 @@ import scala.util.Success
             slice = env.slice,
             offset = Some(protoOffset(env)),
             payload = Some(protoEvent),
-            source = env.source,
-            metadata = metadata
+            metadata = metadata,
+            source = env.source
           )
         }
         mappedFuture.value match {

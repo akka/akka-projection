@@ -17,7 +17,12 @@
     <logger name="akka.projection.r2dbc" level="DEBUG" />
     <logger name="akka.persistence.r2dbc" level="DEBUG" />
 
-    <root level="INFO">
+    <!-- Silence some other stuff -->
+    <logger name="akka.actor.typed.pubsub" level="INFO" />
+    <logger name="akka.cluster.typed.internal.receptionist" level="INFO" />
+    <logger name="io.grpc.netty.shaded.io.grpc.netty" level="INFO" />
+
+    <root level="DEBUG">
         <appender-ref ref="CapturingAppender"/>
     </root>
 

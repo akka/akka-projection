@@ -64,14 +64,9 @@ message Event {
   // the serializer id and manifest are encoded into a custom type_url schema
   google.protobuf.Any payload = 5;
   string source = 6;
-  EventMetadata metadata = 7;
+  google.protobuf.Any metadata = 7;
 }
 
-message EventMetadata {
-  bytes payload = 1;
-  int32 ser_id = 2;
-  string manifest = 3;
-}
 
 // Events that are filtered out are represented by this
 // placeholder to be able to track sequence numbers without holes.
