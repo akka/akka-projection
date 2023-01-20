@@ -5,7 +5,6 @@
 package akka.projection.grpc.consumer.scaladsl
 
 import akka.Done
-import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
@@ -15,9 +14,9 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.projection.grpc.TestContainerConf
+import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
-import akka.projection.grpc.TestData
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
@@ -123,7 +122,7 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
         .loadEnvelope[String](pid.id, sequenceNr = 1L)
         .futureValue
       env.filtered shouldBe true
-      env.eventMetadata shouldBe Some(NotUsed)
+      env.eventMetadata shouldBe None
       env.eventOption.isEmpty shouldBe true
     }
 
