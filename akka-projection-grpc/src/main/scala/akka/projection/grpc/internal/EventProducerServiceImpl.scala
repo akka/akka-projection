@@ -160,18 +160,19 @@ import scala.util.Success
           transformAndEncodeEvent(producerSource.transformation, env).map {
             case Some(event) =>
               log.traceN(
-                "Emitting {}event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                if (event.payload.isEmpty) "backtracking " else "",
+                "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
                 env.persistenceId,
                 env.sequenceNr,
-                env.offset)
+                env.offset,
+                event.source)
               StreamOut(StreamOut.Message.Event(event))
             case None =>
               log.traceN(
-                "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
                 env.persistenceId,
                 env.sequenceNr,
-                env.offset)
+                env.offset,
+                env.source)
               StreamOut(
                 StreamOut.Message.FilteredEvent(
                   FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))
@@ -205,6 +206,13 @@ import scala.util.Success
         val mappedFuture: Future[Option[Any]] = transformation(env.asInstanceOf[EventEnvelope[Any]])
         def toEvent(transformedEvent: Any): Event = {
           val protoEvent = protoAnySerialization.serialize(transformedEvent)
+          Event(
+            persistenceId = env.persistenceId,
+            seqNr = env.sequenceNr,
+            slice = env.slice,
+            offset = Some(protoOffset(env)),
+            payload = Some(protoEvent),
+            source = env.source)
           Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), Some(protoEvent))
         }
         mappedFuture.value match {
@@ -217,7 +225,14 @@ import scala.util.Success
         // Events from backtracking are lazily loaded via `loadEvent` if needed.
         // Transformation and filter is done via `loadEvent` in that case.
         Future.successful(
-          Some(Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), payload = None)))
+          Some(
+            Event(
+              persistenceId = env.persistenceId,
+              seqNr = env.sequenceNr,
+              slice = env.slice,
+              offset = Some(protoOffset(env)),
+              payload = None,
+              source = env.source)))
     }
   }
 
@@ -271,8 +286,14 @@ import scala.util.Success
                     env.persistenceId,
                     env.sequenceNr,
                     env.offset)
-                  LoadEventResponse(LoadEventResponse.Message.FilteredEvent(
-                    FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))
+                  LoadEventResponse(
+                    LoadEventResponse.Message.FilteredEvent(
+                      FilteredEvent(
+                        persistenceId = env.persistenceId,
+                        seqNr = env.sequenceNr,
+                        slice = env.slice,
+                        offset = Some(protoOffset(env)),
+                        source = env.source)))
               }
             }
             .recoverWith {

@@ -23,7 +23,9 @@ class TransformationSpec extends AnyWordSpec with Matchers with ScalaFutures {
       timestamp = System.currentTimeMillis(),
       entityType = "banana",
       slice = 5,
-      eventMetadata = meta).asInstanceOf[EventEnvelope[Any]]
+      eventMetadata = meta,
+      filtered = false,
+      source = "").asInstanceOf[EventEnvelope[Any]]
 
   "The gRPC event Transformation" should {
 

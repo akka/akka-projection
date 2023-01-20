@@ -6,10 +6,8 @@ package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.concurrent.Future
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -266,23 +264,24 @@ final class GrpcReadJournal private (
       case StreamOut(StreamOut.Message.Event(event), _) =>
         if (log.isTraceEnabled)
           log.traceN(
-            "Received {}event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
-            if (event.payload.isEmpty) "backtracking " else "",
+            "Received event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
             clientSettings.serviceName,
             event.persistenceId,
             event.seqNr,
-            timestampOffset(event.offset.get).timestamp)
+            timestampOffset(event.offset.get).timestamp,
+            event.source)
 
         eventToEnvelope(event, streamId)
 
       case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
         if (log.isTraceEnabled)
           log.traceN(
-            "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
+            "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
             clientSettings.serviceName,
             filteredEvent.persistenceId,
             filteredEvent.seqNr,
-            timestampOffset(filteredEvent.offset.get).timestamp)
+            timestampOffset(filteredEvent.offset.get).timestamp,
+            filteredEvent.source)
 
         filteredEventToEnvelope(filteredEvent, streamId)
 
@@ -309,23 +308,24 @@ final class GrpcReadJournal private (
       eventOffset.timestamp.toEpochMilli,
       eventMetadata = None,
       PersistenceId.extractEntityType(event.persistenceId),
-      event.slice)
+      event.slice,
+      filtered = false,
+      source = event.source)
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {
     val eventOffset = timestampOffset(filteredEvent.offset.get)
-
-    // Note that envelope is marked with NotUsed in the eventMetadata. That is handled by the R2dbcProjection
-    // implementation to skip the envelope and still store the offset.
     new EventEnvelope(
       eventOffset,
       filteredEvent.persistenceId,
       filteredEvent.seqNr,
       None,
       eventOffset.timestamp.toEpochMilli,
-      eventMetadata = Some(NotUsed),
+      eventMetadata = None,
       entityType,
-      filteredEvent.slice)
+      filteredEvent.slice,
+      filtered = true,
+      source = filteredEvent.source)
   }
 
   private def timestampOffset(protoOffset: akka.projection.grpc.internal.proto.Offset): TimestampOffset = {
