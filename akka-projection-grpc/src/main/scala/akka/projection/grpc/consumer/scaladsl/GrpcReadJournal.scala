@@ -315,17 +315,13 @@ final class GrpcReadJournal private (
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {
     val eventOffset = timestampOffset(filteredEvent.offset.get)
-
-    // Note that envelope is marked with NotUsed in the eventMetadata. That is handled by the R2dbcProjection
-    // implementation to skip the envelope and still store the offset.
     new EventEnvelope(
       eventOffset,
       filteredEvent.persistenceId,
       filteredEvent.seqNr,
       None,
       eventOffset.timestamp.toEpochMilli,
-      // FIXME do we need keep passing this for rolling upgrade or can we switch to None now that we have filtered and source?
-      eventMetadata = Some(NotUsed),
+      eventMetadata = None,
       entityType,
       filteredEvent.slice,
       filtered = true,
