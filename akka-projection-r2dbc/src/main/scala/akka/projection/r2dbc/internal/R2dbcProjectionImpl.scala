@@ -66,6 +66,8 @@ import org.slf4j.LoggerFactory
  */
 @InternalApi
 private[projection] object R2dbcProjectionImpl {
+  import akka.persistence.r2dbc.internal.EnvelopeOrigin.{ fromBacktracking, isFilteredEvent }
+
   val log: Logger = LoggerFactory.getLogger(classOf[R2dbcProjectionImpl[_, _]])
 
   private val FutureDone: Future[Done] = Future.successful(Done)
@@ -85,7 +87,8 @@ private[projection] object R2dbcProjectionImpl {
   def loadEnvelope[Envelope](env: Envelope, sourceProvider: SourceProvider[_, Envelope])(implicit
       ec: ExecutionContext): Future[Envelope] = {
     env match {
-      case eventEnvelope: EventEnvelope[_] if eventEnvelope.eventOption.isEmpty && !skipEnvelope(eventEnvelope) =>
+      case eventEnvelope: EventEnvelope[_]
+          if fromBacktracking(eventEnvelope) && eventEnvelope.eventOption.isEmpty && !eventEnvelope.filtered =>
         val pid = eventEnvelope.persistenceId
         val seqNr = eventEnvelope.sequenceNr
         (sourceProvider match {
@@ -153,7 +156,7 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              if (skipEnvelope(envelope)) {
+              if (isFilteredEvent(envelope)) {
                 val offset = sourceProvider.extractOffset(envelope)
                 offsetStore.saveOffset(offset)
               } else {
@@ -194,7 +197,7 @@ private[projection] object R2dbcProjectionImpl {
             Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
               loadedEnvelopes =>
                 val offsets = loadedEnvelopes.iterator.map(sourceProvider.extractOffset).toVector
-                val filteredEnvelopes = loadedEnvelopes.filterNot(skipEnvelope)
+                val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
                 if (filteredEnvelopes.isEmpty) {
                   offsetStore.saveOffsets(offsets)
                 } else {
@@ -223,7 +226,7 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              if (skipEnvelope(envelope)) {
+              if (isFilteredEvent(envelope)) {
                 offsetStore.addInflight(envelope)
                 FutureDone
               } else {
@@ -256,7 +259,7 @@ private[projection] object R2dbcProjectionImpl {
         override def process(envelope: Envelope): Future[Done] = {
           offsetStore.isAccepted(envelope).flatMap {
             case true =>
-              if (skipEnvelope(envelope)) {
+              if (isFilteredEvent(envelope)) {
                 offsetStore.addInflight(envelope)
                 FutureDone
               } else {
@@ -291,7 +294,7 @@ private[projection] object R2dbcProjectionImpl {
           } else {
             Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
               loadedEnvelopes =>
-                val filteredEnvelopes = loadedEnvelopes.filterNot(skipEnvelope)
+                val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
                 if (filteredEnvelopes.isEmpty) {
                   offsetStore.addInflights(loadedEnvelopes)
                   FutureDone
@@ -324,7 +327,7 @@ private[projection] object R2dbcProjectionImpl {
           .isAccepted(env)
           .flatMap { ok =>
             if (ok) {
-              if (skipEnvelope(env) && settings.warnAboutFilteredEventsInFlow) {
+              if (isFilteredEvent(env) && settings.warnAboutFilteredEventsInFlow) {
                 log.info("atLeastOnceFlow doesn't support of skipping envelopes. Envelope [{}] still emitted.", env)
               }
               loadEnvelope(env, sourceProvider).map { loadedEnvelope =>
@@ -362,17 +365,6 @@ private[projection] object R2dbcProjectionImpl {
 
     override def stop(): Future[Done] =
       delegate.stop()
-  }
-
-  private def skipEnvelope[Envelope](env: Envelope): Boolean = {
-    env match {
-      case e: EventEnvelope[_] =>
-        e.eventMetadata match {
-          case Some(NotUsed) => true
-          case _             => false
-        }
-      case _ => false
-    }
   }
 
 }
