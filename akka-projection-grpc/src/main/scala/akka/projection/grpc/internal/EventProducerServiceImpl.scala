@@ -160,18 +160,19 @@ import scala.util.Success
           transformAndEncodeEvent(producerSource.transformation, env).map {
             case Some(event) =>
               log.traceN(
-                "Emitting {}event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                if (event.source == EnvelopeSource.Backtracking) "backtracking " else "",
+                "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
                 env.persistenceId,
                 env.sequenceNr,
-                env.offset)
+                env.offset,
+                event.source)
               StreamOut(StreamOut.Message.Event(event))
             case None =>
               log.traceN(
-                "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
                 env.persistenceId,
                 env.sequenceNr,
-                env.offset)
+                env.offset,
+                env.source)
               StreamOut(
                 StreamOut.Message.FilteredEvent(
                   FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))

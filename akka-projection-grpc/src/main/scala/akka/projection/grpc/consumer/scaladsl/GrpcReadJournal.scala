@@ -34,7 +34,6 @@ import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
-import akka.projection.grpc.internal.EnvelopeSource
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.Event
@@ -265,12 +264,12 @@ final class GrpcReadJournal private (
       case StreamOut(StreamOut.Message.Event(event), _) =>
         if (log.isTraceEnabled)
           log.traceN(
-            "Received {}event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
-            if (event.source == EnvelopeSource.Backtracking) "backtracking " else "",
+            "Received event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
             clientSettings.serviceName,
             event.persistenceId,
             event.seqNr,
-            timestampOffset(event.offset.get).timestamp)
+            timestampOffset(event.offset.get).timestamp,
+            event.source)
 
         eventToEnvelope(event, streamId)
 

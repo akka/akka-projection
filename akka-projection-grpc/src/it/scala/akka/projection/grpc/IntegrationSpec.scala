@@ -42,6 +42,7 @@ import io.grpc.Status
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
+import org.slf4j.event.Level
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -307,17 +308,19 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       entity ! TestEntity.Ping(replyProbe.ref)
       replyProbe.receiveMessage()
 
-      def expectedLogMessage(seqNr: Long): String =
-        s"Received backtracking event from [127.0.0.1] persistenceId [${pid.id}] with seqNr [$seqNr]"
       val projection =
-        LoggingTestKit.trace(expectedLogMessage(1)).expect {
-          LoggingTestKit.trace(expectedLogMessage(2)).expect {
-            LoggingTestKit.trace(expectedLogMessage(3)).expect {
-              // start the projection
-              spawnExactlyOnceProjection()
-            }
+        LoggingTestKit
+          .custom { event =>
+            event.level == Level.TRACE && event.message.matches(
+              s"""Received event from \\[127.0.0.1] persistenceId \\[${pid.id
+                .replace("|", "\\|")}] with seqNr \\[[123]].*""") && event.message
+              .endsWith("source [BT]")
           }
-        }
+          .withOccurrences(3)
+          .expect {
+            // start the projection
+            spawnExactlyOnceProjection()
+          }
 
       processedProbe.receiveMessage().envelope.event shouldBe "A"
       processedProbe.receiveMessage().envelope.event shouldBe "B"
