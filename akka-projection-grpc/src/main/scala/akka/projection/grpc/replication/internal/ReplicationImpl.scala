@@ -14,7 +14,6 @@ import akka.cluster.ClusterActorRefProvider
 import akka.cluster.sharding.typed.ReplicatedEntity
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
@@ -27,9 +26,6 @@ import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.internal.PublishedEventImpl
 import akka.persistence.typed.internal.ReplicatedEventMetadata
 import akka.persistence.typed.internal.ReplicatedPublishedEventMetaData
-import akka.persistence.typed.scaladsl.EventSourcedBehavior
-import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
-import akka.persistence.typed.scaladsl.ReplicationContext
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
