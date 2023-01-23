@@ -16,11 +16,11 @@ import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
 import akka.projection.grpc.replication.internal.ReplicaImpl
 import akka.projection.grpc.replication.scaladsl
-import akka.util.JavaDurationConverters.JavaDurationOps
+import akka.util.JavaDurationConverters._
+import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
-import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.reflect.ClassTag
 
 @ApiMayChange

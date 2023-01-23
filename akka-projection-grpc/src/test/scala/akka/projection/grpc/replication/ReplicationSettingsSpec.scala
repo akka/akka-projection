@@ -24,7 +24,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
   "The ReplicationSettings" should {
     "Parse from config" in {
       implicit val system: ActorSystem[Unit] = ActorSystem[Unit](
-        Behaviors.empty,
+        Behaviors.empty[Unit],
         "parse-test",
         ConfigFactory.parseString("""
          // #config

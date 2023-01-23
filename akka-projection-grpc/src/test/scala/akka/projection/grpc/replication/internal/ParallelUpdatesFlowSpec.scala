@@ -27,7 +27,7 @@ class ParallelUpdatesFlowSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val (sourceProbe, resultF) = TestSource()
         .viaMat(new ParallelUpdatesFlow[AnyRef](4)({ envelope =>
           val done = Promise[Done]()
-          processProbe ! (envelope.persistenceId, done)
+          processProbe ! ((envelope.persistenceId, done))
           done.future
         }))(Keep.left)
         .toMat(Sink.seq)(Keep.both)
@@ -58,7 +58,7 @@ class ParallelUpdatesFlowSpec extends ScalaTestWithActorTestKit with AnyWordSpec
       val (sourceProbe, resultF) = TestSource()
         .viaMat(new ParallelUpdatesFlow[AnyRef](4)({ envelope =>
           val done = Promise[Done]()
-          processProbe ! (envelope.persistenceId, done)
+          processProbe ! ((envelope.persistenceId, done))
           done.future
         }))(Keep.left)
         .toMat(Sink.seq)(Keep.both)
