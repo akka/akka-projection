@@ -9,6 +9,8 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
+import akka.projection.grpc.replication.javadsl.{ ReplicationSettings => JReplicationSettings }
+import akka.projection.grpc.replication.javadsl.{ ReplicationProjectionProvider => JReplicationProjectionProvider }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -37,6 +39,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
                grpc.client {
                  host = "dca.example.com"
                  port = 8443
+                 use-tls = true
                }
              },
              {
@@ -77,6 +80,34 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
         replicaB.grpcClientSettings.defaultPort should ===(8444)
         replicaB.grpcClientSettings.serviceName should ===("dcb.example.com")
         replicaB.consumersOnClusterRole should ===(Some("dcb-consumer"))
+
+        // And Java DSL
+        val javaSettings = JReplicationSettings.create(
+          classOf[MyCommand],
+          "my-replicated-entity",
+          // never actually used, just passed along
+          null: JReplicationProjectionProvider,
+          system)
+
+        val converted = javaSettings.toScala
+        converted.selfReplicaId should ===(settings.selfReplicaId)
+        converted.streamId should ===(settings.streamId)
+
+        converted.otherReplicas.foreach { replica =>
+          val scalaReplica = settings.otherReplicas.find(_.replicaId == replica.replicaId).get
+          replica.consumersOnClusterRole should ===(scalaReplica.consumersOnClusterRole)
+          replica.numberOfConsumers should ===(scalaReplica.numberOfConsumers)
+          // no equals on GrpcClientSettings
+          replica.grpcClientSettings.serviceName === (scalaReplica.grpcClientSettings.serviceName)
+          replica.grpcClientSettings.defaultPort === (scalaReplica.grpcClientSettings.defaultPort)
+          replica.grpcClientSettings.useTls === (scalaReplica.grpcClientSettings.useTls)
+        }
+
+        converted.entityEventReplicationTimeout should ===(settings.entityEventReplicationTimeout)
+        converted.entityTypeKey === (settings.entityTypeKey)
+        converted.eventProducerInterceptor === (settings.eventProducerInterceptor)
+        converted.projectionProvider === (settings.projectionProvider)
+        converted.parallelUpdates === (settings.parallelUpdates)
 
       } finally {
         ActorTestKit.shutdown(system)

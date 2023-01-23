@@ -7,15 +7,18 @@ package akka.projection.grpc.replication.scaladsl
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
+import akka.cluster.sharding.typed.ReplicatedEntity
+import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
+import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
+import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.persistence.typed.scaladsl.ReplicationContext
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
-import akka.projection.grpc.replication.internal.ReplicationSettingsImpl
 
 import scala.concurrent.Future
 
@@ -67,8 +70,20 @@ object Replication {
    */
   def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command])(
       replicatedBehaviorFactory: ReplicationContext => EventSourcedBehavior[Command, Event, State])(
-      implicit system: ActorSystem[_]): Replication[Command] =
-    ReplicationImpl.grpcReplication[Command, Event, State](settings.asInstanceOf[ReplicationSettingsImpl[Command]])(
-      replicatedBehaviorFactory)(system)
+      implicit system: ActorSystem[_]): Replication[Command] = {
+
+    val replicatedEntity =
+      ReplicatedEntity(
+        settings.selfReplicaId,
+        settings.configureEntity.apply(Entity(settings.entityTypeKey) { entityContext =>
+          val replicationId =
+            ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
+          ReplicatedEventSourcing.externalReplication(
+            replicationId,
+            settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(replicatedBehaviorFactory)
+        }))
+
+    ReplicationImpl.grpcReplication[Command, Event, State](settings, replicatedEntity)
+  }
 
 }

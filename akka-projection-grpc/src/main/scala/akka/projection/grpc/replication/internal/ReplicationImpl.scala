@@ -41,6 +41,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.Replication
+import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
@@ -76,8 +77,8 @@ private[akka] object ReplicationImpl {
    *
    * Important: Note that this does not publish the endpoint, additional steps are needed!
    */
-  def grpcReplication[Command, Event, State](settings: ReplicationSettingsImpl[Command])(
-      replicatedBehaviorFactory: ReplicationContext => EventSourcedBehavior[Command, Event, State])(
+  def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command],
+                                             replicatedEntity: ReplicatedEntity[Command])(
       implicit system: ActorSystem[_]): ReplicationImpl[Command] = {
     require(
       system.classicSystem.asInstanceOf[ExtendedActorSystem].provider.isInstanceOf[ClusterActorRefProvider],
@@ -101,17 +102,6 @@ private[akka] object ReplicationImpl {
       onlyLocalOriginTransformer,
       settings.eventProducerSettings)
 
-    // sharding for hosting the entities and forwarding events
-    val replicatedEntity = {
-
-      ReplicatedEntity(settings.selfReplicaId, settings.configureEntity.apply(Entity(settings.entityTypeKey) {
-        entityContext =>
-          val replicationId =
-            ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
-          ReplicatedEventSourcing.externalReplication(replicationId, allReplicaIds)(replicatedBehaviorFactory)
-      }))
-    }
-
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
 
@@ -129,7 +119,7 @@ private[akka] object ReplicationImpl {
 
   private def startConsumer[C](
       remoteReplica: Replica,
-      settings: ReplicationSettingsImpl[C],
+      settings: ReplicationSettings[C],
       entityRefFactory: String => EntityRef[C])(implicit system: ActorSystem[_]): Unit = {
     implicit val timeout: Timeout = settings.entityEventReplicationTimeout
     implicit val ec: ExecutionContext = system.executionContext

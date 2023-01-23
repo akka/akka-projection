@@ -7,20 +7,24 @@ package akka.projection.grpc.replication.javadsl
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
+import akka.annotation.InternalApi
 import akka.cluster.sharding.typed.ShardingEnvelope
 import akka.cluster.sharding.typed.javadsl.Entity
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey
+import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.javadsl.EventProducerInterceptor
-import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
-import akka.projection.grpc.replication.internal.ReplicationSettingsImpl
+import akka.projection.grpc.replication.internal.ReplicaImpl
+import akka.projection.grpc.replication.scaladsl.{ ReplicationSettings => SReplicationSettings }
 import akka.util.JavaDurationConverters.JavaDurationOps
+import com.typesafe.config.Config
 
 import java.time.Duration
+import java.util.Optional
 import java.util.{ Set => JSet }
 import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
+import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
 
 object ReplicationSettings {
 
@@ -50,17 +54,18 @@ object ReplicationSettings {
       entityEventReplicationTimeout: Duration,
       parallelUpdates: Int,
       replicationProjectionProvider: ReplicationProjectionProvider): ReplicationSettings[Command] = {
-    val classTag = ClassTag[Command](commandClass)
-    akka.projection.grpc.replication.scaladsl.ReplicationSettings
-      .apply[Command](
-        entityTypeName,
-        selfReplicaId,
-        eventProducerSettings,
-        otherReplicas.asScala.toSet[Replica].map(_.toScala),
-        entityEventReplicationTimeout.asScala,
-        parallelUpdates,
-        ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))(classTag)
-      .asInstanceOf[ReplicationSettingsImpl[Command]]
+    val entityTypeKey = EntityTypeKey.create(commandClass, entityTypeName)
+    new ReplicationSettings[Command](
+      selfReplicaId,
+      entityTypeKey,
+      eventProducerSettings,
+      entityTypeName,
+      otherReplicas,
+      entityEventReplicationTimeout,
+      parallelUpdates,
+      replicationProjectionProvider,
+      Optional.empty(),
+      identity)
   }
 
   /**
@@ -73,12 +78,44 @@ object ReplicationSettings {
       entityTypeName: String,
       replicationProjectionProvider: ReplicationProjectionProvider,
       system: ActorSystem[_]): ReplicationSettings[Command] = {
-    val classTag: ClassTag[Command] = ClassTag(commandClass)
-    akka.projection.grpc.replication.scaladsl.ReplicationSettings
-      .apply(entityTypeName, ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))(
-        system,
-        classTag)
-      .asInstanceOf[ReplicationSettingsImpl[Command]]
+    val config = system.settings.config.getConfig(entityTypeName)
+    val selfReplicaId = ReplicaId(config.getString("self-replica-id"))
+    val grpcClientFallBack = system.settings.config.getConfig("""akka.grpc.client."*"""")
+    val allReplicas: Set[Replica] = config
+      .getConfigList("replicas")
+      .asScala
+      .toSet
+      .map { config: Config =>
+        val replicaId = config.getString("replica-id")
+        val clientConfig =
+          config.getConfig("grpc.client").withFallback(grpcClientFallBack)
+
+        val consumersOnRole =
+          if (config.hasPath("consumers-on-cluster-role")) Some(config.getString("consumers-on-cluster-role"))
+          else None
+        new ReplicaImpl(
+          ReplicaId(replicaId),
+          numberOfConsumers = config.getInt("number-of-consumers"),
+          // so akka.grpc.client.[replica-id]
+          grpcClientSettings = GrpcClientSettings.fromConfig(clientConfig)(system),
+          None,
+          consumersOnRole): Replica
+      }
+    val otherReplicas = allReplicas.filter(_.replicaId != selfReplicaId).asJava
+    val entityTypeKey = EntityTypeKey.create(commandClass, entityTypeName)
+
+    new ReplicationSettings[Command](
+      selfReplicaId = selfReplicaId,
+      entityTypeKey = entityTypeKey,
+      eventProducerSettings = EventProducerSettings(system),
+      streamId = entityTypeName,
+      otherReplicas = otherReplicas,
+      entityEventReplicationTimeout = config
+        .getDuration("entity-event-replication-timeout"),
+      parallelUpdates = config.getInt("parallel-updates"),
+      replicationProjectionProvider = replicationProjectionProvider,
+      Optional.empty(),
+      identity)
   }
 }
 
@@ -87,50 +124,56 @@ object ReplicationSettings {
  */
 @ApiMayChange
 @DoNotInherit
-trait ReplicationSettings[Command] {
+final class ReplicationSettings[Command] private (
+    val selfReplicaId: ReplicaId,
+    val entityTypeKey: EntityTypeKey[Command],
+    val eventProducerSettings: EventProducerSettings,
+    val streamId: String,
+    val otherReplicas: JSet[Replica],
+    val entityEventReplicationTimeout: Duration,
+    val parallelUpdates: Int,
+    val replicationProjectionProvider: ReplicationProjectionProvider,
+    val eventProducerInterceptor: Optional[EventProducerInterceptor],
+    val configureEntity: java.util.function.Function[
+      Entity[Command, ShardingEnvelope[Command]],
+      Entity[Command, ShardingEnvelope[Command]]]) {
 
-  def selfReplicaId: ReplicaId
+  def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command] =
+    copy(selfReplicaId = selfReplicaId)
 
-  def getEntityTypeKey: EntityTypeKey[Command]
+  def withEventProducerSettings(eventProducerSettings: EventProducerSettings): ReplicationSettings[Command] =
+    copy(eventProducerSettings = eventProducerSettings)
 
-  def eventProducerSettings: EventProducerSettings
+  def withStreamId(streamId: String): ReplicationSettings[Command] =
+    copy(streamId = streamId)
 
-  def streamId: String
-
-  def getOtherReplicas: JSet[Replica]
-
-  def getEntityEventReplicationTimeout: Duration
-
-  def parallelUpdates: Int
-
-  def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command]
-
-  def withEventProducerSettings(eventProducerSettings: EventProducerSettings): ReplicationSettings[Command]
-
-  def withStreamId(streamId: String): ReplicationSettings[Command]
-
-  def withOtherReplicas(replicas: JSet[Replica]): ReplicationSettings[Command]
+  def withOtherReplicas(otherReplicas: JSet[Replica]): ReplicationSettings[Command] =
+    copy(otherReplicas = otherReplicas)
 
   /**
    * Set the timeout for events being completely processed after arriving to a node in the replication stream
    */
-  def withEntityEventReplicationTimeout(duration: Duration): ReplicationSettings[Command]
+  def withEntityEventReplicationTimeout(duration: Duration): ReplicationSettings[Command] =
+    copy(entityEventReplicationTimeout = duration)
 
   /**
    * Run up to this many parallel updates over sharding. Note however that updates for the same persistence id
    * is always sequential.
    */
-  def withParallelUpdates(parallelUpdates: Int): ReplicationSettings[Command]
+  def withParallelUpdates(parallelUpdates: Int): ReplicationSettings[Command] =
+    copy(parallelUpdates = parallelUpdates)
 
   /**
    * Change projection provider
    */
-  def withProjectionProvider(projectionProvider: ReplicationProjectionProvider): ReplicationSettings[Command]
+  def withProjectionProvider(projectionProvider: ReplicationProjectionProvider): ReplicationSettings[Command] =
+    copy(projectionProvider = projectionProvider)
 
   /**
    * Add an interceptor to the gRPC event producer for example for authentication of incoming requests
    */
-  def withEventProducerInterceptor(interceptor: EventProducerInterceptor): ReplicationSettings[Command]
+  def withEventProducerInterceptor(interceptor: EventProducerInterceptor): ReplicationSettings[Command] =
+    copy(eventProducerInterceptor = Optional.of(interceptor))
 
   /**
    * Allows for changing the settings of the replicated entity, such as stop message, passivation strategy etc.
@@ -138,6 +181,49 @@ trait ReplicationSettings[Command] {
   def configureEntity(
       configure: java.util.function.Function[
         Entity[Command, ShardingEnvelope[Command]],
-        Entity[Command, ShardingEnvelope[Command]]]): ReplicationSettings[Command]
+        Entity[Command, ShardingEnvelope[Command]]]): ReplicationSettings[Command] =
+    copy(configureEntity = configure)
+
+  private def copy(
+      selfReplicaId: ReplicaId = selfReplicaId,
+      entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
+      eventProducerSettings: EventProducerSettings = eventProducerSettings,
+      streamId: String = streamId,
+      otherReplicas: JSet[Replica] = otherReplicas,
+      entityEventReplicationTimeout: Duration = entityEventReplicationTimeout,
+      parallelUpdates: Int = parallelUpdates,
+      projectionProvider: ReplicationProjectionProvider = replicationProjectionProvider,
+      eventProducerInterceptor: Optional[EventProducerInterceptor] = eventProducerInterceptor,
+      configureEntity: java.util.function.Function[
+        Entity[Command, ShardingEnvelope[Command]],
+        Entity[Command, ShardingEnvelope[Command]]] = configureEntity): ReplicationSettings[Command] =
+    new ReplicationSettings[Command](
+      selfReplicaId,
+      entityTypeKey,
+      eventProducerSettings,
+      streamId,
+      otherReplicas,
+      entityEventReplicationTimeout,
+      parallelUpdates,
+      projectionProvider,
+      eventProducerInterceptor,
+      configureEntity)
+
+  override def toString =
+    s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, ${otherReplicas.asScala.mkString(", ")})"
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def toScala: SReplicationSettings[Command] =
+    SReplicationSettings[Command](
+      entityTypeKey = entityTypeKey.asScala,
+      selfReplicaId = selfReplicaId,
+      eventProducerSettings = eventProducerSettings,
+      otherReplicas = otherReplicas.asScala.map(_.toScala).toSet,
+      entityEventReplicationTimeout = entityEventReplicationTimeout.asScala,
+      parallelUpdates = parallelUpdates,
+      replicationProjectionProvider = ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))
 
 }

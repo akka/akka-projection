@@ -14,12 +14,12 @@ import akka.projection.grpc.replication.scaladsl.{ Replica => SReplica }
  * INTERNAL API
  */
 @InternalApi
-private[akka] final class ReplicaImpl(
-    val replicaId: ReplicaId,
-    val numberOfConsumers: Int,
-    val grpcClientSettings: GrpcClientSettings,
-    val additionalQueryRequestMetadata: Option[akka.grpc.scaladsl.Metadata],
-    val consumersOnClusterRole: Option[String])
+private[akka] final case class ReplicaImpl(
+    override val replicaId: ReplicaId,
+    override val numberOfConsumers: Int,
+    override val grpcClientSettings: GrpcClientSettings,
+    override val additionalQueryRequestMetadata: Option[akka.grpc.scaladsl.Metadata],
+    override val consumersOnClusterRole: Option[String])
     extends JReplica
     with SReplica {
 
@@ -47,18 +47,7 @@ private[akka] final class ReplicaImpl(
   def withConsumersOnClusterRole(clusterRole: String): ReplicaImpl =
     copy(consumersOnClusterRole = Some(clusterRole))
 
-  private def copy(
-      replicaId: ReplicaId = replicaId,
-      numberOfConsumers: Int = numberOfConsumers,
-      grpcClientSettings: GrpcClientSettings = grpcClientSettings,
-      additionalQueryRequestMetadata: Option[akka.grpc.scaladsl.Metadata] = additionalQueryRequestMetadata,
-      consumersOnClusterRole: Option[String] = consumersOnClusterRole) =
-    new ReplicaImpl(
-      replicaId,
-      numberOfConsumers,
-      grpcClientSettings,
-      additionalQueryRequestMetadata,
-      consumersOnClusterRole)
-
   override def toScala: SReplica = this
+
+  override def toString: String = s"Replica($replicaId, $numberOfConsumers, ${consumersOnClusterRole.getOrElse("")})"
 }

@@ -32,6 +32,8 @@ object Replica {
 @DoNotInherit
 trait Replica {
 
+  def replicaId: ReplicaId
+
   def withReplicaId(replicaId: ReplicaId): Replica
 
   def withNumberOfConsumers(numberOfConsumers: Int): Replica

@@ -7,18 +7,22 @@ package akka.projection.grpc.replication.javadsl
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
+import akka.cluster.sharding.typed.ReplicatedEntity
+import akka.cluster.sharding.typed.javadsl.Entity
+import akka.cluster.sharding.typed.javadsl.EntityContext
 import akka.cluster.sharding.typed.javadsl.EntityRef
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.japi.function.{ Function => JFunction }
+import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.javadsl.EventSourcedBehavior
 import akka.persistence.typed.javadsl.ReplicationContext
+import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.projection.grpc.producer.javadsl.EventProducer
 import akka.projection.grpc.producer.javadsl.EventProducerSource
 import akka.projection.grpc.producer.javadsl.Transformation
 import akka.projection.grpc.replication.internal.ReplicationImpl
-import akka.projection.grpc.replication.internal.ReplicationSettingsImpl
 
 import java.util.concurrent.CompletionStage
 
@@ -72,15 +76,30 @@ object Replication {
       settings: ReplicationSettings[Command],
       replicatedBehaviorFactory: JFunction[ReplicationContext, EventSourcedBehavior[Command, Event, State]],
       system: ActorSystem[_]): Replication[Command] = {
+
+    val scalaReplicationSettings = settings.toScala
+
+    val replicatedEntity =
+      ReplicatedEntity[Command](
+        settings.selfReplicaId,
+        settings.configureEntity
+          .apply(
+            Entity.of(
+              settings.entityTypeKey, { entityContext: EntityContext[Command] =>
+                val replicationId =
+                  ReplicationId(entityContext.getEntityTypeKey.name, entityContext.getEntityId, settings.selfReplicaId)
+                ReplicatedEventSourcing.externalReplication(
+                  replicationId,
+                  scalaReplicationSettings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(
+                  replicationContext =>
+                    replicatedBehaviorFactory
+                      .apply(replicationContext.asInstanceOf[ReplicationContext])
+                      .createEventSourcedBehavior())
+              }))
+          .toScala)
+
     val scalaRESOG =
-      ReplicationImpl
-        .grpcReplication(settings.asInstanceOf[ReplicationSettingsImpl[Command]]) {
-          case ctx: ReplicationContext =>
-            replicatedBehaviorFactory.apply(ctx).createEventSourcedBehavior()
-          case other =>
-            // Should never happen
-            throw new IllegalArgumentException(s"Expected javadsl ReplicationContext but got ${other.getClass}")
-        }(system)
+      ReplicationImpl.grpcReplication[Command, Event, State](scalaReplicationSettings, replicatedEntity)(system)
     val jEventProducerSource = new EventProducerSource(
       scalaRESOG.eventProducerService.entityType,
       scalaRESOG.eventProducerService.streamId,
