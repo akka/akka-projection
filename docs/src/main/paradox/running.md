@@ -48,8 +48,7 @@ When using [Akka Persistence Cassandra plugin](https://doc.akka.io/docs/akka-per
 not use too many tags for each event. Each tag will result in a copy of the event in a separate table and
 that can impact write performance. Typically, you would use 1 tag per event as illustrated here. Additional
 filtering of events can be done in the Projection handler if it doesn't have to act on certain events.
-The [JDBC plugin](https://doc.akka.io/docs/akka-persistence-jdbc/current/) and
-[Spanner plugin](https://doc.akka.io/docs/akka-persistence-spanner/current/)
+The [JDBC plugin](https://doc.akka.io/docs/akka-persistence-jdbc/current/) 
 don't have this constraint.
 @@@
 

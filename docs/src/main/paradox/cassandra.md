@@ -270,9 +270,7 @@ The supported offset types of the `CassandraProjection` are:
 * `String`
 * @scala[`Int`]@java[Integer]
 * `Long`
-* Any other type that has a configured Akka Serializer is stored with base64 encoding of the serialized bytes.
-  For example the [Akka Persistence Spanner](https://doc.akka.io/docs/akka-persistence-spanner/current/) offset
-  is supported in this way. 
+* Any other type that has a configured Akka Serializer is stored with base64 encoding of the serialized bytes. 
 
 @@@ note
 
