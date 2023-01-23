@@ -29,13 +29,27 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
         ConfigFactory.parseString("""
          // #config
          my-replicated-entity {
-           entity-event-replication-timeout = 10s
+           # which of the replicas this node belongs to, should be the same
+           # across the nodes of each replica Akka cluster.
            self-replica-id = dca
+           # max number of parallel in-flight (sent over sharding) entity updates
+           # per consumer/projection
            parallel-updates = 8
+           # Fail the replication stream (and restart with backoff) if completing
+           # the write of a replicated event reaching the cluster takes more time
+           # than this.
+           entity-event-replication-timeout = 10s
            replicas: [
              {
+               # Unique identifier of the replica/datacenter, is stored in the events
+               # and can not be changed after events has been persisted.
                replica-id = "dca"
+               # Number of replication streams/projections to start to consume events
+               # from this replica
                number-of-consumers = 4
+               # Akka gRPC client config block for how to reach this replica
+               # from the other replicas, note that binding the server/publishing
+               # endpoint of each replica is done separately, in code.
                grpc.client {
                  host = "dca.example.com"
                  port = 8443
@@ -45,7 +59,8 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
              {
                replica-id = "dcb"
                number-of-consumers = 4
-               # optional
+               # Optional - only run replication stream consumers for events from the
+               # remote replica on nodes with this role
                consumers-on-cluster-role = dcb-consumer
                grpc.client {
                  host = "dcb.example.com"
@@ -75,6 +90,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
         settings.selfReplicaId.id should ===("dca")
         settings.otherReplicas.map(_.replicaId.id) should ===(Set("dcb", "dcc"))
         settings.otherReplicas.forall(_.numberOfConsumers === 4) should ===(true)
+        settings.parallelUpdates should ===(8)
 
         val replicaB = settings.otherReplicas.find(_.replicaId.id == "dcb").get
         replicaB.grpcClientSettings.defaultPort should ===(8444)

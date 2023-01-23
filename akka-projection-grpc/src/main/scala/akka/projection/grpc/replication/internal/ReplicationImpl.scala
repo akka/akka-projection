@@ -77,14 +77,12 @@ private[akka] object ReplicationImpl {
    *
    * Important: Note that this does not publish the endpoint, additional steps are needed!
    */
-  def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command],
-                                             replicatedEntity: ReplicatedEntity[Command])(
-      implicit system: ActorSystem[_]): ReplicationImpl[Command] = {
+  def grpcReplication[Command, Event, State](
+      settings: ReplicationSettings[Command],
+      replicatedEntity: ReplicatedEntity[Command])(implicit system: ActorSystem[_]): ReplicationImpl[Command] = {
     require(
       system.classicSystem.asInstanceOf[ExtendedActorSystem].provider.isInstanceOf[ClusterActorRefProvider],
       "Replicated Event Sourcing over gRPC only possible together with Akka cluster (akka.actor.provider = cluster)")
-
-    val allReplicaIds = settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId
 
     // set up a publisher
     val onlyLocalOriginTransformer = Transformation.empty.registerAsyncEnvelopeOrElseMapper(envelope =>
@@ -152,8 +150,7 @@ private[akka] object ReplicationImpl {
 
       val replicationFlow: FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed] =
         FlowWithContext[EventEnvelope[AnyRef], ProjectionContext]
-        // FIXME config for parallelism
-          .via(new ParallelUpdatesFlow[AnyRef](16)({
+          .via(new ParallelUpdatesFlow[AnyRef](settings.parallelUpdates)({
             envelope =>
 
               if (!envelope.filtered) {
