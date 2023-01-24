@@ -130,7 +130,7 @@ private[akka] object ReplicationImpl {
       remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
     }
     val eventsBySlicesQuery = GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, Nil)
-    log.info(
+    log.infoN(
       "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",
       remoteReplica.numberOfConsumers,
       remoteReplica.consumersOnClusterRole.fold("")(role => s" on nodes with cluster role $role"),
