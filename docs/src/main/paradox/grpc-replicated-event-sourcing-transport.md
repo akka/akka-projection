@@ -54,13 +54,16 @@ artifact=akka-projection-grpc_$scala.binary.version$
 version=$project.version$
 group2=com.typesafe.akka
 artifact2=akka-cluster-typed_$scala.binary.version$
-version2=2.8.0
+version2=$akka.version$
 group3=com.typesafe.akka
 artifact3=akka-cluster-sharding-typed_$scala.binary.version$
-version3=2.8.0
+version3=$akka.version$
 group4=com.lightbend.akka
 artifact4=akka-persistence-r2dbc_$scala.binary.version$
-version4=1.0.1
+version4=$akka.r2dbc.version$
+group5=com.lightbend.akka
+artifact5=akka-projection-r2dbc_$scala.binary.version$
+version5=$akka.r2dbc.version$
 }
 
 ### Transitive dependencies

@@ -141,6 +141,7 @@ lazy val docs = project
         "canonical.base_url" -> "https://doc.akka.io/docs/akka-projection/current",
         "github.base_url" -> "https://github.com/akka/akka-projection",
         "akka.version" -> Dependencies.Versions.akka,
+        "akka.r2dbc.version" -> Dependencies.Versions.akkaPersistenceR2dbc,
         // Akka
         "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.AkkaVersionInDocs}/%s",
         "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.AkkaVersionInDocs}/",

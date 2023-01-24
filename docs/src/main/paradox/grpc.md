@@ -46,7 +46,10 @@ projection storage and journal for this module.
 @@dependency [sbt,Maven,Gradle] {
 group=com.lightbend.akka
 artifact=akka-persistence-r2dbc_$scala.binary.version$
-version=$1.0.1$
+version=$akka.r2dbc.version$
+group2=com.lightbend.akka
+artifact2=akka-projection-r2dbc_$scala.binary.version$
+version2=$akka.r2dbc.version$
 }
 
 ### Transitive dependencies
