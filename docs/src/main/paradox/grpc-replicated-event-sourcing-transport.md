@@ -5,9 +5,14 @@ writes, for example in different data centers or cloud provider regions. This ma
 such as active-active and hot standby. 
 
 Originally, Akka Replicated Event Sourcing has required cross-replica access to the underlying replica database, which
-can be hard to open up for security and infrastructure reasons.
+can be hard to open up for security and infrastructure reasons. It was also easiest to use in an 
+[Akka Multi DC Cluster](https://doc.akka.io/docs/akka/current/typed/cluster-dc.html) setup
+where a single cluster spans multiple datacenters or regions, another thing that can be complicated to allow.
 
 Akka Replicated Event Sourcing over gRPC builds on @ref:[Akka Projection gRPC](grpc.md) and @extref:[Akka gRPC](akka-grpc:index.html) to instead use gRPC as the cross-replica transport for events.
+
+There are no requirements that the replicas are sharing a cluster, instead it is expected that each replica is a separate
+Akka cluster with the gRPC replication transport as only connection in between.
 
 @@@ warning
 
