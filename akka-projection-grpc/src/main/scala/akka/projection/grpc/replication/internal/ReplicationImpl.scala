@@ -130,6 +130,14 @@ private[akka] object ReplicationImpl {
       remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
     }
     val eventsBySlicesQuery = GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, Nil)
+    log.info(
+      "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",
+      remoteReplica.numberOfConsumers,
+      remoteReplica.consumersOnClusterRole.fold("")(role => s" on nodes with cluster role $role"),
+      settings.entityTypeKey.name,
+      remoteReplica.replicaId.id,
+      remoteReplica.grpcClientSettings.serviceName,
+      remoteReplica.grpcClientSettings.defaultPort)
 
     val shardedDaemonProcessSettings = {
       val default = ShardedDaemonProcessSettings(system)
@@ -158,8 +166,8 @@ private[akka] object ReplicationImpl {
                     val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
                     val entityRef =
                       entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
-                    if (log.isDebugEnabled) {
-                      log.debugN(
+                    if (log.isTraceEnabled) {
+                      log.traceN(
                         "[{}] forwarding event originating on dc [{}] to [{}] (origin seq_nr [{}]): [{}]",
                         projectionKey,
                         replicatedEventMetadata.originReplica,
@@ -190,8 +198,8 @@ private[akka] object ReplicationImpl {
                 }
               } else {
                 // Events not originating on sending side already are filtered/have no payload and end up here
-                if (log.isDebugEnabled())
-                  log.debugN(
+                if (log.isTraceEnabled)
+                  log.traceN(
                     "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
                     projectionKey,
                     remoteReplica.replicaId,
