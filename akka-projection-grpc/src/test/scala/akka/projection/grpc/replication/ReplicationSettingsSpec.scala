@@ -42,7 +42,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
            replicas: [
              {
                # Unique identifier of the replica/datacenter, is stored in the events
-               # and can not be changed after events has been persisted.
+               # and cannot be changed after events have been persisted.
                replica-id = "dca"
                # Number of replication streams/projections to start to consume events
                # from this replica

@@ -27,7 +27,7 @@ import akka.projection.grpc.replication.internal.ReplicationImpl
 import java.util.concurrent.CompletionStage
 
 /**
- * Created using [[Replication#grpcRepliation]], which starts sharding with the entity and
+ * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
  * replication stream consumers but not the replication endpoint needed to publish events to other replication places.
  *
  * @tparam Command The type of commands the Replicated Event Sourced Entity accepts
