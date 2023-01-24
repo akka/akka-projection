@@ -21,7 +21,7 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerAdapter
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.JavaSourceProviderAdapter
+import akka.projection.internal.SourceProviderAdapter
 import akka.projection.javadsl.AtLeastOnceFlowProjection
 import akka.projection.javadsl.AtLeastOnceProjection
 import akka.projection.javadsl.AtMostOnceProjection
@@ -52,7 +52,7 @@ object CassandraProjection {
       handler: Supplier[Handler[Envelope]]): AtLeastOnceProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
-      new JavaSourceProviderAdapter(sourceProvider),
+      new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
@@ -76,7 +76,7 @@ object CassandraProjection {
       handler: Supplier[Handler[java.util.List[Envelope]]]): GroupedProjection[Offset, Envelope] =
     new CassandraProjectionImpl[Offset, Envelope](
       projectionId,
-      new JavaSourceProviderAdapter(sourceProvider),
+      new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy =
@@ -112,7 +112,7 @@ object CassandraProjection {
       : AtLeastOnceFlowProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
-      new JavaSourceProviderAdapter(sourceProvider),
+      new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
@@ -130,7 +130,7 @@ object CassandraProjection {
       handler: Supplier[Handler[Envelope]]): AtMostOnceProjection[Offset, Envelope] =
     new CassandraProjectionImpl(
       projectionId,
-      new JavaSourceProviderAdapter(sourceProvider),
+      new SourceProviderAdapter(sourceProvider),
       settingsOpt = None,
       restartBackoffOpt = None,
       offsetStrategy = AtMostOnce(),

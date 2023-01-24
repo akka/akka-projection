@@ -13,26 +13,28 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
-import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.cluster.sharding.typed.javadsl.ClusterSharding
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
-import akka.http.scaladsl.Http
+import akka.http.javadsl.Http
+import akka.http.javadsl.ServerBinding
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.crdt.LwwTime
-import akka.persistence.typed.scaladsl.Effect
-import akka.persistence.typed.scaladsl.EventSourcedBehavior
-import akka.persistence.typed.scaladsl.ReplicationContext
+import akka.persistence.typed.javadsl.CommandHandler
+import akka.persistence.typed.javadsl.EventHandler
+import akka.persistence.typed.javadsl.EventSourcedBehavior
+import akka.persistence.typed.javadsl.ReplicationContext
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication
-import akka.projection.grpc.replication.scaladsl.Replica
-import akka.projection.grpc.replication.scaladsl.Replication
-import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
-import akka.projection.grpc.replication.scaladsl.ReplicationSettings
+import akka.projection.grpc.replication.javadsl.Replica
+import akka.projection.grpc.replication.javadsl.Replication
+import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider
+import akka.projection.grpc.replication.javadsl.ReplicationSettings
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.scaladsl.R2dbcProjection
+import akka.projection.r2dbc.javadsl.R2dbcProjection
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -40,19 +42,23 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
+import java.time.Duration
+import java.util.Optional
+import scala.compat.java8.FutureConverters.CompletionStageOps
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters._
 
-object ReplicationIntegrationSpec {
+object ReplicationJavaDSLIntegrationSpec {
 
   private def config(dc: ReplicaId): Config =
     ConfigFactory.parseString(s"""
        akka.actor.provider = cluster
        akka.actor {
          serialization-bindings {
-           "${classOf[replication.ReplicationIntegrationSpec].getName}$$LWWHelloWorld$$Event" = jackson-json
+           "${classOf[replication.ReplicationJavaDSLIntegrationSpec].getName}$$LWWHelloWorld$$Event" = jackson-json
          }
        }
        akka.http.server.preview.enable-http2 = on
@@ -98,44 +104,56 @@ object ReplicationIntegrationSpec {
 
     case class State(greeting: String, timestamp: LwwTime)
 
-    // FIXME needing to return/pass an EventSourcedBehavior means it is impossible to compose for logging/setup etc
-    def apply(replicationContext: ReplicationContext) =
-      EventSourcedBehavior[Command, Event, State](
-        replicationContext.persistenceId,
-        State.initial, {
-          case (State(greeting, _), Get(replyTo)) =>
-            replyTo ! greeting
-            Effect.none
-          case (state, SetGreeting(greeting, replyTo)) =>
-            Effect
-              .persist(
+    def create(replicationContext: ReplicationContext) = new LWWHelloWorldBehavior(replicationContext)
+
+    class LWWHelloWorldBehavior(replicationContext: ReplicationContext)
+        extends EventSourcedBehavior[Command, Event, State](replicationContext.persistenceId) {
+      protected def emptyState: State = State.initial
+
+      protected def commandHandler(): CommandHandler[Command, Event, State] =
+        newCommandHandlerBuilder()
+          .forAnyState()
+          .onCommand(classOf[Get], { (state: State, command: Get) =>
+            command.replyTo.tell(state.greeting)
+            Effect.none()
+          })
+          .onCommand(
+            classOf[SetGreeting], { (state: State, command: SetGreeting) =>
+              Effect.persist(
                 GreetingChanged(
-                  greeting,
-                  state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
-              .thenRun((_: State) => replyTo ! Done)
-        }, {
-          case (currentState, GreetingChanged(newGreeting, newTimestamp)) =>
-            if (newTimestamp.isAfter(currentState.timestamp))
-              State(newGreeting, newTimestamp)
+                  greeting = command.newGreeting,
+                  timestamp =
+                    state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+            })
+          .build()
+
+      protected def eventHandler(): EventHandler[State, Event] =
+        newEventHandlerBuilder()
+          .forAnyState()
+          .onEvent(classOf[GreetingChanged], { (currentState: State, event: GreetingChanged) =>
+            if (event.timestamp.isAfter(currentState.timestamp)) State(event.greeting, event.timestamp)
             else currentState
-        })
+          })
+          .build()
+    }
   }
 }
 
-class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
+// A shorter version of ReplicationIntegrationSpec covering the Java DSL for bootstrapping
+class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
       akka.actor
         .ActorSystem(
-          "ReplicationIntegrationSpecA",
-          ReplicationIntegrationSpec
-            .config(ReplicationIntegrationSpec.DCA)
+          "ReplicationJavaDSLIntegrationSpecA",
+          ReplicationJavaDSLIntegrationSpec
+            .config(ReplicationJavaDSLIntegrationSpec.DCA)
             .withFallback(testContainerConf.config))
         .toTyped)
     with AnyWordSpecLike
     with TestDbLifecycle
     with BeforeAndAfterAll
     with LogCapturing {
-  import ReplicationIntegrationSpec._
+  import ReplicationJavaDSLIntegrationSpec._
   implicit val ec: ExecutionContext = system.executionContext
 
   def this() = this(new TestContainerConf)
@@ -147,20 +165,20 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     typedSystem,
     akka.actor
       .ActorSystem(
-        "ReplicationIntegrationSpecB",
-        ReplicationIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
+        "ReplicationJavaDSLIntegrationSpecB",
+        ReplicationJavaDSLIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
       .toTyped,
     akka.actor
       .ActorSystem(
-        "ReplicationIntegrationSpecC",
-        ReplicationIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
+        "ReplicationJavaDSLIntegrationSpecC",
+        ReplicationJavaDSLIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
       .toTyped)
 
   private val grpcPorts = SocketUtil.temporaryServerAddresses(systems.size, "127.0.0.1").map(_.getPort)
   private val allDcsAndPorts = Seq(DCA, DCB, DCC).zip(grpcPorts)
   private val allReplicas = allDcsAndPorts.map {
     case (id, port) =>
-      Replica(id, 2, GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
+      Replica.create(id, 2, GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
   }
 
   private val testKitsPerDc = Map(DCA -> testKit, DCB -> ActorTestKit(systems(1)), DCC -> ActorTestKit(systems(2)))
@@ -186,20 +204,23 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
   def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
     // Note: inline SAM/functional interface as a parameter does not expand/infer the right way
-    val projectionProvider: ReplicationProjectionProvider = R2dbcProjection.atLeastOnceFlow(
-      _,
-      Some(R2dbcProjectionSettings(system).withWarnAboutFilteredEventsInFlow(false)),
-      _,
-      _)(_)
-    val settings = ReplicationSettings[LWWHelloWorld.Command](
-      "hello-world",
+    val projectionProvider: ReplicationProjectionProvider =
+      R2dbcProjection.atLeastOnceFlow(
+        _,
+        Optional.of(R2dbcProjectionSettings.create(system).withWarnAboutFilteredEventsInFlow(false)),
+        _,
+        _,
+        _)
+    val settings = ReplicationSettings.create(
+      classOf[LWWHelloWorld.Command],
+      "hello-world-java",
       selfReplicaId,
-      EventProducerSettings(replicaSystem),
-      allReplicas.filterNot(_.replicaId == selfReplicaId).toSet,
-      10.seconds,
+      EventProducerSettings.apply(replicaSystem),
+      allReplicas.filterNot(_.replicaId == selfReplicaId).toSet.asJava: java.util.Set[Replica],
+      Duration.ofSeconds(10),
       8,
       projectionProvider)
-    Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
+    Replication.grpcReplication(settings, LWWHelloWorld.create _, replicaSystem)
   }
 
   "Replication over gRPC" should {
@@ -230,8 +251,11 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
           Http(system)
             .newServerAt("127.0.0.1", grpcPort)
             .bind(started.createSingleServiceHandler())
-            .map(_.addToCoordinatedShutdown(3.seconds)(system))(system.executionContext)
-            .map(_ => replica.replicaId -> started)
+            .thenApply { binding: ServerBinding =>
+              binding.addToCoordinatedShutdown(Duration.ofSeconds(3), system)
+              replica.replicaId -> started
+            }
+            .toScala
       })
 
       replicatedEventSourcingOverGrpcPerDc = replicasStarted.futureValue.toMap
@@ -245,9 +269,13 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
           Future
             .sequence(entityIds.map { entityId =>
               logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
-              ClusterSharding(systemPerDc(dc))
+              ClusterSharding
+                .get(systemPerDc(dc))
                 .entityRefFor(entityTypeKey, entityId)
-                .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _))
+                .ask(
+                  LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _),
+                  Duration.ofMillis(patience.timeout.millisPart))
+                .toScala
             })
             .futureValue
 
@@ -257,12 +285,14 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
               entityIds.foreach { entityId =>
                 withClue(s"for entity id $entityId") {
-                  val entityRef = ClusterSharding(testKit.system)
+                  val entityRef = ClusterSharding
+                    .get(testKit.system)
                     .entityRefFor(entityTypeKey, entityId)
 
                   probe.awaitAssert({
                     entityRef
-                      .ask(LWWHelloWorld.Get.apply)
+                      .ask(LWWHelloWorld.Get.apply, Duration.ofSeconds(3))
+                      .toScala
                       .futureValue should ===(s"hello 1 from ${dc.id}")
                   }, 10.seconds)
                 }
@@ -270,44 +300,6 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
             }
           }
         }
-      }
-    }
-
-    "replicate concurrent writes to the other DCs" in (2 to 4).foreach { greetingNo =>
-      withClue(s"Greeting $greetingNo") {
-        val entityTypeKey = replicatedEventSourcingOverGrpcPerDc.values.head.entityTypeKey
-        Future
-          .sequence(systemPerDc.keys.map { dc =>
-            withClue(s"from ${dc.id}") {
-              Future.sequence(entityIds.map { entityId =>
-                logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
-                ClusterSharding(systemPerDc(dc))
-                  .entityRefFor(entityTypeKey, entityId)
-                  .ask(LWWHelloWorld.SetGreeting(s"hello $greetingNo from ${dc.id}", _))
-              })
-            }
-          })
-          .futureValue // all three updated in roughly parallel
-
-        // All 3 should eventually arrive at the same value
-        testKit
-          .createTestProbe()
-          .awaitAssert(
-            {
-              entityIds.foreach { entityId =>
-                withClue(s"for entity id $entityId") {
-                  testKitsPerDc.values.map { testKit =>
-                    val entityRef = ClusterSharding(testKit.system)
-                      .entityRefFor(entityTypeKey, entityId)
-
-                    entityRef
-                      .ask(LWWHelloWorld.Get.apply)
-                      .futureValue
-                  }.toSet should have size (1)
-                }
-              }
-            },
-            20.seconds)
       }
     }
   }

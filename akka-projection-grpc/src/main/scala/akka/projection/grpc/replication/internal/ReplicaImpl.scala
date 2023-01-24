@@ -6,9 +6,13 @@ package akka.projection.grpc.replication.internal
 
 import akka.annotation.InternalApi
 import akka.grpc.GrpcClientSettings
+import akka.grpc.scaladsl.Metadata
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.replication.javadsl.{ Replica => JReplica }
 import akka.projection.grpc.replication.scaladsl.{ Replica => SReplica }
+
+import java.util.Optional
+import scala.compat.java8.OptionConverters._
 
 /**
  * INTERNAL API
@@ -22,6 +26,10 @@ private[akka] final case class ReplicaImpl(
     override val consumersOnClusterRole: Option[String])
     extends JReplica
     with SReplica {
+
+  def getAdditionalQueryRequestMetadata: Optional[Metadata] = additionalQueryRequestMetadata.asJava
+
+  def getConsumersOnClusterRole: Optional[String] = consumersOnClusterRole.asJava
 
   override def withReplicaId(replicaId: ReplicaId): ReplicaImpl =
     copy(replicaId = replicaId)

@@ -16,6 +16,7 @@ import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.japi.function.{ Function => JFunction }
 import akka.persistence.typed.ReplicationId
+import akka.persistence.typed.internal.ReplicationContextImpl
 import akka.persistence.typed.javadsl.EventSourcedBehavior
 import akka.persistence.typed.javadsl.ReplicationContext
 import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
@@ -94,7 +95,9 @@ object Replication {
                   replicationContext =>
                     replicatedBehaviorFactory
                       .apply(replicationContext.asInstanceOf[ReplicationContext])
-                      .createEventSourcedBehavior())
+                      .createEventSourcedBehavior()
+                      // MEH
+                      .withReplication(replicationContext.asInstanceOf[ReplicationContextImpl]))
               }))
           .toScala)
 

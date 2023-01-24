@@ -10,6 +10,8 @@ import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.replication.internal.ReplicaImpl
 
+import java.util.Optional
+
 @ApiMayChange
 object Replica {
 
@@ -37,6 +39,14 @@ trait Replica {
   def withReplicaId(replicaId: ReplicaId): Replica
 
   def withNumberOfConsumers(numberOfConsumers: Int): Replica
+
+  def numberOfConsumers: Int
+
+  def grpcClientSettings: GrpcClientSettings
+
+  def getAdditionalQueryRequestMetadata: Optional[akka.grpc.scaladsl.Metadata]
+
+  def getConsumersOnClusterRole: Optional[String]
 
   def withGrpcClientSettings(grpcClientSettings: GrpcClientSettings): Replica
 
