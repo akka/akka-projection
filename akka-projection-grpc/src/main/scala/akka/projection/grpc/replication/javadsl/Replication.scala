@@ -22,7 +22,6 @@ import akka.persistence.typed.javadsl.ReplicationContext
 import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.projection.grpc.producer.javadsl.EventProducer
 import akka.projection.grpc.producer.javadsl.EventProducerSource
-import akka.projection.grpc.producer.javadsl.Transformation
 import akka.projection.grpc.replication.internal.ReplicationImpl
 
 import java.util.concurrent.CompletionStage
@@ -106,7 +105,7 @@ object Replication {
     val jEventProducerSource = new EventProducerSource(
       scalaRESOG.eventProducerService.entityType,
       scalaRESOG.eventProducerService.streamId,
-      Transformation.fromScala(scalaRESOG.eventProducerService.transformation),
+      scalaRESOG.eventProducerService.transformation.toJava,
       scalaRESOG.eventProducerService.settings)
 
     new Replication[Command] {

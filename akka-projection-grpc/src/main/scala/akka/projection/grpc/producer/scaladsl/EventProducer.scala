@@ -16,6 +16,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.projection.grpc.producer.EventProducerSettings
+import akka.projection.grpc.producer.javadsl.{ Transformation => JTransformation }
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -102,6 +103,8 @@ object EventProducer {
       mapper.apply(envelope)
     }
 
+    private[akka] def toJava: JTransformation =
+      new JTransformation(this)
   }
 
   /**
