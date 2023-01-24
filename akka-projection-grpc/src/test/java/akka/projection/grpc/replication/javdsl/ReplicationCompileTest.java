@@ -49,12 +49,12 @@ public class ReplicationCompileTest {
   public static void start(ActorSystem<?> system) {
    Set<Replica> otherReplicas = new HashSet<>();
    otherReplicas.add(Replica.create(
-       ReplicaId.apply("DCB"),
+       new ReplicaId("DCB"),
        2,
        GrpcClientSettings.connectToServiceAt("b.example.com", 443, system).withTls(true)
        ));
    otherReplicas.add(Replica.create(
-       ReplicaId.apply("DCC"),
+       new ReplicaId("DCC"),
        2,
        GrpcClientSettings.connectToServiceAt("c.example.com", 443, system).withTls(true)
    ));
