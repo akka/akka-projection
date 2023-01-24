@@ -26,12 +26,15 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
       implicit val system: ActorSystem[Unit] = ActorSystem[Unit](
         Behaviors.empty[Unit],
         "parse-test",
-        ConfigFactory.parseString("""
+        ConfigFactory.parseString(s"""
          // #config
          my-replicated-entity {
            # which of the replicas this node belongs to, should be the same
            # across the nodes of each replica Akka cluster.
            self-replica-id = dca
+           # Pick it up from an environment variable to re-use the same config
+           # without changes across replicas
+           self-replica-id = $${?SELF_REPLICA}
            # max number of parallel in-flight (sent over sharding) entity updates
            # per consumer/projection
            parallel-updates = 8
@@ -78,7 +81,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
            ]
          }
          // #config
-         """))
+         """).resolve())
 
       try {
         val settings = ReplicationSettings[MyCommand](
