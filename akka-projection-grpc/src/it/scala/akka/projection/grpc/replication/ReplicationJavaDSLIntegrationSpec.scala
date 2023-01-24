@@ -119,11 +119,13 @@ object ReplicationJavaDSLIntegrationSpec {
           })
           .onCommand(
             classOf[SetGreeting], { (state: State, command: SetGreeting) =>
-              Effect.persist(
-                GreetingChanged(
-                  greeting = command.newGreeting,
-                  timestamp =
-                    state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+              Effect
+                .persist(
+                  GreetingChanged(
+                    greeting = command.newGreeting,
+                    timestamp =
+                      state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+                .thenReply(command.replyTo, _ => Done)
             })
           .build()
 
@@ -272,9 +274,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
               ClusterSharding
                 .get(systemPerDc(dc))
                 .entityRefFor(entityTypeKey, entityId)
-                .ask(
-                  LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _),
-                  Duration.ofMillis(patience.timeout.millisPart))
+                .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _), Duration.ofSeconds(3))
                 .toScala
             })
             .futureValue
