@@ -253,11 +253,12 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
           Http(system)
             .newServerAt("127.0.0.1", grpcPort)
             .bind(started.createSingleServiceHandler())
-            .thenApply { binding: ServerBinding =>
+            .toScala
+            .map { binding: ServerBinding =>
               binding.addToCoordinatedShutdown(Duration.ofSeconds(3), system)
               replica.replicaId -> started
             }
-            .toScala
+
       })
 
       replicatedEventSourcingOverGrpcPerDc = replicasStarted.futureValue.toMap
