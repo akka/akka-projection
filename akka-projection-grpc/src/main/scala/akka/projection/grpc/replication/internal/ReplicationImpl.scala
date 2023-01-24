@@ -105,8 +105,7 @@ private[akka] object ReplicationImpl {
 
     new ReplicationImpl[Command](
       eventProducerService = eps,
-      createSingleServiceHandler = () =>
-        EventProducer.grpcServiceHandler(Set(eps), settings.eventProducerInterceptor, includeMetadata = true),
+      createSingleServiceHandler = () => EventProducer.grpcServiceHandler(Set(eps), settings.eventProducerInterceptor),
       entityTypeKey = replicatedEntity.entity.typeKey,
       entityRefFactory = entityRefFactory)
   }

@@ -62,8 +62,7 @@ import scala.util.Success
     system: ActorSystem[_],
     eventsBySlicesQueriesPerStreamId: Map[String, EventsBySliceQuery],
     sources: Set[EventProducer.EventProducerSource],
-    interceptor: Option[EventProducerInterceptor],
-    includeMetadata: Boolean)
+    interceptor: Option[EventProducerInterceptor])
     extends EventProducerServicePowerApi {
   import EventProducerServiceImpl._
   import system.executionContext
@@ -206,10 +205,7 @@ import scala.util.Success
         val mappedFuture: Future[Option[Any]] = transformation(env.asInstanceOf[EventEnvelope[Any]])
         def toEvent(transformedEvent: Any): Event = {
           val protoEvent = protoAnySerialization.serialize(transformedEvent)
-          val metadata =
-            if (includeMetadata)
-              env.eventMetadata.map(protoAnySerialization.serialize)
-            else None
+          val metadata = env.eventMetadata.map(protoAnySerialization.serialize)
           Event(
             persistenceId = env.persistenceId,
             seqNr = env.sequenceNr,

@@ -17,6 +17,7 @@ class TestContainerConf {
   container.withInitScript("db/default-init.sql")
   container.withStartupCheckStrategy(new IsRunningStartupCheckStrategy)
   container.withStartupAttempts(5)
+  container.withReuse(true)
   container.start()
 
   def config: Config =

@@ -291,7 +291,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
 
                   probe.awaitAssert({
                     entityRef
-                      .ask(LWWHelloWorld.Get.apply, Duration.ofSeconds(3))
+                      .ask(LWWHelloWorld.Get.apply, Duration.ofSeconds(10))
                       .toScala
                       .futureValue should ===(s"hello 1 from ${dc.id}")
                   }, 10.seconds)

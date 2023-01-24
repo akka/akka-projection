@@ -116,7 +116,7 @@ class EventProducerServiceSpec
   val queries =
     Map(streamId1 -> eventsBySlicesQuery1, streamId2 -> eventsBySlicesQuery2)
   private val eventProducerService =
-    new EventProducerServiceImpl(system, queries, eventProducerSources, None, false)
+    new EventProducerServiceImpl(system, queries, eventProducerSources, None)
 
   private def runEventsBySlices(streamIn: Source[StreamIn, NotUsed]) = {
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
@@ -220,7 +220,7 @@ class EventProducerServiceSpec
               Future.failed(new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-async")))
             else Future.successful(Done)
           }
-        }), false)
+        }))
 
       def assertGrpcStatusDenied(
           fail: Throwable,

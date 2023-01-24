@@ -22,7 +22,8 @@
     <logger name="akka.cluster.typed.internal.receptionist" level="INFO" />
     <logger name="io.grpc.netty.shaded.io.grpc.netty" level="INFO" />
     <logger name="io.r2dbc.postgresql" level="INFO" />
-    <logger name="akka.persistence.typed" level="TRACE" />
+    <logger name="reactor.netty.resources" level="INFO" />
+    <logger name="io.r2dbc.pool" level="INFO" />
 
     <root level="TRACE">
         <appender-ref ref="CapturingAppender"/>
