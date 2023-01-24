@@ -218,7 +218,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
       "hello-world-java",
       selfReplicaId,
       EventProducerSettings.apply(replicaSystem),
-      allReplicas.filterNot(_.replicaId == selfReplicaId).toSet.asJava: java.util.Set[Replica],
+      allReplicas.toSet.asJava: java.util.Set[Replica],
       Duration.ofSeconds(10),
       8,
       projectionProvider)

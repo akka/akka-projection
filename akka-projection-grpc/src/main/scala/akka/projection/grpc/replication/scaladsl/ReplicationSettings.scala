@@ -35,7 +35,7 @@ object ReplicationSettings {
    * @param entityTypeName                A name for the type of replicated entity
    * @param selfReplicaId                 The replica id of this node, must not be present among 'otherReplicas'
    * @param eventProducerSettings         Event producer settings for the event stream published by this replica
-   * @param otherReplicas                 One entry for each remote replica to replicate into this replica
+   * @param replicas                 One entry for each remote replica to replicate into this replica
    * @param entityEventReplicationTimeout A timeout for the replication event, needs to be large enough for the time
    *                                      of sending a message across sharding and persisting it in the local replica
    *                                      of an entity. Hitting this timeout means the entire replication stream will
@@ -47,7 +47,7 @@ object ReplicationSettings {
       entityTypeName: String,
       selfReplicaId: ReplicaId,
       eventProducerSettings: EventProducerSettings,
-      otherReplicas: Set[Replica],
+      replicas: Set[Replica],
       entityEventReplicationTimeout: FiniteDuration,
       parallelUpdates: Int,
       replicationProjectionProvider: scaladsl.ReplicationProjectionProvider): ReplicationSettings[Command] = {
@@ -56,7 +56,7 @@ object ReplicationSettings {
       entityTypeKey,
       selfReplicaId,
       eventProducerSettings,
-      otherReplicas,
+      replicas,
       entityEventReplicationTimeout,
       parallelUpdates,
       replicationProjectionProvider)
@@ -76,7 +76,7 @@ object ReplicationSettings {
       entityTypeKey = entityTypeKey,
       eventProducerSettings = eventProducerSettings,
       streamId = entityTypeKey.name,
-      otherReplicas = otherReplicas,
+      otherReplicas = otherReplicas.filter(_.replicaId != selfReplicaId),
       entityEventReplicationTimeout = entityEventReplicationTimeout,
       parallelUpdates = parallelUpdates,
       projectionProvider = replicationProjectionProvider,

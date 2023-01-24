@@ -37,7 +37,8 @@ object ReplicationSettings {
    * @param entityTypeName                A name for the type of replicated entity
    * @param selfReplicaId                 The replica id of this node, must not be present among 'otherReplicas'
    * @param eventProducerSettings         Event producer settings for the event stream published by this replica
-   * @param otherReplicas                 One entry for each remote replica to replicate into this replica
+   * @param replicas                      One entry for each replica to replicate into this replica (if it contains self replica id that is filtered out)
+   *                                      to create the `otherReplicas` set.
    * @param entityEventReplicationTimeout A timeout for the replication event, needs to be large enough for the time
    *                                      of sending a message across sharding and persisting it in the local replica
    *                                      of an entity. Hitting this timeout means the entire replication stream will
@@ -50,11 +51,12 @@ object ReplicationSettings {
       entityTypeName: String,
       selfReplicaId: ReplicaId,
       eventProducerSettings: EventProducerSettings,
-      otherReplicas: JSet[Replica],
+      replicas: JSet[Replica],
       entityEventReplicationTimeout: Duration,
       parallelUpdates: Int,
       replicationProjectionProvider: ReplicationProjectionProvider): ReplicationSettings[Command] = {
     val entityTypeKey = EntityTypeKey.create(commandClass, entityTypeName)
+    val otherReplicas = replicas.asScala.filter(_.replicaId != selfReplicaId).asJava
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,

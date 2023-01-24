@@ -161,7 +161,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
   private val allReplicas = allDcsAndPorts.map {
     case (id, port) =>
       Replica(id, 2, GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
-  }
+  }.toSet
 
   private val testKitsPerDc = Map(DCA -> testKit, DCB -> ActorTestKit(systems(1)), DCC -> ActorTestKit(systems(2)))
   private val systemPerDc = Map(DCA -> system, DCB -> systems(1), DCC -> systems(2))
@@ -195,7 +195,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       "hello-world",
       selfReplicaId,
       EventProducerSettings(replicaSystem),
-      allReplicas.filterNot(_.replicaId == selfReplicaId).toSet,
+      allReplicas,
       10.seconds,
       8,
       projectionProvider)
