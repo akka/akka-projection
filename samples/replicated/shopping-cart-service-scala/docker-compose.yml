@@ -1,10 +1,18 @@
 version: '2.2'
 services:
-  postgres-db:
+  postgres-db-1:
     image: postgres:latest
-    container_name: postgres_db
+    container_name: postgres_db_1
     ports:
-      - 5432:5432
+      - 5101:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+  postgres-db-2:
+    image: postgres:latest
+    container_name: postgres_db_2
+    ports:
+      - 5201:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
