@@ -22,12 +22,12 @@ import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.crdt.LwwTime
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
-import akka.persistence.typed.scaladsl.ReplicationContext
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication
 import akka.projection.grpc.replication.scaladsl.Replica
+import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
 import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
@@ -98,27 +98,28 @@ object ReplicationIntegrationSpec {
 
     case class State(greeting: String, timestamp: LwwTime)
 
-    // FIXME needing to return/pass an EventSourcedBehavior means it is impossible to compose for logging/setup etc
-    def apply(replicationContext: ReplicationContext) =
-      EventSourcedBehavior[Command, Event, State](
-        replicationContext.persistenceId,
-        State.initial, {
-          case (State(greeting, _), Get(replyTo)) =>
-            replyTo ! greeting
-            Effect.none
-          case (state, SetGreeting(greeting, replyTo)) =>
-            Effect
-              .persist(
-                GreetingChanged(
-                  greeting,
-                  state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
-              .thenRun((_: State) => replyTo ! Done)
-        }, {
-          case (currentState, GreetingChanged(newGreeting, newTimestamp)) =>
-            if (newTimestamp.isAfter(currentState.timestamp))
-              State(newGreeting, newTimestamp)
-            else currentState
-        })
+    def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) =
+      replicatedBehaviors.setup { replicationContext =>
+        EventSourcedBehavior[Command, Event, State](
+          replicationContext.persistenceId,
+          State.initial, {
+            case (State(greeting, _), Get(replyTo)) =>
+              replyTo ! greeting
+              Effect.none
+            case (state, SetGreeting(greeting, replyTo)) =>
+              Effect
+                .persist(
+                  GreetingChanged(
+                    greeting,
+                    state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+                .thenRun((_: State) => replyTo ! Done)
+          }, {
+            case (currentState, GreetingChanged(newGreeting, newTimestamp)) =>
+              if (newTimestamp.isAfter(currentState.timestamp))
+                State(newGreeting, newTimestamp)
+              else currentState
+          })
+      }
   }
 }
 

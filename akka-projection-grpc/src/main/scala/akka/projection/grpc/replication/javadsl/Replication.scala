@@ -5,6 +5,7 @@
 package akka.projection.grpc.replication.javadsl
 
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.Behavior
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.cluster.sharding.typed.ReplicatedEntity
@@ -17,7 +18,6 @@ import akka.http.javadsl.model.HttpResponse
 import akka.japi.function.{ Function => JFunction }
 import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.internal.ReplicationContextImpl
-import akka.persistence.typed.javadsl.EventSourcedBehavior
 import akka.persistence.typed.javadsl.ReplicationContext
 import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.projection.grpc.producer.javadsl.EventProducer
@@ -74,7 +74,7 @@ object Replication {
    */
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
-      replicatedBehaviorFactory: JFunction[ReplicationContext, EventSourcedBehavior[Command, Event, State]],
+      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
       system: ActorSystem[_]): Replication[Command] = {
 
     val scalaReplicationSettings = settings.toScala
@@ -88,15 +88,17 @@ object Replication {
               settings.entityTypeKey, { entityContext: EntityContext[Command] =>
                 val replicationId =
                   ReplicationId(entityContext.getEntityTypeKey.name, entityContext.getEntityId, settings.selfReplicaId)
-                ReplicatedEventSourcing.externalReplication(
-                  replicationId,
-                  scalaReplicationSettings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(
-                  replicationContext =>
-                    replicatedBehaviorFactory
-                      .apply(replicationContext.asInstanceOf[ReplicationContext])
-                      .createEventSourcedBehavior()
-                      // MEH
-                      .withReplication(replicationContext.asInstanceOf[ReplicationContextImpl]))
+                replicatedBehaviorFactory.apply(
+                  factory =>
+                    ReplicatedEventSourcing.externalReplication(
+                      replicationId,
+                      scalaReplicationSettings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(
+                      replicationContext =>
+                        factory
+                          .apply(replicationContext.asInstanceOf[ReplicationContext])
+                          .createEventSourcedBehavior()
+                          // MEH
+                          .withReplication(replicationContext.asInstanceOf[ReplicationContextImpl])))
               }))
           .toScala)
 

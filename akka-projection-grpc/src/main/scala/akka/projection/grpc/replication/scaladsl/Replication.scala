@@ -5,6 +5,7 @@
 package akka.projection.grpc.replication.scaladsl
 
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.Behavior
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.cluster.sharding.typed.ReplicatedEntity
@@ -14,9 +15,7 @@ import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.typed.ReplicationId
-import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
-import akka.persistence.typed.scaladsl.ReplicationContext
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
 
@@ -69,7 +68,7 @@ object Replication {
    * Important: Note that this does not publish the endpoint, additional steps are needed!
    */
   def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command])(
-      replicatedBehaviorFactory: ReplicationContext => EventSourcedBehavior[Command, Event, State])(
+      replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
       implicit system: ActorSystem[_]): Replication[Command] = {
 
     val replicatedEntity =
@@ -78,9 +77,11 @@ object Replication {
         settings.configureEntity.apply(Entity(settings.entityTypeKey) { entityContext =>
           val replicationId =
             ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
-          ReplicatedEventSourcing.externalReplication(
-            replicationId,
-            settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(replicatedBehaviorFactory)
+          replicatedBehaviorFactory { factory =>
+            ReplicatedEventSourcing.externalReplication(
+              replicationId,
+              settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(factory)
+          }
         }))
 
     ReplicationImpl.grpcReplication[Command, Event, State](settings, replicatedEntity)
