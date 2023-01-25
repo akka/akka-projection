@@ -143,3 +143,8 @@ jobs:
         run: |-
           cd samples/replicated/shopping-cart-service-scala
           sbt compile -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Java Replicated Event Sourcing over gRPC sample Shopping Cart
+        run: |-
+          cd samples/replicated/shopping-cart-service-java
+          mvn compile -nsu -Dakka-projection.version=`cat ~/.version`
