@@ -13,8 +13,8 @@ import shopping.cart.proto.Cart;
 import shopping.cart.proto.CheckoutRequest;
 import shopping.cart.proto.GetCartRequest;
 import shopping.cart.proto.Item;
+import shopping.cart.proto.RemoveItemRequest;
 import shopping.cart.proto.ShoppingCartService;
-import shopping.cart.proto.UpdateItemRequest;
 
 import java.time.Duration;
 import java.util.List;
@@ -40,9 +40,9 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
 
   @Override
   public CompletionStage<Cart> addItem(AddItemRequest in) {
-    logger.info("addItem {} to cart {}", in.getItemId(), in.getCartId());
-    EntityRef<ShoppingCart.Command> entityRef =
-        sharding.entityRefFor(entityKey, in.getCartId());
+    logger.info(
+        "addItem {} quantity {} to cart {}", in.getItemId(), in.getQuantity(), in.getCartId());
+    EntityRef<ShoppingCart.Command> entityRef = sharding.entityRefFor(entityKey, in.getCartId());
     CompletionStage<ShoppingCart.Summary> reply =
         entityRef.askWithStatus(
             replyTo -> new ShoppingCart.AddItem(in.getItemId(), in.getQuantity(), replyTo),
@@ -52,22 +52,14 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
   }
 
   @Override
-  public CompletionStage<Cart> updateItem(UpdateItemRequest in) {
-    logger.info("updateItem {}", in.getCartId());
-    EntityRef<ShoppingCart.Command> entityRef =
-        sharding.entityRefFor(entityKey, in.getCartId());
-    final CompletionStage<ShoppingCart.Summary> reply;
-    if (in.getQuantity() == 0) {
-      reply =
-          entityRef.askWithStatus(
-              replyTo -> new ShoppingCart.RemoveItem(in.getItemId(), replyTo), timeout);
-    } else {
-      reply =
-          entityRef.askWithStatus(
-              replyTo ->
-                  new ShoppingCart.AdjustItemQuantity(in.getItemId(), in.getQuantity(), replyTo),
-              timeout);
-    }
+  public CompletionStage<Cart> removeItem(RemoveItemRequest in) {
+    logger.info(
+        "removeItem {} quantity {} from cart {}", in.getItemId(), in.getQuantity(), in.getCartId());
+    EntityRef<ShoppingCart.Command> entityRef = sharding.entityRefFor(entityKey, in.getCartId());
+    CompletionStage<ShoppingCart.Summary> reply =
+        entityRef.askWithStatus(
+            replyTo -> new ShoppingCart.RemoveItem(in.getItemId(), in.getQuantity(), replyTo),
+            timeout);
     CompletionStage<Cart> cart = reply.thenApply(ShoppingCartServiceImpl::toProtoCart);
     return convertError(cart);
   }
@@ -75,8 +67,7 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
   @Override
   public CompletionStage<Cart> checkout(CheckoutRequest in) {
     logger.info("checkout {}", in.getCartId());
-    EntityRef<ShoppingCart.Command> entityRef =
-        sharding.entityRefFor(entityKey, in.getCartId());
+    EntityRef<ShoppingCart.Command> entityRef = sharding.entityRefFor(entityKey, in.getCartId());
     CompletionStage<ShoppingCart.Summary> reply =
         entityRef.askWithStatus(replyTo -> new ShoppingCart.Checkout(replyTo), timeout);
     CompletionStage<Cart> cart = reply.thenApply(ShoppingCartServiceImpl::toProtoCart);
@@ -86,8 +77,7 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
   @Override
   public CompletionStage<Cart> getCart(GetCartRequest in) {
     logger.info("getCart {}", in.getCartId());
-    EntityRef<ShoppingCart.Command> entityRef =
-        sharding.entityRefFor(entityKey, in.getCartId());
+    EntityRef<ShoppingCart.Command> entityRef = sharding.entityRefFor(entityKey, in.getCartId());
     CompletionStage<ShoppingCart.Summary> reply =
         entityRef.ask(replyTo -> new ShoppingCart.Get(replyTo), timeout);
     CompletionStage<Cart> protoCart =
