@@ -3,6 +3,7 @@ package shopping.cart;
 import akka.actor.typed.ActorSystem;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 import akka.cluster.sharding.typed.javadsl.EntityRef;
+import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
 import akka.grpc.GrpcServiceException;
 import io.grpc.Status;
 import org.slf4j.Logger;
@@ -25,12 +26,14 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
 
   private final Logger logger = LoggerFactory.getLogger(getClass());
 
+  private final EntityTypeKey<ShoppingCart.Command> entityKey;
   private final Duration timeout;
   private final ClusterSharding sharding;
 
   public ShoppingCartServiceImpl(
-      ActorSystem<?> system) {
+      ActorSystem<?> system, EntityTypeKey<ShoppingCart.Command> entityKey) {
 
+    this.entityKey = entityKey;
     timeout = system.settings().config().getDuration("shopping-cart-service.ask-timeout");
     sharding = ClusterSharding.get(system);
   }
@@ -39,7 +42,7 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
   public CompletionStage<Cart> addItem(AddItemRequest in) {
     logger.info("addItem {} to cart {}", in.getItemId(), in.getCartId());
     EntityRef<ShoppingCart.Command> entityRef =
-        sharding.entityRefFor(ShoppingCart.ENTITY_KEY, in.getCartId());
+        sharding.entityRefFor(entityKey, in.getCartId());
     CompletionStage<ShoppingCart.Summary> reply =
         entityRef.askWithStatus(
             replyTo -> new ShoppingCart.AddItem(in.getItemId(), in.getQuantity(), replyTo),
@@ -52,7 +55,7 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
   public CompletionStage<Cart> updateItem(UpdateItemRequest in) {
     logger.info("updateItem {}", in.getCartId());
     EntityRef<ShoppingCart.Command> entityRef =
-        sharding.entityRefFor(ShoppingCart.ENTITY_KEY, in.getCartId());
+        sharding.entityRefFor(entityKey, in.getCartId());
     final CompletionStage<ShoppingCart.Summary> reply;
     if (in.getQuantity() == 0) {
       reply =
@@ -73,7 +76,7 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
   public CompletionStage<Cart> checkout(CheckoutRequest in) {
     logger.info("checkout {}", in.getCartId());
     EntityRef<ShoppingCart.Command> entityRef =
-        sharding.entityRefFor(ShoppingCart.ENTITY_KEY, in.getCartId());
+        sharding.entityRefFor(entityKey, in.getCartId());
     CompletionStage<ShoppingCart.Summary> reply =
         entityRef.askWithStatus(replyTo -> new ShoppingCart.Checkout(replyTo), timeout);
     CompletionStage<Cart> cart = reply.thenApply(ShoppingCartServiceImpl::toProtoCart);
@@ -84,7 +87,7 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
   public CompletionStage<Cart> getCart(GetCartRequest in) {
     logger.info("getCart {}", in.getCartId());
     EntityRef<ShoppingCart.Command> entityRef =
-        sharding.entityRefFor(ShoppingCart.ENTITY_KEY, in.getCartId());
+        sharding.entityRefFor(entityKey, in.getCartId());
     CompletionStage<ShoppingCart.Summary> reply =
         entityRef.ask(replyTo -> new ShoppingCart.Get(replyTo), timeout);
     CompletionStage<Cart> protoCart =

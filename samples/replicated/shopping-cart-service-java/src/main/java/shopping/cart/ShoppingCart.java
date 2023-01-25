@@ -4,13 +4,13 @@ import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.SupervisorStrategy;
-import akka.actor.typed.javadsl.Behaviors;
-import akka.cluster.sharding.typed.javadsl.ClusterSharding;
-import akka.cluster.sharding.typed.javadsl.Entity;
-import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
 import akka.pattern.StatusReply;
-import akka.persistence.typed.PersistenceId;
 import akka.persistence.typed.javadsl.*;
+import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
+import akka.projection.grpc.replication.javadsl.Replication;
+import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider;
+import akka.projection.grpc.replication.javadsl.ReplicationSettings;
+import akka.projection.r2dbc.javadsl.R2dbcProjection;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Duration;
 import java.time.Instant;
@@ -293,31 +293,28 @@ public final class ShoppingCart
     }
   }
 
-  static final EntityTypeKey<Command> ENTITY_KEY =
-      EntityTypeKey.create(Command.class, "ShoppingCart");
-
-  public static void init(ActorSystem<?> system) {
-    ClusterSharding.get(system)
-        .init(
-            Entity.of(
-                ENTITY_KEY,
-                entityContext ->
-                  ShoppingCart.create(entityContext.getEntityId())
-                ));
+  public static Replication<Command> init(ActorSystem<?> system) {
+    ReplicationProjectionProvider projectionProvider =
+        (projectionId, sourceProvider, replicationFlow, actorSystem) ->
+            R2dbcProjection.atLeastOnceFlow(
+                projectionId, Optional.empty(), sourceProvider, replicationFlow, actorSystem);
+    ReplicationSettings<Command> replicationSettings =
+        ReplicationSettings.create(
+            Command.class, "replicated-shopping-cart", projectionProvider, system);
+    return Replication.grpcReplication(replicationSettings, ShoppingCart::create, system);
   }
 
-  public static Behavior<Command> create(String cartId) {
-    return Behaviors.setup(
-        ctx -> EventSourcedBehavior.start(new ShoppingCart(cartId), ctx));
+  public static Behavior<Command> create(ReplicatedBehaviors<Command, Event, State> replicatedBehaviors) {
+    return replicatedBehaviors.setup(ShoppingCart::new);
   }
 
   private final String cartId;
 
-  private ShoppingCart(String cartId) {
+  private ShoppingCart(ReplicationContext replicationContext) {
     super(
-        PersistenceId.of(ENTITY_KEY.name(), cartId),
+        replicationContext.persistenceId(),
         SupervisorStrategy.restartWithBackoff(Duration.ofMillis(200), Duration.ofSeconds(5), 0.1));
-    this.cartId = cartId;
+    this.cartId = replicationContext.entityId();
   }
 
   @Override

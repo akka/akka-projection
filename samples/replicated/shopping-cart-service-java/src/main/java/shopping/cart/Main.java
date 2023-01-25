@@ -7,6 +7,7 @@ import akka.http.javadsl.model.HttpResponse;
 import akka.japi.function.Function;
 import akka.management.cluster.bootstrap.ClusterBootstrap;
 import akka.management.javadsl.AkkaManagement;
+import akka.projection.grpc.replication.javadsl.Replication;
 import com.typesafe.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,13 +33,16 @@ public class Main {
     AkkaManagement.get(system).start();
     ClusterBootstrap.get(system).start();
 
-    ShoppingCart.init(system);
+    Replication<ShoppingCart.Command> replicatedShoppingCart = ShoppingCart.init(system);
+    Function<HttpRequest, CompletionStage<HttpResponse>> replicationService =
+        replicatedShoppingCart.createSingleServiceHandler();
 
     Config config = system.settings().config();
     String grpcInterface = config.getString("shopping-cart-service.grpc.interface");
     int grpcPort = config.getInt("shopping-cart-service.grpc.port");
-    ShoppingCartService grpcService = new ShoppingCartServiceImpl(system);
-    ShoppingCartServer.start(grpcInterface, grpcPort, system, grpcService);
+    ShoppingCartService grpcService =
+        new ShoppingCartServiceImpl(system, replicatedShoppingCart.entityTypeKey());
+    ShoppingCartServer.start(grpcInterface, grpcPort, system, grpcService, replicationService);
   }
 
 }
