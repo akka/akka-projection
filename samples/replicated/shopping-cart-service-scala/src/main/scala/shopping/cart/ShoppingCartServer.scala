@@ -25,6 +25,7 @@ object ShoppingCartServer {
     implicit val ec: ExecutionContext =
       system.executionContext
 
+    // #bind
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
         replicationService,
@@ -37,6 +38,7 @@ object ShoppingCartServer {
         .newServerAt(interface, port)
         .bind(service)
         .map(_.addToCoordinatedShutdown(3.seconds))
+    // #bind
 
     bound.onComplete {
       case Success(binding) =>

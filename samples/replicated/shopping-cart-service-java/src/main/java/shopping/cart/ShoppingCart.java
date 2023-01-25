@@ -236,6 +236,7 @@ public final class ShoppingCart
     }
   }
 
+  // #init
   public static Replication<Command> init(ActorSystem<?> system) {
     ReplicationProjectionProvider projectionProvider =
         (projectionId, sourceProvider, replicationFlow, actorSystem) ->
@@ -254,6 +255,7 @@ public final class ShoppingCart
             replicatedBehaviors.setup(
                 replicationContext -> new ShoppingCart(context, replicationContext)));
   }
+  // #init
 
   private final ActorContext<Command> context;
   private final ReplicationContext replicationContext;

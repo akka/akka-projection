@@ -33,9 +33,11 @@ public class Main {
     AkkaManagement.get(system).start();
     ClusterBootstrap.get(system).start();
 
+    // #single-service-handler
     Replication<ShoppingCart.Command> replicatedShoppingCart = ShoppingCart.init(system);
     Function<HttpRequest, CompletionStage<HttpResponse>> replicationService =
         replicatedShoppingCart.createSingleServiceHandler();
+    // #single-service-handler
 
     Config config = system.settings().config();
     String grpcInterface = config.getString("shopping-cart-service.grpc.interface");

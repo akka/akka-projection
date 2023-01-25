@@ -26,6 +26,7 @@ public final class ShoppingCartServer {
       ShoppingCartService grpcService,
       Function<HttpRequest, CompletionStage<HttpResponse>> replicationService) {
     @SuppressWarnings("unchecked")
+    // #bind
     Function<HttpRequest, CompletionStage<HttpResponse>> service =
         ServiceHandler.concatOrNotFound(
             replicationService,
@@ -36,6 +37,7 @@ public final class ShoppingCartServer {
 
     CompletionStage<ServerBinding> bound =
         Http.get(system).newServerAt(host, port).bind(service::apply);
+    // #bind
 
     bound.whenComplete(
         (binding, ex) -> {

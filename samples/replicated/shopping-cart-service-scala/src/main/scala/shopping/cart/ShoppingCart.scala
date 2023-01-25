@@ -127,6 +127,7 @@ object ShoppingCart {
 
   final case class CheckedOut(eventTime: Instant) extends Event
 
+  // #init
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
     val projectionProvider: ReplicationProjectionProvider = R2dbcProjection.atLeastOnceFlow(_, None, _, _)(_)
     val replicationSettings = ReplicationSettings[Command]("replicated-shopping-cart", projectionProvider)
@@ -140,6 +141,7 @@ object ShoppingCart {
       }
     }
   }
+  // #init
 }
 
 class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationContext: ReplicationContext) {

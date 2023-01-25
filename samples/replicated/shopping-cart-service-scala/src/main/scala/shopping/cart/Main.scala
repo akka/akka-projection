@@ -27,8 +27,10 @@ object Main {
     AkkaManagement(system).start()
     ClusterBootstrap(system).start()
 
+    // #single-service-handler
     val replicatedShoppingCart = ShoppingCart.init(system)
     val replicationService = replicatedShoppingCart.createSingleServiceHandler()
+    // #single-service-handler
 
     val grpcInterface = system.settings.config.getString("shopping-cart-service.grpc.interface")
     val grpcPort = system.settings.config.getInt("shopping-cart-service.grpc.port")

@@ -139,12 +139,12 @@ but it illustrates how to combine the `EventProducer` service with other gRPC se
 
 Source code and build files for complete sample projects can be found in `akka/akka-projection` GitHub repository. 
 
-Scala:
+Java:
 
 * [Producer service: shopping-cart-service-java](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java)
 * [Consumer service: shopping-analytics-service-java](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-java)
 
-Java:
+Scala:
 
 * [Producer service: shopping-cart-service-scala](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala)
 * [Consumer service: shopping-analytics-service-scala](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-scala)
