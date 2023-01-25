@@ -21,6 +21,7 @@
 * [Error](error.md)
 * [Projection Settings](projection-settings.md)
 * [gRPC](grpc.md)
+* [Replicated Event Sourcing over gRPC](grpc-replicated-event-sourcing-transport.md)
 * [Management](management.md)
 * [Testing](testing.md)
 * [Classic](classic.md)

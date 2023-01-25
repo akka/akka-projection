@@ -28,7 +28,7 @@ messages or stored data.
 
 ## Dependencies
 
-To use the R2DBC module of Akka Projections add the following dependency in your project:
+To use the gRPC module of Akka Projections add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
   group=com.lightbend.akka
@@ -40,6 +40,17 @@ Akka Projections require Akka $akka.version$ or later, see @ref:[Akka version](o
 
 @@project-info{ projectId="akka-projection-grpc" }
 
+It is currently only possible to use @extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:projection.html) as the
+projection storage and journal for this module.
+
+@@dependency [sbt,Maven,Gradle] {
+group=com.lightbend.akka
+artifact=akka-persistence-r2dbc_$scala.binary.version$
+version=$akka.r2dbc.version$
+group2=com.lightbend.akka
+artifact2=akka-projection-r2dbc_$scala.binary.version$
+version2=$akka.r2dbc.version$
+}
 
 ### Transitive dependencies
 
@@ -113,6 +124,14 @@ Scala
 Java
 :  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #startServer }
 
+The Akka HTTP server must be running with HTTP/2, this is done through config:
+
+Scala
+:  @@snip [ShoppingCartServer.scala](/samples/grpc/shopping-cart-service-scala/src/main/resources/grpc.conf) { #http2 }
+
+Java
+:  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/resources/grpc.conf) { #http2 }
+
 This example includes an application specific `ShoppingCartService`, which is unrelated to Akka Projections gRPC,
 but it illustrates how to combine the `EventProducer` service with other gRPC services.
 
@@ -167,7 +186,7 @@ The configuration for the `GrpcReadJournal` may look like this:
 
 @@snip [grpc.conf](/samples/grpc/shopping-analytics-service-java/src/main/resources/grpc.conf) { }
 
-The `client` section in the configuration defines where the producer is running. It is an @extref:[Akka gRPC configuration](akka-grpc:configuration.html#by-configuration) with several connection options.
+The `client` section in the configuration defines where the producer is running. It is an @extref:[Akka gRPC configuration](akka-grpc:client/configuration.html#by-configuration) with several connection options.
 
 ### Reference configuration
 

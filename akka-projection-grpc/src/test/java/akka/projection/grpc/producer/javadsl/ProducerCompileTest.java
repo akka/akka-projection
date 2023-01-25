@@ -47,6 +47,7 @@ public class ProducerCompileTest {
     Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerServiceWithMultiple =
         EventProducer.grpcServiceHandler(system, Collections.singleton(source));
 
+    @SuppressWarnings("unchecked")
     Function<HttpRequest, CompletionStage<HttpResponse>> service =
         ServiceHandler.concatOrNotFound(eventProducerService);
 

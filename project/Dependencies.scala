@@ -16,7 +16,7 @@ object Dependencies {
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
 
   object Versions {
-    // FIXME non-milestone
+    // FIXME released version/milestone
     val akka = sys.props.getOrElse("build.akka.version", "2.8.0-M4")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
@@ -39,10 +39,15 @@ object Dependencies {
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
     val akkaProtobufV3 = "com.typesafe.akka" %% "akka-protobuf-v3" % Versions.akka
     val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
+    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
 
     // TestKit in compile scope for ProjectionTestKit
     val akkaTypedTestkit = "com.typesafe.akka" %% "akka-actor-testkit-typed" % Versions.akka
     val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Versions.akka
+
+    // FIXME remove semi-circular dependency
+    val akkaProjectionR2dbc =
+      "com.lightbend.akka" %% "akka-projection-r2dbc" % Versions.akkaPersistenceR2dbc
 
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
@@ -69,9 +74,7 @@ object Dependencies {
     val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % allTestConfig
     val akkaDiscovery = "com.typesafe.akka" %% "akka-discovery" % Versions.akka % allTestConfig
 
-    // FIXME remove semi-circular depenendency
-    val akkaProjectionR2dbc =
-      "com.lightbend.akka" %% "akka-projection-r2dbc" % Versions.akkaPersistenceR2dbc % allTestConfig
+    val akkaProjectionR2dbc = Compile.akkaProjectionR2dbc % allTestConfig
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % allTestConfig
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % allTestConfig
@@ -207,6 +210,8 @@ object Dependencies {
         Compile.akkaStream,
         Compile.akkaPersistenceTyped,
         Compile.akkaPersistenceQuery,
+        // Only needed for Replicated Event Sourcing over gRPC
+        Compile.akkaClusterShardingTyped % Optional,
         Test.akkaProjectionR2dbc,
         Test.postgresDriver,
         Test.akkaShardingTyped,

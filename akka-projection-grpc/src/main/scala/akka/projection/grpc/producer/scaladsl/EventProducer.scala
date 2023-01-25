@@ -5,9 +5,6 @@
 package akka.projection.grpc.producer.scaladsl
 
 import akka.Done
-
-import scala.concurrent.Future
-import scala.reflect.ClassTag
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.grpc.scaladsl.Metadata
@@ -19,6 +16,10 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.projection.grpc.producer.EventProducerSettings
+import akka.projection.grpc.producer.javadsl.{ Transformation => JTransformation }
+
+import scala.concurrent.Future
+import scala.reflect.ClassTag
 
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
@@ -102,6 +103,8 @@ object EventProducer {
       mapper.apply(envelope)
     }
 
+    private[akka] def toJava: JTransformation =
+      new JTransformation(this)
   }
 
   /**

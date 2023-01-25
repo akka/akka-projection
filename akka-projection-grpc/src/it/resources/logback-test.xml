@@ -12,14 +12,22 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
+    <!-- One of the tests depend on these, don't change -->
     <logger name="akka.projection.grpc" level="TRACE" />
     <logger name="akka.projection.r2dbc" level="DEBUG" />
     <logger name="akka.persistence.r2dbc" level="DEBUG" />
+    <logger name="akka.persistence.typed" level="TRACE" />
 
+    <!-- Silence some other stuff -->
+    <logger name="akka.actor.typed.pubsub" level="INFO" />
+    <logger name="akka.cluster.typed.internal.receptionist" level="INFO" />
+    <logger name="io.grpc.netty.shaded.io.grpc.netty" level="INFO" />
+    <logger name="io.r2dbc.postgresql" level="INFO" />
+    <logger name="reactor.netty.resources" level="INFO" />
+    <logger name="io.r2dbc.pool" level="INFO" />
 
-    <root level="INFO">
+    <root level="TRACE">
         <appender-ref ref="CapturingAppender"/>
-<!--        <appender-ref ref="STDOUT"/>-->
     </root>
 
 </configuration>

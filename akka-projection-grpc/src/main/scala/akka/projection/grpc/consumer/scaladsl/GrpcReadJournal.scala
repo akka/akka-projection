@@ -4,10 +4,6 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-import scala.collection.immutable
-import scala.concurrent.Future
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -53,6 +49,11 @@ import com.typesafe.config.Config
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import scala.collection.immutable
+import scala.concurrent.Future
 
 @ApiMayChange
 object GrpcReadJournal {
@@ -300,13 +301,15 @@ final class GrpcReadJournal private (
     val evt =
       event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
 
+    val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
+
     new EventEnvelope(
       eventOffset,
       event.persistenceId,
       event.seqNr,
       evt,
       eventOffset.timestamp.toEpochMilli,
-      eventMetadata = None,
+      eventMetadata = metadata,
       PersistenceId.extractEntityType(event.persistenceId),
       event.slice,
       filtered = false,

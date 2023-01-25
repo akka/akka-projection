@@ -5,9 +5,6 @@
 package akka.projection.grpc.internal
 
 import akka.Done
-
-import java.time.Instant
-import scala.concurrent.Future
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
@@ -44,7 +41,9 @@ import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import java.time.Instant
 import scala.annotation.nowarn
+import scala.concurrent.Future
 import scala.util.Success
 
 /**
@@ -206,14 +205,15 @@ import scala.util.Success
         val mappedFuture: Future[Option[Any]] = transformation(env.asInstanceOf[EventEnvelope[Any]])
         def toEvent(transformedEvent: Any): Event = {
           val protoEvent = protoAnySerialization.serialize(transformedEvent)
+          val metadata = env.eventMetadata.map(protoAnySerialization.serialize)
           Event(
             persistenceId = env.persistenceId,
             seqNr = env.sequenceNr,
             slice = env.slice,
             offset = Some(protoOffset(env)),
             payload = Some(protoEvent),
+            metadata = metadata,
             source = env.source)
-          Event(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)), Some(protoEvent))
         }
         mappedFuture.value match {
           case Some(Success(Some(transformedEvent))) => Future.successful(Some(toEvent(transformedEvent)))
