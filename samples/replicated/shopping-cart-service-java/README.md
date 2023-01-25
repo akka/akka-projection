@@ -1,13 +1,14 @@
 ## Running the sample code
 
-1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally.
+1. Start two local PostgresSQL servers, on ports 5101 and 5201. The included `docker-compose.yml` starts everything required for running locally.
 
     ```shell
     docker-compose up -d
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
-    docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+    docker exec -i postgres_db_1 psql -U postgres -t < ddl-scripts/create_tables.sql
+    docker exec -i postgres_db_2 psql -U postgres -t < ddl-scripts/create_tables.sql
     ```
 
 2. Make sure you have compiled the project
@@ -16,28 +17,44 @@
     mvn compile 
     ```
 
-3. Start a first node:
+3. Start a first node for each replica:
 
     ```shell
-    mvn compile exec:exec -DAPP_CONFIG=local1.conf
+    mvn compile exec:exec -DAPP_CONFIG=replica1-local1.conf
+    ```
+
+    ```shell
+    mvn compile exec:exec -DAPP_CONFIG=replica2-local1.conf
     ```
 
 4. (Optional) Start another node with different ports:
 
     ```shell
-    mvn compile exec:exec -DAPP_CONFIG=local2.conf
+    mvn compile exec:exec -DAPP_CONFIG=replica1-local2.conf
+    ```
+
+    ```shell
+    mvn compile exec:exec -DAPP_CONFIG=replica2-local2.conf
     ```
 
 5. (Optional) More can be started:
 
     ```shell
-    mvn compile exec:exec -DAPP_CONFIG=local3.conf
+    mvn compile exec:exec -DAPP_CONFIG=replica1-local3.conf
+    ```
+
+    ```shell
+    mvn compile exec:exec -DAPP_CONFIG=replica2-local3.conf
     ```
 
 6. Check for service readiness
 
     ```shell
     curl http://localhost:9101/ready
+    ```
+
+    ```shell
+    curl http://localhost:9201/ready
     ```
 
 7. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
