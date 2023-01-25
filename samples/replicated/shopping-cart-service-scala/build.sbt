@@ -8,7 +8,7 @@ licenses := Seq(
 scalaVersion := "2.13.10"
 
 Compile / scalacOptions ++= Seq(
-  "-target:11",
+  "-release", "11",
   "-deprecation",
   "-feature",
   "-unchecked",
