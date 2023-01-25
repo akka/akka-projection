@@ -10,9 +10,6 @@ import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 
-import akka.actor.typed.ActorRef
-import akka.pattern.StatusReply
-
 class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[ShoppingCart.Command])
     extends proto.ShoppingCartService {
 
@@ -26,7 +23,7 @@ class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[S
   private val sharding = ClusterSharding(system)
 
   override def addItem(in: proto.AddItemRequest): Future[proto.Cart] = {
-    logger.info("addItem {} to cart {}", in.itemId, in.cartId)
+    logger.info("addItem {} quantity {} to cart {}", in.itemId, in.quantity, in.cartId)
     val entityRef = sharding.entityRefFor(entityKey, in.cartId)
     val reply: Future[ShoppingCart.Summary] =
       entityRef.askWithStatus(ShoppingCart.AddItem(in.itemId, in.quantity, _))
@@ -34,18 +31,11 @@ class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[S
     convertError(response)
   }
 
-  override def updateItem(in: proto.UpdateItemRequest): Future[proto.Cart] = {
-    logger.info("updateItem {} to cart {}", in.itemId, in.cartId)
+  override def removeItem(in: proto.RemoveItemRequest): Future[proto.Cart] = {
+    logger.info("removeItem {} quantity {} from cart {}", in.itemId, in.quantity, in.cartId)
     val entityRef = sharding.entityRefFor(entityKey, in.cartId)
-
-    def command(replyTo: ActorRef[StatusReply[ShoppingCart.Summary]]) =
-      if (in.quantity == 0)
-        ShoppingCart.RemoveItem(in.itemId, replyTo)
-      else
-        ShoppingCart.AdjustItemQuantity(in.itemId, in.quantity, replyTo)
-
     val reply: Future[ShoppingCart.Summary] =
-      entityRef.askWithStatus(command(_))
+      entityRef.askWithStatus(ShoppingCart.RemoveItem(in.itemId, in.quantity, _))
     val response = reply.map(cart => toProtoCart(cart))
     convertError(response)
   }
@@ -54,7 +44,7 @@ class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[S
     logger.info("checkout {}", in.cartId)
     val entityRef = sharding.entityRefFor(entityKey, in.cartId)
     val reply: Future[ShoppingCart.Summary] =
-      entityRef.askWithStatus(ShoppingCart.Checkout(_))
+      entityRef.askWithStatus(ShoppingCart.Checkout)
     val response = reply.map(cart => toProtoCart(cart))
     convertError(response)
   }

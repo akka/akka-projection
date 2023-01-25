@@ -8,7 +8,10 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.SupervisorStrategy
+import akka.actor.typed.scaladsl.ActorContext
+import akka.actor.typed.scaladsl.Behaviors
 import akka.pattern.StatusReply
+import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplicationContext
@@ -32,42 +35,42 @@ import akka.projection.r2dbc.scaladsl.R2dbcProjection
  * It's the events that are persisted by the `EventSourcedBehavior`. The event handler updates the current state based
  * on the event. This is done when the event is first created, and when the entity is loaded from the database - each
  * event will be replayed to recreate the state of the entity.
+ *
+ * This shopping cart is replicated using Replicated Event Sourcing. Multiple entity instances can be active at the same
+ * time, so the state must be convergent, and each cart item is modelled as a counter. When checking out the cart, only
+ * one of the replicas performs the actual checkout, once it's seen that all replicas have closed this cart which will
+ * be after all item updated events have been replicated.
  */
 object ShoppingCart {
 
   /**
    * The current state held by the `EventSourcedBehavior`.
    */
-  final case class State(items: Map[String, Int], checkoutDate: Option[Instant]) extends CborSerializable {
+  final case class State(items: Map[String, Int], closed: Set[ReplicaId], checkedOut: Option[Instant])
+      extends CborSerializable {
 
-    def isCheckedOut: Boolean =
-      checkoutDate.isDefined
+    def isClosed: Boolean =
+      closed.nonEmpty
 
-    def hasItem(itemId: String): Boolean =
-      items.contains(itemId)
+    def updateItem(itemId: String, quantity: Int): State =
+      copy(items = items + (itemId -> (items.getOrElse(itemId, 0) + quantity)))
 
-    def isEmpty: Boolean =
-      items.isEmpty
-
-    def updateItem(itemId: String, quantity: Int): State = {
-      quantity match {
-        case 0 => copy(items = items - itemId)
-        case _ => copy(items = items + (itemId -> quantity))
-      }
-    }
-
-    def removeItem(itemId: String): State =
-      copy(items = items - itemId)
+    def close(replica: ReplicaId): State =
+      copy(closed = closed + replica)
 
     def checkout(now: Instant): State =
-      copy(checkoutDate = Some(now))
+      copy(checkedOut = Some(now))
 
-    def toSummary: Summary =
-      Summary(items, isCheckedOut)
+    def toSummary: Summary = {
+      val cartItems = items.collect {
+        case (id, quantity) if quantity > 0 => id -> quantity
+      }
+      Summary(cartItems, isClosed)
+    }
   }
+
   object State {
-    val empty =
-      State(items = Map.empty, checkoutDate = None)
+    val empty: State = State(items = Map.empty, closed = Set.empty, checkedOut = None)
   }
 
   /**
@@ -86,18 +89,22 @@ object ShoppingCart {
   /**
    * A command to remove an item from the cart.
    */
-  final case class RemoveItem(itemId: String, replyTo: ActorRef[StatusReply[Summary]]) extends Command
+  final case class RemoveItem(itemId: String, quantity: Int, replyTo: ActorRef[StatusReply[Summary]]) extends Command
 
   /**
-   * A command to adjust the quantity of an item in the cart.
-   */
-  final case class AdjustItemQuantity(itemId: String, quantity: Int, replyTo: ActorRef[StatusReply[Summary]])
-      extends Command
-
-  /**
-   * A command to checkout the shopping cart.
+   * A command to check out the shopping cart.
    */
   final case class Checkout(replyTo: ActorRef[StatusReply[Summary]]) extends Command
+
+  /**
+   * Internal command to close a shopping cart that's being checked out.
+   */
+  case object CloseForCheckout extends Command
+
+  /**
+   * Internal command to complete the checkout for a shopping cart.
+   */
+  case object CompleteCheckout extends Command
 
   /**
    * A command to get the current state of the shopping cart.
@@ -112,18 +119,13 @@ object ShoppingCart {
   /**
    * This interface defines all the events that the ShoppingCart supports.
    */
-  sealed trait Event extends CborSerializable {
-    def cartId: String
-  }
+  sealed trait Event extends CborSerializable
 
-  final case class ItemAdded(cartId: String, itemId: String, quantity: Int) extends Event
+  final case class ItemUpdated(itemId: String, quantity: Int) extends Event
 
-  final case class ItemRemoved(cartId: String, itemId: String, oldQuantity: Int) extends Event
+  final case class Closed(replica: ReplicaId) extends Event
 
-  final case class ItemQuantityAdjusted(cartId: String, itemId: String, newQuantity: Int, oldQuantity: Int)
-      extends Event
-
-  final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
+  final case class CheckedOut(eventTime: Instant) extends Event
 
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
     val projectionProvider: ReplicationProjectionProvider = R2dbcProjection.atLeastOnceFlow(_, None, _, _)(_)
@@ -132,75 +134,83 @@ object ShoppingCart {
   }
 
   def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]): Behavior[Command] = {
-    replicatedBehaviors.setup { replicationContext =>
-      EventSourcedBehavior
-        .withEnforcedReplies[Command, Event, State](
-          persistenceId = replicationContext.persistenceId,
-          emptyState = State.empty,
-          commandHandler = (state, command) => handleCommand(replicationContext.entityId, state, command),
-          eventHandler = (state, event) => handleEvent(state, event))
-        .withRetention(RetentionCriteria
-          .snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
-        .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
+    Behaviors.setup[Command] { context =>
+      replicatedBehaviors.setup { replicationContext =>
+        new ShoppingCart(context, replicationContext).behavior()
+      }
     }
   }
+}
 
-  private def handleCommand(cartId: String, state: State, command: Command): ReplyEffect[Event, State] = {
-    // The shopping cart behavior changes if it's checked out or not.
-    // The commands are handled differently for each case.
-    if (state.isCheckedOut)
-      checkedOutShoppingCart(cartId, state, command)
-    else
-      openShoppingCart(cartId, state, command)
+class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationContext: ReplicationContext) {
+  import ShoppingCart._
+
+  // one of the replicas is responsible for checking out the shopping cart, once all replicas have closed
+  private val isLeader: Boolean = {
+    val orderedReplicas = replicationContext.allReplicas.toSeq.sortBy(_.id)
+    val leaderIndex = math.abs(replicationContext.entityId.hashCode % orderedReplicas.size)
+    orderedReplicas(leaderIndex) == replicationContext.replicaId
   }
 
-  private def openShoppingCart(cartId: String, state: State, command: Command): ReplyEffect[Event, State] = {
+  def behavior(): EventSourcedBehavior[Command, Event, State] = {
+    EventSourcedBehavior
+      .withEnforcedReplies[Command, Event, State](
+        persistenceId = replicationContext.persistenceId,
+        emptyState = State.empty,
+        commandHandler = handleCommand,
+        eventHandler = handleEvent)
+      .withRetention(RetentionCriteria
+        .snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+      .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
+  }
+
+  private def handleCommand(state: State, command: Command): ReplyEffect[Event, State] = {
+    // The shopping cart behavior changes if it's closed / checked out or not.
+    // The commands are handled differently for each case.
+    if (state.isClosed)
+      closedShoppingCart(state, command)
+    else
+      openShoppingCart(state, command)
+  }
+
+  private def openShoppingCart(state: State, command: Command): ReplyEffect[Event, State] = {
     command match {
       case AddItem(itemId, quantity, replyTo) =>
-        if (state.hasItem(itemId))
-          Effect.reply(replyTo)(StatusReply.Error(s"Item '$itemId' was already added to this shopping cart"))
-        else if (quantity <= 0)
-          Effect.reply(replyTo)(StatusReply.Error("Quantity must be greater than zero"))
-        else
-          Effect
-            .persist(ItemAdded(cartId, itemId, quantity))
-            .thenReply(replyTo) { updatedCart =>
-              StatusReply.Success(updatedCart.toSummary)
-            }
+        Effect
+          .persist(ItemUpdated(itemId, quantity))
+          .thenReply(replyTo) { updatedCart =>
+            StatusReply.Success(updatedCart.toSummary)
+          }
 
-      case RemoveItem(itemId, replyTo) =>
-        if (state.hasItem(itemId))
-          Effect
-            .persist(ItemRemoved(cartId, itemId, state.items(itemId)))
-            .thenReply(replyTo)(updatedCart => StatusReply.Success(updatedCart.toSummary))
-        else
-          Effect.reply(replyTo)(StatusReply.Success(state.toSummary)) // removing an item is idempotent
-
-      case AdjustItemQuantity(itemId, quantity, replyTo) =>
-        if (quantity <= 0)
-          Effect.reply(replyTo)(StatusReply.Error("Quantity must be greater than zero"))
-        else if (state.hasItem(itemId))
-          Effect
-            .persist(ItemQuantityAdjusted(cartId, itemId, quantity, state.items(itemId)))
-            .thenReply(replyTo)(updatedCart => StatusReply.Success(updatedCart.toSummary))
-        else
-          Effect.reply(replyTo)(
-            StatusReply.Error(s"Cannot adjust quantity for item '$itemId'. Item not present on cart"))
+      case RemoveItem(itemId, quantity, replyTo) =>
+        Effect
+          .persist(ItemUpdated(itemId, -quantity))
+          .thenReply(replyTo) { updatedCart =>
+            StatusReply.Success(updatedCart.toSummary)
+          }
 
       case Checkout(replyTo) =>
-        if (state.isEmpty)
-          Effect.reply(replyTo)(StatusReply.Error("Cannot checkout an empty shopping cart"))
-        else
-          Effect
-            .persist(CheckedOut(cartId, Instant.now()))
-            .thenReply(replyTo)(updatedCart => StatusReply.Success(updatedCart.toSummary))
+        Effect
+          .persist(Closed(replicationContext.replicaId))
+          .thenReply(replyTo) { updatedCart =>
+            StatusReply.Success(updatedCart.toSummary)
+          }
+
+      case CloseForCheckout =>
+        Effect
+          .persist(Closed(replicationContext.replicaId))
+          .thenNoReply()
+
+      case CompleteCheckout =>
+        // only closed shopping carts should be completable
+        Effect.noReply
 
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
     }
   }
 
-  private def checkedOutShoppingCart(cartId: String, state: State, command: Command): ReplyEffect[Event, State] = {
+  private def closedShoppingCart(state: State, command: Command): ReplyEffect[Event, State] = {
     command match {
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
@@ -208,23 +218,45 @@ object ShoppingCart {
         Effect.reply(cmd.replyTo)(StatusReply.Error("Can't add an item to an already checked out shopping cart"))
       case cmd: RemoveItem =>
         Effect.reply(cmd.replyTo)(StatusReply.Error("Can't remove an item from an already checked out shopping cart"))
-      case cmd: AdjustItemQuantity =>
-        Effect.reply(cmd.replyTo)(StatusReply.Error("Can't adjust item on an already checked out shopping cart"))
       case cmd: Checkout =>
         Effect.reply(cmd.replyTo)(StatusReply.Error("Can't checkout already checked out shopping cart"))
+      case CloseForCheckout =>
+        Effect
+          .persist(Closed(replicationContext.replicaId))
+          .thenNoReply()
+      case CompleteCheckout =>
+        // TODO: trigger other effects from shopping cart checkout
+        Effect
+          .persist(CheckedOut(Instant.now()))
+          .thenNoReply()
     }
   }
 
   private def handleEvent(state: State, event: Event): State = {
-    event match {
-      case ItemAdded(_, itemId, quantity) =>
+    val newState = event match {
+      case ItemUpdated(itemId, quantity) =>
         state.updateItem(itemId, quantity)
-      case ItemRemoved(_, itemId, _) =>
-        state.removeItem(itemId)
-      case ItemQuantityAdjusted(_, itemId, quantity, _) =>
-        state.updateItem(itemId, quantity)
-      case CheckedOut(_, eventTime) =>
+      case Closed(replica) =>
+        state.close(replica)
+      case CheckedOut(eventTime) =>
         state.checkout(eventTime)
+    }
+    eventTriggers(newState, event)
+    newState
+  }
+
+  private def eventTriggers(state: State, event: Event): Unit = {
+    if (!replicationContext.recoveryRunning) {
+      event match {
+        case _: Closed =>
+          if (!state.closed(replicationContext.replicaId)) {
+            context.self ! CloseForCheckout
+          } else if (isLeader) {
+            val allClosed = replicationContext.allReplicas.diff(state.closed).isEmpty
+            if (allClosed) context.self ! CompleteCheckout
+          }
+        case _ =>
+      }
     }
   }
 }
