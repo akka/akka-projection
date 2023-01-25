@@ -125,7 +125,7 @@ lazy val examples = project
   .settings(publish / skip := true, scalacOptions += "-feature", javacOptions += "-parameters")
 
 lazy val docs = project
-  .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
+  .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, SitePreviewPlugin, PreprocessPlugin, PublishRsyncPlugin)
   .disablePlugins(MimaPlugin)
   .dependsOn(core, testkit)
   .settings(
@@ -135,6 +135,10 @@ lazy val docs = project
     previewPath := (Paradox / siteSubdirName).value,
     Preprocess / siteSubdirName := s"api/akka-projection/${projectInfoVersion.value}",
     Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
+    Preprocess / preprocessRules := Seq(
+        ( // package duplication errors
+          (s"https://doc\\.akka\\.io/api/akka-grpc/${akka.grpc.gen.BuildInfo.version}/akka/grpc/akka/grpc").r,
+          _ => s"https://doc\\.akka\\.io/api/akka-grpc/${akka.grpc.gen.BuildInfo.version}/akka/grpc/")),
     Paradox / siteSubdirName := s"docs/akka-projection/${projectInfoVersion.value}",
     Compile / paradoxProperties ++= Map(
         "project.url" -> "https://doc.akka.io/docs/akka-projection/current/",
@@ -167,7 +171,7 @@ lazy val docs = project
         "javadoc.akka.projection.base_url" -> "", // no Javadoc is published
         // Misc
         "extref.samples.base_url" -> "https://developer.lightbend.com/start/?group=akka&amp;project=%s",
-        "extref.platform-guide.base_url" -> "https://developer.lightbend.com/docs/akka-platform-guide/%s"),
+        "extref.platform-guide.base_url" -> "https://developer.lightbend.com/docs/akka-guide/%s"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     paradoxRoots := List("index.html", "getting-started/event-generator-app.html"),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
