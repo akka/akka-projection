@@ -8,15 +8,17 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.SupervisorStrategy
-import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import akka.cluster.sharding.typed.scaladsl.Entity
-import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.pattern.StatusReply
-import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
+import akka.persistence.typed.scaladsl.ReplicationContext
 import akka.persistence.typed.scaladsl.ReplyEffect
 import akka.persistence.typed.scaladsl.RetentionCriteria
+import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
+import akka.projection.grpc.replication.scaladsl.Replication
+import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
+import akka.projection.grpc.replication.scaladsl.ReplicationSettings
+import akka.projection.r2dbc.scaladsl.R2dbcProjection
 
 /**
  * This is an event sourced actor (`EventSourcedBehavior`). An entity managed by Cluster Sharding.
@@ -123,25 +125,24 @@ object ShoppingCart {
 
   final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
 
-  val EntityKey: EntityTypeKey[Command] =
-    EntityTypeKey[Command]("ShoppingCart")
-
-  val tags = Vector.tabulate(5)(i => s"carts-$i")
-
-  def init(system: ActorSystem[_]): Unit = {
-    ClusterSharding(system).init(Entity(EntityKey)(entityContext => ShoppingCart(entityContext.entityId)))
+  def init(implicit system: ActorSystem[_]): Replication[Command] = {
+    val projectionProvider: ReplicationProjectionProvider = R2dbcProjection.atLeastOnceFlow(_, None, _, _)(_)
+    val replicationSettings = ReplicationSettings[Command]("replicated-shopping-cart", projectionProvider)
+    Replication.grpcReplication(replicationSettings)(ShoppingCart.apply)
   }
 
-  def apply(cartId: String): Behavior[Command] = {
-    EventSourcedBehavior
-      .withEnforcedReplies[Command, Event, State](
-        persistenceId = PersistenceId(EntityKey.name, cartId),
-        emptyState = State.empty,
-        commandHandler = (state, command) => handleCommand(cartId, state, command),
-        eventHandler = (state, event) => handleEvent(state, event))
-      .withRetention(RetentionCriteria
-        .snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
-      .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
+  def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]): Behavior[Command] = {
+    replicatedBehaviors.setup { replicationContext =>
+      EventSourcedBehavior
+        .withEnforcedReplies[Command, Event, State](
+          persistenceId = replicationContext.persistenceId,
+          emptyState = State.empty,
+          commandHandler = (state, command) => handleCommand(replicationContext.entityId, state, command),
+          eventHandler = (state, event) => handleEvent(state, event))
+        .withRetention(RetentionCriteria
+          .snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+        .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
+    }
   }
 
   private def handleCommand(cartId: String, state: State, command: Command): ReplyEffect[Event, State] = {
