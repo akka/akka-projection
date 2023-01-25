@@ -29,13 +29,13 @@ For a basic overview of Replicated Event Sourcing see the @extref:[Akka Replicat
 
 Akka Replicated Event Sourcing over gRPC consists of the following three parts:
 
-The Replicated Event Sourced Behavior is run in each replica as a sharded entity using @extref:[Akka Cluster Sharding](akka:typed/cluster-sharding.html).
+* The Replicated Event Sourced Behavior is run in each replica as a sharded entity using @extref:[Akka Cluster
+  Sharding](akka:typed/cluster-sharding.html).
 
-The events of each replica are published to the other replicas using @ref:[Akka Projection gRPC](grpc.md) endpoints.
+* The events of each replica are published to the other replicas using @ref:[Akka Projection gRPC](grpc.md) endpoints.
 
-Each replica consumes a number of parallel slices of the events from each other replica by running Akka Projection gRPC
-in @extref:[Akka Sharded Daemon Process](akka:typed/cluster-sharded-daemon-process.html).
-
+* Each replica consumes a number of parallel slices of the events from each other replica by running Akka Projection
+  gRPC in @extref:[Akka Sharded Daemon Process](akka:typed/cluster-sharded-daemon-process.html).
 
 
 ## Dependencies
@@ -45,6 +45,12 @@ The functionality is provided through the `akka-projection-grpc` module.
 @@project-info{ projectId="akka-projection-grpc" }
 
 To use the gRPC module of Akka Projections add the following dependency in your project:
+
+@@dependency [sbt,Maven,Gradle] {
+  group=com.lightbend.akka
+  artifact=akka-projection-grpc_$scala.binary.version$
+  version=$project.version$
+}
 
 Akka Replicated Event Sourcing over gRPC requires Akka 2.8.0 or later and can only be run in an Akka cluster since it uses cluster components.
 
@@ -77,7 +83,23 @@ The table below shows `akka-projection-grpc`'s direct dependencies, and the seco
 
 @@dependencies{ projectId="akka-projection-grpc" }
 
+## API and setup
 
+The same API as regular `EventSourcedBehavior`s is used to define the logic. See @extref:[Replicated Event Sourcing](akka:typed/replicated-eventsourcing.html) for more detail on designing an entity for replication.
+
+To enable an entity for Replicated Event Sourcing over gRPC, use the @apidoc[Replication$] `grpcReplication` method,
+which takes @apidoc[ReplicationSettings], a factory function for the behavior, and an actor system.
+
+The factory function will be passed a @apidoc[ReplicatedBehaviors] factory that must be used to set up the replicated
+event sourced behavior. Its `setup` method provides a @apidoc[ReplicationContext] to create an `EventSourcedBehavior`
+which will then be configured for replication. The behavior factory can be composed with other behavior factories, if
+access to the actor context or timers are needed.
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init }
 
 ### Settings
 
@@ -106,10 +128,22 @@ Binding the publisher is a manual step to allow arbitrary customization of the A
 with other HTTP and gRPC routes.
 
 When there is only a single replicated entity and no other usage of Akka gRPC Projections in an application a
-convenience is provided through `createSingleServiceHandler` on @apidoc[akka.projection.grpc.replication.*.Replication] which
-will create a single handler, this can then be bound:
+convenience is provided through `createSingleServiceHandler` on @apidoc[akka.projection.grpc.replication.*.Replication]
+which will create a single handler:
 
-FIXME sample snippet
+Scala
+:  @@snip [Main.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/Main.scala) { #single-service-handler }
+
+Java
+:  @@snip [Main.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/Main.java) { #single-service-handler }
+
+This can then be bound:
+
+Scala
+:  @@snip [ShoppingCartServer.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCartServer.scala) { #bind }
+
+Java
+:  @@snip [ShoppingCartServer.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #bind }
 
 When multiple producers exist, all instances of @apidoc[akka.projection.grpc.producer.EventProducerSettings] need to
 be passed at once to `EventProducer.grpcServiceHandler` to create a single producer service handling each of the event
@@ -137,9 +171,12 @@ new versions of the application to the replicas.
 FIXME something more here - serialization can fail and stop the replication, but it could also silently lose data in new fields
 before the consuming side has a new version.
 
-### Sample projects
+## Sample projects
 
-FIXME should we have one? The shopping cart?
+Source code and build files for complete sample projects can be found in the `akka/akka-projection` GitHub repository.
+
+* [Replicated shopping cart service in Scala](https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-scala)
+* [Replicated shopping cart service in Java](https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-java)
 
 ## Access control
 

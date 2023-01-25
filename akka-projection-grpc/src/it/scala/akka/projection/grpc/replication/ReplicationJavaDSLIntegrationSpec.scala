@@ -30,6 +30,7 @@ import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication
 import akka.projection.grpc.replication.javadsl.Replica
+import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.javadsl.Replication
 import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider
 import akka.projection.grpc.replication.javadsl.ReplicationSettings
@@ -104,7 +105,8 @@ object ReplicationJavaDSLIntegrationSpec {
 
     case class State(greeting: String, timestamp: LwwTime)
 
-    def create(replicationContext: ReplicationContext) = new LWWHelloWorldBehavior(replicationContext)
+    def create(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) =
+      replicatedBehaviors.setup { replicationContext => new LWWHelloWorldBehavior(replicationContext) }
 
     class LWWHelloWorldBehavior(replicationContext: ReplicationContext)
         extends EventSourcedBehavior[Command, Event, State](replicationContext.persistenceId) {

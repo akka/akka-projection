@@ -7,6 +7,7 @@ package akka.projection.grpc.replication.javdsl;
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.typed.ActorSystem;
+import akka.actor.typed.Behavior;
 import akka.grpc.GrpcClientSettings;
 import akka.grpc.javadsl.ServiceHandler;
 import akka.http.javadsl.Http;
@@ -17,12 +18,11 @@ import akka.japi.function.Function;
 import akka.persistence.query.Offset;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.persistence.typed.ReplicaId;
-import akka.persistence.typed.javadsl.ReplicatedEventSourcedBehavior;
-import akka.persistence.typed.javadsl.ReplicationContext;
 import akka.projection.ProjectionContext;
 import akka.projection.ProjectionId;
 import akka.projection.grpc.producer.EventProducerSettings;
 import akka.projection.grpc.replication.javadsl.Replica;
+import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
 import akka.projection.grpc.replication.javadsl.Replication;
 import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider;
 import akka.projection.grpc.replication.javadsl.ReplicationSettings;
@@ -40,11 +40,15 @@ import java.util.concurrent.CompletionStage;
 
 public class ReplicationCompileTest {
 
- interface MyCommand {}
+  interface MyCommand {}
 
- static ReplicatedEventSourcedBehavior<MyCommand, Void, Void> create(ReplicationContext context) {
-   throw new UnsupportedOperationException("just a dummy factory method");
- }
+  static Behavior<MyCommand> create(
+      ReplicatedBehaviors<MyCommand, Void, Void> replicatedBehaviors) {
+    return replicatedBehaviors.setup(
+        replicationContext -> {
+          throw new UnsupportedOperationException("just a dummy factory method");
+        });
+  }
 
   public static void start(ActorSystem<?> system) {
    Set<Replica> otherReplicas = new HashSet<>();
