@@ -73,7 +73,10 @@ object ReplicationIntegrationSpec {
         }
         akka.remote.artery.canonical.host = "127.0.0.1"
         akka.remote.artery.canonical.port = 0
-        akka.actor.testkit.typed.filter-leeway = 10s
+        akka.actor.testkit.typed {
+          filter-leeway = 10s
+          system-shutdown-default = 30s
+        }
       """)
 
   private val DCA = ReplicaId("DCA")
@@ -315,6 +318,8 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
   protected override def afterAll(): Unit = {
     logger.info("Shutting down all three DCs")
+    systems.foreach(_.terminate()) // speed up termination by terminating all at the once
+    // and then make sure they are completely shutdown
     systems.foreach { system =>
       ActorTestKit.shutdown(system)
     }
