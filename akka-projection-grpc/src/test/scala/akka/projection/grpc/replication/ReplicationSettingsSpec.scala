@@ -26,7 +26,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
       implicit val system: ActorSystem[Unit] = ActorSystem[Unit](
         Behaviors.empty[Unit],
         "parse-test",
-        ConfigFactory.parseString(s"""
+        ConfigFactory.parseString("""
          // #config
          my-replicated-entity {
            # which of the replicas this node belongs to, should be the same
@@ -34,7 +34,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
            self-replica-id = dca
            # Pick it up from an environment variable to re-use the same config
            # without changes across replicas
-           self-replica-id = $${?SELF_REPLICA}
+           self-replica-id = ${?SELF_REPLICA}
            # max number of parallel in-flight (sent over sharding) entity updates
            # per consumer/projection
            parallel-updates = 8
