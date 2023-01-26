@@ -32,10 +32,9 @@ import akka.projection.grpc.replication
 import akka.projection.grpc.replication.javadsl.Replica
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.javadsl.Replication
-import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider
 import akka.projection.grpc.replication.javadsl.ReplicationSettings
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.javadsl.R2dbcProjection
+import akka.projection.r2dbc.javadsl.R2dbcReplication
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -44,7 +43,6 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
 import java.time.Duration
-import java.util.Optional
 import scala.compat.java8.FutureConverters.CompletionStageOps
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
@@ -207,14 +205,6 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
   }
 
   def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
-    // Note: inline SAM/functional interface as a parameter does not expand/infer the right way
-    val projectionProvider: ReplicationProjectionProvider =
-      R2dbcProjection.atLeastOnceFlow(
-        _,
-        Optional.of(R2dbcProjectionSettings.create(system).withWarnAboutFilteredEventsInFlow(false)),
-        _,
-        _,
-        _)
     val settings = ReplicationSettings.create(
       classOf[LWWHelloWorld.Command],
       "hello-world-java",
@@ -223,7 +213,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
       allReplicas.toSet.asJava: java.util.Set[Replica],
       Duration.ofSeconds(10),
       8,
-      projectionProvider)
+      R2dbcReplication.create(system))
     Replication.grpcReplication(settings, LWWHelloWorld.create _, replicaSystem)
   }
 
