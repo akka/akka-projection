@@ -24,6 +24,7 @@ object AkkaDisciplinePlugin extends AutoPlugin {
     if (enabled) {
       Seq(
         Test / scalacOptions --= testUndicipline,
+        Test / scalacOptions ++= testsExtraUndicipline,
         Compile / scalacOptions ++= (CrossVersion.partialVersion(scalaVersion.value) match {
             case Some((2, 13)) =>
               disciplineScalacOptions --
@@ -55,6 +56,7 @@ object AkkaDisciplinePlugin extends AutoPlugin {
 
   val testUndicipline = Seq("-Ywarn-dead-code" // '???' used in compile only specs
   )
+  val testsExtraUndicipline = Seq("-Wconf:msg=missing interpolator:s")
 
   /**
    * Remain visibly filtered for future code quality work and removing.
