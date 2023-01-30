@@ -21,6 +21,8 @@ import akka.persistence.typed.ReplicaId;
 import akka.projection.ProjectionContext;
 import akka.projection.ProjectionId;
 import akka.projection.grpc.producer.EventProducerSettings;
+import akka.projection.grpc.producer.javadsl.EventProducer;
+import akka.projection.grpc.producer.javadsl.EventProducerSource;
 import akka.projection.grpc.replication.javadsl.Replica;
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
 import akka.projection.grpc.replication.javadsl.Replication;
@@ -33,21 +35,26 @@ import akka.projection.javadsl.AtLeastOnceFlowProjection;
 import akka.stream.javadsl.FlowWithContext;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 public class ReplicationCompileTest {
+  interface MyCommand {
+  }
 
-  interface MyCommand {}
+  static class MyReplicatedBehavior {
 
-  static Behavior<MyCommand> create(
-      ReplicatedBehaviors<MyCommand, Void, Void> replicatedBehaviors) {
-    return replicatedBehaviors.setup(
-        replicationContext -> {
-          throw new UnsupportedOperationException("just a dummy factory method");
-        });
+
+    static Behavior<MyCommand> create(
+        ReplicatedBehaviors<MyCommand, Void, Void> replicatedBehaviors) {
+      return replicatedBehaviors.setup(
+          replicationContext -> {
+            throw new UnsupportedOperationException("just a dummy factory method");
+          });
+    }
   }
 
   public static void start(ActorSystem<?> system) {
@@ -86,7 +93,7 @@ public class ReplicationCompileTest {
        8,
        projectionProvider).configureEntity(entity -> entity.withRole("entities"));
 
-   Replication<MyCommand> replication = Replication.grpcReplication(settings, ReplicationCompileTest::create, system);
+   Replication<MyCommand> replication = Replication.grpcReplication(settings, MyReplicatedBehavior::create, system);
 
    // bind a single handler endpoint
    Function<HttpRequest, CompletionStage<HttpResponse>> handler = replication.createSingleServiceHandler();
@@ -97,6 +104,39 @@ public class ReplicationCompileTest {
 
    CompletionStage<ServerBinding> bound =
        Http.get(system).newServerAt("127.0.0.1", 8080).bind(service);
+
+  }
+
+  static class ShoppingCart {
+    static Replication<MyCommand> init(ActorSystem<?> system) {
+      throw new UnsupportedOperationException("Just a sample");
+    }
+  }
+
+  public static void multiEventProducers(ActorSystem<?> system, ReplicationSettings<MyCommand> settings, String host, int port) {
+
+    Replication<Void> otherReplication = null;
+
+    // #multi-service
+    Set<EventProducerSource> allSources = new HashSet<>();
+
+    Replication<MyCommand> replication = ShoppingCart.init(system);
+    allSources.add(replication.eventProducerService());
+
+    // add additional EventProducerSource from other entities or
+    // Akka Projection gRPC
+    allSources.add(otherReplication.eventProducerService());
+
+    Function<HttpRequest, CompletionStage<HttpResponse>> route =
+        EventProducer.grpcServiceHandler(system, allSources);
+
+    @SuppressWarnings("unchecked")
+    Function<HttpRequest, CompletionStage<HttpResponse>> handler =
+        ServiceHandler.concatOrNotFound(route);
+    // #multi-service
+
+    CompletionStage<ServerBinding> bound =
+        Http.get(system).newServerAt(host, port).bind(handler);
 
   }
 }
