@@ -28,11 +28,12 @@ run / javaOptions ++= sys.props
 Global / cancelable := false // ctrl-c
 
 val AkkaVersion = "2.7.0"
-val AkkaHttpVersion = "10.4.0"
+val AkkaHttpVersion = "10.5.0-M1"
 val AkkaManagementVersion = "1.2.0"
 val AkkaPersistenceR2dbcVersion = "1.0.1"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.3.1")
+val AkkaDiagnostics = "2.0.0-M2"
 
 enablePlugins(AkkaGrpcPlugin)
 
@@ -56,6 +57,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.management" %% "akka-management-cluster-http" % AkkaManagementVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
   "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
+  "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnostics,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.2.11",
