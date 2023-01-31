@@ -9,10 +9,10 @@ object Dependencies {
   val Scala212 = "2.12.17"
   val ScalaVersions = Seq(Scala213, Scala212)
 
-  val AkkaVersionInDocs = "2.7"
+  val AkkaVersionInDocs = "2.8"
   val AlpakkaVersionInDocs = "5.0"
-  val AlpakkaKafkaVersionInDocs = "3.1"
-  val AkkaGrpcVersionInDocs = "2.2"
+  val AlpakkaKafkaVersionInDocs = "4.0"
+  val AkkaGrpcVersionInDocs = "2.3"
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
 
   object Versions {
@@ -29,7 +29,7 @@ object Dependencies {
     val testContainers = "1.15.3"
     val junit = "4.13.2"
     val h2Driver = "1.4.200"
-    val jackson = "2.13.4.2" // this should match the version of jackson used by akka-serialization-jackson
+    val jacksonDatabind = "2.13.4.2" // this should match the version of jackson used by akka-serialization-jackson
   }
 
   object Compile {
@@ -56,7 +56,7 @@ object Dependencies {
     val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
 
     // must be provided on classpath when using Apache Kafka 2.6.0+
-    val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jackson
+    val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jacksonDatabind
 
     // not really used in lib code, but in example and test
     val h2Driver = "com.h2database" % "h2" % Versions.h2Driver

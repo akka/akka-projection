@@ -159,7 +159,7 @@ The consumer can pass metadata, such as auth headers, in each request to the pro
 
 Authentication and authorization for the producer can be done by implementing a @apidoc[EventProducerInterceptor] and pass
 it to the `grpcServiceHandler` method during producer bootstrap. The interceptor is invoked with the stream id and 
-gRPC request metadata for each incoming request and can return a suitable error through @apidoc[GrpcServiceException]
+gRPC request metadata for each incoming request and can return a suitable error through @apidoc[akka.grpc.GrpcServiceException]
 
 ## Performance considerations
 

@@ -1,7 +1,7 @@
 # Offset in a relational DB with Slick
 
 The @apidoc[SlickProjection$] has support for storing the offset in a relational database using
-[Slick](http://scala-slick.org) (JDBC). This is only an option for Scala and for Java the
+[Slick](https://scala-slick.org) (JDBC). This is only an option for Scala and for Java the
 @ref:[offset can be stored in relational DB with JDBC](jdbc.md). The JDBC module can also be
 used with Scala.
 
