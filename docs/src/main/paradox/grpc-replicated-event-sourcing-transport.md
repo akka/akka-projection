@@ -149,7 +149,12 @@ When multiple producers exist, all instances of @apidoc[akka.projection.grpc.pro
 be passed at once to `EventProducer.grpcServiceHandler` to create a single producer service handling each of the event
 streams.
 
-FIXME sample snippet
+Scala
+:  @@snip [ProducerApiSample.scala](/akka-projection-grpc/src/test/scala/akka/projection/grpc/replication/scaladsl/ProducerApiSample.scala) { #multi-service }
+
+Java
+:  @@snip [ReplicationCompileTest.java](/akka-projection-grpc/src/test/java/akka/projection/grpc/replication/javdsl/ReplicationCompileTest.java) { #multi-service }
+
 
 The Akka HTTP server must be running with HTTP/2, this is done through config:
 
@@ -168,8 +173,9 @@ Note that having separate replicas increases the risk that two different seriali
 are running at the same time, so extra care must be taken when changing the events and their serialization and deploying
 new versions of the application to the replicas.
 
-FIXME something more here - serialization can fail and stop the replication, but it could also silently lose data in new fields
-before the consuming side has a new version.
+For some scenarios it may be necessary to do a two-step deploy of format changes to not lose data, first deploy support 
+for a new serialization format so that all replicas can deserialize it, then a second deploy where the new field is actually
+populated with data.
 
 ## Sample projects
 
