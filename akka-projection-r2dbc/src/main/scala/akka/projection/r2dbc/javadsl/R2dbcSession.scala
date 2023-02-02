@@ -20,7 +20,7 @@ import io.r2dbc.spi.Statement
 import scala.collection.JavaConverters._
 
 @ApiMayChange
-final class R2dbcSession(connection: Connection)(implicit ec: ExecutionContext, system: ActorSystem[_]) {
+final class R2dbcSession(val connection: Connection)(implicit ec: ExecutionContext, system: ActorSystem[_]) {
 
   def createStatement(sql: String): Statement =
     connection.createStatement(sql)
