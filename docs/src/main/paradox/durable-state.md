@@ -5,6 +5,10 @@ consumed with the [changes query](https://doc.akka.io/docs/akka/current/durable-
 
 Akka Projections has integration with `changes`, which is described here. 
 
+@@@ note { title=Alternative }
+When using the R2DBC plugin an alternative to using a Projection is to [store the query representation](https://doc.akka.io/docs/akka-persistence-r2dbc/current/durable-state-store.html#storing-query-representation) directly from the write side.
+@@@
+
 ## Dependencies
 
 To use the Durable State module of Akka Projections, add the following dependency in your project:
