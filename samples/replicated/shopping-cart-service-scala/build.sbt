@@ -33,6 +33,7 @@ val AkkaManagementVersion = "1.2.0"
 val AkkaPersistenceR2dbcVersion = "1.0.1"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.3.1")
+val AkkaDiagnosticsVersion = "2.0.0-M4"
 
 enablePlugins(AkkaGrpcPlugin)
 
@@ -56,6 +57,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.management" %% "akka-management-cluster-http" % AkkaManagementVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
   "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
+  "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.2.11",
