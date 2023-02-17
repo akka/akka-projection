@@ -1,0 +1,30 @@
+name: Dependency Graph submission
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags: ["*"]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-graph:
+    name: Update Dependency Graph
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v3.3.0
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+        with:
+          fetch-depth: 0
+      - name: Submit dependencies to GitHub
+        # https://github.com/scalacenter/sbt-dependency-submission/releases
+        # v2.1.0
+        uses: scalacenter/sbt-dependency-submission@573f2f9
