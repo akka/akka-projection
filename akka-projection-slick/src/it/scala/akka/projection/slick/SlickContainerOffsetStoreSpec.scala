@@ -115,8 +115,7 @@ object SlickContainerOffsetStoreSpec {
       // https://www.testcontainers.org/modules/databases/oraclexe/
       new OracleContainer("gvenzl/oracle-xe:21-slim-faststart")
         .withDatabaseName("TEST_SCHEMA")
-        .withUsername("TEST_SCHEMA")
-    )
+        .withUsername("TEST_SCHEMA"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""
