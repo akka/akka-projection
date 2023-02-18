@@ -114,9 +114,8 @@ object SlickContainerOffsetStoreSpec {
     val container: JdbcDatabaseContainer[_] = initContainer(
       // https://www.testcontainers.org/modules/databases/oraclexe/
       new OracleContainer("gvenzl/oracle-xe:21-slim-faststart")
-        .withInitScript("db/oracle-init.sql")
-//        .withDatabaseName("TEST_SCHEMA")
-//        .withUsername("TEST_SCHEMA")
+        .withDatabaseName("TEST_SCHEMA")
+        .withUsername("TEST_SCHEMA")
     )
 
     override def config: Config =
