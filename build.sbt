@@ -99,12 +99,21 @@ lazy val `durable-state` =
 
 lazy val grpc =
   Project(id = "akka-projection-grpc", base = file("akka-projection-grpc"))
-    .configs(IntegrationTest)
-    .settings(headerSettings(IntegrationTest))
-    .settings(Defaults.itSettings)
     .settings(Dependencies.grpc)
     .dependsOn(core)
     .dependsOn(eventsourced)
+    .enablePlugins(AkkaGrpcPlugin)
+    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
+
+lazy val grpcTests =
+  Project(id = "akka-projection-grpc-tests", base = file("akka-projection-grpc-tests"))
+    .configs(IntegrationTest)
+    .settings(headerSettings(IntegrationTest))
+    .disablePlugins(MimaPlugin)
+    .settings(Defaults.itSettings)
+    .settings(Dependencies.grpcTest)
+    .settings(publish / skip := true)
+    .dependsOn(grpc)
     .dependsOn(testkit % Test)
     .enablePlugins(AkkaGrpcPlugin)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
