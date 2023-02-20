@@ -49,7 +49,7 @@ jobs:
           jvm: ${{ matrix.jvmName }}
 
       - name: Run all integration tests with default Scala and Java ${{ matrix.jdkVersion }}
-        run: sbt "akka-projection-grpc/It/test" ${{ matrix.extraOpts }}
+        run: sbt "akka-projection-grpc-test/It/test" ${{ matrix.extraOpts }}
         env: # Disable Ryuk resource reaper since we always spin up fresh VMs
           TESTCONTAINERS_RYUK_DISABLED: true
 
