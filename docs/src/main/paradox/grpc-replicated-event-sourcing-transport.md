@@ -150,10 +150,10 @@ be passed at once to `EventProducer.grpcServiceHandler` to create a single produ
 streams.
 
 Scala
-:  @@snip [ProducerApiSample.scala](/akka-projection-grpc/src/test/scala/akka/projection/grpc/replication/scaladsl/ProducerApiSample.scala) { #multi-service }
+:  @@snip [ProducerApiSample.scala](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/scaladsl/ProducerApiSample.scala) { #multi-service }
 
 Java
-:  @@snip [ReplicationCompileTest.java](/akka-projection-grpc/src/test/java/akka/projection/grpc/replication/javdsl/ReplicationCompileTest.java) { #multi-service }
+:  @@snip [ReplicationCompileTest.java](/akka-projection-grpc-tests/src/test/java/akka/projection/grpc/replication/javdsl/ReplicationCompileTest.java) { #multi-service }
 
 
 The Akka HTTP server must be running with HTTP/2, this is done through config:
