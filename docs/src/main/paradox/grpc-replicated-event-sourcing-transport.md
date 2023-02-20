@@ -108,10 +108,10 @@ accept an entity name, a @apidoc[ReplicationProjectionProvider] and an actor sys
 is expected to have a top level entry with the entity name containing this structure:
 
 Scala
-:  @@snip [config](/akka-projection-grpcssrc/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
+:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
 
 Java
-:  @@snip [config](/akka-projection-grpcs/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
+:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
 
 The entries in the block refer to the local replica while `replicas` is a list of all replicas, including the node itself,
 with details about how to reach the replicas across the network.
