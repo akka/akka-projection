@@ -62,7 +62,7 @@ object Common extends AutoPlugin {
         "-skip-packages",
         "akka.pattern" // for some reason Scaladoc creates this
       ),
-    scalafmtOnCompile := true,
+    scalafmtOnCompile := System.getenv("CI") != "true",
     autoAPIMappings := true,
     apiURL := Some(url(s"https://doc.akka.io/api/akka-projection/${projectInfoVersion.value}")),
     // show full stack traces and test case durations

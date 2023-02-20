@@ -25,7 +25,7 @@ final class ContainerSessionProvider extends CqlSessionProvider {
   override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = started.map { _ =>
     CqlSession.builder
       .addContactEndPoint(new DefaultEndPoint(InetSocketAddress
-        .createUnresolved(container.getContainerIpAddress, container.getFirstMappedPort.intValue())))
+        .createUnresolved(container.getHost, container.getFirstMappedPort.intValue())))
       .withLocalDatacenter("datacenter1")
       .build()
   }
