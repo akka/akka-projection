@@ -438,9 +438,7 @@ class CassandraProjectionSpec
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         offsetShouldBe(projectionId, 17L)
-        eventually {
-          repository.findById(entityId).futureValue.get.text should include("elem-17")
-        }
+        repository.findById(entityId).futureValue.get.text should include("elem-17")
 
       }
     }
