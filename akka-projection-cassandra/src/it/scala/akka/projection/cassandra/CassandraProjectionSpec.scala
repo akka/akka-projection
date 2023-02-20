@@ -389,13 +389,17 @@ class CassandraProjectionSpec
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         offsetShouldBe(projectionId, 10L)
-        repository.findById(entityId).futureValue.get.text should include("elem-15")
+        eventually {
+          repository.findById(entityId).futureValue.get.text should include("elem-15")
+        }
 
         (16 to 22).foreach { n =>
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         offsetShouldBe(projectionId, 20L)
-        repository.findById(entityId).futureValue.get.text should include("elem-22")
+        eventually {
+          repository.findById(entityId).futureValue.get.text should include("elem-22")
+        }
       }
     }
 
@@ -426,13 +430,17 @@ class CassandraProjectionSpec
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         offsetShouldBe(projectionId, 10L)
-        repository.findById(entityId).futureValue.get.text should include("elem-15")
+        eventually {
+          repository.findById(entityId).futureValue.get.text should include("elem-15")
+        }
 
         (16 to 17).foreach { n =>
           sourceProbe.get.sendNext(Envelope(entityId, n, s"elem-$n"))
         }
         offsetShouldBe(projectionId, 17L)
-        repository.findById(entityId).futureValue.get.text should include("elem-17")
+        eventually {
+          repository.findById(entityId).futureValue.get.text should include("elem-17")
+        }
 
       }
     }

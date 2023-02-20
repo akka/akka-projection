@@ -25,7 +25,7 @@ object Dependencies {
     val alpakka = "5.0.0"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.0")
     val slick = "3.4.1"
-    val scalaTest = "3.1.1"
+    val scalaTest = "3.2.12"
     val testContainers = "1.17.6"
     val junit = "4.13.2"
     val h2Driver = "1.4.200"
@@ -77,7 +77,7 @@ object Dependencies {
     val akkaProjectionR2dbc = Compile.akkaProjectionR2dbc % allTestConfig
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % allTestConfig
-    val scalatestJUnit = "org.scalatestplus" %% "junit-4-12" % (Versions.scalaTest + ".0") % allTestConfig
+    val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % allTestConfig
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
     val h2Driver = Compile.h2Driver % allTestConfig
