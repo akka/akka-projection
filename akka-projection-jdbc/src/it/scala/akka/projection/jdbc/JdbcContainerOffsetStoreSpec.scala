@@ -101,14 +101,13 @@ object JdbcContainerOffsetStoreSpec {
   object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
     val name = "Oracle Database"
 
-    // related to https://github.com/testcontainers/testcontainers-java/issues/2313
-    // otherwise we get ORA-01882: timezone region not found
-    System.setProperty("oracle.jdbc.timezoneAsRegion", "false")
-    override def newContainer() =
-      new OracleContainer("oracleinanutshell/oracle-xe-11g:1.0.0")
-        .withInitScript("db/oracle-init.sql")
+    override def newContainer(): JdbcDatabaseContainer[_] = {
+      // https://www.testcontainers.org/modules/databases/oraclexe/
+      new OracleContainer("gvenzl/oracle-xe:21-slim-faststart")
+        .withDatabaseName("TEST_SCHEMA")
+        .withUsername("TEST_SCHEMA")
+    }
   }
-
 }
 
 class PostgresJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.PostgresSpecConfig)

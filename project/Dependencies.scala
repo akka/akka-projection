@@ -26,7 +26,7 @@ object Dependencies {
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.0")
     val slick = "3.4.1"
     val scalaTest = "3.1.1"
-    val testContainers = "1.15.3"
+    val testContainers = "1.17.6"
     val junit = "4.13.2"
     val h2Driver = "1.4.200"
     val jacksonDatabind = "2.13.4.2" // this should match the version of jackson used by akka-serialization-jackson
