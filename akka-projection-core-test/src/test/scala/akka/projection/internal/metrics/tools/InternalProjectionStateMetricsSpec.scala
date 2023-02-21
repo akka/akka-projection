@@ -5,13 +5,9 @@
 package akka.projection.internal.metrics.tools
 
 import java.util.UUID
-
 import scala.collection.immutable
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import scala.concurrent.{ Await, ExecutionContext, ExecutionContextExecutor, Future }
 import scala.concurrent.duration._
-
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -128,7 +124,7 @@ object InternalProjectionStateMetricsSpec {
       implicit system: ActorSystem[_],
       projectionId: ProjectionId) {
 
-    private implicit val exCtx = system.executionContext
+    private implicit val exCtx: ExecutionContextExecutor = system.executionContext
     val entityId = UUID.randomUUID().toString
 
     private val projectionSettings = ProjectionSettings(system)
@@ -192,7 +188,7 @@ object InternalProjectionStateMetricsSpec {
         handlerStrategy,
         statusObserver,
         settings) {
-    override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+    override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass.asInstanceOf[Class[Any]])
 
     override implicit def executionContext: ExecutionContext = system.executionContext
 

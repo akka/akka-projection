@@ -82,7 +82,7 @@ object ProjectionId {
    * @return an [[java.util.Set]] of [[ProjectionId]]s
    */
   def of(name: String, keys: java.util.Set[String]): java.util.Set[ProjectionId] =
-    keys.asScala.map { key: String => new ProjectionId(name, key) }.asJava
+    keys.asScala.map { (key: String) => new ProjectionId(name, key) }.asJava
 }
 
 final class ProjectionId private (val name: String, val key: String) {

@@ -83,7 +83,7 @@ object ProjectionBehavior {
         val running = projection.run()(ctx.system)
         if (running.isInstanceOf[RunningProjectionManagement[_]])
           ProjectionManagement(ctx.system).register(projection.projectionId, ctx.self)
-        new ProjectionBehavior(ctx, projection, stashBuffer).started(running)
+        new ProjectionBehavior[Nothing, Envelope](ctx, projection, stashBuffer).started(running)
       }
     }
   }
