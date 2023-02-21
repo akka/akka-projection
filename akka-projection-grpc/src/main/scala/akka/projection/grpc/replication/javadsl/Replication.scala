@@ -85,7 +85,7 @@ object Replication {
         settings.configureEntity
           .apply(
             Entity.of(
-              settings.entityTypeKey, { entityContext: EntityContext[Command] =>
+              settings.entityTypeKey, { (entityContext: EntityContext[Command]) =>
                 val replicationId =
                   ReplicationId(entityContext.getEntityTypeKey.name, entityContext.getEntityId, settings.selfReplicaId)
                 replicatedBehaviorFactory.apply(

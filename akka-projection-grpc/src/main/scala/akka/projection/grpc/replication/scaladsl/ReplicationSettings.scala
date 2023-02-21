@@ -102,7 +102,7 @@ object ReplicationSettings {
       .getConfigList("replicas")
       .asScala
       .toSet
-      .map { config: Config =>
+      .map { (config: Config) =>
         val replicaId = config.getString("replica-id")
         val clientConfig =
           config.getConfig("grpc.client").withFallback(grpcClientFallBack)

@@ -152,7 +152,7 @@ final class GrpcReadJournal private (
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
     this(system, config, cfgPath, ProtoAnySerialization.Prefer.Scala)
 
-  private implicit val typedSystem = system.toTyped
+  private implicit val typedSystem: ClassicActorSystemProvider = system.toTyped
   private val persistenceExt = Persistence(system)
 
   private val client = EventProducerServiceClient(clientSettings)

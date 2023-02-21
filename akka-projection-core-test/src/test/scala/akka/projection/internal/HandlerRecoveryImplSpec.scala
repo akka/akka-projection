@@ -45,7 +45,7 @@ class HandlerRecoveryImplSpec extends ScalaTestWithActorTestKit with AnyWordSpec
   import HandlerRecoveryImplSpec._
   import TestStatusObserver._
 
-  private val logger = Logging(system.toClassic, getClass)
+  private val logger = Logging(system.toClassic, getClass.asInstanceOf[Class[Any]])
   private val failOnOffset: Long = 3
   private val env3 = Envelope(offset = failOnOffset, "c")
   private val projectionId = ProjectionId("test", "1")

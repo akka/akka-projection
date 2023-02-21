@@ -17,7 +17,13 @@ import akka.projection.ProjectionContext
     envelope: Envelope,
     externalContext: AnyRef,
     groupSize: Int)
-    extends ProjectionContext
+    extends ProjectionContext {
+
+  /**
+   * scala3 makes `copy` private
+   */
+  def withGroupSize(groupSize: Int) = copy(groupSize = groupSize)
+}
 
 /**
  * INTERNAL API

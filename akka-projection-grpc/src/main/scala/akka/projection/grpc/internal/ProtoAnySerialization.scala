@@ -68,7 +68,7 @@ import scalapb.options.Scalapb
    * should be preferred.
    */
   sealed trait Prefer
-  final object Prefer {
+  object Prefer {
     case object Java extends Prefer
     case object Scala extends Prefer
   }

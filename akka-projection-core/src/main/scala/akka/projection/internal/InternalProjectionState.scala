@@ -184,7 +184,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
               handlerRecovery
                 .applyRecovery(first.envelope, first.offset, last.offset, abort.future, measured)
                 .map { _ =>
-                  last.copy(groupSize = envelopes.length)
+                  last.withGroupSize(envelopes.length)
                 }
             }
 
@@ -260,7 +260,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
       }
 
       sourceProvider match {
-        case _: MergeableOffsetSourceProvider[Offset, Envelope] =>
+        case _: MergeableOffsetSourceProvider[_, _] =>
           val batches = envelopesAndOffsets
             .flatMap {
               case context @ ProjectionContextImpl(offset: MergeableOffset[_] @unchecked, _, _, _) =>
