@@ -59,16 +59,13 @@ object Common extends AutoPlugin {
           val branch = if (isSnapshot.value) "main" else s"v${version.value}"
           s"https://github.com/akka/akka-projection/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
         })
-      ++
-    {
-        if(scalaBinaryVersion.value.startsWith("3")){
+      ++ {
+        if (scalaBinaryVersion.value.startsWith("3")) {
           Seq("-skip-packages:akka.pattern") // different usage in scala3
         } else {
-          Seq("-skip-packages",
-          "akka.pattern") // for some reason Scaladoc creates this
+          Seq("-skip-packages", "akka.pattern") // for some reason Scaladoc creates this
         }
-    }
-      ,
+      },
     scalafmtOnCompile := System.getenv("CI") != "true",
     autoAPIMappings := true,
     apiURL := Some(url(s"https://doc.akka.io/api/akka-projection/${projectInfoVersion.value}")),
