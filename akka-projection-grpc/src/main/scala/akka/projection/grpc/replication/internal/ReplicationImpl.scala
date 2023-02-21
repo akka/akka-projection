@@ -41,9 +41,10 @@ import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.cluster.sharding.typed.ClusterShardingSettings
 
 /**
  * INTERNAL API
@@ -140,10 +141,18 @@ private[akka] object ReplicationImpl {
       remoteReplica.grpcClientSettings.defaultPort)
 
     val shardedDaemonProcessSettings = {
+      import scala.concurrent.duration._
       val default = ShardedDaemonProcessSettings(system)
+      val shardingSettings = default.shardingSettings.getOrElse(ClusterShardingSettings(system))
+      // shorter handoff timeout because in some restart backoff it may take a while for the projections to
+      // terminate and we don't want to delay sharding rebalance for too long. 10 seconds actually
+      // means that it will wait 5 seconds before stopping them hard (5 seconds is reduced in sharding).
+      val handOffTimeout = shardingSettings.tuningParameters.handOffTimeout.min(10.seconds)
+      val defaultWithShardingSettings = default.withShardingSettings(
+        shardingSettings.withTuningParameters(shardingSettings.tuningParameters.withHandOffTimeout(handOffTimeout)))
       remoteReplica.consumersOnClusterRole match {
-        case None       => default
-        case Some(role) => default.withRole(role)
+        case None       => defaultWithShardingSettings
+        case Some(role) => defaultWithShardingSettings.withRole(role)
       }
     }
     ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, { idx =>
@@ -217,7 +226,7 @@ private[akka] object ReplicationImpl {
         sliceRange.min,
         sliceRange.max)
       ProjectionBehavior(settings.projectionProvider(projectionId, sourceProvider, replicationFlow, system))
-    }, shardedDaemonProcessSettings, None) // FIXME why doesn't Some(ProjectionBehavior.Stop) work
+    }, shardedDaemonProcessSettings, Some(ProjectionBehavior.Stop))
   }
 
 }
