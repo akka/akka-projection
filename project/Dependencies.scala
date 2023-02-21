@@ -9,7 +9,7 @@ object Dependencies {
   val Scala212 = "2.12.17"
   val Scala3 = "3.1.3"
   val Scala2Versions = Seq(Scala213, Scala212)
-  val ScalaVersions = Dependencies.Scala2Versions ++ Seq(Dependencies.Scala3)
+  val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
   val AkkaVersionInDocs = "2.8"
   val AlpakkaVersionInDocs = "5.0"
