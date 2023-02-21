@@ -1,9 +1,7 @@
 package shopping.cart
 
 import java.time.Instant
-
 import scala.concurrent.duration._
-
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
@@ -19,9 +17,8 @@ import akka.persistence.typed.scaladsl.ReplyEffect
 import akka.persistence.typed.scaladsl.RetentionCriteria
 import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
-import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
-import akka.projection.r2dbc.scaladsl.R2dbcProjection
+import akka.projection.r2dbc.scaladsl.R2dbcReplication
 
 /**
  * This is an event sourced actor (`EventSourcedBehavior`). An entity managed by Cluster Sharding.
@@ -129,8 +126,9 @@ object ShoppingCart {
 
   // #init
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
-    val projectionProvider: ReplicationProjectionProvider = R2dbcProjection.atLeastOnceFlow(_, None, _, _)(_)
-    val replicationSettings = ReplicationSettings[Command]("replicated-shopping-cart", projectionProvider)
+    val replicationSettings = ReplicationSettings[Command](
+      "replicated-shopping-cart",
+      R2dbcReplication())
     Replication.grpcReplication(replicationSettings)(ShoppingCart.apply)
   }
 

@@ -29,10 +29,9 @@ import akka.projection.grpc.replication
 import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
-import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.scaladsl.R2dbcProjection
+import akka.projection.r2dbc.scaladsl.R2dbcReplication
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -189,12 +188,6 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
   }
 
   def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
-    // Note: inline SAM/functional interface as a parameter does not expand/infer the right way
-    val projectionProvider: ReplicationProjectionProvider = R2dbcProjection.atLeastOnceFlow(
-      _,
-      Some(R2dbcProjectionSettings(system).withWarnAboutFilteredEventsInFlow(false)),
-      _,
-      _)(_)
     val settings = ReplicationSettings[LWWHelloWorld.Command](
       "hello-world",
       selfReplicaId,
@@ -202,7 +195,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       allReplicas,
       10.seconds,
       8,
-      projectionProvider)
+      R2dbcReplication())
     Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
   }
 

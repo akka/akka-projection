@@ -11,9 +11,8 @@ import akka.persistence.typed.ReplicaId;
 import akka.persistence.typed.javadsl.*;
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
 import akka.projection.grpc.replication.javadsl.Replication;
-import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider;
 import akka.projection.grpc.replication.javadsl.ReplicationSettings;
-import akka.projection.r2dbc.javadsl.R2dbcProjection;
+import akka.projection.r2dbc.javadsl.R2dbcReplication;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Duration;
 import java.time.Instant;
@@ -238,13 +237,12 @@ public final class ShoppingCart
 
   // #init
   public static Replication<Command> init(ActorSystem<?> system) {
-    ReplicationProjectionProvider projectionProvider =
-        (projectionId, sourceProvider, replicationFlow, actorSystem) ->
-            R2dbcProjection.atLeastOnceFlow(
-                projectionId, Optional.empty(), sourceProvider, replicationFlow, actorSystem);
     ReplicationSettings<Command> replicationSettings =
         ReplicationSettings.create(
-            Command.class, "replicated-shopping-cart", projectionProvider, system);
+            Command.class,
+            "replicated-shopping-cart",
+            R2dbcReplication.create(system),
+            system);
     return Replication.grpcReplication(replicationSettings, ShoppingCart::create, system);
   }
 
