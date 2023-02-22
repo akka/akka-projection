@@ -953,7 +953,7 @@ private[projection] class R2dbcOffsetStore(
     r2dbcExecutor
       .selectOne("read management state")(
         conn => createStatement(conn),
-        row => ManagementState(row.get("paused", classOf[java.lang.Boolean])))
+        row => ManagementState(row.get[java.lang.Boolean]("paused", classOf[java.lang.Boolean])))
   }
 
   def savePaused(paused: Boolean): Future[Done] = {

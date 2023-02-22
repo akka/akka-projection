@@ -484,7 +484,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         settings) {
 
     implicit val executionContext: ExecutionContext = system.executionContext
-    override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+    override val logger: LoggingAdapter = Logging(system.classicSystem, getClass.asInstanceOf[Class[Any]])
 
     private val isExactlyOnceWithSkip: Boolean =
       offsetStrategy match {
@@ -552,7 +552,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new R2dbcRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
+      new R2dbcRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
   }
 
   private class R2dbcRunningProjection(source: Source[Done, _], projectionState: R2dbcInternalProjectionState)(implicit
