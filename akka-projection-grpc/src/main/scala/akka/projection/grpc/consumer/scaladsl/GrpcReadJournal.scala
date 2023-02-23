@@ -49,11 +49,14 @@ import com.typesafe.config.Config
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
 import scala.collection.immutable
 import scala.concurrent.Future
+
+import akka.projection.grpc.internal.proto.FilterEntityIdsReq
+import akka.stream.OverflowStrategy
 
 @ApiMayChange
 object GrpcReadJournal {
@@ -249,10 +252,27 @@ final class GrpcReadJournal private (
           throw new IllegalArgumentException(s"Expected TimestampOffset or NoOffset, but got [$offset]")
       }
 
+    // FIXME also need to retrieve filters at startup and include in InitReq
     val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset)
-    val streamIn = Source
+
+    val inReqSource: Source[StreamIn, NotUsed] = Source
+      .actorRef[ConsumerFilter.FilterEntityIds](
+        completionMatcher = PartialFunction.empty,
+        failureMatcher = PartialFunction.empty,
+        bufferSize = 1024,
+        OverflowStrategy.fail)
+      .collect {
+        case ConsumerFilter.FilterEntityIds(`streamId`, include, exclude) =>
+          StreamIn(StreamIn.Message.FilterEntityIds(FilterEntityIdsReq(include.toVector, exclude.toVector)))
+      }
+      .mapMaterializedValue { ref =>
+        ConsumerFilter(system.toTyped).ref ! ConsumerFilter.Subscribe(streamId, ref)
+        NotUsed
+      }
+
+    val streamIn: Source[StreamIn, NotUsed] = Source
       .single(StreamIn(StreamIn.Message.Init(initReq)))
-      .concat(Source.maybe)
+      .concat(inReqSource)
     val streamOut: Source[StreamOut, NotUsed] =
       addRequestHeaders(client.eventsBySlices())
         .invoke(streamIn)
