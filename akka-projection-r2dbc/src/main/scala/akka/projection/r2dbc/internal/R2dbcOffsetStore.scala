@@ -24,7 +24,6 @@ import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.query.DeletedDurableState
 import akka.persistence.query.DurableStateChange
-import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
@@ -53,7 +52,7 @@ private[projection] object R2dbcOffsetStore {
   type SeqNr = Long
   type Pid = String
 
-  final case class Record(pid: Pid, seqNr: SeqNr, timestamp: Instant)
+  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant)
   final case class RecordWithOffset(
       record: Record,
       offset: TimestampOffset,
@@ -62,7 +61,7 @@ private[projection] object R2dbcOffsetStore {
       fromPubSub: Boolean)
 
   object State {
-    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH)
+    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, 0)
 
     def apply(records: immutable.IndexedSeq[Record]): State = {
       if (records.isEmpty) empty
@@ -70,7 +69,12 @@ private[projection] object R2dbcOffsetStore {
     }
   }
 
-  final case class State(byPid: Map[Pid, Record], latest: immutable.IndexedSeq[Record], oldestTimestamp: Instant) {
+  final case class State(
+      byPid: Map[Pid, Record],
+      latest: immutable.IndexedSeq[Record],
+      oldestTimestamp: Instant,
+      sizeAfterEvict: Int) {
+
     def size: Int = byPid.size
 
     def latestTimestamp: Instant =
@@ -136,16 +140,29 @@ private[projection] object R2dbcOffsetStore {
     def window: JDuration =
       JDuration.between(oldestTimestamp, latestTimestamp)
 
+    private lazy val sortedByTimestamp: Vector[Record] = byPid.valuesIterator.toVector.sortBy(_.timestamp)
+
+    lazy val latestBySlice: Vector[Record] = {
+      val builder = scala.collection.mutable.Map[Int, Record]()
+      sortedByTimestamp.reverseIterator.foreach { record =>
+        if (!builder.contains(record.slice))
+          builder.update(record.slice, record)
+      }
+      builder.values.toVector
+    }
+
     def evict(until: Instant, keepNumberOfEntries: Int): State = {
       if (oldestTimestamp.isBefore(until) && size > keepNumberOfEntries) {
-        val sorted: Vector[Record] = byPid.valuesIterator.toVector.sortBy(_.timestamp)
-        State(
-          sorted
+        val newState = State(
+          sortedByTimestamp
             .take(size - keepNumberOfEntries)
-            .filterNot(_.timestamp.isBefore(until)) ++ sorted.takeRight(keepNumberOfEntries))
+            .filterNot(_.timestamp.isBefore(until)) ++ sortedByTimestamp.takeRight(
+            keepNumberOfEntries) ++ latestBySlice)
+        newState.copy(sizeAfterEvict = newState.size)
       } else
         this
     }
+
   }
 
   val FutureDone: Future[Done] = Future.successful(Done)
@@ -170,8 +187,9 @@ private[projection] class R2dbcOffsetStore(
   // FIXME include projectionId in all log messages
   private val logger = LoggerFactory.getLogger(this.getClass)
 
+  private val persistenceExt = Persistence(system)
+
   private val evictWindow = settings.timeWindow.plus(settings.evictInterval)
-  private val evictKeepNumberOfEntriesThreshold = (settings.keepNumberOfEntries * 1.1).toInt
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -183,10 +201,8 @@ private[projection] class R2dbcOffsetStore(
 
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
-  private val persistenceExt = Persistence(system)
-
   private val selectTimestampOffsetSql: String = sql"""
-    SELECT persistence_id, seq_nr, timestamp_offset
+    SELECT slice, persistence_id, seq_nr, timestamp_offset
     FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
 
   private val insertTimestampOffsetSql: String = sql"""
@@ -195,8 +211,9 @@ private[projection] class R2dbcOffsetStore(
     VALUES (?,?,?,?,?,?, transaction_timestamp())"""
 
   // delete less than a timestamp
-  private val deleteOldTimestampOffsetSql: String =
-    sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset < ?"
+  private val deleteOldTimestampOffsetSql: String = sql"""
+    DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset < ?
+    AND NOT (persistence_id || '-' || seq_nr) = ANY (?)"""
 
   // delete greater than or equal a timestamp
   private val deleteNewTimestampOffsetSql: String =
@@ -325,10 +342,11 @@ private[projection] class R2dbcOffsetStore(
           .bind(2, projectionId.name)
       },
       row => {
+        val slice = row.get("slice", classOf[java.lang.Integer])
         val pid = row.get("persistence_id", classOf[String])
         val seqNr = row.get("seq_nr", classOf[java.lang.Long])
         val timestamp = row.get("timestamp_offset", classOf[Instant])
-        Record(pid, seqNr, timestamp)
+        Record(slice, pid, seqNr, timestamp)
       })
     recordsFut.map { records =>
       val newState = State(records)
@@ -405,7 +423,10 @@ private[projection] class R2dbcOffsetStore(
     offset match {
       case t: TimestampOffset =>
         // TODO possible perf improvement to optimize for the normal case of 1 record
-        val records = t.seen.map { case (pid, seqNr) => Record(pid, seqNr, t.timestamp) }.toVector
+        val records = t.seen.map { case (pid, seqNr) =>
+          val slice = persistenceExt.sliceForPersistenceId(pid)
+          Record(slice, pid, seqNr, t.timestamp)
+        }.toVector
         saveTimestampOffsetInTx(conn, records)
       case _ =>
         savePrimitiveOffsetInTx(conn, offset)
@@ -424,7 +445,10 @@ private[projection] class R2dbcOffsetStore(
     if (offsets.exists(_.isInstanceOf[TimestampOffset])) {
       val records = offsets.flatMap {
         case t: TimestampOffset =>
-          t.seen.map { case (pid, seqNr) => Record(pid, seqNr, t.timestamp) }
+          t.seen.map { case (pid, seqNr) =>
+            val slice = persistenceExt.sliceForPersistenceId(pid)
+            Record(slice, pid, seqNr, t.timestamp)
+          }
         case _ =>
           Nil
       }
@@ -456,9 +480,13 @@ private[projection] class R2dbcOffsetStore(
     } else {
       val newState = oldState.add(filteredRecords)
 
-      // accumulate some more than the timeWindow before evicting
+      // accumulate some more than the timeWindow before evicting, and at least 10% increase of size
+      // for testing keepNumberOfEntries = 0 is used
+      val evictThresholdReached =
+        if (settings.keepNumberOfEntries == 0) true else newState.size > (newState.sizeAfterEvict * 1.1).toInt
       val evictedNewState =
-        if (newState.size > evictKeepNumberOfEntriesThreshold && newState.window.compareTo(evictWindow) > 0) {
+        if (newState.size > settings.keepNumberOfEntries && evictThresholdReached && newState.window
+            .compareTo(evictWindow) > 0) {
           val evictUntil = newState.latestTimestamp.minus(settings.timeWindow)
           val s = newState.evict(evictUntil, settings.keepNumberOfEntries)
           logger.debugN(
@@ -796,6 +824,10 @@ private[projection] class R2dbcOffsetStore(
         val until = currentState.latestTimestamp.minus(settings.timeWindow)
         val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
         val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+        val notInLatestBySlice = currentState.latestBySlice.map { record =>
+          s"${record.pid}-${record.seqNr}"
+        }.toArray
+
         val result = r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
           conn
             .createStatement(deleteOldTimestampOffsetSql)
@@ -803,10 +835,8 @@ private[projection] class R2dbcOffsetStore(
             .bind(1, maxSlice)
             .bind(2, projectionId.name)
             .bind(3, until)
+            .bind(4, notInLatestBySlice)
         }
-
-        // FIXME would it be good to keep at least one record per slice that can be used as the
-        // starting point for the slice if the slice ranges are changed?
 
         result.failed.foreach { exc =>
           idle.set(false) // try again next tick
@@ -841,11 +871,16 @@ private[projection] class R2dbcOffsetStore(
           .withConnection("set offset") { conn =>
             deleteNewTimestampOffsetsInTx(conn, t.timestamp).flatMap { _ =>
               val records =
-                if (t.seen.isEmpty)
+                if (t.seen.isEmpty) {
                   // we need some persistenceId to be able to store the new offset timestamp
-                  Vector(Record(PersistenceId("mgmt", UUID.randomUUID().toString).id, seqNr = 1L, t.timestamp))
-                else
-                  t.seen.iterator.map { case (pid, seqNr) => Record(pid, seqNr, t.timestamp) }.toVector
+                  val pid = PersistenceId("mgmt", UUID.randomUUID().toString).id
+                  val slice = persistenceExt.sliceForPersistenceId(pid)
+                  Vector(Record(slice, pid, seqNr = 1L, t.timestamp))
+                } else
+                  t.seen.iterator.map { case (pid, seqNr) =>
+                    val slice = persistenceExt.sliceForPersistenceId(pid)
+                    Record(slice, pid, seqNr, t.timestamp)
+                  }.toVector
               insertTimestampOffsetInTx(conn, records)
             }
           }
@@ -875,9 +910,6 @@ private[projection] class R2dbcOffsetStore(
           .bind(1, maxSlice)
           .bind(2, projectionId.name)
           .bind(3, timestamp))
-
-      // FIXME would it be good to keep at least one record per slice that can be used as the
-      // starting point for the slice if the slice ranges are changed?
 
       if (logger.isDebugEnabled)
         result.foreach { rows =>
@@ -977,27 +1009,30 @@ private[projection] class R2dbcOffsetStore(
     envelope match {
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
+        val slice = persistenceExt.sliceForPersistenceId(eventEnvelope.persistenceId)
         Some(
           RecordWithOffset(
-            Record(eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp),
+            Record(slice, eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp),
             timestampOffset,
             strictSeqNr = true,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(eventEnvelope),
             fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope)))
       case change: UpdatedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
+        val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
         Some(
           RecordWithOffset(
-            Record(change.persistenceId, change.revision, timestampOffset.timestamp),
+            Record(slice, change.persistenceId, change.revision, timestampOffset.timestamp),
             timestampOffset,
             strictSeqNr = false,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(change),
             fromPubSub = false))
       case change: DeletedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
+        val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
         Some(
           RecordWithOffset(
-            Record(change.persistenceId, change.revision, timestampOffset.timestamp),
+            Record(slice, change.persistenceId, change.revision, timestampOffset.timestamp),
             timestampOffset,
             strictSeqNr = false,
             fromBacktracking = false,

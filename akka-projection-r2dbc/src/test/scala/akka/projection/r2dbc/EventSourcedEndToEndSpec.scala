@@ -6,12 +6,15 @@ package akka.projection.r2dbc
 
 import java.time.Instant
 import java.util.UUID
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
+
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
@@ -195,6 +198,38 @@ class EventSourcedEndToEndSpec
     "e" + (template + s).takeRight(5)
   }
 
+  private def assertEventsProcessed(
+      expectedEvents: Vector[String],
+      processedProbe: TestProbe[Processed],
+      verifyProjectionId: Boolean): Unit = {
+    val expectedNumberOfEvents = expectedEvents.size
+    var processed = Vector.empty[Processed]
+
+    (1 to expectedNumberOfEvents).foreach { _ =>
+      // not using receiveMessages(expectedEvents) for better logging in case of failure
+      try {
+        processed :+= processedProbe.receiveMessage(15.seconds)
+      } catch {
+        case e: AssertionError =>
+          val missing = expectedEvents.diff(processed.map(_.envelope.event))
+          log.error(s"Processed [${processed.size}] events, but expected [$expectedNumberOfEvents]. " +
+          s"Missing [${missing.mkString(",")}]. " +
+          s"Received [${processed.map(p => s"(${p.envelope.event}, ${p.envelope.persistenceId}, ${p.envelope.sequenceNr})").mkString(", ")}]. ")
+          throw e
+      }
+    }
+
+    if (verifyProjectionId) {
+      val byPid = processed.groupBy(_.envelope.persistenceId)
+      byPid.foreach { case (_, processedByPid) =>
+        // all events of a pid must be processed by the same projection instance
+        processedByPid.map(_.projectionId).toSet.size shouldBe 1
+        // processed events in right order
+        processedByPid.map(_.envelope.sequenceNr).toVector shouldBe (1 to processedByPid.size).toVector
+      }
+    }
+  }
+
   "A R2DBC projection with eventsBySlices source" must {
 
     "handle all events exactlyOnce" in {
@@ -204,7 +239,7 @@ class EventSourcedEndToEndSpec
 
       val entities = (0 until numberOfEntities).map { n =>
         val persistenceId = PersistenceId(entityType, s"p$n")
-        spawn(Persister(persistenceId), s"p$n")
+        spawn(Persister(persistenceId), s"$entityType-p$n")
       }
 
       // write some before starting the projections
@@ -253,29 +288,64 @@ class EventSourcedEndToEndSpec
         n += 1
       }
 
-      var processed = Vector.empty[Processed]
       val expectedEvents = (1 to numberOfEvents).map(mkEvent).toVector
-      (1 to numberOfEvents).foreach { _ =>
-        // not using receiveMessages(expectedEvents) for better logging in case of failure
-        try {
-          processed :+= processedProbe.receiveMessage(15.seconds)
-        } catch {
-          case e: AssertionError =>
-            val missing = expectedEvents.diff(processed.map(_.envelope.event))
-            log.error(s"Processed [${processed.size}] events, but expected [$numberOfEvents]. " +
-            s"Missing [${missing.mkString(",")}]. " +
-            s"Received [${processed.map(p => s"(${p.envelope.event}, ${p.envelope.persistenceId}, ${p.envelope.sequenceNr})").mkString(", ")}]. ")
-            throw e
-        }
+      assertEventsProcessed(expectedEvents, processedProbe, verifyProjectionId = true)
+
+      projections.foreach(_ ! ProjectionBehavior.Stop)
+    }
+
+    "support change of slice distribution" in {
+      val numberOfEntities = 20
+      val numberOfEvents = numberOfEntities * 10
+      val entityType = nextEntityType()
+
+      val entities = (0 until numberOfEntities).map { n =>
+        val persistenceId = PersistenceId(entityType, s"p$n")
+        spawn(Persister(persistenceId), s"$entityType-p$n")
       }
 
-      val byPid = processed.groupBy(_.envelope.persistenceId)
-      byPid.foreach { case (_, processedByPid) =>
-        // all events of a pid must be processed by the same projection instance
-        processedByPid.map(_.projectionId).toSet.size shouldBe 1
-        // processed events in right order
-        processedByPid.map(_.envelope.sequenceNr).toVector shouldBe (1 to processedByPid.size).toVector
+      val projectionName = UUID.randomUUID().toString
+      val processedProbe = createTestProbe[Processed]()
+      var projections = startProjections(entityType, projectionName, nrOfProjections = 4, processedProbe.ref)
+
+      (1 to numberOfEvents).foreach { n =>
+        val p = n % numberOfEntities
+        entities(p) ! Persister.Persist(mkEvent(n))
+
+        if (n % 10 == 0)
+          Thread.sleep(50)
+        else if (n % 25 == 0)
+          Thread.sleep(1500)
+
+        // stop projections
+        if (n == numberOfEvents / 4) {
+          val probe = createTestProbe()
+          projections.foreach { ref =>
+            ref ! ProjectionBehavior.Stop
+            probe.expectTerminated(ref)
+          }
+        }
+
+        // resume projections again but with more nrOfProjections
+        if (n == (numberOfEvents / 4) + 20)
+          projections = startProjections(entityType, projectionName, nrOfProjections = 8, processedProbe.ref)
+
+        // stop projections
+        if (n == numberOfEvents * 3 / 4) {
+          val probe = createTestProbe()
+          projections.foreach { ref =>
+            ref ! ProjectionBehavior.Stop
+            probe.expectTerminated(ref)
+          }
+        }
+
+        // resume projections again but with less nrOfProjections
+        if (n == (numberOfEvents * 3 / 4) + 20)
+          projections = startProjections(entityType, projectionName, nrOfProjections = 2, processedProbe.ref)
       }
+
+      val expectedEvents = (1 to numberOfEvents).map(mkEvent).toVector
+      assertEventsProcessed(expectedEvents, processedProbe, verifyProjectionId = false)
 
       projections.foreach(_ ! ProjectionBehavior.Stop)
     }
@@ -321,6 +391,7 @@ class EventSourcedEndToEndSpec
 
       projection ! ProjectionBehavior.Stop
     }
+
   }
 
 }

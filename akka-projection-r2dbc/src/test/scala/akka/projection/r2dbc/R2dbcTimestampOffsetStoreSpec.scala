@@ -342,23 +342,26 @@ class R2dbcTimestampOffsetStoreSpec
       val offset3 = TimestampOffset(clock.instant(), Map("p5" -> 10L))
       offsetStore.saveOffset(offset3).futureValue
 
-      offsetStore.isDuplicate(Record("p5", 10, offset3.timestamp)) shouldBe true
-      offsetStore.isDuplicate(Record("p1", 4, offset2.timestamp)) shouldBe true
-      offsetStore.isDuplicate(Record("p3", 6, offset2.timestamp)) shouldBe true
-      offsetStore.isDuplicate(Record("p4", 9, offset2.timestamp)) shouldBe true
+      def createRecord(pid: Pid, seqNr: SeqNr, timestamp: Instant): Record =
+        Record(persistenceExt.sliceForPersistenceId(pid), pid, seqNr, timestamp)
 
-      offsetStore.isDuplicate(Record("p1", 3, offset1.timestamp)) shouldBe true
-      offsetStore.isDuplicate(Record("p2", 1, offset1.timestamp)) shouldBe true
-      offsetStore.isDuplicate(Record("p3", 5, offset1.timestamp)) shouldBe true
+      offsetStore.isDuplicate(createRecord("p5", 10, offset3.timestamp)) shouldBe true
+      offsetStore.isDuplicate(createRecord("p1", 4, offset2.timestamp)) shouldBe true
+      offsetStore.isDuplicate(createRecord("p3", 6, offset2.timestamp)) shouldBe true
+      offsetStore.isDuplicate(createRecord("p4", 9, offset2.timestamp)) shouldBe true
 
-      offsetStore.isDuplicate(Record("p1", 2, offset1.timestamp.minusMillis(1))) shouldBe true
-      offsetStore.isDuplicate(Record("p5", 9, offset3.timestamp.minusMillis(1))) shouldBe true
+      offsetStore.isDuplicate(createRecord("p1", 3, offset1.timestamp)) shouldBe true
+      offsetStore.isDuplicate(createRecord("p2", 1, offset1.timestamp)) shouldBe true
+      offsetStore.isDuplicate(createRecord("p3", 5, offset1.timestamp)) shouldBe true
 
-      offsetStore.isDuplicate(Record("p5", 11, offset3.timestamp)) shouldBe false
-      offsetStore.isDuplicate(Record("p5", 12, offset3.timestamp.plusMillis(1))) shouldBe false
+      offsetStore.isDuplicate(createRecord("p1", 2, offset1.timestamp.minusMillis(1))) shouldBe true
+      offsetStore.isDuplicate(createRecord("p5", 9, offset3.timestamp.minusMillis(1))) shouldBe true
 
-      offsetStore.isDuplicate(Record("p6", 1, offset3.timestamp.plusMillis(2))) shouldBe false
-      offsetStore.isDuplicate(Record("p7", 1, offset3.timestamp.minusMillis(1))) shouldBe false
+      offsetStore.isDuplicate(createRecord("p5", 11, offset3.timestamp)) shouldBe false
+      offsetStore.isDuplicate(createRecord("p5", 12, offset3.timestamp.plusMillis(1))) shouldBe false
+
+      offsetStore.isDuplicate(createRecord("p6", 1, offset3.timestamp.plusMillis(2))) shouldBe false
+      offsetStore.isDuplicate(createRecord("p7", 1, offset3.timestamp.minusMillis(1))) shouldBe false
     }
 
     "accept known sequence numbers and reject unknown" in {
@@ -607,38 +610,101 @@ class R2dbcTimestampOffsetStoreSpec
       val startTime = TestClock.nowMicros().instant()
       log.debug("Start time [{}]", startTime)
 
-      offsetStore.saveOffset(TimestampOffset(startTime, Map("p1" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(1)), Map("p2" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(2)), Map("p3" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(evictInterval), Map("p4" -> 1L))).futureValue
+      // these pids have the same slice 645, otherwise it will keep one for each slice
+      val p1 = "p500"
+      val p2 = "p621"
+      val p3 = "p742"
+      val p4 = "p863"
+      val p5 = "p984"
+      val p6 = "p3080"
+      val p7 = "p4290"
+      val p8 = "p20180"
+
+      offsetStore.saveOffset(TimestampOffset(startTime, Map(p1 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(1)), Map(p2 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(2)), Map(p3 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(evictInterval), Map(p4 -> 1L))).futureValue
       offsetStore
-        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(1)), Map("p4" -> 1L)))
+        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(1)), Map(p4 -> 1L)))
         .futureValue
       offsetStore
-        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(2)), Map("p5" -> 1L)))
+        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(2)), Map(p5 -> 1L)))
         .futureValue
       offsetStore
-        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(3)), Map("p6" -> 1L)))
+        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(3)), Map(p6 -> 1L)))
         .futureValue
       offsetStore.getState().size shouldBe 6
 
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(10)), Map("p7" -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(10)), Map(p7 -> 1L))).futureValue
       offsetStore.getState().size shouldBe 7 // nothing evicted yet
 
       offsetStore
-        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).minusSeconds(3)), Map("p8" -> 1L)))
+        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).minusSeconds(3)), Map(p8 -> 1L)))
         .futureValue
       offsetStore.getState().size shouldBe 8 // still nothing evicted yet
 
       offsetStore
-        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(1)), Map("p8" -> 2L)))
+        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(1)), Map(p8 -> 2L)))
         .futureValue
-      offsetStore.getState().byPid.keySet shouldBe Set("p5", "p6", "p7", "p8")
+      offsetStore.getState().byPid.keySet shouldBe Set(p5, p6, p7, p8)
 
       offsetStore
-        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(20)), Map("p8" -> 3L)))
+        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(20)), Map(p8 -> 3L)))
         .futureValue
-      offsetStore.getState().byPid.keySet shouldBe Set("p7", "p8")
+      offsetStore.getState().byPid.keySet shouldBe Set(p7, p8)
+    }
+
+    "evict old records but keep latest for each slice" in {
+      val projectionId = genRandomProjectionId()
+      val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100)).withEvictInterval(JDuration.ofSeconds(10))
+      import evictSettings._
+      val offsetStore = createOffsetStore(projectionId, evictSettings)
+
+      val startTime = TestClock.nowMicros().instant()
+      log.debug("Start time [{}]", startTime)
+
+      val p1 = "p500" // slice 645
+      val p2 = "p92" // slice 905
+      val p3 = "p108" // slice 905
+      val p4 = "p863" // slice 645
+      val p5 = "p984" // slice 645
+      val p6 = "p3080" // slice 645
+      val p7 = "p4290" // slice 645
+      val p8 = "p20180" // slice 645
+
+      offsetStore.saveOffset(TimestampOffset(startTime, Map(p1 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(1)), Map(p2 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(2)), Map(p3 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(evictInterval), Map(p4 -> 1L))).futureValue
+      offsetStore
+        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(1)), Map(p4 -> 1L)))
+        .futureValue
+      offsetStore
+        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(2)), Map(p5 -> 1L)))
+        .futureValue
+      offsetStore
+        .saveOffset(TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(3)), Map(p6 -> 1L)))
+        .futureValue
+      offsetStore.getState().size shouldBe 6
+
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(10)), Map(p7 -> 1L))).futureValue
+      offsetStore.getState().size shouldBe 7 // nothing evicted yet
+
+      offsetStore
+        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).minusSeconds(3)), Map(p8 -> 1L)))
+        .futureValue
+      offsetStore.getState().size shouldBe 8 // still nothing evicted yet
+
+      offsetStore
+        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(1)), Map(p8 -> 2L)))
+        .futureValue
+      // also keeping p3 ("p108") for slice 905
+      offsetStore.getState().byPid.keySet shouldBe Set(p3, p5, p6, p7, p8)
+
+      offsetStore
+        .saveOffset(TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(20)), Map(p8 -> 3L)))
+        .futureValue
+      offsetStore.getState().byPid.keySet shouldBe Set(p3, p7, p8)
     }
 
     "delete old records" in {
@@ -650,26 +716,112 @@ class R2dbcTimestampOffsetStoreSpec
       val startTime = TestClock.nowMicros().instant()
       log.debug("Start time [{}]", startTime)
 
-      offsetStore.saveOffset(TimestampOffset(startTime, Map("p1" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(1)), Map("p2" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(2)), Map("p3" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(3)), Map("p4" -> 1L))).futureValue
+      // these pids have the same slice 645, otherwise it will keep one for each slice
+      val p1 = "p500"
+      val p2 = "p621"
+      val p3 = "p742"
+      val p4 = "p863"
+      val p5 = "p984"
+      val p6 = "p3080"
+      val p7 = "p4290"
+      val p8 = "p20180"
+
+      offsetStore.saveOffset(TimestampOffset(startTime, Map(p1 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(1)), Map(p2 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(2)), Map(p3 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(3)), Map(p4 -> 1L))).futureValue
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
       offsetStore.readOffset().futureValue // this will load from database
       offsetStore.getState().size shouldBe 4
 
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(2)), Map("p5" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(1)), Map("p6" -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(2)), Map(p5 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(1)), Map(p6 -> 1L))).futureValue
       // nothing deleted yet
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
       offsetStore.readOffset().futureValue // this will load from database
       offsetStore.getState().size shouldBe 6
 
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.plusSeconds(1)), Map("p7" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.plusSeconds(2)), Map("p8" -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.plusSeconds(1)), Map(p7 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.plusSeconds(3)), Map(p8 -> 1L))).futureValue
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 3
+      offsetStore.readOffset().futureValue // this will load from database
+      offsetStore.getState().byPid.keySet shouldBe Set(p4, p5, p6, p7, p8)
+    }
+
+    "delete old records but keep latest for each slice" in {
+      val projectionId = genRandomProjectionId()
+      val deleteSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
+      import deleteSettings._
+      val offsetStore = createOffsetStore(projectionId, deleteSettings)
+
+      val startTime = TestClock.nowMicros().instant()
+      log.debug("Start time [{}]", startTime)
+
+      val p1 = "p500" // slice 645
+      val p2 = "p92" // slice 905
+      val p3 = "p108" // slice 905
+      val p4 = "p863" // slice 645
+      val p5 = "p984" // slice 645
+      val p6 = "p3080" // slice 645
+      val p7 = "p4290" // slice 645
+      val p8 = "p20180" // slice 645
+
+      offsetStore.saveOffset(TimestampOffset(startTime, Map(p1 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(1)), Map(p2 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(2)), Map(p3 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(JDuration.ofSeconds(3)), Map(p4 -> 1L))).futureValue
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
+      offsetStore.readOffset().futureValue // this will load from database
+      offsetStore.getState().size shouldBe 4
+
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(2)), Map(p5 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.minusSeconds(1)), Map(p6 -> 1L))).futureValue
+      // nothing deleted yet
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
+      offsetStore.readOffset().futureValue // this will load from database
+      offsetStore.getState().size shouldBe 6
+
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.plusSeconds(1)), Map(p7 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.plusSeconds(3)), Map(p8 -> 1L))).futureValue
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 2
       offsetStore.readOffset().futureValue // this will load from database
-      offsetStore.getState().byPid.keySet shouldBe Set("p3", "p4", "p5", "p6", "p7", "p8")
+      // p3 is kept for slice 905
+      offsetStore.getState().byPid.keySet shouldBe Set(p3, p4, p5, p6, p7, p8)
+    }
+
+    "delete many old records" in {
+      // windowSeconds and totalMillis can be increase for longer/more testing
+      val windowSeconds = 3
+      val totalMillis = 5 * 1000
+
+      val projectionId = genRandomProjectionId()
+      val deleteSettings = settings
+        .withTimeWindow(JDuration.ofSeconds(windowSeconds))
+        .withKeepNumberOfEntries(2000)
+        .withDeleteInterval(JDuration.ofHours(1)) // don't run the scheduled deletes
+      val offsetStore = createOffsetStore(projectionId, deleteSettings)
+
+      val startTime = TestClock.nowMicros().instant()
+      log.debug("Start time [{}]", startTime)
+
+      val storedSlices =
+        (1 to totalMillis / 10).flatMap { m =>
+          val offsets = (1 to 10).map { n =>
+            val pid = s"p$m-$n"
+            TimestampOffset(startTime.plus(JDuration.ofMillis(m * 10 + n)), Map(pid -> 1L))
+          }
+          offsetStore.saveOffsets(offsets).futureValue
+          if (m % (totalMillis / 100) == 0) {
+            val t0 = System.nanoTime()
+            val deleted = offsetStore.deleteOldTimestampOffsets().futureValue
+            println(s"# ${m * 10} deleted $deleted, took ${(System.nanoTime() - t0) / 1000 / 1000} ms")
+          }
+          offsets.map(o => persistenceExt.sliceForPersistenceId(o.seen.head._1)).toSet
+        }.toSet
+
+      offsetStore.readOffset().futureValue // this will load from database
+      val readSlices = offsetStore.getState().byPid.keySet.map(pid => persistenceExt.sliceForPersistenceId(pid))
+      readSlices shouldBe storedSlices
     }
 
     "periodically delete old records" in {
@@ -684,19 +836,24 @@ class R2dbcTimestampOffsetStoreSpec
       val startTime = TestClock.nowMicros().instant()
       log.debug("Start time [{}]", startTime)
 
-      offsetStore.saveOffset(TimestampOffset(startTime, Map("p1" -> 1L))).futureValue
-      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.plusSeconds(1)), Map("p2" -> 1L))).futureValue
+      // these pids have the same slice 645, otherwise it will keep one for each slice
+      val p1 = "p500"
+      val p2 = "p621"
+      val p3 = "p742"
+
+      offsetStore.saveOffset(TimestampOffset(startTime, Map(p1 -> 1L))).futureValue
+      offsetStore.saveOffset(TimestampOffset(startTime.plus(timeWindow.plusSeconds(1)), Map(p2 -> 1L))).futureValue
       eventually {
         offsetStore.readOffset().futureValue // this will load from database
-        offsetStore.getState().byPid.keySet shouldBe Set("p2")
+        offsetStore.getState().byPid.keySet shouldBe Set(p2)
       }
 
       offsetStore
-        .saveOffset(TimestampOffset(startTime.plus(timeWindow.multipliedBy(2).plusSeconds(2)), Map("p3" -> 1L)))
+        .saveOffset(TimestampOffset(startTime.plus(timeWindow.multipliedBy(2).plusSeconds(2)), Map(p3 -> 1L)))
         .futureValue
       eventually {
         offsetStore.readOffset().futureValue // this will load from database
-        offsetStore.getState().byPid.keySet shouldBe Set("p3")
+        offsetStore.getState().byPid.keySet shouldBe Set(p3)
       }
     }
 
