@@ -811,7 +811,7 @@ class R2dbcTimestampOffsetProjectionSpec
 
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
-      implicit val offsetStore =
+      implicit val offsetStore: R2dbcOffsetStore =
         new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
 
       val result1 = new StringBuffer()
@@ -948,7 +948,7 @@ class R2dbcTimestampOffsetProjectionSpec
 
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
-      implicit val offsetStore =
+      implicit val offsetStore: R2dbcOffsetStore =
         new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
 
       val projectionRef = spawn(
@@ -1152,7 +1152,7 @@ class R2dbcTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
-      implicit val offsetStore =
+      implicit val offsetStore: R2dbcOffsetStore =
         new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
 
       val result1 = new StringBuffer()
@@ -1294,7 +1294,7 @@ class R2dbcTimestampOffsetProjectionSpec
 
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
-      implicit val offsetStore =
+      implicit val offsetStore: R2dbcOffsetStore =
         new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
 
       val flowHandler =
