@@ -824,8 +824,11 @@ private[projection] class R2dbcOffsetStore(
         val until = currentState.latestTimestamp.minus(settings.timeWindow)
         val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
         val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-        val notInLatestBySlice = currentState.latestBySlice.map { record =>
-          s"${record.pid}-${record.seqNr}"
+        val notInLatestBySlice = currentState.latestBySlice.collect {
+          case record if record.timestamp.isBefore(until) =>
+            // note that deleteOldTimestampOffsetSql already has `AND timestamp_offset < ?`
+            // and that's why timestamp >= until don't have to be included here
+            s"${record.pid}-${record.seqNr}"
         }.toArray
 
         val result = r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
