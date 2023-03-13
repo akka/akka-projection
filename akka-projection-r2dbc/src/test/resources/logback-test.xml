@@ -12,7 +12,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="akka.projection.r2dbc" level="DEBUG" />
+    <logger name="akka.projection" level="DEBUG" />
     <logger name="akka.persistence.r2dbc" level="DEBUG" />
 <!--    <logger name="io.r2dbc.postgresql.QUERY" level="DEBUG" />-->
 <!--    <logger name="io.r2dbc.pool" level="DEBUG" />-->
