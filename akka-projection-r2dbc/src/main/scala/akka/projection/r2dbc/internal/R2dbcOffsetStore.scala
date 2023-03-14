@@ -408,7 +408,7 @@ private[projection] class R2dbcOffsetStore(
   /**
    * Like saveOffsetInTx, but in own transaction. Used by atLeastOnce.
    */
-  def saveOffset[Offset](offset: Offset): Future[Done] = {
+  def saveOffset(offset: OffsetPidSeqNr): Future[Done] = {
     r2dbcExecutor
       .withConnection("save offset") { conn =>
         saveOffsetInTx(conn, offset)
@@ -419,21 +419,20 @@ private[projection] class R2dbcOffsetStore(
   /**
    * This method is used together with the users' handler code and run in same transaction.
    */
-  def saveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
+  def saveOffsetInTx(conn: Connection, offset: OffsetPidSeqNr): Future[Done] = {
     offset match {
-      case t: TimestampOffset =>
-        // TODO possible perf improvement to optimize for the normal case of 1 record
-        val records = t.seen.map { case (pid, seqNr) =>
-          val slice = persistenceExt.sliceForPersistenceId(pid)
-          Record(slice, pid, seqNr, t.timestamp)
-        }.toVector
-        saveTimestampOffsetInTx(conn, records)
+      case OffsetPidSeqNr(t: TimestampOffset, Some((pid, seqNr))) =>
+        val slice = persistenceExt.sliceForPersistenceId(pid)
+        val record = Record(slice, pid, seqNr, t.timestamp)
+        saveTimestampOffsetInTx(conn, Vector(record))
+      case OffsetPidSeqNr(_: TimestampOffset, None) =>
+        throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
       case _ =>
-        savePrimitiveOffsetInTx(conn, offset)
+        savePrimitiveOffsetInTx(conn, offset.offset)
     }
   }
 
-  def saveOffsets[Offset](offsets: immutable.IndexedSeq[Offset]): Future[Done] = {
+  def saveOffsets(offsets: immutable.IndexedSeq[OffsetPidSeqNr]): Future[Done] = {
     r2dbcExecutor
       .withConnection("save offsets") { conn =>
         saveOffsetsInTx(conn, offsets)
@@ -441,24 +440,27 @@ private[projection] class R2dbcOffsetStore(
       .map(_ => Done)(ExecutionContexts.parasitic)
   }
 
-  def saveOffsetsInTx[Offset](conn: Connection, offsets: immutable.IndexedSeq[Offset]): Future[Done] = {
-    if (offsets.exists(_.isInstanceOf[TimestampOffset])) {
-      val records = offsets.flatMap {
-        case t: TimestampOffset =>
-          t.seen.map { case (pid, seqNr) =>
-            val slice = persistenceExt.sliceForPersistenceId(pid)
-            Record(slice, pid, seqNr, t.timestamp)
-          }
+  def saveOffsetsInTx(conn: Connection, offsets: immutable.IndexedSeq[OffsetPidSeqNr]): Future[Done] = {
+    if (offsets.isEmpty)
+      FutureDone
+    else if (offsets.head.offset.isInstanceOf[TimestampOffset]) {
+      val records = offsets.map {
+        case OffsetPidSeqNr(t: TimestampOffset, Some((pid, seqNr))) =>
+          val slice = persistenceExt.sliceForPersistenceId(pid)
+          Record(slice, pid, seqNr, t.timestamp)
+        case OffsetPidSeqNr(_: TimestampOffset, None) =>
+          throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
         case _ =>
-          Nil
+          throw new IllegalArgumentException(
+            "Mix of TimestampOffset and other offset type in same transaction isnot supported")
       }
       saveTimestampOffsetInTx(conn, records)
     } else {
-      savePrimitiveOffsetInTx(conn, offsets.last)
+      savePrimitiveOffsetInTx(conn, offsets.last.offset)
     }
   }
 
-  private def saveTimestampOffsetInTx[Offset](conn: Connection, records: immutable.IndexedSeq[Record]): Future[Done] = {
+  private def saveTimestampOffsetInTx(conn: Connection, records: immutable.IndexedSeq[Record]): Future[Done] = {
     idle.set(false)
     val oldState = state.get()
     val filteredRecords = {
