@@ -56,7 +56,7 @@ class ProjectionManagement(system: ActorSystem[_]) {
   /**
    * Pause the given Projection. Processing will be stopped.
    * While the Projection is paused other management operations can be performed, such as
-   * [[ProjectionManagement.resume]].
+   * [[ProjectionManagement.updateOffset]].
    * The Projection can be resumed with [[ProjectionManagement.resume]].
    *
    * The paused/resumed state is stored, and it is read when the Projections are started, for example
