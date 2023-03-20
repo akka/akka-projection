@@ -21,6 +21,7 @@ service EventProducerService {
 message StreamIn {
   oneof message {
     InitReq init = 1;
+    FilterEntityIdsReq filter_entity_ids = 2;
   }
 }
 
@@ -33,6 +34,12 @@ message InitReq {
   int32 slice_min = 2;
   int32 slice_max = 3;
   Offset offset = 4;
+  // FIXME InitReq should also be able to include filter
+}
+
+message FilterEntityIdsReq {
+  repeated string include_entity_ids = 1;
+  repeated string exclude_entity_ids = 2;
 }
 
 message Offset {

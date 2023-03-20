@@ -43,10 +43,11 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
+
+import akka.projection.grpc.consumer.scaladsl.ConsumerFilter
 
 object IntegrationSpec {
 
@@ -107,7 +108,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
-  private val numberOfTests = 4
+  private val numberOfTests = 5
 
   // needs to be unique per test case and known up front for setting up the producer
   case class TestSource(entityType: String, streamId: String, pid: PersistenceId)
@@ -330,6 +331,57 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
 
+      processedProbe.expectTerminated(projection)
+      processedProbe.expectTerminated(entity)
+    }
+
+    "dynamically filter persistence ids" in new TestFixture {
+      entity ! TestEntity.Persist("a")
+      entity ! TestEntity.Persist("b")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      // start the projection
+      val projection = spawnAtLeastOnceProjection()
+
+      val processedA = processedProbe.receiveMessage()
+      processedA.envelope.persistenceId shouldBe pid.id
+      processedA.envelope.sequenceNr shouldBe 1L
+      processedA.envelope.event shouldBe "A"
+
+      val processedB = processedProbe.receiveMessage()
+      processedB.envelope.persistenceId shouldBe pid.id
+      processedB.envelope.sequenceNr shouldBe 2L
+      processedB.envelope.event shouldBe "B"
+
+      val consumerFilter = ConsumerFilter(system).ref
+      consumerFilter ! ConsumerFilter.FilterEntityIds(streamId, include = Set.empty, exclude = Set(pid.entityId))
+      // FIXME hack sleep to let it propagate to producer side
+      Thread.sleep(3000)
+
+      entity ! TestEntity.Persist("c")
+      processedProbe.expectNoMessage(1.second)
+
+      consumerFilter ! ConsumerFilter.FilterEntityIds(streamId, include = Set(pid.entityId), exclude = Set.empty)
+      // FIXME hack sleep
+      Thread.sleep(3000)
+
+      entity ! TestEntity.Persist("d")
+
+      // D first rejected because expecting seqNr 3 (c) first
+      // C received via backtracking (or other duplicate), but FIXME this is probably racy
+      val processedC = processedProbe.receiveMessage()
+      processedC.envelope.persistenceId shouldBe pid.id
+      processedC.envelope.sequenceNr shouldBe 3L
+      processedC.envelope.event shouldBe "C"
+
+      val processedD = processedProbe.receiveMessage()
+      processedD.envelope.persistenceId shouldBe pid.id
+      processedD.envelope.sequenceNr shouldBe 4L
+      processedD.envelope.event shouldBe "D"
+
+      projection ! ProjectionBehavior.Stop
+      entity ! TestEntity.Stop(replyProbe.ref)
       processedProbe.expectTerminated(projection)
       processedProbe.expectTerminated(entity)
     }
