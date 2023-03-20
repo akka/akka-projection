@@ -152,7 +152,8 @@ import akka.stream.scaladsl.BidiFlow
 
       val eventsFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
         BidiFlow
-          .fromGraph(new FilterStage(init.streamId, producerSource.entityType, init.sliceMin to init.sliceMax))
+          .fromGraph(
+            new FilterStage(init.streamId, producerSource.entityType, init.sliceMin to init.sliceMax, init.filter))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =

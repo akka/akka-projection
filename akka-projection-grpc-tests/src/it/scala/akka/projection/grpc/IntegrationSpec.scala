@@ -355,14 +355,16 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedB.envelope.event shouldBe "B"
 
       val consumerFilter = ConsumerFilter(system).ref
-      consumerFilter ! ConsumerFilter.FilterEntityIds(streamId, include = Set.empty, exclude = Set(pid.entityId))
+      consumerFilter ! ConsumerFilter.FilterCommand(streamId, List(ConsumerFilter.ExcludeEntityIds(Set(pid.entityId))))
       // FIXME hack sleep to let it propagate to producer side
       Thread.sleep(3000)
 
       entity ! TestEntity.Persist("c")
       processedProbe.expectNoMessage(1.second)
 
-      consumerFilter ! ConsumerFilter.FilterEntityIds(streamId, include = Set(pid.entityId), exclude = Set.empty)
+      consumerFilter ! ConsumerFilter.FilterCommand(
+        streamId,
+        List(ConsumerFilter.IncludeEntityIds(Set(ConsumerFilter.EntityIdOffset(pid.entityId, 0L)))))
       // FIXME hack sleep
       Thread.sleep(3000)
 
