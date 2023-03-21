@@ -23,6 +23,7 @@ import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.IncludeEntityIds
+import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.stream.scaladsl.BidiFlow
 import akka.stream.scaladsl.Flow
@@ -171,7 +172,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
           .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
       val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
 
-      val (inPublisher, outProbe) = streamIn.via(envFlow).log("test stream").toMat(TestSink())(Keep.both).run()
+      val (inPublisher, outProbe) = streamIn.via(envFlow).toMat(TestSink())(Keep.both).run()
       val envPublisher = envPublisherPromise.future.futureValue
 
       val filterCriteria = List(
@@ -203,6 +204,54 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
       outProbe.expectNoMessage()
       envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
+      outProbe.expectNext().event shouldBe "d1"
+      outProbe.expectNext().event shouldBe "d2"
+    }
+
+    "replay ReplayReq" in {
+      // some more envelopes
+      val allEnvelopes = envelopes ++
+        Vector(
+          createEnvelope(PersistenceId(entityType, "d"), 1, "d1"),
+          createEnvelope(PersistenceId(entityType, "d"), 2, "d2"))
+
+      val envPublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
+      val envSource: Source[EventEnvelope[Any], _] =
+        TestSource()
+          .mapMaterializedValue(envPublisherPromise.success)
+      val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
+        BidiFlow
+          .fromGraph(
+            new FilterStage(
+              streamId,
+              entityType,
+              0 until persistence.numberOfSlices,
+              Nil,
+              testCurrentEventsByPersistenceIdQuery(allEnvelopes)))
+          .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
+      val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
+
+      val (inPublisher, outProbe) = streamIn.via(envFlow).toMat(TestSink())(Keep.both).run()
+      val envPublisher = envPublisherPromise.future.futureValue
+
+      inPublisher.sendNext(
+        StreamIn(StreamIn.Message.Replay(ReplayReq(List(EntityIdOffset("b", 1L), EntityIdOffset("c", 1L))))))
+
+      val expectedEnvelopes = allEnvelopes
+        .filter { env =>
+          env.persistenceId == PersistenceId(entityType, "b").id || env.persistenceId == PersistenceId(entityType, "c").id
+        }
+
+      outProbe.request(10)
+      // no guarantee of order between b and c
+      outProbe.expectNextN(2).map(_.event).toSet shouldBe expectedEnvelopes.map(_.event).toSet
+      outProbe.expectNoMessage()
+
+      inPublisher.sendNext(StreamIn(StreamIn.Message.Replay(ReplayReq(List(EntityIdOffset("d", 1L))))))
+      // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
+      outProbe.expectNoMessage()
+      envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
+      outProbe.expectNext().event shouldBe "e1"
       outProbe.expectNext().event shouldBe "d1"
       outProbe.expectNext().event shouldBe "d2"
     }

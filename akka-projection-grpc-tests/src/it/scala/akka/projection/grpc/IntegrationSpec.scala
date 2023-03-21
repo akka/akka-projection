@@ -108,7 +108,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
-  private val numberOfTests = 5
+  private val numberOfTests = 6
 
   // needs to be unique per test case and known up front for setting up the producer
   case class TestSource(entityType: String, streamId: String, pid: PersistenceId)
@@ -335,7 +335,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedProbe.expectTerminated(entity)
     }
 
-    "dynamically filter persistence ids" in new TestFixture {
+    "dynamically filter entity ids" in new TestFixture {
       entity ! TestEntity.Persist("a")
       entity ! TestEntity.Persist("b")
       entity ! TestEntity.Ping(replyProbe.ref)
@@ -381,6 +381,54 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedD.envelope.persistenceId shouldBe pid.id
       processedD.envelope.sequenceNr shouldBe 4L
       processedD.envelope.event shouldBe "D"
+
+      projection ! ProjectionBehavior.Stop
+      entity ! TestEntity.Stop(replyProbe.ref)
+      processedProbe.expectTerminated(projection)
+      processedProbe.expectTerminated(entity)
+    }
+
+    "dynamically replay events" in new TestFixture {
+      entity ! TestEntity.Persist("a")
+      entity ! TestEntity.Persist("b")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      // start the projection
+      val projection = spawnAtLeastOnceProjection()
+
+      val processedA = processedProbe.receiveMessage()
+      processedA.envelope.persistenceId shouldBe pid.id
+      processedA.envelope.sequenceNr shouldBe 1L
+      processedA.envelope.event shouldBe "A"
+
+      val processedB = processedProbe.receiveMessage()
+      processedB.envelope.persistenceId shouldBe pid.id
+      processedB.envelope.sequenceNr shouldBe 2L
+      processedB.envelope.event shouldBe "B"
+
+      val consumerFilter = ConsumerFilter(system).ref
+      consumerFilter ! ConsumerFilter.ReplayCommand(streamId, Set(ConsumerFilter.EntityIdOffset(pid.entityId, 2L)))
+      // FIXME hack sleep to let it propagate to producer side
+      Thread.sleep(3000)
+
+      entity ! TestEntity.Persist("c")
+      entity ! TestEntity.Persist("d")
+
+      // this doesn't really verify that a replay occurred since same events are propagated the ordinary way
+
+      val processedC = processedProbe.receiveMessage()
+      processedC.envelope.persistenceId shouldBe pid.id
+      processedC.envelope.sequenceNr shouldBe 3L
+      processedC.envelope.event shouldBe "C"
+
+      val processedD = processedProbe.receiveMessage()
+      processedD.envelope.persistenceId shouldBe pid.id
+      processedD.envelope.sequenceNr shouldBe 4L
+      processedD.envelope.event shouldBe "D"
+
+      // no duplicates
+      processedProbe.expectNoMessage()
 
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)

@@ -19,8 +19,8 @@ import akka.persistence.query.TimestampOffset
 import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
+import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.FilterCriteria
-import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.stream.Attributes
 import akka.stream.BidiShape
@@ -117,7 +117,7 @@ import akka.stream.stage.StageLogging
       override def preStart(): Unit = {
         persistence = Persistence(materializer.system)
         updateFilter(initFilter)
-        replay(initFilter)
+        replayFromFilterCriteria(initFilter)
         initFilter = Nil // for GC
       }
 
@@ -210,21 +210,24 @@ import akka.stream.stage.StageLogging
       private def mapEntityIdToPidHandledByThisStream(entityIds: Seq[String]): Seq[String] =
         entityIds.map(PersistenceId(entityType, _)).filter(handledByThisStream).map(_.id)
 
-      private def replay(criteria: Iterable[FilterCriteria]): Unit = {
-        // FIXME limit number of concurrent replay requests, place additional in a pending queue
+      private def replayFromFilterCriteria(criteria: Iterable[FilterCriteria]): Unit = {
         criteria.foreach {
           _.message match {
-            case FilterCriteria.Message.IncludeEntityIds(include) =>
-              include.entityIdOffset.foreach { entityOffset =>
-                if (entityOffset.seqNr >= 1)
-                  replay(entityOffset.entityId, entityOffset.seqNr)
-              // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter
-              // change. In that case we must have a way to signal to the R2dbcOffsetStore that the
-              // first seqNr of that new pid is ok to pass through even though it isn't 1
-              // and the offset store doesn't know about previous seqNr.
-              }
-            case _ =>
+            case FilterCriteria.Message.IncludeEntityIds(include) => replayAll(include.entityIdOffset)
+            case _                                                =>
           }
+        }
+      }
+
+      private def replayAll(entityOffsets: Iterable[EntityIdOffset]): Unit = {
+        // FIXME limit number of concurrent replay requests, place additional in a pending queue
+        entityOffsets.foreach { entityOffset =>
+          if (entityOffset.seqNr >= 1)
+            replay(entityOffset.entityId, entityOffset.seqNr)
+        // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter
+        // change. In that case we must have a way to signal to the R2dbcOffsetStore that the
+        // first seqNr of that new pid is ok to pass through even though it isn't 1
+        // and the offset store doesn't know about previous seqNr.
         }
       }
 
@@ -268,9 +271,16 @@ import akka.stream.stage.StageLogging
         new InHandler {
           override def onPush(): Unit = {
             grab(inReq) match {
-              case StreamIn(StreamIn.Message.Filter(filterReq: FilterReq), _) =>
+              case StreamIn(StreamIn.Message.Filter(filterReq), _) =>
                 updateFilter(filterReq.criteria)
-                replay(filterReq.criteria)
+                replayFromFilterCriteria(filterReq.criteria)
+
+              case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
+                replayAll(replayReq.entityIdOffset)
+
+              case StreamIn(StreamIn.Message.Init(_), _) =>
+                log.warning("Stream [{}]: Init request can only be used as the first message", logPrefix)
+                throw new IllegalStateException("Init request can only be used as the first message")
 
               case StreamIn(other, _) =>
                 log.warning("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)

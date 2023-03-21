@@ -22,9 +22,12 @@ message StreamIn {
   oneof message {
     InitReq init = 1;
     FilterReq filter = 2;
+    ReplayReq replay = 3;
   }
 }
 
+// The first message must always be this InitReq to setup the stream.
+// It can only be used as the first message.
 message InitReq {
   // the logical stream identifier, mapped to a specific internal entity type by
   // the producer settings
@@ -37,8 +40,14 @@ message InitReq {
   repeated FilterCriteria filter = 5;
 }
 
+// Add filter criteria to exclude and include events for matching entities.
 message FilterReq {
   repeated FilterCriteria criteria = 1;
+}
+
+// Replay events for given entities.
+message ReplayReq {
+  repeated EntityIdOffset entity_id_offset = 1;
 }
 
 message FilterCriteria {
