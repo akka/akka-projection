@@ -60,10 +60,14 @@ object EventProducer {
     val eventsBySlicesQueriesPerStreamId =
       akka.projection.grpc.producer.scaladsl.EventProducer
         .eventsBySlicesQueriesForStreamIds(scalaProducerSources, system)
+    val currentEventsByPersistenceIdQueriesForStreamIds =
+      akka.projection.grpc.producer.scaladsl.EventProducer
+        .currentEventsByPersistenceIdQueriesForStreamIds(scalaProducerSources, system)
 
     val eventProducerService = new EventProducerServiceImpl(
       system,
       eventsBySlicesQueriesPerStreamId,
+      currentEventsByPersistenceIdQueriesForStreamIds,
       scalaProducerSources,
       interceptor.asScala.map(new EventProducerInterceptorAdapter(_)))
 

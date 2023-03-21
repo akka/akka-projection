@@ -4,11 +4,19 @@
 
 package akka.projection.grpc.internal
 
+import java.time.Instant
+
+import scala.concurrent.ExecutionContext
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 import scala.util.matching.Regex
 
 import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.persistence.Persistence
+import akka.persistence.query.TimestampOffset
+import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.FilterCriteria
@@ -18,6 +26,8 @@ import akka.stream.Attributes
 import akka.stream.BidiShape
 import akka.stream.Inlet
 import akka.stream.Outlet
+import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.SinkQueueWithCancel
 import akka.stream.stage.GraphStage
 import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
@@ -65,6 +75,8 @@ import akka.stream.stage.StageLogging
     }
   }
 
+  private case class ReplayEnvelope(entityId: String, env: Option[EventEnvelope[Any]])
+
 }
 
 /**
@@ -74,20 +86,88 @@ import akka.stream.stage.StageLogging
     streamId: String,
     entityType: String,
     sliceRange: Range,
-    var initFilter: Iterable[FilterCriteria])
+    var initFilter: Iterable[FilterCriteria],
+    currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdQuery,
+    verbose: Boolean = false)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
   import FilterStage._
-  private val in1 = Inlet[StreamIn]("in1")
-  private val in2 = Inlet[EventEnvelope[Any]]("in2")
-  private val out1 = Outlet[NotUsed]("out1")
+  private val inReq = Inlet[StreamIn]("in1")
+  private val inEnv = Inlet[EventEnvelope[Any]]("in2")
+  private val outNotUsed = Outlet[NotUsed]("out1")
   // FIXME probably need something else than EventEnvelope out later if need to filter on individual events to pass on pid/seqNr
-  private val out2 = Outlet[EventEnvelope[Any]]("out2")
-  override val shape = BidiShape(in1, out1, in2, out2)
+  private val outEnv = Outlet[EventEnvelope[Any]]("out2")
+  override val shape = BidiShape(inReq, outNotUsed, inEnv, outEnv)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) with StageLogging {
 
       private var persistence: Persistence = _
+
+      // only one pull replay stream -> async callback at a time
+      private var replayHasBeenPulled = false
+      // several replay streams may be in progress at the same time
+      private var replayInProgress: Map[String, SinkQueueWithCancel[EventEnvelope[Any]]] = Map.empty
+      private val replayCallback = getAsyncCallback[Try[ReplayEnvelope]] {
+        case Success(replayEnv) => onReplay(replayEnv)
+        case Failure(exc)       => failStage(exc)
+      }
+
+      private val logPrefix = s"$streamId (${sliceRange.min}-${sliceRange.max})"
+
+      override def preStart(): Unit = {
+        persistence = Persistence(materializer.system)
+        updateFilter(initFilter)
+        replay(initFilter)
+        initFilter = Nil // for GC
+      }
+
+      override protected def logSource: Class[_] = classOf[FilterStage]
+
+      private def onReplay(replayEnv: ReplayEnvelope): Unit = {
+        def replayCompleted(): Unit = {
+          replayInProgress -= replayEnv.entityId
+          pullInEnvOrReplay()
+        }
+
+        replayHasBeenPulled = false
+
+        replayEnv match {
+          case ReplayEnvelope(entityId, Some(env)) =>
+            if (filter.matches(env.persistenceId)) {
+              if (verbose)
+                log.debug(
+                  "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
+                  logPrefix,
+                  env.persistenceId,
+                  env.sequenceNr)
+              push(outEnv, env)
+            } else {
+              log.debug(
+                "Stream [{}]: Filter out replayed event persistenceId [{}], seqNr [{}]. Cancel remaining replay.",
+                logPrefix,
+                env.persistenceId,
+                env.sequenceNr)
+              val queue = replayInProgress(entityId)
+              queue.cancel()
+              replayCompleted()
+            }
+
+          case ReplayEnvelope(entityId, None) =>
+            log.debug("Stream [{}]: Completed replay of entityId [{}]", logPrefix, entityId)
+            replayCompleted()
+        }
+      }
+
+      private def tryPullReplay(entityId: String): Unit = {
+        if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
+          replayHasBeenPulled = true
+          if (verbose)
+            log.debug("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
+          implicit val ec: ExecutionContext = materializer.executionContext
+          val next = replayInProgress(entityId).pull().map(ReplayEnvelope(entityId, _))
+          next.onComplete(replayCallback.invoke)
+        }
+      }
 
       private var filter = Filter.empty
 
@@ -112,14 +192,6 @@ import akka.stream.stage.StageLogging
         }
       }
 
-      override def preStart(): Unit = {
-        persistence = Persistence(materializer.system)
-        updateFilter(initFilter)
-        initFilter = Nil // for GC
-      }
-
-      override protected def logSource: Class[_] = classOf[FilterStage]
-
       private def handledByThisStream(pid: PersistenceId): Boolean = {
         // note that it's not possible to decide this on the consumer side because there we don't know the
         // mapping between streamId and entityType
@@ -131,54 +203,105 @@ import akka.stream.stage.StageLogging
       private def mapEntityIdToPidHandledByThisStream(entityIds: Seq[String]): Seq[String] =
         entityIds.map(PersistenceId(entityType, _)).filter(handledByThisStream).map(_.id)
 
-      setHandler(
-        in1,
-        new InHandler {
-          override def onPush(): Unit = {
-            grab(in1) match {
-              case StreamIn(StreamIn.Message.Filter(filterReq: FilterReq), _) =>
-                updateFilter(filterReq.criteria)
-
-              // FIXME When adding new pid to includes we can load all events for that pid via
-              // eventsByPersistenceId and push them before pushing more from eventsBySlices (in2).
-              // We could also support a mode where we only deliver events after the include filter
+      private def replay(criteria: Iterable[FilterCriteria]): Unit = {
+        // FIXME limit number of concurrent replay requests, place additional in a pending queue
+        criteria.foreach {
+          _.message match {
+            case FilterCriteria.Message.IncludeEntityIds(include) =>
+              include.entityIdOffset.foreach { entityOffset =>
+                if (entityOffset.seqNr >= 1)
+                  replay(entityOffset.entityId, entityOffset.seqNr)
+              // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter
               // change. In that case we must have a way to signal to the R2dbcOffsetStore that the
               // first seqNr of that new pid is ok to pass through even though it isn't 1
               // and the offset store doesn't know about previous seqNr.
+              }
+            case _ =>
+          }
+        }
+      }
+
+      private def replay(entityId: String, fromSeqNr: Long): Unit = {
+        val pid = PersistenceId(entityType, entityId)
+        if (handledByThisStream(pid)) {
+          replayInProgress.get(entityId).foreach { queue =>
+            log.debug("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
+            queue.cancel()
+          }
+
+          log.debug("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
+          val slice = persistence.sliceForPersistenceId(pid.id)
+          val queue =
+            currentEventsByPersistenceIdQuery
+              .currentEventsByPersistenceId(pid.id, fromSeqNr, Long.MaxValue)
+              .map { env =>
+                // FIXME "wrong" timestamp, we should probably define a new currentEventsByPersistenceId that matches eventsBySlices
+                val offset =
+                  TimestampOffset(Instant.ofEpochMilli(env.timestamp), Map(env.persistenceId -> env.sequenceNr))
+                EventEnvelope(offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp, entityType, slice)
+              }
+              .runWith(Sink.queue())(materializer)
+          replayInProgress = replayInProgress.updated(entityId, queue)
+          tryPullReplay(entityId)
+        }
+      }
+
+      private def pullInEnvOrReplay(): Unit = {
+        if (replayInProgress.isEmpty) {
+          if (verbose)
+            log.debug("Stream [{}]: Pull inEnv", logPrefix)
+          pull(inEnv)
+        } else {
+          tryPullReplay(replayInProgress.head._1)
+        }
+      }
+
+      setHandler(
+        inReq,
+        new InHandler {
+          override def onPush(): Unit = {
+            grab(inReq) match {
+              case StreamIn(StreamIn.Message.Filter(filterReq: FilterReq), _) =>
+                updateFilter(filterReq.criteria)
+                replay(filterReq.criteria)
 
               case StreamIn(other, _) =>
-                log.warning("Unknown StreamIn request [{}]", other.getClass.getName)
+                log.warning("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
             }
 
-            pull(in1)
+            pull(inReq)
           }
         })
 
       setHandler(
-        in2,
+        inEnv,
         new InHandler {
           override def onPush(): Unit = {
-            val env = grab(in2)
+            val env = grab(inEnv)
             val pid = env.persistenceId
 
             if (filter.matches(pid)) {
-              push(out2, env)
+              if (verbose)
+                log.debug("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+              push(outEnv, env)
             } else {
-              log.debug("Stream [{}] Filter out event persistenceId [{}], seqNr [{}]", streamId, pid, env.sequenceNr)
-              pull(in2)
+              log.debug("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+              pullInEnvOrReplay()
             }
           }
         })
 
-      setHandler(out1, new OutHandler {
+      setHandler(outNotUsed, new OutHandler {
         override def onPull(): Unit = {
-          pull(in1)
+          pull(inReq)
         }
       })
 
-      setHandler(out2, new OutHandler {
+      setHandler(outEnv, new OutHandler {
         override def onPull(): Unit = {
-          pull(in2)
+          if (verbose)
+            log.debug("Stream [{}]: onPull outEnv", logPrefix)
+          pullInEnvOrReplay()
         }
       })
     }

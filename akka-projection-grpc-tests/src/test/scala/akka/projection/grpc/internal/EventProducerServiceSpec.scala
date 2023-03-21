@@ -5,12 +5,13 @@
 package akka.projection.grpc.internal
 
 import akka.Done
-
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.Promise
+
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -19,8 +20,10 @@ import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.persistence.Persistence
+import akka.persistence.query
 import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
+import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
@@ -110,13 +113,29 @@ class EventProducerServiceSpec
   val streamId1 = "stream_id_" + entityType1
   val entityType2 = nextEntityType()
   val streamId2 = "stream_id_" + entityType2
+
+  private val notUsedCurrentEventsByPersistenceIdQuery = new CurrentEventsByPersistenceIdQuery {
+    override def currentEventsByPersistenceId(
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long): Source[query.EventEnvelope, NotUsed] =
+      throw new IllegalStateException("Unexpected use of currentEventsByPersistenceId")
+  }
+  private val notUsedCurrentEventsByPersistenceIdQueries =
+    Map(streamId1 -> notUsedCurrentEventsByPersistenceIdQuery, streamId2 -> notUsedCurrentEventsByPersistenceIdQuery)
+
   private val eventProducerSources = Set(
     EventProducerSource(entityType1, streamId1, transformation, settings),
     EventProducerSource(entityType2, streamId2, transformation, settings))
   val queries =
     Map(streamId1 -> eventsBySlicesQuery1, streamId2 -> eventsBySlicesQuery2)
   private val eventProducerService =
-    new EventProducerServiceImpl(system, queries, eventProducerSources, None)
+    new EventProducerServiceImpl(
+      system,
+      queries,
+      notUsedCurrentEventsByPersistenceIdQueries,
+      eventProducerSources,
+      None)
 
   private def runEventsBySlices(streamIn: Source[StreamIn, NotUsed]) = {
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
@@ -210,17 +229,22 @@ class EventProducerServiceSpec
 
     "intercept and fail requests" in {
       val interceptedProducerService =
-        new EventProducerServiceImpl(system, queries, eventProducerSources, Some(new EventProducerInterceptor {
-          def intercept(streamId: String, requestMetadata: Metadata): Future[Done] = {
-            if (streamId == "nono-direct")
-              throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-direct"))
-            else if (requestMetadata.getText("nono-meta-direct").isDefined)
-              throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-meta-direct"))
-            else if (streamId == "nono-async")
-              Future.failed(new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-async")))
-            else Future.successful(Done)
-          }
-        }))
+        new EventProducerServiceImpl(
+          system,
+          queries,
+          notUsedCurrentEventsByPersistenceIdQueries,
+          eventProducerSources,
+          Some(new EventProducerInterceptor {
+            def intercept(streamId: String, requestMetadata: Metadata): Future[Done] = {
+              if (streamId == "nono-direct")
+                throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-direct"))
+              else if (requestMetadata.getText("nono-meta-direct").isDefined)
+                throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-meta-direct"))
+              else if (streamId == "nono-async")
+                Future.failed(new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-async")))
+              else Future.successful(Done)
+            }
+          }))
 
       def assertGrpcStatusDenied(
           fail: Throwable,
