@@ -1,0 +1,2 @@
+# internal protocol class changes
+ProblemFilters.exclude[Problem]("akka.projection.grpc.internal.proto.*")
