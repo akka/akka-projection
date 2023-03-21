@@ -55,7 +55,12 @@ import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.Future
 
-import akka.projection.grpc.internal.proto.FilterEntityIdsReq
+import akka.projection.grpc.internal.proto.EntityIdOffset
+import akka.projection.grpc.internal.proto.ExcludeEntityIds
+import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
+import akka.projection.grpc.internal.proto.FilterCriteria
+import akka.projection.grpc.internal.proto.FilterReq
+import akka.projection.grpc.internal.proto.IncludeEntityIds
 import akka.stream.OverflowStrategy
 
 @ApiMayChange
@@ -256,14 +261,25 @@ final class GrpcReadJournal private (
     val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset)
 
     val inReqSource: Source[StreamIn, NotUsed] = Source
-      .actorRef[ConsumerFilter.FilterEntityIds](
+      .actorRef[ConsumerFilter.FilterCommand](
         completionMatcher = PartialFunction.empty,
         failureMatcher = PartialFunction.empty,
         bufferSize = 1024,
         OverflowStrategy.fail)
       .collect {
-        case ConsumerFilter.FilterEntityIds(`streamId`, include, exclude) =>
-          StreamIn(StreamIn.Message.FilterEntityIds(FilterEntityIdsReq(include.toVector, exclude.toVector)))
+        case ConsumerFilter.FilterCommand(`streamId`, criteria) =>
+          val protoCriteria = criteria.map {
+            case ConsumerFilter.IncludeEntityIds(entityOffsets) =>
+              FilterCriteria(FilterCriteria.Message.IncludeEntityIds(IncludeEntityIds(entityOffsets.map {
+                case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
+              }.toVector)))
+            case ConsumerFilter.ExcludeEntityIds(entityIds) =>
+              FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(entityIds.toVector)))
+            case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
+              FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(matching.toVector)))
+          }
+
+          StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
       }
       .mapMaterializedValue { ref =>
         ConsumerFilter(system.toTyped).ref ! ConsumerFilter.Subscribe(streamId, ref)

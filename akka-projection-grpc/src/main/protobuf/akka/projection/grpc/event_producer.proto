@@ -21,7 +21,7 @@ service EventProducerService {
 message StreamIn {
   oneof message {
     InitReq init = 1;
-    FilterEntityIdsReq filter_entity_ids = 2;
+    FilterReq filter = 2;
   }
 }
 
@@ -34,12 +34,43 @@ message InitReq {
   int32 slice_min = 2;
   int32 slice_max = 3;
   Offset offset = 4;
-  // FIXME InitReq should also be able to include filter
+  repeated FilterCriteria filter = 5;
 }
 
-message FilterEntityIdsReq {
-  repeated string include_entity_ids = 1;
-  repeated string exclude_entity_ids = 2;
+message FilterReq {
+  repeated FilterCriteria criteria = 1;
+}
+
+message FilterCriteria {
+  // Exclude criteria are evaluated first.
+  // If no matching exclude the event is emitted.
+  // If an exclude is matching the include criteria are evaluated.
+  //   If no matching include the event is discarded.
+  //   If matching include the event is emitted.
+  oneof message {
+    ExcludeRegexEntityIds exclude_matching_entity_ids = 1;
+    ExcludeEntityIds exclude_entity_ids = 2;
+    IncludeEntityIds include_entity_ids = 3;
+  }
+}
+
+message IncludeEntityIds {
+  repeated EntityIdOffset entity_id_offset = 1;
+}
+
+message EntityIdOffset {
+  string entity_id = 1;
+  // If this is defined (> 0) events are replayed from the given
+  // sequence number (inclusive).
+  int64 seq_nr = 2;
+}
+
+message ExcludeEntityIds {
+  repeated string entity_ids = 1;
+}
+
+message ExcludeRegexEntityIds {
+  repeated string matching = 1;
 }
 
 message Offset {

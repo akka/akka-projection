@@ -1,8 +1,10 @@
-/**
- * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
+/*
+ * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
  */
+
 package akka.projection.grpc.consumer.scaladsl
 
+import scala.collection.immutable
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
@@ -17,15 +19,14 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   sealed trait Command
   final case class Subscribe(streamId: String, subscriber: ActorRef[FilterCommand]) extends Command
 
-  sealed trait FilterCommand extends Command
-  final case class FilterEntityIds(streamId: String, include: Set[String], exclude: Set[String]) extends FilterCommand
+  final case class FilterCommand(streamId: String, criteria: immutable.Seq[FilterCriteria]) extends Command
 
-  // FIXME What kind of filters should we support? Per entity like this FilterEntityIds is very fine grained.
-  //       Regular expression matches on the entity ids would be nice, but there we have a challenge that we
-  //       can't load previous events when an "include" filter is added. We don't know the matching pids unless
-  //       we would keep track of all pids via the PersistenceIdsQuery. Then we would instead have to load
-  //       previous events on demand when we receive an "unexpected" seqNr. Or we would just support receiving
-  //       events after the filter was added.
+  sealed trait FilterCriteria
+  final case class ExcludeRegexEntityIds(matching: Set[String]) extends FilterCriteria
+  final case class ExcludeEntityIds(entityIds: Set[String]) extends FilterCriteria
+  final case class IncludeEntityIds(entityOffsets: Set[EntityIdOffset]) extends FilterCriteria
+
+  final case class EntityIdOffset(entityId: String, seqNr: Long)
 
   override def createExtension(system: ActorSystem[_]): ConsumerFilter = new ConsumerFilter(system)
 
@@ -73,7 +74,7 @@ class ConsumerFilter(system: ActorSystem[_]) extends Extension {
 
         behavior(subscribers + Subscriber(sub.streamId, sub.subscriber))
 
-      case filter: FilterEntityIds =>
+      case filter: FilterCommand =>
         // FIXME the registered filters (aggregated) must also be kept in state and distributed to other nodes in the cluster
 
         context.log.debug("Publish filter [{}] to subscribers", filter)
