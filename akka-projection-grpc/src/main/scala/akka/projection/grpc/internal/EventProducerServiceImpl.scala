@@ -45,6 +45,7 @@ import java.time.Instant
 import scala.concurrent.Future
 import scala.util.Success
 
+import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.stream.scaladsl.BidiFlow
 
 /**
@@ -62,6 +63,7 @@ import akka.stream.scaladsl.BidiFlow
 @InternalApi private[akka] class EventProducerServiceImpl(
     system: ActorSystem[_],
     eventsBySlicesQueriesPerStreamId: Map[String, EventsBySliceQuery],
+    currentEventsByPersistenceIdQueriesPerStreamId: Map[String, CurrentEventsByPersistenceIdQuery],
     sources: Set[EventProducer.EventProducerSource],
     interceptor: Option[EventProducerInterceptor])
     extends EventProducerServicePowerApi {
@@ -153,7 +155,12 @@ import akka.stream.scaladsl.BidiFlow
       val eventsFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
         BidiFlow
           .fromGraph(
-            new FilterStage(init.streamId, producerSource.entityType, init.sliceMin to init.sliceMax, init.filter))
+            new FilterStage(
+              init.streamId,
+              producerSource.entityType,
+              init.sliceMin to init.sliceMax,
+              init.filter,
+              currentEventsByPersistenceIdQueriesPerStreamId(init.streamId)))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =
