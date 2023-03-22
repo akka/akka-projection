@@ -208,7 +208,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNext().event shouldBe "d2"
     }
 
-    "replay ReplayReq" in {
+    "replay from ReplayReq" in {
       // some more envelopes
       val allEnvelopes = envelopes ++
         Vector(
@@ -254,6 +254,48 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNext().event shouldBe "e1"
       outProbe.expectNext().event shouldBe "d1"
       outProbe.expectNext().event shouldBe "d2"
+    }
+
+    "handle many replay requests" in {
+      val entityIds = (1 to 20).map(n => s"entity-$n")
+      val allEnvelopes = envelopes ++
+        entityIds.map(id => createEnvelope(PersistenceId(entityType, id), 1, id))
+
+      val envPublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
+      val envSource: Source[EventEnvelope[Any], _] =
+        TestSource()
+          .mapMaterializedValue(envPublisherPromise.success)
+      val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
+        BidiFlow
+          .fromGraph(
+            new FilterStage(
+              streamId,
+              entityType,
+              0 until persistence.numberOfSlices,
+              Nil,
+              testCurrentEventsByPersistenceIdQuery(allEnvelopes),
+              verbose = true))
+          .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
+      val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
+
+      val (inPublisher, outProbe) = streamIn.via(envFlow).toMat(TestSink())(Keep.both).run()
+      val envPublisher = envPublisherPromise.future.futureValue
+
+      inPublisher.sendNext(
+        StreamIn(StreamIn.Message.Replay(ReplayReq(entityIds.take(7).map(id => EntityIdOffset(id, 1L))))))
+      inPublisher.sendNext(
+        StreamIn(StreamIn.Message.Replay(ReplayReq(entityIds.slice(7, 10).map(id => EntityIdOffset(id, 1L))))))
+      inPublisher.sendNext(
+        StreamIn(StreamIn.Message.Replay(ReplayReq(entityIds.drop(10).map(id => EntityIdOffset(id, 1L))))))
+
+      outProbe.request(100)
+      // no guarantee of order between different entityIds
+      outProbe.expectNextN(entityIds.size).map(_.persistenceId).toSet shouldBe entityIds
+        .map(PersistenceId(entityType, _).id)
+        .toSet
+      outProbe.expectNoMessage()
+
+      envPublisher.sendComplete()
     }
 
   }
