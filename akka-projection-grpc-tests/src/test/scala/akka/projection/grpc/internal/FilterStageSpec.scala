@@ -60,14 +60,6 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
     createEnvelope(PersistenceId(entityType, "b"), 1, "b1"),
     createEnvelope(PersistenceId(entityType, "c"), 1, "c1"))
 
-  private val notUsedCurrentEventsByPersistenceIdQuery = new CurrentEventsByPersistenceIdQuery {
-    override def currentEventsByPersistenceId(
-        persistenceId: String,
-        fromSequenceNr: Long,
-        toSequenceNr: Long): Source[query.EventEnvelope, NotUsed] =
-      throw new IllegalStateException("Unexpected use of currentEventsByPersistenceId")
-  }
-
   private def testCurrentEventsByPersistenceIdQuery(allEnvelopes: Vector[EventEnvelope[Any]]) =
     new CurrentEventsByPersistenceIdQuery {
       override def currentEventsByPersistenceId(
@@ -82,98 +74,68 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       }
     }
 
+  private class Setup {
+    def allEnvelopes: Vector[EventEnvelope[Any]] = envelopes
+
+    def initFilter: Iterable[FilterCriteria] = Nil
+
+    def envelopesFor(entityId: String): Vector[EventEnvelope[Any]] =
+      allEnvelopes.filter(_.persistenceId == PersistenceId(entityType, entityId).id)
+
+    private val envPublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
+    private val envSource: Source[EventEnvelope[Any], _] =
+      TestSource()
+        .mapMaterializedValue(envPublisherPromise.success)
+    private val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
+      BidiFlow
+        .fromGraph(
+          new FilterStage(
+            streamId,
+            entityType,
+            0 until persistence.numberOfSlices,
+            initFilter,
+            testCurrentEventsByPersistenceIdQuery(allEnvelopes)))
+        .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
+    private val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
+
+    val (inPublisher, outProbe) = streamIn.via(envFlow).toMat(TestSink())(Keep.both).run()
+    val envPublisher = envPublisherPromise.future.futureValue
+  }
+
   "FilterStage" must {
-    "emit EventEnvelope" in {
-
-      val envSource: Source[EventEnvelope[Any], NotUsed] = Source(envelopes)
-      val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
-        BidiFlow
-          .fromGraph(
-            new FilterStage(
-              streamId,
-              entityType,
-              0 until persistence.numberOfSlices,
-              Nil,
-              notUsedCurrentEventsByPersistenceIdQuery))
-          .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
-      val streamIn: Source[StreamIn, _] = Source.maybe
-
-      val out = streamIn.via(envFlow).runWith(Sink.seq).futureValue
-      out shouldBe envelopes
+    "emit EventEnvelope" in new Setup {
+      allEnvelopes.foreach(envPublisher.sendNext)
+      outProbe.request(10)
+      outProbe.expectNextN(envelopes.size) shouldBe envelopes
     }
 
-    "use init filter" in {
-      val initFilter = List(FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(List("b")))))
-      val envSource: Source[EventEnvelope[Any], NotUsed] = Source(envelopes)
-      val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
-        BidiFlow
-          .fromGraph(
-            new FilterStage(
-              streamId,
-              entityType,
-              0 until persistence.numberOfSlices,
-              initFilter,
-              notUsedCurrentEventsByPersistenceIdQuery))
-          .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
-      val streamIn: Source[StreamIn, _] = Source.maybe
-
-      val out = streamIn.via(envFlow).runWith(Sink.seq).futureValue
-      out shouldBe envelopes.filterNot(_.persistenceId == PersistenceId(entityType, "b").id)
+    "use init filter" in new Setup {
+      override lazy val initFilter =
+        List(FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(List("b")))))
+      allEnvelopes.foreach(envPublisher.sendNext)
+      outProbe.request(10)
+      val expected = envelopes.filterNot(_.persistenceId == PersistenceId(entityType, "b").id)
+      outProbe.expectNextN(expected.size) shouldBe expected
     }
 
-    "use filter request" in {
-      val envPublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
-      val envSource: Source[EventEnvelope[Any], _] =
-        TestSource()
-          .mapMaterializedValue(envPublisherPromise.success)
-      val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
-        BidiFlow
-          .fromGraph(
-            new FilterStage(
-              streamId,
-              entityType,
-              0 until persistence.numberOfSlices,
-              Nil,
-              notUsedCurrentEventsByPersistenceIdQuery))
-          .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
-      val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
-
-      val (inPublisher, outFuture) = streamIn.via(envFlow).toMat(Sink.seq)(Keep.both).run()
-      val envPublisher = envPublisherPromise.future.futureValue
-
+    "use filter request" in new Setup {
       val filterCriteria = List(FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(List("b")))))
       inPublisher.sendNext(StreamIn(StreamIn.Message.Filter(FilterReq(filterCriteria))))
 
       envelopes.foreach(envPublisher.sendNext)
-      envPublisher.sendComplete()
-      outFuture.futureValue shouldBe envelopes.filterNot(_.persistenceId == PersistenceId(entityType, "b").id)
+      outProbe.request(10)
+      outProbe.expectNext(envelopesFor("a").head)
+      // b filtered out
+      outProbe.expectNext(envelopesFor("c").head)
+      outProbe.expectNoMessage()
     }
 
-    "replay from IncludeEntityIds in FilterReq" in {
+    "replay from IncludeEntityIds in FilterReq" in new Setup {
       // some more envelopes
-      val allEnvelopes = envelopes ++
+      override lazy val allEnvelopes = envelopes ++
         Vector(
           createEnvelope(PersistenceId(entityType, "d"), 1, "d1"),
           createEnvelope(PersistenceId(entityType, "d"), 2, "d2"))
-
-      val envPublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
-      val envSource: Source[EventEnvelope[Any], _] =
-        TestSource()
-          .mapMaterializedValue(envPublisherPromise.success)
-      val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
-        BidiFlow
-          .fromGraph(
-            new FilterStage(
-              streamId,
-              entityType,
-              0 until persistence.numberOfSlices,
-              Nil,
-              testCurrentEventsByPersistenceIdQuery(allEnvelopes)))
-          .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
-      val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
-
-      val (inPublisher, outProbe) = streamIn.via(envFlow).toMat(TestSink())(Keep.both).run()
-      val envPublisher = envPublisherPromise.future.futureValue
 
       val filterCriteria = List(
         FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(List(".*")))),
@@ -182,20 +144,15 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             IncludeEntityIds(List(EntityIdOffset("b", 1L), EntityIdOffset("c", 1L))))))
       inPublisher.sendNext(StreamIn(StreamIn.Message.Filter(FilterReq(filterCriteria))))
 
-      val expectedEnvelopes = allEnvelopes
-        .filter { env =>
-          env.persistenceId == PersistenceId(entityType, "b").id || env.persistenceId == PersistenceId(entityType, "c").id
-        }
-
       outProbe.request(10)
       // no guarantee of order between b and c
-      outProbe.expectNextN(2).map(_.event).toSet shouldBe expectedEnvelopes.map(_.event).toSet
+      outProbe.expectNextN(2).map(_.event).toSet shouldBe Set("b1", "c1")
       outProbe.expectNoMessage()
 
       // replay done, now from ordinary envSource
       allEnvelopes.foreach(envPublisher.sendNext)
-      outProbe.expectNext(expectedEnvelopes(0))
-      outProbe.expectNext(expectedEnvelopes(1))
+      outProbe.expectNext(envelopesFor("b").head)
+      outProbe.expectNext(envelopesFor("c").head)
       outProbe.expectNoMessage()
 
       val filterCriteria2 =
@@ -208,43 +165,19 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNext().event shouldBe "d2"
     }
 
-    "replay from ReplayReq" in {
+    "replay from ReplayReq" in new Setup {
       // some more envelopes
-      val allEnvelopes = envelopes ++
+      override lazy val allEnvelopes = envelopes ++
         Vector(
           createEnvelope(PersistenceId(entityType, "d"), 1, "d1"),
           createEnvelope(PersistenceId(entityType, "d"), 2, "d2"))
 
-      val envPublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
-      val envSource: Source[EventEnvelope[Any], _] =
-        TestSource()
-          .mapMaterializedValue(envPublisherPromise.success)
-      val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
-        BidiFlow
-          .fromGraph(
-            new FilterStage(
-              streamId,
-              entityType,
-              0 until persistence.numberOfSlices,
-              Nil,
-              testCurrentEventsByPersistenceIdQuery(allEnvelopes)))
-          .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
-      val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
-
-      val (inPublisher, outProbe) = streamIn.via(envFlow).toMat(TestSink())(Keep.both).run()
-      val envPublisher = envPublisherPromise.future.futureValue
-
       inPublisher.sendNext(
         StreamIn(StreamIn.Message.Replay(ReplayReq(List(EntityIdOffset("b", 1L), EntityIdOffset("c", 1L))))))
 
-      val expectedEnvelopes = allEnvelopes
-        .filter { env =>
-          env.persistenceId == PersistenceId(entityType, "b").id || env.persistenceId == PersistenceId(entityType, "c").id
-        }
-
       outProbe.request(10)
       // no guarantee of order between b and c
-      outProbe.expectNextN(2).map(_.event).toSet shouldBe expectedEnvelopes.map(_.event).toSet
+      outProbe.expectNextN(2).map(_.event).toSet shouldBe Set("b1", "c1")
       outProbe.expectNoMessage()
 
       inPublisher.sendNext(StreamIn(StreamIn.Message.Replay(ReplayReq(List(EntityIdOffset("d", 1L))))))
@@ -256,30 +189,10 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNext().event shouldBe "d2"
     }
 
-    "handle many replay requests" in {
-      val entityIds = (1 to 20).map(n => s"entity-$n")
-      val allEnvelopes = envelopes ++
+    "handle many replay requests" in new Setup {
+      lazy val entityIds = (1 to 20).map(n => s"entity-$n")
+      override lazy val allEnvelopes = envelopes ++
         entityIds.map(id => createEnvelope(PersistenceId(entityType, id), 1, id))
-
-      val envPublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
-      val envSource: Source[EventEnvelope[Any], _] =
-        TestSource()
-          .mapMaterializedValue(envPublisherPromise.success)
-      val envFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
-        BidiFlow
-          .fromGraph(
-            new FilterStage(
-              streamId,
-              entityType,
-              0 until persistence.numberOfSlices,
-              Nil,
-              testCurrentEventsByPersistenceIdQuery(allEnvelopes),
-              verbose = true))
-          .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
-      val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
-
-      val (inPublisher, outProbe) = streamIn.via(envFlow).toMat(TestSink())(Keep.both).run()
-      val envPublisher = envPublisherPromise.future.futureValue
 
       inPublisher.sendNext(
         StreamIn(StreamIn.Message.Replay(ReplayReq(entityIds.take(7).map(id => EntityIdOffset(id, 1L))))))

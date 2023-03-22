@@ -4,6 +4,12 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+
+import scala.collection.immutable
+import scala.concurrent.Future
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -32,16 +38,27 @@ import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.proto
+import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.Event
 import akka.projection.grpc.internal.proto.EventProducerServiceClient
 import akka.projection.grpc.internal.proto.EventTimestampRequest
+import akka.projection.grpc.internal.proto.ExcludeEntityIds
+import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
+import akka.projection.grpc.internal.proto.FilterCriteria
+import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.FilteredEvent
+import akka.projection.grpc.internal.proto.IncludeEntityIds
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
+import akka.projection.grpc.internal.proto.RemoveExcludeEntityIds
+import akka.projection.grpc.internal.proto.RemoveExcludeRegexEntityIds
+import akka.projection.grpc.internal.proto.RemoveIncludeEntityIds
+import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
+import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
 import com.google.protobuf.Descriptors
 import com.google.protobuf.timestamp.Timestamp
@@ -49,20 +66,6 @@ import com.typesafe.config.Config
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-
-import scala.collection.immutable
-import scala.concurrent.Future
-
-import akka.projection.grpc.internal.proto.EntityIdOffset
-import akka.projection.grpc.internal.proto.ExcludeEntityIds
-import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
-import akka.projection.grpc.internal.proto.FilterCriteria
-import akka.projection.grpc.internal.proto.FilterReq
-import akka.projection.grpc.internal.proto.IncludeEntityIds
-import akka.projection.grpc.internal.proto.ReplayReq
-import akka.stream.OverflowStrategy
 
 @ApiMayChange
 object GrpcReadJournal {
@@ -274,10 +277,17 @@ final class GrpcReadJournal private (
               FilterCriteria(FilterCriteria.Message.IncludeEntityIds(IncludeEntityIds(entityOffsets.map {
                 case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
               }.toVector)))
+            case ConsumerFilter.RemoveIncludeEntityIds(entityIds) =>
+              FilterCriteria(FilterCriteria.Message.RemoveIncludeEntityIds(RemoveIncludeEntityIds(entityIds.toVector)))
             case ConsumerFilter.ExcludeEntityIds(entityIds) =>
               FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(entityIds.toVector)))
+            case ConsumerFilter.RemoveExcludeEntityIds(entityIds) =>
+              FilterCriteria(FilterCriteria.Message.RemoveExcludeEntityIds(RemoveExcludeEntityIds(entityIds.toVector)))
             case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
               FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(matching.toVector)))
+            case ConsumerFilter.RemoveExcludeRegexEntityIds(matching) =>
+              FilterCriteria(
+                FilterCriteria.Message.RemoveExcludeMatchingEntityIds(RemoveExcludeRegexEntityIds(matching.toVector)))
           }
 
           StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))

@@ -58,8 +58,11 @@ message FilterCriteria {
   //   If matching include the event is emitted.
   oneof message {
     ExcludeRegexEntityIds exclude_matching_entity_ids = 1;
-    ExcludeEntityIds exclude_entity_ids = 2;
-    IncludeEntityIds include_entity_ids = 3;
+    RemoveExcludeRegexEntityIds remove_exclude_matching_entity_ids = 2;
+    ExcludeEntityIds exclude_entity_ids = 3;
+    RemoveExcludeEntityIds remove_exclude_entity_ids = 4;
+    IncludeEntityIds include_entity_ids = 5;
+    RemoveIncludeEntityIds remove_include_entity_ids = 6;
   }
 }
 
@@ -74,11 +77,23 @@ message EntityIdOffset {
   int64 seq_nr = 2;
 }
 
+message RemoveIncludeEntityIds {
+  repeated string entity_ids = 1;
+}
+
 message ExcludeEntityIds {
   repeated string entity_ids = 1;
 }
 
+message RemoveExcludeEntityIds {
+  repeated string entity_ids = 1;
+}
+
 message ExcludeRegexEntityIds {
+  repeated string matching = 1;
+}
+
+message RemoveExcludeRegexEntityIds {
   repeated string matching = 1;
 }
 
