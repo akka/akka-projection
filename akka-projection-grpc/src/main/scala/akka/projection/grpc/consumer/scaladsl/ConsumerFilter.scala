@@ -28,8 +28,11 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
   sealed trait FilterCriteria
   final case class ExcludeRegexEntityIds(matching: Set[String]) extends FilterCriteria
+  final case class RemoveExcludeRegexEntityIds(matching: Set[String]) extends FilterCriteria
   final case class ExcludeEntityIds(entityIds: Set[String]) extends FilterCriteria
+  final case class RemoveExcludeEntityIds(entityIds: Set[String]) extends FilterCriteria
   final case class IncludeEntityIds(entityOffsets: Set[EntityIdOffset]) extends FilterCriteria
+  final case class RemoveIncludeEntityIds(entityIds: Set[String]) extends FilterCriteria
 
   final case class EntityIdOffset(entityId: String, seqNr: Long)
 

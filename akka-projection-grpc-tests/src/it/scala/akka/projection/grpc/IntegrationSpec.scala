@@ -382,6 +382,16 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedD.envelope.sequenceNr shouldBe 4L
       processedD.envelope.event shouldBe "D"
 
+      // remove filter
+      consumerFilter ! ConsumerFilter.FilterCommand(
+        streamId,
+        List(ConsumerFilter.RemoveIncludeEntityIds(Set(pid.entityId))))
+      // FIXME hack sleep to let it propagate to producer side
+      Thread.sleep(3000)
+
+      entity ! TestEntity.Persist("e")
+      processedProbe.expectNoMessage(1.second)
+
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
       processedProbe.expectTerminated(projection)

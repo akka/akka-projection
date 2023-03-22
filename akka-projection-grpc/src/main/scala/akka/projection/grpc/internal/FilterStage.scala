@@ -39,22 +39,31 @@ import akka.stream.stage.StageLogging
  */
 @InternalApi private[akka] object FilterStage {
   object Filter {
-    val empty: Filter = Filter(Set.empty, Set.empty, Vector.empty)
+    val empty: Filter = Filter(Set.empty, Set.empty, Map.empty)
   }
 
   final case class Filter(
       includePersistenceIds: Set[String],
       excludePersistenceIds: Set[String],
-      excludeRegexEntityIds: Vector[Regex]) {
+      excludeRegexEntityIds: Map[String, Regex]) {
 
     def addIncludePersistenceIds(pids: Iterable[String]): Filter =
       copy(includePersistenceIds = includePersistenceIds ++ pids)
 
+    def removeIncludePersistenceIds(pids: Iterable[String]): Filter =
+      copy(includePersistenceIds = includePersistenceIds -- pids)
+
     def addExcludePersistenceIds(pids: Iterable[String]): Filter =
       copy(excludePersistenceIds = excludePersistenceIds ++ pids)
 
-    def addExcludeRegexEntityIds(reqex: Iterable[Regex]): Filter =
-      copy(excludeRegexEntityIds = excludeRegexEntityIds ++ reqex)
+    def removeExcludePersistenceIds(pids: Iterable[String]): Filter =
+      copy(excludePersistenceIds = excludePersistenceIds -- pids)
+
+    def addExcludeRegexEntityIds(reqexStr: Iterable[String]): Filter =
+      copy(excludeRegexEntityIds = excludeRegexEntityIds ++ reqexStr.map(s => s -> s.r))
+
+    def removeExcludeRegexEntityIds(reqexStr: Iterable[String]): Filter =
+      copy(excludeRegexEntityIds = excludeRegexEntityIds -- reqexStr)
 
     /**
      * Exclude criteria are evaluated first.
@@ -65,8 +74,9 @@ import akka.stream.stage.StageLogging
     def matches(pid: String): Boolean = {
       val entityId = PersistenceId.extractEntityId(pid)
 
-      if (excludePersistenceIds.contains(pid) || excludeRegexEntityIds.exists { regex =>
-            regex.matches(entityId)
+      if (excludePersistenceIds.contains(pid) || excludeRegexEntityIds.exists {
+            case (_, regex) =>
+              regex.matches(entityId)
           }) {
         includePersistenceIds.contains(pid)
       } else {
@@ -187,14 +197,19 @@ import akka.stream.stage.StageLogging
               case FilterCriteria.Message.IncludeEntityIds(include) =>
                 val pids = mapEntityIdToPidHandledByThisStream(include.entityIdOffset.map(_.entityId))
                 acc.addIncludePersistenceIds(pids)
+              case FilterCriteria.Message.RemoveIncludeEntityIds(include) =>
+                val pids = mapEntityIdToPidHandledByThisStream(include.entityIds)
+                acc.removeIncludePersistenceIds(pids)
               case FilterCriteria.Message.ExcludeEntityIds(exclude) =>
                 val pids = mapEntityIdToPidHandledByThisStream(exclude.entityIds)
                 acc.addExcludePersistenceIds(pids)
-
+              case FilterCriteria.Message.RemoveExcludeEntityIds(exclude) =>
+                val pids = mapEntityIdToPidHandledByThisStream(exclude.entityIds)
+                acc.removeExcludePersistenceIds(pids)
               case FilterCriteria.Message.ExcludeMatchingEntityIds(excludeRegex) =>
-                // FIXME add the entityType prefix to the regex so that it is matching the persistenceId ?
-                val regex = excludeRegex.matching.map(_.r)
-                acc.addExcludeRegexEntityIds(regex)
+                acc.addExcludeRegexEntityIds(excludeRegex.matching)
+              case FilterCriteria.Message.RemoveExcludeMatchingEntityIds(excludeRegex) =>
+                acc.removeExcludeRegexEntityIds(excludeRegex.matching)
               case FilterCriteria.Message.Empty =>
                 acc
             }
