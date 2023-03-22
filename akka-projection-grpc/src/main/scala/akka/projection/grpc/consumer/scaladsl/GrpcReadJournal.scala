@@ -61,6 +61,7 @@ import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.IncludeEntityIds
+import akka.projection.grpc.internal.proto.ReplayReq
 import akka.stream.OverflowStrategy
 
 @ApiMayChange
@@ -261,7 +262,7 @@ final class GrpcReadJournal private (
     val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset)
 
     val inReqSource: Source[StreamIn, NotUsed] = Source
-      .actorRef[ConsumerFilter.FilterCommand](
+      .actorRef[ConsumerFilter.SubscriberCommand](
         completionMatcher = PartialFunction.empty,
         failureMatcher = PartialFunction.empty,
         bufferSize = 1024,
@@ -280,6 +281,12 @@ final class GrpcReadJournal private (
           }
 
           StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
+
+        case ConsumerFilter.ReplayCommand(`streamId`, entityOffsets) =>
+          val protoEntityOffsets = entityOffsets.map {
+            case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
+          }.toVector
+          StreamIn(StreamIn.Message.Replay(ReplayReq(protoEntityOffsets)))
       }
       .mapMaterializedValue { ref =>
         ConsumerFilter(system.toTyped).ref ! ConsumerFilter.Subscribe(streamId, ref)
