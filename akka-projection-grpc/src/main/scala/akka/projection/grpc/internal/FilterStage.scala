@@ -103,8 +103,10 @@ import akka.stream.stage.StageLogging
 
       private var persistence: Persistence = _
 
+      private val replayParallelism = 3 // FIXME config
       // only one pull replay stream -> async callback at a time
       private var replayHasBeenPulled = false
+      private var pendingReplayRequests: Vector[EntityIdOffset] = Vector.empty
       // several replay streams may be in progress at the same time
       private var replayInProgress: Map[String, SinkQueueWithCancel[EventEnvelope[Any]]] = Map.empty
       private val replayCallback = getAsyncCallback[Try[ReplayEnvelope]] {
@@ -223,7 +225,7 @@ import akka.stream.stage.StageLogging
         // FIXME limit number of concurrent replay requests, place additional in a pending queue
         entityOffsets.foreach { entityOffset =>
           if (entityOffset.seqNr >= 1)
-            replay(entityOffset.entityId, entityOffset.seqNr)
+            replay(entityOffset)
         // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter
         // change. In that case we must have a way to signal to the R2dbcOffsetStore that the
         // first seqNr of that new pid is ok to pass through even though it isn't 1
@@ -231,32 +233,46 @@ import akka.stream.stage.StageLogging
         }
       }
 
-      private def replay(entityId: String, fromSeqNr: Long): Unit = {
+      private def replay(entityOffset: EntityIdOffset): Unit = {
+        val entityId = entityOffset.entityId
+        val fromSeqNr = entityOffset.seqNr
         val pid = PersistenceId(entityType, entityId)
         if (handledByThisStream(pid)) {
           replayInProgress.get(entityId).foreach { queue =>
             log.debug("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
             queue.cancel()
+            replayInProgress -= entityId
           }
 
-          log.debug("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
-          val slice = persistence.sliceForPersistenceId(pid.id)
-          val queue =
-            currentEventsByPersistenceIdQuery
-              .currentEventsByPersistenceId(pid.id, fromSeqNr, Long.MaxValue)
-              .map { env =>
-                // FIXME "wrong" timestamp, we should probably define a new currentEventsByPersistenceId that matches eventsBySlices
-                val offset =
-                  TimestampOffset(Instant.ofEpochMilli(env.timestamp), Map(env.persistenceId -> env.sequenceNr))
-                EventEnvelope(offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp, entityType, slice)
-              }
-              .runWith(Sink.queue())(materializer)
-          replayInProgress = replayInProgress.updated(entityId, queue)
-          tryPullReplay(entityId)
+          if (replayInProgress.size < replayParallelism) {
+            log.debug("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
+            val slice = persistence.sliceForPersistenceId(pid.id)
+            val queue =
+              currentEventsByPersistenceIdQuery
+                .currentEventsByPersistenceId(pid.id, fromSeqNr, Long.MaxValue)
+                .map { env =>
+                  // FIXME "wrong" timestamp, we should probably define a new currentEventsByPersistenceId that matches eventsBySlices
+                  val offset =
+                    TimestampOffset(Instant.ofEpochMilli(env.timestamp), Map(env.persistenceId -> env.sequenceNr))
+                  EventEnvelope(offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp, entityType, slice)
+                }
+                .runWith(Sink.queue())(materializer)
+            replayInProgress = replayInProgress.updated(entityId, queue)
+            tryPullReplay(entityId)
+          } else {
+            log.debug("Stream [{}]: Queueing replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
+            pendingReplayRequests = pendingReplayRequests.filterNot(_.entityId == entityId) :+ entityOffset
+          }
         }
       }
 
       private def pullInEnvOrReplay(): Unit = {
+        if (replayInProgress.size < replayParallelism && pendingReplayRequests.nonEmpty) {
+          val pendingEntityOffset = pendingReplayRequests.head
+          pendingReplayRequests = pendingReplayRequests.tail
+          replay(pendingEntityOffset)
+        }
+
         if (replayInProgress.isEmpty) {
           if (verbose)
             log.debug("Stream [{}]: Pull inEnv", logPrefix)
