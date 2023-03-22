@@ -9,12 +9,12 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.Future
 import scala.concurrent.Promise
-
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.Persistence
 import akka.persistence.query
+import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.typed.EventEnvelope
@@ -45,7 +45,11 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
   private val persistence = Persistence(system)
 
-  private def createEnvelope(pid: PersistenceId, seqNr: Long, evt: String): EventEnvelope[Any] = {
+  private def createEnvelope(
+      pid: PersistenceId,
+      seqNr: Long,
+      evt: String,
+      tags: Set[String] = Set.empty): EventEnvelope[Any] = {
     val now = Instant.now()
     EventEnvelope(
       TimestampOffset(Instant.now, Map(pid.id -> seqNr)),
@@ -54,7 +58,10 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       evt,
       now.toEpochMilli,
       pid.entityTypeHint,
-      persistence.sliceForPersistenceId(pid.id))
+      persistence.sliceForPersistenceId(pid.id),
+      filtered = false,
+      source = "",
+      tags = tags)
   }
 
   private val envelopes = Vector(
@@ -66,6 +73,8 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
     def allEnvelopes: Vector[EventEnvelope[Any]] = envelopes
 
     def initFilter: Iterable[FilterCriteria] = Nil
+
+    def initEnvelopeFilter: EventEnvelope[Any] => Boolean = _ => false
 
     def envelopesFor(entityId: String): Vector[EventEnvelope[Any]] =
       allEnvelopes.filter(_.persistenceId == PersistenceId(entityType, entityId).id)
@@ -108,7 +117,9 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             entityType,
             0 until persistence.numberOfSlices,
             initFilter,
-            testCurrentEventsByPersistenceIdQuery(allEnvelopes)))
+            testCurrentEventsByPersistenceIdQuery(allEnvelopes),
+            verbose = true,
+            envelopeFilter = initEnvelopeFilter))
         .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
     private val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
 
@@ -142,6 +153,31 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       // b filtered out
       outProbe.expectNext(envelopesFor("c").head)
       outProbe.expectNoMessage()
+    }
+
+    "apply envelope filter after declarative filters excludes" in new Setup {
+      // exclude everything
+      override def initFilter =
+        Seq(FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(Seq(".*")))))
+
+      val envFilterProbe = createTestProbe[Offset]()
+      override def initEnvelopeFilter = { envelope =>
+        envFilterProbe.ref ! envelope.offset
+        envelope.tags.contains("replicate-it")
+      }
+
+      val envelopes = Vector(
+        createEnvelope(PersistenceId(entityType, "a"), 1, "a1"),
+        createEnvelope(PersistenceId(entityType, "b"), 1, "b1"),
+        createEnvelope(PersistenceId(entityType, "c"), 1, "c1"),
+        createEnvelope(PersistenceId(entityType, "a"), 1, "a2", tags = Set("replicate-it")))
+
+      envelopes.foreach(envPublisher.sendNext)
+      outProbe.request(10)
+      // each goes through the envelope filter
+      envFilterProbe.receiveMessages(envelopes.size)
+      // only last should be let through, consumer will trigger replay if not first seqnr
+      outProbe.expectNext() shouldBe envelopes.last
     }
 
     "replay from IncludeEntityIds in FilterReq" in new Setup {

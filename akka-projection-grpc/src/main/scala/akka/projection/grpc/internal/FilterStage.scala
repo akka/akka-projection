@@ -5,13 +5,11 @@
 package akka.projection.grpc.internal
 
 import java.time.Instant
-
 import scala.concurrent.ExecutionContext
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import scala.util.matching.Regex
-
 import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.persistence.Persistence
@@ -100,7 +98,8 @@ import akka.stream.stage.StageLogging
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdQuery,
-    verbose: Boolean = false)
+    verbose: Boolean = false,
+    val envelopeFilter: EventEnvelope[Any] => Boolean = _ => false)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
   import FilterStage._
   private val inReq = Inlet[StreamIn]("in1")
@@ -175,12 +174,11 @@ import akka.stream.stage.StageLogging
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
           if (verbose)
             log.debug("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
-          implicit val ec: ExecutionContext = materializer.executionContext
-          val next = replayInProgress(entityId).pull().map(ReplayEnvelope(entityId, _))
+          val next = replayInProgress(entityId).pull().map(ReplayEnvelope(entityId, _))(ExecutionContext.parasitic)
           next.value match {
             case None =>
               replayHasBeenPulled = true
-              next.onComplete(replayCallback.invoke)
+              next.onComplete(replayCallback.invoke)(ExecutionContext.parasitic)
             case Some(Success(replayEnv)) =>
               onReplay(replayEnv)
             case Some(Failure(exc)) =>
@@ -331,7 +329,7 @@ import akka.stream.stage.StageLogging
             val env = grab(inEnv)
             val pid = env.persistenceId
 
-            if (filter.matches(pid)) {
+            if (filter.matches(pid) || envelopeFilter(env)) {
               if (verbose)
                 log.debug("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               push(outEnv, env)
