@@ -145,6 +145,9 @@ import akka.stream.stage.StageLogging
 
         replayEnv match {
           case ReplayEnvelope(entityId, Some(env)) =>
+            // Note that the producer filter predicate is not applied on replay as that could be triggered by
+            // the predicate to replay events from start for a given pid
+            // FIXME that won't actually work right now because it will not be replayed but dropped/cancelled here
             if (filter.matches(env.persistenceId)) {
               if (verbose)
                 log.debug(
@@ -329,6 +332,7 @@ import akka.stream.stage.StageLogging
             val env = grab(inEnv)
             val pid = env.persistenceId
 
+            // Note that the producer filter predicate is only applied if the envelope was filtered out by the regular filter
             if (filter.matches(pid) || envelopeFilter(env)) {
               if (verbose)
                 log.debug("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
