@@ -160,12 +160,19 @@ import akka.stream.stage.StageLogging
 
       private def tryPullReplay(entityId: String): Unit = {
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
-          replayHasBeenPulled = true
           if (verbose)
             log.debug("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
           implicit val ec: ExecutionContext = materializer.executionContext
           val next = replayInProgress(entityId).pull().map(ReplayEnvelope(entityId, _))
-          next.onComplete(replayCallback.invoke)
+          next.value match {
+            case None =>
+              replayHasBeenPulled = true
+              next.onComplete(replayCallback.invoke)
+            case Some(Success(replayEnv)) =>
+              onReplay(replayEnv)
+            case Some(Failure(exc)) =>
+              failStage(exc)
+          }
         }
       }
 
