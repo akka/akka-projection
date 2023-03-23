@@ -99,7 +99,7 @@ import akka.stream.stage.StageLogging
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdQuery,
     verbose: Boolean = false,
-    val envelopeFilter: EventEnvelope[Any] => Boolean = _ => false)
+    val producerFilter: EventEnvelope[Any] => Boolean = _ => true)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
   import FilterStage._
   private val inReq = Inlet[StreamIn]("in1")
@@ -332,8 +332,9 @@ import akka.stream.stage.StageLogging
             val env = grab(inEnv)
             val pid = env.persistenceId
 
-            // Note that the producer filter predicate is only applied if the envelope was filtered out by the regular filter
-            if (filter.matches(pid) || envelopeFilter(env)) {
+            // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
+            // can never include them
+            if (producerFilter(env) && filter.matches(pid)) {
               if (verbose)
                 log.debug("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               push(outEnv, env)

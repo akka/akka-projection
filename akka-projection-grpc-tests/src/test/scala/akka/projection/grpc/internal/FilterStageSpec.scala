@@ -74,7 +74,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
     def initFilter: Iterable[FilterCriteria] = Nil
 
-    def initEnvelopeFilter: EventEnvelope[Any] => Boolean = _ => false
+    def initProducerFilter: EventEnvelope[Any] => Boolean = _ => true
 
     def envelopesFor(entityId: String): Vector[EventEnvelope[Any]] =
       allEnvelopes.filter(_.persistenceId == PersistenceId(entityType, entityId).id)
@@ -119,7 +119,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             initFilter,
             testCurrentEventsByPersistenceIdQuery(allEnvelopes),
             verbose = true,
-            envelopeFilter = initEnvelopeFilter))
+            producerFilter = initProducerFilter))
         .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
     private val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
 
@@ -156,12 +156,9 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
     }
 
     "apply envelope filter after declarative filters excludes" in new Setup {
-      // exclude everything
-      override def initFilter =
-        Seq(FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(Seq(".*")))))
 
       val envFilterProbe = createTestProbe[Offset]()
-      override def initEnvelopeFilter = { envelope =>
+      override def initProducerFilter = { envelope =>
         envFilterProbe.ref ! envelope.offset
         envelope.tags.contains("replicate-it")
       }
