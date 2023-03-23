@@ -123,7 +123,7 @@ lazy val grpcTests =
     .settings(publish / skip := true)
     .dependsOn(grpc)
     .dependsOn(testkit % Test)
-    .dependsOn(r2dbc % Test)
+    .dependsOn(r2dbc % IntegrationTest)
     .enablePlugins(AkkaGrpcPlugin)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
 

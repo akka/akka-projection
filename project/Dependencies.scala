@@ -82,6 +82,7 @@ object Dependencies {
     val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka % allTestConfig
     val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % allTestConfig
     val akkaDiscovery = "com.typesafe.akka" %% "akka-discovery" % Versions.akka % allTestConfig
+    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % allTestConfig
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % allTestConfig
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % allTestConfig
@@ -239,6 +240,7 @@ object Dependencies {
         Compile.akkaPersistenceR2dbc,
         Test.akkaStreamTestkit,
         Test.akkaTypedTestkit,
+        Test.akkaClusterShardingTyped,
         Test.akkaSerializationJackson,
         Test.akkaDiscovery,
         Test.logback,

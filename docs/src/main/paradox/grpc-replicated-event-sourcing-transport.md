@@ -54,7 +54,7 @@ To use the gRPC module of Akka Projections add the following dependency in your 
 
 Akka Replicated Event Sourcing over gRPC requires Akka 2.8.0 or later and can only be run in an Akka cluster since it uses cluster components.
 
-It is currently only possible to use @extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:projection.html) as the
+It is currently only possible to use @ref:[akka-projection-r2dbc](r2dbc.md) as the
 projection storage and journal for this module.
 
 The full set of dependencies needed:
