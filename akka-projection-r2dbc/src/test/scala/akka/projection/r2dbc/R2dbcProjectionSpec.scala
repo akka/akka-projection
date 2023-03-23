@@ -178,11 +178,9 @@ class R2dbcProjectionSpec
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    Await.result(
-      r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
-        conn.createStatement(TestRepository.createTableSql)
-      },
-      10.seconds)
+    Await.result(r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
+      conn.createStatement(TestRepository.createTableSql)
+    }, 10.seconds)
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
       10.seconds)
@@ -465,7 +463,7 @@ class R2dbcProjectionSpec
 
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       case class ProbeMessage(str: String, offset: Long)
       val verificationProbe = createTestProbe[ProbeMessage]("verification")
@@ -507,7 +505,7 @@ class R2dbcProjectionSpec
     "skip record if offset verification fails before processing envelope" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -533,7 +531,7 @@ class R2dbcProjectionSpec
     "skip record if offset verification fails after processing envelope" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -807,9 +805,8 @@ class R2dbcProjectionSpec
       val projectionId = genRandomProjectionId()
       implicit val offsetStore = createOffsetStore(projectionId)
 
-      import akka.actor.typed.scaladsl.adapter._
       val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
-      val source = TestSource.probe[Envelope](system.toClassic).mapMaterializedValue { probe =>
+      val source = TestSource[Envelope]().mapMaterializedValue { probe =>
         sourceProbe.set(probe)
         NotUsed
       }
@@ -853,9 +850,8 @@ class R2dbcProjectionSpec
       val projectionId = genRandomProjectionId()
       implicit val offsetStore = createOffsetStore(projectionId)
 
-      import akka.actor.typed.scaladsl.adapter._
       val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
-      val source = TestSource.probe[Envelope](system.toClassic).mapMaterializedValue { probe =>
+      val source = TestSource[Envelope]().mapMaterializedValue { probe =>
         sourceProbe.set(probe)
         NotUsed
       }
@@ -898,7 +894,7 @@ class R2dbcProjectionSpec
     "verify offsets before processing an envelope" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
       val verifiedProbe = createTestProbe[Long]()
 
       val testVerification = (offset: Long) => {
@@ -928,7 +924,7 @@ class R2dbcProjectionSpec
     "skip record if offset verification fails before processing envelope" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -1066,7 +1062,7 @@ class R2dbcProjectionSpec
     "call start and stop of the handler" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref)
@@ -1104,7 +1100,7 @@ class R2dbcProjectionSpec
     "call start and stop of the handler when using TestKit.runWithTestSink" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref)
@@ -1143,7 +1139,7 @@ class R2dbcProjectionSpec
     "call start and stop of handler when restarted" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       @volatile var _handler: Option[LifecycleHandler] = None
@@ -1214,7 +1210,7 @@ class R2dbcProjectionSpec
     "call start and stop of handler when failed but no restart" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       val failOnceOnOffset = new AtomicInteger(4)
@@ -1242,7 +1238,7 @@ class R2dbcProjectionSpec
     "be able to stop when retrying" in {
       implicit val entityId = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      implicit val offsetStore = createOffsetStore(projectionId)
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref, alwaysFailOnOffset = 4)

@@ -109,12 +109,8 @@ class EventSourcedPubSubSpec
     sliceRanges.map { range =>
       val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
       val sourceProvider =
-        EventSourcedProvider.eventsBySlices[String](
-          system,
-          R2dbcReadJournal.Identifier,
-          entityType,
-          range.min,
-          range.max)
+        EventSourcedProvider
+          .eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityType, range.min, range.max)
       val projection = R2dbcProjection
         .exactlyOnce(
           projectionId,
@@ -214,24 +210,27 @@ class EventSourcedPubSubSpec
       processed ++= expectProcessed(processedProbe, numberOfEvents - 10 + 1, numberOfEvents)
 
       val byPid = processed.groupBy(_.envelope.persistenceId)
-      byPid.foreach { case (pid, processedByPid) =>
-        // all events of a pid must be processed by the same projection instance
-        processedByPid.map(_.projectionId).toSet.size shouldBe 1
-        // processed events in right order
-        processedByPid.map(_.envelope.sequenceNr) shouldBe (1 to processedByPid.size).toVector
+      byPid.foreach {
+        case (pid, processedByPid) =>
+          // all events of a pid must be processed by the same projection instance
+          processedByPid.map(_.projectionId).toSet.size shouldBe 1
+          // processed events in right order
+          processedByPid.map(_.envelope.sequenceNr) shouldBe (1 to processedByPid.size).toVector
 
-        val viaPubSub =
-          processedByPid.filter(p =>
-            p.envelope.offset.asInstanceOf[TimestampOffset].timestamp == p.envelope.offset
-              .asInstanceOf[TimestampOffset]
-              .readTimestamp)
-        log.info2("via pub-sub {}: {}", pid, viaPubSub.map(_.envelope.sequenceNr).mkString(", "))
+          val viaPubSub =
+            processedByPid.filter(
+              p =>
+                p.envelope.offset.asInstanceOf[TimestampOffset].timestamp == p.envelope.offset
+                    .asInstanceOf[TimestampOffset]
+                    .readTimestamp)
+          log.info2("via pub-sub {}: {}", pid, viaPubSub.map(_.envelope.sequenceNr).mkString(", "))
       }
 
-      val countViaPubSub = processed.count(p =>
-        p.envelope.offset.asInstanceOf[TimestampOffset].timestamp == p.envelope.offset
-          .asInstanceOf[TimestampOffset]
-          .readTimestamp)
+      val countViaPubSub = processed.count(
+        p =>
+          p.envelope.offset.asInstanceOf[TimestampOffset].timestamp == p.envelope.offset
+              .asInstanceOf[TimestampOffset]
+              .readTimestamp)
       log.info("Total via pub-sub: {}", countViaPubSub)
       countViaPubSub shouldBe >(0)
 

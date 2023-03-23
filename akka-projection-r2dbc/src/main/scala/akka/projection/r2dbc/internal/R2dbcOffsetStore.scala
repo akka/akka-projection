@@ -89,44 +89,45 @@ private[projection] object R2dbcOffsetStore {
     }
 
     def add(records: immutable.IndexedSeq[Record]): State = {
-      records.foldLeft(this) { case (acc, r) =>
-        val newByPid =
-          acc.byPid.get(r.pid) match {
-            case Some(existingRecord) =>
-              if (r.seqNr > existingRecord.seqNr)
-                acc.byPid.updated(r.pid, r)
-              else
-                acc.byPid // older or same seqNr
-            case None =>
-              acc.byPid.updated(r.pid, r)
-          }
-
-        val latestTimestamp = acc.latestTimestamp
-        val newLatest =
-          if (r.timestamp.isAfter(latestTimestamp)) {
-            Vector(r)
-          } else if (r.timestamp == latestTimestamp) {
-            acc.latest.find(_.pid == r.pid) match {
-              case None                 => acc.latest :+ r
+      records.foldLeft(this) {
+        case (acc, r) =>
+          val newByPid =
+            acc.byPid.get(r.pid) match {
               case Some(existingRecord) =>
-                // keep highest seqNr
-                if (r.seqNr >= existingRecord.seqNr)
-                  acc.latest.filterNot(_.pid == r.pid) :+ r
+                if (r.seqNr > existingRecord.seqNr)
+                  acc.byPid.updated(r.pid, r)
                 else
-                  acc.latest
+                  acc.byPid // older or same seqNr
+              case None =>
+                acc.byPid.updated(r.pid, r)
             }
-          } else {
-            acc.latest // older than existing latest, keep existing latest
-          }
-        val newOldestTimestamp =
-          if (acc.oldestTimestamp == Instant.EPOCH)
-            r.timestamp // first record
-          else if (r.timestamp.isBefore(acc.oldestTimestamp))
-            r.timestamp
-          else
-            acc.oldestTimestamp // this is the normal case
 
-        acc.copy(byPid = newByPid, latest = newLatest, oldestTimestamp = newOldestTimestamp)
+          val latestTimestamp = acc.latestTimestamp
+          val newLatest =
+            if (r.timestamp.isAfter(latestTimestamp)) {
+              Vector(r)
+            } else if (r.timestamp == latestTimestamp) {
+              acc.latest.find(_.pid == r.pid) match {
+                case None                 => acc.latest :+ r
+                case Some(existingRecord) =>
+                  // keep highest seqNr
+                  if (r.seqNr >= existingRecord.seqNr)
+                    acc.latest.filterNot(_.pid == r.pid) :+ r
+                  else
+                    acc.latest
+              }
+            } else {
+              acc.latest // older than existing latest, keep existing latest
+            }
+          val newOldestTimestamp =
+            if (acc.oldestTimestamp == Instant.EPOCH)
+              r.timestamp // first record
+            else if (r.timestamp.isBefore(acc.oldestTimestamp))
+              r.timestamp
+            else
+              acc.oldestTimestamp // this is the normal case
+
+          acc.copy(byPid = newByPid, latest = newLatest, oldestTimestamp = newOldestTimestamp)
       }
     }
 
@@ -156,8 +157,8 @@ private[projection] object R2dbcOffsetStore {
         val newState = State(
           sortedByTimestamp
             .take(size - keepNumberOfEntries)
-            .filterNot(_.timestamp.isBefore(until)) ++ sortedByTimestamp.takeRight(
-            keepNumberOfEntries) ++ latestBySlice)
+            .filterNot(_.timestamp.isBefore(until)) ++ sortedByTimestamp
+            .takeRight(keepNumberOfEntries) ++ latestBySlice)
         newState.copy(sizeAfterEvict = newState.size)
       } else
         this
@@ -311,7 +312,7 @@ private[projection] class R2dbcOffsetStore(
     // look for TimestampOffset first since that is used by akka-persistence-r2dbc,
     // and then fall back to the other more primitive offset types
     sourceProvider match {
-      case Some(provider) =>
+      case Some(_) =>
         readTimestampOffset().flatMap {
           case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
           case None    => readPrimitiveOffset()
@@ -488,7 +489,7 @@ private[projection] class R2dbcOffsetStore(
         if (settings.keepNumberOfEntries == 0) true else newState.size > (newState.sizeAfterEvict * 1.1).toInt
       val evictedNewState =
         if (newState.size > settings.keepNumberOfEntries && evictThresholdReached && newState.window
-            .compareTo(evictWindow) > 0) {
+              .compareTo(evictWindow) > 0) {
           val evictUntil = newState.latestTimestamp.minus(settings.timeWindow)
           val s = newState.evict(evictUntil, settings.keepNumberOfEntries)
           logger.debugN(
@@ -616,25 +617,27 @@ private[projection] class R2dbcOffsetStore(
 
   def filterAccepted[Envelope](envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[Envelope]] = {
     envelopes
-      .foldLeft(Future.successful(getInflight(), Vector.empty[Envelope])) { (acc, envelope) =>
-        acc.flatMap { case (inflight, filteredEnvelopes) =>
-          createRecordWithOffset(envelope) match {
-            case Some(recordWithOffset) =>
-              isAccepted(recordWithOffset, inflight).map {
-                case true =>
-                  (
-                    inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
-                    filteredEnvelopes :+ envelope)
-                case false =>
-                  (inflight, filteredEnvelopes)
-              }
-            case None =>
-              Future.successful((inflight, filteredEnvelopes :+ envelope))
-          }
+      .foldLeft(Future.successful((getInflight(), Vector.empty[Envelope]))) { (acc, envelope) =>
+        acc.flatMap {
+          case (inflight, filteredEnvelopes) =>
+            createRecordWithOffset(envelope) match {
+              case Some(recordWithOffset) =>
+                isAccepted(recordWithOffset, inflight).map {
+                  case true =>
+                    (
+                      inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
+                      filteredEnvelopes :+ envelope)
+                  case false =>
+                    (inflight, filteredEnvelopes)
+                }
+              case None =>
+                Future.successful((inflight, filteredEnvelopes :+ envelope))
+            }
         }
       }
-      .map { case (_, filteredEnvelopes) =>
-        filteredEnvelopes
+      .map {
+        case (_, filteredEnvelopes) =>
+          filteredEnvelopes
       }
   }
 
@@ -792,8 +795,9 @@ private[projection] class R2dbcOffsetStore(
 
   @tailrec final def addInflights[Envelope](envelopes: immutable.Seq[Envelope]): Unit = {
     val currentInflight = getInflight()
-    val entries = envelopes.iterator.map(createRecordWithOffset).collect { case Some(r) =>
-      r.record.pid -> r.record.seqNr
+    val entries = envelopes.iterator.map(createRecordWithOffset).collect {
+      case Some(r) =>
+        r.record.pid -> r.record.seqNr
     }
     val newInflight = currentInflight ++ entries
     if (!inflight.compareAndSet(currentInflight, newInflight))
@@ -882,9 +886,10 @@ private[projection] class R2dbcOffsetStore(
                   val slice = persistenceExt.sliceForPersistenceId(pid)
                   Vector(Record(slice, pid, seqNr = 1L, t.timestamp))
                 } else
-                  t.seen.iterator.map { case (pid, seqNr) =>
-                    val slice = persistenceExt.sliceForPersistenceId(pid)
-                    Record(slice, pid, seqNr, t.timestamp)
+                  t.seen.iterator.map {
+                    case (pid, seqNr) =>
+                      val slice = persistenceExt.sliceForPersistenceId(pid)
+                      Record(slice, pid, seqNr, t.timestamp)
                   }.toVector
               insertTimestampOffsetInTx(conn, records)
             }

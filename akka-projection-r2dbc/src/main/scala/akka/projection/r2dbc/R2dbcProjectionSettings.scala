@@ -134,18 +134,19 @@ final class R2dbcProjectionSettings private (
       evictInterval: JDuration = evictInterval,
       deleteInterval: JDuration = deleteInterval,
       logDbCallsExceeding: FiniteDuration = logDbCallsExceeding,
-      warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow) = new R2dbcProjectionSettings(
-    schema,
-    offsetTable,
-    timestampOffsetTable,
-    managementTable,
-    useConnectionFactory,
-    timeWindow,
-    keepNumberOfEntries,
-    evictInterval,
-    deleteInterval,
-    logDbCallsExceeding,
-    warnAboutFilteredEventsInFlow)
+      warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow) =
+    new R2dbcProjectionSettings(
+      schema,
+      offsetTable,
+      timestampOffsetTable,
+      managementTable,
+      useConnectionFactory,
+      timeWindow,
+      keepNumberOfEntries,
+      evictInterval,
+      deleteInterval,
+      logDbCallsExceeding,
+      warnAboutFilteredEventsInFlow)
 
   override def toString =
     s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $keepNumberOfEntries, $evictInterval, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow)"

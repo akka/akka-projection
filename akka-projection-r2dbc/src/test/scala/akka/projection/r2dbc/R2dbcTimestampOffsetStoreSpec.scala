@@ -8,7 +8,6 @@ import java.time.Instant
 import java.time.{ Duration => JDuration }
 import java.util.UUID
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -53,7 +52,8 @@ class R2dbcTimestampOffsetStoreSpec
         .parseString("""
     # to be able to test eviction
     akka.projection.r2dbc.offset-store.keep-number-of-entries = 0
-    """).withFallback(TestConfig.config))
+    """)
+        .withFallback(TestConfig.config))
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData
@@ -130,8 +130,6 @@ class R2dbcTimestampOffsetStoreSpec
       state,
       TimestampOffset(timestamp, timestamp.plusMillis(1000), Map(pid -> revision)),
       timestamp.toEpochMilli)
-
-  private implicit val ec: ExecutionContext = system.executionContext
 
   "The R2dbcOffsetStore for TimestampOffset" must {
 

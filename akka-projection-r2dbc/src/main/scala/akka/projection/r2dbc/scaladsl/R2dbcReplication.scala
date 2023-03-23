@@ -25,7 +25,7 @@ object R2dbcReplication {
    * Creates a projection provider for using R2dbc as backend for the Akka Projection gRPC transport for Replicated
    * Event Sourcing.
    */
-  def apply(settings: R2dbcProjectionSettings)(implicit system: ActorSystem[_]): ReplicationProjectionProvider =
+  def apply(settings: R2dbcProjectionSettings): ReplicationProjectionProvider =
     R2dbcProjection.atLeastOnceFlow(_, Some(settings.withWarnAboutFilteredEventsInFlow(false)), _, _)(_)
 
 }

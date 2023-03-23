@@ -7,7 +7,6 @@ package akka.projection.r2dbc
 import java.time.Instant
 import java.util.UUID
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -65,10 +64,8 @@ object EventSourcedEndToEndSpec {
 
     def apply(pid: PersistenceId): Behavior[Command] = {
       Behaviors.setup { context =>
-        EventSourcedBehavior[Command, Any, String](
-          persistenceId = pid,
-          "",
-          { (_, command) =>
+        EventSourcedBehavior[Command, Any, String](persistenceId = pid, "", {
+          (_, command) =>
             command match {
               case command: Persist =>
                 context.log.debugN(
@@ -99,8 +96,7 @@ object EventSourcedEndToEndSpec {
                 replyTo ! Done
                 Effect.stop()
             }
-          },
-          (_, _) => "")
+        }, (_, _) => "")
       }
     }
   }
@@ -129,7 +125,6 @@ class EventSourcedEndToEndSpec
   import EventSourcedEndToEndSpec._
 
   override def typedSystem: ActorSystem[_] = system
-  private implicit val ec: ExecutionContext = system.executionContext
 
   private val log = LoggerFactory.getLogger(getClass)
 
@@ -176,12 +171,8 @@ class EventSourcedEndToEndSpec
     sliceRanges.map { range =>
       val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
       val sourceProvider =
-        EventSourcedProvider.eventsBySlices[String](
-          system,
-          R2dbcReadJournal.Identifier,
-          entityType,
-          range.min,
-          range.max)
+        EventSourcedProvider
+          .eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityType, range.min, range.max)
       val projection = R2dbcProjection
         .exactlyOnce(
           projectionId,
@@ -221,11 +212,12 @@ class EventSourcedEndToEndSpec
 
     if (verifyProjectionId) {
       val byPid = processed.groupBy(_.envelope.persistenceId)
-      byPid.foreach { case (_, processedByPid) =>
-        // all events of a pid must be processed by the same projection instance
-        processedByPid.map(_.projectionId).toSet.size shouldBe 1
-        // processed events in right order
-        processedByPid.map(_.envelope.sequenceNr).toVector shouldBe (1 to processedByPid.size).toVector
+      byPid.foreach {
+        case (_, processedByPid) =>
+          // all events of a pid must be processed by the same projection instance
+          processedByPid.map(_.projectionId).toSet.size shouldBe 1
+          // processed events in right order
+          processedByPid.map(_.envelope.sequenceNr).toVector shouldBe (1 to processedByPid.size).toVector
       }
     }
   }

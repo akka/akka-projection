@@ -5,15 +5,12 @@
 package akka.projection.r2dbc.internal
 
 import java.util.concurrent.atomic.AtomicLong
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
-
 import akka.Done
-import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
@@ -65,6 +62,8 @@ import io.r2dbc.spi.ConnectionFactory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.annotation.nowarn
+
 /**
  * INTERNAL API
  */
@@ -88,7 +87,8 @@ private[projection] object R2dbcProjectionImpl {
 
   private val loadEnvelopeCounter = new AtomicLong
 
-  def loadEnvelope[Envelope](env: Envelope, sourceProvider: SourceProvider[_, Envelope])(implicit
+  def loadEnvelope[Envelope](env: Envelope, sourceProvider: SourceProvider[_, Envelope])(
+      implicit
       ec: ExecutionContext): Future[Envelope] = {
     env match {
       case eventEnvelope: EventEnvelope[_]
@@ -122,6 +122,8 @@ private[projection] object R2dbcProjectionImpl {
           case store: akka.persistence.state.javadsl.DurableStateStore[_] =>
             import scala.compat.java8.FutureConverters._
             store.getObject(pid).toScala.map(_.toScala)
+          case unknown =>
+            throw new IllegalArgumentException(s"Unsupported source provider type '${unknown.getClass}'")
         }).map {
           case GetObjectResult(Some(loadedValue), loadedRevision) =>
             val count = loadEnvelopeCounter.incrementAndGet()
@@ -207,7 +209,8 @@ private[projection] object R2dbcProjectionImpl {
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => R2dbcHandler[immutable.Seq[Envelope]],
       offsetStore: R2dbcOffsetStore,
-      r2dbcExecutor: R2dbcExecutor)(implicit
+      r2dbcExecutor: R2dbcExecutor)(
+      implicit
       ec: ExecutionContext,
       system: ActorSystem[_]): () => Handler[immutable.Seq[Envelope]] = { () =>
 
@@ -305,7 +308,8 @@ private[projection] object R2dbcProjectionImpl {
   private[projection] def adaptedHandlerForGroupedAsync[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => Handler[immutable.Seq[Envelope]],
-      offsetStore: R2dbcOffsetStore)(implicit
+      offsetStore: R2dbcOffsetStore)(
+      implicit
       ec: ExecutionContext,
       system: ActorSystem[_]): () => Handler[immutable.Seq[Envelope]] = { () =>
 
@@ -340,9 +344,9 @@ private[projection] object R2dbcProjectionImpl {
       sourceProvider: SourceProvider[Offset, Envelope],
       handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _],
       offsetStore: R2dbcOffsetStore,
-      settings: R2dbcProjectionSettings)(implicit
-      ec: ExecutionContext,
-      system: ActorSystem[_]): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
+      settings: R2dbcProjectionSettings)(
+      implicit
+      ec: ExecutionContext): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
 
     FlowWithContext[Envelope, ProjectionContext]
       .mapAsync(1) { env =>
@@ -362,13 +366,16 @@ private[projection] object R2dbcProjectionImpl {
             }
           }
       }
-      .collect { case Some(env) =>
-        env
+      .collect {
+        case Some(env) =>
+          env
       }
       .via(handler)
   }
 
-  abstract class AdaptedR2dbcHandler[E](val delegate: R2dbcHandler[E])(implicit
+  @nowarn("msg=never used")
+  abstract class AdaptedR2dbcHandler[E](val delegate: R2dbcHandler[E])(
+      implicit
       ec: ExecutionContext,
       system: ActorSystem[_])
       extends Handler[E] {
@@ -380,6 +387,7 @@ private[projection] object R2dbcProjectionImpl {
       delegate.stop()
   }
 
+  @nowarn("msg=never used")
   abstract class AdaptedHandler[E](val delegate: Handler[E])(implicit ec: ExecutionContext, system: ActorSystem[_])
       extends Handler[E] {
 
@@ -594,7 +602,8 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       new R2dbcRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
   }
 
-  private class R2dbcRunningProjection(source: Source[Done, _], projectionState: R2dbcInternalProjectionState)(implicit
+  private class R2dbcRunningProjection(source: Source[Done, _], projectionState: R2dbcInternalProjectionState)(
+      implicit
       system: ActorSystem[_])
       extends RunningProjection
       with RunningProjectionManagement[Offset] {

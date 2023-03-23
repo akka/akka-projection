@@ -7,8 +7,6 @@ package akka.projection.r2dbc
 import java.time.Instant
 import java.util.UUID
 
-import scala.concurrent.ExecutionContext
-
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
@@ -40,8 +38,6 @@ class R2dbcOffsetStoreSpec
     new R2dbcOffsetStore(projectionId, None, system, settings, r2dbcExecutor, clock)
 
   private val table = settings.offsetTableWithSchema
-
-  private implicit val ec: ExecutionContext = system.executionContext
 
   def selectLastSql: String =
     sql"SELECT * FROM $table WHERE projection_name = ? AND projection_key = ?"
@@ -249,9 +245,6 @@ class R2dbcOffsetStoreSpec
     s"read and save paused" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
-      def saveOffset(offset: Any): Unit =
-        offsetStore.saveOffset(OffsetPidSeqNr(offset)).futureValue
-
       offsetStore.readManagementState().futureValue shouldBe None
 
       offsetStore.savePaused(paused = true).futureValue

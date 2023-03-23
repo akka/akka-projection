@@ -45,7 +45,8 @@ object R2dbcProjection {
       projectionId: ProjectionId,
       settings: Option[R2dbcProjectionSettings],
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: () => R2dbcHandler[Envelope])(implicit
+      handler: () => R2dbcHandler[Envelope])(
+      implicit
       system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
@@ -95,7 +96,8 @@ object R2dbcProjection {
       projectionId: ProjectionId,
       settings: Option[R2dbcProjectionSettings],
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: () => R2dbcHandler[Envelope])(implicit
+      handler: () => R2dbcHandler[Envelope])(
+      implicit
       system: ActorSystem[_]): AtLeastOnceProjection[Offset, Envelope] = {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
@@ -186,7 +188,8 @@ object R2dbcProjection {
       projectionId: ProjectionId,
       settings: Option[R2dbcProjectionSettings],
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: () => R2dbcHandler[immutable.Seq[Envelope]])(implicit
+      handler: () => R2dbcHandler[immutable.Seq[Envelope]])(
+      implicit
       system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
@@ -235,7 +238,8 @@ object R2dbcProjection {
       projectionId: ProjectionId,
       settings: Option[R2dbcProjectionSettings],
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: () => Handler[immutable.Seq[Envelope]])(implicit
+      handler: () => Handler[immutable.Seq[Envelope]])(
+      implicit
       system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
@@ -289,7 +293,8 @@ object R2dbcProjection {
       projectionId: ProjectionId,
       settings: Option[R2dbcProjectionSettings],
       sourceProvider: SourceProvider[Offset, Envelope],
-      handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])(implicit
+      handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _])(
+      implicit
       system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
@@ -303,8 +308,7 @@ object R2dbcProjection {
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForFlow(sourceProvider, handler, offsetStore, r2dbcSettings)(
-        system.executionContext,
-        system)
+        system.executionContext)
 
     new R2dbcProjectionImpl(
       projectionId,

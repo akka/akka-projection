@@ -5,7 +5,6 @@
 package akka.projection.r2dbc
 
 import java.util.UUID
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -59,10 +58,8 @@ object DurableStateEndToEndSpec {
 
     def apply(pid: PersistenceId): Behavior[Command] = {
       Behaviors.setup { context =>
-        DurableStateBehavior[Command, Any](
-          persistenceId = pid,
-          "",
-          { (_, command) =>
+        DurableStateBehavior[Command, Any](persistenceId = pid, "", {
+          (_, command) =>
             command match {
               case command: Persist =>
                 context.log.debugN(
@@ -85,7 +82,7 @@ object DurableStateEndToEndSpec {
                 replyTo ! Done
                 Effect.stop()
             }
-          })
+        })
       }
     }
   }
@@ -118,7 +115,6 @@ class DurableStateEndToEndSpec
   import DurableStateEndToEndSpec._
 
   override def typedSystem: ActorSystem[_] = system
-  private implicit val ec: ExecutionContext = system.executionContext
 
   private val settings = R2dbcProjectionSettings(testKit.system)
 
@@ -146,12 +142,8 @@ class DurableStateEndToEndSpec
     sliceRanges.map { range =>
       val projectionId = ProjectionId(projectionName, s"${range.min}-${range.max}")
       val sourceProvider =
-        DurableStateSourceProvider.changesBySlices[String](
-          system,
-          R2dbcDurableStateStore.Identifier,
-          entityType,
-          range.min,
-          range.max)
+        DurableStateSourceProvider
+          .changesBySlices[String](system, R2dbcDurableStateStore.Identifier, entityType, range.min, range.max)
       val projection = R2dbcProjection
         .exactlyOnce(
           projectionId,
@@ -219,28 +211,29 @@ class DurableStateEndToEndSpec
         n += 1
       }
 
-      handlers.foreach { case (projectionId, handler) =>
-        (0 until numberOfEntities).foreach { p =>
-          val persistenceId = PersistenceId(entityType, s"p$p")
-          val slice = DurableStateSourceProvider.sliceForPersistenceId(
-            system,
-            R2dbcDurableStateStore.Identifier,
-            persistenceId.id)
-          withClue(s"projectionId $projectionId, persistenceId $persistenceId, slice $slice: ") {
-            if (handler.sliceRange.contains(slice)) {
-              eventually {
-                val updates = handler.processed.collect {
-                  case upd: UpdatedDurableState[String] if upd.persistenceId == persistenceId.id => upd
+      handlers.foreach {
+        case (projectionId, handler) =>
+          (0 until numberOfEntities).foreach { p =>
+            val persistenceId = PersistenceId(entityType, s"p$p")
+            val slice = DurableStateSourceProvider.sliceForPersistenceId(
+              system,
+              R2dbcDurableStateStore.Identifier,
+              persistenceId.id)
+            withClue(s"projectionId $projectionId, persistenceId $persistenceId, slice $slice: ") {
+              if (handler.sliceRange.contains(slice)) {
+                eventually {
+                  val updates = handler.processed.collect {
+                    case upd: UpdatedDurableState[String] if upd.persistenceId == persistenceId.id => upd
+                  }
+                  val revision = revisionPerEntity(p)
+                  updates.last.revision shouldBe revision
+                  updates.last.value shouldBe s"s$p-$revision"
+                  // processed events in right order
+                  updates shouldBe updates.sortBy(_.revision)
                 }
-                val revision = revisionPerEntity(p)
-                updates.last.revision shouldBe revision
-                updates.last.value shouldBe s"s$p-$revision"
-                // processed events in right order
-                updates shouldBe updates.sortBy(_.revision)
               }
             }
           }
-        }
       }
 
       projections.foreach(_ ! ProjectionBehavior.Stop)

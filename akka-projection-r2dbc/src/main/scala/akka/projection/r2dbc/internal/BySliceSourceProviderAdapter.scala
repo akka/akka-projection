@@ -17,10 +17,8 @@ import akka.projection.scaladsl
 import akka.stream.scaladsl.Source
 
 import scala.compat.java8.FutureConverters._
-import akka.util.ccompat.JavaConverters._
 
 import scala.compat.java8.OptionConverters._
-import scala.concurrent.ExecutionContext
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery

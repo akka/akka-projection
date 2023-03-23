@@ -16,7 +16,6 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.language.postfixOps
 
 import akka.Done
 import akka.NotUsed
@@ -152,11 +151,9 @@ class R2dbcTimestampOffsetProjectionSpec
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    Await.result(
-      r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
-        conn.createStatement(TestRepository.createTableSql)
-      },
-      10.seconds)
+    Await.result(r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
+      conn.createStatement(TestRepository.createTableSql)
+    }, 10.seconds)
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
       10.seconds)
@@ -200,11 +197,6 @@ class R2dbcTimestampOffsetProjectionSpec
   private def projectedValueShouldBe(expected: String)(implicit entityId: String) = {
     val opt = withRepo(_.findById(entityId)).futureValue.map(_.text)
     opt shouldBe Some(expected)
-  }
-
-  private def projectedValueShouldBeEmpty()(implicit entityId: String) = {
-    val opt = withRepo(_.findById(entityId)).futureValue.map(_.text)
-    opt shouldBe None
   }
 
   // TODO: extract this to some utility
@@ -337,13 +329,14 @@ class R2dbcTimestampOffsetProjectionSpec
         Future.successful(Done)
       else {
         val repo = TestRepository(session)
-        val results = envelopes.groupBy(_.persistenceId).map { case (pid, envs) =>
-          repo.findById(pid).flatMap { existing =>
-            val newConcatStr = envs.foldLeft(existing.getOrElse(ConcatStr(pid, ""))) { (acc, env) =>
-              acc.concat(env.event)
+        val results = envelopes.groupBy(_.persistenceId).map {
+          case (pid, envs) =>
+            repo.findById(pid).flatMap { existing =>
+              val newConcatStr = envs.foldLeft(existing.getOrElse(ConcatStr(pid, ""))) { (acc, env) =>
+                acc.concat(env.event)
+              }
+              repo.update(pid, newConcatStr.text)
             }
-            repo.update(pid, newConcatStr.text)
-          }
         }
         Future.sequence(results).map(_ => Done)
       }

@@ -7,7 +7,6 @@ package akka.projection.r2dbc
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Random
@@ -102,7 +101,6 @@ class EventSourcedChaosSpec
   import EventSourcedEndToEndSpec._
 
   override def typedSystem: ActorSystem[_] = system
-  private implicit val ec: ExecutionContext = system.executionContext
 
   private val settings = R2dbcProjectionSettings(testKit.system)
   private val log = LoggerFactory.getLogger(getClass)
@@ -213,13 +211,14 @@ class EventSourcedChaosSpec
         val logMsg =
           s"Iteration #$iteration. Processed [$expectedEventCounts] events in [$numberOfProjections] projections from [${byPid.size}] pids."
         log.debug(logMsg)
-        byPid.foreach { case (_, processedByPid) =>
-          // all events of a pid must be processed by the same projection instance
-          processedByPid.map(_.projectionId).toSet.size shouldBe 1
-          // processed events in right order
-          val seqNrs = processedByPid.map(_.envelope.sequenceNr).toVector
-          (seqNrs.last - seqNrs.head + 1) shouldBe processedByPid.size
-          seqNrs shouldBe (seqNrs.head to seqNrs.last).toVector
+        byPid.foreach {
+          case (_, processedByPid) =>
+            // all events of a pid must be processed by the same projection instance
+            processedByPid.map(_.projectionId).toSet.size shouldBe 1
+            // processed events in right order
+            val seqNrs = processedByPid.map(_.envelope.sequenceNr).toVector
+            (seqNrs.last - seqNrs.head + 1) shouldBe processedByPid.size
+            seqNrs shouldBe (seqNrs.head to seqNrs.last).toVector
         }
         info(logMsg)
 
