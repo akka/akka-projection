@@ -1,0 +1,107 @@
+name: Integration Tests for R2DBC
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags-ignore: [ v.* ]
+
+jobs:
+  test-r2dbc-postgres:
+    name: Run r2dbc test with Postgres
+    runs-on: ubuntu-22.04
+    if: github.repository == 'akka/akka-projection'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # - { jdkVersion: "1.8.0",  jvmName: "temurin:1.8.0",  extraOpts: '' }
+          # - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
+          - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
+
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v3.3.0
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Cache Coursier cache
+        # https://github.com/coursier/cache-action/releases
+        # v6.4.3
+        uses: coursier/cache-action@d1039466d0812d6370649b9afb02bbf5f646bacf
+
+      - name: Set up JDK ${{ matrix.jdkVersion }}
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.0
+        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
+        with:
+          jvm: ${{ matrix.jvmName }}
+
+      - name: Start DB
+        run: |-
+          docker-compose -f docker-files/docker-compose-postgres.yml up -d
+          # TODO: could we poll the port instead of sleep?
+          sleep 10
+          docker exec -i postgres_db psql -U postgres -t < akka-projection-r2dbc/ddl-scripts/create_tables_postgres.sql
+
+      - name: Run integration tests with with Scala and Java ${{ matrix.jdkVersion }}
+        run: |-
+          sbt akka-projection-r2dbc/It/test
+
+  test-r2dbc-yugabyte:
+    name: Run r2dbc tests with Yugabyte
+    runs-on: ubuntu-22.04
+    if: github.repository == 'akka/akka-projection'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # - { jdkVersion: "1.8.0",  jvmName: "temurin:1.8.0",  extraOpts: '' }
+          # - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
+          - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
+
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v3.3.0
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Cache Coursier cache
+        # https://github.com/coursier/cache-action/releases
+        # v6.4.3
+        uses: coursier/cache-action@d1039466d0812d6370649b9afb02bbf5f646bacf
+
+      - name: Set up JDK ${{ matrix.jdkVersion }}
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.0
+        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
+        with:
+          jvm: ${{ matrix.jvmName }}
+
+      - name: Start DB
+        run: |-
+          docker-compose -f docker-files/docker-compose-yugabyte.yml up -d
+          # TODO: could we poll the port instead of sleep?
+          sleep 10
+          docker exec -i yb-tserver-n1 /home/yugabyte/bin/ysqlsh -h yb-tserver-n1 -t < akka-projection-r2dbc/ddl-scripts/create_tables_yugabyte.sql
+
+      - name: Run integration tests with with Scala and Java ${{ matrix.jdkVersion }}
+        run: |-
+          sbt -Dakka.persistence.r2dbc.dialect=yugabyte -Dakka.projection.r2dbc.dialect=yugabyte akka-projection-r2dbc/It/test
