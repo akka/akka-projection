@@ -5,7 +5,9 @@
 package akka.projection.grpc.internal
 
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 
+import scala.concurrent.Future
 import scala.concurrent.Promise
 
 import akka.NotUsed
@@ -60,20 +62,6 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
     createEnvelope(PersistenceId(entityType, "b"), 1, "b1"),
     createEnvelope(PersistenceId(entityType, "c"), 1, "c1"))
 
-  private def testCurrentEventsByPersistenceIdQuery(allEnvelopes: Vector[EventEnvelope[Any]]) =
-    new CurrentEventsByPersistenceIdQuery {
-      override def currentEventsByPersistenceId(
-          persistenceId: String,
-          fromSequenceNr: Long,
-          toSequenceNr: Long): Source[query.EventEnvelope, NotUsed] = {
-        val filtered = allEnvelopes
-          .filter(env => env.persistenceId == persistenceId && env.sequenceNr >= fromSequenceNr)
-          .sortBy(_.sequenceNr)
-        Source(filtered.map(env =>
-          query.EventEnvelope(env.offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp)))
-      }
-    }
-
   private class Setup {
     def allEnvelopes: Vector[EventEnvelope[Any]] = envelopes
 
@@ -81,6 +69,32 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
     def envelopesFor(entityId: String): Vector[EventEnvelope[Any]] =
       allEnvelopes.filter(_.persistenceId == PersistenceId(entityType, entityId).id)
+
+    private val eventsByPersistenceIdConcurrency = new AtomicInteger()
+
+    private def testCurrentEventsByPersistenceIdQuery(allEnvelopes: Vector[EventEnvelope[Any]]) =
+      new CurrentEventsByPersistenceIdQuery {
+        override def currentEventsByPersistenceId(
+            persistenceId: String,
+            fromSequenceNr: Long,
+            toSequenceNr: Long): Source[query.EventEnvelope, NotUsed] = {
+          val filtered = allEnvelopes
+            .filter(env => env.persistenceId == persistenceId && env.sequenceNr >= fromSequenceNr)
+            .sortBy(_.sequenceNr)
+          // simulate initial delay for more realistic testing, and concurrency check
+          import akka.pattern.{ after => futureAfter }
+          import scala.concurrent.duration._
+          if (eventsByPersistenceIdConcurrency.incrementAndGet() > FilterStage.ReplayParallelism)
+            throw new IllegalStateException("Unexpected, too many concurrent calls to currentEventsByPersistenceId")
+          Source
+            .futureSource(futureAfter(10.millis) {
+              eventsByPersistenceIdConcurrency.decrementAndGet()
+              Future.successful(Source(filtered.map(env =>
+                query.EventEnvelope(env.offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp))))
+            })
+            .mapMaterializedValue(_ => NotUsed)
+        }
+      }
 
     private val envPublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
     private val envSource: Source[EventEnvelope[Any], _] =

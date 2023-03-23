@@ -38,6 +38,8 @@ import akka.stream.stage.StageLogging
  * INTERNAL API
  */
 @InternalApi private[akka] object FilterStage {
+  val ReplayParallelism = 3 // FIXME config
+
   object Filter {
     val empty: Filter = Filter(Set.empty, Set.empty, Map.empty)
   }
@@ -113,7 +115,6 @@ import akka.stream.stage.StageLogging
 
       private var persistence: Persistence = _
 
-      private val replayParallelism = 3 // FIXME config
       // only one pull replay stream -> async callback at a time
       private var replayHasBeenPulled = false
       private var pendingReplayRequests: Vector[EntityIdOffset] = Vector.empty
@@ -259,7 +260,7 @@ import akka.stream.stage.StageLogging
             replayInProgress -= entityId
           }
 
-          if (replayInProgress.size < replayParallelism) {
+          if (replayInProgress.size < ReplayParallelism) {
             log.debug("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
             val slice = persistence.sliceForPersistenceId(pid.id)
             val queue =
@@ -282,7 +283,7 @@ import akka.stream.stage.StageLogging
       }
 
       private def pullInEnvOrReplay(): Unit = {
-        if (replayInProgress.size < replayParallelism && pendingReplayRequests.nonEmpty) {
+        if (replayInProgress.size < ReplayParallelism && pendingReplayRequests.nonEmpty) {
           val pendingEntityOffset = pendingReplayRequests.head
           pendingReplayRequests = pendingReplayRequests.tail
           replay(pendingEntityOffset)
