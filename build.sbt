@@ -131,6 +131,7 @@ lazy val grpcTests =
 lazy val r2dbc =
   Project(id = "akka-projection-r2dbc", base = file("akka-projection-r2dbc"))
     .configs(IntegrationTest)
+    // .settings(Scala3.settings) FIXME can be done once r2dbc 1.1.0 is out
     .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.r2dbc)
