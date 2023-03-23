@@ -240,3 +240,26 @@ The supported offset types of the `R2dbcProjection` are:
 ## Publish events for lower latency
 
 See @extref:[eventsBySlices documentation](akka-persistence-r2dbc:query.html#publish-events-for-lower-latency-of-eventsbyslices).
+
+
+## Multiple projection configurations
+
+For Projection offset store you need another config section:
+
+@@snip [conf](/docs/src/test/scala/docs/home/projection/R2dbcProjectionDocExample.scala){#second-projection-config}
+
+Note that the `use-connection-factory` property references the same connection settings as is used for the `second-r2dbc` plugins, but it could also
+have been a separate connection pool configured as:
+
+@@snip [conf](/docs/src/test/scala/docs/home/projection/R2dbcProjectionDocExample.scala){#second-projection-config-with-connection-factory}
+
+In that way you can use the default plugins for the write side and Projection `SourceProvider`, but use a separate database for the Projection
+handlers and offset storage.
+
+You start the Projections with the `ProjectionSettings` loaded from `"second-projection-r2dbc"`.
+
+Scala
+:  @@snip [Example.scala](/docs/src/test/scala/docs/home/projection/R2dbcProjectionDocExample.scala){#projectionSettings}
+
+Java
+:  @@snip [Example.java](/docs/src/test/java/jdocs/home/projection/R2dbcProjectionDocExample.java){#projectionSettings}
