@@ -47,7 +47,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-import akka.projection.grpc.consumer.scaladsl.ConsumerFilter
+import akka.projection.grpc.consumer.ConsumerFilter
 
 object IntegrationSpec {
 

@@ -2,50 +2,14 @@
  * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.grpc.consumer.scaladsl
+package akka.projection.grpc.internal
 
-import scala.collection.immutable
 import akka.actor.typed.ActorRef
-import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
-import akka.actor.typed.Extension
-import akka.actor.typed.ExtensionId
-import akka.actor.typed.Props
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.InternalApi
-
-object ConsumerFilter extends ExtensionId[ConsumerFilter] {
-  sealed trait Command
-  sealed trait SubscriberCommand extends Command {
-    def streamId: String
-  }
-  final case class Subscribe(streamId: String, subscriber: ActorRef[SubscriberCommand]) extends Command
-
-  final case class FilterCommand(streamId: String, criteria: immutable.Seq[FilterCriteria]) extends SubscriberCommand
-
-  final case class ReplayCommand(streamId: String, entityOffsets: Set[EntityIdOffset]) extends SubscriberCommand
-
-  sealed trait FilterCriteria
-  final case class ExcludeRegexEntityIds(matching: Set[String]) extends FilterCriteria
-  final case class RemoveExcludeRegexEntityIds(matching: Set[String]) extends FilterCriteria
-  final case class ExcludeEntityIds(entityIds: Set[String]) extends FilterCriteria
-  final case class RemoveExcludeEntityIds(entityIds: Set[String]) extends FilterCriteria
-  final case class IncludeEntityIds(entityOffsets: Set[EntityIdOffset]) extends FilterCriteria
-  final case class RemoveIncludeEntityIds(entityIds: Set[String]) extends FilterCriteria
-
-  final case class EntityIdOffset(entityId: String, seqNr: Long)
-
-  override def createExtension(system: ActorSystem[_]): ConsumerFilter = new ConsumerFilter(system)
-
-}
-
-class ConsumerFilter(system: ActorSystem[_]) extends Extension {
-
-  val ref: ActorRef[ConsumerFilter.Command] =
-    system.systemActorOf(ConsumerFilterRegistry(), "projectionGrpcConsumerFilter", Props.empty)
-
-}
+import akka.projection.grpc.consumer.ConsumerFilter
 
 /**
  * INTERNAL API
@@ -68,8 +32,8 @@ class ConsumerFilter(system: ActorSystem[_]) extends Extension {
  * INTERNAL API
  */
 @InternalApi private[akka] class ConsumerFilterRegistry(context: ActorContext[ConsumerFilter.Command]) {
-  import ConsumerFilterRegistry._
   import ConsumerFilter._
+  import ConsumerFilterRegistry._
 
   private def behavior(subscribers: Set[Subscriber]): Behavior[Command] = {
     Behaviors.receiveMessage {
