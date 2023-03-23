@@ -22,7 +22,7 @@ import akka.projection.grpc.internal.ConsumerFilterRegistry
  * Extension to dynamically control the filters for the `GrpcReadJournal`.
  */
 object ConsumerFilter extends ExtensionId[ConsumerFilter] {
-  sealed trait Command
+  trait Command
   sealed trait SubscriberCommand extends Command {
     def streamId: String
   }
@@ -42,17 +42,26 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
    * If no matching include the event is discarded.
    * If matching include the event is emitted.
    */
-  final case class FilterCommand(streamId: String, criteria: immutable.Seq[FilterCriteria]) extends SubscriberCommand {
+  final case class UpdateFilter(streamId: String, criteria: immutable.Seq[FilterCriteria]) extends SubscriberCommand {
 
     /** Java API */
     def this(streamId: String, criteria: JList[FilterCriteria]) =
       this(streamId, criteria.asScala.toVector)
   }
 
+  final case class GetFilter(streamId: String, replyTo: ActorRef[CurrentFilter]) extends Command
+
+  final case class CurrentFilter(streamId: String, criteria: immutable.Seq[FilterCriteria]) {
+
+    /** Java API */
+    def getCriteria(): JList[FilterCriteria] =
+      criteria.asJava
+  }
+
   /**
    * Explicit request to replay events for given entities.
    */
-  final case class ReplayCommand(streamId: String, entityOffsets: Set[EntityIdOffset]) extends SubscriberCommand {
+  final case class Replay(streamId: String, entityOffsets: Set[EntityIdOffset]) extends SubscriberCommand {
 
     /** Java API */
     def this(streamId: String, entityOffsets: JSet[EntityIdOffset]) =

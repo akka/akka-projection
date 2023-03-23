@@ -8,12 +8,14 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 import scala.collection.immutable
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
+import akka.actor.typed.Scheduler
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.ApiMayChange
@@ -61,6 +63,7 @@ import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
+import akka.util.Timeout
 import com.google.protobuf.Descriptors
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
@@ -247,6 +250,8 @@ final class GrpcReadJournal private (
         case _                  => offset
       })
 
+    val typedSystem = system.toTyped
+
     val protoOffset =
       offset match {
         case o: TimestampOffset =>
@@ -262,8 +267,7 @@ final class GrpcReadJournal private (
           throw new IllegalArgumentException(s"Expected TimestampOffset or NoOffset, but got [$offset]")
       }
 
-    // FIXME also need to retrieve filters at startup and include in InitReq
-    val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset)
+    val consumerFilter = ConsumerFilter(typedSystem)
 
     val inReqSource: Source[StreamIn, NotUsed] = Source
       .actorRef[ConsumerFilter.SubscriberCommand](
@@ -272,41 +276,45 @@ final class GrpcReadJournal private (
         bufferSize = 1024,
         OverflowStrategy.fail)
       .collect {
-        case ConsumerFilter.FilterCommand(`streamId`, criteria) =>
-          val protoCriteria = criteria.map {
-            case ConsumerFilter.IncludeEntityIds(entityOffsets) =>
-              FilterCriteria(FilterCriteria.Message.IncludeEntityIds(IncludeEntityIds(entityOffsets.map {
-                case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
-              }.toVector)))
-            case ConsumerFilter.RemoveIncludeEntityIds(entityIds) =>
-              FilterCriteria(FilterCriteria.Message.RemoveIncludeEntityIds(RemoveIncludeEntityIds(entityIds.toVector)))
-            case ConsumerFilter.ExcludeEntityIds(entityIds) =>
-              FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(entityIds.toVector)))
-            case ConsumerFilter.RemoveExcludeEntityIds(entityIds) =>
-              FilterCriteria(FilterCriteria.Message.RemoveExcludeEntityIds(RemoveExcludeEntityIds(entityIds.toVector)))
-            case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
-              FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(matching.toVector)))
-            case ConsumerFilter.RemoveExcludeRegexEntityIds(matching) =>
-              FilterCriteria(
-                FilterCriteria.Message.RemoveExcludeMatchingEntityIds(RemoveExcludeRegexEntityIds(matching.toVector)))
-          }
-
+        case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
+          val protoCriteria = toProtoFilterCriteria(criteria)
           StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
-        case ConsumerFilter.ReplayCommand(`streamId`, entityOffsets) =>
+        case ConsumerFilter.Replay(`streamId`, entityOffsets) =>
           val protoEntityOffsets = entityOffsets.map {
             case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
           }.toVector
           StreamIn(StreamIn.Message.Replay(ReplayReq(protoEntityOffsets)))
       }
       .mapMaterializedValue { ref =>
-        ConsumerFilter(system.toTyped).ref ! ConsumerFilter.Subscribe(streamId, ref)
+        consumerFilter.ref ! ConsumerFilter.Subscribe(streamId, ref)
         NotUsed
       }
 
-    val streamIn: Source[StreamIn, NotUsed] = Source
-      .single(StreamIn(StreamIn.Message.Init(initReq)))
-      .concat(inReqSource)
+    val initFilter = {
+      import akka.actor.typed.scaladsl.AskPattern._
+      import scala.concurrent.duration._
+      implicit val scheduler: Scheduler = typedSystem.scheduler
+      implicit val askTimeout: Timeout = 10.seconds // FIXME config
+      consumerFilter.ref.ask[ConsumerFilter.CurrentFilter](ConsumerFilter.GetFilter(streamId, _))
+    }
+
+    val streamIn: Source[StreamIn, NotUsed] = {
+      implicit val ec: ExecutionContext = typedSystem.executionContext
+      Source
+        .futureSource {
+          initFilter.map { filter =>
+            val protoCriteria = toProtoFilterCriteria(filter.criteria)
+            val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset, protoCriteria)
+
+            Source
+              .single(StreamIn(StreamIn.Message.Init(initReq)))
+              .concat(inReqSource)
+          }
+        }
+        .mapMaterializedValue(_ => NotUsed)
+    }
+
     val streamOut: Source[StreamOut, NotUsed] =
       addRequestHeaders(client.eventsBySlices())
         .invoke(streamIn)
@@ -342,6 +350,26 @@ final class GrpcReadJournal private (
 
       case other =>
         throw new IllegalArgumentException(s"Unexpected StreamOut [${other.message.getClass.getName}]")
+    }
+  }
+
+  private def toProtoFilterCriteria(criteria: immutable.Seq[ConsumerFilter.FilterCriteria]): Seq[FilterCriteria] = {
+    criteria.map {
+      case ConsumerFilter.IncludeEntityIds(entityOffsets) =>
+        FilterCriteria(FilterCriteria.Message.IncludeEntityIds(IncludeEntityIds(entityOffsets.map {
+          case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
+        }.toVector)))
+      case ConsumerFilter.RemoveIncludeEntityIds(entityIds) =>
+        FilterCriteria(FilterCriteria.Message.RemoveIncludeEntityIds(RemoveIncludeEntityIds(entityIds.toVector)))
+      case ConsumerFilter.ExcludeEntityIds(entityIds) =>
+        FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(entityIds.toVector)))
+      case ConsumerFilter.RemoveExcludeEntityIds(entityIds) =>
+        FilterCriteria(FilterCriteria.Message.RemoveExcludeEntityIds(RemoveExcludeEntityIds(entityIds.toVector)))
+      case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
+        FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(matching.toVector)))
+      case ConsumerFilter.RemoveExcludeRegexEntityIds(matching) =>
+        FilterCriteria(
+          FilterCriteria.Message.RemoveExcludeMatchingEntityIds(RemoveExcludeRegexEntityIds(matching.toVector)))
     }
   }
 
