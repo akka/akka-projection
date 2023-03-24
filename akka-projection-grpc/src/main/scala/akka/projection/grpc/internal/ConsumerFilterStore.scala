@@ -21,7 +21,6 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.InternalApi
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
-import akka.projection.grpc.internal.LocalConsumerFilterStore.reduceFilter
 
 /**
  * INTERNAL API
@@ -81,41 +80,6 @@ import akka.projection.grpc.internal.LocalConsumerFilterStore.reduceFilter
     val filtersByStreamId = new ConcurrentHashMap[String, immutable.Seq[FilterCriteria]]
   }
 
-  def reduceFilter(
-      filterCriteria: immutable.Seq[FilterCriteria],
-      update: immutable.Seq[FilterCriteria]): immutable.Seq[FilterCriteria] = {
-    update.foldLeft(filterCriteria) {
-      case (acc, ConsumerFilter.RemoveIncludeEntityIds(entityIds)) =>
-        acc.flatMap {
-          case inc: ConsumerFilter.IncludeEntityIds =>
-            val newEntityOffsets = inc.entityOffsets.filterNot(x => entityIds.contains(x.entityId))
-            if (newEntityOffsets.isEmpty) None
-            else Some(ConsumerFilter.IncludeEntityIds(newEntityOffsets))
-          case other => Some(other)
-        }
-
-      case (acc, ConsumerFilter.RemoveExcludeEntityIds(entityIds)) =>
-        acc.flatMap {
-          case excl: ConsumerFilter.ExcludeEntityIds =>
-            val newEntityIds = excl.entityIds.diff(entityIds)
-            if (newEntityIds.isEmpty) None
-            else Some(ConsumerFilter.ExcludeEntityIds(newEntityIds))
-          case other => Some(other)
-        }
-
-      case (acc, ConsumerFilter.RemoveExcludeRegexEntityIds(matching)) =>
-        acc.flatMap {
-          case excl: ConsumerFilter.RemoveExcludeRegexEntityIds =>
-            val newMatching = excl.matching.diff(matching)
-            if (newMatching.isEmpty) None
-            else Some(ConsumerFilter.ExcludeEntityIds(newMatching))
-          case other => Some(other)
-        }
-
-      case (acc, other) =>
-        acc :+ other
-    }
-  }
 }
 
 /**
@@ -137,13 +101,15 @@ import akka.projection.grpc.internal.LocalConsumerFilterStore.reduceFilter
   def setState(old: immutable.Seq[FilterCriteria], filterCriteria: immutable.Seq[FilterCriteria]): Unit = {
     if (!storeExt.filtersByStreamId.replace(streamId, old, filterCriteria))
       throw new ConcurrentModificationException(s"Unexpected concurrent update of streamId [$streamId]")
+    // FIXME this might be too much logging when many ids
+    context.log.debug("Updated filter for streamId [{}] to [{}]", streamId, filterCriteria)
   }
 
   def behavior(): Behavior[Command] = {
     Behaviors.receiveMessage {
       case UpdateFilter(updatedCriteria) =>
         val oldFilterCriteria = getState()
-        val newFilterCriteria = reduceFilter(oldFilterCriteria, updatedCriteria)
+        val newFilterCriteria = ConsumerFilter.mergeFilter(oldFilterCriteria, updatedCriteria)
         setState(oldFilterCriteria, newFilterCriteria)
 
         notifyUpdatesTo ! ConsumerFilterRegistry.FilterUpdated(streamId, newFilterCriteria)

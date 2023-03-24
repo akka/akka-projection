@@ -215,6 +215,8 @@ import akka.stream.stage.StageLogging
                 acc
             }
         }
+        // FIXME might be too much logging if it includes many ids
+        log.debug("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
       }
 
       private def handledByThisStream(pid: PersistenceId): Boolean = {

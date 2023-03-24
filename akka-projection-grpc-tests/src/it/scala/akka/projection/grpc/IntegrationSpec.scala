@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc
@@ -55,6 +55,7 @@ object IntegrationSpec {
 
   val config: Config = ConfigFactory
     .parseString(s"""
+    akka.loglevel = DEBUG
     akka.http.server.preview.enable-http2 = on
     akka.persistence.r2dbc {
       query {

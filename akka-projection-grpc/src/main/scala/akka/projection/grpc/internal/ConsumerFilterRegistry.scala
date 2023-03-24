@@ -32,7 +32,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
 
   def apply(): Behavior[Command] = {
     Behaviors.setup { context =>
-      new ConsumerFilterRegistry(context).behavior(Set.empty, Map.empty)
+      new ConsumerFilterRegistry(context).behavior(Map.empty, Map.empty)
     }
 
   }
@@ -46,8 +46,10 @@ import akka.projection.grpc.consumer.ConsumerFilter
   import ConsumerFilter._
   import ConsumerFilterRegistry._
 
+  // FIXME add unit test for this actor
+
   private def behavior(
-      subscribers: Set[Subscriber],
+      subscribers: Map[Subscriber, immutable.Seq[FilterCriteria]],
       stores: Map[String, ActorRef[ConsumerFilterStore.Command]]): Behavior[Command] = {
 
     def getOrCreateStore(streamId: String): ActorRef[ConsumerFilterStore.Command] = {
@@ -60,11 +62,27 @@ import akka.projection.grpc.consumer.ConsumerFilter
       }
     }
 
+    def publishUpdatedFilterToSubscribers(
+        streamId: String,
+        filter: immutable.Seq[FilterCriteria]): Map[Subscriber, immutable.Seq[FilterCriteria]] = {
+      subscribers.map {
+        case (sub, subFilter) =>
+          if (sub.streamId == streamId) {
+            val diff = ConsumerFilter.createDiff(subFilter, filter)
+            sub.ref ! UpdateFilter(streamId, diff)
+            sub -> filter
+          } else {
+            sub -> subFilter
+          }
+      }
+    }
+
     def publishToSubscribers(cmd: SubscriberCommand): Unit = {
       context.log.debug("Publish command [{}] to subscribers", cmd)
-      subscribers.foreach { sub =>
-        if (sub.streamId == cmd.streamId)
-          sub.ref ! cmd
+      subscribers.foreach {
+        case (sub, _) =>
+          if (sub.streamId == cmd.streamId)
+            sub.ref ! cmd
       }
     }
 
@@ -75,7 +93,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
           context.watchWith(sub.subscriber, SubscriberTerminated(subscriber))
           // eagerly start the store
           val store = getOrCreateStore(sub.streamId)
-          behavior(subscribers + subscriber, stores.updated(sub.streamId, store))
+          behavior(subscribers.updated(subscriber, Vector.empty), stores.updated(sub.streamId, store))
 
         case cmd: UpdateFilter =>
           val store = getOrCreateStore(cmd.streamId)
@@ -90,6 +108,8 @@ import akka.projection.grpc.consumer.ConsumerFilter
           behavior(subscribers, stores.updated(streamId, store))
 
         case cmd: Replay =>
+          // FIXME revisit the Replay command. Might not be useful for end users since we
+          // don't propagate it to other nodes. We need it (or similar) internally for the lazy replay.
           publishToSubscribers(cmd)
 
           Behaviors.same
@@ -98,15 +118,14 @@ import akka.projection.grpc.consumer.ConsumerFilter
           // extra match for compiler exhaustiveness check
           internalCommand match {
             case FilterUpdated(streamId, criteria) =>
-              // FIXME the critiera is the full accumulated critera, we should create a diff per subscriber
-              publishToSubscribers(UpdateFilter(streamId, criteria))
-              Behaviors.same
+              val newSubscribers = publishUpdatedFilterToSubscribers(streamId, criteria)
+              behavior(newSubscribers, stores)
 
             case SubscriberTerminated(subscriber) =>
               val streamId = subscriber.streamId
               val newSubscribers = subscribers - subscriber
               val newStores =
-                if (stores.contains(streamId) && !newSubscribers.exists(_.streamId == streamId)) {
+                if (stores.contains(streamId) && !newSubscribers.exists { case (sub, _) => sub.streamId == streamId }) {
                   // no more subscribers of the streamId, we can stop the store
                   context.stop(stores(streamId))
                   stores - streamId

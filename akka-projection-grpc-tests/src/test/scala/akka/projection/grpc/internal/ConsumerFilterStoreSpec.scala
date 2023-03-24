@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
  */
+
 package akka.projection.grpc.internal
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -46,8 +47,7 @@ abstract class ConsumerFilterStoreSpec(implName: String)
       val filter =
         Vector(
           ConsumerFilter.ExcludeEntityIds(Set("a", "b", "c")),
-          ConsumerFilter.IncludeEntityIds(
-            Set(ConsumerFilter.EntityIdOffset("b", 1), ConsumerFilter.EntityIdOffset("b", 2))))
+          ConsumerFilter.IncludeEntityIds(Set(ConsumerFilter.EntityIdOffset("b", 1))))
       store1 ! ConsumerFilterStore.UpdateFilter(filter)
       notifyProbe.expectMessage(ConsumerFilterRegistry.FilterUpdated(streamId, filter))
       testKit.stop(store1)
@@ -67,29 +67,4 @@ class LocalConsumerFilterStoreSpec extends ConsumerFilterStoreSpec("LocalConsume
       new LocalConsumerFilterStore(context, streamId, notifyProbe.ref).behavior()
     })
   }
-
-  "additionally, LocalConsumerFilterStore" must {
-    "reduce filter" in {
-      val filter1 =
-        Vector(
-          ConsumerFilter.ExcludeEntityIds(Set("a", "b", "c")),
-          ConsumerFilter.IncludeEntityIds(
-            Set(ConsumerFilter.EntityIdOffset("b", 1), ConsumerFilter.EntityIdOffset("c", 2))))
-
-      val filter2 =
-        Vector(
-          ConsumerFilter.ExcludeEntityIds(Set("d")),
-          ConsumerFilter.RemoveIncludeEntityIds(Set("a", "b")),
-          ConsumerFilter.RemoveExcludeEntityIds(Set("c")))
-
-      val expectedFilter =
-        Vector(
-          ConsumerFilter.ExcludeEntityIds(Set("a", "b")),
-          ConsumerFilter.IncludeEntityIds(Set(ConsumerFilter.EntityIdOffset("c", 2))),
-          ConsumerFilter.ExcludeEntityIds(Set("d")))
-
-      LocalConsumerFilterStore.reduceFilter(filter1, filter2) shouldBe expectedFilter
-    }
-  }
-
 }
