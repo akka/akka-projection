@@ -31,7 +31,6 @@ object Dependencies {
     val scalaTest = "3.2.12"
     val testContainers = "1.17.6"
     val junit = "4.13.2"
-    val h2Driver = "1.4.200"
     val jacksonDatabind = "2.13.4.2" // this should match the version of jackson used by akka-serialization-jackson
   }
 
@@ -62,9 +61,6 @@ object Dependencies {
     // must be provided on classpath when using Apache Kafka 2.6.0+
     val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jacksonDatabind
 
-    // not really used in lib code, but in example and test
-    val h2Driver = "com.h2database" % "h2" % Versions.h2Driver
-
     val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.7.0"
 
     // FIXME doesn't these come transitively form akka-persistence-r2dbc?
@@ -88,7 +84,7 @@ object Dependencies {
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % allTestConfig
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
-    val h2Driver = Compile.h2Driver % allTestConfig
+    val h2Driver = "com.h2database" % "h2" % "2.1.214" % allTestConfig
     val postgresDriver = "org.postgresql" % "postgresql" % "42.5.3" % allTestConfig
     val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.32" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
