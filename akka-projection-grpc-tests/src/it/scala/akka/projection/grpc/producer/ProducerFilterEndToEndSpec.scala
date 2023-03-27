@@ -43,6 +43,7 @@ object ProducerFilterEndToEndSpec {
 
   val config: Config = ConfigFactory
     .parseString(s"""
+    akka.actor.allow-java-serialization = on
     akka.http.server.preview.enable-http2 = on
     akka.persistence.r2dbc.journal.publish-events = false
     akka.persistence.r2dbc {

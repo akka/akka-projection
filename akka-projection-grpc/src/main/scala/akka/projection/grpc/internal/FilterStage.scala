@@ -4,16 +4,9 @@
 
 package akka.projection.grpc.internal
 
-import java.time.Instant
-import scala.concurrent.ExecutionContext
-import scala.util.Failure
-import scala.util.Success
-import scala.util.Try
-import scala.util.matching.Regex
 import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.persistence.Persistence
-import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.typed.PersistenceId
@@ -31,6 +24,12 @@ import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
 import akka.stream.stage.OutHandler
 import akka.stream.stage.StageLogging
+
+import scala.concurrent.ExecutionContext
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+import scala.util.matching.Regex
 
 /**
  * INTERNAL API
@@ -87,6 +86,8 @@ import akka.stream.stage.StageLogging
 
   private case class ReplayEnvelope(entityId: String, env: Option[EventEnvelope[Any]])
 
+  private final case class ReplaySession(queue: SinkQueueWithCancel[EventEnvelope[Any]], explicitReplay: Boolean)
+
 }
 
 /**
@@ -118,7 +119,7 @@ import akka.stream.stage.StageLogging
       private var replayHasBeenPulled = false
       private var pendingReplayRequests: Vector[EntityIdOffset] = Vector.empty
       // several replay streams may be in progress at the same time
-      private var replayInProgress: Map[String, SinkQueueWithCancel[EventEnvelope[Any]]] = Map.empty
+      private var replayInProgress: Map[String, ReplaySession] = Map.empty
       private val replayCallback = getAsyncCallback[Try[ReplayEnvelope]] {
         case Success(replayEnv) => onReplay(replayEnv)
         case Failure(exc)       => failStage(exc)
@@ -146,8 +147,8 @@ import akka.stream.stage.StageLogging
         replayEnv match {
           case ReplayEnvelope(entityId, Some(env)) =>
             // the predicate to replay events from start for a given pid
-            // FIXME that won't actually work right now because it will not be replayed but dropped/cancelled here
-            if (filter.matches(env.persistenceId)) {
+            val replay = replayInProgress(entityId)
+            if (replay.explicitReplay || filter.matches(env.persistenceId)) {
               if (verbose)
                 log.debug(
                   "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
@@ -161,8 +162,7 @@ import akka.stream.stage.StageLogging
                 logPrefix,
                 env.persistenceId,
                 env.sequenceNr)
-              val queue = replayInProgress(entityId)
-              queue.cancel()
+              replay.queue.cancel()
               replayCompleted()
             }
 
@@ -176,7 +176,8 @@ import akka.stream.stage.StageLogging
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
           if (verbose)
             log.debug("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
-          val next = replayInProgress(entityId).pull().map(ReplayEnvelope(entityId, _))(ExecutionContext.parasitic)
+          val next =
+            replayInProgress(entityId).queue.pull().map(ReplayEnvelope(entityId, _))(ExecutionContext.parasitic)
           next.value match {
             case None =>
               replayHasBeenPulled = true
@@ -239,11 +240,11 @@ import akka.stream.stage.StageLogging
         }
       }
 
-      private def replayAll(entityOffsets: Iterable[EntityIdOffset]): Unit = {
+      private def replayAll(entityOffsets: Iterable[EntityIdOffset], explicitReplay: Boolean = false): Unit = {
         // FIXME limit number of concurrent replay requests, place additional in a pending queue
         entityOffsets.foreach { entityOffset =>
-          if (entityOffset.seqNr >= 1)
-            replay(entityOffset)
+          if (entityOffset.seqNr >= 1 || explicitReplay)
+            replay(entityOffset, explicitReplay)
         // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter
         // change. In that case we must have a way to signal to the R2dbcOffsetStore that the
         // first seqNr of that new pid is ok to pass through even though it isn't 1
@@ -251,33 +252,27 @@ import akka.stream.stage.StageLogging
         }
       }
 
-      private def replay(entityOffset: EntityIdOffset): Unit = {
-        val entityId = entityOffset.entityId
+      private def replay(entityOffset: EntityIdOffset, explicitReplay: Boolean = false): Unit = {
+        val pid = PersistenceId.ofUniqueId(entityOffset.entityId)
+        val entityId = pid.entityId
         val fromSeqNr = entityOffset.seqNr
-        val pid = PersistenceId(entityType, entityId)
         if (handledByThisStream(pid)) {
-          replayInProgress.get(entityId).foreach { queue =>
+          replayInProgress.get(entityId).foreach { replay =>
             log.debug("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
-            queue.cancel()
+            replay.queue.cancel()
             replayInProgress -= entityId
           }
 
           if (replayInProgress.size < ReplayParallelism) {
             log.debug("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
-            val slice = persistence.sliceForPersistenceId(pid.id)
             val queue =
               currentEventsByPersistenceIdQuery
                 .currentEventsByPersistenceIdTyped[Any](pid.id, fromSeqNr, Long.MaxValue)
-                .map { env =>
-                  // FIXME "wrong" timestamp, we should probably define a new currentEventsByPersistenceId that matches eventsBySlices
-                  val offset =
-                    TimestampOffset(Instant.ofEpochMilli(env.timestamp), Map(env.persistenceId -> env.sequenceNr))
-                  EventEnvelope(offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp, entityType, slice)
-                }
                 .runWith(Sink.queue())(materializer)
-            replayInProgress = replayInProgress.updated(entityId, queue)
+            replayInProgress = replayInProgress.updated(entityId, ReplaySession(queue, explicitReplay))
             tryPullReplay(entityId)
           } else {
+            // FIXME track explicit request here as well or it is lost when queued
             log.debug("Stream [{}]: Queueing replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
             pendingReplayRequests = pendingReplayRequests.filterNot(_.entityId == entityId) :+ entityOffset
           }
@@ -306,12 +301,14 @@ import akka.stream.stage.StageLogging
           override def onPush(): Unit = {
             grab(inReq) match {
               case StreamIn(StreamIn.Message.Filter(filterReq), _) =>
+                if (log.isDebugEnabled)
+                  log.debug("Stream [{}]: Filter update requested [{}]", streamId, filterReq.criteria)
                 updateFilter(filterReq.criteria)
                 replayFromFilterCriteria(filterReq.criteria)
 
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
                 log.debug("Stream [{}]: Replay requested for [{}]", streamId, replayReq.entityIdOffset)
-                replayAll(replayReq.entityIdOffset)
+                replayAll(replayReq.entityIdOffset, explicitReplay = true)
 
               case StreamIn(StreamIn.Message.Init(_), _) =>
                 log.warning("Stream [{}]: Init request can only be used as the first message", logPrefix)
