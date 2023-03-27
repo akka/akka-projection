@@ -1,11 +1,9 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022 - 2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.jdbc
+package akka.projection.r2dbc
 
-import java.sql.Connection
-import java.sql.DriverManager
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -22,10 +20,10 @@ import akka.NotUsed
 import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.japi.function
+import akka.persistence.r2dbc.internal.Sql.Interpolation
+import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.OffsetVerification
 import akka.projection.OffsetVerification.VerificationFailure
@@ -34,11 +32,10 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.TestStatusObserver
-import akka.projection.jdbc.internal.JdbcOffsetStore
-import akka.projection.jdbc.internal.JdbcSessionUtil
-import akka.projection.jdbc.internal.JdbcSettings
-import akka.projection.jdbc.scaladsl.JdbcHandler
-import akka.projection.jdbc.scaladsl.JdbcProjection
+import akka.projection.r2dbc.internal.R2dbcOffsetStore
+import akka.projection.r2dbc.scaladsl.R2dbcHandler
+import akka.projection.r2dbc.scaladsl.R2dbcProjection
+import akka.projection.r2dbc.scaladsl.R2dbcSession
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.ProjectionManagement
 import akka.projection.scaladsl.SourceProvider
@@ -49,51 +46,11 @@ import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSource
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException
-import org.scalatest.OptionValues
 import org.scalatest.wordspec.AnyWordSpecLike
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-object JdbcProjectionSpec {
-  val config: Config = ConfigFactory.parseString(s"""
-    akka {
-      loglevel = "DEBUG"
-      projection.jdbc {
-        dialect = "h2-dialect"
-        offset-store {
-          schema = ""
-          table = "akka_projection_offset_store"
-        }
-        
-        blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size = 5
-        debug.verbose-offset-store-logging = true
-      }
-    }
-    """)
-
-  class PureJdbcSession extends JdbcSession {
-
-    lazy val conn = {
-      Class.forName("org.h2.Driver")
-      val c = DriverManager.getConnection("jdbc:h2:mem:jdbc-projection-test;DB_CLOSE_DELAY=-1")
-      c.setAutoCommit(false)
-      c
-    }
-
-    override def withConnection[Result](func: function.Function[Connection, Result]): Result =
-      func(conn)
-
-    override def commit(): Unit = conn.commit()
-    override def rollback(): Unit = conn.rollback()
-    override def close(): Unit = conn.close()
-  }
-
-  val jdbcSessionFactory = () => new PureJdbcSession
-
-  case class Envelope(id: String, offset: Long, message: String)
+object R2dbcProjectionSpec {
+  final case class Envelope(id: String, offset: Long, message: String)
 
   def sourceProvider(
       id: String,
@@ -118,124 +75,123 @@ object JdbcProjectionSpec {
 
   // test model is as simple as a text that gets other string concatenated to it
   case class ConcatStr(id: String, text: String) {
-    def concat(newMsg: String) = copy(text = text + "|" + newMsg)
+    def concat(newMsg: String): ConcatStr = {
+      if (text == "")
+        copy(id, newMsg)
+      else
+        copy(text = text + "|" + newMsg)
+    }
   }
 
-  case class TestRepository(conn: Connection) {
+  object TestRepository {
+    val table = "projection_spec_model"
+
+    val createTableSql: String =
+      s"""|CREATE table IF NOT EXISTS "$table" (
+          |  id VARCHAR(255) NOT NULL,
+          |  concatenated VARCHAR(255) NOT NULL,
+          |  PRIMARY KEY(id)
+          |);""".stripMargin
+  }
+
+  final case class TestRepository(session: R2dbcSession)(implicit ec: ExecutionContext, system: ActorSystem[_]) {
+    import TestRepository.table
 
     private val logger = LoggerFactory.getLogger(this.getClass)
 
-    private val table = "TEST_MODEL"
-
-    def concatToText(id: String, payload: String): Done = {
+    def concatToText(id: String, payload: String): Future[Done] = {
       val savedStrOpt = findById(id)
 
-      val concatStr =
-        savedStrOpt
-          .map { _.concat(payload) }
+      savedStrOpt.flatMap { strOpt =>
+        val newConcatStr = strOpt
+          .map {
+            _.concat(payload)
+          }
           .getOrElse(ConcatStr(id, payload))
 
-      insertOrUpdate(concatStr)
-    }
-
-    def updateWithNullValue(id: String): Done = {
-      insertOrUpdate(ConcatStr(id, null))
-    }
-
-    private def insertOrUpdate(concatStr: ConcatStr): Done = {
-      logger.debug(
-        "TestRepository.insertOrUpdate: [{}], using connection id [{}]",
-        concatStr,
-        System.identityHashCode(conn))
-      val stmtStr = s"""MERGE INTO "$table" ("ID","CONCATENATED")  VALUES (?,?)"""
-      JdbcSessionUtil.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
-        stmt.setString(1, concatStr.id)
-        stmt.setString(2, concatStr.text)
-        stmt.executeUpdate()
-        Done
+        upsert(newConcatStr)
       }
     }
 
-    def findById(id: String): Option[ConcatStr] = {
-
-      val stmtStr = s"SELECT * FROM $table WHERE ID = ?"
-
-      JdbcSessionUtil.tryWithResource(conn.prepareStatement(stmtStr)) { stmt =>
-        logger.debug("TestRepository.findById: [{}], using connection id [{}]", id, System.identityHashCode(conn))
-        stmt.setString(1, id)
-        val resultSet = stmt.executeQuery()
-        if (resultSet.first()) {
-          Some(ConcatStr(resultSet.getString("ID"), resultSet.getString("CONCATENATED")))
-        } else None
-      }
+    def update(id: String, payload: String): Future[Done] = {
+      upsert(ConcatStr(id, payload))
     }
 
-    def createTable(): Done = {
-
-      val createTableStatement = s"""
-       create table if not exists "$table" (
-        "ID" CHAR(255) NOT NULL,
-        "CONCATENATED" CHARACTER VARYING(255) NOT NULL
-       );
-       """
-
-      val alterTableStatement =
-        s"""alter table "$table" add constraint "PK_ID" primary key("ID");"""
-
-      JdbcSessionUtil.tryWithResource(conn.createStatement()) { stmt =>
-        logger.debug("TestRepository.createTable using connection id [{}]", System.identityHashCode(conn))
-        stmt.execute(createTableStatement)
-        stmt.execute(alterTableStatement)
-        Done
-      }
-
+    def updateWithNullValue(id: String): Future[Done] = {
+      upsert(ConcatStr(id, null))
     }
+
+    private def upsert(concatStr: ConcatStr): Future[Done] = {
+      logger.debug("TestRepository.upsert: [{}]", concatStr)
+
+      val stmtSql =
+        sql"""
+          INSERT INTO "$table" (id, concatenated)  VALUES (?, ?)
+          ON CONFLICT (id)
+          DO UPDATE SET
+            id = excluded.id,
+            concatenated = excluded.concatenated
+         """
+      val stmt = session
+        .createStatement(stmtSql)
+        .bind(0, concatStr.id)
+        .bind(1, concatStr.text)
+
+      R2dbcExecutor
+        .updateOneInTx(stmt)
+        .map(_ => Done)
+    }
+
+    def findById(id: String): Future[Option[ConcatStr]] = {
+      logger.debug("TestRepository.findById: [{}]", id)
+
+      val stmtSql = sql"SELECT * FROM $table WHERE id = ?"
+      val stmt = session
+        .createStatement(stmtSql)
+        .bind(0, id)
+
+      R2dbcExecutor.selectOneInTx(
+        stmt,
+        row => ConcatStr(row.get("id", classOf[String]), row.get("concatenated", classOf[String])))
+    }
+
   }
-
 }
 
-class JdbcProjectionSpec
-    extends ScalaTestWithActorTestKit(JdbcProjectionSpec.config)
+class R2dbcProjectionSpec
+    extends ScalaTestWithActorTestKit(TestConfig.config)
     with AnyWordSpecLike
-    with LogCapturing
-    with OptionValues {
+    with TestDbLifecycle
+    with TestData
+    with LogCapturing {
+  import R2dbcProjectionSpec._
 
-  import JdbcProjectionSpec._
+  override def typedSystem: ActorSystem[_] = system
+  private implicit val ec: ExecutionContext = system.executionContext
 
-  val logger: Logger = LoggerFactory.getLogger(this.getClass)
-
-  implicit val actorSystem: ActorSystem[Nothing] = testKit.system
-  implicit val executionContext: ExecutionContext = testKit.system.executionContext
-
-  val jdbcSettings = JdbcSettings(testKit.system)
-  implicit val offsetStore = new JdbcOffsetStore(system, jdbcSettings, jdbcSessionFactory)
-
-  val projectionTestKit = ProjectionTestKit(system)
+  private val logger = LoggerFactory.getLogger(getClass)
+  private val settings = R2dbcProjectionSettings(testKit.system)
+  private def createOffsetStore(projectionId: ProjectionId): R2dbcOffsetStore =
+    new R2dbcOffsetStore(projectionId, None, system, settings, r2dbcExecutor)
+  private val projectionTestKit = ProjectionTestKit(system)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    // create offset table
-    val creationFut = offsetStore
-      .createIfNotExists()
-      .flatMap(_ =>
-        JdbcSessionUtil.withConnection(jdbcSessionFactory) { conn =>
-          TestRepository(conn).createTable()
-        })
-    Await.result(creationFut, 3.seconds)
+    Await.result(r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
+      conn.createStatement(TestRepository.createTableSql)
+    }, 10.seconds)
+    Await.result(
+      r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
+      10.seconds)
   }
 
-  private def genRandomProjectionId() = ProjectionId(UUID.randomUUID().toString, "00")
-
-  private def offsetShouldBe(
-      expected: Long)(implicit offsetStore: JdbcOffsetStore[PureJdbcSession], projectionId: ProjectionId) = {
-    offsetStore.readOffset[Long](projectionId).futureValue shouldBe Some(expected)
+  private def offsetShouldBe(expected: Long)(implicit offsetStore: R2dbcOffsetStore) = {
+    offsetStore.readOffset[Long]().futureValue shouldBe Some(expected)
   }
 
-  private def offsetShouldBeEmpty()(
-      implicit offsetStore: JdbcOffsetStore[PureJdbcSession],
-      projectionId: ProjectionId) = {
-    offsetStore.readOffset[Long](projectionId).futureValue shouldBe empty
+  private def offsetShouldBeEmpty()(implicit offsetStore: R2dbcOffsetStore) = {
+    offsetStore.readOffset[Long]().futureValue shouldBe empty
   }
 
   private def projectedValueShouldBe(expected: String)(implicit entityId: String) = {
@@ -245,21 +201,21 @@ class JdbcProjectionSpec
 
   private def projectedValueShouldInclude(expected: String)(implicit entityId: String) = {
     withClue(s"checking projected value contains [$expected]: ") {
-      val text = withRepo(_.findById(entityId)).futureValue.value.text
+      val text = withRepo(_.findById(entityId)).futureValue.get.text
       text should include(expected)
     }
   }
 
   private def projectedValueShould(actual: String => Boolean)(implicit entityId: String) = {
     withClue(s"checking projected value fulfil predicate: ") {
-      val text = withRepo(_.findById(entityId)).futureValue.value.text
+      val text = withRepo(_.findById(entityId)).futureValue.get.text
       actual(text)
     }
   }
 
   private def projectedValueShouldIncludeNTimes(expected: String, nTimes: Int)(implicit entityId: String) = {
     withClue(s"checking projected value contains [$expected] $nTimes times: ") {
-      val text = withRepo(_.findById(entityId)).futureValue.value.text
+      val text = withRepo(_.findById(entityId)).futureValue.get.text
       text.split("\\|").count(_ == expected) shouldBe nTimes
     }
   }
@@ -274,41 +230,41 @@ class JdbcProjectionSpec
 
   private val concatHandlerFail4Msg = "fail on fourth envelope"
 
-  private def withRepo[R](block: TestRepository => R): Future[R] = {
-    JdbcSessionUtil.withConnection(jdbcSessionFactory) { conn =>
-      block(TestRepository(conn))
+  private def withRepo[R](fun: TestRepository => Future[R]): Future[R] = {
+    r2dbcExecutor.withConnection("test") { conn =>
+      val session = new R2dbcSession(conn)
+      fun(TestRepository(session))
     }
   }
 
-  class ConcatHandler(failPredicate: Long => Boolean = _ => false) extends JdbcHandler[Envelope, PureJdbcSession] {
+  class ConcatHandler(failPredicate: Long => Boolean = _ => false) extends R2dbcHandler[Envelope] {
 
     private val _attempts = new AtomicInteger()
     def attempts: Int = _attempts.get
 
-    override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
+    override def process(session: R2dbcSession, envelope: Envelope): Future[Done] = {
       if (failPredicate(envelope.offset)) {
         _attempts.incrementAndGet()
         throw TestException(concatHandlerFail4Msg + s" after $attempts attempts")
       } else {
-        session.withConnection { conn =>
-          logger.debug(s"handling $envelope using [${System.identityHashCode(conn)}])")
-          TestRepository(conn).concatToText(envelope.id, envelope.message)
-        }
+        logger.debug("handling {}", envelope)
+        TestRepository(session).concatToText(envelope.id, envelope.message)
       }
     }
   }
 
-  "A JDBC exactly-once projection" must {
+  "A R2DBC exactly-once projection" must {
 
     "persist projection and offset in the same write operation (transactional)" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val projection =
-        JdbcProjection.exactlyOnce(
+        R2dbcProjection.exactlyOnce(
           projectionId,
+          Some(settings),
           sourceProvider = sourceProvider(entityId),
-          jdbcSessionFactory,
           handler = () => new ConcatHandler)
 
       offsetShouldBeEmpty()
@@ -320,16 +276,17 @@ class JdbcProjectionSpec
 
     "skip failing events when using RecoveryStrategy.skip" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
       val projectionFailing =
-        JdbcProjection
+        R2dbcProjection
           .exactlyOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
@@ -342,16 +299,17 @@ class JdbcProjectionSpec
 
     "store offset for failing events when using RecoveryStrategy.skip" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val bogusEventHandler = new ConcatHandler(_ == 6)
 
       val projectionFailing =
-        JdbcProjection
+        R2dbcProjection
           .exactlyOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
 
@@ -364,7 +322,8 @@ class JdbcProjectionSpec
 
     "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
@@ -374,11 +333,11 @@ class JdbcProjectionSpec
         new TestStatusObserver[Envelope](statusProbe.ref, offsetProgressProbe = Some(progressProbe.ref))
 
       val projectionFailing =
-        JdbcProjection
+        R2dbcProjection
           .exactlyOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndSkip(3, 10.millis))
           .withStatusObserver(statusObserver)
@@ -410,52 +369,41 @@ class JdbcProjectionSpec
 
     "fail after retrying when using RecoveryStrategy.retryAndFail" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val bogusEventHandler = new ConcatHandler(_ == 4)
 
-      val statusProbe = createTestProbe[TestStatusObserver.Status]()
-      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
-
       val projectionFailing =
-        JdbcProjection
+        R2dbcProjection
           .exactlyOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => bogusEventHandler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(3, 10.millis))
-          .withStatusObserver(statusObserver)
 
       offsetShouldBeEmpty()
-      spawn(ProjectionBehavior(projectionFailing))
-
-      eventually {
-        projectedValueShouldBe("e1|e2|e3")
+      projectionTestKit.runWithTestSink(projectionFailing) { sinkProbe =>
+        sinkProbe.request(1000)
+        eventuallyExpectError(sinkProbe).getMessage should startWith(concatHandlerFail4Msg)
       }
-
-      statusProbe.expectMessage(TestStatusObserver.Started)
-
-      val someTestException = TestException("err")
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
-      statusProbe.expectMessage(TestStatusObserver.Err(Envelope(entityId, 4, "e4"), someTestException))
-
-      // ultimately, the projection must fail
-      statusProbe.expectMessage(TestStatusObserver.Failed)
+      projectedValueShouldBe("e1|e2|e3")
+      // 1 + 3 => 1 original attempt and 3 retries
+      bogusEventHandler.attempts shouldBe 1 + 3
       offsetShouldBe(3L)
     }
 
     "restart from previous offset - fail with throwing an exception" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       def exactlyOnceProjection(failWhenOffset: Long => Boolean = _ => false) = {
-        JdbcProjection.exactlyOnce(
+        R2dbcProjection.exactlyOnce(
           projectionId,
+          Some(settings),
           sourceProvider = sourceProvider(entityId),
-          jdbcSessionFactory,
           handler = () => new ConcatHandler(failWhenOffset))
       }
 
@@ -476,29 +424,30 @@ class JdbcProjectionSpec
 
     "restart from previous offset - fail with bad insert on user code" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
-      val bogusEventHandler = new JdbcHandler[Envelope, PureJdbcSession] {
-        override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
-          session.withConnection { conn =>
-            val repo = TestRepository(conn)
-            if (envelope.offset == 4L) repo.updateWithNullValue(envelope.id)
-            else repo.concatToText(envelope.id, envelope.message)
-          }
+      val bogusEventHandler = new R2dbcHandler[Envelope] {
+        override def process(session: R2dbcSession, envelope: Envelope): Future[Done] = {
+          val repo = TestRepository(session)
+          if (envelope.offset == 4L) repo.updateWithNullValue(envelope.id)
+          else repo.concatToText(envelope.id, envelope.message)
         }
       }
 
-      def exactlyOnceProjection(handler: () => JdbcHandler[Envelope, PureJdbcSession]) =
-        JdbcProjection.exactlyOnce(
+      def exactlyOnceProjection(handler: () => R2dbcHandler[Envelope]) =
+        R2dbcProjection.exactlyOnce(
           projectionId,
+          Some(settings),
           sourceProvider = sourceProvider(entityId),
-          jdbcSessionFactory,
           handler = handler)
 
       offsetShouldBeEmpty()
       projectionTestKit.runWithTestSink(exactlyOnceProjection(() => bogusEventHandler)) { sinkProbe =>
         sinkProbe.request(4)
-        eventuallyExpectError(sinkProbe).getClass shouldBe classOf[JdbcSQLIntegrityConstraintViolationException]
+        val exc = eventuallyExpectError(sinkProbe)
+        exc.getMessage shouldBe "value must not be null"
+        exc.getClass shouldBe classOf[IllegalArgumentException]
       }
       projectedValueShouldBe("e1|e2|e3")
       offsetShouldBe(3L)
@@ -513,36 +462,35 @@ class JdbcProjectionSpec
     "verify offsets before and after processing an envelope" in {
 
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       case class ProbeMessage(str: String, offset: Long)
-      val verificationProbe = testKit.createTestProbe[ProbeMessage]("verification")
-      val processProbe = testKit.createTestProbe[ProbeMessage]("processing")
+      val verificationProbe = createTestProbe[ProbeMessage]("verification")
+      val processProbe = createTestProbe[ProbeMessage]("processing")
 
       val testVerification = (offset: Long) => {
         verificationProbe.ref ! ProbeMessage("verification", offset)
         VerificationSuccess
       }
 
-      val handler = new JdbcHandler[Envelope, PureJdbcSession] {
-        override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
+      val handler = new R2dbcHandler[Envelope] {
+        override def process(session: R2dbcSession, envelope: Envelope): Future[Done] = {
 
           verificationProbe.receiveMessage().offset shouldEqual envelope.offset
           processProbe.ref ! ProbeMessage("process", envelope.offset)
 
-          session.withConnection { conn =>
-            TestRepository(conn).concatToText(envelope.id, envelope.message)
-          }
+          TestRepository(session).concatToText(envelope.id, envelope.message)
         }
       }
 
       val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
-        JdbcProjection.exactlyOnce(
+        R2dbcProjection.exactlyOnce(
           projectionId,
+          Some(settings),
           sourceProvider = testSourceProvider,
-          jdbcSessionFactory,
           handler = () => handler)
 
       projectionTestKit.runWithTestSink(projection) { testSink =>
@@ -556,7 +504,8 @@ class JdbcProjectionSpec
 
     "skip record if offset verification fails before processing envelope" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -568,10 +517,10 @@ class JdbcProjectionSpec
       val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
-        JdbcProjection.exactlyOnce(
+        R2dbcProjection.exactlyOnce(
           projectionId,
+          Some(settings),
           sourceProvider = testSourceProvider,
-          jdbcSessionFactory,
           handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
@@ -581,7 +530,8 @@ class JdbcProjectionSpec
 
     "skip record if offset verification fails after processing envelope" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -593,10 +543,10 @@ class JdbcProjectionSpec
       val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
-        JdbcProjection.exactlyOnce(
+        R2dbcProjection.exactlyOnce(
           projectionId,
+          Some(settings),
           sourceProvider = testSourceProvider,
-          jdbcSessionFactory,
           handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
@@ -605,26 +555,34 @@ class JdbcProjectionSpec
     }
   }
 
-  "A JDBC grouped projection" must {
+  "A R2DBC grouped projection" must {
     "persist projection and offset in the same write operation (transactional)" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val handlerCalled = "called"
-      val handlerProbe = testKit.createTestProbe[String]("calls-to-handler")
+      val handlerProbe = createTestProbe[String]("calls-to-handler")
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .groupedWithin(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () =>
-              JdbcHandler[PureJdbcSession, immutable.Seq[Envelope]] { (sess, envelopes) =>
+              R2dbcHandler[immutable.Seq[Envelope]] { (session, envelopes) =>
                 handlerProbe.ref ! handlerCalled
-                sess.withConnection { conn =>
-                  envelopes.foreach { envelope =>
-                    TestRepository(conn).concatToText(envelope.id, envelope.message)
+                if (envelopes.isEmpty)
+                  Future.successful(Done)
+                else {
+                  val repo = TestRepository(session)
+                  val id = envelopes.head.id
+                  repo.findById(id).flatMap { existing =>
+                    val newConcatStr = envelopes.foldLeft(existing.getOrElse(ConcatStr(id, ""))) { (acc, env) =>
+                      acc.concat(env.message)
+                    }
+                    repo.update(id, newConcatStr.text)
                   }
                 }
               })
@@ -643,7 +601,8 @@ class JdbcProjectionSpec
 
     "handle grouped async projection and store offset" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val result = new StringBuffer()
 
@@ -656,11 +615,11 @@ class JdbcProjectionSpec
       }
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .groupedWithinAsync(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => handler())
           .withGroup(2, 3.seconds)
 
@@ -668,40 +627,46 @@ class JdbcProjectionSpec
       projectionTestKit.run(projection) {
         result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
   }
 
-  "A JDBC at-least-once projection" must {
+  "A R2DBC at-least-once projection" must {
 
     "persist projection and offset" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val projection =
-        JdbcProjection.atLeastOnce(
+        R2dbcProjection.atLeastOnce(
           projectionId,
+          Some(settings),
           sourceProvider = sourceProvider(entityId),
-          jdbcSessionFactory,
           handler = () => new ConcatHandler)
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "skip failing events when using RecoveryStrategy.skip, save after 1" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => new ConcatHandler(_ == 4))
           .withSaveOffset(1, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
@@ -710,19 +675,22 @@ class JdbcProjectionSpec
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e5|e6")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "skip failing events when using RecoveryStrategy.skip, save after 2" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => new ConcatHandler(_ == 4))
           .withSaveOffset(2, 1.minute)
           .withRecoveryStrategy(HandlerRecoveryStrategy.skip)
@@ -731,19 +699,22 @@ class JdbcProjectionSpec
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e5|e6")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "restart from previous offset - handler throwing an exception, save after 1" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       def atLeastOnceProjection(failWhenOffset: Long => Boolean = _ => false) =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => new ConcatHandler(failWhenOffset))
           .withSaveOffset(1, Duration.Zero)
 
@@ -773,21 +744,24 @@ class JdbcProjectionSpec
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
 
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "restart from previous offset - handler throwing an exception, save after 2" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
-      offsetStore.readOffset[Long](projectionId).futureValue shouldBe empty
+      offsetStore.readOffset[Long]().futureValue shouldBe empty
 
       def atLeastOnceProjection(failWhenOffset: Long => Boolean = _ => false) =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () => new ConcatHandler(failWhenOffset))
           .withSaveOffset(2, 1.minute)
 
@@ -828,21 +802,21 @@ class JdbcProjectionSpec
 
     "save offset after number of elements" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
-      import akka.actor.typed.scaladsl.adapter._
       val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
-      val source = TestSource[Envelope]()(system.toClassic).mapMaterializedValue { probe =>
+      val source = TestSource[Envelope]().mapMaterializedValue { probe =>
         sourceProbe.set(probe)
         NotUsed
       }
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnce(
             projectionId,
+            Some(settings),
             sourceProvider = TestSourceProvider[Long, Envelope](source, _.offset),
-            jdbcSessionFactory,
             handler = () => new ConcatHandler())
           .withSaveOffset(10, 1.minute)
 
@@ -873,21 +847,21 @@ class JdbcProjectionSpec
 
     "save offset after idle duration" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
-      import akka.actor.typed.scaladsl.adapter._
       val sourceProbe = new AtomicReference[TestPublisher.Probe[Envelope]]()
-      val source = TestSource[Envelope]()(system.toClassic).mapMaterializedValue { probe =>
+      val source = TestSource[Envelope]().mapMaterializedValue { probe =>
         sourceProbe.set(probe)
         NotUsed
       }
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnce(
             projectionId,
+            Some(settings),
             sourceProvider = TestSourceProvider[Long, Envelope](source, _.offset),
-            jdbcSessionFactory,
             handler = () => new ConcatHandler())
           .withSaveOffset(10, 2.seconds)
 
@@ -919,8 +893,9 @@ class JdbcProjectionSpec
 
     "verify offsets before processing an envelope" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
-      val verifiedProbe: TestProbe[Long] = createTestProbe[Long]()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
+      val verifiedProbe = createTestProbe[Long]()
 
       val testVerification = (offset: Long) => {
         verifiedProbe.ref ! offset
@@ -930,17 +905,15 @@ class JdbcProjectionSpec
       val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnce(
             projectionId,
+            Some(settings),
             sourceProvider = testSourceProvider,
-            jdbcSessionFactory,
             handler = () =>
-              JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
+              R2dbcHandler[Envelope] { (session, envelope) =>
                 verifiedProbe.expectMessage(envelope.offset)
-                sess.withConnection { conn =>
-                  TestRepository(conn).concatToText(envelope.id, envelope.message)
-                }
+                TestRepository(session).concatToText(envelope.id, envelope.message)
               })
 
       projectionTestKit.run(projection) {
@@ -950,7 +923,8 @@ class JdbcProjectionSpec
 
     "skip record if offset verification fails before processing envelope" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       val testVerification = (offset: Long) => {
         if (offset == 3L)
@@ -962,11 +936,11 @@ class JdbcProjectionSpec
       val testSourceProvider = sourceProvider(entityId, verifyOffsetFn = testVerification)
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnce(
             projectionId,
+            Some(settings),
             sourceProvider = testSourceProvider,
-            jdbcSessionFactory,
             handler = () => new ConcatHandler())
 
       projectionTestKit.run(projection) {
@@ -976,7 +950,8 @@ class JdbcProjectionSpec
 
     "handle async projection and store offset" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val result = new StringBuffer()
 
@@ -989,24 +964,27 @@ class JdbcProjectionSpec
       }
 
       val projection =
-        JdbcProjection.atLeastOnceAsync(
+        R2dbcProjection.atLeastOnceAsync(
           projectionId,
+          Some(settings),
           sourceProvider = sourceProvider(entityId),
-          jdbcSessionFactory,
           handler = () => handler())
 
       projectionTestKit.run(projection) {
         result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
   }
 
-  "A JDBC flow projection" must {
+  "A R2DBC flow projection" must {
 
     "persist projection and offset" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       offsetShouldBeEmpty()
 
@@ -1017,29 +995,31 @@ class JdbcProjectionSpec
           }
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .atLeastOnceFlow(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = flowHandler)
           .withSaveOffset(1, 1.minute)
 
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
 
     }
   }
 
-  "JdbcProjection lifecycle" must {
+  "R2dbcProjection lifecycle" must {
 
     class LifecycleHandler(
         probe: ActorRef[String],
         failOnceOnOffset: AtomicInteger = new AtomicInteger(-1),
         alwaysFailOnOffset: Int = -1)
-        extends JdbcHandler[Envelope, PureJdbcSession] {
+        extends R2dbcHandler[Envelope] {
 
       val createdMessage = "created"
       val startMessage = "start"
@@ -1052,17 +1032,19 @@ class JdbcProjectionSpec
 
       probe ! createdMessage
 
-      override def start(): Unit = {
+      override def start(): Future[Done] = {
         // reset stop message to 'completed' on each new start
         stopMessage = completedMessage
         probe ! startMessage
+        Future.successful(Done)
       }
 
-      override def stop(): Unit = {
+      override def stop(): Future[Done] = {
         probe ! stopMessage
+        Future.successful(Done)
       }
 
-      override def process(session: PureJdbcSession, envelope: Envelope): Unit = {
+      override def process(session: R2dbcSession, envelope: Envelope): Future[Done] = {
         if (envelope.offset == failOnceOnOffset.get()) {
           failOnceOnOffset.set(-1)
           stopMessage = failedMessage
@@ -1072,14 +1054,15 @@ class JdbcProjectionSpec
           throw TestException(s"Always Fail $alwaysFailOnOffset")
         } else {
           probe ! envelope.message
-          ()
+          Future.successful(Done)
         }
       }
     }
 
     "call start and stop of the handler" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref)
@@ -1088,12 +1071,8 @@ class JdbcProjectionSpec
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
 
       val projection =
-        JdbcProjection
-          .exactlyOnce(
-            projectionId,
-            sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
-            handler = () => handler)
+        R2dbcProjection
+          .exactlyOnce(projectionId, Some(settings), sourceProvider = sourceProvider(entityId), handler = () => handler)
           .withStatusObserver(statusObserver)
 
       // not using ProjectionTestKit because want to test restarts
@@ -1120,18 +1099,15 @@ class JdbcProjectionSpec
 
     "call start and stop of the handler when using TestKit.runWithTestSink" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref)
 
       val projection =
-        JdbcProjection
-          .exactlyOnce(
-            projectionId,
-            sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
-            handler = () => handler)
+        R2dbcProjection
+          .exactlyOnce(projectionId, Some(settings), sourceProvider = sourceProvider(entityId), handler = () => handler)
 
       // not using ProjectionTestKit because want to test restarts
       projectionTestKit.runWithTestSink(projection) { sinkProbe =>
@@ -1162,7 +1138,8 @@ class JdbcProjectionSpec
 
     "call start and stop of handler when restarted" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       @volatile var _handler: Option[LifecycleHandler] = None
@@ -1172,6 +1149,7 @@ class JdbcProjectionSpec
         _handler = Some(newHandler)
         newHandler
       }
+
       def handler: LifecycleHandler = _handler match {
         case Some(h) => h
         case None =>
@@ -1185,8 +1163,8 @@ class JdbcProjectionSpec
       val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true, Some(progressProbe.ref))
 
       val projection =
-        JdbcProjection
-          .exactlyOnce(projectionId, sourceProvider = sourceProvider(entityId), jdbcSessionFactory, handlerFactory)
+        R2dbcProjection
+          .exactlyOnce(projectionId, Some(settings), sourceProvider = sourceProvider(entityId), handlerFactory)
           .withRestartBackoff(1.second, 2.seconds, 0.0)
           .withStatusObserver(statusObserver)
 
@@ -1231,19 +1209,16 @@ class JdbcProjectionSpec
 
     "call start and stop of handler when failed but no restart" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       val failOnceOnOffset = new AtomicInteger(4)
       val handler = new LifecycleHandler(handlerProbe.ref, failOnceOnOffset)
 
       val projection =
-        JdbcProjection
-          .exactlyOnce(
-            projectionId,
-            sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
-            handler = () => handler)
+        R2dbcProjection
+          .exactlyOnce(projectionId, Some(settings), sourceProvider = sourceProvider(entityId), handler = () => handler)
           .withRestartBackoff(1.second, 2.seconds, 0.0, maxRestarts = 0)
 
       // not using ProjectionTestKit because want to test restarts
@@ -1262,18 +1237,15 @@ class JdbcProjectionSpec
 
     "be able to stop when retrying" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      createOffsetStore(projectionId)
 
       val handlerProbe = createTestProbe[String]()
       val handler = new LifecycleHandler(handlerProbe.ref, alwaysFailOnOffset = 4)
 
       val projection =
-        JdbcProjection
-          .exactlyOnce(
-            projectionId,
-            sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
-            handler = () => handler)
+        R2dbcProjection
+          .exactlyOnce(projectionId, Some(settings), sourceProvider = sourceProvider(entityId), handler = () => handler)
           .withRecoveryStrategy(HandlerRecoveryStrategy.retryAndFail(100, 100.millis))
 
       val ref = spawn(ProjectionBehavior(projection))
@@ -1293,23 +1265,22 @@ class JdbcProjectionSpec
     }
   }
 
-  "JdbcProjection management" must {
+  "R2dbcProjection management" must {
 
     "restart from beginning when offset is cleared" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .exactlyOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () =>
-              JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
-                sess.withConnection { conn =>
-                  TestRepository(conn).concatToText(envelope.id, envelope.message)
-                }
+              R2dbcHandler[Envelope] { (session, envelope) =>
+                TestRepository(session).concatToText(envelope.id, envelope.message)
               })
 
       offsetShouldBeEmpty()
@@ -1330,19 +1301,18 @@ class JdbcProjectionSpec
 
     "restart from updated offset" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .exactlyOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () =>
-              JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
-                sess.withConnection { conn =>
-                  TestRepository(conn).concatToText(envelope.id, envelope.message)
-                }
+              R2dbcHandler[Envelope] { (session, envelope) =>
+                TestRepository(session).concatToText(envelope.id, envelope.message)
               })
 
       offsetShouldBeEmpty()
@@ -1364,19 +1334,18 @@ class JdbcProjectionSpec
 
     "pause projection" in {
       implicit val entityId = UUID.randomUUID().toString
-      implicit val projectionId = genRandomProjectionId()
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
 
       val projection =
-        JdbcProjection
+        R2dbcProjection
           .exactlyOnce(
             projectionId,
+            Some(settings),
             sourceProvider = sourceProvider(entityId),
-            jdbcSessionFactory,
             handler = () =>
-              JdbcHandler[PureJdbcSession, Envelope] { (sess, envelope) =>
-                sess.withConnection { conn =>
-                  TestRepository(conn).concatToText(envelope.id, envelope.message)
-                }
+              R2dbcHandler[Envelope] { (session, envelope) =>
+                TestRepository(session).concatToText(envelope.id, envelope.message)
               })
 
       offsetShouldBeEmpty()
@@ -1411,4 +1380,5 @@ class JdbcProjectionSpec
       }
     }
   }
+
 }

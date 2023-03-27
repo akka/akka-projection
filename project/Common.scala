@@ -78,10 +78,16 @@ object Common extends AutoPlugin {
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
     Test / logBuffered := false,
     IntegrationTest / logBuffered := false,
-    mimaPreviousArtifacts :=
-      Set(
-        organization.value %% moduleName.value % previousStableVersion.value
-          .getOrElse(throw new Error("Unable to determine previous version"))),
+    mimaPreviousArtifacts := {
+      if (moduleName.value == "akka-projection-r2dbc") {
+        // was released with akka-persistence-r2dbc then moved here
+        // FIXME drop once we have a release 1.4.0 release out
+        Set(organization.value %% moduleName.value % "1.0.1")
+      } else
+        Set(
+          organization.value %% moduleName.value % previousStableVersion.value
+            .getOrElse(throw new Error("Unable to determine previous version")))
+    },
     sonatypeProfileName := "com.lightbend")
 
 }

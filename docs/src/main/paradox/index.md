@@ -12,6 +12,7 @@
 * [Event Sourced](eventsourced.md)
 * [Durable State](durable-state.md)
 * [Kafka](kafka.md)
+* [R2DBC](r2dbc.md)
 * [Cassandra](cassandra.md)
 * [JDBC](jdbc.md)
 * [Slick](slick.md)
