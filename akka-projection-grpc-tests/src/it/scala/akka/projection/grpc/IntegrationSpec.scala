@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc
@@ -55,6 +55,7 @@ object IntegrationSpec {
 
   val config: Config = ConfigFactory
     .parseString(s"""
+    akka.loglevel = DEBUG
     akka.http.server.preview.enable-http2 = on
     akka.persistence.r2dbc {
       query {
@@ -355,14 +356,14 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedB.envelope.event shouldBe "B"
 
       val consumerFilter = ConsumerFilter(system).ref
-      consumerFilter ! ConsumerFilter.FilterCommand(streamId, List(ConsumerFilter.ExcludeEntityIds(Set(pid.entityId))))
+      consumerFilter ! ConsumerFilter.UpdateFilter(streamId, List(ConsumerFilter.ExcludeEntityIds(Set(pid.entityId))))
       // FIXME hack sleep to let it propagate to producer side
       Thread.sleep(3000)
 
       entity ! TestEntity.Persist("c")
       processedProbe.expectNoMessage(1.second)
 
-      consumerFilter ! ConsumerFilter.FilterCommand(
+      consumerFilter ! ConsumerFilter.UpdateFilter(
         streamId,
         List(ConsumerFilter.IncludeEntityIds(Set(ConsumerFilter.EntityIdOffset(pid.entityId, 0L)))))
       // FIXME hack sleep
@@ -383,7 +384,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedD.envelope.event shouldBe "D"
 
       // remove filter
-      consumerFilter ! ConsumerFilter.FilterCommand(
+      consumerFilter ! ConsumerFilter.UpdateFilter(
         streamId,
         List(ConsumerFilter.RemoveIncludeEntityIds(Set(pid.entityId))))
       // FIXME hack sleep to let it propagate to producer side
@@ -418,7 +419,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedB.envelope.event shouldBe "B"
 
       val consumerFilter = ConsumerFilter(system).ref
-      consumerFilter ! ConsumerFilter.ReplayCommand(streamId, Set(ConsumerFilter.EntityIdOffset(pid.entityId, 2L)))
+      consumerFilter ! ConsumerFilter.Replay(streamId, Set(ConsumerFilter.EntityIdOffset(pid.entityId, 2L)))
       // FIXME hack sleep to let it propagate to producer side
       Thread.sleep(3000)
 
