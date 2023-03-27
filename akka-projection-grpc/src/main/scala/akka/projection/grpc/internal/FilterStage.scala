@@ -78,7 +78,7 @@ import akka.stream.stage.StageLogging
 
       if (excludePersistenceIds.contains(pid) || excludeRegexEntityIds.exists {
             case (_, regex) =>
-              regex.matches(entityId)
+              regex.pattern.matcher(entityId).matches()
           }) {
         includePersistenceIds.contains(pid)
       } else {
