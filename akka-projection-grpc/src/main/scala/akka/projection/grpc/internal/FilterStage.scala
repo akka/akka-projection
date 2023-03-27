@@ -14,8 +14,8 @@ import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.persistence.Persistence
 import akka.persistence.query.TimestampOffset
-import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.FilterCriteria
@@ -97,7 +97,7 @@ import akka.stream.stage.StageLogging
     entityType: String,
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
-    currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdQuery,
+    currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
     verbose: Boolean = false,
     val producerFilter: EventEnvelope[Any] => Boolean = _ => true)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
@@ -145,7 +145,6 @@ import akka.stream.stage.StageLogging
 
         replayEnv match {
           case ReplayEnvelope(entityId, Some(env)) =>
-            // Note that the producer filter predicate is not applied on replay as that could be triggered by
             // the predicate to replay events from start for a given pid
             // FIXME that won't actually work right now because it will not be replayed but dropped/cancelled here
             if (filter.matches(env.persistenceId)) {
@@ -268,7 +267,7 @@ import akka.stream.stage.StageLogging
             val slice = persistence.sliceForPersistenceId(pid.id)
             val queue =
               currentEventsByPersistenceIdQuery
-                .currentEventsByPersistenceId(pid.id, fromSeqNr, Long.MaxValue)
+                .currentEventsByPersistenceIdTyped[Any](pid.id, fromSeqNr, Long.MaxValue)
                 .map { env =>
                   // FIXME "wrong" timestamp, we should probably define a new currentEventsByPersistenceId that matches eventsBySlices
                   val offset =
@@ -311,6 +310,7 @@ import akka.stream.stage.StageLogging
                 replayFromFilterCriteria(filterReq.criteria)
 
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
+                log.debug("Stream [{}]: Replay requested for [{}]", streamId, replayReq.entityIdOffset)
                 replayAll(replayReq.entityIdOffset)
 
               case StreamIn(StreamIn.Message.Init(_), _) =>

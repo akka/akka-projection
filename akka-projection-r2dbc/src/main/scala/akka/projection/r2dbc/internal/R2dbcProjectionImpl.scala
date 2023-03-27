@@ -4,12 +4,6 @@
 
 package akka.projection.r2dbc.internal
 
-import java.util.concurrent.atomic.AtomicLong
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
-import scala.util.control.NonFatal
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
@@ -34,6 +28,7 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.RunningProjectionManagement
 import akka.projection.StatusObserver
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
@@ -62,14 +57,21 @@ import io.r2dbc.spi.ConnectionFactory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import java.util.concurrent.atomic.AtomicLong
 import scala.annotation.nowarn
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 /**
  * INTERNAL API
  */
 @InternalApi
 private[projection] object R2dbcProjectionImpl {
-  import akka.persistence.r2dbc.internal.EnvelopeOrigin.{ fromBacktracking, isFilteredEvent }
+  import akka.persistence.r2dbc.internal.EnvelopeOrigin.fromBacktracking
+  import akka.persistence.r2dbc.internal.EnvelopeOrigin.isFilteredEvent
 
   val log: Logger = LoggerFactory.getLogger(classOf[R2dbcProjectionImpl[_, _]])
 
@@ -345,9 +347,8 @@ private[projection] object R2dbcProjectionImpl {
       handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _],
       offsetStore: R2dbcOffsetStore,
       settings: R2dbcProjectionSettings)(
-      implicit
-      ec: ExecutionContext): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
-
+      implicit system: ActorSystem[_]): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
+    implicit val ec: ExecutionContext = system.executionContext
     FlowWithContext[Envelope, ProjectionContext]
       .mapAsync(1) { env =>
         offsetStore
@@ -362,6 +363,17 @@ private[projection] object R2dbcProjectionImpl {
                 Some(loadedEnvelope)
               }
             } else {
+              // FIXME do we need the same for all projection handler variants?
+              // FIXME not accepted may be that a producer filter decided to start including events,
+              //       how do we know for sure and what offset to start from?
+              env match {
+                case ee: EventEnvelope[_] if ee.sequenceNr > 0 =>
+                  log.debug("Triggering replay for unexpected offset envelope: [{}]", env)
+                  ConsumerFilter(system).ref ! ConsumerFilter.Replay(
+                    "producer-filter-e2e-test", // FIXME where do we get stream id from?
+                    Set(ConsumerFilter.EntityIdOffset(ee.persistenceId, 0L)))
+                case _ =>
+              }
               Future.successful(None)
             }
           }

@@ -6,7 +6,6 @@ package akka.projection.grpc.producer.scaladsl
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -14,9 +13,9 @@ import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.PersistenceQuery
-import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
@@ -40,7 +39,9 @@ object EventProducer {
       entityType: String,
       streamId: String,
       transformation: Transformation,
-      settings: EventProducerSettings) {
+      settings: EventProducerSettings,
+      // FIXME make this none-case-class with factory/constructor overloads and whatnot
+      producerFilter: EventEnvelope[Any] => Boolean = _ => true) {
     require(entityType.nonEmpty, "Stream id must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
   }
@@ -163,9 +164,9 @@ object EventProducer {
    */
   private[akka] def currentEventsByPersistenceIdQueriesForStreamIds(
       sources: Set[EventProducerSource],
-      system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdQuery] = {
+      system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdTypedQuery] = {
     queriesForStreamIds(sources, system).map {
-      case (streamId, q: CurrentEventsByPersistenceIdQuery) => streamId -> q
+      case (streamId, q: CurrentEventsByPersistenceIdTypedQuery) => streamId -> q
       case (_, other) =>
         throw new IllegalArgumentException(
           s"Expected CurrentEventsByPersistenceIdQuery but was [${other.getClass.getName}]")
