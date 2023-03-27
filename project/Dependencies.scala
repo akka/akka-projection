@@ -214,8 +214,9 @@ object Dependencies {
         Compile.akkaStream,
         Compile.akkaPersistenceTyped,
         Compile.akkaPersistenceQuery,
-        // Only needed for Replicated Event Sourcing over gRPC
-        Compile.akkaClusterShardingTyped % Optional)
+        // Only needed for Replicated Event Sourcing over gRPC,
+        // and ConsumerFilter with Cluster on consumer side
+        Compile.akkaClusterShardingTyped % "provided")
 
   val grpcTest = deps ++= Seq(
         Test.postgresDriver,
