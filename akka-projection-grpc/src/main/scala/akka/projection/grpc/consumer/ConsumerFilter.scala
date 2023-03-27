@@ -33,8 +33,15 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
   /**
    * INTERNAL API
+   *
+   * Before registering the subscriber it would retrieve the current filter with `GetFilter`.
+   * That init filter is then included in the `Subscribe.initCriteria`, to be used as starting point for evaluating
+   * the diff for that subscriber.
    */
-  @InternalApi private[akka] final case class Subscribe(streamId: String, subscriber: ActorRef[SubscriberCommand])
+  @InternalApi private[akka] final case class Subscribe(
+      streamId: String,
+      initCriteria: immutable.Seq[FilterCriteria],
+      subscriber: ActorRef[SubscriberCommand])
       extends Command
 
   /**

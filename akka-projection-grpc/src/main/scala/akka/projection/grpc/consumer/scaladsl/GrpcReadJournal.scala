@@ -269,27 +269,28 @@ final class GrpcReadJournal private (
 
     val consumerFilter = ConsumerFilter(typedSystem)
 
-    val inReqSource: Source[StreamIn, NotUsed] = Source
-      .actorRef[ConsumerFilter.SubscriberCommand](
-        completionMatcher = PartialFunction.empty,
-        failureMatcher = PartialFunction.empty,
-        bufferSize = 1024,
-        OverflowStrategy.fail)
-      .collect {
-        case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
-          val protoCriteria = toProtoFilterCriteria(criteria)
-          StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
+    def inReqSource(initCriteria: immutable.Seq[ConsumerFilter.FilterCriteria]): Source[StreamIn, NotUsed] =
+      Source
+        .actorRef[ConsumerFilter.SubscriberCommand](
+          completionMatcher = PartialFunction.empty,
+          failureMatcher = PartialFunction.empty,
+          bufferSize = 1024,
+          OverflowStrategy.fail)
+        .collect {
+          case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
+            val protoCriteria = toProtoFilterCriteria(criteria)
+            StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
-        case ConsumerFilter.Replay(`streamId`, entityOffsets) =>
-          val protoEntityOffsets = entityOffsets.map {
-            case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
-          }.toVector
-          StreamIn(StreamIn.Message.Replay(ReplayReq(protoEntityOffsets)))
-      }
-      .mapMaterializedValue { ref =>
-        consumerFilter.ref ! ConsumerFilter.Subscribe(streamId, ref)
-        NotUsed
-      }
+          case ConsumerFilter.Replay(`streamId`, entityOffsets) =>
+            val protoEntityOffsets = entityOffsets.map {
+              case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
+            }.toVector
+            StreamIn(StreamIn.Message.Replay(ReplayReq(protoEntityOffsets)))
+        }
+        .mapMaterializedValue { ref =>
+          consumerFilter.ref ! ConsumerFilter.Subscribe(streamId, initCriteria, ref)
+          NotUsed
+        }
 
     val initFilter = {
       import akka.actor.typed.scaladsl.AskPattern._
@@ -309,7 +310,7 @@ final class GrpcReadJournal private (
 
             Source
               .single(StreamIn(StreamIn.Message.Init(initReq)))
-              .concat(inReqSource)
+              .concat(inReqSource(filter.criteria))
           }
         }
         .mapMaterializedValue(_ => NotUsed)

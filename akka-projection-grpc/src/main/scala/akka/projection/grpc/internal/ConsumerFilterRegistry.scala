@@ -4,10 +4,13 @@
 
 package akka.projection.grpc.internal
 
+import scala.concurrent.duration._
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 import scala.collection.immutable
+import scala.util.Failure
+import scala.util.Success
 
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
@@ -15,6 +18,7 @@ import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.InternalApi
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.util.Timeout
 
 /**
  * INTERNAL API
@@ -69,7 +73,8 @@ import akka.projection.grpc.consumer.ConsumerFilter
         case (sub, subFilter) =>
           if (sub.streamId == streamId) {
             val diff = ConsumerFilter.createDiff(subFilter, filter)
-            sub.ref ! UpdateFilter(streamId, diff)
+            if (diff.nonEmpty)
+              sub.ref ! UpdateFilter(streamId, diff)
             sub -> filter
           } else {
             sub -> subFilter
@@ -88,12 +93,25 @@ import akka.projection.grpc.consumer.ConsumerFilter
 
     Behaviors
       .receiveMessage {
-        case sub: Subscribe =>
-          val subscriber = Subscriber(sub.streamId, sub.subscriber)
-          context.watchWith(sub.subscriber, SubscriberTerminated(subscriber))
+        case Subscribe(streamId, initCriteria, subscriberRef) =>
+          val subscriber = Subscriber(streamId, subscriberRef)
+          context.watchWith(subscriberRef, SubscriberTerminated(subscriber))
           // eagerly start the store
-          val store = getOrCreateStore(sub.streamId)
-          behavior(subscribers.updated(subscriber, Vector.empty), stores.updated(sub.streamId, store))
+          val store = getOrCreateStore(streamId)
+
+          // trigger a refresh from current filter so that updates between the initCriteria and the Subscribe is flushed
+          // to the new subscriber
+          implicit val askTimeout: Timeout = 10.seconds
+          context
+            .ask[ConsumerFilterStore.GetFilter, ConsumerFilter.CurrentFilter](store, ConsumerFilterStore.GetFilter(_)) {
+              case Success(ConsumerFilter.CurrentFilter(_, criteria)) => FilterUpdated(streamId, criteria)
+              case Failure(_) =>
+                context.log
+                  .debug("Ask of current filter failed when subscriber for streamId [{}] registered.", streamId)
+                null // ignore, it will be ok on next update anyway
+            }
+
+          behavior(subscribers.updated(subscriber, initCriteria), stores.updated(streamId, store))
 
         case cmd: UpdateFilter =>
           val store = getOrCreateStore(cmd.streamId)
