@@ -91,10 +91,12 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       this(matching.asScala.toSet)
   }
 
+  sealed trait RemoveCriteria extends FilterCriteria
+
   /**
    * Remove a previously added [[ExcludeRegexEntityIds]].
    */
-  final case class RemoveExcludeRegexEntityIds(matching: Set[String]) extends FilterCriteria {
+  final case class RemoveExcludeRegexEntityIds(matching: Set[String]) extends RemoveCriteria {
 
     /** Java API */
     def this(matching: JSet[String]) =
@@ -115,7 +117,7 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   /**
    * Remove a previously added [[ExcludeEntityIds]].
    */
-  final case class RemoveExcludeEntityIds(entityIds: Set[String]) extends FilterCriteria {
+  final case class RemoveExcludeEntityIds(entityIds: Set[String]) extends RemoveCriteria {
 
     /** Java API */
     def this(entityIds: JSet[String]) =
@@ -139,7 +141,7 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   /**
    * Remove a previously added [[IncludeEntityIds]].
    */
-  final case class RemoveIncludeEntityIds(entityIds: Set[String]) extends FilterCriteria {
+  final case class RemoveIncludeEntityIds(entityIds: Set[String]) extends RemoveCriteria {
 
     /** Java API */
     def this(entityIds: JSet[String]) =
@@ -214,6 +216,9 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       a: immutable.Seq[FilterCriteria],
       b: immutable.Seq[FilterCriteria]): immutable.Seq[FilterCriteria] = {
 
+    require(!hasRemoveCriteria(a), "Unexpected RemoveCriteria in a when creating diff, use mergeFilter first.")
+    require(!hasRemoveCriteria(b), "Unexpected RemoveCriteria in b when creating diff, use mergeFilter first.")
+
     val excludeRegexEntityIdsA = excludeRegexEntityIds(a)
     val excludeRegexEntityIdsB = excludeRegexEntityIds(b)
     val excludeRegexEntityIdsDiffAB = excludeRegexEntityIdsA.diff(excludeRegexEntityIdsB)
@@ -259,26 +264,33 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
   }
 
-  private def includeEntityOffsets(filter: Seq[FilterCriteria]): Set[EntityIdOffset] = {
+  /** INTERNAL API */
+  @InternalApi private[akka] def includeEntityOffsets(filter: immutable.Seq[FilterCriteria]): Set[EntityIdOffset] = {
     filter.flatMap {
       case inc: IncludeEntityIds => inc.entityOffsets
       case _                     => Set.empty[EntityIdOffset]
     }.toSet
   }
 
-  private def excludeEntityIds(filter: Seq[FilterCriteria]): Set[String] = {
+  /** INTERNAL API */
+  @InternalApi private[akka] def excludeEntityIds(filter: immutable.Seq[FilterCriteria]): Set[String] = {
     filter.flatMap {
       case exl: ExcludeEntityIds => exl.entityIds
       case _                     => Set.empty[String]
     }.toSet
   }
 
-  private def excludeRegexEntityIds(filter: Seq[FilterCriteria]): Set[String] = {
+  /** INTERNAL API */
+  @InternalApi private[akka] def excludeRegexEntityIds(filter: immutable.Seq[FilterCriteria]): Set[String] = {
     filter.flatMap {
       case rxp: ExcludeRegexEntityIds => rxp.matching
       case _                          => Set.empty[String]
     }.toSet
   }
+
+  /** INTERNAL API */
+  @InternalApi private[akka] def hasRemoveCriteria(filter: immutable.Seq[FilterCriteria]): Boolean =
+    filter.exists(_.isInstanceOf[RemoveCriteria])
 
 }
 

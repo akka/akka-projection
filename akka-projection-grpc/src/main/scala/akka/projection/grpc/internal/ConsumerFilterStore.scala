@@ -23,8 +23,14 @@ import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.cluster.UniqueAddress
+import akka.cluster.ddata.DeltaReplicatedData
 import akka.cluster.ddata.Key
+import akka.cluster.ddata.ORMap
+import akka.cluster.ddata.ORSet
+import akka.cluster.ddata.RemovedNodePruning
 import akka.cluster.ddata.ReplicatedData
+import akka.cluster.ddata.SelfUniqueAddress
 import akka.cluster.ddata.typed.scaladsl.DistributedData
 import akka.cluster.ddata.typed.scaladsl.Replicator
 import akka.cluster.ddata.typed.scaladsl.ReplicatorMessageAdapter
@@ -165,16 +171,155 @@ import org.slf4j.LoggerFactory
  */
 @InternalApi private[akka] object DdataConsumerFilterStore {
   object State {
-    val empty: State = State(Vector.empty)
+    val empty: State = State(ORSet.empty, ORSet.empty, SeqNrMap.empty)
+
   }
-  final case class State(filterCriteria: immutable.Seq[ConsumerFilter.FilterCriteria]) extends ReplicatedData {
+  final case class State(
+      excludeRegexEntityIds: ORSet[String],
+      excludeEntityIds: ORSet[String],
+      includeEntityOffsets: SeqNrMap)
+      extends ReplicatedData {
     // FIXME serialization
     type T = State
 
     override def merge(that: State): State =
-      State(ConsumerFilter.mergeFilter(filterCriteria, that.filterCriteria))
+      State(
+        excludeRegexEntityIds = excludeRegexEntityIds.merge(that.excludeRegexEntityIds),
+        excludeEntityIds = excludeEntityIds.merge(that.excludeEntityIds),
+        includeEntityOffsets = includeEntityOffsets.merge(that.includeEntityOffsets))
 
-    // FIXME might be easy to implement delta crdt via ConsumerFilter.createDiff
+    // FIXME implement delta crdt
+
+    def updated(filterCriteria: immutable.Seq[ConsumerFilter.FilterCriteria])(
+        implicit node: SelfUniqueAddress): State = {
+
+      var newExcludeRegexEntityIds = excludeRegexEntityIds
+      var newExcludeEntityIds = excludeEntityIds
+      var newIncludeEntityOffsets = includeEntityOffsets
+
+      filterCriteria.foreach {
+        case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
+          matching.foreach { r =>
+            newExcludeRegexEntityIds = newExcludeRegexEntityIds :+ r
+          }
+        case ConsumerFilter.ExcludeEntityIds(entityIds) =>
+          entityIds.foreach { id =>
+            newExcludeEntityIds = newExcludeEntityIds :+ id
+          }
+        case ConsumerFilter.IncludeEntityIds(entityOffsets) =>
+          entityOffsets.foreach { entityOffset =>
+            newIncludeEntityOffsets = newIncludeEntityOffsets.updated(entityOffset.entityId, entityOffset.seqNr)
+          }
+        case ConsumerFilter.RemoveExcludeRegexEntityIds(matching) =>
+          matching.foreach { r =>
+            newExcludeRegexEntityIds = newExcludeRegexEntityIds.remove(r)
+          }
+        case ConsumerFilter.RemoveExcludeEntityIds(entityIds) =>
+          entityIds.foreach { id =>
+            newExcludeEntityIds = newExcludeEntityIds.remove(id)
+          }
+        case ConsumerFilter.RemoveIncludeEntityIds(entityIds) =>
+          entityIds.foreach { id =>
+            newIncludeEntityOffsets = newIncludeEntityOffsets.remove(id)
+          }
+      }
+
+      State(
+        excludeRegexEntityIds = newExcludeRegexEntityIds,
+        excludeEntityIds = newExcludeEntityIds,
+        includeEntityOffsets = newIncludeEntityOffsets)
+    }
+
+    lazy val toFilterCriteria: immutable.Seq[ConsumerFilter.FilterCriteria] = {
+      Vector(
+        if (excludeRegexEntityIds.isEmpty) None
+        else Some(ConsumerFilter.ExcludeRegexEntityIds(excludeRegexEntityIds.elements)),
+        if (excludeEntityIds.isEmpty) None else Some(ConsumerFilter.ExcludeEntityIds(excludeEntityIds.elements)),
+        if (includeEntityOffsets.isEmpty) None
+        else
+          Some(ConsumerFilter.IncludeEntityIds(includeEntityOffsets.entries.map {
+            case (k, v) => ConsumerFilter.EntityIdOffset(k, v.nr)
+          }.toSet))).flatten
+    }
+
+  }
+
+  final case class SeqNr(nr: Long) extends ReplicatedData {
+    type T = SeqNr
+
+    override def merge(that: SeqNr): SeqNr = {
+      if (nr >= that.nr) this
+      else that
+    }
+  }
+
+  object SeqNrMap {
+    val empty: SeqNrMap = new SeqNrMap(ORMap.empty)
+  }
+
+  final case class SeqNrMap(val underlying: ORMap[String, SeqNr]) extends DeltaReplicatedData with RemovedNodePruning {
+
+    // FIXME serialization
+
+    type T = SeqNrMap
+    type D = ORMap.DeltaOp
+
+    def entries: Map[String, SeqNr] =
+      underlying.entries
+
+    def isEmpty: Boolean =
+      underlying.isEmpty
+
+    def contains(key: String): Boolean =
+      underlying.contains(key)
+
+    def updated(key: String, seqNr: Long)(implicit node: SelfUniqueAddress): SeqNrMap =
+      new SeqNrMap(underlying.put(node, key, SeqNr(seqNr)))
+
+    /**
+     * Removes an entry from the map.
+     * Note that if there is a conflicting update on another node the entry will
+     * not be removed after merge.
+     */
+    def remove(key: String)(implicit node: SelfUniqueAddress): SeqNrMap =
+      new SeqNrMap(underlying.remove(node, key))
+
+    override def merge(that: SeqNrMap): SeqNrMap =
+      new SeqNrMap(underlying.merge(that.underlying))
+
+    override def resetDelta: SeqNrMap =
+      new SeqNrMap(underlying.resetDelta)
+
+    override def delta: Option[D] = underlying.delta
+
+    override def mergeDelta(thatDelta: D): SeqNrMap =
+      new SeqNrMap(underlying.mergeDelta(thatDelta))
+
+    override def modifiedByNodes: Set[UniqueAddress] =
+      underlying.modifiedByNodes
+
+    override def needPruningFrom(removedNode: UniqueAddress): Boolean =
+      underlying.needPruningFrom(removedNode)
+
+    override def prune(removedNode: UniqueAddress, collapseInto: UniqueAddress): SeqNrMap =
+      new SeqNrMap(underlying.prune(removedNode, collapseInto))
+
+    override def pruningCleanup(removedNode: UniqueAddress): SeqNrMap =
+      new SeqNrMap(underlying.pruningCleanup(removedNode))
+
+    // this class cannot be a `case class` because we need different `unapply`
+
+    override def toString: String = {
+      val mapEntries = underlying.entries.map { case (k, v) => k -> v.nr }
+      s"SeqNr$mapEntries"
+    }
+
+    override def equals(o: Any): Boolean = o match {
+      case other: SeqNrMap => underlying == other.underlying
+      case _               => false
+    }
+
+    override def hashCode: Int = underlying.hashCode
   }
 
   final case class ConsumerFilterKey(_id: String) extends Key[State](_id) {
@@ -223,6 +368,8 @@ import org.slf4j.LoggerFactory
   import ConsumerFilterStore._
   import DdataConsumerFilterStore._
 
+  implicit val selfUniqueAddress: SelfUniqueAddress = DistributedData(context.system).selfUniqueAddress
+
   private val stateReadConsistency = Replicator.ReadMajority(3.seconds) // FIXME config
   private val stateWriteConsistency = Replicator.WriteMajority(3.seconds) // FIXME config
 
@@ -234,7 +381,7 @@ import org.slf4j.LoggerFactory
     Behaviors.receiveMessage {
       case UpdateFilter(updatedCriteria) =>
         replicatorAdapter.askUpdate(
-          replyTo => Replicator.Update(key, State.empty, stateWriteConsistency, replyTo)(_ => State(updatedCriteria)),
+          replyTo => Replicator.Update(key, State.empty, stateWriteConsistency, replyTo)(_.updated(updatedCriteria)),
           response => InternalUpdateResponse(response))
         Behaviors.same
 
@@ -248,7 +395,7 @@ import org.slf4j.LoggerFactory
 
       case InternalSubscribeResponse(chg @ Replicator.Changed(`key`)) =>
         val state = chg.get(key)
-        notifyUpdatesTo ! ConsumerFilterRegistry.FilterUpdated(streamId, state.filterCriteria)
+        notifyUpdatesTo ! ConsumerFilterRegistry.FilterUpdated(streamId, state.toFilterCriteria)
         Behaviors.same
 
       case GetFilter(replyTo) =>
@@ -259,7 +406,7 @@ import org.slf4j.LoggerFactory
 
       case InternalGetResponse(success @ Replicator.GetSuccess(`key`), replyTo) =>
         val state = success.get(key)
-        replyTo ! ConsumerFilter.CurrentFilter(streamId, state.filterCriteria)
+        replyTo ! ConsumerFilter.CurrentFilter(streamId, state.toFilterCriteria)
         Behaviors.same
 
       case InternalGetResponse(_ @Replicator.NotFound(`key`), replyTo) =>
