@@ -88,7 +88,7 @@ import org.slf4j.LoggerFactory
           classOf[ActorRef[ConsumerFilterRegistry.FilterUpdated]])
         applyMethod.invoke(companion, streamId, notifyUpdatesTo).asInstanceOf[Behavior[Command]]
       case Failure(exc) =>
-        LoggerFactory.getLogger(className).error("Couldn't create instance of [{}]", className, exc)
+        LoggerFactory.getLogger(className).error2("Couldn't create instance of [{}]", className, exc)
         throw exc
     }
   }
