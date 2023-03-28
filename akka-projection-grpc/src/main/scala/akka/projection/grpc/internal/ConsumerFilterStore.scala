@@ -133,9 +133,8 @@ import org.slf4j.LoggerFactory
   // The state must survive the actor lifecycle so keeping the state in an Extension. Single writer per streamId.
   private val storeExt = LocalConsumerFilterStore.StoreExt(context.system)
 
-  def getState(): immutable.Seq[FilterCriteria] = {
+  def getState(): immutable.Seq[FilterCriteria] =
     storeExt.filtersByStreamId.computeIfAbsent(streamId, _ => Vector.empty[FilterCriteria])
-  }
 
   def setState(old: immutable.Seq[FilterCriteria], filterCriteria: immutable.Seq[FilterCriteria]): Unit = {
     if (!storeExt.filtersByStreamId.replace(streamId, old, filterCriteria))
@@ -242,30 +241,26 @@ import org.slf4j.LoggerFactory
           }.toSet))).flatten
     }
 
-    override def modifiedByNodes: Set[UniqueAddress] = {
+    override def modifiedByNodes: Set[UniqueAddress] =
       excludeRegexEntityIds.modifiedByNodes
         .union(excludeEntityIds.modifiedByNodes)
         .union(includeEntityOffsets.modifiedByNodes)
-    }
 
-    override def needPruningFrom(removedNode: UniqueAddress): Boolean = {
+    override def needPruningFrom(removedNode: UniqueAddress): Boolean =
       excludeRegexEntityIds.needPruningFrom(removedNode) || excludeEntityIds.needPruningFrom(removedNode) || includeEntityOffsets
         .needPruningFrom(removedNode)
-    }
 
-    override def prune(removedNode: UniqueAddress, collapseInto: UniqueAddress): State = {
+    override def prune(removedNode: UniqueAddress, collapseInto: UniqueAddress): State =
       State(
         excludeRegexEntityIds.prune(removedNode, collapseInto),
         excludeEntityIds.prune(removedNode, collapseInto),
         includeEntityOffsets.prune(removedNode, collapseInto))
-    }
 
-    override def pruningCleanup(removedNode: UniqueAddress): State = {
+    override def pruningCleanup(removedNode: UniqueAddress): State =
       State(
         excludeRegexEntityIds.pruningCleanup(removedNode),
         excludeEntityIds.pruningCleanup(removedNode),
         includeEntityOffsets.pruningCleanup(removedNode))
-    }
   }
 
   final case class SeqNr(nr: Long) extends ReplicatedData {
