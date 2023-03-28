@@ -1,0 +1,27 @@
+// Copyright 2022 Lightbend Inc.
+
+syntax = "proto3";
+
+package akka.projection.grpc;
+
+option java_package = "akka.projection.grpc.internal.proto";
+option optimize_for = SPEED;
+
+message ConsumerFilterStoreState {
+  // ORSet serialized with Akka's ReplicatedDataSerializer
+  bytes exclude_regex_entity_ids = 1;
+  // ORSet serialized with Akka's ReplicatedDataSerializer
+  bytes exclude_entity_ids = 2;
+  SeqNrMap include_entity_offsets = 3;
+}
+
+message SeqNrMap {
+  message Entry {
+    string key = 1;
+    int64 seq_nr = 2;
+  }
+
+  // ORSet serialized with Akka's ReplicatedDataSerializer
+  bytes orset_keys = 1;
+  repeated Entry entries = 2;
+}

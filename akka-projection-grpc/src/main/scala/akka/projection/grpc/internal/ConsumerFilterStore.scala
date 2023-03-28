@@ -189,6 +189,7 @@ import org.slf4j.LoggerFactory
         includeEntityOffsets = includeEntityOffsets.merge(that.includeEntityOffsets))
 
     // FIXME implement delta crdt
+    // FIXME implement pruning
 
     def updated(filterCriteria: immutable.Seq[ConsumerFilter.FilterCriteria])(
         implicit node: SelfUniqueAddress): State = {
