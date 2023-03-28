@@ -5,6 +5,7 @@
 package akka.projection.grpc.internal
 
 import akka.NotUsed
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
@@ -147,14 +148,14 @@ import scala.util.matching.Regex
             // the predicate to replay events from start for a given pid
             // Note: we do not apply the producer filter here as that may be what triggered the replay
             if (filter.matches(env.persistenceId)) {
-              log.trace(
+              log.traceN(
                 "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
                 logPrefix,
                 env.persistenceId,
                 env.sequenceNr)
               push(outEnv, env)
             } else {
-              log.debug(
+              log.debugN(
                 "Stream [{}]: Filter out replayed event persistenceId [{}], seqNr [{}]. Cancel remaining replay.",
                 logPrefix,
                 env.persistenceId,
@@ -165,14 +166,14 @@ import scala.util.matching.Regex
             }
 
           case ReplayEnvelope(entityId, None) =>
-            log.debug("Stream [{}]: Completed replay of entityId [{}]", logPrefix, entityId)
+            log.debug2("Stream [{}]: Completed replay of entityId [{}]", logPrefix, entityId)
             replayCompleted()
         }
       }
 
       private def tryPullReplay(entityId: String): Unit = {
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
-          log.trace("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
+          log.trace2("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
           val next =
             replayInProgress(entityId).queue.pull().map(ReplayEnvelope(entityId, _))(ExecutionContexts.parasitic)
           next.value match {
@@ -213,8 +214,7 @@ import scala.util.matching.Regex
                 acc
             }
         }
-        // FIXME might be too much logging if it includes many ids
-        log.debug("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
+        log.trace2("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
       }
 
       private def handledByThisStream(pid: PersistenceId): Boolean = {
@@ -255,13 +255,13 @@ import scala.util.matching.Regex
         val pid = PersistenceId(entityType, entityId)
         if (handledByThisStream(pid)) {
           replayInProgress.get(entityId).foreach { replay =>
-            log.debug("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
+            log.debug2("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
             replay.queue.cancel()
             replayInProgress -= entityId
           }
 
           if (replayInProgress.size < ReplayParallelism) {
-            log.debug("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
+            log.debugN("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
             val queue =
               currentEventsByPersistenceIdQuery
                 .currentEventsByPersistenceIdTyped[Any](pid.id, fromSeqNr, Long.MaxValue)
@@ -269,7 +269,7 @@ import scala.util.matching.Regex
             replayInProgress = replayInProgress.updated(entityId, queue)
             tryPullReplay(entityId)
           } else {
-            log.debug("Stream [{}]: Queueing replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
+            log.debugN("Stream [{}]: Queueing replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
             pendingReplayRequests = pendingReplayRequests.filterNot(_.entityId == entityId) :+ entityOffset
           }
         }
@@ -296,13 +296,12 @@ import scala.util.matching.Regex
           override def onPush(): Unit = {
             grab(inReq) match {
               case StreamIn(StreamIn.Message.Filter(filterReq), _) =>
-                if (log.isDebugEnabled)
-                  log.debug("Stream [{}]: Filter update requested [{}]", logPrefix, filterReq.criteria)
+                log.debug2("Stream [{}]: Filter update requested [{}]", logPrefix, filterReq.criteria)
                 updateFilter(filterReq.criteria)
                 replayFromFilterCriteria(filterReq.criteria)
 
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
-                log.debug("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.entityIdOffset)
+                log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.entityIdOffset)
                 replayAll(replayReq.entityIdOffset)
 
               case StreamIn(StreamIn.Message.Init(_), _) =>
@@ -310,7 +309,7 @@ import scala.util.matching.Regex
                 throw new IllegalStateException("Init request can only be used as the first message")
 
               case StreamIn(other, _) =>
-                log.warn("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
+                log.warn2("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
             }
 
             pull(inReq)
@@ -327,10 +326,10 @@ import scala.util.matching.Regex
             // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
             // can never include them
             if (producerFilter(env) && filter.matches(pid)) {
-              log.trace("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+              log.traceN("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               push(outEnv, env)
             } else {
-              log.debug("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+              log.debugN("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               pullInEnvOrReplay()
             }
           }
