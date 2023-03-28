@@ -272,7 +272,6 @@ import scala.util.matching.Regex
             replayInProgress = replayInProgress.updated(entityId, queue)
             tryPullReplay(entityId)
           } else {
-            // FIXME track explicit request here as well or it is lost when queued
             log.debug("Stream [{}]: Queueing replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
             pendingReplayRequests = pendingReplayRequests.filterNot(_.entityId == entityId) :+ entityOffset
           }
