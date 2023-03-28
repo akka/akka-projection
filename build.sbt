@@ -122,6 +122,7 @@ lazy val grpcTests =
     .settings(Dependencies.grpcTest)
     .settings(publish / skip := true)
     .dependsOn(grpc)
+    .dependsOn(r2dbc % Test)
     .dependsOn(testkit % Test)
     .dependsOn(r2dbc % IntegrationTest)
     .enablePlugins(AkkaGrpcPlugin)
@@ -222,6 +223,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
     kafka,
     `durable-state`,
     grpc,
+    grpcTests,
     r2dbc,
     examples,
     docs)
