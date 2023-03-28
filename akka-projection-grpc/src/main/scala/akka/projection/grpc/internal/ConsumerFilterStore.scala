@@ -178,8 +178,8 @@ import org.slf4j.LoggerFactory
       excludeRegexEntityIds: ORSet[String],
       excludeEntityIds: ORSet[String],
       includeEntityOffsets: SeqNrMap)
-      extends ReplicatedData {
-    // FIXME serialization
+      extends ReplicatedData
+      with RemovedNodePruning {
     type T = State
 
     override def merge(that: State): State =
@@ -189,7 +189,6 @@ import org.slf4j.LoggerFactory
         includeEntityOffsets = includeEntityOffsets.merge(that.includeEntityOffsets))
 
     // FIXME implement delta crdt
-    // FIXME implement pruning
 
     def updated(filterCriteria: immutable.Seq[ConsumerFilter.FilterCriteria])(
         implicit node: SelfUniqueAddress): State = {
@@ -243,6 +242,30 @@ import org.slf4j.LoggerFactory
           }.toSet))).flatten
     }
 
+    override def modifiedByNodes: Set[UniqueAddress] = {
+      excludeRegexEntityIds.modifiedByNodes
+        .union(excludeEntityIds.modifiedByNodes)
+        .union(includeEntityOffsets.modifiedByNodes)
+    }
+
+    override def needPruningFrom(removedNode: UniqueAddress): Boolean = {
+      excludeRegexEntityIds.needPruningFrom(removedNode) || excludeEntityIds.needPruningFrom(removedNode) || includeEntityOffsets
+        .needPruningFrom(removedNode)
+    }
+
+    override def prune(removedNode: UniqueAddress, collapseInto: UniqueAddress): State = {
+      State(
+        excludeRegexEntityIds.prune(removedNode, collapseInto),
+        excludeEntityIds.prune(removedNode, collapseInto),
+        includeEntityOffsets.prune(removedNode, collapseInto))
+    }
+
+    override def pruningCleanup(removedNode: UniqueAddress): State = {
+      State(
+        excludeRegexEntityIds.pruningCleanup(removedNode),
+        excludeEntityIds.pruningCleanup(removedNode),
+        includeEntityOffsets.pruningCleanup(removedNode))
+    }
   }
 
   final case class SeqNr(nr: Long) extends ReplicatedData {
@@ -259,8 +282,6 @@ import org.slf4j.LoggerFactory
   }
 
   final case class SeqNrMap(val underlying: ORMap[String, SeqNr]) extends DeltaReplicatedData with RemovedNodePruning {
-
-    // FIXME serialization
 
     type T = SeqNrMap
     type D = ORMap.DeltaOp
