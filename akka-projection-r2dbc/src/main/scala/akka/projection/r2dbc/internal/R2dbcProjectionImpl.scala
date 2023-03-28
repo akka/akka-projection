@@ -18,6 +18,7 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult
+import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.HandlerRecoveryStrategy.Internal.RetryAndSkip
@@ -367,11 +368,12 @@ private[projection] object R2dbcProjectionImpl {
               // FIXME not accepted may be that a producer filter decided to start including events,
               //       how do we know for sure and what offset to start from?
               env match {
-                case ee: EventEnvelope[_] if ee.sequenceNr > 0 =>
+                case ee: EventEnvelope[_] if ee.sequenceNr > 1L =>
                   log.debug("Triggering replay for unexpected offset envelope: [{}]", env)
+                  val pid = PersistenceId.ofUniqueId(ee.persistenceId)
                   ConsumerFilter(system).ref ! ConsumerFilter.Replay(
                     "producer-filter-e2e-test", // FIXME where do we get stream id from?
-                    Set(ConsumerFilter.EntityIdOffset(ee.persistenceId, 0L)))
+                    Set(ConsumerFilter.EntityIdOffset(pid.entityId, 1L)))
                 case _ =>
               }
               Future.successful(None)

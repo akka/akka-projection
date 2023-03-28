@@ -26,7 +26,6 @@ import akka.stream.stage.InHandler
 import akka.stream.stage.OutHandler
 import akka.stream.stage.StageLogging
 
-import scala.concurrent.ExecutionContext
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -87,8 +86,6 @@ import scala.util.matching.Regex
 
   private case class ReplayEnvelope(entityId: String, env: Option[EventEnvelope[Any]])
 
-  private final case class ReplaySession(queue: SinkQueueWithCancel[EventEnvelope[Any]], explicitReplay: Boolean)
-
 }
 
 /**
@@ -120,7 +117,7 @@ import scala.util.matching.Regex
       private var replayHasBeenPulled = false
       private var pendingReplayRequests: Vector[EntityIdOffset] = Vector.empty
       // several replay streams may be in progress at the same time
-      private var replayInProgress: Map[String, ReplaySession] = Map.empty
+      private var replayInProgress: Map[String, SinkQueueWithCancel[EventEnvelope[Any]]] = Map.empty
       private val replayCallback = getAsyncCallback[Try[ReplayEnvelope]] {
         case Success(replayEnv) => onReplay(replayEnv)
         case Failure(exc)       => failStage(exc)
@@ -148,8 +145,8 @@ import scala.util.matching.Regex
         replayEnv match {
           case ReplayEnvelope(entityId, Some(env)) =>
             // the predicate to replay events from start for a given pid
-            val replay = replayInProgress(entityId)
-            if (replay.explicitReplay || filter.matches(env.persistenceId)) {
+            // Note: we do not apply the producer filter here as that may be what triggered the replay
+            if (filter.matches(env.persistenceId)) {
               if (verbose)
                 log.debug(
                   "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
@@ -163,7 +160,8 @@ import scala.util.matching.Regex
                 logPrefix,
                 env.persistenceId,
                 env.sequenceNr)
-              replay.queue.cancel()
+              val queue = replayInProgress(entityId)
+              queue.cancel()
               replayCompleted()
             }
 
@@ -241,11 +239,11 @@ import scala.util.matching.Regex
         }
       }
 
-      private def replayAll(entityOffsets: Iterable[EntityIdOffset], explicitReplay: Boolean = false): Unit = {
+      private def replayAll(entityOffsets: Iterable[EntityIdOffset]): Unit = {
         // FIXME limit number of concurrent replay requests, place additional in a pending queue
         entityOffsets.foreach { entityOffset =>
-          if (entityOffset.seqNr >= 1 || explicitReplay)
-            replay(entityOffset, explicitReplay)
+          if (entityOffset.seqNr >= 1)
+            replay(entityOffset)
         // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter
         // change. In that case we must have a way to signal to the R2dbcOffsetStore that the
         // first seqNr of that new pid is ok to pass through even though it isn't 1
@@ -253,10 +251,10 @@ import scala.util.matching.Regex
         }
       }
 
-      private def replay(entityOffset: EntityIdOffset, explicitReplay: Boolean = false): Unit = {
-        val pid = PersistenceId.ofUniqueId(entityOffset.entityId)
-        val entityId = pid.entityId
+      private def replay(entityOffset: EntityIdOffset): Unit = {
+        val entityId = entityOffset.entityId
         val fromSeqNr = entityOffset.seqNr
+        val pid = PersistenceId(entityType, entityId)
         if (handledByThisStream(pid)) {
           replayInProgress.get(entityId).foreach { replay =>
             log.debug("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
@@ -270,7 +268,7 @@ import scala.util.matching.Regex
               currentEventsByPersistenceIdQuery
                 .currentEventsByPersistenceIdTyped[Any](pid.id, fromSeqNr, Long.MaxValue)
                 .runWith(Sink.queue())(materializer)
-            replayInProgress = replayInProgress.updated(entityId, ReplaySession(queue, explicitReplay))
+            replayInProgress = replayInProgress.updated(entityId, queue)
             tryPullReplay(entityId)
           } else {
             // FIXME track explicit request here as well or it is lost when queued
@@ -309,7 +307,7 @@ import scala.util.matching.Regex
 
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
                 log.debug("Stream [{}]: Replay requested for [{}]", streamId, replayReq.entityIdOffset)
-                replayAll(replayReq.entityIdOffset, explicitReplay = true)
+                replayAll(replayReq.entityIdOffset)
 
               case StreamIn(StreamIn.Message.Init(_), _) =>
                 log.warning("Stream [{}]: Init request can only be used as the first message", logPrefix)
