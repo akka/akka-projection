@@ -97,6 +97,7 @@ import scala.util.matching.Regex
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
+    // FIXME should we switch to SLF4J and use trace instead of this verbose log flag?
     verbose: Boolean = false,
     val producerFilter: EventEnvelope[Any] => Boolean = _ => true)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
@@ -301,12 +302,12 @@ import scala.util.matching.Regex
             grab(inReq) match {
               case StreamIn(StreamIn.Message.Filter(filterReq), _) =>
                 if (log.isDebugEnabled)
-                  log.debug("Stream [{}]: Filter update requested [{}]", streamId, filterReq.criteria)
+                  log.debug("Stream [{}]: Filter update requested [{}]", logPrefix, filterReq.criteria)
                 updateFilter(filterReq.criteria)
                 replayFromFilterCriteria(filterReq.criteria)
 
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
-                log.debug("Stream [{}]: Replay requested for [{}]", streamId, replayReq.entityIdOffset)
+                log.debug("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.entityIdOffset)
                 replayAll(replayReq.entityIdOffset)
 
               case StreamIn(StreamIn.Message.Init(_), _) =>

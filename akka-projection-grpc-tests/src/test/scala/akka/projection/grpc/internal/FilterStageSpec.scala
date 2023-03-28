@@ -155,7 +155,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNoMessage()
     }
 
-    "apply envelope filter after declarative filters excludes" in new Setup {
+    "apply producer filter before consumer filters" in new Setup {
 
       val envFilterProbe = createTestProbe[Offset]()
       override def initProducerFilter = { envelope =>
@@ -173,7 +173,8 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.request(10)
       // each goes through the envelope filter
       envFilterProbe.receiveMessages(envelopes.size)
-      // only last should be let through, consumer will trigger replay if not first seqnr
+      // only last should be let through, consumer filter would allow all,
+      // (consumer will trigger replay if not first seqnr once the envelope gets there)
       outProbe.expectNext() shouldBe envelopes.last
     }
 

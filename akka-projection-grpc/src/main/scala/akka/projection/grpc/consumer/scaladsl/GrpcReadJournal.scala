@@ -279,8 +279,7 @@ final class GrpcReadJournal private (
         .collect {
           case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
             val protoCriteria = toProtoFilterCriteria(criteria)
-            if (log.isDebugEnabled())
-              log.debug2("{}: Filter updated [{}]", streamId, protoCriteria)
+            log.debug2("{}: Filter updated [{}]", streamId, protoCriteria)
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
           case ConsumerFilter.Replay(`streamId`, entityOffsets) =>
