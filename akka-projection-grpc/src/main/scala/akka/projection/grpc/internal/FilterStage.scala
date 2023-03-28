@@ -4,20 +4,13 @@
 
 package akka.projection.grpc.internal
 
-import java.time.Instant
-
-import scala.concurrent.ExecutionContext
-import scala.util.Failure
-import scala.util.Success
-import scala.util.Try
-import scala.util.matching.Regex
-
 import akka.NotUsed
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
-import akka.persistence.query.TimestampOffset
-import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.FilterCriteria
@@ -32,7 +25,12 @@ import akka.stream.stage.GraphStage
 import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
 import akka.stream.stage.OutHandler
-import akka.stream.stage.StageLogging
+import org.slf4j.LoggerFactory
+
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+import scala.util.matching.Regex
 
 /**
  * INTERNAL API
@@ -99,9 +97,12 @@ import akka.stream.stage.StageLogging
     entityType: String,
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
-    currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdQuery,
-    verbose: Boolean = false)
+    currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
+    val producerFilter: EventEnvelope[Any] => Boolean)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
+
+  private val log = LoggerFactory.getLogger(classOf[FilterStage])
+
   import FilterStage._
   private val inReq = Inlet[StreamIn]("in1")
   private val inEnv = Inlet[EventEnvelope[Any]]("in2")
@@ -111,7 +112,7 @@ import akka.stream.stage.StageLogging
   override val shape = BidiShape(inReq, outNotUsed, inEnv, outEnv)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) with StageLogging {
+    new GraphStageLogic(shape) {
 
       private var persistence: Persistence = _
 
@@ -134,8 +135,6 @@ import akka.stream.stage.StageLogging
         initFilter = Nil // for GC
       }
 
-      override protected def logSource: Class[_] = classOf[FilterStage]
-
       private def onReplay(replayEnv: ReplayEnvelope): Unit = {
         def replayCompleted(): Unit = {
           replayInProgress -= replayEnv.entityId
@@ -146,16 +145,17 @@ import akka.stream.stage.StageLogging
 
         replayEnv match {
           case ReplayEnvelope(entityId, Some(env)) =>
+            // the predicate to replay events from start for a given pid
+            // Note: we do not apply the producer filter here as that may be what triggered the replay
             if (filter.matches(env.persistenceId)) {
-              if (verbose)
-                log.debug(
-                  "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
-                  logPrefix,
-                  env.persistenceId,
-                  env.sequenceNr)
+              log.traceN(
+                "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
+                logPrefix,
+                env.persistenceId,
+                env.sequenceNr)
               push(outEnv, env)
             } else {
-              log.debug(
+              log.debugN(
                 "Stream [{}]: Filter out replayed event persistenceId [{}], seqNr [{}]. Cancel remaining replay.",
                 logPrefix,
                 env.persistenceId,
@@ -166,21 +166,20 @@ import akka.stream.stage.StageLogging
             }
 
           case ReplayEnvelope(entityId, None) =>
-            log.debug("Stream [{}]: Completed replay of entityId [{}]", logPrefix, entityId)
+            log.debug2("Stream [{}]: Completed replay of entityId [{}]", logPrefix, entityId)
             replayCompleted()
         }
       }
 
       private def tryPullReplay(entityId: String): Unit = {
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
-          if (verbose)
-            log.debug("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
-          implicit val ec: ExecutionContext = materializer.executionContext
-          val next = replayInProgress(entityId).pull().map(ReplayEnvelope(entityId, _))
+          log.trace2("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
+          val next =
+            replayInProgress(entityId).queue.pull().map(ReplayEnvelope(entityId, _))(ExecutionContexts.parasitic)
           next.value match {
             case None =>
               replayHasBeenPulled = true
-              next.onComplete(replayCallback.invoke)
+              next.onComplete(replayCallback.invoke)(ExecutionContexts.parasitic)
             case Some(Success(replayEnv)) =>
               onReplay(replayEnv)
             case Some(Failure(exc)) =>
@@ -215,8 +214,7 @@ import akka.stream.stage.StageLogging
                 acc
             }
         }
-        // FIXME might be too much logging if it includes many ids
-        log.debug("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
+        log.trace2("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
       }
 
       private def handledByThisStream(pid: PersistenceId): Boolean = {
@@ -256,29 +254,22 @@ import akka.stream.stage.StageLogging
         val fromSeqNr = entityOffset.seqNr
         val pid = PersistenceId(entityType, entityId)
         if (handledByThisStream(pid)) {
-          replayInProgress.get(entityId).foreach { queue =>
-            log.debug("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
-            queue.cancel()
+          replayInProgress.get(entityId).foreach { replay =>
+            log.debug2("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
+            replay.queue.cancel()
             replayInProgress -= entityId
           }
 
           if (replayInProgress.size < ReplayParallelism) {
-            log.debug("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
-            val slice = persistence.sliceForPersistenceId(pid.id)
+            log.debugN("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
             val queue =
               currentEventsByPersistenceIdQuery
-                .currentEventsByPersistenceId(pid.id, fromSeqNr, Long.MaxValue)
-                .map { env =>
-                  // FIXME "wrong" timestamp, we should probably define a new currentEventsByPersistenceId that matches eventsBySlices
-                  val offset =
-                    TimestampOffset(Instant.ofEpochMilli(env.timestamp), Map(env.persistenceId -> env.sequenceNr))
-                  EventEnvelope(offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp, entityType, slice)
-                }
+                .currentEventsByPersistenceIdTyped[Any](pid.id, fromSeqNr, Long.MaxValue)
                 .runWith(Sink.queue())(materializer)
             replayInProgress = replayInProgress.updated(entityId, queue)
             tryPullReplay(entityId)
           } else {
-            log.debug("Stream [{}]: Queueing replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
+            log.debugN("Stream [{}]: Queueing replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
             pendingReplayRequests = pendingReplayRequests.filterNot(_.entityId == entityId) :+ entityOffset
           }
         }
@@ -292,8 +283,7 @@ import akka.stream.stage.StageLogging
         }
 
         if (replayInProgress.isEmpty) {
-          if (verbose)
-            log.debug("Stream [{}]: Pull inEnv", logPrefix)
+          log.trace("Stream [{}]: Pull inEnv", logPrefix)
           pull(inEnv)
         } else {
           tryPullReplay(replayInProgress.head._1)
@@ -306,18 +296,20 @@ import akka.stream.stage.StageLogging
           override def onPush(): Unit = {
             grab(inReq) match {
               case StreamIn(StreamIn.Message.Filter(filterReq), _) =>
+                log.debug2("Stream [{}]: Filter update requested [{}]", logPrefix, filterReq.criteria)
                 updateFilter(filterReq.criteria)
                 replayFromFilterCriteria(filterReq.criteria)
 
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
+                log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.entityIdOffset)
                 replayAll(replayReq.entityIdOffset)
 
               case StreamIn(StreamIn.Message.Init(_), _) =>
-                log.warning("Stream [{}]: Init request can only be used as the first message", logPrefix)
+                log.warn("Stream [{}]: Init request can only be used as the first message", logPrefix)
                 throw new IllegalStateException("Init request can only be used as the first message")
 
               case StreamIn(other, _) =>
-                log.warning("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
+                log.warn2("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
             }
 
             pull(inReq)
@@ -331,12 +323,13 @@ import akka.stream.stage.StageLogging
             val env = grab(inEnv)
             val pid = env.persistenceId
 
-            if (filter.matches(pid)) {
-              if (verbose)
-                log.debug("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+            // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
+            // can never include them
+            if (producerFilter(env) && filter.matches(pid)) {
+              log.traceN("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               push(outEnv, env)
             } else {
-              log.debug("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+              log.debugN("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               pullInEnvOrReplay()
             }
           }
@@ -350,8 +343,7 @@ import akka.stream.stage.StageLogging
 
       setHandler(outEnv, new OutHandler {
         override def onPull(): Unit = {
-          if (verbose)
-            log.debug("Stream [{}]: onPull outEnv", logPrefix)
+          log.trace("Stream [{}]: onPull outEnv", logPrefix)
           pullInEnvOrReplay()
         }
       })

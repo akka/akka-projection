@@ -5,13 +5,6 @@
 package akka.projection.grpc.internal
 
 import akka.Done
-import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
-
-import scala.collection.immutable
-import scala.concurrent.Future
-import scala.concurrent.Promise
-
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -20,12 +13,11 @@ import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.persistence.Persistence
-import akka.persistence.query
 import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
-import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.EventTimestampRequest
@@ -49,6 +41,12 @@ import com.typesafe.config.ConfigFactory
 import io.grpc.Status
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
+import scala.collection.immutable
+import scala.concurrent.Future
+import scala.concurrent.Promise
 
 object EventProducerServiceSpec {
   val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
@@ -114,11 +112,12 @@ class EventProducerServiceSpec
   val entityType2 = nextEntityType()
   val streamId2 = "stream_id_" + entityType2
 
-  private val notUsedCurrentEventsByPersistenceIdQuery = new CurrentEventsByPersistenceIdQuery {
-    override def currentEventsByPersistenceId(
+  private val notUsedCurrentEventsByPersistenceIdQuery = new CurrentEventsByPersistenceIdTypedQuery {
+
+    override def currentEventsByPersistenceIdTyped[Event](
         persistenceId: String,
         fromSequenceNr: Long,
-        toSequenceNr: Long): Source[query.EventEnvelope, NotUsed] =
+        toSequenceNr: Long): Source[EventEnvelope[Event], NotUsed] =
       throw new IllegalStateException("Unexpected use of currentEventsByPersistenceId")
   }
   private val notUsedCurrentEventsByPersistenceIdQueries =

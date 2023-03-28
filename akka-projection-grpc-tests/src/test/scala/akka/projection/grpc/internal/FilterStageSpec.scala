@@ -4,20 +4,14 @@
 
 package akka.projection.grpc.internal
 
-import java.time.Instant
-import java.util.concurrent.atomic.AtomicInteger
-
-import scala.concurrent.Future
-import scala.concurrent.Promise
-
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.Persistence
-import akka.persistence.query
+import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
-import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.ExcludeEntityIds
@@ -37,6 +31,11 @@ import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
 
+import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
+import scala.concurrent.Future
+import scala.concurrent.Promise
+
 class FilterStageSpec extends ScalaTestWithActorTestKit("""
     akka.loglevel = DEBUG
     """) with AnyWordSpecLike with LogCapturing {
@@ -45,7 +44,11 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
   private val persistence = Persistence(system)
 
-  private def createEnvelope(pid: PersistenceId, seqNr: Long, evt: String): EventEnvelope[Any] = {
+  private def createEnvelope(
+      pid: PersistenceId,
+      seqNr: Long,
+      evt: String,
+      tags: Set[String] = Set.empty): EventEnvelope[Any] = {
     val now = Instant.now()
     EventEnvelope(
       TimestampOffset(Instant.now, Map(pid.id -> seqNr)),
@@ -54,7 +57,10 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       evt,
       now.toEpochMilli,
       pid.entityTypeHint,
-      persistence.sliceForPersistenceId(pid.id))
+      persistence.sliceForPersistenceId(pid.id),
+      filtered = false,
+      source = "",
+      tags = tags)
   }
 
   private val envelopes = Vector(
@@ -67,30 +73,34 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
     def initFilter: Iterable[FilterCriteria] = Nil
 
+    def initProducerFilter: EventEnvelope[Any] => Boolean = _ => true
+
     def envelopesFor(entityId: String): Vector[EventEnvelope[Any]] =
       allEnvelopes.filter(_.persistenceId == PersistenceId(entityType, entityId).id)
 
     private val eventsByPersistenceIdConcurrency = new AtomicInteger()
 
     private def testCurrentEventsByPersistenceIdQuery(allEnvelopes: Vector[EventEnvelope[Any]]) =
-      new CurrentEventsByPersistenceIdQuery {
-        override def currentEventsByPersistenceId(
+      new CurrentEventsByPersistenceIdTypedQuery {
+
+        override def currentEventsByPersistenceIdTyped[Event](
             persistenceId: String,
             fromSequenceNr: Long,
-            toSequenceNr: Long): Source[query.EventEnvelope, NotUsed] = {
+            toSequenceNr: Long): Source[EventEnvelope[Event], NotUsed] = {
           val filtered = allEnvelopes
             .filter(env => env.persistenceId == persistenceId && env.sequenceNr >= fromSequenceNr)
             .sortBy(_.sequenceNr)
+            .map(_.asInstanceOf[EventEnvelope[Event]])
           // simulate initial delay for more realistic testing, and concurrency check
           import akka.pattern.{ after => futureAfter }
+
           import scala.concurrent.duration._
           if (eventsByPersistenceIdConcurrency.incrementAndGet() > FilterStage.ReplayParallelism)
             throw new IllegalStateException("Unexpected, too many concurrent calls to currentEventsByPersistenceId")
           Source
             .futureSource(futureAfter(10.millis) {
               eventsByPersistenceIdConcurrency.decrementAndGet()
-              Future.successful(Source(filtered.map(env =>
-                query.EventEnvelope(env.offset, env.persistenceId, env.sequenceNr, env.event, env.timestamp))))
+              Future.successful(Source(filtered))
             })
             .mapMaterializedValue(_ => NotUsed)
         }
@@ -108,7 +118,8 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             entityType,
             0 until persistence.numberOfSlices,
             initFilter,
-            testCurrentEventsByPersistenceIdQuery(allEnvelopes)))
+            testCurrentEventsByPersistenceIdQuery(allEnvelopes),
+            producerFilter = initProducerFilter))
         .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
     private val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
 
@@ -142,6 +153,29 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       // b filtered out
       outProbe.expectNext(envelopesFor("c").head)
       outProbe.expectNoMessage()
+    }
+
+    "apply producer filter before consumer filters" in new Setup {
+
+      val envFilterProbe = createTestProbe[Offset]()
+      override def initProducerFilter = { envelope =>
+        envFilterProbe.ref ! envelope.offset
+        envelope.tags.contains("replicate-it")
+      }
+
+      val envelopes = Vector(
+        createEnvelope(PersistenceId(entityType, "a"), 1, "a1"),
+        createEnvelope(PersistenceId(entityType, "b"), 1, "b1"),
+        createEnvelope(PersistenceId(entityType, "c"), 1, "c1"),
+        createEnvelope(PersistenceId(entityType, "a"), 1, "a2", tags = Set("replicate-it")))
+
+      envelopes.foreach(envPublisher.sendNext)
+      outProbe.request(10)
+      // each goes through the envelope filter
+      envFilterProbe.receiveMessages(envelopes.size)
+      // only last should be let through, consumer filter would allow all,
+      // (consumer will trigger replay if not first seqnr once the envelope gets there)
+      outProbe.expectNext() shouldBe envelopes.last
     }
 
     "replay from IncludeEntityIds in FilterReq" in new Setup {

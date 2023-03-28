@@ -6,16 +6,13 @@ package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
-import akka.actor.typed.Scheduler
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.ApiMayChange
@@ -61,6 +58,7 @@ import akka.projection.grpc.internal.proto.RemoveIncludeEntityIds
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
+import akka.projection.internal.CanTriggerReplay
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
@@ -149,7 +147,8 @@ final class GrpcReadJournal private (
     extends ReadJournal
     with EventsBySliceQuery
     with EventTimestampQuery
-    with LoadEventQuery {
+    with LoadEventQuery
+    with CanTriggerReplay {
   import GrpcReadJournal.log
 
   // When created as delegate in javadsl from `GrpcReadJournalProvider`.
@@ -168,13 +167,20 @@ final class GrpcReadJournal private (
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
     this(system, config, cfgPath, ProtoAnySerialization.Prefer.Scala)
 
-  private implicit val typedSystem: ClassicActorSystemProvider = system.toTyped
+  private implicit val typedSystem: akka.actor.typed.ActorSystem[_] = system.toTyped
   private val persistenceExt = Persistence(system)
+
+  lazy val consumerFilter = ConsumerFilter(typedSystem)
 
   private val client = EventProducerServiceClient(clientSettings)
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
     case Some(meta) => meta.asList
     case None       => Seq.empty
+  }
+
+  @InternalApi
+  private[akka] override def triggerReplay(entityId: String, fromSeqNr: Long): Unit = {
+    consumerFilter.ref ! ConsumerFilter.Replay(streamId, Set(ConsumerFilter.EntityIdOffset(entityId, fromSeqNr)))
   }
 
   private def addRequestHeaders[Req, Res](
@@ -250,8 +256,6 @@ final class GrpcReadJournal private (
         case _                  => offset
       })
 
-    val typedSystem = system.toTyped
-
     val protoOffset =
       offset match {
         case o: TimestampOffset =>
@@ -267,8 +271,6 @@ final class GrpcReadJournal private (
           throw new IllegalArgumentException(s"Expected TimestampOffset or NoOffset, but got [$offset]")
       }
 
-    val consumerFilter = ConsumerFilter(typedSystem)
-
     def inReqSource(initCriteria: immutable.Seq[ConsumerFilter.FilterCriteria]): Source[StreamIn, NotUsed] =
       Source
         .actorRef[ConsumerFilter.SubscriberCommand](
@@ -279,9 +281,14 @@ final class GrpcReadJournal private (
         .collect {
           case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
             val protoCriteria = toProtoFilterCriteria(criteria)
+            if (log.isDebugEnabled)
+              log.debug2("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
           case ConsumerFilter.Replay(`streamId`, entityOffsets) =>
+            if (log.isDebugEnabled())
+              log.debug2("{}: Replay triggered for [{}]", streamId, entityOffsets.mkString(", "))
+
             val protoEntityOffsets = entityOffsets.map {
               case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
             }.toVector
@@ -295,7 +302,6 @@ final class GrpcReadJournal private (
     val initFilter = {
       import akka.actor.typed.scaladsl.AskPattern._
       import scala.concurrent.duration._
-      implicit val scheduler: Scheduler = typedSystem.scheduler
       implicit val askTimeout: Timeout = 10.seconds // FIXME config
       consumerFilter.ref.ask[ConsumerFilter.CurrentFilter](ConsumerFilter.GetFilter(streamId, _))
     }

@@ -14,6 +14,7 @@ import akka.grpc.scaladsl.Metadata
 import akka.persistence.query.NoOffset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
@@ -33,6 +34,7 @@ import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
+import akka.stream.scaladsl.BidiFlow
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
@@ -40,13 +42,10 @@ import com.google.protobuf.timestamp.Timestamp
 import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.time.Instant
 
+import java.time.Instant
 import scala.concurrent.Future
 import scala.util.Success
-
-import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
-import akka.stream.scaladsl.BidiFlow
 
 /**
  * INTERNAL API
@@ -63,7 +62,7 @@ import akka.stream.scaladsl.BidiFlow
 @InternalApi private[akka] class EventProducerServiceImpl(
     system: ActorSystem[_],
     eventsBySlicesQueriesPerStreamId: Map[String, EventsBySliceQuery],
-    currentEventsByPersistenceIdQueriesPerStreamId: Map[String, CurrentEventsByPersistenceIdQuery],
+    currentEventsByPersistenceIdQueriesPerStreamId: Map[String, CurrentEventsByPersistenceIdTypedQuery],
     sources: Set[EventProducer.EventProducerSource],
     interceptor: Option[EventProducerInterceptor])
     extends EventProducerServicePowerApi {
@@ -160,7 +159,8 @@ import akka.stream.scaladsl.BidiFlow
               producerSource.entityType,
               init.sliceMin to init.sliceMax,
               init.filter,
-              currentEventsByPersistenceIdQueriesPerStreamId(init.streamId)))
+              currentEventsByPersistenceIdQueriesPerStreamId(init.streamId),
+              producerFilter = producerSource.producerFilter))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =

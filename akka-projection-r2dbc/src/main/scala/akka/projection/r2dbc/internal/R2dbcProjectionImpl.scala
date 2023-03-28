@@ -4,12 +4,6 @@
 
 package akka.projection.r2dbc.internal
 
-import java.util.concurrent.atomic.AtomicLong
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
-import scala.util.control.NonFatal
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
@@ -24,6 +18,7 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult
+import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.HandlerRecoveryStrategy.Internal.RetryAndSkip
@@ -37,6 +32,7 @@ import akka.projection.StatusObserver
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
+import akka.projection.internal.CanTriggerReplay
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
@@ -62,14 +58,21 @@ import io.r2dbc.spi.ConnectionFactory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import java.util.concurrent.atomic.AtomicLong
 import scala.annotation.nowarn
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 /**
  * INTERNAL API
  */
 @InternalApi
 private[projection] object R2dbcProjectionImpl {
-  import akka.persistence.r2dbc.internal.EnvelopeOrigin.{ fromBacktracking, isFilteredEvent }
+  import akka.persistence.r2dbc.internal.EnvelopeOrigin.fromBacktracking
+  import akka.persistence.r2dbc.internal.EnvelopeOrigin.isFilteredEvent
 
   val log: Logger = LoggerFactory.getLogger(classOf[R2dbcProjectionImpl[_, _]])
 
@@ -345,9 +348,8 @@ private[projection] object R2dbcProjectionImpl {
       handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _],
       offsetStore: R2dbcOffsetStore,
       settings: R2dbcProjectionSettings)(
-      implicit
-      ec: ExecutionContext): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
-
+      implicit system: ActorSystem[_]): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
+    implicit val ec: ExecutionContext = system.executionContext
     FlowWithContext[Envelope, ProjectionContext]
       .mapAsync(1) { env =>
         offsetStore
@@ -362,8 +364,14 @@ private[projection] object R2dbcProjectionImpl {
                 Some(loadedEnvelope)
               }
             } else {
+              triggerReplayIfPossible(sourceProvider, env)
               Future.successful(None)
             }
+          }
+          .recover {
+            case ex: IllegalStateException =>
+              if (triggerReplayIfPossible(sourceProvider, env)) None
+              else throw ex
           }
       }
       .collect {
@@ -371,6 +379,24 @@ private[projection] object R2dbcProjectionImpl {
           env
       }
       .via(handler)
+  }
+
+  private def triggerReplayIfPossible[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
+      envelope: Envelope): Boolean = {
+    envelope match {
+      case typedEnv: EventEnvelope[Any @unchecked] if typedEnv.sequenceNr > 1 =>
+        sourceProvider match {
+          case provider: CanTriggerReplay =>
+            val entityId = PersistenceId.extractEntityId(typedEnv.persistenceId)
+            provider.triggerReplay(entityId, 1L)
+            true
+          case _ =>
+            false // no replay support for other source providers
+        }
+      case _ =>
+        false // no replay support for non typed envelopes
+    }
   }
 
   @nowarn("msg=never used")

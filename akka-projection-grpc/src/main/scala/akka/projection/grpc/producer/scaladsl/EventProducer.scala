@@ -6,7 +6,6 @@ package akka.projection.grpc.producer.scaladsl
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -14,9 +13,9 @@ import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.PersistenceQuery
-import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
@@ -29,20 +28,43 @@ import akka.projection.grpc.producer.javadsl.{ Transformation => JTransformation
 @ApiMayChange
 object EventProducer {
 
+  object EventProducerSource {
+    def apply(
+        entityType: String,
+        streamId: String,
+        transformation: Transformation,
+        settings: EventProducerSettings): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, _ => true)
+
+    def apply(
+        entityType: String,
+        streamId: String,
+        transformation: Transformation,
+        settings: EventProducerSettings,
+        producerFilter: EventEnvelope[Any] => Boolean): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter)
+
+  }
+
   /**
-   * @param entityType The internal entity type name
-   * @param streamId The public, logical, stream id that consumers use to consume this source
+   * @param entityType     The internal entity type name
+   * @param streamId       The public, logical, stream id that consumers use to consume this source
    * @param transformation Transformations for turning the internal events to public message types
-   * @param settings The event producer settings used (can be shared for multiple sources)
+   * @param settings       The event producer settings used (can be shared for multiple sources)
    */
   @ApiMayChange
-  final case class EventProducerSource(
-      entityType: String,
-      streamId: String,
-      transformation: Transformation,
-      settings: EventProducerSettings) {
+  final class EventProducerSource private (
+      val entityType: String,
+      val streamId: String,
+      val transformation: Transformation,
+      val settings: EventProducerSettings,
+      val producerFilter: EventEnvelope[Any] => Boolean) {
     require(entityType.nonEmpty, "Stream id must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
+
+    def withProducerFilter(producerFilter: EventEnvelope[Any] => Boolean): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter)
+
   }
 
   @ApiMayChange
@@ -163,9 +185,9 @@ object EventProducer {
    */
   private[akka] def currentEventsByPersistenceIdQueriesForStreamIds(
       sources: Set[EventProducerSource],
-      system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdQuery] = {
+      system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdTypedQuery] = {
     queriesForStreamIds(sources, system).map {
-      case (streamId, q: CurrentEventsByPersistenceIdQuery) => streamId -> q
+      case (streamId, q: CurrentEventsByPersistenceIdTypedQuery) => streamId -> q
       case (_, other) =>
         throw new IllegalArgumentException(
           s"Expected CurrentEventsByPersistenceIdQuery but was [${other.getClass.getName}]")
