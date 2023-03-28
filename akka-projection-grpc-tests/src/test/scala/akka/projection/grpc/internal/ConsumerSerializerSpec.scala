@@ -52,7 +52,8 @@ class ConsumerSerializerSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
         .updated(filter2)(node2),
       "empty after updates ConsumerFilterStore.State" -> DdataConsumerFilterStore.State.empty
         .updated(filter3)(node1)
-        .updated(filter4)(node1)).foreach {
+        .updated(filter4)(node1),
+      "ConsumerFilterKey" -> DdataConsumerFilterStore.ConsumerFilterKey("abc")).foreach {
       case (scenario, item) =>
         s"resolve serializer for $scenario" in {
           val serializer = SerializationExtension(classicSystem)

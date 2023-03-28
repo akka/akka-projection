@@ -345,8 +345,6 @@ import org.slf4j.LoggerFactory
   }
 
   final case class ConsumerFilterKey(_id: String) extends Key[State](_id) {
-    // FIXME serialization
-
     override def withId(newId: Key.KeyId): ConsumerFilterKey =
       ConsumerFilterKey(newId)
   }

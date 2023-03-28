@@ -12,6 +12,7 @@ import java.util.zip.GZIPOutputStream
 import scala.annotation.tailrec
 
 import akka.actor.ExtendedActorSystem
+import akka.annotation.InternalApi
 import akka.cluster.ddata.ORMap
 import akka.cluster.ddata.ORSet
 import akka.cluster.ddata.protobuf.ReplicatedDataSerializer
@@ -22,27 +23,37 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.UnsafeByteOperations
 import scalapb.GeneratedMessage
 
-class ConsumerSerializer(val system: ExtendedActorSystem) extends SerializerWithStringManifest with BaseSerializer {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class ConsumerSerializer(val system: ExtendedActorSystem)
+    extends SerializerWithStringManifest
+    with BaseSerializer {
   private val ConsumerFilterStoreStateManifest = "A"
+  private val ConsumerFilterKeyManifest = "B"
 
   private final val CompressionBufferSize = 1024 * 4
 
   private val replicatedDataSerializer = new ReplicatedDataSerializer(system)
 
   override def manifest(obj: AnyRef): String = obj match {
-    case _: DdataConsumerFilterStore.State => ConsumerFilterStoreStateManifest
+    case _: DdataConsumerFilterStore.State             => ConsumerFilterStoreStateManifest
+    case _: DdataConsumerFilterStore.ConsumerFilterKey => ConsumerFilterKeyManifest
     case _ =>
       throw new IllegalArgumentException(s"Can't serialize object of type ${obj.getClass} in [${getClass.getName}]")
   }
 
   override def toBinary(obj: AnyRef): Array[Byte] = obj match {
-    case state: DdataConsumerFilterStore.State => compress(stateToProto(state))
+    case state: DdataConsumerFilterStore.State           => compress(stateToProto(state))
+    case key: DdataConsumerFilterStore.ConsumerFilterKey => replicatedDataSerializer.keyIdToBinary(key.id)
     case _ =>
       throw new IllegalArgumentException(s"Can't serialize object of type ${obj.getClass} in [${getClass.getName}]")
   }
 
   override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = manifest match {
     case ConsumerFilterStoreStateManifest => stateFromBinary(decompress(bytes))
+    case ConsumerFilterKeyManifest =>
+      DdataConsumerFilterStore.ConsumerFilterKey(replicatedDataSerializer.keyIdFromBinary(bytes))
     case _ =>
       throw new NotSerializableException(
         s"Unimplemented deserialization of message with manifest [$manifest] in [${getClass.getName}]")
