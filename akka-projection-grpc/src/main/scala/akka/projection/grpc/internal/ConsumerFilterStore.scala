@@ -20,7 +20,6 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
-import akka.actor.typed.scaladsl.LoggerOps
 
 /**
  * INTERNAL API
