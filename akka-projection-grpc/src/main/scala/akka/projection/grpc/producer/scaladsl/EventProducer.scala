@@ -28,22 +28,43 @@ import akka.projection.grpc.producer.javadsl.{ Transformation => JTransformation
 @ApiMayChange
 object EventProducer {
 
+  object EventProducerSource {
+    def apply(
+        entityType: String,
+        streamId: String,
+        transformation: Transformation,
+        settings: EventProducerSettings): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, _ => true)
+
+    def apply(
+        entityType: String,
+        streamId: String,
+        transformation: Transformation,
+        settings: EventProducerSettings,
+        producerFilter: EventEnvelope[Any] => Boolean): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter)
+
+  }
+
   /**
-   * @param entityType The internal entity type name
-   * @param streamId The public, logical, stream id that consumers use to consume this source
+   * @param entityType     The internal entity type name
+   * @param streamId       The public, logical, stream id that consumers use to consume this source
    * @param transformation Transformations for turning the internal events to public message types
-   * @param settings The event producer settings used (can be shared for multiple sources)
+   * @param settings       The event producer settings used (can be shared for multiple sources)
    */
   @ApiMayChange
-  final case class EventProducerSource(
-      entityType: String,
-      streamId: String,
-      transformation: Transformation,
-      settings: EventProducerSettings,
-      // FIXME make this none-case-class with factory/constructor overloads and whatnot
-      producerFilter: EventEnvelope[Any] => Boolean = _ => true) {
+  final class EventProducerSource private (
+      val entityType: String,
+      val streamId: String,
+      val transformation: Transformation,
+      val settings: EventProducerSettings,
+      val producerFilter: EventEnvelope[Any] => Boolean) {
     require(entityType.nonEmpty, "Stream id must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
+
+    def withProducerFilter(producerFilter: EventEnvelope[Any] => Boolean): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter)
+
   }
 
   @ApiMayChange
