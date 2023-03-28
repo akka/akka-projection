@@ -21,6 +21,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.InternalApi
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
+import akka.actor.typed.scaladsl.LoggerOps
 
 /**
  * INTERNAL API
@@ -38,7 +39,7 @@ import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
       .provider
       .getClass
       .getName == "akka.cluster.ClusterActorRefProvider" &&
-    system.dynamicAccess.getClassFor("akka.cluster.ddata.typed.scaladsl.DistributedData").isSuccess
+    system.dynamicAccess.getClassFor[Any]("akka.cluster.ddata.typed.scaladsl.DistributedData").isSuccess
   }
 
   def apply(
@@ -102,7 +103,7 @@ import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
     if (!storeExt.filtersByStreamId.replace(streamId, old, filterCriteria))
       throw new ConcurrentModificationException(s"Unexpected concurrent update of streamId [$streamId]")
     // FIXME this might be too much logging when many ids
-    context.log.debug("Updated filter for streamId [{}] to [{}]", streamId, filterCriteria)
+    context.log.debug2("Updated filter for streamId [{}] to [{}]", streamId, filterCriteria)
   }
 
   def behavior(): Behavior[Command] = {

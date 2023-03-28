@@ -23,7 +23,7 @@ import com.typesafe.config.Config
 import java.time.Duration
 import java.util.Optional
 import java.util.{ Set => JSet }
-import scala.jdk.CollectionConverters._
+import akka.util.ccompat.JavaConverters._
 import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
 
 object ReplicationSettings {
