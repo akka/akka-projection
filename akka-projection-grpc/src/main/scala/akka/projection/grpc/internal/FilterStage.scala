@@ -6,6 +6,7 @@ package akka.projection.grpc.internal
 
 import akka.NotUsed
 import akka.annotation.InternalApi
+import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
@@ -177,11 +178,11 @@ import scala.util.matching.Regex
           if (verbose)
             log.debug("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
           val next =
-            replayInProgress(entityId).queue.pull().map(ReplayEnvelope(entityId, _))(ExecutionContext.parasitic)
+            replayInProgress(entityId).queue.pull().map(ReplayEnvelope(entityId, _))(ExecutionContexts.parasitic)
           next.value match {
             case None =>
               replayHasBeenPulled = true
-              next.onComplete(replayCallback.invoke)(ExecutionContext.parasitic)
+              next.onComplete(replayCallback.invoke)(ExecutionContexts.parasitic)
             case Some(Success(replayEnv)) =>
               onReplay(replayEnv)
             case Some(Failure(exc)) =>
