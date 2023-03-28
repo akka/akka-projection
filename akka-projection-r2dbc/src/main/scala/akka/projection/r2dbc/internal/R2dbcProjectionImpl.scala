@@ -18,7 +18,6 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult
-import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.HandlerRecoveryStrategy.Internal.RetryAndSkip
@@ -29,10 +28,10 @@ import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.RunningProjectionManagement
 import akka.projection.StatusObserver
-import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
+import akka.projection.internal.CanTriggerReplay
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
@@ -365,16 +364,14 @@ private[projection] object R2dbcProjectionImpl {
               }
             } else {
               // FIXME do we need the same for all projection handler variants?
-              // FIXME not accepted may be that a producer filter decided to start including events,
-              //       how do we know for sure and what offset to start from?
               env match {
-                case ee: EventEnvelope[_] if ee.sequenceNr > 1L =>
-                  log.debug("Triggering replay for unexpected offset envelope: [{}]", env)
-                  val pid = PersistenceId.ofUniqueId(ee.persistenceId)
-                  ConsumerFilter(system).ref ! ConsumerFilter.Replay(
-                    "producer-filter-e2e-test", // FIXME where do we get stream id from?
-                    Set(ConsumerFilter.EntityIdOffset(pid.entityId, 1L)))
+                case typedEnv: EventEnvelope[Any @unchecked] if typedEnv.sequenceNr > 1 =>
+                  sourceProvider match {
+                    case provider: CanTriggerReplay => provider.triggerReplay(typedEnv)
+                    case _                          => // no replay support for other source providers
+                  }
                 case _ =>
+                // no replay support for non typed envelopes
               }
               Future.successful(None)
             }

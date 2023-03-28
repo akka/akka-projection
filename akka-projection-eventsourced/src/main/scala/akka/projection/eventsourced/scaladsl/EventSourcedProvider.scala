@@ -5,22 +5,22 @@
 package akka.projection.eventsourced.scaladsl
 
 import java.time.Instant
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.EventsByTagQuery
+import akka.persistence.query.typed
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
 import akka.projection.eventsourced.EventEnvelope
+import akka.projection.internal.CanTriggerReplay
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
@@ -79,7 +79,15 @@ object EventSourcedProvider {
       entityType: String,
       minSlice: Int,
       maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
-    new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
+    eventsBySlicesQuery match {
+      case query: EventsBySliceQuery with CanTriggerReplay =>
+        new EventsBySlicesSourceProvider[Event](eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
+          with CanTriggerReplay {
+          override def triggerReplay(envelope: typed.EventEnvelope[Any]): Unit = query.triggerReplay(envelope)
+        }
+      case _ =>
+        new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
+    }
   }
 
   def sliceForPersistenceId(system: ActorSystem[_], readJournalPluginId: String, persistenceId: String): Int =

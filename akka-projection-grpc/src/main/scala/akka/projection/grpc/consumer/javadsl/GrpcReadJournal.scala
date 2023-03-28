@@ -8,10 +8,8 @@ import java.time.Instant
 import java.util
 import java.util.Optional
 import java.util.concurrent.CompletionStage
-
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -28,6 +26,7 @@ import akka.persistence.query.typed.javadsl.LoadEventQuery
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.internal.ProtoAnySerialization
+import akka.projection.internal.CanTriggerReplay
 import akka.stream.javadsl.Source
 import com.google.protobuf.Descriptors
 
@@ -70,7 +69,8 @@ class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     extends ReadJournal
     with EventsBySliceQuery
     with EventTimestampQuery
-    with LoadEventQuery {
+    with LoadEventQuery
+    with CanTriggerReplay {
 
   /**
    * The identifier of the stream to consume, which is exposed by the producing/publishing side.
@@ -78,6 +78,8 @@ class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
    */
   def streamId(): String =
     delegate.streamId
+
+  override def triggerReplay(envelope: EventEnvelope[Any]): Unit = delegate.triggerReplay(envelope)
 
   override def eventsBySlices[Event](
       entityType: String,
