@@ -222,7 +222,8 @@ import scala.util.Success
             offset = Some(protoOffset(env)),
             payload = Some(protoEvent),
             metadata = metadata,
-            source = env.source)
+            source = env.source,
+            tags = env.tags.toSeq)
         }
         mappedFuture.value match {
           case Some(Success(Some(transformedEvent))) => Future.successful(Some(toEvent(transformedEvent)))
@@ -241,7 +242,8 @@ import scala.util.Success
               slice = env.slice,
               offset = Some(protoOffset(env)),
               payload = None,
-              source = env.source)))
+              source = env.source,
+              tags = env.tags.toSeq)))
     }
   }
 

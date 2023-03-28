@@ -402,7 +402,8 @@ final class GrpcReadJournal private (
       PersistenceId.extractEntityType(event.persistenceId),
       event.slice,
       filtered = false,
-      source = event.source)
+      source = event.source,
+      tags = event.tags.toSet)
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {

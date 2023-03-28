@@ -150,7 +150,12 @@ class EventProducerServiceSpec
     probe
   }
 
-  private def createEnvelope(streamId: String, pid: PersistenceId, seqNr: Long, evt: String): EventEnvelope[String] = {
+  private def createEnvelope(
+      streamId: String,
+      pid: PersistenceId,
+      seqNr: Long,
+      evt: String,
+      tags: Set[String] = Set.empty): EventEnvelope[String] = {
     val now = Instant.now()
     EventEnvelope(
       TimestampOffset(Instant.now, Map(pid.id -> seqNr)),
@@ -159,7 +164,10 @@ class EventProducerServiceSpec
       evt,
       now.toEpochMilli,
       pid.entityTypeHint,
-      queries(streamId).sliceForPersistenceId(pid.id))
+      queries(streamId).sliceForPersistenceId(pid.id),
+      filtered = false,
+      source = "",
+      tags)
   }
 
   "EventProducerService" must {
@@ -177,7 +185,7 @@ class EventProducerServiceSpec
 
       val env1 = createEnvelope(streamId1, nextPid(entityType1), 1L, "e-1")
       testPublisher.sendNext(env1)
-      val env2 = createEnvelope(streamId1, nextPid(entityType1), 2L, "e-2")
+      val env2 = createEnvelope(streamId1, nextPid(entityType1), 2L, "e-2", tags = Set("tag-a", "tag-b"))
       testPublisher.sendNext(env2)
 
       val out1 = probe.expectNext()
@@ -187,6 +195,7 @@ class EventProducerServiceSpec
       val out2 = probe.expectNext()
       out2.getEvent.persistenceId shouldBe env2.persistenceId
       out2.getEvent.seqNr shouldBe env2.sequenceNr
+      out2.getEvent.tags.toSet shouldBe Set("tag-a", "tag-b")
     }
 
     "emit filtered events" in {

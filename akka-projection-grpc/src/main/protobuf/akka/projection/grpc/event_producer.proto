@@ -127,6 +127,7 @@ message Event {
   google.protobuf.Any payload = 5;
   string source = 6;
   google.protobuf.Any metadata = 7;
+  repeated string tags = 8;
 }
 
 
