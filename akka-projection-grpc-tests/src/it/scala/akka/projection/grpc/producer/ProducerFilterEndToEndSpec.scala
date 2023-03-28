@@ -167,6 +167,8 @@ class ProducerFilterEndToEndSpec(testContainerConf: TestContainerConf)
 
       val replicatedEvents = projectionProbe.receiveMessages(3, 5.seconds) // behind-current-time + some more time
       replicatedEvents.map(_.envelope.event) shouldBe Seq("a", "b", "c-replicate-it")
+      replicatedEvents.head.envelope.tags shouldBe Set.empty
+      replicatedEvents.last.envelope.tags shouldBe Set("replicate-it")
     }
 
   }
