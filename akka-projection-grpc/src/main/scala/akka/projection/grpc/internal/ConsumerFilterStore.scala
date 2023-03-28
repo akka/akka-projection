@@ -6,9 +6,7 @@ package akka.projection.grpc.internal
 
 import java.util.ConcurrentModificationException
 import java.util.concurrent.ConcurrentHashMap
-
 import scala.collection.immutable
-
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -18,6 +16,7 @@ import akka.actor.typed.ExtensionId
 import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria

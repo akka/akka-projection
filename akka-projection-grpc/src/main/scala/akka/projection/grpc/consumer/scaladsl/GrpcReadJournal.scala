@@ -287,7 +287,7 @@ final class GrpcReadJournal private (
 
           case ConsumerFilter.Replay(`streamId`, entityOffsets) =>
             if (log.isDebugEnabled())
-              log.debug("{}: Replay triggered for [{}]", streamId, entityOffsets.mkString(", "))
+              log.debug2("{}: Replay triggered for [{}]", streamId, entityOffsets.mkString(", "))
 
             val protoEntityOffsets = entityOffsets.map {
               case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
