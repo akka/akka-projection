@@ -363,18 +363,15 @@ private[projection] object R2dbcProjectionImpl {
                 Some(loadedEnvelope)
               }
             } else {
-              // FIXME do we need the same for all projection handler variants?
-              env match {
-                case typedEnv: EventEnvelope[Any @unchecked] if typedEnv.sequenceNr > 1 =>
-                  sourceProvider match {
-                    case provider: CanTriggerReplay => provider.triggerReplay(typedEnv)
-                    case _                          => // no replay support for other source providers
-                  }
-                case _ =>
-                // no replay support for non typed envelopes
-              }
+              triggerReplayIfPossible(sourceProvider, env)
               Future.successful(None)
             }
+          }
+          // FIXME not sure how to test this or if it is the right thing
+          .recover {
+            case ex: IllegalStateException if ex.getMessage.contains("Rejected envelope from backtracking") =>
+              if (triggerReplayIfPossible(sourceProvider, env)) None
+              else throw ex
           }
       }
       .collect {
@@ -382,6 +379,23 @@ private[projection] object R2dbcProjectionImpl {
           env
       }
       .via(handler)
+  }
+
+  private def triggerReplayIfPossible[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
+      envelope: Envelope): Boolean = {
+    envelope match {
+      case typedEnv: EventEnvelope[Any @unchecked] if typedEnv.sequenceNr > 1 =>
+        sourceProvider match {
+          case provider: CanTriggerReplay =>
+            provider.triggerReplay(typedEnv)
+            true
+          case _ =>
+            false // no replay support for other source providers
+        }
+      case _ =>
+        false // no replay support for non typed envelopes
+    }
   }
 
   @nowarn("msg=never used")
