@@ -24,7 +24,7 @@ import akka.stream.stage.GraphStage
 import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
 import akka.stream.stage.OutHandler
-import akka.stream.stage.StageLogging
+import org.slf4j.LoggerFactory
 
 import scala.util.Failure
 import scala.util.Success
@@ -97,10 +97,11 @@ import scala.util.matching.Regex
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
-    val producerFilter: EventEnvelope[Any] => Boolean,
-    // FIXME should we switch to SLF4J and use trace instead of this verbose log flag?
-    verbose: Boolean = false)
+    val producerFilter: EventEnvelope[Any] => Boolean)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
+
+  private val log = LoggerFactory.getLogger(classOf[FilterStage])
+
   import FilterStage._
   private val inReq = Inlet[StreamIn]("in1")
   private val inEnv = Inlet[EventEnvelope[Any]]("in2")
@@ -110,7 +111,7 @@ import scala.util.matching.Regex
   override val shape = BidiShape(inReq, outNotUsed, inEnv, outEnv)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) with StageLogging {
+    new GraphStageLogic(shape) {
 
       private var persistence: Persistence = _
 
@@ -133,8 +134,6 @@ import scala.util.matching.Regex
         initFilter = Nil // for GC
       }
 
-      override protected def logSource: Class[_] = classOf[FilterStage]
-
       private def onReplay(replayEnv: ReplayEnvelope): Unit = {
         def replayCompleted(): Unit = {
           replayInProgress -= replayEnv.entityId
@@ -148,12 +147,11 @@ import scala.util.matching.Regex
             // the predicate to replay events from start for a given pid
             // Note: we do not apply the producer filter here as that may be what triggered the replay
             if (filter.matches(env.persistenceId)) {
-              if (verbose)
-                log.debug(
-                  "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
-                  logPrefix,
-                  env.persistenceId,
-                  env.sequenceNr)
+              log.trace(
+                "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
+                logPrefix,
+                env.persistenceId,
+                env.sequenceNr)
               push(outEnv, env)
             } else {
               log.debug(
@@ -174,8 +172,7 @@ import scala.util.matching.Regex
 
       private def tryPullReplay(entityId: String): Unit = {
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
-          if (verbose)
-            log.debug("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
+          log.trace("Stream [{}]: tryPullReplay entityId [{}}]", logPrefix, entityId)
           val next =
             replayInProgress(entityId).queue.pull().map(ReplayEnvelope(entityId, _))(ExecutionContexts.parasitic)
           next.value match {
@@ -286,8 +283,7 @@ import scala.util.matching.Regex
         }
 
         if (replayInProgress.isEmpty) {
-          if (verbose)
-            log.debug("Stream [{}]: Pull inEnv", logPrefix)
+          log.trace("Stream [{}]: Pull inEnv", logPrefix)
           pull(inEnv)
         } else {
           tryPullReplay(replayInProgress.head._1)
@@ -310,11 +306,11 @@ import scala.util.matching.Regex
                 replayAll(replayReq.entityIdOffset)
 
               case StreamIn(StreamIn.Message.Init(_), _) =>
-                log.warning("Stream [{}]: Init request can only be used as the first message", logPrefix)
+                log.warn("Stream [{}]: Init request can only be used as the first message", logPrefix)
                 throw new IllegalStateException("Init request can only be used as the first message")
 
               case StreamIn(other, _) =>
-                log.warning("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
+                log.warn("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
             }
 
             pull(inReq)
@@ -331,8 +327,7 @@ import scala.util.matching.Regex
             // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
             // can never include them
             if (producerFilter(env) && filter.matches(pid)) {
-              if (verbose)
-                log.debug("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+              log.trace("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               push(outEnv, env)
             } else {
               log.debug("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
@@ -349,8 +344,7 @@ import scala.util.matching.Regex
 
       setHandler(outEnv, new OutHandler {
         override def onPull(): Unit = {
-          if (verbose)
-            log.debug("Stream [{}]: onPull outEnv", logPrefix)
+          log.trace("Stream [{}]: onPull outEnv", logPrefix)
           pullInEnvOrReplay()
         }
       })

@@ -119,7 +119,6 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             0 until persistence.numberOfSlices,
             initFilter,
             testCurrentEventsByPersistenceIdQuery(allEnvelopes),
-            verbose = true,
             producerFilter = initProducerFilter))
         .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
     private val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
