@@ -111,6 +111,7 @@ import akka.util.Timeout
                 null // ignore, it will be ok on next update anyway
             }
 
+          require(!ConsumerFilter.hasRemoveCriteria(initCriteria), "Unexpected RemoveCriteria in a initCriteria")
           behavior(subscribers.updated(subscriber, initCriteria), stores.updated(streamId, store))
 
         case cmd: UpdateFilter =>

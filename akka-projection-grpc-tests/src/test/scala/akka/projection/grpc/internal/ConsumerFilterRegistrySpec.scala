@@ -99,7 +99,7 @@ class ConsumerFilterRegistrySpec
 
       // subscriber2 starts from filter2
       val subscriberProbe2 = createTestProbe[ConsumerFilter.SubscriberCommand]()
-      registry ! ConsumerFilter.Subscribe(streamId, filter2, subscriberProbe2.ref)
+      registry ! ConsumerFilter.Subscribe(streamId, ConsumerFilter.mergeFilter(filter1, filter2), subscriberProbe2.ref)
       subscriberProbe2.expectNoMessage()
 
       val filter3 = Vector(ConsumerFilter.ExcludeEntityIds(Set("d")))
