@@ -165,7 +165,7 @@ class ProducerFilterEndToEndSpec(testContainerConf: TestContainerConf)
       entity1.tell(TestEntity.Command("c-replicate-it", ackProbe.ref))
       ackProbe.receiveMessage()
 
-      val replicatedEvents = projectionProbe.receiveMessages(3, 5.seconds) // FIXME default 3s is too tight here (why?)
+      val replicatedEvents = projectionProbe.receiveMessages(3, 5.seconds) // behind-current-time + some more time
       replicatedEvents.map(_.envelope.event) shouldBe Seq("a", "b", "c-replicate-it")
     }
 

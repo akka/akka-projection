@@ -14,6 +14,7 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcClientSettings
 import akka.japi.Pair
@@ -79,7 +80,9 @@ class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
   def streamId(): String =
     delegate.streamId
 
-  override def triggerReplay(envelope: EventEnvelope[Any]): Unit = delegate.triggerReplay(envelope)
+  @InternalApi
+  private[akka] override def triggerReplay(entityId: String, fromSeqNr: Long): Unit =
+    delegate.triggerReplay(entityId, fromSeqNr)
 
   override def eventsBySlices[Event](
       entityType: String,

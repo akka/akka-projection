@@ -20,7 +20,6 @@ import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.javadsl.EventsByTagQuery
-import akka.persistence.query.typed
 import akka.persistence.query.typed.javadsl.EventTimestampQuery
 import akka.persistence.query.typed.javadsl.EventsBySliceQuery
 import akka.persistence.query.typed.javadsl.LoadEventQuery
@@ -96,7 +95,10 @@ object EventSourcedProvider {
       case query: EventsBySliceQuery with CanTriggerReplay =>
         new EventsBySlicesSourceProvider[Event](eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
           with CanTriggerReplay {
-          override def triggerReplay(envelope: typed.EventEnvelope[Any]): Unit = query.triggerReplay(envelope)
+
+          private[akka] override def triggerReplay(entityId: String, fromSeqNr: Long): Unit =
+            query.triggerReplay(entityId, fromSeqNr)
+
         }
       case _ =>
         new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)

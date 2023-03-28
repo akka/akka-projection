@@ -97,9 +97,9 @@ import scala.util.matching.Regex
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
+    val producerFilter: EventEnvelope[Any] => Boolean,
     // FIXME should we switch to SLF4J and use trace instead of this verbose log flag?
-    verbose: Boolean = false,
-    val producerFilter: EventEnvelope[Any] => Boolean = _ => true)
+    verbose: Boolean = false)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
   import FilterStage._
   private val inReq = Inlet[StreamIn]("in1")

@@ -18,6 +18,7 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult
+import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.HandlerRecoveryStrategy.Internal.RetryAndSkip
@@ -367,9 +368,8 @@ private[projection] object R2dbcProjectionImpl {
               Future.successful(None)
             }
           }
-          // FIXME not sure how to test this or if it is the right thing
           .recover {
-            case ex: IllegalStateException if ex.getMessage.contains("Rejected envelope from backtracking") =>
+            case ex: IllegalStateException =>
               if (triggerReplayIfPossible(sourceProvider, env)) None
               else throw ex
           }
@@ -388,7 +388,8 @@ private[projection] object R2dbcProjectionImpl {
       case typedEnv: EventEnvelope[Any @unchecked] if typedEnv.sequenceNr > 1 =>
         sourceProvider match {
           case provider: CanTriggerReplay =>
-            provider.triggerReplay(typedEnv)
+            val entityId = PersistenceId.extractEntityId(typedEnv.persistenceId)
+            provider.triggerReplay(entityId, 1L)
             true
           case _ =>
             false // no replay support for other source providers

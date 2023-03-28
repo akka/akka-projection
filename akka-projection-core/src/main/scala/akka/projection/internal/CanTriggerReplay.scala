@@ -5,12 +5,11 @@
 package akka.projection.internal
 
 import akka.annotation.InternalApi
-import akka.persistence.query.typed.EventEnvelope
 
 /**
  * INTERNAL API
  */
 @InternalApi
-trait CanTriggerReplay {
-  def triggerReplay(envelope: EventEnvelope[Any]): Unit
+private[akka] trait CanTriggerReplay {
+  private[akka] def triggerReplay(entityId: String, fromSeqNr: Long): Unit
 }

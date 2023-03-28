@@ -178,10 +178,9 @@ final class GrpcReadJournal private (
     case None       => Seq.empty
   }
 
-  override def triggerReplay(envelope: EventEnvelope[Any]): Unit = {
-    val pid = PersistenceId.ofUniqueId(envelope.persistenceId)
-    // FIXME do we really need to go via ConsumerFilter we are in the gRPC read journal already
-    consumerFilter.ref ! ConsumerFilter.Replay(streamId, Set(ConsumerFilter.EntityIdOffset(pid.entityId, 1L)))
+  @InternalApi
+  private[akka] override def triggerReplay(entityId: String, fromSeqNr: Long): Unit = {
+    consumerFilter.ref ! ConsumerFilter.Replay(streamId, Set(ConsumerFilter.EntityIdOffset(entityId, fromSeqNr)))
   }
 
   private def addRequestHeaders[Req, Res](
@@ -282,7 +281,8 @@ final class GrpcReadJournal private (
         .collect {
           case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
             val protoCriteria = toProtoFilterCriteria(criteria)
-            log.debug2("{}: Filter updated [{}]", streamId, protoCriteria)
+            if (log.isDebugEnabled)
+              log.debug2("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
           case ConsumerFilter.Replay(`streamId`, entityOffsets) =>
