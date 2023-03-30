@@ -228,7 +228,7 @@ import scala.util.matching.Regex
 
       // Translate the streamId to the entityType and thereby constructing the full persistenceId.
       private def mapEntityIdToPidHandledByThisStream(entityIds: Seq[String]): Seq[String] =
-        entityIds.map(PersistenceId(entityType, _)).filter(handledByThisStream).map(_.id)
+        entityIds.map(PersistenceId(entityType, _)).filter(handledByThisStream).map(_.id) // FIXME what about the replicaId when using RES?
 
       private def replayFromFilterCriteria(criteria: Iterable[FilterCriteria]): Unit = {
         criteria.foreach {
@@ -254,6 +254,7 @@ import scala.util.matching.Regex
       private def replay(entityOffset: EntityIdOffset): Unit = {
         val entityId = entityOffset.entityId
         val fromSeqNr = entityOffset.seqNr
+        // FIXME what about the replicaId when using RES?
         val pid = PersistenceId(entityType, entityId)
         if (handledByThisStream(pid)) {
           val sameInProgress =

@@ -23,8 +23,10 @@ import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.projection.grpc.producer.javadsl.EventProducer
 import akka.projection.grpc.producer.javadsl.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
-
 import java.util.concurrent.CompletionStage
+import java.util.function.Predicate
+
+import akka.persistence.query.typed.EventEnvelope
 
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
@@ -76,6 +78,22 @@ object Replication {
       settings: ReplicationSettings[Command],
       replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
       system: ActorSystem[_]): Replication[Command] = {
+    val trueProducerFilter = new Predicate[EventEnvelope[Event]] {
+      override def test(env: EventEnvelope[Event]): Boolean = true
+    }
+    grpcReplication[Command, Event, State](settings, trueProducerFilter, replicatedBehaviorFactory, system)
+  }
+
+  /**
+   * Called to bootstrap the entity on each cluster node in each of the replicas.
+   *
+   * Important: Note that this does not publish the endpoint, additional steps are needed!
+   */
+  def grpcReplication[Command, Event, State](
+      settings: ReplicationSettings[Command],
+      producerFilter: Predicate[EventEnvelope[Event]],
+      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
+      system: ActorSystem[_]): Replication[Command] = {
 
     val scalaReplicationSettings = settings.toScala
 
@@ -102,8 +120,13 @@ object Replication {
               }))
           .toScala)
 
+    val scalaProducerFilter: EventEnvelope[Event] => Boolean = producerFilter.test
+
     val scalaRESOG =
-      ReplicationImpl.grpcReplication[Command, Event, State](scalaReplicationSettings, replicatedEntity)(system)
+      ReplicationImpl.grpcReplication[Command, Event, State](
+        scalaReplicationSettings,
+        scalaProducerFilter,
+        replicatedEntity)(system)
     val jEventProducerSource = new EventProducerSource(
       scalaRESOG.eventProducerService.entityType,
       scalaRESOG.eventProducerService.streamId,
