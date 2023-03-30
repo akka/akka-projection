@@ -87,6 +87,8 @@ import scala.util.matching.Regex
 
   private case class ReplayEnvelope(entityId: String, env: Option[EventEnvelope[Any]])
 
+  private case class ReplaySession(fromSeqNr: Long, queue: SinkQueueWithCancel[EventEnvelope[Any]])
+
 }
 
 /**
@@ -120,7 +122,7 @@ import scala.util.matching.Regex
       private var replayHasBeenPulled = false
       private var pendingReplayRequests: Vector[EntityIdOffset] = Vector.empty
       // several replay streams may be in progress at the same time
-      private var replayInProgress: Map[String, SinkQueueWithCancel[EventEnvelope[Any]]] = Map.empty
+      private var replayInProgress: Map[String, ReplaySession] = Map.empty
       private val replayCallback = getAsyncCallback[Try[ReplayEnvelope]] {
         case Success(replayEnv) => onReplay(replayEnv)
         case Failure(exc)       => failStage(exc)
@@ -160,7 +162,7 @@ import scala.util.matching.Regex
                 logPrefix,
                 env.persistenceId,
                 env.sequenceNr)
-              val queue = replayInProgress(entityId)
+              val queue = replayInProgress(entityId).queue
               queue.cancel()
               replayCompleted()
             }
@@ -254,19 +256,33 @@ import scala.util.matching.Regex
         val fromSeqNr = entityOffset.seqNr
         val pid = PersistenceId(entityType, entityId)
         if (handledByThisStream(pid)) {
-          replayInProgress.get(entityId).foreach { replay =>
-            log.debug2("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
-            replay.queue.cancel()
-            replayInProgress -= entityId
-          }
+          val sameInProgress =
+            replayInProgress.get(entityId) match {
+              case Some(replay) if replay.fromSeqNr == fromSeqNr =>
+                // no point in cancel and starting new from same seqNr
+                true
+              case Some(replay) =>
+                log.debug2("Stream [{}]: Cancel replay of entityId [{}], replaced by new replay", logPrefix, entityId)
+                replay.queue.cancel()
+                replayInProgress -= entityId
+                false
+              case None =>
+                false
+            }
 
-          if (replayInProgress.size < ReplayParallelism) {
+          if (sameInProgress) {
+            log.debugN(
+              "Stream [{}]: Replay of entityId [{}] already in progress from seqNr [{}], replaced by new replay",
+              logPrefix,
+              entityId,
+              fromSeqNr)
+          } else if (replayInProgress.size < ReplayParallelism) {
             log.debugN("Stream [{}]: Starting replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
             val queue =
               currentEventsByPersistenceIdQuery
                 .currentEventsByPersistenceIdTyped[Any](pid.id, fromSeqNr, Long.MaxValue)
                 .runWith(Sink.queue())(materializer)
-            replayInProgress = replayInProgress.updated(entityId, queue)
+            replayInProgress = replayInProgress.updated(entityId, ReplaySession(fromSeqNr, queue))
             tryPullReplay(entityId)
           } else {
             log.debugN("Stream [{}]: Queueing replay of entityId [{}], from seqNr [{}]", logPrefix, entityId, fromSeqNr)
