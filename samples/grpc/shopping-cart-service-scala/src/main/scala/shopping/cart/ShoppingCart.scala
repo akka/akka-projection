@@ -65,9 +65,21 @@ object ShoppingCart {
 
     def toSummary: Summary =
       Summary(items, isCheckedOut)
+
+    def totalQuantity: Int =
+      items.valuesIterator.sum
+
+    def tags: Set[String] = {
+      val total = totalQuantity
+      if (total == 0) Set.empty
+      else if (total >= 100) Set(LargeQuantityTag)
+      else if (total >= 10) Set(MediumQuantityTag)
+      else Set(SmallQuantityTag)
+    }
+
   }
   object State {
-    val empty =
+    val empty: State =
       State(items = Map.empty, checkoutDate = None)
   }
 
@@ -147,11 +159,13 @@ object ShoppingCart {
   val EntityKey: EntityTypeKey[Command] =
     EntityTypeKey[Command]("ShoppingCart")
 
-  val tags = Vector.tabulate(5)(i => s"carts-$i")
+  val SmallQuantityTag = "small"
+  val MediumQuantityTag = "medium"
+  val LargeQuantityTag = "large"
 
   def init(system: ActorSystem[_]): Unit = {
-    ClusterSharding(system).init(
-      Entity(EntityKey)(entityContext => ShoppingCart(entityContext.entityId)))
+    ClusterSharding(system).init(Entity(EntityKey)(entityContext =>
+      ShoppingCart(entityContext.entityId)))
   }
 
   def apply(cartId: String): Behavior[Command] = {
@@ -162,8 +176,11 @@ object ShoppingCart {
         commandHandler =
           (state, command) => handleCommand(cartId, state, command),
         eventHandler = (state, event) => handleEvent(state, event))
-      .withRetention(RetentionCriteria
-        .snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+      .withTaggerForState { case (state, _) =>
+        state.tags
+
+      }
+      .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100))
       .onPersistFailure(
         SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }

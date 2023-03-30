@@ -22,9 +22,8 @@ object Dependencies {
     val akka = sys.props.getOrElse("build.akka.version", "2.8.1-M1")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
-    val r2dbc = "1.0.0.RELEASE"
     // FIXME non-milestone
-    val akkaPersistenceR2dbc = "1.1.0-M7"
+    val akkaPersistenceR2dbc = "1.1.0-M7+1-6053b5c5+20230330-1119-SNAPSHOT"
     val alpakka = "5.0.0"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.0")
     val slick = "3.4.1"
@@ -62,11 +61,6 @@ object Dependencies {
     val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jacksonDatabind
 
     val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
-
-    // FIXME doesn't these come transitively form akka-persistence-r2dbc?
-    val r2dbcSpi = "io.r2dbc" % "r2dbc-spi" % Versions.r2dbc // ApacheV2
-    val r2dbcPool = "io.r2dbc" % "r2dbc-pool" % Versions.r2dbc // ApacheV2
-    val r2dbcPostgres = "org.postgresql" % "r2dbc-postgresql" % Versions.r2dbc // ApacheV2
   }
 
   object Test {
@@ -231,9 +225,6 @@ object Dependencies {
 
   val r2dbc = deps ++= Seq(
         Compile.akkaPersistenceQuery,
-        Compile.r2dbcSpi,
-        Compile.r2dbcPool,
-        Compile.r2dbcPostgres,
         Compile.akkaPersistenceR2dbc,
         Test.akkaStreamTestkit,
         Test.akkaTypedTestkit,
