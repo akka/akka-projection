@@ -28,6 +28,8 @@ object PublishEvents {
         Some(transformItemRemoved(event)))
       .registerMapper[ShoppingCart.CheckedOut, proto.CheckedOut](event =>
         Some(transformCheckedOut(event)))
+      .registerMapper[ShoppingCart.CustomerDefined, proto.CustomerDefined](event =>
+        Some(transformCustomerDefined(event)))
 
     val eventProducerSource = EventProducer
       .EventProducerSource(
@@ -66,5 +68,8 @@ object PublishEvents {
 
   def transformCheckedOut(event: ShoppingCart.CheckedOut): proto.CheckedOut =
     proto.CheckedOut(event.cartId)
+
+  def transformCustomerDefined(event: ShoppingCart.CustomerDefined): proto.CustomerDefined =
+    proto.CustomerDefined(event.cartId, event.customerId, event.category)
 
 }
