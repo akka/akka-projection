@@ -166,6 +166,8 @@ private[projection] object R2dbcOffsetStore {
 
   }
 
+  final class RejectedEnvelope(message: String) extends IllegalStateException(message)
+
   val FutureDone: Future[Done] = Future.successful(Done)
   val FutureTrue: Future[Boolean] = Future.successful(true)
   val FutureFalse: Future[Boolean] = Future.successful(false)
@@ -612,6 +614,15 @@ private[projection] class R2dbcOffsetStore(
     R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContexts.parasitic)
   }
 
+  /**
+   * The stored sequence number for a persistenceId, or 0 if unknown persistenceId.
+   */
+  def storedSeqNr(pid: Pid): SeqNr =
+    getState().byPid.get(pid) match {
+      case Some(record) => record.seqNr
+      case None         => 0L
+    }
+
   def isDuplicate(record: Record): Boolean =
     getState().isDuplicate(record)
 
@@ -641,6 +652,10 @@ private[projection] class R2dbcOffsetStore(
       }
   }
 
+  /**
+   * Completed with `true` if accepted, otherwise `false` if rejected or failed with `EnvelopeRejected` if
+   * backtracking envelope is rejected.
+   */
   def isAccepted[Envelope](envelope: Envelope): Future[Boolean] = {
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) => isAccepted(recordWithOffset, getInflight())
@@ -648,9 +663,7 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  private def isAccepted[Envelope](
-      recordWithOffset: RecordWithOffset,
-      currentInflight: Map[Pid, SeqNr]): Future[Boolean] = {
+  private def isAccepted(recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Future[Boolean] = {
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
     val currentState = getState()
@@ -727,10 +740,9 @@ private[projection] class R2dbcOffsetStore(
           logUnexpected()
           // This will result in projection restart (with normal configuration)
           Future.failed(
-            new IllegalStateException(
+            new RejectedEnvelope(
               s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr] " +
-              "due to unexpected sequence number. " +
-              "Please report this issue at https://github.com/akka/akka-persistence-r2dbc"))
+              "due to unexpected sequence number."))
         }
       } else if (seqNr == 1) {
         // always accept first event if no other event for that pid has been seen
@@ -758,10 +770,9 @@ private[projection] class R2dbcOffsetStore(
             } else {
               logUnknown()
               // This will result in projection restart (with normal configuration)
-              throw new IllegalStateException(
+              throw new RejectedEnvelope(
                 s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr], " +
-                "due to unknown sequence number. " +
-                "Please report this issue at https://github.com/akka/akka-persistence-r2dbc")
+                "due to unknown sequence number.")
             }
           case None =>
             // previous not found, could have been deleted

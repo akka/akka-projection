@@ -4,6 +4,15 @@
 
 package akka.projection.r2dbc.internal
 
+import java.util.concurrent.atomic.AtomicLong
+
+import scala.annotation.nowarn
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
@@ -45,6 +54,7 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.r2dbc.R2dbcProjectionSettings
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.RejectedEnvelope
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.extractOffsetPidSeqNr
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcSession
@@ -57,14 +67,6 @@ import akka.stream.scaladsl.Source
 import io.r2dbc.spi.ConnectionFactory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
-import java.util.concurrent.atomic.AtomicLong
-import scala.annotation.nowarn
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
-import scala.util.control.NonFatal
 
 /**
  * INTERNAL API
@@ -182,28 +184,36 @@ private[projection] object R2dbcProjectionImpl {
 
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          offsetStore.isAccepted(envelope).flatMap {
-            case true =>
-              if (isFilteredEvent(envelope)) {
-                val offset = extractOffsetPidSeqNr(sourceProvider, envelope)
-                offsetStore.saveOffset(offset)
-              } else {
-                loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                  val offset = extractOffsetPidSeqNr(sourceProvider, loadedEnvelope)
-                  r2dbcExecutor.withConnection("exactly-once handler") { conn =>
-                    // run users handler
-                    val session = new R2dbcSession(conn)
-                    delegate
-                      .process(session, loadedEnvelope)
-                      .flatMap { _ =>
-                        offsetStore.saveOffsetInTx(conn, offset)
-                      }
+          offsetStore
+            .isAccepted(envelope)
+            .flatMap {
+              case true =>
+                if (isFilteredEvent(envelope)) {
+                  val offset = extractOffsetPidSeqNr(sourceProvider, envelope)
+                  offsetStore.saveOffset(offset)
+                } else {
+                  loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                    val offset = extractOffsetPidSeqNr(sourceProvider, loadedEnvelope)
+                    r2dbcExecutor.withConnection("exactly-once handler") { conn =>
+                      // run users handler
+                      val session = new R2dbcSession(conn)
+                      delegate
+                        .process(session, loadedEnvelope)
+                        .flatMap { _ =>
+                          offsetStore.saveOffsetInTx(conn, offset)
+                        }
+                    }
                   }
                 }
-              }
-            case false =>
-              FutureDone
-          }
+              case false =>
+                triggerReplayIfPossible(sourceProvider, offsetStore, envelope)
+                FutureDone
+            }
+            .recover {
+              case ex: RejectedEnvelope =>
+                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope)) Done
+                else throw ex
+            }
         }
       }
   }
@@ -253,28 +263,36 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          offsetStore.isAccepted(envelope).flatMap {
-            case true =>
-              if (isFilteredEvent(envelope)) {
-                offsetStore.addInflight(envelope)
-                FutureDone
-              } else {
-                loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                  r2dbcExecutor
-                    .withConnection("at-least-once handler") { conn =>
-                      // run users handler
-                      val session = new R2dbcSession(conn)
-                      delegate.process(session, loadedEnvelope)
-                    }
-                    .map { _ =>
-                      offsetStore.addInflight(loadedEnvelope)
-                      Done
-                    }
+          offsetStore
+            .isAccepted(envelope)
+            .flatMap {
+              case true =>
+                if (isFilteredEvent(envelope)) {
+                  offsetStore.addInflight(envelope)
+                  FutureDone
+                } else {
+                  loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                    r2dbcExecutor
+                      .withConnection("at-least-once handler") { conn =>
+                        // run users handler
+                        val session = new R2dbcSession(conn)
+                        delegate.process(session, loadedEnvelope)
+                      }
+                      .map { _ =>
+                        offsetStore.addInflight(loadedEnvelope)
+                        Done
+                      }
+                  }
                 }
-              }
-            case false =>
-              FutureDone
-          }
+              case false =>
+                triggerReplayIfPossible(sourceProvider, offsetStore, envelope)
+                FutureDone
+            }
+            .recover {
+              case ex: RejectedEnvelope =>
+                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope)) Done
+                else throw ex
+            }
         }
       }
   }
@@ -286,24 +304,32 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          offsetStore.isAccepted(envelope).flatMap {
-            case true =>
-              if (isFilteredEvent(envelope)) {
-                offsetStore.addInflight(envelope)
-                FutureDone
-              } else {
-                loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                  delegate
-                    .process(loadedEnvelope)
-                    .map { _ =>
-                      offsetStore.addInflight(loadedEnvelope)
-                      Done
-                    }
+          offsetStore
+            .isAccepted(envelope)
+            .flatMap {
+              case true =>
+                if (isFilteredEvent(envelope)) {
+                  offsetStore.addInflight(envelope)
+                  FutureDone
+                } else {
+                  loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
+                    delegate
+                      .process(loadedEnvelope)
+                      .map { _ =>
+                        offsetStore.addInflight(loadedEnvelope)
+                        Done
+                      }
+                  }
                 }
-              }
-            case false =>
-              FutureDone
-          }
+              case false =>
+                triggerReplayIfPossible(sourceProvider, offsetStore, envelope)
+                FutureDone
+            }
+            .recover {
+              case ex: RejectedEnvelope =>
+                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope)) Done
+                else throw ex
+            }
         }
       }
   }
@@ -364,13 +390,13 @@ private[projection] object R2dbcProjectionImpl {
                 Some(loadedEnvelope)
               }
             } else {
-              triggerReplayIfPossible(sourceProvider, env)
+              triggerReplayIfPossible(sourceProvider, offsetStore, env)
               Future.successful(None)
             }
           }
           .recover {
-            case ex: IllegalStateException =>
-              if (triggerReplayIfPossible(sourceProvider, env)) None
+            case ex: RejectedEnvelope =>
+              if (triggerReplayIfPossible(sourceProvider, offsetStore, env)) None
               else throw ex
           }
       }
@@ -383,13 +409,15 @@ private[projection] object R2dbcProjectionImpl {
 
   private def triggerReplayIfPossible[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
+      offsetStore: R2dbcOffsetStore,
       envelope: Envelope): Boolean = {
     envelope match {
-      case typedEnv: EventEnvelope[Any @unchecked] if typedEnv.sequenceNr > 1 =>
+      case env: EventEnvelope[Any @unchecked] if env.sequenceNr > 1 =>
         sourceProvider match {
           case provider: CanTriggerReplay =>
-            val entityId = PersistenceId.extractEntityId(typedEnv.persistenceId)
-            provider.triggerReplay(entityId, 1L)
+            val entityId = PersistenceId.extractEntityId(env.persistenceId)
+            val fromSeqNr = offsetStore.storedSeqNr(env.persistenceId) + 1
+            provider.triggerReplay(entityId, fromSeqNr)
             true
           case _ =>
             false // no replay support for other source providers
