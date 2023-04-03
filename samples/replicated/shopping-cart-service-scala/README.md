@@ -68,6 +68,12 @@
     
     # check out cart
     grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
+   
+    # exclude cart from first replica
+    grpcurl -d '{"cartId":"cart1", "exclude":true}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.ExcludeCart
+    
+    # get cart from second replica
+    grpcurl -d '{"cartId":"cart1", "exclude":true}' -plaintext 127.0.0.1:8201 shoppingcart.ShoppingCartService.ExcludeCart
     ```
 
     or same `grpcurl` commands to port 8102/8202 to reach node 2.

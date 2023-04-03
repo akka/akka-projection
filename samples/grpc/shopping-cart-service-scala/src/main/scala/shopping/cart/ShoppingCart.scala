@@ -205,7 +205,6 @@ object ShoppingCart {
         eventHandler = (state, event) => handleEvent(state, event))
       .withTaggerForState { case (state, _) =>
         state.tags
-
       }
       .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100))
       .onPersistFailure(

@@ -17,6 +17,7 @@ import akka.actor.typed.Extension
 import akka.actor.typed.ExtensionId
 import akka.actor.typed.Props
 import akka.annotation.InternalApi
+import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.internal.ConsumerFilterRegistry
 
 // FIXME add ApiMayChange in all places
@@ -25,6 +26,9 @@ import akka.projection.grpc.internal.ConsumerFilterRegistry
  * Extension to dynamically control the filters for the `GrpcReadJournal`.
  */
 object ConsumerFilter extends ExtensionId[ConsumerFilter] {
+
+  private val ReplicationIdSeparator = '|'
+
   trait Command
   sealed trait SubscriberCommand extends Command {
     def streamId: String
@@ -71,11 +75,11 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   /**
    * Explicit request to replay events for given entities.
    */
-  final case class Replay(streamId: String, entityOffsets: Set[EntityIdOffset]) extends SubscriberCommand {
+  final case class Replay(streamId: String, persistenceIdOffsets: Set[PersistenceIdOffset]) extends SubscriberCommand {
 
     /** Java API */
-    def this(streamId: String, entityOffsets: JSet[EntityIdOffset]) =
-      this(streamId, entityOffsets.asScala.toSet)
+    def this(streamId: String, persistenceIdOffsets: JSet[PersistenceIdOffset]) =
+      this(streamId, persistenceIdOffsets.asScala.toSet)
   }
 
   sealed trait FilterCriteria
@@ -103,6 +107,11 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       this(matching.asScala.toSet)
   }
 
+  object ExcludeEntityIds {
+    def apply(replicaId: ReplicaId, entityIds: Set[String]): ExcludeEntityIds =
+      ExcludeEntityIds(entityIds.map(addReplicaIdToEntityId(replicaId, _)))
+  }
+
   /**
    * Exclude events for entities with the given entity ids,
    * unless there is a matching include filter that overrides the exclude.
@@ -114,6 +123,11 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       this(entityIds.asScala.toSet)
   }
 
+  object RemoveExcludeEntityIds {
+    def apply(replicaId: ReplicaId, entityIds: Set[String]): RemoveExcludeEntityIds =
+      RemoveExcludeEntityIds(entityIds.map(addReplicaIdToEntityId(replicaId, _)))
+  }
+
   /**
    * Remove a previously added [[ExcludeEntityIds]].
    */
@@ -122,6 +136,12 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     /** Java API */
     def this(entityIds: JSet[String]) =
       this(entityIds.asScala.toSet)
+  }
+
+  object IncludeEntityIds {
+    def apply(replicaId: ReplicaId, entityOffsets: Set[EntityIdOffset]): IncludeEntityIds =
+      IncludeEntityIds(
+        entityOffsets.map(offset => EntityIdOffset(addReplicaIdToEntityId(replicaId, offset.entityId), offset.seqNr)))
   }
 
   /**
@@ -138,6 +158,11 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       this(entityOffsets.asScala.toSet)
   }
 
+  object RemoveIncludeEntityIds {
+    def apply(replicaId: ReplicaId, entityIds: Set[String]): RemoveIncludeEntityIds =
+      RemoveIncludeEntityIds(entityIds.map(addReplicaIdToEntityId(replicaId, _)))
+  }
+
   /**
    * Remove a previously added [[IncludeEntityIds]].
    */
@@ -148,7 +173,12 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       this(entityIds.asScala.toSet)
   }
 
+  private def addReplicaIdToEntityId(replicaId: ReplicaId, entityId: String): String =
+    s"$entityId$ReplicationIdSeparator${replicaId.id}"
+
   final case class EntityIdOffset(entityId: String, seqNr: Long)
+
+  final case class PersistenceIdOffset(persistenceIdId: String, seqNr: Long)
 
   override def createExtension(system: ActorSystem[_]): ConsumerFilter = new ConsumerFilter(system)
 

@@ -179,8 +179,10 @@ final class GrpcReadJournal private (
   }
 
   @InternalApi
-  private[akka] override def triggerReplay(entityId: String, fromSeqNr: Long): Unit = {
-    consumerFilter.ref ! ConsumerFilter.Replay(streamId, Set(ConsumerFilter.EntityIdOffset(entityId, fromSeqNr)))
+  private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = {
+    consumerFilter.ref ! ConsumerFilter.Replay(
+      streamId,
+      Set(ConsumerFilter.PersistenceIdOffset(persistenceId, fromSeqNr)))
   }
 
   private def addRequestHeaders[Req, Res](
@@ -256,6 +258,11 @@ final class GrpcReadJournal private (
         case _                  => offset
       })
 
+    def sliceHandledByThisStream(pid: String): Boolean = {
+      val slice = persistenceExt.sliceForPersistenceId(pid)
+      minSlice <= slice && slice <= maxSlice
+    }
+
     val protoOffset =
       offset match {
         case o: TimestampOffset =>
@@ -285,14 +292,21 @@ final class GrpcReadJournal private (
               log.debug2("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
-          case ConsumerFilter.Replay(`streamId`, entityOffsets) =>
-            if (log.isDebugEnabled())
-              log.debug2("{}: Replay triggered for [{}]", streamId, entityOffsets.mkString(", "))
+          case ConsumerFilter.Replay(`streamId`, persistenceIdOffsets) =>
+            // FIXME for RES, would it be possible to skip replicaId not handled by this stream here?
 
-            val protoEntityOffsets = entityOffsets.map {
-              case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
+            val protoPersistenceIdOffsets = persistenceIdOffsets.collect {
+              case ConsumerFilter.PersistenceIdOffset(pid, seqNr) if sliceHandledByThisStream(pid) =>
+                PersistenceIdSeqNr(pid, seqNr)
             }.toVector
-            StreamIn(StreamIn.Message.Replay(ReplayReq(protoEntityOffsets)))
+
+            if (log.isDebugEnabled() && protoPersistenceIdOffsets.nonEmpty)
+              log.debug2(
+                "{}: Replay triggered for [{}]",
+                streamId,
+                protoPersistenceIdOffsets.map(offset => offset.persistenceId -> offset.seqNr).mkString(", "))
+
+            StreamIn(StreamIn.Message.Replay(ReplayReq(protoPersistenceIdOffsets)))
         }
         .mapMaterializedValue { ref =>
           consumerFilter.ref ! ConsumerFilter.Subscribe(streamId, initCriteria, ref)

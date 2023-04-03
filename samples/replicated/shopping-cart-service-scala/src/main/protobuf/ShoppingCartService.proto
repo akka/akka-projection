@@ -12,6 +12,7 @@ service ShoppingCartService {
   rpc RemoveItem (RemoveItemRequest) returns (Cart) {}
   rpc Checkout (CheckoutRequest) returns (Cart) {}
   rpc GetCart (GetCartRequest) returns (Cart) {}
+  rpc ExcludeCart (ExcludeCartRequest) returns (Empty) {}
 }
 
 message AddItemRequest {
@@ -43,3 +44,10 @@ message Item {
   string itemId = 1;
   int32 quantity = 2;
 }
+
+message ExcludeCartRequest {
+  string cartId = 1;
+  bool exclude = 2;
+}
+
+message Empty {}

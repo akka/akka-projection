@@ -27,7 +27,6 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.state.scaladsl.DurableStateStore
 import akka.persistence.state.scaladsl.GetObjectResult
-import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.HandlerRecoveryStrategy.Internal.RetryAndSkip
@@ -458,9 +457,8 @@ private[projection] object R2dbcProjectionImpl {
       case env: EventEnvelope[Any @unchecked] if env.sequenceNr > 1 =>
         sourceProvider match {
           case provider: CanTriggerReplay =>
-            val entityId = PersistenceId.extractEntityId(env.persistenceId)
             val fromSeqNr = offsetStore.storedSeqNr(env.persistenceId) + 1
-            provider.triggerReplay(entityId, fromSeqNr)
+            provider.triggerReplay(env.persistenceId, fromSeqNr)
             true
           case _ =>
             false // no replay support for other source providers

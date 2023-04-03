@@ -4,6 +4,12 @@
 
 package akka.projection.grpc.internal
 
+import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
+
+import scala.concurrent.Future
+import scala.concurrent.Promise
+
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -19,6 +25,7 @@ import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.IncludeEntityIds
+import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.stream.scaladsl.BidiFlow
@@ -30,11 +37,6 @@ import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
-
-import java.time.Instant
-import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.Future
-import scala.concurrent.Promise
 
 class FilterStageSpec extends ScalaTestWithActorTestKit("""
     akka.loglevel = DEBUG
@@ -92,9 +94,9 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             .sortBy(_.sequenceNr)
             .map(_.asInstanceOf[EventEnvelope[Event]])
           // simulate initial delay for more realistic testing, and concurrency check
-          import akka.pattern.{ after => futureAfter }
-
           import scala.concurrent.duration._
+
+          import akka.pattern.{ after => futureAfter }
           if (eventsByPersistenceIdConcurrency.incrementAndGet() > FilterStage.ReplayParallelism)
             throw new IllegalStateException("Unexpected, too many concurrent calls to currentEventsByPersistenceId")
           Source
@@ -221,14 +223,18 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
           createEnvelope(PersistenceId(entityType, "d"), 2, "d2"))
 
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(ReplayReq(List(EntityIdOffset("b", 1L), EntityIdOffset("c", 1L))))))
+        StreamIn(
+          StreamIn.Message.Replay(ReplayReq(List(
+            PersistenceIdSeqNr(PersistenceId(entityType, "b").id, 1L),
+            PersistenceIdSeqNr(PersistenceId(entityType, "c").id, 1L))))))
 
       outProbe.request(10)
       // no guarantee of order between b and c
       outProbe.expectNextN(2).map(_.event).toSet shouldBe Set("b1", "c1")
       outProbe.expectNoMessage()
 
-      inPublisher.sendNext(StreamIn(StreamIn.Message.Replay(ReplayReq(List(EntityIdOffset("d", 1L))))))
+      inPublisher.sendNext(
+        StreamIn(StreamIn.Message.Replay(ReplayReq(List(PersistenceIdSeqNr(PersistenceId(entityType, "d").id, 1L))))))
       // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
       outProbe.expectNoMessage()
       envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
@@ -243,11 +249,14 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
         entityIds.map(id => createEnvelope(PersistenceId(entityType, id), 1, id))
 
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(ReplayReq(entityIds.take(7).map(id => EntityIdOffset(id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(
+          ReplayReq(entityIds.take(7).map(id => PersistenceIdSeqNr(PersistenceId(entityType, id).id, 1L))))))
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(ReplayReq(entityIds.slice(7, 10).map(id => EntityIdOffset(id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(
+          ReplayReq(entityIds.slice(7, 10).map(id => PersistenceIdSeqNr(PersistenceId(entityType, id).id, 1L))))))
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(ReplayReq(entityIds.drop(10).map(id => EntityIdOffset(id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(
+          ReplayReq(entityIds.drop(10).map(id => PersistenceIdSeqNr(PersistenceId(entityType, id).id, 1L))))))
 
       outProbe.request(100)
       // no guarantee of order between different entityIds

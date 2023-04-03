@@ -419,7 +419,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedB.envelope.event shouldBe "B"
 
       val consumerFilter = ConsumerFilter(system).ref
-      consumerFilter ! ConsumerFilter.Replay(streamId, Set(ConsumerFilter.EntityIdOffset(pid.entityId, 2L)))
+      consumerFilter ! ConsumerFilter.Replay(streamId, Set(ConsumerFilter.PersistenceIdOffset(pid.id, 2L)))
       // FIXME hack sleep to let it propagate to producer side
       Thread.sleep(3000)
 
