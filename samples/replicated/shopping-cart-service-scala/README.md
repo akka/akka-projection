@@ -51,7 +51,7 @@
     curl http://localhost:9201/ready
     ```
 
-6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
+6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl). Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
 
     ```shell
     # add item to cart on the first replica

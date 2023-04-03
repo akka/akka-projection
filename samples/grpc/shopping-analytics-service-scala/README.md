@@ -18,4 +18,6 @@
 
 3. Start `shopping-cart-service` and add item to cart
 
-4. Notice the log output in the terminal of the `shopping-analytics-service`
+4. Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter
+
+5. Notice the log output in the terminal of the `shopping-analytics-service`
