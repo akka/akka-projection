@@ -23,7 +23,7 @@ object Dependencies {
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
     // FIXME non-milestone
-    val akkaPersistenceR2dbc = "1.1.0-M7+1-6053b5c5+20230330-1119-SNAPSHOT"
+    val akkaPersistenceR2dbc = "1.1.0-M7+2-e241ee57-SNAPSHOT"
     val alpakka = "5.0.0"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.0")
     val slick = "3.4.1"

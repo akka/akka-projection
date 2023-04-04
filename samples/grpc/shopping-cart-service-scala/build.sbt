@@ -27,10 +27,13 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
+// FIXME for r2dbc snapshot, remove when release is out
+ThisBuild / resolvers ++= Resolver.sonatypeOssRepos("snapshots")
+
 val AkkaVersion = "2.8.1-M1"
 val AkkaHttpVersion = "10.5.0"
 val AkkaManagementVersion = "1.3.0"
-val AkkaPersistenceR2dbcVersion = "1.1.0-M7+1-6053b5c5+20230330-1119-SNAPSHOT"
+val AkkaPersistenceR2dbcVersion = "1.1.0-M7+2-e241ee57-SNAPSHOT"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.4.0-M3-122-93612f12-20230330-1121-SNAPSHOT") // FIXME
 val AkkaDiagnosticsVersion = "2.0.0"
