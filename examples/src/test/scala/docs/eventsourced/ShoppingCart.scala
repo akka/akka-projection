@@ -161,7 +161,7 @@ object ShoppingCart {
           else openShoppingCart(cartId, state, command),
         (state, event) => handleEvent(state, event))
       .withTagger(_ => Set(projectionTag))
-      .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+      .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100))
       .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }
   //#tagging

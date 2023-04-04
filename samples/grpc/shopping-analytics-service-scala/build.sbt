@@ -27,12 +27,15 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.7.0"
-val AkkaHttpVersion = "10.4.0"
-val AkkaManagementVersion = "1.2.0"
-val AkkaPersistenceR2dbcVersion = "1.0.1"
+// FIXME for r2dbc snapshot, remove when release is out
+ThisBuild / resolvers ++= Resolver.sonatypeOssRepos("snapshots")
+
+val AkkaVersion = "2.8.1-M1"
+val AkkaHttpVersion = "10.5.0"
+val AkkaManagementVersion = "1.3.0"
+val AkkaPersistenceR2dbcVersion = "1.1.0-M7+2-e241ee57-SNAPSHOT"
 val AkkaProjectionVersion =
-  sys.props.getOrElse("akka-projection.version", "1.3.1")
+  sys.props.getOrElse("akka-projection.version", "1.4.0-M3-122-93612f12-20230330-1121-SNAPSHOT") // FIXME
 val AkkaDiagnosticsVersion = "2.0.0"
 
 enablePlugins(AkkaGrpcPlugin)
@@ -70,7 +73,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
   // 4. Querying or projecting data from Akka Persistence
-  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaPersistenceR2dbcVersion,
+  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion,
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
   "com.lightbend.akka" %% "akka-projection-grpc" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,

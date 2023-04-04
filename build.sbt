@@ -3,7 +3,7 @@ import akka.projections.Dependencies
 // avoid + in snapshot versions
 ThisBuild / dynverSeparator := "-"
 
-// FIXME for r2dbc snapshot, remove when release out with convenience transport factories
+// FIXME for r2dbc snapshot, remove when release is out
 ThisBuild / resolvers ++= Resolver.sonatypeOssRepos("snapshots")
 
 lazy val core =
