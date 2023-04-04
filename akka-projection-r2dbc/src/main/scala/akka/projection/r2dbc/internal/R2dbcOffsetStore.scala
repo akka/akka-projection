@@ -168,6 +168,20 @@ private[projection] object R2dbcOffsetStore {
 
   final class RejectedEnvelope(message: String) extends IllegalStateException(message)
 
+  sealed trait IsAcceptedResult
+
+  object IsAcceptedResult {
+    case object Accepted extends IsAcceptedResult
+    case object Duplicate extends IsAcceptedResult
+    case object RejectedSeqNr extends IsAcceptedResult
+    case object RejectedBacktrackingSeqNr extends IsAcceptedResult
+
+    val FutureAccepted: Future[IsAcceptedResult] = Future.successful(Accepted)
+    val FutureDuplicate: Future[IsAcceptedResult] = Future.successful(Duplicate)
+    val FutureRejectedSeqNr: Future[IsAcceptedResult] = Future.successful(RejectedSeqNr)
+    val FutureRejectedBacktrackingSeqNr: Future[IsAcceptedResult] = Future.successful(RejectedBacktrackingSeqNr)
+  }
+
   val FutureDone: Future[Done] = Future.successful(Done)
   val FutureTrue: Future[Boolean] = Future.successful(true)
   val FutureFalse: Future[Boolean] = Future.successful(false)
@@ -626,23 +640,25 @@ private[projection] class R2dbcOffsetStore(
   def isDuplicate(record: Record): Boolean =
     getState().isDuplicate(record)
 
-  def filterAccepted[Envelope](envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[Envelope]] = {
+  def mapIsAccepted[Envelope](
+      envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[(Envelope, IsAcceptedResult)]] = {
+    import IsAcceptedResult._
     envelopes
-      .foldLeft(Future.successful((getInflight(), Vector.empty[Envelope]))) { (acc, envelope) =>
+      .foldLeft(Future.successful((getInflight(), Vector.empty[(Envelope, IsAcceptedResult)]))) { (acc, envelope) =>
         acc.flatMap {
           case (inflight, filteredEnvelopes) =>
             createRecordWithOffset(envelope) match {
               case Some(recordWithOffset) =>
                 isAccepted(recordWithOffset, inflight).map {
-                  case true =>
+                  case Accepted =>
                     (
                       inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
-                      filteredEnvelopes :+ envelope)
-                  case false =>
-                    (inflight, filteredEnvelopes)
+                      filteredEnvelopes :+ (envelope -> Accepted))
+                  case rejected =>
+                    (inflight, filteredEnvelopes :+ (envelope -> rejected))
                 }
               case None =>
-                Future.successful((inflight, filteredEnvelopes :+ envelope))
+                Future.successful((inflight, filteredEnvelopes :+ (envelope -> Accepted)))
             }
         }
       }
@@ -656,14 +672,17 @@ private[projection] class R2dbcOffsetStore(
    * Completed with `true` if accepted, otherwise `false` if rejected or failed with `EnvelopeRejected` if
    * backtracking envelope is rejected.
    */
-  def isAccepted[Envelope](envelope: Envelope): Future[Boolean] = {
+  def isAccepted[Envelope](envelope: Envelope): Future[IsAcceptedResult] = {
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) => isAccepted(recordWithOffset, getInflight())
-      case None                   => FutureTrue
+      case None                   => IsAcceptedResult.FutureAccepted
     }
   }
 
-  private def isAccepted(recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Future[Boolean] = {
+  private def isAccepted(
+      recordWithOffset: RecordWithOffset,
+      currentInflight: Map[Pid, SeqNr]): Future[IsAcceptedResult] = {
+    import IsAcceptedResult._
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
     val currentState = getState()
@@ -672,7 +691,7 @@ private[projection] class R2dbcOffsetStore(
 
     if (duplicate) {
       logger.trace("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid)
-      FutureFalse
+      FutureDuplicate
     } else if (recordWithOffset.strictSeqNr) {
       // strictSeqNr == true is for event sourced
       val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
@@ -728,25 +747,22 @@ private[projection] class R2dbcOffsetStore(
         // expecting seqNr to be +1 of previously known
         val ok = seqNr == prevSeqNr + 1
         if (ok) {
-          FutureTrue
+          FutureAccepted
         } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
           // currentInFlight contains those that have been processed or about to be processed in Flow,
           // but offset not saved yet => ok to handle as duplicate
-          FutureFalse
+          FutureDuplicate
         } else if (!recordWithOffset.fromBacktracking) {
           logUnexpected()
-          FutureFalse
+          FutureRejectedSeqNr
         } else {
           logUnexpected()
           // This will result in projection restart (with normal configuration)
-          Future.failed(
-            new RejectedEnvelope(
-              s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr] " +
-              "due to unexpected sequence number."))
+          FutureRejectedBacktrackingSeqNr
         }
       } else if (seqNr == 1) {
         // always accept first event if no other event for that pid has been seen
-        FutureTrue
+        FutureAccepted
       } else {
         // Haven't see seen this pid within the time window. Since events can be missed
         // when read at the tail we will only accept it if the event with previous seqNr has timestamp
@@ -763,20 +779,18 @@ private[projection] class R2dbcOffsetStore(
                 seqNr,
                 previousTimestamp,
                 before)
-              true
+              Accepted
             } else if (!recordWithOffset.fromBacktracking) {
               logUnknown()
-              false
+              RejectedSeqNr
             } else {
               logUnknown()
               // This will result in projection restart (with normal configuration)
-              throw new RejectedEnvelope(
-                s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr], " +
-                "due to unknown sequence number.")
+              RejectedBacktrackingSeqNr
             }
           case None =>
             // previous not found, could have been deleted
-            true
+            Accepted
         }
       }
     } else {
@@ -785,10 +799,10 @@ private[projection] class R2dbcOffsetStore(
       val ok = seqNr > prevSeqNr
 
       if (ok) {
-        FutureTrue
+        FutureAccepted
       } else {
         logger.traceN("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
-        FutureFalse
+        FutureDuplicate
       }
     }
   }

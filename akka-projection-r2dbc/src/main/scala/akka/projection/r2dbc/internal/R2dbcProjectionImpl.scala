@@ -184,10 +184,11 @@ private[projection] object R2dbcProjectionImpl {
 
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
+          import R2dbcOffsetStore.IsAcceptedResult._
           offsetStore
             .isAccepted(envelope)
             .flatMap {
-              case true =>
+              case Accepted =>
                 if (isFilteredEvent(envelope)) {
                   val offset = extractOffsetPidSeqNr(sourceProvider, envelope)
                   offsetStore.saveOffset(offset)
@@ -205,14 +206,16 @@ private[projection] object R2dbcProjectionImpl {
                     }
                   }
                 }
-              case false =>
+              case Duplicate =>
+                FutureDone
+              case RejectedSeqNr =>
                 triggerReplayIfPossible(sourceProvider, offsetStore, envelope)
                 FutureDone
-            }
-            .recover {
-              case ex: RejectedEnvelope =>
-                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope)) Done
-                else throw ex
+              case RejectedBacktrackingSeqNr =>
+                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope))
+                  FutureDone
+                else
+                  throwRejectedEnvelope(sourceProvider, envelope)
             }
         }
       }
@@ -229,7 +232,23 @@ private[projection] object R2dbcProjectionImpl {
 
     new AdaptedR2dbcHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-        offsetStore.filterAccepted(envelopes).flatMap { acceptedEnvelopes =>
+        import R2dbcOffsetStore.IsAcceptedResult._
+        offsetStore.mapIsAccepted(envelopes).flatMap { isAcceptedEnvelopes =>
+          isAcceptedEnvelopes.foreach {
+            case (env, RejectedSeqNr) =>
+              triggerReplayIfPossible(sourceProvider, offsetStore, env)
+            case (env, RejectedBacktrackingSeqNr) =>
+              if (triggerReplayIfPossible(sourceProvider, offsetStore, env))
+                FutureDone
+              else
+                throwRejectedEnvelope(sourceProvider, env)
+            case _ =>
+          }
+
+          val acceptedEnvelopes = isAcceptedEnvelopes.collect {
+            case (env, Accepted) => env
+          }
+
           if (acceptedEnvelopes.isEmpty) {
             FutureDone
           } else {
@@ -263,10 +282,11 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
+          import R2dbcOffsetStore.IsAcceptedResult._
           offsetStore
             .isAccepted(envelope)
             .flatMap {
-              case true =>
+              case Accepted =>
                 if (isFilteredEvent(envelope)) {
                   offsetStore.addInflight(envelope)
                   FutureDone
@@ -284,14 +304,16 @@ private[projection] object R2dbcProjectionImpl {
                       }
                   }
                 }
-              case false =>
+              case Duplicate =>
+                FutureDone
+              case RejectedSeqNr =>
                 triggerReplayIfPossible(sourceProvider, offsetStore, envelope)
                 FutureDone
-            }
-            .recover {
-              case ex: RejectedEnvelope =>
-                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope)) Done
-                else throw ex
+              case RejectedBacktrackingSeqNr =>
+                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope))
+                  FutureDone
+                else
+                  throwRejectedEnvelope(sourceProvider, envelope)
             }
         }
       }
@@ -304,10 +326,11 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
+          import R2dbcOffsetStore.IsAcceptedResult._
           offsetStore
             .isAccepted(envelope)
             .flatMap {
-              case true =>
+              case Accepted =>
                 if (isFilteredEvent(envelope)) {
                   offsetStore.addInflight(envelope)
                   FutureDone
@@ -321,14 +344,16 @@ private[projection] object R2dbcProjectionImpl {
                       }
                   }
                 }
-              case false =>
+              case Duplicate =>
+                FutureDone
+              case RejectedSeqNr =>
                 triggerReplayIfPossible(sourceProvider, offsetStore, envelope)
                 FutureDone
-            }
-            .recover {
-              case ex: RejectedEnvelope =>
-                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope)) Done
-                else throw ex
+              case RejectedBacktrackingSeqNr =>
+                if (triggerReplayIfPossible(sourceProvider, offsetStore, envelope))
+                  FutureDone
+                else
+                  throwRejectedEnvelope(sourceProvider, envelope)
             }
         }
       }
@@ -344,7 +369,23 @@ private[projection] object R2dbcProjectionImpl {
 
     new AdaptedHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-        offsetStore.filterAccepted(envelopes).flatMap { acceptedEnvelopes =>
+        import R2dbcOffsetStore.IsAcceptedResult._
+        offsetStore.mapIsAccepted(envelopes).flatMap { isAcceptedEnvelopes =>
+          isAcceptedEnvelopes.foreach {
+            case (env, RejectedSeqNr) =>
+              triggerReplayIfPossible(sourceProvider, offsetStore, env)
+            case (env, RejectedBacktrackingSeqNr) =>
+              if (triggerReplayIfPossible(sourceProvider, offsetStore, env))
+                FutureDone
+              else
+                throwRejectedEnvelope(sourceProvider, env)
+            case _ =>
+          }
+
+          val acceptedEnvelopes = isAcceptedEnvelopes.collect {
+            case (env, Accepted) => env
+          }
+
           if (acceptedEnvelopes.isEmpty) {
             FutureDone
           } else {
@@ -375,13 +416,14 @@ private[projection] object R2dbcProjectionImpl {
       offsetStore: R2dbcOffsetStore,
       settings: R2dbcProjectionSettings)(
       implicit system: ActorSystem[_]): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
+    import R2dbcOffsetStore.IsAcceptedResult._
     implicit val ec: ExecutionContext = system.executionContext
     FlowWithContext[Envelope, ProjectionContext]
       .mapAsync(1) { env =>
         offsetStore
           .isAccepted(env)
-          .flatMap { ok =>
-            if (ok) {
+          .flatMap {
+            case Accepted =>
               if (isFilteredEvent(env) && settings.warnAboutFilteredEventsInFlow) {
                 log.info("atLeastOnceFlow doesn't support of skipping envelopes. Envelope [{}] still emitted.", env)
               }
@@ -389,15 +431,16 @@ private[projection] object R2dbcProjectionImpl {
                 offsetStore.addInflight(loadedEnvelope)
                 Some(loadedEnvelope)
               }
-            } else {
+            case Duplicate =>
+              Future.successful(None)
+            case RejectedSeqNr =>
               triggerReplayIfPossible(sourceProvider, offsetStore, env)
               Future.successful(None)
-            }
-          }
-          .recover {
-            case ex: RejectedEnvelope =>
-              if (triggerReplayIfPossible(sourceProvider, offsetStore, env)) None
-              else throw ex
+            case RejectedBacktrackingSeqNr =>
+              if (triggerReplayIfPossible(sourceProvider, offsetStore, env))
+                Future.successful(None)
+              else
+                throwRejectedEnvelope(sourceProvider, env)
           }
       }
       .collect {
@@ -424,6 +467,18 @@ private[projection] object R2dbcProjectionImpl {
         }
       case _ =>
         false // no replay support for non typed envelopes
+    }
+  }
+
+  private def throwRejectedEnvelope[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
+      envelope: Envelope): Nothing = {
+    extractOffsetPidSeqNr(sourceProvider, envelope) match {
+      case OffsetPidSeqNr(_, Some((pid, seqNr))) =>
+        throw new RejectedEnvelope(
+          s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr] due to unexpected sequence number.")
+      case OffsetPidSeqNr(_, None) =>
+        throw new RejectedEnvelope(s"Rejected envelope from backtracking.")
     }
   }
 
