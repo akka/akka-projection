@@ -183,9 +183,9 @@ private[projection] object R2dbcProjectionImpl {
 
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          import R2dbcOffsetStore.IsAcceptedResult._
+          import R2dbcOffsetStore.Validation._
           offsetStore
-            .isAccepted(envelope)
+            .validate(envelope)
             .flatMap {
               case Accepted =>
                 if (isFilteredEvent(envelope)) {
@@ -231,8 +231,8 @@ private[projection] object R2dbcProjectionImpl {
 
     new AdaptedR2dbcHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-        import R2dbcOffsetStore.IsAcceptedResult._
-        offsetStore.mapIsAccepted(envelopes).flatMap { isAcceptedEnvelopes =>
+        import R2dbcOffsetStore.Validation._
+        offsetStore.validateAll(envelopes).flatMap { isAcceptedEnvelopes =>
           isAcceptedEnvelopes.foreach {
             case (env, RejectedSeqNr) =>
               triggerReplayIfPossible(sourceProvider, offsetStore, env)
@@ -281,9 +281,9 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          import R2dbcOffsetStore.IsAcceptedResult._
+          import R2dbcOffsetStore.Validation._
           offsetStore
-            .isAccepted(envelope)
+            .validate(envelope)
             .flatMap {
               case Accepted =>
                 if (isFilteredEvent(envelope)) {
@@ -325,9 +325,9 @@ private[projection] object R2dbcProjectionImpl {
     () =>
       new AdaptedHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
-          import R2dbcOffsetStore.IsAcceptedResult._
+          import R2dbcOffsetStore.Validation._
           offsetStore
-            .isAccepted(envelope)
+            .validate(envelope)
             .flatMap {
               case Accepted =>
                 if (isFilteredEvent(envelope)) {
@@ -368,8 +368,8 @@ private[projection] object R2dbcProjectionImpl {
 
     new AdaptedHandler(handlerFactory()) {
       override def process(envelopes: immutable.Seq[Envelope]): Future[Done] = {
-        import R2dbcOffsetStore.IsAcceptedResult._
-        offsetStore.mapIsAccepted(envelopes).flatMap { isAcceptedEnvelopes =>
+        import R2dbcOffsetStore.Validation._
+        offsetStore.validateAll(envelopes).flatMap { isAcceptedEnvelopes =>
           isAcceptedEnvelopes.foreach {
             case (env, RejectedSeqNr) =>
               triggerReplayIfPossible(sourceProvider, offsetStore, env)
@@ -415,12 +415,12 @@ private[projection] object R2dbcProjectionImpl {
       offsetStore: R2dbcOffsetStore,
       settings: R2dbcProjectionSettings)(
       implicit system: ActorSystem[_]): FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _] = {
-    import R2dbcOffsetStore.IsAcceptedResult._
+    import R2dbcOffsetStore.Validation._
     implicit val ec: ExecutionContext = system.executionContext
     FlowWithContext[Envelope, ProjectionContext]
       .mapAsync(1) { env =>
         offsetStore
-          .isAccepted(env)
+          .validate(env)
           .flatMap {
             case Accepted =>
               if (isFilteredEvent(env) && settings.warnAboutFilteredEventsInFlow) {

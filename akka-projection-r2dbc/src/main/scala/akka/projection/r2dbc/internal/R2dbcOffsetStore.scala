@@ -168,23 +168,21 @@ private[projection] object R2dbcOffsetStore {
 
   final class RejectedEnvelope(message: String) extends IllegalStateException(message)
 
-  sealed trait IsAcceptedResult
+  sealed trait Validation
 
-  object IsAcceptedResult {
-    case object Accepted extends IsAcceptedResult
-    case object Duplicate extends IsAcceptedResult
-    case object RejectedSeqNr extends IsAcceptedResult
-    case object RejectedBacktrackingSeqNr extends IsAcceptedResult
+  object Validation {
+    case object Accepted extends Validation
+    case object Duplicate extends Validation
+    case object RejectedSeqNr extends Validation
+    case object RejectedBacktrackingSeqNr extends Validation
 
-    val FutureAccepted: Future[IsAcceptedResult] = Future.successful(Accepted)
-    val FutureDuplicate: Future[IsAcceptedResult] = Future.successful(Duplicate)
-    val FutureRejectedSeqNr: Future[IsAcceptedResult] = Future.successful(RejectedSeqNr)
-    val FutureRejectedBacktrackingSeqNr: Future[IsAcceptedResult] = Future.successful(RejectedBacktrackingSeqNr)
+    val FutureAccepted: Future[Validation] = Future.successful(Accepted)
+    val FutureDuplicate: Future[Validation] = Future.successful(Duplicate)
+    val FutureRejectedSeqNr: Future[Validation] = Future.successful(RejectedSeqNr)
+    val FutureRejectedBacktrackingSeqNr: Future[Validation] = Future.successful(RejectedBacktrackingSeqNr)
   }
 
   val FutureDone: Future[Done] = Future.successful(Done)
-  val FutureTrue: Future[Boolean] = Future.successful(true)
-  val FutureFalse: Future[Boolean] = Future.successful(false)
 }
 
 /**
@@ -637,19 +635,15 @@ private[projection] class R2dbcOffsetStore(
       case None         => 0L
     }
 
-  def isDuplicate(record: Record): Boolean =
-    getState().isDuplicate(record)
-
-  def mapIsAccepted[Envelope](
-      envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[(Envelope, IsAcceptedResult)]] = {
-    import IsAcceptedResult._
+  def validateAll[Envelope](envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[(Envelope, Validation)]] = {
+    import Validation._
     envelopes
-      .foldLeft(Future.successful((getInflight(), Vector.empty[(Envelope, IsAcceptedResult)]))) { (acc, envelope) =>
+      .foldLeft(Future.successful((getInflight(), Vector.empty[(Envelope, Validation)]))) { (acc, envelope) =>
         acc.flatMap {
           case (inflight, filteredEnvelopes) =>
             createRecordWithOffset(envelope) match {
               case Some(recordWithOffset) =>
-                isAccepted(recordWithOffset, inflight).map {
+                validate(recordWithOffset, inflight).map {
                   case Accepted =>
                     (
                       inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
@@ -669,25 +663,24 @@ private[projection] class R2dbcOffsetStore(
   }
 
   /**
-   * Completed with `true` if accepted, otherwise `false` if rejected or failed with `EnvelopeRejected` if
-   * backtracking envelope is rejected.
+   * Validate if the sequence number of the envelope is the next expected, or if the envelope
+   * is a duplicate that has already been processed, or there is a gap in sequence numbers that
+   * should be rejected.
    */
-  def isAccepted[Envelope](envelope: Envelope): Future[IsAcceptedResult] = {
+  def validate[Envelope](envelope: Envelope): Future[Validation] = {
     createRecordWithOffset(envelope) match {
-      case Some(recordWithOffset) => isAccepted(recordWithOffset, getInflight())
-      case None                   => IsAcceptedResult.FutureAccepted
+      case Some(recordWithOffset) => validate(recordWithOffset, getInflight())
+      case None                   => Validation.FutureAccepted
     }
   }
 
-  private def isAccepted(
-      recordWithOffset: RecordWithOffset,
-      currentInflight: Map[Pid, SeqNr]): Future[IsAcceptedResult] = {
-    import IsAcceptedResult._
+  private def validate(recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Future[Validation] = {
+    import Validation._
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
     val currentState = getState()
 
-    val duplicate = isDuplicate(recordWithOffset.record)
+    val duplicate = getState().isDuplicate(recordWithOffset.record)
 
     if (duplicate) {
       logger.trace("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid)
