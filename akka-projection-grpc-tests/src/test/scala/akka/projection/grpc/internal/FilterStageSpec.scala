@@ -19,6 +19,8 @@ import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.typed.PersistenceId
+import akka.persistence.typed.ReplicaId
+import akka.persistence.typed.ReplicationId
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.ExcludeEntityIds
 import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
@@ -241,6 +243,33 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNext().event shouldBe "e1"
       outProbe.expectNext().event shouldBe "d1"
       outProbe.expectNext().event shouldBe "d2"
+    }
+
+    "replay from ReplayReq with RES ReplicaId" in new Setup {
+      // some more envelopes
+      override lazy val allEnvelopes = Vector(
+        createEnvelope(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId, 1, "a1"),
+        createEnvelope(ReplicationId(entityType, "a", ReplicaId("B")).persistenceId, 1, "b1"),
+        createEnvelope(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId, 2, "a2"))
+
+      envPublisher.sendNext(allEnvelopes.last)
+      outProbe.request(10)
+      outProbe.expectNext().event shouldBe "a2"
+
+      inPublisher.sendNext(
+        StreamIn(StreamIn.Message.Replay(
+          ReplayReq(List(PersistenceIdSeqNr(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId.id, 1L))))))
+      // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
+      envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
+      outProbe.expectNext().event shouldBe "e1"
+      outProbe.expectNext().event shouldBe "a1"
+      outProbe.expectNext().event shouldBe "a2"
+
+      // but ignored if it's a request for another replicaId
+      inPublisher.sendNext(
+        StreamIn(StreamIn.Message.Replay(
+          ReplayReq(List(PersistenceIdSeqNr(ReplicationId(entityType, "a", ReplicaId("B")).persistenceId.id, 1L))))))
+      outProbe.expectNoMessage()
     }
 
     "handle many replay requests" in new Setup {
