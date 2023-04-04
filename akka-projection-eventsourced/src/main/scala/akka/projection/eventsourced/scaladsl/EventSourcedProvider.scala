@@ -82,8 +82,8 @@ object EventSourcedProvider {
       case query: EventsBySliceQuery with CanTriggerReplay =>
         new EventsBySlicesSourceProvider[Event](eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
           with CanTriggerReplay {
-          override private[akka] def triggerReplay(entityId: String, fromSeqNr: Long): Unit =
-            query.triggerReplay(entityId, fromSeqNr)
+          override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
+            query.triggerReplay(persistenceId, fromSeqNr)
         }
       case _ =>
         new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)

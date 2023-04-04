@@ -47,7 +47,7 @@ message FilterReq {
 
 // Replay events for given entities.
 message ReplayReq {
-  repeated EntityIdOffset entity_id_offset = 1;
+  repeated PersistenceIdSeqNr persistence_id_offset = 1;
 }
 
 message FilterCriteria {
