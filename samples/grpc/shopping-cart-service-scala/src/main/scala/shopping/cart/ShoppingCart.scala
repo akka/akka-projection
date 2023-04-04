@@ -38,7 +38,11 @@ object ShoppingCart {
   /**
    * The current state held by the `EventSourcedBehavior`.
    */
-  final case class State(items: Map[String, Int], checkoutDate: Option[Instant])
+  final case class State(
+      items: Map[String, Int],
+      checkoutDate: Option[Instant],
+      customerId: String,
+      customerCategory: String)
       extends CborSerializable {
 
     def isCheckedOut: Boolean =
@@ -63,8 +67,11 @@ object ShoppingCart {
     def checkout(now: Instant): State =
       copy(checkoutDate = Some(now))
 
+    def setCustomer(customerId: String, category: String): State =
+      copy(customerId = customerId, customerCategory = category)
+
     def toSummary: Summary =
-      Summary(items, isCheckedOut)
+      Summary(items, isCheckedOut, customerId, customerCategory)
 
     def totalQuantity: Int =
       items.valuesIterator.sum
@@ -80,7 +87,11 @@ object ShoppingCart {
   }
   object State {
     val empty: State =
-      State(items = Map.empty, checkoutDate = None)
+      State(
+        items = Map.empty,
+        checkoutDate = None,
+        customerId = "",
+        customerCategory = "")
   }
 
   /**
@@ -131,8 +142,18 @@ object ShoppingCart {
   /**
    * Summary of the shopping cart state, used in reply messages.
    */
-  final case class Summary(items: Map[String, Int], checkedOut: Boolean)
+  final case class Summary(
+      items: Map[String, Int],
+      checkedOut: Boolean,
+      customerId: String,
+      customerCategory: String)
       extends CborSerializable
+
+  final case class SetCustomer(
+      customerId: String,
+      category: String,
+      replyTo: ActorRef[StatusReply[Summary]])
+      extends Command
 
   /**
    * This interface defines all the events that the ShoppingCart supports.
@@ -155,6 +176,12 @@ object ShoppingCart {
       extends Event
 
   final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
+
+  final case class CustomerDefined(
+      cartId: String,
+      customerId: String,
+      category: String)
+      extends Event
 
   val EntityKey: EntityTypeKey[Command] =
     EntityTypeKey[Command]("ShoppingCart")
@@ -258,6 +285,12 @@ object ShoppingCart {
 
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
+
+      case SetCustomer(customerId, category, replyTo) =>
+        Effect
+          .persist(CustomerDefined(cartId, customerId, category))
+          .thenReply(replyTo)(updatedCart =>
+            StatusReply.Success(updatedCart.toSummary))
     }
   }
 
@@ -268,6 +301,11 @@ object ShoppingCart {
     command match {
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
+      case SetCustomer(customerId, category, replyTo) =>
+        Effect
+          .persist(CustomerDefined(cartId, customerId, category))
+          .thenReply(replyTo)(updatedCart =>
+            StatusReply.Success(updatedCart.toSummary))
       case cmd: AddItem =>
         Effect.reply(cmd.replyTo)(
           StatusReply.Error(
@@ -296,6 +334,8 @@ object ShoppingCart {
         state.updateItem(itemId, quantity)
       case CheckedOut(_, eventTime) =>
         state.checkout(eventTime)
+      case CustomerDefined(_, customerId, category) =>
+        state.setCustomer(customerId, category)
     }
   }
 }

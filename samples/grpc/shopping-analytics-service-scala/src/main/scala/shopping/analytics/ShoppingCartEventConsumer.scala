@@ -11,11 +11,13 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
 import org.slf4j.LoggerFactory
 import shoppingcart.CheckedOut
+import shoppingcart.CustomerDefined
 import shoppingcart.ItemAdded
 import shoppingcart.ItemQuantityAdjusted
 import shoppingcart.ItemRemoved
@@ -28,7 +30,10 @@ object ShoppingCartEventConsumer {
     LoggerFactory.getLogger("shopping.analytics.ShoppingCartEventConsumer")
 
   //#eventHandler
-  private class EventHandler(projectionId: ProjectionId)
+  private class EventHandler(
+      projectionId: ProjectionId,
+      streamId: String,
+      system: ActorSystem[_])
       extends Handler[EventEnvelope[AnyRef]] {
     private var totalCount = 0
     private var throughputStartTime = System.nanoTime()
@@ -80,6 +85,20 @@ object ShoppingCartEventConsumer {
             projectionId.id,
             checkedOut.cartId,
             totalCount)
+        case customerDefined: CustomerDefined =>
+          log.info(
+            "Projection [{}] consumed CustomerDefined for cart {}. Total [{}] events.",
+            projectionId.id,
+            customerDefined.cartId,
+            totalCount)
+          // Only interested in gold customers, update the filter to exclude.
+          // In a real application it would have to remove such entityId filter when it's not relevant any more.
+          if (customerDefined.category != "gold")
+            ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(
+              streamId,
+              List(
+                ConsumerFilter.ExcludeEntityIds(Set(customerDefined.cartId))))
+
         case unknown =>
           throw new IllegalArgumentException(s"Unknown event $unknown")
       }
@@ -133,7 +152,11 @@ object ShoppingCartEventConsumer {
             projectionId,
             None,
             sourceProvider,
-            () => new EventHandler(projectionId)))
+            () =>
+              new EventHandler(
+                projectionId,
+                eventsBySlicesQuery.streamId,
+                sys)))
       })
   }
 
