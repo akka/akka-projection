@@ -26,7 +26,6 @@ import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.OffsetPidSeqNr
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Pid
-import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.SeqNr
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -341,6 +340,7 @@ class R2dbcTimestampOffsetStoreSpec
     }
 
     "filter duplicates" in {
+      import R2dbcOffsetStore.Validation._
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
 
@@ -358,26 +358,26 @@ class R2dbcTimestampOffsetStoreSpec
       val offset3 = TimestampOffset(clock.instant(), Map("p5" -> 10L))
       offsetStore.saveOffset(OffsetPidSeqNr(offset3, "p5", 10L)).futureValue
 
-      def createRecord(pid: Pid, seqNr: SeqNr, timestamp: Instant): Record =
-        Record(persistenceExt.sliceForPersistenceId(pid), pid, seqNr, timestamp)
+      def env(pid: Pid, seqNr: SeqNr, timestamp: Instant): EventEnvelope[String] =
+        createEnvelope(pid, seqNr, timestamp, "evt")
 
-      offsetStore.isDuplicate(createRecord("p5", 10, offset3.timestamp)) shouldBe true
-      offsetStore.isDuplicate(createRecord("p1", 4, offset2.timestamp)) shouldBe true
-      offsetStore.isDuplicate(createRecord("p3", 6, offset2.timestamp)) shouldBe true
-      offsetStore.isDuplicate(createRecord("p4", 9, offset2.timestamp)) shouldBe true
+      offsetStore.validate(env("p5", 10, offset3.timestamp)).futureValue shouldBe Duplicate
+      offsetStore.validate(env("p1", 4, offset2.timestamp)).futureValue shouldBe Duplicate
+      offsetStore.validate(env("p3", 6, offset2.timestamp)).futureValue shouldBe Duplicate
+      offsetStore.validate(env("p4", 9, offset2.timestamp)).futureValue shouldBe Duplicate
 
-      offsetStore.isDuplicate(createRecord("p1", 3, offset1.timestamp)) shouldBe true
-      offsetStore.isDuplicate(createRecord("p2", 1, offset1.timestamp)) shouldBe true
-      offsetStore.isDuplicate(createRecord("p3", 5, offset1.timestamp)) shouldBe true
+      offsetStore.validate(env("p1", 3, offset1.timestamp)).futureValue shouldBe Duplicate
+      offsetStore.validate(env("p2", 1, offset1.timestamp)).futureValue shouldBe Duplicate
+      offsetStore.validate(env("p3", 5, offset1.timestamp)).futureValue shouldBe Duplicate
 
-      offsetStore.isDuplicate(createRecord("p1", 2, offset1.timestamp.minusMillis(1))) shouldBe true
-      offsetStore.isDuplicate(createRecord("p5", 9, offset3.timestamp.minusMillis(1))) shouldBe true
+      offsetStore.validate(env("p1", 2, offset1.timestamp.minusMillis(1))).futureValue shouldBe Duplicate
+      offsetStore.validate(env("p5", 9, offset3.timestamp.minusMillis(1))).futureValue shouldBe Duplicate
 
-      offsetStore.isDuplicate(createRecord("p5", 11, offset3.timestamp)) shouldBe false
-      offsetStore.isDuplicate(createRecord("p5", 12, offset3.timestamp.plusMillis(1))) shouldBe false
+      offsetStore.validate(env("p5", 11, offset3.timestamp)).futureValue shouldNot be(Duplicate)
+      offsetStore.validate(env("p5", 12, offset3.timestamp.plusMillis(1))).futureValue shouldNot be(Duplicate)
 
-      offsetStore.isDuplicate(createRecord("p6", 1, offset3.timestamp.plusMillis(2))) shouldBe false
-      offsetStore.isDuplicate(createRecord("p7", 1, offset3.timestamp.minusMillis(1))) shouldBe false
+      offsetStore.validate(env("p6", 1, offset3.timestamp.plusMillis(2))).futureValue shouldNot be(Duplicate)
+      offsetStore.validate(env("p7", 1, offset3.timestamp.minusMillis(1))).futureValue shouldNot be(Duplicate)
     }
 
     "accept known sequence numbers and reject unknown" in {
