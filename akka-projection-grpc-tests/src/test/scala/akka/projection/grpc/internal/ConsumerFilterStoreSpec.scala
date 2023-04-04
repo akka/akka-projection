@@ -10,6 +10,7 @@ import akka.actor.typed.ActorRef
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.consumer.ConsumerFilter.ConsumerFilterSettings
 import akka.projection.grpc.consumer.ConsumerFilter.CurrentFilter
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -22,6 +23,8 @@ abstract class ConsumerFilterStoreSpec(implName: String, config: Config)
     with Matchers
     with TestData
     with LogCapturing {
+
+  val consumerFilterSettings = ConsumerFilterSettings(system)
 
   val notifyProbe = createTestProbe[ConsumerFilterRegistry.FilterUpdated]()
 
@@ -107,11 +110,9 @@ class DdataConsumerFilterStoreSpec
         canonical.port = 0
       }
     }
-    // FIXME impl State serialization
-    akka.actor.allow-java-serialization = on
     """)) {
   override def spawnStore(streamId: String): ActorRef[ConsumerFilterStore.Command] = {
-    spawn(DdataConsumerFilterStore(streamId, notifyProbe.ref))
+    spawn(DdataConsumerFilterStore(consumerFilterSettings, streamId, notifyProbe.ref))
   }
 
   Cluster(system).manager ! Join(Cluster(system).selfMember.address)
@@ -120,7 +121,8 @@ class DdataConsumerFilterStoreSpec
     val replyProbe = createTestProbe[ConsumerFilter.CurrentFilter]()
     val streamId = nextStreamId()
     ConsumerFilterStore.useDistributedData(system) shouldBe true
-    val behv = ConsumerFilterStore.createDdataConsumerFilterStore(system, streamId, notifyProbe.ref)
+    val behv =
+      ConsumerFilterStore.createDdataConsumerFilterStore(system, consumerFilterSettings, streamId, notifyProbe.ref)
     val store = spawn(behv)
     store ! ConsumerFilterStore.GetFilter(replyProbe.ref)
     replyProbe.expectMessage(CurrentFilter(streamId, Nil))

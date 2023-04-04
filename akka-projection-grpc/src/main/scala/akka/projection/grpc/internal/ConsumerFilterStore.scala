@@ -8,7 +8,6 @@ import java.util.ConcurrentModificationException
 import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.immutable
-import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
 
@@ -35,6 +34,7 @@ import akka.cluster.ddata.typed.scaladsl.DistributedData
 import akka.cluster.ddata.typed.scaladsl.Replicator
 import akka.cluster.ddata.typed.scaladsl.ReplicatorMessageAdapter
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.consumer.ConsumerFilter.ConsumerFilterSettings
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import org.slf4j.LoggerFactory
 
@@ -50,11 +50,12 @@ import org.slf4j.LoggerFactory
 
   def apply(
       system: ActorSystem[_],
+      settings: ConsumerFilterSettings,
       streamId: String,
       notifyUpdatesTo: ActorRef[ConsumerFilterRegistry.FilterUpdated]): Behavior[Command] = {
     // ddata dependency is optional
     if (useDistributedData(system)) {
-      createDdataConsumerFilterStore(system, streamId, notifyUpdatesTo)
+      createDdataConsumerFilterStore(system, settings, streamId, notifyUpdatesTo)
     } else {
       LocalConsumerFilterStore(streamId, notifyUpdatesTo)
     }
@@ -74,6 +75,7 @@ import org.slf4j.LoggerFactory
    */
   def createDdataConsumerFilterStore(
       system: ActorSystem[_],
+      settings: ConsumerFilterSettings,
       streamId: String,
       notifyUpdatesTo: ActorRef[ConsumerFilterRegistry.FilterUpdated]): Behavior[Command] = {
     val className = "akka.projection.grpc.internal.DdataConsumerFilterStore"
@@ -84,9 +86,10 @@ import org.slf4j.LoggerFactory
       case Success(companion) =>
         val applyMethod = companion.getClass.getMethod(
           "apply",
+          classOf[ConsumerFilterSettings],
           classOf[String],
           classOf[ActorRef[ConsumerFilterRegistry.FilterUpdated]])
-        applyMethod.invoke(companion, streamId, notifyUpdatesTo).asInstanceOf[Behavior[Command]]
+        applyMethod.invoke(companion, settings, streamId, notifyUpdatesTo).asInstanceOf[Behavior[Command]]
       case Failure(exc) =>
         LoggerFactory.getLogger(className).error2("Couldn't create instance of [{}]", className, exc)
         throw exc
@@ -139,7 +142,6 @@ import org.slf4j.LoggerFactory
   def setState(old: immutable.Seq[FilterCriteria], filterCriteria: immutable.Seq[FilterCriteria]): Unit = {
     if (!storeExt.filtersByStreamId.replace(streamId, old, filterCriteria))
       throw new ConcurrentModificationException(s"Unexpected concurrent update of streamId [$streamId]")
-    // FIXME this might be too much logging when many ids
     context.log.debug2("Updated filter for streamId [{}] to [{}]", streamId, filterCriteria)
   }
 
@@ -356,6 +358,7 @@ import org.slf4j.LoggerFactory
   private case class InternalSubscribeResponse(chg: Replicator.SubscribeResponse[State]) extends InternalCommand
 
   def apply(
+      settings: ConsumerFilterSettings,
       streamId: String,
       notifyUpdatesTo: ActorRef[ConsumerFilterRegistry.FilterUpdated]): Behavior[ConsumerFilterStore.Command] = {
     Behaviors
@@ -363,7 +366,8 @@ import org.slf4j.LoggerFactory
         Behaviors.setup { context =>
           val key = ConsumerFilterKey(s"ddataConsumerFilterStore-$streamId")
           DistributedData.withReplicatorMessageAdapter[ConsumerFilterStore.Command, State] { replicatorAdapter =>
-            new DdataConsumerFilterStore(context, replicatorAdapter, key, streamId, notifyUpdatesTo).behavior()
+            new DdataConsumerFilterStore(context, settings, replicatorAdapter, key, streamId, notifyUpdatesTo)
+              .behavior()
           }
         }
       }
@@ -376,6 +380,7 @@ import org.slf4j.LoggerFactory
  */
 @InternalApi private[akka] class DdataConsumerFilterStore(
     context: ActorContext[ConsumerFilterStore.Command],
+    settings: ConsumerFilterSettings,
     replicatorAdapter: ReplicatorMessageAdapter[ConsumerFilterStore.Command, DdataConsumerFilterStore.State],
     key: DdataConsumerFilterStore.ConsumerFilterKey,
     streamId: String,
@@ -385,8 +390,8 @@ import org.slf4j.LoggerFactory
 
   implicit val selfUniqueAddress: SelfUniqueAddress = DistributedData(context.system).selfUniqueAddress
 
-  private val stateReadConsistency = Replicator.ReadMajority(3.seconds) // FIXME config
-  private val stateWriteConsistency = Replicator.WriteMajority(3.seconds) // FIXME config
+  private val stateReadConsistency = Replicator.ReadMajority(settings.ddataReadTimeout)
+  private val stateWriteConsistency = Replicator.WriteMajority(settings.ddataWriteTimeout)
 
   // FIXME use the expire-keys-after-inactivity for this, and have a keep alive
 

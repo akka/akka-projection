@@ -9,8 +9,8 @@ import java.util.{ Set => JSet }
 
 import scala.annotation.tailrec
 import scala.collection.immutable
+import scala.concurrent.duration.FiniteDuration
 
-import akka.util.ccompat.JavaConverters._
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Extension
@@ -19,6 +19,9 @@ import akka.actor.typed.Props
 import akka.annotation.InternalApi
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.internal.ConsumerFilterRegistry
+import akka.util.JavaDurationConverters._
+import akka.util.ccompat.JavaConverters._
+import com.typesafe.config.Config
 
 // FIXME add ApiMayChange in all places
 
@@ -28,6 +31,7 @@ import akka.projection.grpc.internal.ConsumerFilterRegistry
 object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
   private val ReplicationIdSeparator = '|'
+  private val ToStringLimit = 100
 
   trait Command
   sealed trait SubscriberCommand extends Command {
@@ -121,6 +125,13 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     /** Java API */
     def this(entityIds: JSet[String]) =
       this(entityIds.asScala.toSet)
+
+    override def toString: String = {
+      if (entityIds.size > ToStringLimit)
+        s"ExcludeEntityIds(${entityIds.take(ToStringLimit).mkString(", ")} ...)"
+      else
+        s"ExcludeEntityIds(${entityIds.mkString(", ")})"
+    }
   }
 
   object RemoveExcludeEntityIds {
@@ -136,6 +147,13 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     /** Java API */
     def this(entityIds: JSet[String]) =
       this(entityIds.asScala.toSet)
+
+    override def toString: String = {
+      if (entityIds.size > ToStringLimit)
+        s"RemoveExcludeEntityIds(${entityIds.take(ToStringLimit).mkString(", ")} ...)"
+      else
+        s"RemoveExcludeEntityIds(${entityIds.mkString(", ")})"
+    }
   }
 
   object IncludeEntityIds {
@@ -156,6 +174,13 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     /** Java API */
     def this(entityOffsets: JSet[EntityIdOffset]) =
       this(entityOffsets.asScala.toSet)
+
+    override def toString: String = {
+      if (entityOffsets.size > ToStringLimit)
+        s"IncludeEntityIds(${entityOffsets.take(ToStringLimit).mkString(", ")} ...)"
+      else
+        s"IncludeEntityIds(${entityOffsets.mkString(", ")})"
+    }
   }
 
   object RemoveIncludeEntityIds {
@@ -171,6 +196,13 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     /** Java API */
     def this(entityIds: JSet[String]) =
       this(entityIds.asScala.toSet)
+
+    override def toString: String = {
+      if (entityIds.size > ToStringLimit)
+        s"RemoveIncludeEntityIds(${entityIds.take(ToStringLimit).mkString(", ")} ...)"
+      else
+        s"RemoveIncludeEntityIds(${entityIds.mkString(", ")})"
+    }
   }
 
   private def addReplicaIdToEntityId(replicaId: ReplicaId, entityId: String): String =
@@ -322,11 +354,29 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   @InternalApi private[akka] def hasRemoveCriteria(filter: immutable.Seq[FilterCriteria]): Boolean =
     filter.exists(_.isInstanceOf[RemoveCriteria])
 
+  /** INTERNAL API */
+  @InternalApi private[akka] object ConsumerFilterSettings {
+    def apply(system: ActorSystem[_]): ConsumerFilterSettings =
+      apply(system.settings.config.getConfig("akka.projection.grpc.consumer.filter"))
+
+    def apply(config: Config): ConsumerFilterSettings =
+      ConsumerFilterSettings(
+        ddataReadTimeout = config.getDuration("ddata-read-timeout").asScala,
+        ddataWriteTimeout = config.getDuration("ddata-write-timeout").asScala)
+  }
+
+  /** INTERNAL API */
+  @InternalApi private[akka] final case class ConsumerFilterSettings(
+      ddataReadTimeout: FiniteDuration,
+      ddataWriteTimeout: FiniteDuration)
+
 }
 
 class ConsumerFilter(system: ActorSystem[_]) extends Extension {
 
+  private val settings = ConsumerFilter.ConsumerFilterSettings(system)
+
   val ref: ActorRef[ConsumerFilter.Command] =
-    system.systemActorOf(ConsumerFilterRegistry(), "projectionGrpcConsumerFilter", Props.empty)
+    system.systemActorOf(ConsumerFilterRegistry(settings), "projectionGrpcConsumerFilter", Props.empty)
 
 }

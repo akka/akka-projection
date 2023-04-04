@@ -160,7 +160,8 @@ import scala.util.Success
               init.sliceMin to init.sliceMax,
               init.filter,
               currentEventsByPersistenceIdQueriesPerStreamId(init.streamId),
-              producerFilter = producerSource.producerFilter))
+              producerFilter = producerSource.producerFilter,
+              replayParallelism = producerSource.settings.replayParallelism))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =

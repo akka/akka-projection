@@ -7,6 +7,7 @@ package akka.projection.grpc.internal
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.consumer.ConsumerFilter.ConsumerFilterSettings
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -17,6 +18,8 @@ class ConsumerFilterRegistrySpec
     with TestData
     with LogCapturing {
 
+  private val consumerFilterSettings = ConsumerFilterSettings(system)
+
   private var streamIdCounter = 0
   def nextStreamId(): String = {
     streamIdCounter += 1
@@ -26,7 +29,7 @@ class ConsumerFilterRegistrySpec
   "ConsumerFilterRegistry" must {
     "get filter" in {
       val streamId = nextStreamId()
-      val registry = spawn(ConsumerFilterRegistry())
+      val registry = spawn(ConsumerFilterRegistry(consumerFilterSettings))
 
       val currentProbe = createTestProbe[ConsumerFilter.CurrentFilter]()
       registry ! ConsumerFilter.GetFilter(streamId, currentProbe.ref)
@@ -56,7 +59,7 @@ class ConsumerFilterRegistrySpec
 
     "update filter and notify subscriber" in {
       val streamId = nextStreamId()
-      val registry = spawn(ConsumerFilterRegistry())
+      val registry = spawn(ConsumerFilterRegistry(consumerFilterSettings))
 
       val subscriberProbe = createTestProbe[ConsumerFilter.SubscriberCommand]()
       registry ! ConsumerFilter.Subscribe(streamId, Nil, subscriberProbe.ref)
@@ -72,7 +75,7 @@ class ConsumerFilterRegistrySpec
 
     "notify subscriber with diff" in {
       val streamId = nextStreamId()
-      val registry = spawn(ConsumerFilterRegistry())
+      val registry = spawn(ConsumerFilterRegistry(consumerFilterSettings))
 
       val subscriberProbe1 = createTestProbe[ConsumerFilter.SubscriberCommand]()
       registry ! ConsumerFilter.Subscribe(streamId, Nil, subscriberProbe1.ref)
@@ -111,7 +114,7 @@ class ConsumerFilterRegistrySpec
 
     "start diff from init filter" in {
       val streamId = nextStreamId()
-      val registry = spawn(ConsumerFilterRegistry())
+      val registry = spawn(ConsumerFilterRegistry(consumerFilterSettings))
 
       val initFilter = Vector(ConsumerFilter.ExcludeEntityIds(Set("a", "c")))
       registry ! ConsumerFilter.UpdateFilter(streamId, initFilter)
@@ -145,7 +148,7 @@ class ConsumerFilterRegistrySpec
 
     "notify new subscriber of diff from concurrent update" in {
       val streamId = nextStreamId()
-      val registry = spawn(ConsumerFilterRegistry())
+      val registry = spawn(ConsumerFilterRegistry(consumerFilterSettings))
 
       val initFilter = Vector(ConsumerFilter.ExcludeEntityIds(Set("a", "c")))
       registry ! ConsumerFilter.UpdateFilter(streamId, initFilter)
