@@ -316,7 +316,7 @@ final class GrpcReadJournal private (
     val initFilter = {
       import akka.actor.typed.scaladsl.AskPattern._
       import scala.concurrent.duration._
-      implicit val askTimeout: Timeout = 10.seconds // FIXME config
+      implicit val askTimeout: Timeout = 10.seconds
       consumerFilter.ref.ask[ConsumerFilter.CurrentFilter](ConsumerFilter.GetFilter(streamId, _))
     }
 

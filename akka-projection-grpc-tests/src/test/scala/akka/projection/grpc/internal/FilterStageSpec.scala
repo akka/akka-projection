@@ -28,6 +28,7 @@ import akka.projection.grpc.internal.proto.IncludeEntityIds
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
+import akka.projection.grpc.producer.EventProducerSettings
 import akka.stream.scaladsl.BidiFlow
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Keep
@@ -45,6 +46,8 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
   private val streamId = "EntityAStream"
 
   private val persistence = Persistence(system)
+
+  private val producerSettings = EventProducerSettings(system)
 
   private def createEnvelope(
       pid: PersistenceId,
@@ -97,7 +100,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
           import scala.concurrent.duration._
 
           import akka.pattern.{ after => futureAfter }
-          if (eventsByPersistenceIdConcurrency.incrementAndGet() > FilterStage.ReplayParallelism)
+          if (eventsByPersistenceIdConcurrency.incrementAndGet() > producerSettings.replayParallelism)
             throw new IllegalStateException("Unexpected, too many concurrent calls to currentEventsByPersistenceId")
           Source
             .futureSource(futureAfter(10.millis) {
@@ -121,7 +124,8 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             0 until persistence.numberOfSlices,
             initFilter,
             testCurrentEventsByPersistenceIdQuery(allEnvelopes),
-            producerFilter = initProducerFilter))
+            producerFilter = initProducerFilter,
+            replayParallelism = producerSettings.replayParallelism))
         .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
     private val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
 

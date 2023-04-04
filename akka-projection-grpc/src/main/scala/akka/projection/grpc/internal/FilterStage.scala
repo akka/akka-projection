@@ -38,7 +38,6 @@ import org.slf4j.LoggerFactory
  * INTERNAL API
  */
 @InternalApi private[akka] object FilterStage {
-  val ReplayParallelism = 3 // FIXME config
   private val ReplicationIdSeparator = '|'
 
   object Filter {
@@ -103,7 +102,8 @@ import org.slf4j.LoggerFactory
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
-    val producerFilter: EventEnvelope[Any] => Boolean)
+    val producerFilter: EventEnvelope[Any] => Boolean,
+    replayParallelism: Int)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
 
   private val log = LoggerFactory.getLogger(classOf[FilterStage])
@@ -112,7 +112,6 @@ import org.slf4j.LoggerFactory
   private val inReq = Inlet[StreamIn]("in1")
   private val inEnv = Inlet[EventEnvelope[Any]]("in2")
   private val outNotUsed = Outlet[NotUsed]("out1")
-  // FIXME probably need something else than EventEnvelope out later if need to filter on individual events to pass on pid/seqNr
   private val outEnv = Outlet[EventEnvelope[Any]]("out2")
   override val shape = BidiShape(inReq, outNotUsed, inEnv, outEnv)
 
@@ -261,7 +260,6 @@ import org.slf4j.LoggerFactory
       }
 
       private def replayAll(persistenceIdOffsets: Iterable[PersistenceIdSeqNr]): Unit = {
-        // FIXME limit number of concurrent replay requests, place additional in a pending queue
         persistenceIdOffsets.foreach { offset =>
           if (offset.seqNr >= 1)
             replay(offset)
@@ -297,7 +295,7 @@ import org.slf4j.LoggerFactory
               logPrefix,
               pid,
               fromSeqNr)
-          } else if (replayInProgress.size < ReplayParallelism) {
+          } else if (replayInProgress.size < replayParallelism) {
             log.debugN("Stream [{}]: Starting replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
             val queue =
               currentEventsByPersistenceIdQuery
@@ -313,7 +311,7 @@ import org.slf4j.LoggerFactory
       }
 
       private def pullInEnvOrReplay(): Unit = {
-        if (replayInProgress.size < ReplayParallelism && pendingReplayRequests.nonEmpty) {
+        if (replayInProgress.size < replayParallelism && pendingReplayRequests.nonEmpty) {
           val pendingEntityOffset = pendingReplayRequests.head
           pendingReplayRequests = pendingReplayRequests.tail
           replay(pendingEntityOffset)

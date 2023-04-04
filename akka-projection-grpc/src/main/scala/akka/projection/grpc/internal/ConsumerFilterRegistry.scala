@@ -18,6 +18,7 @@ import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.annotation.InternalApi
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.consumer.ConsumerFilter.ConsumerFilterSettings
 import akka.util.Timeout
 
 /**
@@ -34,9 +35,9 @@ import akka.util.Timeout
 
   private final case class Subscriber(streamId: String, ref: ActorRef[SubscriberCommand])
 
-  def apply(): Behavior[Command] = {
+  def apply(settings: ConsumerFilterSettings): Behavior[Command] = {
     Behaviors.setup { context =>
-      new ConsumerFilterRegistry(context).behavior(Map.empty, Map.empty)
+      new ConsumerFilterRegistry(context, settings).behavior(Map.empty, Map.empty)
     }
 
   }
@@ -46,11 +47,11 @@ import akka.util.Timeout
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class ConsumerFilterRegistry(context: ActorContext[ConsumerFilter.Command]) {
+@InternalApi private[akka] class ConsumerFilterRegistry(
+    context: ActorContext[ConsumerFilter.Command],
+    settings: ConsumerFilterSettings) {
   import ConsumerFilter._
   import ConsumerFilterRegistry._
-
-  // FIXME add unit test for this actor
 
   private def behavior(
       subscribers: Map[Subscriber, immutable.Seq[FilterCriteria]],
@@ -61,7 +62,7 @@ import akka.util.Timeout
         case Some(store) => store
         case None =>
           context.spawn(
-            ConsumerFilterStore(context.system, streamId, context.self),
+            ConsumerFilterStore(context.system, settings, streamId, context.self),
             URLEncoder.encode(streamId, StandardCharsets.UTF_8.name))
       }
     }
@@ -127,10 +128,7 @@ import akka.util.Timeout
           behavior(subscribers, stores.updated(streamId, store))
 
         case cmd: Replay =>
-          // FIXME revisit the Replay command. Might not be useful for end users since we
-          // don't propagate it to other nodes. We need it (or similar) internally for the lazy replay.
           publishToSubscribers(cmd)
-
           Behaviors.same
 
         case internalCommand: InternalCommand =>
