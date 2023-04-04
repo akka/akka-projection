@@ -170,10 +170,12 @@ import org.slf4j.LoggerFactory
  */
 @InternalApi private[akka] object DdataConsumerFilterStore {
   object State {
-    val empty: State = State(ORSet.empty, ORSet.empty, SeqNrMap.empty)
+    val empty: State = State(ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, SeqNrMap.empty)
 
   }
   final case class State(
+      excludeTags: ORSet[String],
+      includeTags: ORSet[String],
       excludeRegexEntityIds: ORSet[String],
       excludeEntityIds: ORSet[String],
       includeEntityOffsets: SeqNrMap)
@@ -183,6 +185,8 @@ import org.slf4j.LoggerFactory
 
     override def merge(that: State): State =
       State(
+        excludeTags = excludeTags.merge(that.excludeTags),
+        includeTags = includeTags.merge(that.includeTags),
         excludeRegexEntityIds = excludeRegexEntityIds.merge(that.excludeRegexEntityIds),
         excludeEntityIds = excludeEntityIds.merge(that.excludeEntityIds),
         includeEntityOffsets = includeEntityOffsets.merge(that.includeEntityOffsets))
@@ -192,11 +196,29 @@ import org.slf4j.LoggerFactory
     def updated(filterCriteria: immutable.Seq[ConsumerFilter.FilterCriteria])(
         implicit node: SelfUniqueAddress): State = {
 
+      var newExcludeTags = excludeTags
+      var newIncludeTags = includeTags
       var newExcludeRegexEntityIds = excludeRegexEntityIds
       var newExcludeEntityIds = excludeEntityIds
       var newIncludeEntityOffsets = includeEntityOffsets
 
       filterCriteria.foreach {
+        case ConsumerFilter.ExcludeTags(tags) =>
+          tags.foreach { t =>
+            newExcludeTags = newExcludeTags :+ t
+          }
+        case ConsumerFilter.RemoveExcludeTags(tags) =>
+          tags.foreach { t =>
+            newExcludeTags = newExcludeTags.remove(t)
+          }
+        case ConsumerFilter.IncludeTags(tags) =>
+          tags.foreach { t =>
+            newIncludeTags = newIncludeTags :+ t
+          }
+        case ConsumerFilter.RemoveIncludeTags(tags) =>
+          tags.foreach { t =>
+            newIncludeTags = newIncludeTags.remove(t)
+          }
         case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
           matching.foreach { r =>
             newExcludeRegexEntityIds = newExcludeRegexEntityIds :+ r
@@ -224,6 +246,8 @@ import org.slf4j.LoggerFactory
       }
 
       State(
+        excludeTags = newExcludeTags,
+        includeTags = newIncludeTags,
         excludeRegexEntityIds = newExcludeRegexEntityIds,
         excludeEntityIds = newExcludeEntityIds,
         includeEntityOffsets = newIncludeEntityOffsets)
@@ -231,6 +255,10 @@ import org.slf4j.LoggerFactory
 
     lazy val toFilterCriteria: immutable.Seq[ConsumerFilter.FilterCriteria] = {
       Vector(
+        if (excludeTags.isEmpty) None
+        else Some(ConsumerFilter.ExcludeTags(excludeTags.elements)),
+        if (includeTags.isEmpty) None
+        else Some(ConsumerFilter.IncludeTags(includeTags.elements)),
         if (excludeRegexEntityIds.isEmpty) None
         else Some(ConsumerFilter.ExcludeRegexEntityIds(excludeRegexEntityIds.elements)),
         if (excludeEntityIds.isEmpty) None else Some(ConsumerFilter.ExcludeEntityIds(excludeEntityIds.elements)),
@@ -242,22 +270,29 @@ import org.slf4j.LoggerFactory
     }
 
     override def modifiedByNodes: Set[UniqueAddress] =
-      excludeRegexEntityIds.modifiedByNodes
+      excludeTags.modifiedByNodes
+        .union(includeTags.modifiedByNodes)
+        .union(excludeRegexEntityIds.modifiedByNodes)
         .union(excludeEntityIds.modifiedByNodes)
         .union(includeEntityOffsets.modifiedByNodes)
 
     override def needPruningFrom(removedNode: UniqueAddress): Boolean =
-      excludeRegexEntityIds.needPruningFrom(removedNode) || excludeEntityIds.needPruningFrom(removedNode) || includeEntityOffsets
+      excludeTags.needPruningFrom(removedNode) || includeTags.needPruningFrom(removedNode) || excludeRegexEntityIds
+        .needPruningFrom(removedNode) || excludeEntityIds.needPruningFrom(removedNode) || includeEntityOffsets
         .needPruningFrom(removedNode)
 
     override def prune(removedNode: UniqueAddress, collapseInto: UniqueAddress): State =
       State(
+        excludeTags.prune(removedNode, collapseInto),
+        includeTags.prune(removedNode, collapseInto),
         excludeRegexEntityIds.prune(removedNode, collapseInto),
         excludeEntityIds.prune(removedNode, collapseInto),
         includeEntityOffsets.prune(removedNode, collapseInto))
 
     override def pruningCleanup(removedNode: UniqueAddress): State =
       State(
+        excludeTags.pruningCleanup(removedNode),
+        includeTags.pruningCleanup(removedNode),
         excludeRegexEntityIds.pruningCleanup(removedNode),
         excludeEntityIds.pruningCleanup(removedNode),
         includeEntityOffsets.pruningCleanup(removedNode))

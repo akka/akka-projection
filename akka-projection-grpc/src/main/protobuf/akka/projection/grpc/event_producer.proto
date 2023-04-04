@@ -57,13 +57,33 @@ message FilterCriteria {
   //   If no matching include the event is discarded.
   //   If matching include the event is emitted.
   oneof message {
-    ExcludeRegexEntityIds exclude_matching_entity_ids = 1;
-    RemoveExcludeRegexEntityIds remove_exclude_matching_entity_ids = 2;
-    ExcludeEntityIds exclude_entity_ids = 3;
-    RemoveExcludeEntityIds remove_exclude_entity_ids = 4;
-    IncludeEntityIds include_entity_ids = 5;
-    RemoveIncludeEntityIds remove_include_entity_ids = 6;
+    ExcludeTags exclude_tags = 1;
+    RemoveExcludeTags remove_exclude_tags = 2;
+    IncludeTags include_tags = 3;
+    RemoveIncludeTags remove_include_tags = 4;
+    ExcludeRegexEntityIds exclude_matching_entity_ids = 5;
+    RemoveExcludeRegexEntityIds remove_exclude_matching_entity_ids = 6;
+    ExcludeEntityIds exclude_entity_ids = 7;
+    RemoveExcludeEntityIds remove_exclude_entity_ids = 8;
+    IncludeEntityIds include_entity_ids = 9;
+    RemoveIncludeEntityIds remove_include_entity_ids = 10;
   }
+}
+
+message ExcludeTags {
+  repeated string tags = 1;
+}
+
+message RemoveExcludeTags {
+  repeated string tags = 1;
+}
+
+message IncludeTags {
+  repeated string tags = 1;
+}
+
+message RemoveIncludeTags {
+  repeated string tags = 1;
 }
 
 message IncludeEntityIds {

@@ -67,6 +67,7 @@ abstract class ConsumerFilterStoreSpec(implName: String, config: Config)
       val store = spawnStore(streamId)
       val filter1 =
         Vector(
+          ConsumerFilter.ExcludeTags(Set("t1", "t2")),
           ConsumerFilter.ExcludeEntityIds(Set("a", "b", "c")),
           ConsumerFilter.IncludeEntityIds(Set(ConsumerFilter.EntityIdOffset("b", 1))))
       store ! ConsumerFilterStore.UpdateFilter(filter1)
@@ -74,11 +75,13 @@ abstract class ConsumerFilterStoreSpec(implName: String, config: Config)
 
       val filter2 =
         Vector(
+          ConsumerFilter.RemoveExcludeTags(Set("t2")),
           ConsumerFilter.ExcludeEntityIds(Set("d")),
           ConsumerFilter.RemoveExcludeEntityIds(Set("c")),
           ConsumerFilter.RemoveIncludeEntityIds(Set("b")))
       store ! ConsumerFilterStore.UpdateFilter(filter2)
-      val expectedFilter = Vector(ConsumerFilter.ExcludeEntityIds(Set("a", "b", "d")))
+      val expectedFilter =
+        Vector(ConsumerFilter.ExcludeTags(Set("t1")), ConsumerFilter.ExcludeEntityIds(Set("a", "b", "d")))
       notifyProbe.expectMessage(ConsumerFilterRegistry.FilterUpdated(streamId, expectedFilter))
 
       store ! ConsumerFilterStore.GetFilter(replyProbe.ref)

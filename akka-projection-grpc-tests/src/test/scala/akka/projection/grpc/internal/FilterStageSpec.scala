@@ -22,6 +22,7 @@ import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.ExcludeEntityIds
 import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
+import akka.projection.grpc.internal.proto.ExcludeTags
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.IncludeEntityIds
@@ -146,14 +147,23 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
     }
 
     "use filter request" in new Setup {
-      val filterCriteria = List(FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(List("b")))))
+      override lazy val allEnvelopes = envelopes ++
+        Vector(
+          createEnvelope(PersistenceId(entityType, "d"), 1, "d1", tags = Set("t1")),
+          createEnvelope(PersistenceId(entityType, "d"), 2, "d2"))
+
+      val filterCriteria = List(
+        FilterCriteria(FilterCriteria.Message.ExcludeTags(ExcludeTags(List("t1")))),
+        FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(List("b")))))
       inPublisher.sendNext(StreamIn(StreamIn.Message.Filter(FilterReq(filterCriteria))))
 
-      envelopes.foreach(envPublisher.sendNext)
+      allEnvelopes.foreach(envPublisher.sendNext)
       outProbe.request(10)
       outProbe.expectNext(envelopesFor("a").head)
-      // b filtered out
+      // b filtered out by ExcludeEntityIds
       outProbe.expectNext(envelopesFor("c").head)
+      // d1 filtered out by ExcludeTags
+      outProbe.expectNext(envelopesFor("d").last)
       outProbe.expectNoMessage()
     }
 

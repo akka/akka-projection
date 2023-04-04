@@ -42,13 +42,27 @@ import org.slf4j.LoggerFactory
   private val ReplicationIdSeparator = '|'
 
   object Filter {
-    val empty: Filter = Filter(Set.empty, Set.empty, Map.empty)
+    val empty: Filter = Filter(Set.empty, Set.empty, Set.empty, Set.empty, Map.empty)
   }
 
   final case class Filter(
+      includeTags: Set[String],
+      excludeTags: Set[String],
       includePersistenceIds: Set[String],
       excludePersistenceIds: Set[String],
       excludeRegexEntityIds: Map[String, Regex]) {
+
+    def addIncludeTags(tags: Iterable[String]): Filter =
+      copy(includeTags = includeTags ++ tags)
+
+    def removeIncludeTags(tags: Iterable[String]): Filter =
+      copy(includeTags = includeTags -- tags)
+
+    def addExcludeTags(tags: Iterable[String]): Filter =
+      copy(excludeTags = excludeTags ++ tags)
+
+    def removeExcludeTags(tags: Iterable[String]): Filter =
+      copy(excludeTags = excludeTags -- tags)
 
     def addIncludePersistenceIds(pids: Iterable[String]): Filter =
       copy(includePersistenceIds = includePersistenceIds ++ pids)
@@ -74,14 +88,20 @@ import org.slf4j.LoggerFactory
      * If an exclude is matching the include criteria are evaluated.
      * Returns `true` if there is a matching include, otherwise `false`.
      */
-    def matches(pid: String): Boolean = {
-      val entityId = PersistenceId.extractEntityId(pid)
+    def matches(env: EventEnvelope[_]): Boolean = {
+      val pid = env.persistenceId
 
-      if (excludePersistenceIds.contains(pid) || excludeRegexEntityIds.exists {
-            case (_, regex) =>
-              regex.pattern.matcher(entityId).matches()
-          }) {
-        includePersistenceIds.contains(pid)
+      def matchesExcludeRegexEntityIds: Boolean = {
+        val entityId = PersistenceId.extractEntityId(pid)
+        excludeRegexEntityIds.exists {
+          case (_, regex) =>
+            regex.pattern.matcher(entityId).matches()
+        }
+      }
+
+      if (env.tags.intersect(excludeTags).nonEmpty || excludePersistenceIds.contains(pid) ||
+          matchesExcludeRegexEntityIds) {
+        env.tags.intersect(includeTags).nonEmpty || includePersistenceIds.contains(pid)
       } else {
         true
       }
@@ -152,7 +172,7 @@ import org.slf4j.LoggerFactory
           case ReplayEnvelope(persistenceId, Some(env)) =>
             // the predicate to replay events from start for a given pid
             // Note: we do not apply the producer filter here as that may be what triggered the replay
-            if (filter.matches(env.persistenceId)) {
+            if (filter.matches(env)) {
               log.traceN(
                 "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
                 logPrefix,
@@ -199,6 +219,14 @@ import org.slf4j.LoggerFactory
         filter = criteria.foldLeft(filter) {
           case (acc, criteria) =>
             criteria.message match {
+              case FilterCriteria.Message.IncludeTags(include) =>
+                acc.addIncludeTags(include.tags)
+              case FilterCriteria.Message.RemoveIncludeTags(include) =>
+                acc.removeIncludeTags(include.tags)
+              case FilterCriteria.Message.ExcludeTags(exclude) =>
+                acc.addExcludeTags(exclude.tags)
+              case FilterCriteria.Message.RemoveExcludeTags(exclude) =>
+                acc.removeExcludeTags(exclude.tags)
               case FilterCriteria.Message.IncludeEntityIds(include) =>
                 val pids = mapEntityIdToPidHandledByThisStream(include.entityIdOffset.map(_.entityId))
                 acc.addIncludePersistenceIds(pids)
@@ -365,7 +393,7 @@ import org.slf4j.LoggerFactory
 
             // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
             // can never include them
-            if (producerFilter(env) && filter.matches(pid)) {
+            if (producerFilter(env) && filter.matches(env)) {
               log.traceN("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               push(outEnv, env)
             } else {

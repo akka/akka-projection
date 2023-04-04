@@ -83,6 +83,49 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   }
 
   sealed trait FilterCriteria
+  sealed trait RemoveCriteria extends FilterCriteria
+
+  /**
+   * Exclude events with any of the given tags,
+   * unless there is a matching include filter that overrides the exclude.
+   */
+  final case class ExcludeTags(tags: Set[String]) extends FilterCriteria {
+
+    /** Java API */
+    def this(tags: JSet[String]) =
+      this(tags.asScala.toSet)
+  }
+
+  /**
+   * Remove a previously added [[ExcludeTags]].
+   */
+  final case class RemoveExcludeTags(tags: Set[String]) extends RemoveCriteria {
+
+    /** Java API */
+    def this(tags: JSet[String]) =
+      this(tags.asScala.toSet)
+  }
+
+  /**
+   * Include events with any of the given tags. A matching include overrides
+   * a matching exclude.
+   */
+  final case class IncludeTags(tags: Set[String]) extends FilterCriteria {
+
+    /** Java API */
+    def this(tags: JSet[String]) =
+      this(tags.asScala.toSet)
+  }
+
+  /**
+   * Remove a previously added [[IncludeTags]].
+   */
+  final case class RemoveIncludeTags(tags: Set[String]) extends FilterCriteria {
+
+    /** Java API */
+    def this(tags: JSet[String]) =
+      this(tags.asScala.toSet)
+  }
 
   /**
    * Exclude events for entities with entity ids matching the given regular expressions,
@@ -94,8 +137,6 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     def this(matching: JSet[String]) =
       this(matching.asScala.toSet)
   }
-
-  sealed trait RemoveCriteria extends FilterCriteria
 
   /**
    * Remove a previously added [[ExcludeRegexEntityIds]].
@@ -191,6 +232,20 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
     val both = currentFilter ++ update
 
+    val removeExcludeTags =
+      both.flatMap {
+        case rem: RemoveExcludeTags => rem.tags
+        case _                      => Set.empty[String]
+      }.toSet
+    val excludeTags2 = excludeTags(both).diff(removeExcludeTags)
+
+    val removeIncludeTags =
+      both.flatMap {
+        case rem: RemoveIncludeTags => rem.tags
+        case _                      => Set.empty[String]
+      }.toSet
+    val includeTags2 = includeTags(both).diff(removeIncludeTags)
+
     val removeExcludeRegexEntityIds =
       both.flatMap {
         case rem: RemoveExcludeRegexEntityIds => rem.matching
@@ -214,6 +269,8 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     val includeEntityOffsets3 = deduplicateEntityOffsets(includeEntityOffsets2.iterator, Map.empty)
 
     Vector(
+      if (excludeTags2.isEmpty) None else Some(ExcludeTags(excludeTags2)),
+      if (includeTags2.isEmpty) None else Some(IncludeTags(includeTags2)),
       if (excludeRegexEntityIds2.isEmpty) None else Some(ExcludeRegexEntityIds(excludeRegexEntityIds2)),
       if (excludeEntityIds2.isEmpty) None else Some(ExcludeEntityIds(excludeEntityIds2)),
       if (includeEntityOffsets3.isEmpty) None else Some(IncludeEntityIds(includeEntityOffsets3))).flatten
@@ -248,6 +305,24 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
     require(!hasRemoveCriteria(a), "Unexpected RemoveCriteria in a when creating diff, use mergeFilter first.")
     require(!hasRemoveCriteria(b), "Unexpected RemoveCriteria in b when creating diff, use mergeFilter first.")
+
+    val excludeTagsA = excludeTags(a)
+    val excludeTagsB = excludeTags(b)
+    val excludeTagsDiffAB = excludeTagsA.diff(excludeTagsB)
+    val excludeTagsDiffBA = excludeTagsB.diff(excludeTagsA)
+    val excludeTagsCriteria =
+      if (excludeTagsDiffBA.isEmpty) None else Some(ExcludeTags(excludeTagsDiffBA))
+    val removeExcludeTagsCriteria =
+      if (excludeTagsDiffAB.isEmpty) None else Some(RemoveExcludeTags(excludeTagsDiffAB))
+
+    val includeTagsA = includeTags(a)
+    val includeTagsB = includeTags(b)
+    val includeTagsDiffAB = includeTagsA.diff(includeTagsB)
+    val includeTagsDiffBA = includeTagsB.diff(includeTagsA)
+    val includeTagsCriteria =
+      if (includeTagsDiffBA.isEmpty) None else Some(IncludeTags(includeTagsDiffBA))
+    val removeIncludeTagsCriteria =
+      if (includeTagsDiffAB.isEmpty) None else Some(RemoveIncludeTags(includeTagsDiffAB))
 
     val excludeRegexEntityIdsA = excludeRegexEntityIds(a)
     val excludeRegexEntityIdsB = excludeRegexEntityIds(b)
@@ -285,6 +360,10 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       if (includeEntityOffsetsDiffAB.isEmpty) None else Some(RemoveIncludeEntityIds(includeEntityOffsetsDiffAB.keySet))
 
     Vector(
+      excludeTagsCriteria,
+      removeExcludeTagsCriteria,
+      includeTagsCriteria,
+      removeIncludeTagsCriteria,
       excludeRegexEntityIdCriteria,
       removeExcludeRegexEntityIdCriteria,
       excludeEntityIdCriteria,
@@ -299,6 +378,22 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     filter.flatMap {
       case inc: IncludeEntityIds => inc.entityOffsets
       case _                     => Set.empty[EntityIdOffset]
+    }.toSet
+  }
+
+  /** INTERNAL API */
+  @InternalApi private[akka] def excludeTags(filter: immutable.Seq[FilterCriteria]): Set[String] = {
+    filter.flatMap {
+      case exl: ExcludeTags => exl.tags
+      case _                => Set.empty[String]
+    }.toSet
+  }
+
+  /** INTERNAL API */
+  @InternalApi private[akka] def includeTags(filter: immutable.Seq[FilterCriteria]): Set[String] = {
+    filter.flatMap {
+      case incl: IncludeTags => incl.tags
+      case _                 => Set.empty[String]
     }.toSet
   }
 

@@ -24,6 +24,18 @@ class ConsumerFilterSpec extends AnyWordSpecLike with Matchers {
       mergeFilter(filter3, filter1 ++ filter2) shouldBe filter1
     }
 
+    "merge and remove include of tags" in {
+      val filter1 = Vector(ExcludeTags(Set("a", "b")))
+      mergeFilter(Nil, filter1) shouldBe filter1
+      mergeFilter(filter1, Nil) shouldBe filter1
+      val filter2 = Vector(IncludeTags(Set("a", "c")))
+      mergeFilter(filter1, filter2) shouldBe filter1 ++ filter2
+      mergeFilter(filter2, filter1) shouldBe filter1 ++ filter2
+      val filter3 = Vector(RemoveIncludeTags(Set("a", "c")))
+      mergeFilter(filter1 ++ filter2, filter3) shouldBe filter1
+      mergeFilter(filter3, filter1 ++ filter2) shouldBe filter1
+    }
+
     "merge and reduce filter" in {
       val filter1 =
         Vector(
@@ -40,6 +52,20 @@ class ConsumerFilterSpec extends AnyWordSpecLike with Matchers {
       mergeFilter(filter2, filter1) shouldBe expectedFilter
     }
 
+    "merge and reduce filter of tags" in {
+      val filter1 =
+        Vector(ExcludeTags(Set("a", "b", "c")), IncludeTags(Set("b", "c")))
+
+      val filter2 =
+        Vector(ExcludeTags(Set("d")), RemoveIncludeTags(Set("a", "b")), RemoveExcludeTags(Set("c")))
+
+      val expectedFilter =
+        Vector(ExcludeTags(Set("a", "b", "d")), IncludeTags(Set("c")))
+
+      mergeFilter(filter1, filter2) shouldBe expectedFilter
+      mergeFilter(filter2, filter1) shouldBe expectedFilter
+    }
+
     "merge and use highest seqNr" in {
       val filter1 =
         Vector(IncludeEntityIds(Set(EntityIdOffset("b", 1), EntityIdOffset("b", 2), EntityIdOffset("c", 2))))
@@ -51,6 +77,24 @@ class ConsumerFilterSpec extends AnyWordSpecLike with Matchers {
         Vector(IncludeEntityIds(Set(EntityIdOffset("b", 3), EntityIdOffset("c", 1))))
       val expectedFilter2 = Vector(IncludeEntityIds(Set(EntityIdOffset("b", 3), EntityIdOffset("c", 2))))
       mergeFilter(filter1, filter2) shouldBe expectedFilter2
+    }
+
+    "create diff for ExcludeTags" in {
+      val filter1 = Vector(ExcludeTags(Set("a", "b")))
+      createDiff(Nil, filter1) shouldBe filter1
+      createDiff(filter1, Nil) shouldBe Vector(RemoveExcludeTags(Set("a", "b")))
+
+      val filter2 = Vector(ExcludeTags(Set("a", "c")))
+      createDiff(filter1, filter2) shouldBe Vector(ExcludeTags(Set("c")), RemoveExcludeTags(Set("b")))
+    }
+
+    "create diff for IncludeTags" in {
+      val filter1 = Vector(IncludeTags(Set("a", "b")))
+      createDiff(Nil, filter1) shouldBe filter1
+      createDiff(filter1, Nil) shouldBe Vector(RemoveIncludeTags(Set("a", "b")))
+
+      val filter2 = Vector(IncludeTags(Set("a", "c")))
+      createDiff(filter1, filter2) shouldBe Vector(IncludeTags(Set("c")), RemoveIncludeTags(Set("b")))
     }
 
     "create diff for ExcludeRegexEntityIds" in {
