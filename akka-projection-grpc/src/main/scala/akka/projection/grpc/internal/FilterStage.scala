@@ -17,6 +17,7 @@ import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.typed.PersistenceId
+import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.FilterCriteria
@@ -130,6 +131,8 @@ import org.slf4j.LoggerFactory
         case Failure(exc)       => failStage(exc)
       }
 
+      private var replicaId: Option[ReplicaId] = None
+
       private val logPrefix = s"$streamId (${sliceRange.min}-${sliceRange.max})"
 
       override def preStart(): Unit = {
@@ -221,6 +224,14 @@ import org.slf4j.LoggerFactory
         log.trace2("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
       }
 
+      private def replicaIdHandledByThisStream(pid: String): Boolean = {
+        replicaId match {
+          case None => true
+          case Some(id) =>
+            !ReplicationId.isReplicationId(pid) || ReplicationId.fromString(pid).replicaId == id
+        }
+      }
+
       private def sliceHandledByThisStream(pid: String): Boolean = {
         val slice = persistence.sliceForPersistenceId(pid)
         sliceRange.contains(slice)
@@ -272,9 +283,8 @@ import org.slf4j.LoggerFactory
 
       private def replay(persistenceIdOffset: PersistenceIdSeqNr): Unit = {
         val fromSeqNr = persistenceIdOffset.seqNr
-        // FIXME what about the replicaId when using RES?
         val pid = persistenceIdOffset.persistenceId
-        if (sliceHandledByThisStream(pid)) {
+        if (replicaIdHandledByThisStream(pid) && sliceHandledByThisStream(pid)) {
           val sameInProgress =
             replayInProgress.get(pid) match {
               case Some(replay) if replay.fromSeqNr == fromSeqNr =>
@@ -360,6 +370,10 @@ import org.slf4j.LoggerFactory
           override def onPush(): Unit = {
             val env = grab(inEnv)
             val pid = env.persistenceId
+
+            // replicaId is used for validation of replay requests, to avoid replay for other replicas
+            if (replicaId.isEmpty && ReplicationId.isReplicationId(pid))
+              replicaId = Some(ReplicationId.fromString(pid).replicaId)
 
             // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
             // can never include them

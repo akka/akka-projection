@@ -293,8 +293,6 @@ final class GrpcReadJournal private (
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
           case ConsumerFilter.Replay(`streamId`, persistenceIdOffsets) =>
-            // FIXME for RES, would it be possible to skip replicaId not handled by this stream here?
-
             val protoPersistenceIdOffsets = persistenceIdOffsets.collect {
               case ConsumerFilter.PersistenceIdOffset(pid, seqNr) if sliceHandledByThisStream(pid) =>
                 PersistenceIdSeqNr(pid, seqNr)
