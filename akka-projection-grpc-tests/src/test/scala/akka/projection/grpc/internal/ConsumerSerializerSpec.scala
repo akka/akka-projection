@@ -25,12 +25,16 @@ class ConsumerSerializerSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
 
   private val filter1 =
     Vector(
+      ConsumerFilter.ExcludeTags(Set("t1", "t2")),
+      ConsumerFilter.IncludeTags(Set("t3", "t4")),
       ConsumerFilter.ExcludeRegexEntityIds(Set("all.*")),
       ConsumerFilter.ExcludeEntityIds(Set("a", "b", "c")),
       ConsumerFilter.IncludeEntityIds(Set(ConsumerFilter.EntityIdOffset("b", 1))))
 
   private val filter2 =
     Vector(
+      ConsumerFilter.RemoveExcludeTags(Set("t2")),
+      ConsumerFilter.RemoveIncludeTags(Set("t4")),
       ConsumerFilter.ExcludeEntityIds(Set("d")),
       ConsumerFilter.RemoveExcludeEntityIds(Set("c")),
       ConsumerFilter.RemoveIncludeEntityIds(Set("b")),

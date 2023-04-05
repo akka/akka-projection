@@ -6,9 +6,11 @@ package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -44,17 +46,21 @@ import akka.projection.grpc.internal.proto.EventProducerServiceClient
 import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.ExcludeEntityIds
 import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
+import akka.projection.grpc.internal.proto.ExcludeTags
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.IncludeEntityIds
+import akka.projection.grpc.internal.proto.IncludeTags
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.RemoveExcludeEntityIds
 import akka.projection.grpc.internal.proto.RemoveExcludeRegexEntityIds
+import akka.projection.grpc.internal.proto.RemoveExcludeTags
 import akka.projection.grpc.internal.proto.RemoveIncludeEntityIds
+import akka.projection.grpc.internal.proto.RemoveIncludeTags
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
@@ -374,6 +380,14 @@ final class GrpcReadJournal private (
 
   private def toProtoFilterCriteria(criteria: immutable.Seq[ConsumerFilter.FilterCriteria]): Seq[FilterCriteria] = {
     criteria.map {
+      case ConsumerFilter.ExcludeTags(tags) =>
+        FilterCriteria(FilterCriteria.Message.ExcludeTags(ExcludeTags(tags.toVector)))
+      case ConsumerFilter.RemoveExcludeTags(tags) =>
+        FilterCriteria(FilterCriteria.Message.RemoveExcludeTags(RemoveExcludeTags(tags.toVector)))
+      case ConsumerFilter.IncludeTags(tags) =>
+        FilterCriteria(FilterCriteria.Message.IncludeTags(IncludeTags(tags.toVector)))
+      case ConsumerFilter.RemoveIncludeTags(tags) =>
+        FilterCriteria(FilterCriteria.Message.RemoveIncludeTags(RemoveIncludeTags(tags.toVector)))
       case ConsumerFilter.IncludeEntityIds(entityOffsets) =>
         FilterCriteria(FilterCriteria.Message.IncludeEntityIds(IncludeEntityIds(entityOffsets.map {
           case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
