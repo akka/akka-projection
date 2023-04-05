@@ -17,7 +17,6 @@ import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
 import org.slf4j.LoggerFactory
 import shoppingcart.CheckedOut
-import shoppingcart.CustomerDefined
 import shoppingcart.ItemAdded
 import shoppingcart.ItemQuantityAdjusted
 import shoppingcart.ItemRemoved
@@ -85,19 +84,6 @@ object ShoppingCartEventConsumer {
             projectionId.id,
             checkedOut.cartId,
             totalCount)
-        case customerDefined: CustomerDefined =>
-          log.info(
-            "Projection [{}] consumed CustomerDefined for cart {}. Total [{}] events.",
-            projectionId.id,
-            customerDefined.cartId,
-            totalCount)
-          // Only interested in gold customers, update the filter to exclude.
-          // In a real application it would have to remove such entityId filter when it's not relevant any more.
-          if (customerDefined.category != "gold")
-            ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(
-              streamId,
-              List(
-                ConsumerFilter.ExcludeEntityIds(Set(customerDefined.cartId))))
 
         case unknown =>
           throw new IllegalArgumentException(s"Unknown event $unknown")
@@ -159,6 +145,22 @@ object ShoppingCartEventConsumer {
                 sys)))
       })
   }
+
+  //#initProjections
+  //#update-filter
+  def updateConsumerFilter(
+      system: ActorSystem[_],
+      excludeTags: Set[String],
+      includeTags: Set[String]): Unit = {
+    val streamId = system.settings.config
+      .getString("akka.projection.grpc.consumer.stream-id")
+    val criteria = Vector(
+      ConsumerFilter.ExcludeTags(excludeTags),
+      ConsumerFilter.IncludeTags(includeTags))
+    ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(streamId, criteria)
+  }
+  //#update-filter
+  //#initProjections
 
 }
 //#initProjections

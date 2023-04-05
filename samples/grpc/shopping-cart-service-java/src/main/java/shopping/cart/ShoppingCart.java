@@ -31,13 +31,23 @@ import java.util.*;
  * created, and when the entity is loaded from the database - each event will be replayed to
  * recreate the state of the entity.
  */
+//#tags
 public final class ShoppingCart
     extends EventSourcedBehaviorWithEnforcedReplies<
         ShoppingCart.Command, ShoppingCart.Event, ShoppingCart.State> {
 
+  static final String SMALL_QUANTITY_TAG = "small";
+  static final String  MEDIUM_QUANTITY_TAG = "medium";
+  static final String  LARGE_QUANTITY_TAG = "large";
+
+  //#tags
+
   /** The current state held by the `EventSourcedBehavior`. */
+  //#tags
   static final class State implements CborSerializable {
     final Map<String, Integer> items;
+
+    //#tags
     private Optional<Instant> checkoutDate;
 
     public State() {
@@ -87,7 +97,26 @@ public final class ShoppingCart
     public int itemCount(String itemId) {
       return items.get(itemId);
     }
+
+    //#tags
+    public int totalQuantity() {
+      return items.values().stream().reduce(0, Integer::sum);
+    }
+
+    public Set<String> tags() {
+      int total = totalQuantity();
+      if (total == 0)
+        return Collections.emptySet();
+      else if (total >= 100)
+        return Collections.singleton(LARGE_QUANTITY_TAG);
+      else if (total >= 10)
+        return Collections.singleton(MEDIUM_QUANTITY_TAG);
+      else
+        return Collections.singleton(SMALL_QUANTITY_TAG);
+    }
   }
+
+  //#tags
 
   /** This interface defines all the commands (messages) that the ShoppingCart actor supports. */
   interface Command extends CborSerializable {}
@@ -320,6 +349,14 @@ public final class ShoppingCart
     this.cartId = cartId;
   }
 
+  //#tags
+  @Override
+  public Set<String> tagsFor(Event event) {
+    // FIXME state.tags
+    return Collections.emptySet();
+  }
+  //#tags
+
   @Override
   public RetentionCriteria retentionCriteria() {
     return RetentionCriteria.snapshotEvery(100, 3);
@@ -459,4 +496,6 @@ public final class ShoppingCart
         .onEvent(CheckedOut.class, (state, evt) -> state.checkout(evt.eventTime))
         .build();
   }
+  //#tags
 }
+//#tags

@@ -138,5 +138,11 @@ class ShoppingCartEventConsumer {
         ProjectionBehavior.stopMessage());
   }
 
+  //#initProjections
+  //#update-filter
+  // FIXME
+  //#update-filter
+  //#initProjections
+
 }
 //#initProjections

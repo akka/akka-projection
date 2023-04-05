@@ -135,6 +135,132 @@ Java
 This example includes an application specific `ShoppingCartService`, which is unrelated to Akka Projections gRPC,
 but it illustrates how to combine the `EventProducer` service with other gRPC services.
 
+## Filters
+
+By default, events from all entities of the given entity type and slice range are emitted from the producer to the
+consumer. The transformation function on the producer side can omit certain events, but the offsets for these
+events are still transferred to the consumer, to ensure sequence number validations and offset storage.
+
+Filters can be used when a consumer is only interested in a subset of the entities. The filters can be defined
+on both the producer side and on the consumer side, and they can be changed at runtime.
+
+### Tags
+
+Tags are typically used for the filters, so first an example of how to tag events in the entity. Here, the tag is
+based on total quantity of the shopping cart, i.e. the state of the cart. The tags are included in the
+@apidoc[akka.persistence.query.typed.EventEnvelope].
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #tags }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #tags }
+
+
+### Producer defined filter
+
+The producer may define a filter function on the `EventProducerSource`.
+
+Scala
+:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #withProducerFilter }
+
+Java
+:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #withProducerFilter }
+
+In this example the decision is based on tags, but the filter function can use anything in the
+@apidoc[akka.persistence.query.typed.EventEnvelope] parameter or the event itself. Here, the entity sets the tag based
+on the total quantity of the shopping cart, which requires the full state of the shopping cart and is not known from
+an individual event.
+
+Note that the purpose of the `withProducerFilter` is to toggle if all events for the entity is to be emitted or not.
+If the purpose is to filter out certain events you should instead use the `Transformation`.
+
+The producer filter is evaluated before the transformation function, i.e. the event is the original event and not
+the transformed event.
+
+A producer filter that excludes an event wins over any consumer defined filter, i.e. if the producer filter function
+returns `false` the event will not be emitted.
+
+### Consumer defined filter
+
+The consumer may define declarative filters that are sent to the producer and evaluated on the producer side
+before emitting the events.
+
+Consumer filters consists of exclude and include criteria. In short, the exclude criteria are evaluated first and
+may be overridden by an include criteria. More precisely, they are evaluated according to the following rules: 
+
+* Exclude criteria are evaluated first.
+* If no matching exclude the event is emitted.
+* If an exclude is matching the include criteria are evaluated.
+* If no matching include the event is discarded.
+* If matching include the event is emitted.
+
+The exclude criteria can be a combination of:
+
+* `ExcludeTags` - exclude events with any of the given tags
+* `ExcludeRegexEntityIds` - exclude events for entities with entity ids matching the given regular expressions
+* `ExcludeEntityIds` - exclude events for entities with the given entity ids
+
+To exclude all events you can use `ExcludeRegexEntityIds` with `.*`.
+
+The exclude criteria can be a combination of:
+
+* `IncludeTags` - include events with any of the given tags
+* `IncludeEntityIds` - include events for entities with the given entity ids
+
+The filter is updated with the @apidoc[ConsumerFilter] extension.
+
+Scala
+:  @@snip [ShoppingCartEventConsumer.scala](/samples/grpc/shopping-analytics-service-scala/src/main/scala/shopping/analytics/ShoppingCartEventConsumer.scala) { #update-filter }
+
+Java
+:  @@snip [ShoppingCartEventConsumer.java](/samples/grpc/shopping-analytics-service-java/src/main/java/shopping/analytics/ShoppingCartEventConsumer.java) { #update-filter }
+
+Note that the `streamId` must match what is used when initializing the `GrpcReadJournal`, which by default is from
+the config property `akka.projection.grpc.consumer.stream-id`.
+
+The filters can be dynamically changed in runtime without restarting the Projections or the `GrpcReadJournal`. The
+updates are incremental. For example if you first add an `IncludeTags` of tag `"medium"` and then update the filter
+with another `IncludeTags` of tag `"large"`, the full filter consists of both `"medium"` and `"large"`.
+
+To remove a filter criteria you would use the corresponding @apidoc[ConsumerFilter.RemoveCriteria], for example
+`RemoveIncludeTags`.
+
+The updated filter is kept and remains after restarts of the Projection instances. If the consumer side is
+running with Akka Cluster the filter is propagated to other nodes in the cluster automatically with
+Akka Distributed Data. You only have to update at one place and it will be applied to all running Projections
+with the given `streamId`. The filters will be cleared in case of a full Cluster stop, which means that you
+need to take care of populating the initial filters at startup.
+
+See @apidoc[ConsumerFilter] for full API documentation.
+
+### Event replay
+
+When the consumer receives an event that is not the first event for the entity, and it hasn't processed and stored
+the offset for the preceding event (previous sequence number) a replay of previous events will be triggered.
+The reason is that the consumer is typically interested in all events for an entity and must process them in
+the original order. Even though this is completely automatic it can be good to be aware of since it may have
+a substantial performance impact to replay many events for many entities.
+
+The event replay is triggered "lazily" when a new event with unexpected sequence number is received, but with
+the `ConsumerFilter.IncludeEntityIds` it is possible to explicitly define a sequence number from which the
+replay will start immediately. You have the following choices for the sequence number in the `IncludeEntityIds`
+criteria:
+
+* if the previously processed sequence number is known, the next (+1) sequence number can be defined
+* `1` can be used to for replaying all events of the entity
+* `0` can be used to not replay events immediately, but they will be replayed lazily as described previously
+
+Any duplicate events are filtered out by the Projection on the consumer side. This deduplication mechanism depends
+on how long the Projection will keep old offsets. You may have to increase the configuration for this, but that has
+the drawback of more memory usage.
+
+```
+akka.projection.r2dbc.offset-store.time-window = 15 minutes
+```
+
+Application level deduplication of idempotency may be needed if the Projection can't keep enough offsets in memory.
+
 ## Sample projects
 
 Source code and build files for complete sample projects can be found in `akka/akka-projection` GitHub repository. 
