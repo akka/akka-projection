@@ -37,8 +37,8 @@ public final class ShoppingCart
         ShoppingCart.Command, ShoppingCart.Event, ShoppingCart.State> {
 
   static final String SMALL_QUANTITY_TAG = "small";
-  static final String  MEDIUM_QUANTITY_TAG = "medium";
-  static final String  LARGE_QUANTITY_TAG = "large";
+  static final String MEDIUM_QUANTITY_TAG = "medium";
+  static final String LARGE_QUANTITY_TAG = "large";
 
   //#tags
 
