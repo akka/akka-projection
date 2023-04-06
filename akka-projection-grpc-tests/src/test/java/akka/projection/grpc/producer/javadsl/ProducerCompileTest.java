@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import akka.persistence.query.typed.EventEnvelope;
 
 public class ProducerCompileTest {
   public static void start(ActorSystem<?> system) {
@@ -40,7 +41,8 @@ public class ProducerCompileTest {
 
     EventProducerSource source =
         new EventProducerSource(
-            "ShoppingCart", "cart", transformation, EventProducerSettings.apply(system));
+            "ShoppingCart", "cart", transformation, EventProducerSettings.apply(system))
+            .withProducerFilter((EventEnvelope<Integer> env) -> env.event().doubleValue() > 0.0);
 
     Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService =
         EventProducer.grpcServiceHandler(system, source);
