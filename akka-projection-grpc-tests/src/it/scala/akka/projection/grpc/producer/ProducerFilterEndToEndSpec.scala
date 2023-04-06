@@ -131,12 +131,8 @@ class ProducerFilterEndToEndSpec(testContainerConf: TestContainerConf)
   "A projection with producer a filter" must {
 
     "Start an event producer service" in {
-      val eps = EventProducerSource(
-        entityType,
-        streamId,
-        Transformation.identity,
-        EventProducerSettings(system),
-        producerFilter = envelope => envelope.tags.contains("replicate-it"))
+      val eps = EventProducerSource(entityType, streamId, Transformation.identity, EventProducerSettings(system))
+        .withProducerFilter[String](envelope => envelope.tags.contains("replicate-it"))
       val handler = EventProducer.grpcServiceHandler(eps)
 
       val bound =
