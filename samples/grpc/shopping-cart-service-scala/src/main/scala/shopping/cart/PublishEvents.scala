@@ -37,7 +37,7 @@ object PublishEvents {
         "cart",
         transformation,
         EventProducerSettings(system))
-      .withProducerFilter { envelope =>
+      .withProducerFilter[ShoppingCart.Event] { envelope =>
         val tags = envelope.tags
         tags.contains(ShoppingCart.MediumQuantityTag) || tags.contains(
           ShoppingCart.LargeQuantityTag)

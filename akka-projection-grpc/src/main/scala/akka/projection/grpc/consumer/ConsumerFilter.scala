@@ -16,6 +16,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Extension
 import akka.actor.typed.ExtensionId
 import akka.actor.typed.Props
+import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.internal.ConsumerFilterRegistry
@@ -23,11 +24,10 @@ import akka.util.JavaDurationConverters._
 import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.Config
 
-// FIXME add ApiMayChange in all places
-
 /**
  * Extension to dynamically control the filters for the `GrpcReadJournal`.
  */
+@ApiMayChange
 object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
   private val ReplicationIdSeparator = '|'
@@ -467,6 +467,7 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
 }
 
+@ApiMayChange
 class ConsumerFilter(system: ActorSystem[_]) extends Extension {
 
   private val settings = ConsumerFilter.ConsumerFilterSettings(system)

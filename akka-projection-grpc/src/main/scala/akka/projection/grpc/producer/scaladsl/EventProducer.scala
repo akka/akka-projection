@@ -36,13 +36,18 @@ object EventProducer {
         settings: EventProducerSettings): EventProducerSource =
       new EventProducerSource(entityType, streamId, transformation, settings, _ => true)
 
-    def apply(
+    def apply[Event](
         entityType: String,
         streamId: String,
         transformation: Transformation,
         settings: EventProducerSettings,
-        producerFilter: EventEnvelope[Any] => Boolean): EventProducerSource =
-      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter)
+        producerFilter: EventEnvelope[Event] => Boolean): EventProducerSource =
+      new EventProducerSource(
+        entityType,
+        streamId,
+        transformation,
+        settings,
+        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
 
   }
 
@@ -62,8 +67,13 @@ object EventProducer {
     require(entityType.nonEmpty, "Stream id must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
-    def withProducerFilter(producerFilter: EventEnvelope[Any] => Boolean): EventProducerSource =
-      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter)
+    def withProducerFilter[Event](producerFilter: EventEnvelope[Event] => Boolean): EventProducerSource =
+      new EventProducerSource(
+        entityType,
+        streamId,
+        transformation,
+        settings,
+        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
 
   }
 

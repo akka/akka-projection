@@ -25,8 +25,14 @@ final class EventProducerSource(
   def this(entityType: String, streamId: String, transformation: Transformation, settings: EventProducerSettings) =
     this(entityType, streamId, transformation, settings, producerFilter = _ => true)
 
-  def withProducerFilter(producerFilter: java.util.function.Predicate[EventEnvelope[Any]]): EventProducerSource =
-    new EventProducerSource(entityType, streamId, transformation, settings, producerFilter)
+  def withProducerFilter[Event](
+      producerFilter: java.util.function.Predicate[EventEnvelope[Event]]): EventProducerSource =
+    new EventProducerSource(
+      entityType,
+      streamId,
+      transformation,
+      settings,
+      producerFilter.asInstanceOf[java.util.function.Predicate[EventEnvelope[Any]]])
 
   def asScala: akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource =
     akka.projection.grpc.producer.scaladsl.EventProducer
