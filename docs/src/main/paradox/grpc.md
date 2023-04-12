@@ -229,8 +229,12 @@ To remove a filter criteria you would use the corresponding @apidoc[ConsumerFilt
 The updated filter is kept and remains after restarts of the Projection instances. If the consumer side is
 running with Akka Cluster the filter is propagated to other nodes in the cluster automatically with
 Akka Distributed Data. You only have to update at one place and it will be applied to all running Projections
-with the given `streamId`. The filters will be cleared in case of a full Cluster stop, which means that you
+with the given `streamId`.
+
+@@@ warning
+The filters will be cleared in case of a full Cluster stop, which means that you
 need to take care of populating the initial filters at startup.
+@@@
 
 See @apidoc[ConsumerFilter] for full API documentation.
 
