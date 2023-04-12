@@ -33,17 +33,22 @@ import akka.persistence.typed.scaladsl.RetentionCriteria
  * loaded from the database - each event will be replayed to recreate the state
  * of the entity.
  */
+//#tags
 object ShoppingCart {
+  //#tags
 
   /**
    * The current state held by the `EventSourcedBehavior`.
    */
+  //#tags
   final case class State(
       items: Map[String, Int],
       checkoutDate: Option[Instant],
       customerId: String,
       customerCategory: String)
       extends CborSerializable {
+
+    //#tags
 
     def isCheckedOut: Boolean =
       checkoutDate.isDefined
@@ -73,6 +78,7 @@ object ShoppingCart {
     def toSummary: Summary =
       Summary(items, isCheckedOut, customerId, customerCategory)
 
+    //#tags
     def totalQuantity: Int =
       items.valuesIterator.sum
 
@@ -85,6 +91,9 @@ object ShoppingCart {
     }
 
   }
+
+  //#tags
+
   object State {
     val empty: State =
       State(
@@ -186,15 +195,19 @@ object ShoppingCart {
   val EntityKey: EntityTypeKey[Command] =
     EntityTypeKey[Command]("ShoppingCart")
 
+  //#tags
   val SmallQuantityTag = "small"
   val MediumQuantityTag = "medium"
   val LargeQuantityTag = "large"
+
+  //#tags
 
   def init(system: ActorSystem[_]): Unit = {
     ClusterSharding(system).init(Entity(EntityKey)(entityContext =>
       ShoppingCart(entityContext.entityId)))
   }
 
+  //#tags
   def apply(cartId: String): Behavior[Command] = {
     EventSourcedBehavior
       .withEnforcedReplies[Command, Event, State](
@@ -210,6 +223,7 @@ object ShoppingCart {
       .onPersistFailure(
         SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }
+  //#tags
 
   private def handleCommand(
       cartId: String,
@@ -337,4 +351,6 @@ object ShoppingCart {
         state.setCustomer(customerId, category)
     }
   }
+  //#tags
 }
+//#tags

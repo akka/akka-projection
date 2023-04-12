@@ -26,12 +26,18 @@ public class PublishEvents {
             .registerMapper(ShoppingCart.ItemRemoved.class, event -> Optional.of(transformItemRemoved(event)))
             .registerMapper(ShoppingCart.CheckedOut.class, event -> Optional.of(transformCheckedOut(event)));
 
+    //#withProducerFilter
     EventProducerSource eventProducerSource = new EventProducerSource(
         "ShoppingCart",
         "cart",
         transformation,
         EventProducerSettings.apply(system)
-    );
+    )
+    //#eventProducerService
+    //#eventProducerService
+        // FIXME withProducerFilter
+    //#withProducerFilter
+    ;
 
     return EventProducer.grpcServiceHandler(system, eventProducerSource);
   }

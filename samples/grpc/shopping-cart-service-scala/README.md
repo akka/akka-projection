@@ -34,7 +34,7 @@
     curl http://localhost:9101/ready
     ```
 
-6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
+6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl). Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
 
     ```shell
     # add item to cart
@@ -49,8 +49,6 @@
     # check out cart
     grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
    
-    # set customer
-    grpcurl -d '{"cartId":"cart2", "customer": {"customerId":"customer2", "category":"gold"}}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.SetCustomer
     ```
 
     or same `grpcurl` commands to port 8102 to reach node 2.

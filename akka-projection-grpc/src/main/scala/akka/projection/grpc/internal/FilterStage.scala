@@ -84,9 +84,9 @@ import org.slf4j.LoggerFactory
 
     /**
      * Exclude criteria are evaluated first.
-     * Returns `true` if no matching exclude.
-     * If an exclude is matching the include criteria are evaluated.
-     * Returns `true` if there is a matching include, otherwise `false`.
+     * Returns `true` if no matching exclude criteria.
+     * If an exclude criteria is matching the include criteria are evaluated.
+     * Returns `true` if there is a matching include criteria, otherwise `false`.
      */
     def matches(env: EventEnvelope[_]): Boolean = {
       val pid = env.persistenceId

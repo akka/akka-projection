@@ -12,7 +12,6 @@ service ShoppingCartService {
     rpc UpdateItem (UpdateItemRequest) returns (Cart) {}
     rpc Checkout (CheckoutRequest) returns (Cart) {}
     rpc GetCart (GetCartRequest) returns (Cart) {}
-    rpc SetCustomer (SetCustomerRequest) returns (Cart) {}
 }
 
 
@@ -36,20 +35,9 @@ message GetCartRequest {
     string cartId = 1;
 }
 
-message SetCustomerRequest {
-    string cartId = 1;
-    Customer customer = 2;
-}
-
-message Customer {
-    string customerId = 1;
-    string category = 2;
-}
-
 message Cart {
     repeated Item items = 1;
     bool checkedOut = 2;
-    Customer customer = 3;
 }
 
 message Item {

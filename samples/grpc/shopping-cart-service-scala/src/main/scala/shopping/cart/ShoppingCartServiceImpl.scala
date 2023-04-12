@@ -10,8 +10,6 @@ import akka.grpc.GrpcServiceException
 import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-import shopping.cart.proto.Cart
-import shopping.cart.proto.SetCustomerRequest
 
 // tag::moreOperations[]
 import akka.actor.typed.ActorRef
@@ -78,35 +76,12 @@ class ShoppingCartServiceImpl(system: ActorSystem[_])
     convertError(response)
   }
 
-  override def setCustomer(in: SetCustomerRequest): Future[Cart] = {
-    in.customer match {
-      case Some(c) =>
-        logger.info("setCustomer {} to cart {}", c.customerId, in.cartId)
-        val entityRef = sharding.entityRefFor(ShoppingCart.EntityKey, in.cartId)
-        val reply: Future[ShoppingCart.Summary] =
-          entityRef.askWithStatus(
-            ShoppingCart.SetCustomer(c.customerId, c.category, _))
-        val response = reply.map(cart => toProtoCart(cart))
-        convertError(response)
-      case None =>
-        Future.failed(new GrpcServiceException(
-          Status.INVALID_ARGUMENT.withDescription("customer must be defined")))
-    }
-  }
-
   private def toProtoCart(cart: ShoppingCart.Summary): proto.Cart = {
-    val customer =
-      if (cart.customerId != "")
-        Some(proto.Customer(cart.customerId, cart.customerCategory))
-      else
-        None
-
     proto.Cart(
       cart.items.iterator.map { case (itemId, quantity) =>
         proto.Item(itemId, quantity)
       }.toSeq,
-      cart.checkedOut,
-      customer)
+      cart.checkedOut)
   }
 
   private def convertError[T](response: Future[T]): Future[T] = {

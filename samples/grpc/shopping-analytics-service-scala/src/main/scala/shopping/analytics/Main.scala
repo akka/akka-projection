@@ -27,6 +27,11 @@ object Main {
     AkkaManagement(system).start()
     ClusterBootstrap(system).start()
 
+    ShoppingCartEventConsumer.updateConsumerFilter(
+      system,
+      excludeTags = Set("small"),
+      includeTags = Set("medium", "large"))
+
     ShoppingCartEventConsumer.init(system)
   }
 

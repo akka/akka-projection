@@ -55,10 +55,10 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
    * Add or remove filter criteria.
    *
    * Exclude criteria are evaluated first.
-   * If no matching exclude the event is emitted.
-   * If an exclude is matching the include criteria are evaluated.
-   * If no matching include the event is discarded.
-   * If matching include the event is emitted.
+   * If no matching exclude criteria the event is emitted.
+   * If an exclude criteria is matching the include criteria are evaluated.
+   * If no matching include criteria the event is discarded.
+   * If matching include criteria the event is emitted.
    */
   final case class UpdateFilter(streamId: String, criteria: immutable.Seq[FilterCriteria]) extends SubscriberCommand {
 

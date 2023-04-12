@@ -28,20 +28,22 @@ object PublishEvents {
         Some(transformItemRemoved(event)))
       .registerMapper[ShoppingCart.CheckedOut, proto.CheckedOut](event =>
         Some(transformCheckedOut(event)))
-      .registerMapper[ShoppingCart.CustomerDefined, proto.CustomerDefined](event =>
-        Some(transformCustomerDefined(event)))
 
+    //#withProducerFilter
     val eventProducerSource = EventProducer
       .EventProducerSource(
         "ShoppingCart",
         "cart",
         transformation,
         EventProducerSettings(system))
+      //#eventProducerService
       .withProducerFilter[ShoppingCart.Event] { envelope =>
         val tags = envelope.tags
         tags.contains(ShoppingCart.MediumQuantityTag) || tags.contains(
           ShoppingCart.LargeQuantityTag)
       }
+    //#eventProducerService
+    //#withProducerFilter
 
     EventProducer.grpcServiceHandler(eventProducerSource)(system)
   }
@@ -68,8 +70,5 @@ object PublishEvents {
 
   def transformCheckedOut(event: ShoppingCart.CheckedOut): proto.CheckedOut =
     proto.CheckedOut(event.cartId)
-
-  def transformCustomerDefined(event: ShoppingCart.CustomerDefined): proto.CustomerDefined =
-    proto.CustomerDefined(event.cartId, event.customerId, event.category)
 
 }
