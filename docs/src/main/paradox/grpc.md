@@ -190,10 +190,10 @@ Consumer filters consists of exclude and include criteria. In short, the exclude
 may be overridden by an include criteria. More precisely, they are evaluated according to the following rules: 
 
 * Exclude criteria are evaluated first.
-* If no matching exclude the event is emitted.
-* If an exclude is matching the include criteria are evaluated.
-* If no matching include the event is discarded.
-* If matching include the event is emitted.
+* If no matching exclude criteria the event is emitted.
+* If an exclude criteria is matching the include criteria are evaluated.
+* If no matching include criteria the event is discarded.
+* If matching include criteria the event is emitted.
 
 The exclude criteria can be a combination of:
 
