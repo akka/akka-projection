@@ -15,8 +15,10 @@ message ConsumerFilterStoreState {
   // ORSet serialized with Akka's ReplicatedDataSerializer
   bytes exclude_regex_entity_ids = 3;
   // ORSet serialized with Akka's ReplicatedDataSerializer
-  bytes exclude_entity_ids = 4;
-  SeqNrMap include_entity_offsets = 5;
+  bytes include_regex_entity_ids = 4;
+  // ORSet serialized with Akka's ReplicatedDataSerializer
+  bytes exclude_entity_ids = 5;
+  SeqNrMap include_entity_offsets = 6;
 }
 
 message SeqNrMap {

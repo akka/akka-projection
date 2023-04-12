@@ -51,6 +51,7 @@ import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.IncludeEntityIds
+import akka.projection.grpc.internal.proto.IncludeRegexEntityIds
 import akka.projection.grpc.internal.proto.IncludeTags
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
@@ -60,6 +61,7 @@ import akka.projection.grpc.internal.proto.RemoveExcludeEntityIds
 import akka.projection.grpc.internal.proto.RemoveExcludeRegexEntityIds
 import akka.projection.grpc.internal.proto.RemoveExcludeTags
 import akka.projection.grpc.internal.proto.RemoveIncludeEntityIds
+import akka.projection.grpc.internal.proto.RemoveIncludeRegexEntityIds
 import akka.projection.grpc.internal.proto.RemoveIncludeTags
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
@@ -400,9 +402,14 @@ final class GrpcReadJournal private (
         FilterCriteria(FilterCriteria.Message.RemoveExcludeEntityIds(RemoveExcludeEntityIds(entityIds.toVector)))
       case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
         FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(matching.toVector)))
+      case ConsumerFilter.IncludeRegexEntityIds(matching) =>
+        FilterCriteria(FilterCriteria.Message.IncludeMatchingEntityIds(IncludeRegexEntityIds(matching.toVector)))
       case ConsumerFilter.RemoveExcludeRegexEntityIds(matching) =>
         FilterCriteria(
           FilterCriteria.Message.RemoveExcludeMatchingEntityIds(RemoveExcludeRegexEntityIds(matching.toVector)))
+      case ConsumerFilter.RemoveIncludeRegexEntityIds(matching) =>
+        FilterCriteria(
+          FilterCriteria.Message.RemoveIncludeMatchingEntityIds(RemoveIncludeRegexEntityIds(matching.toVector)))
     }
   }
 

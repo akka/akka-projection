@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory
   private val ReplicationIdSeparator = '|'
 
   object Filter {
-    val empty: Filter = Filter(Set.empty, Set.empty, Set.empty, Set.empty, Map.empty)
+    val empty: Filter = Filter(Set.empty, Set.empty, Set.empty, Set.empty, Map.empty, Map.empty)
   }
 
   final case class Filter(
@@ -50,6 +50,7 @@ import org.slf4j.LoggerFactory
       excludeTags: Set[String],
       includePersistenceIds: Set[String],
       excludePersistenceIds: Set[String],
+      includeRegexEntityIds: Map[String, Regex],
       excludeRegexEntityIds: Map[String, Regex]) {
 
     def addIncludeTags(tags: Iterable[String]): Filter =
@@ -82,6 +83,12 @@ import org.slf4j.LoggerFactory
     def removeExcludeRegexEntityIds(reqexStr: Iterable[String]): Filter =
       copy(excludeRegexEntityIds = excludeRegexEntityIds -- reqexStr)
 
+    def addIncludeRegexEntityIds(reqexStr: Iterable[String]): Filter =
+      copy(includeRegexEntityIds = includeRegexEntityIds ++ reqexStr.map(s => s -> s.r))
+
+    def removeIncludeRegexEntityIds(reqexStr: Iterable[String]): Filter =
+      copy(includeRegexEntityIds = includeRegexEntityIds -- reqexStr)
+
     /**
      * Exclude criteria are evaluated first.
      * Returns `true` if no matching exclude criteria.
@@ -91,17 +98,22 @@ import org.slf4j.LoggerFactory
     def matches(env: EventEnvelope[_]): Boolean = {
       val pid = env.persistenceId
 
-      def matchesExcludeRegexEntityIds: Boolean = {
+      def matchesRegexEntityIds(regexValues: Iterable[Regex]): Boolean = {
         val entityId = PersistenceId.extractEntityId(pid)
-        excludeRegexEntityIds.exists {
-          case (_, regex) =>
-            regex.pattern.matcher(entityId).matches()
+        regexValues.exists {
+          _.pattern.matcher(entityId).matches()
         }
       }
 
+      def matchesExcludeRegexEntityIds: Boolean =
+        matchesRegexEntityIds(excludeRegexEntityIds.values)
+
+      def matchesIncludeRegexEntityIds: Boolean =
+        matchesRegexEntityIds(includeRegexEntityIds.values)
+
       if (env.tags.intersect(excludeTags).nonEmpty || excludePersistenceIds.contains(pid) ||
           matchesExcludeRegexEntityIds) {
-        env.tags.intersect(includeTags).nonEmpty || includePersistenceIds.contains(pid)
+        env.tags.intersect(includeTags).nonEmpty || includePersistenceIds.contains(pid) || matchesIncludeRegexEntityIds
       } else {
         true
       }
@@ -243,8 +255,12 @@ import org.slf4j.LoggerFactory
                 acc.removeExcludePersistenceIds(pids)
               case FilterCriteria.Message.ExcludeMatchingEntityIds(excludeRegex) =>
                 acc.addExcludeRegexEntityIds(excludeRegex.matching)
+              case FilterCriteria.Message.IncludeMatchingEntityIds(includeRegex) =>
+                acc.addIncludeRegexEntityIds(includeRegex.matching)
               case FilterCriteria.Message.RemoveExcludeMatchingEntityIds(excludeRegex) =>
                 acc.removeExcludeRegexEntityIds(excludeRegex.matching)
+              case FilterCriteria.Message.RemoveIncludeMatchingEntityIds(includeRegex) =>
+                acc.removeIncludeRegexEntityIds(includeRegex.matching)
               case FilterCriteria.Message.Empty =>
                 acc
             }

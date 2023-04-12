@@ -28,6 +28,7 @@ class ConsumerSerializerSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
       ConsumerFilter.ExcludeTags(Set("t1", "t2")),
       ConsumerFilter.IncludeTags(Set("t3", "t4")),
       ConsumerFilter.ExcludeRegexEntityIds(Set("all.*")),
+      ConsumerFilter.IncludeRegexEntityIds(Set(".*akka.*")),
       ConsumerFilter.ExcludeEntityIds(Set("a", "b", "c")),
       ConsumerFilter.IncludeEntityIds(Set(ConsumerFilter.EntityIdOffset("b", 1))))
 
