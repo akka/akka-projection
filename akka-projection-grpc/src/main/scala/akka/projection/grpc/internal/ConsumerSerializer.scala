@@ -80,6 +80,7 @@ import scalapb.GeneratedMessage
     val excludeTagsBytes = orsetToBytes(state.excludeTags)
     val includeTagsBytes = orsetToBytes(state.includeTags)
     val excludeRegexEntityIdsBytes = orsetToBytes(state.excludeRegexEntityIds)
+    val includeRegexEntityIdsBytes = orsetToBytes(state.includeRegexEntityIds)
     val excludeEntityIdsBytes = orsetToBytes(state.excludeEntityIds)
     val seqNrMap = Some(seqNrMapToProto(state.includeEntityOffsets))
 
@@ -87,6 +88,7 @@ import scalapb.GeneratedMessage
       excludeTagsBytes,
       includeTagsBytes,
       excludeRegexEntityIdsBytes,
+      includeRegexEntityIdsBytes,
       excludeEntityIdsBytes,
       seqNrMap)
   }
@@ -105,6 +107,7 @@ import scalapb.GeneratedMessage
     val excludeTags = orsetFromBinary(protoState.excludeTags.toByteArray)
     val includeTags = orsetFromBinary(protoState.includeTags.toByteArray)
     val excludeRegexEntityIds = orsetFromBinary(protoState.excludeRegexEntityIds.toByteArray)
+    val includeRegexEntityIds = orsetFromBinary(protoState.includeRegexEntityIds.toByteArray)
     val excludeEntityIds = orsetFromBinary(protoState.excludeEntityIds.toByteArray)
     val includeEntityOffsets = protoState.includeEntityOffsets match {
       case Some(protoSeqNrMap) => seqNrMapFromProto(protoSeqNrMap)
@@ -114,6 +117,7 @@ import scalapb.GeneratedMessage
       excludeTags,
       includeTags,
       excludeRegexEntityIds,
+      includeRegexEntityIds,
       excludeEntityIds,
       includeEntityOffsets)
   }

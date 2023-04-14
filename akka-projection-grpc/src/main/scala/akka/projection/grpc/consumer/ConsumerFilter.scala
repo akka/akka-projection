@@ -152,6 +152,27 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       this(matching.asScala.toSet)
   }
 
+  /**
+   * Include events for entities with entity ids matching the given regular expressions.
+   * A matching include overrides a matching exclude.
+   */
+  final case class IncludeRegexEntityIds(matching: Set[String]) extends FilterCriteria {
+
+    /** Java API */
+    def this(matching: JSet[String]) =
+      this(matching.asScala.toSet)
+  }
+
+  /**
+   * Remove a previously added [[IncludeRegexEntityIds]].
+   */
+  final case class RemoveIncludeRegexEntityIds(matching: Set[String]) extends RemoveCriteria {
+
+    /** Java API */
+    def this(matching: JSet[String]) =
+      this(matching.asScala.toSet)
+  }
+
   object ExcludeEntityIds {
     def apply(replicaId: ReplicaId, entityIds: Set[String]): ExcludeEntityIds =
       ExcludeEntityIds(entityIds.map(addReplicaIdToEntityId(replicaId, _)))
@@ -285,6 +306,13 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       }.toSet
     val excludeRegexEntityIds2 = excludeRegexEntityIds(both).diff(removeExcludeRegexEntityIds)
 
+    val removeIncludeRegexEntityIds =
+      both.flatMap {
+        case rem: RemoveIncludeRegexEntityIds => rem.matching
+        case _                                => Set.empty[String]
+      }.toSet
+    val includeRegexEntityIds2 = includeRegexEntityIds(both).diff(removeIncludeRegexEntityIds)
+
     val removeExcludeEntityIds =
       both.flatMap {
         case rem: RemoveExcludeEntityIds => rem.entityIds
@@ -304,6 +332,7 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       if (excludeTags2.isEmpty) None else Some(ExcludeTags(excludeTags2)),
       if (includeTags2.isEmpty) None else Some(IncludeTags(includeTags2)),
       if (excludeRegexEntityIds2.isEmpty) None else Some(ExcludeRegexEntityIds(excludeRegexEntityIds2)),
+      if (includeRegexEntityIds2.isEmpty) None else Some(IncludeRegexEntityIds(includeRegexEntityIds2)),
       if (excludeEntityIds2.isEmpty) None else Some(ExcludeEntityIds(excludeEntityIds2)),
       if (includeEntityOffsets3.isEmpty) None else Some(IncludeEntityIds(includeEntityOffsets3))).flatten
   }
@@ -365,6 +394,15 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     val removeExcludeRegexEntityIdCriteria =
       if (excludeRegexEntityIdsDiffAB.isEmpty) None else Some(RemoveExcludeRegexEntityIds(excludeRegexEntityIdsDiffAB))
 
+    val includeRegexEntityIdsA = includeRegexEntityIds(a)
+    val includeRegexEntityIdsB = includeRegexEntityIds(b)
+    val includeRegexEntityIdsDiffAB = includeRegexEntityIdsA.diff(includeRegexEntityIdsB)
+    val includeRegexEntityIdsDiffBA = includeRegexEntityIdsB.diff(includeRegexEntityIdsA)
+    val includeRegexEntityIdCriteria =
+      if (includeRegexEntityIdsDiffBA.isEmpty) None else Some(IncludeRegexEntityIds(includeRegexEntityIdsDiffBA))
+    val removeIncludeRegexEntityIdCriteria =
+      if (includeRegexEntityIdsDiffAB.isEmpty) None else Some(RemoveIncludeRegexEntityIds(includeRegexEntityIdsDiffAB))
+
     val excludeEntityIdsA = excludeEntityIds(a)
     val excludeEntityIdsB = excludeEntityIds(b)
     val excludeEntityIdsDiffAB = excludeEntityIdsA.diff(excludeEntityIdsB)
@@ -398,6 +436,8 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       removeIncludeTagsCriteria,
       excludeRegexEntityIdCriteria,
       removeExcludeRegexEntityIdCriteria,
+      includeRegexEntityIdCriteria,
+      removeIncludeRegexEntityIdCriteria,
       excludeEntityIdCriteria,
       removeExcludeEntityIdCriteria,
       includeEntityIdCriteria,
@@ -441,6 +481,14 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   @InternalApi private[akka] def excludeRegexEntityIds(filter: immutable.Seq[FilterCriteria]): Set[String] = {
     filter.flatMap {
       case rxp: ExcludeRegexEntityIds => rxp.matching
+      case _                          => Set.empty[String]
+    }.toSet
+  }
+
+  /** INTERNAL API */
+  @InternalApi private[akka] def includeRegexEntityIds(filter: immutable.Seq[FilterCriteria]): Set[String] = {
+    filter.flatMap {
+      case rxp: IncludeRegexEntityIds => rxp.matching
       case _                          => Set.empty[String]
     }.toSet
   }

@@ -108,6 +108,17 @@ class ConsumerFilterSpec extends AnyWordSpecLike with Matchers {
         RemoveExcludeRegexEntityIds(Set("b.*")))
     }
 
+    "create diff for IncludeRegexEntityIds" in {
+      val filter1 = Vector(IncludeRegexEntityIds(Set("a.*", "b.*")))
+      createDiff(Nil, filter1) shouldBe filter1
+      createDiff(filter1, Nil) shouldBe Vector(RemoveIncludeRegexEntityIds(Set("a.*", "b.*")))
+
+      val filter2 = Vector(IncludeRegexEntityIds(Set("a.*", "c.*")))
+      createDiff(filter1, filter2) shouldBe Vector(
+        IncludeRegexEntityIds(Set("c.*")),
+        RemoveIncludeRegexEntityIds(Set("b.*")))
+    }
+
     "create diff for ExcludeEntityIds" in {
       val filter1 = Vector(ExcludeEntityIds(Set("a", "b")))
       createDiff(Nil, filter1) shouldBe filter1

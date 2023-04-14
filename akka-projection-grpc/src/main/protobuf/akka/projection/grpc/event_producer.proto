@@ -63,10 +63,12 @@ message FilterCriteria {
     RemoveIncludeTags remove_include_tags = 4;
     ExcludeRegexEntityIds exclude_matching_entity_ids = 5;
     RemoveExcludeRegexEntityIds remove_exclude_matching_entity_ids = 6;
-    ExcludeEntityIds exclude_entity_ids = 7;
-    RemoveExcludeEntityIds remove_exclude_entity_ids = 8;
-    IncludeEntityIds include_entity_ids = 9;
-    RemoveIncludeEntityIds remove_include_entity_ids = 10;
+    IncludeRegexEntityIds include_matching_entity_ids = 7;
+    RemoveIncludeRegexEntityIds remove_include_matching_entity_ids = 8;
+    ExcludeEntityIds exclude_entity_ids = 9;
+    RemoveExcludeEntityIds remove_exclude_entity_ids = 10;
+    IncludeEntityIds include_entity_ids = 11;
+    RemoveIncludeEntityIds remove_include_entity_ids = 12;
   }
 }
 
@@ -114,6 +116,14 @@ message ExcludeRegexEntityIds {
 }
 
 message RemoveExcludeRegexEntityIds {
+  repeated string matching = 1;
+}
+
+message IncludeRegexEntityIds {
+  repeated string matching = 1;
+}
+
+message RemoveIncludeRegexEntityIds {
   repeated string matching = 1;
 }
 

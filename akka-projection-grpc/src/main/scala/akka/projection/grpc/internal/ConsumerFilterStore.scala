@@ -172,13 +172,14 @@ import org.slf4j.LoggerFactory
  */
 @InternalApi private[akka] object DdataConsumerFilterStore {
   object State {
-    val empty: State = State(ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, SeqNrMap.empty)
+    val empty: State = State(ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, SeqNrMap.empty)
 
   }
   final case class State(
       excludeTags: ORSet[String],
       includeTags: ORSet[String],
       excludeRegexEntityIds: ORSet[String],
+      includeRegexEntityIds: ORSet[String],
       excludeEntityIds: ORSet[String],
       includeEntityOffsets: SeqNrMap)
       extends ReplicatedData
@@ -190,6 +191,7 @@ import org.slf4j.LoggerFactory
         excludeTags = excludeTags.merge(that.excludeTags),
         includeTags = includeTags.merge(that.includeTags),
         excludeRegexEntityIds = excludeRegexEntityIds.merge(that.excludeRegexEntityIds),
+        includeRegexEntityIds = includeRegexEntityIds.merge(that.includeRegexEntityIds),
         excludeEntityIds = excludeEntityIds.merge(that.excludeEntityIds),
         includeEntityOffsets = includeEntityOffsets.merge(that.includeEntityOffsets))
 
@@ -201,6 +203,7 @@ import org.slf4j.LoggerFactory
       var newExcludeTags = excludeTags
       var newIncludeTags = includeTags
       var newExcludeRegexEntityIds = excludeRegexEntityIds
+      var newIncludeRegexEntityIds = includeRegexEntityIds
       var newExcludeEntityIds = excludeEntityIds
       var newIncludeEntityOffsets = includeEntityOffsets
 
@@ -225,6 +228,10 @@ import org.slf4j.LoggerFactory
           matching.foreach { r =>
             newExcludeRegexEntityIds = newExcludeRegexEntityIds :+ r
           }
+        case ConsumerFilter.IncludeRegexEntityIds(matching) =>
+          matching.foreach { r =>
+            newIncludeRegexEntityIds = newIncludeRegexEntityIds :+ r
+          }
         case ConsumerFilter.ExcludeEntityIds(entityIds) =>
           entityIds.foreach { id =>
             newExcludeEntityIds = newExcludeEntityIds :+ id
@@ -236,6 +243,10 @@ import org.slf4j.LoggerFactory
         case ConsumerFilter.RemoveExcludeRegexEntityIds(matching) =>
           matching.foreach { r =>
             newExcludeRegexEntityIds = newExcludeRegexEntityIds.remove(r)
+          }
+        case ConsumerFilter.RemoveIncludeRegexEntityIds(matching) =>
+          matching.foreach { r =>
+            newIncludeRegexEntityIds = newIncludeRegexEntityIds.remove(r)
           }
         case ConsumerFilter.RemoveExcludeEntityIds(entityIds) =>
           entityIds.foreach { id =>
@@ -251,6 +262,7 @@ import org.slf4j.LoggerFactory
         excludeTags = newExcludeTags,
         includeTags = newIncludeTags,
         excludeRegexEntityIds = newExcludeRegexEntityIds,
+        includeRegexEntityIds = newIncludeRegexEntityIds,
         excludeEntityIds = newExcludeEntityIds,
         includeEntityOffsets = newIncludeEntityOffsets)
     }
@@ -263,6 +275,8 @@ import org.slf4j.LoggerFactory
         else Some(ConsumerFilter.IncludeTags(includeTags.elements)),
         if (excludeRegexEntityIds.isEmpty) None
         else Some(ConsumerFilter.ExcludeRegexEntityIds(excludeRegexEntityIds.elements)),
+        if (includeRegexEntityIds.isEmpty) None
+        else Some(ConsumerFilter.IncludeRegexEntityIds(includeRegexEntityIds.elements)),
         if (excludeEntityIds.isEmpty) None else Some(ConsumerFilter.ExcludeEntityIds(excludeEntityIds.elements)),
         if (includeEntityOffsets.isEmpty) None
         else
@@ -275,12 +289,14 @@ import org.slf4j.LoggerFactory
       excludeTags.modifiedByNodes
         .union(includeTags.modifiedByNodes)
         .union(excludeRegexEntityIds.modifiedByNodes)
+        .union(includeRegexEntityIds.modifiedByNodes)
         .union(excludeEntityIds.modifiedByNodes)
         .union(includeEntityOffsets.modifiedByNodes)
 
     override def needPruningFrom(removedNode: UniqueAddress): Boolean =
       excludeTags.needPruningFrom(removedNode) || includeTags.needPruningFrom(removedNode) || excludeRegexEntityIds
-        .needPruningFrom(removedNode) || excludeEntityIds.needPruningFrom(removedNode) || includeEntityOffsets
+        .needPruningFrom(removedNode) || includeRegexEntityIds.needPruningFrom(removedNode) || excludeEntityIds
+        .needPruningFrom(removedNode) || includeEntityOffsets
         .needPruningFrom(removedNode)
 
     override def prune(removedNode: UniqueAddress, collapseInto: UniqueAddress): State =
@@ -288,6 +304,7 @@ import org.slf4j.LoggerFactory
         excludeTags.prune(removedNode, collapseInto),
         includeTags.prune(removedNode, collapseInto),
         excludeRegexEntityIds.prune(removedNode, collapseInto),
+        includeRegexEntityIds.prune(removedNode, collapseInto),
         excludeEntityIds.prune(removedNode, collapseInto),
         includeEntityOffsets.prune(removedNode, collapseInto))
 
@@ -296,6 +313,7 @@ import org.slf4j.LoggerFactory
         excludeTags.pruningCleanup(removedNode),
         includeTags.pruningCleanup(removedNode),
         excludeRegexEntityIds.pruningCleanup(removedNode),
+        includeRegexEntityIds.pruningCleanup(removedNode),
         excludeEntityIds.pruningCleanup(removedNode),
         includeEntityOffsets.pruningCleanup(removedNode))
   }
