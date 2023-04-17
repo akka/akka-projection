@@ -43,7 +43,13 @@ The table below shows `akka-projection-r2dbc`'s direct dependencies, and the sec
 ## Schema
 
 The `akka_projection_offset_store`, `akka_projection_timestamp_offset_store` and `akka_projection_management` tables
-need to be created in the configured database, see schema definition in @extref:[Creating the schema](akka-persistence-r2dbc:getting-started.html#schema).
+need to be created in the configured database:
+
+PostgreSQL
+:  @@snip [PostgreSQL Schema](/akka-projection-r2dbc/ddl-scripts/create_tables_postgres.sql)
+
+YugaByte
+:  @@snip [YugaByte Schema](/akka-projection-r2dbc/ddl-scripts/create_tables_yugabyte.sql)
 
 ## Configuration
 
