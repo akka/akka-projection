@@ -79,14 +79,24 @@ object Common extends AutoPlugin {
     Test / logBuffered := false,
     IntegrationTest / logBuffered := false,
     mimaPreviousArtifacts := {
-      if (moduleName.value == "akka-projection-r2dbc") {
-        // was released with akka-persistence-r2dbc then moved here
-        // FIXME drop once we have a release 1.4.0 release out
-        Set(organization.value %% moduleName.value % "1.0.1")
-      } else
-        Set(
-          organization.value %% moduleName.value % previousStableVersion.value
-            .getOrElse(throw new Error("Unable to determine previous version")))
+      moduleName.value match {
+        case "akka-projection-r2dbc" =>
+          // was released with akka-persistence-r2dbc then moved here
+          // FIXME drop once we have a release 1.4.0 release out
+          Set(organization.value %% moduleName.value % "1.0.1")
+        case "akka-projection-grpc" =>
+          // FIXME drop once we have 1.4.0 out
+          Set.empty
+        case "akka-projection-kafka" if scalaBinaryVersion.value == "3" =>
+          // FIXME drop once we have 1.4.0 out
+          Set.empty
+        case name if name.endsWith("-tests") => Set.empty
+        case _ =>
+          Set(
+            organization.value %% moduleName.value % previousStableVersion.value
+              .getOrElse(throw new Error("Unable to determine previous version")))
+
+      }
     },
     sonatypeProfileName := "com.lightbend")
 
