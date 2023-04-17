@@ -251,7 +251,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
         settings) {
 
     implicit val executionContext: ExecutionContext = system.executionContext
-    override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass)
+    override val logger: LoggingAdapter = Logging(system.classicSystem, this.getClass.asInstanceOf[Class[Any]])
 
     override def readPaused(): Future[Boolean] =
       offsetStore.readManagementState(projectionId).map(_.exists(_.paused))
@@ -263,7 +263,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       offsetStore.saveOffset(projectionId, offset)
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new JdbcRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), this)
+      new JdbcRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
   }
 
   private class JdbcRunningProjection(source: Source[Done, _], projectionState: JdbcInternalProjectionState)(

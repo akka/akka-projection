@@ -8,14 +8,13 @@ import java.sql.Connection
 import java.sql.DriverManager
 import java.time.Instant
 import java.util.UUID
-
 import scala.concurrent.duration._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.Future
 import scala.util.Try
-
 import akka.Done
+import akka.actor.Scheduler
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.japi.function
@@ -115,7 +114,7 @@ abstract class JdbcOffsetStoreSpec(specConfig: JdbcSpecConfig)
     PatienceConfig(timeout = 10.seconds, interval = 100.millis)
 
   private implicit val executionContext: ExecutionContextExecutor = system.executionContext
-  private implicit val classicScheduler = system.classicSystem.scheduler
+  private implicit val classicScheduler: Scheduler = system.classicSystem.scheduler
 
   // test clock for testing of the `last_updated` Instant
   private val clock = new TestClock
