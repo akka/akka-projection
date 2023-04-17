@@ -1,0 +1,4 @@
+# Settings was case class and sort of may-change but then we turned it proper bin comp evolvable class after 1.1.0
+ProblemFilters.exclude[Problem]("akka.projection.r2dbc.R2dbcProjectionSettings.*")
+ProblemFilters.exclude[MissingTypesProblem]("akka.projection.r2dbc.R2dbcProjectionSettings$")
+ProblemFilters.exclude[MissingTypesProblem]("akka.projection.r2dbc.R2dbcProjectionSettings")

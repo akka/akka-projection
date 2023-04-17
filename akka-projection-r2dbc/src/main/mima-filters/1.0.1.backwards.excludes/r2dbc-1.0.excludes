@@ -1,0 +1,4 @@
+# Update to r2dbc-postgres 1.0
+# CompletionStage<Ljava/lang/Integer;> vs CompletionStage<Ljava/lang/Long;>
+ProblemFilters.exclude[IncompatibleSignatureProblem]("akka.projection.r2dbc.javadsl.R2dbcSession.updateOne")
+ProblemFilters.exclude[IncompatibleSignatureProblem]("akka.projection.r2dbc.javadsl.R2dbcSession.update")

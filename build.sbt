@@ -123,8 +123,21 @@ lazy val grpcTests =
     .settings(publish / skip := true)
     .dependsOn(grpc)
     .dependsOn(testkit % Test)
+    .dependsOn(r2dbc % IntegrationTest)
     .enablePlugins(AkkaGrpcPlugin)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
+
+// provides offset storage backed by akka-persistence-r2dbc
+lazy val r2dbc =
+  Project(id = "akka-projection-r2dbc", base = file("akka-projection-r2dbc"))
+    .configs(IntegrationTest)
+    // .settings(Scala3.settings) FIXME can be done once r2dbc 1.1.0 is out
+    .settings(headerSettings(IntegrationTest))
+    .settings(Defaults.itSettings)
+    .settings(Dependencies.r2dbc)
+    .dependsOn(core, grpc, eventsourced, `durable-state`)
+    .dependsOn(testkit % Test)
+    .dependsOn(slick % "test->test;it->it")
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
@@ -209,6 +222,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
     kafka,
     `durable-state`,
     grpc,
+    r2dbc,
     examples,
     docs)
   .settings(publish / skip := true)
