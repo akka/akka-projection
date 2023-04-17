@@ -60,7 +60,6 @@ object Dependencies {
     // must be provided on classpath when using Apache Kafka 2.6.0+
     val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jacksonDatabind
 
-    val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
   }
 
   object Test {
@@ -140,7 +139,6 @@ object Dependencies {
     deps ++= Seq(
         Compile.akkaTypedTestkit,
         Compile.akkaStreamTestkit,
-        Compile.collectionCompat,
         Test.scalatest,
         Test.scalatestJUnit,
         Test.junit,
