@@ -133,9 +133,9 @@ lazy val r2dbc =
     .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.r2dbc)
+    .settings(Scala3.settings)
     .dependsOn(core, grpc, eventsourced, `durable-state`)
     .dependsOn(testkit % Test)
-    .dependsOn(slick % "test->test;it->it")
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
