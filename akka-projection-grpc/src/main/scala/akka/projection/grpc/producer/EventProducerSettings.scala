@@ -14,16 +14,20 @@ object EventProducerSettings {
     apply(system.settings.config.getConfig("akka.projection.grpc.producer"))
 
   def apply(config: Config): EventProducerSettings = {
-    val queryPluginId: String = config.getString("query-plugin-id")
-    val transformationParallelism: Int =
-      config.getInt("transformation-parallelism")
 
-    new EventProducerSettings(queryPluginId, transformationParallelism)
+    new EventProducerSettings(
+      queryPluginId = config.getString("query-plugin-id"),
+      transformationParallelism = config.getInt("transformation-parallelism"),
+      replayParallelism = config.getInt("filter.replay-parallelism"))
   }
 }
 
 @ApiMayChange
-final case class EventProducerSettings(queryPluginId: String, transformationParallelism: Int) {
+final class EventProducerSettings private (
+    val queryPluginId: String,
+    val transformationParallelism: Int,
+    val replayParallelism: Int) {
   require(transformationParallelism >= 1, "Configuration property [transformation-parallelism] must be >= 1.")
+  require(replayParallelism >= 1, "Configuration property [replay-parallelism] must be >= 1.")
 
 }

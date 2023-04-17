@@ -1,6 +1,6 @@
 ## Running the sample code
 
-1. Start a local PostgresSQL server on default port 5432 and a Kafka broker on port 9092. The included `docker-compose.yml` starts everything required for running locally.
+1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally.
 
     ```shell
     docker-compose up -d
@@ -34,7 +34,7 @@
     curl http://localhost:9101/ready
     ```
 
-6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
+6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl). Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
 
     ```shell
     # add item to cart
@@ -48,9 +48,7 @@
     
     # check out cart
     grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
-    
-    # get item popularity
-    grpcurl -d '{"itemId":"socks"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.GetItemPopularity
+   
     ```
 
     or same `grpcurl` commands to port 8102 to reach node 2.

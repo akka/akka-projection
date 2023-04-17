@@ -4,6 +4,8 @@
 
 package akka.projection.grpc.producer.scaladsl
 
+import scala.concurrent.Future
+import scala.reflect.ClassTag
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -11,15 +13,14 @@ import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.javadsl.{ Transformation => JTransformation }
-
-import scala.concurrent.Future
-import scala.reflect.ClassTag
 
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
@@ -27,20 +28,53 @@ import scala.reflect.ClassTag
 @ApiMayChange
 object EventProducer {
 
+  object EventProducerSource {
+    def apply(
+        entityType: String,
+        streamId: String,
+        transformation: Transformation,
+        settings: EventProducerSettings): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, _ => true)
+
+    def apply[Event](
+        entityType: String,
+        streamId: String,
+        transformation: Transformation,
+        settings: EventProducerSettings,
+        producerFilter: EventEnvelope[Event] => Boolean): EventProducerSource =
+      new EventProducerSource(
+        entityType,
+        streamId,
+        transformation,
+        settings,
+        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+
+  }
+
   /**
-   * @param entityType The internal entity type name
-   * @param streamId The public, logical, stream id that consumers use to consume this source
+   * @param entityType     The internal entity type name
+   * @param streamId       The public, logical, stream id that consumers use to consume this source
    * @param transformation Transformations for turning the internal events to public message types
-   * @param settings The event producer settings used (can be shared for multiple sources)
+   * @param settings       The event producer settings used (can be shared for multiple sources)
    */
   @ApiMayChange
-  final case class EventProducerSource(
-      entityType: String,
-      streamId: String,
-      transformation: Transformation,
-      settings: EventProducerSettings) {
+  final class EventProducerSource private (
+      val entityType: String,
+      val streamId: String,
+      val transformation: Transformation,
+      val settings: EventProducerSettings,
+      val producerFilter: EventEnvelope[Any] => Boolean) {
     require(entityType.nonEmpty, "Stream id must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
+
+    def withProducerFilter[Event](producerFilter: EventEnvelope[Event] => Boolean): EventProducerSource =
+      new EventProducerSource(
+        entityType,
+        streamId,
+        transformation,
+        settings,
+        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+
   }
 
   @ApiMayChange
@@ -134,11 +168,13 @@ object EventProducer {
   def grpcServiceHandler(sources: Set[EventProducerSource], interceptor: Option[EventProducerInterceptor])(
       implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] = {
 
-    val eventsBySlicesQueriesPerStreamId =
-      eventsBySlicesQueriesForStreamIds(sources, system)
-
     EventProducerServicePowerApiHandler.partial(
-      new EventProducerServiceImpl(system, eventsBySlicesQueriesPerStreamId, sources, interceptor))
+      new EventProducerServiceImpl(
+        system,
+        eventsBySlicesQueriesForStreamIds(sources, system),
+        currentEventsByPersistenceIdQueriesForStreamIds(sources, system),
+        sources,
+        interceptor))
   }
 
   /**
@@ -147,6 +183,30 @@ object EventProducer {
   private[akka] def eventsBySlicesQueriesForStreamIds(
       sources: Set[EventProducerSource],
       system: ActorSystem[_]): Map[String, EventsBySliceQuery] = {
+    queriesForStreamIds(sources, system).map {
+      case (streamId, q: EventsBySliceQuery) => streamId -> q
+      case (_, other) =>
+        throw new IllegalArgumentException(s"Expected EventsBySliceQuery but was [${other.getClass.getName}]")
+    }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  private[akka] def currentEventsByPersistenceIdQueriesForStreamIds(
+      sources: Set[EventProducerSource],
+      system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdTypedQuery] = {
+    queriesForStreamIds(sources, system).map {
+      case (streamId, q: CurrentEventsByPersistenceIdTypedQuery) => streamId -> q
+      case (_, other) =>
+        throw new IllegalArgumentException(
+          s"Expected CurrentEventsByPersistenceIdQuery but was [${other.getClass.getName}]")
+    }
+  }
+
+  private def queriesForStreamIds(
+      sources: Set[EventProducerSource],
+      system: ActorSystem[_]): Map[String, ReadJournal] = {
     val streamIds = sources.map(_.streamId)
     require(
       streamIds.size == sources.size,
@@ -164,7 +224,7 @@ object EventProducer {
       case (queryPluginId, sourcesUsingIt) =>
         val eventsBySlicesQuery =
           PersistenceQuery(system)
-            .readJournalFor[EventsBySliceQuery](queryPluginId)
+            .readJournalFor[ReadJournal](queryPluginId)
 
         sourcesUsingIt.map(eps => eps.streamId -> eventsBySlicesQuery)
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc
@@ -43,10 +43,11 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
+
+import akka.projection.grpc.consumer.ConsumerFilter
 
 object IntegrationSpec {
 
@@ -54,6 +55,7 @@ object IntegrationSpec {
 
   val config: Config = ConfigFactory
     .parseString(s"""
+    akka.loglevel = DEBUG
     akka.http.server.preview.enable-http2 = on
     akka.persistence.r2dbc {
       query {
@@ -107,7 +109,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
-  private val numberOfTests = 4
+  private val numberOfTests = 6
 
   // needs to be unique per test case and known up front for setting up the producer
   case class TestSource(entityType: String, streamId: String, pid: PersistenceId)
@@ -330,6 +332,119 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       projection ! ProjectionBehavior.Stop
       entity ! TestEntity.Stop(replyProbe.ref)
 
+      processedProbe.expectTerminated(projection)
+      processedProbe.expectTerminated(entity)
+    }
+
+    "dynamically filter entity ids" in new TestFixture {
+      entity ! TestEntity.Persist("a")
+      entity ! TestEntity.Persist("b")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      // start the projection
+      val projection = spawnAtLeastOnceProjection()
+
+      val processedA = processedProbe.receiveMessage()
+      processedA.envelope.persistenceId shouldBe pid.id
+      processedA.envelope.sequenceNr shouldBe 1L
+      processedA.envelope.event shouldBe "A"
+
+      val processedB = processedProbe.receiveMessage()
+      processedB.envelope.persistenceId shouldBe pid.id
+      processedB.envelope.sequenceNr shouldBe 2L
+      processedB.envelope.event shouldBe "B"
+
+      val consumerFilter = ConsumerFilter(system).ref
+      // look for log message to ensure that filter has propagated to producer side before continuing
+      LoggingTestKit.debug(s"Stream [$streamId (0-1023)]: Filter update requested").expect {
+        consumerFilter ! ConsumerFilter.UpdateFilter(streamId, List(ConsumerFilter.ExcludeEntityIds(Set(pid.entityId))))
+      }
+
+      entity ! TestEntity.Persist("c")
+      processedProbe.expectNoMessage(1.second)
+
+      // look for log message to ensure that filter has propagated to producer side before continuing
+      LoggingTestKit.debug(s"Stream [$streamId (0-1023)]: Filter update requested").expect {
+        consumerFilter ! ConsumerFilter.UpdateFilter(
+          streamId,
+          List(ConsumerFilter.IncludeEntityIds(Set(ConsumerFilter.EntityIdOffset(pid.entityId, 0L)))))
+      }
+
+      entity ! TestEntity.Persist("d")
+
+      // D first rejected because expecting seqNr 3 (c) first
+      // C received via backtracking (or other duplicate), but FIXME this is probably racy
+      val processedC = processedProbe.receiveMessage()
+      processedC.envelope.persistenceId shouldBe pid.id
+      processedC.envelope.sequenceNr shouldBe 3L
+      processedC.envelope.event shouldBe "C"
+
+      val processedD = processedProbe.receiveMessage()
+      processedD.envelope.persistenceId shouldBe pid.id
+      processedD.envelope.sequenceNr shouldBe 4L
+      processedD.envelope.event shouldBe "D"
+
+      // remove filter
+      // look for log message to ensure that filter has propagated to producer side before continuing
+      LoggingTestKit.debug(s"Stream [$streamId (0-1023)]: Filter update requested").expect {
+        consumerFilter ! ConsumerFilter
+          .UpdateFilter(streamId, List(ConsumerFilter.RemoveIncludeEntityIds(Set(pid.entityId))))
+      }
+
+      entity ! TestEntity.Persist("e")
+      processedProbe.expectNoMessage(1.second)
+
+      projection ! ProjectionBehavior.Stop
+      entity ! TestEntity.Stop(replyProbe.ref)
+      processedProbe.expectTerminated(projection)
+      processedProbe.expectTerminated(entity)
+    }
+
+    "dynamically replay events" in new TestFixture {
+      entity ! TestEntity.Persist("a")
+      entity ! TestEntity.Persist("b")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      // start the projection
+      val projection = spawnAtLeastOnceProjection()
+
+      val processedA = processedProbe.receiveMessage()
+      processedA.envelope.persistenceId shouldBe pid.id
+      processedA.envelope.sequenceNr shouldBe 1L
+      processedA.envelope.event shouldBe "A"
+
+      val processedB = processedProbe.receiveMessage()
+      processedB.envelope.persistenceId shouldBe pid.id
+      processedB.envelope.sequenceNr shouldBe 2L
+      processedB.envelope.event shouldBe "B"
+
+      val consumerFilter = ConsumerFilter(system).ref
+      // look for log message to ensure that filter has propagated to producer side before continuing
+      LoggingTestKit.debug(s"Stream [$streamId (0-1023)]: Replay requested").expect {
+        consumerFilter ! ConsumerFilter.Replay(streamId, Set(ConsumerFilter.PersistenceIdOffset(pid.id, 2L)))
+      }
+
+      entity ! TestEntity.Persist("c")
+      entity ! TestEntity.Persist("d")
+
+      // this doesn't really verify that a replay occurred since same events are propagated the ordinary way
+      val processedC = processedProbe.receiveMessage()
+      processedC.envelope.persistenceId shouldBe pid.id
+      processedC.envelope.sequenceNr shouldBe 3L
+      processedC.envelope.event shouldBe "C"
+
+      val processedD = processedProbe.receiveMessage()
+      processedD.envelope.persistenceId shouldBe pid.id
+      processedD.envelope.sequenceNr shouldBe 4L
+      processedD.envelope.event shouldBe "D"
+
+      // no duplicates
+      processedProbe.expectNoMessage()
+
+      projection ! ProjectionBehavior.Stop
+      entity ! TestEntity.Stop(replyProbe.ref)
       processedProbe.expectTerminated(projection)
       processedProbe.expectTerminated(entity)
     }

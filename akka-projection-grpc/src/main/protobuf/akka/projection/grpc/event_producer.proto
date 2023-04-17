@@ -21,9 +21,13 @@ service EventProducerService {
 message StreamIn {
   oneof message {
     InitReq init = 1;
+    FilterReq filter = 2;
+    ReplayReq replay = 3;
   }
 }
 
+// The first message must always be this InitReq to setup the stream.
+// It can only be used as the first message.
 message InitReq {
   // the logical stream identifier, mapped to a specific internal entity type by
   // the producer settings
@@ -33,6 +37,94 @@ message InitReq {
   int32 slice_min = 2;
   int32 slice_max = 3;
   Offset offset = 4;
+  repeated FilterCriteria filter = 5;
+}
+
+// Add filter criteria to exclude and include events for matching entities.
+message FilterReq {
+  repeated FilterCriteria criteria = 1;
+}
+
+// Replay events for given entities.
+message ReplayReq {
+  repeated PersistenceIdSeqNr persistence_id_offset = 1;
+}
+
+message FilterCriteria {
+  // Exclude criteria are evaluated first.
+  // If no matching exclude criteria the event is emitted.
+  // If an exclude criteria is matching the include criteria are evaluated.
+  //   If no matching include criteria the event is discarded.
+  //   If matching include criteria the event is emitted.
+  oneof message {
+    ExcludeTags exclude_tags = 1;
+    RemoveExcludeTags remove_exclude_tags = 2;
+    IncludeTags include_tags = 3;
+    RemoveIncludeTags remove_include_tags = 4;
+    ExcludeRegexEntityIds exclude_matching_entity_ids = 5;
+    RemoveExcludeRegexEntityIds remove_exclude_matching_entity_ids = 6;
+    IncludeRegexEntityIds include_matching_entity_ids = 7;
+    RemoveIncludeRegexEntityIds remove_include_matching_entity_ids = 8;
+    ExcludeEntityIds exclude_entity_ids = 9;
+    RemoveExcludeEntityIds remove_exclude_entity_ids = 10;
+    IncludeEntityIds include_entity_ids = 11;
+    RemoveIncludeEntityIds remove_include_entity_ids = 12;
+  }
+}
+
+message ExcludeTags {
+  repeated string tags = 1;
+}
+
+message RemoveExcludeTags {
+  repeated string tags = 1;
+}
+
+message IncludeTags {
+  repeated string tags = 1;
+}
+
+message RemoveIncludeTags {
+  repeated string tags = 1;
+}
+
+message IncludeEntityIds {
+  repeated EntityIdOffset entity_id_offset = 1;
+}
+
+message EntityIdOffset {
+  string entity_id = 1;
+  // If this is defined (> 0) events are replayed from the given
+  // sequence number (inclusive).
+  int64 seq_nr = 2;
+}
+
+message RemoveIncludeEntityIds {
+  repeated string entity_ids = 1;
+}
+
+message ExcludeEntityIds {
+  repeated string entity_ids = 1;
+}
+
+message RemoveExcludeEntityIds {
+  repeated string entity_ids = 1;
+}
+
+message ExcludeRegexEntityIds {
+  repeated string matching = 1;
+}
+
+message RemoveExcludeRegexEntityIds {
+  repeated string matching = 1;
+}
+
+message IncludeRegexEntityIds {
+  repeated string matching = 1;
+}
+
+message RemoveIncludeRegexEntityIds {
+  repeated string matching = 1;
 }
 
 message Offset {
@@ -65,6 +157,7 @@ message Event {
   google.protobuf.Any payload = 5;
   string source = 6;
   google.protobuf.Any metadata = 7;
+  repeated string tags = 8;
 }
 
 

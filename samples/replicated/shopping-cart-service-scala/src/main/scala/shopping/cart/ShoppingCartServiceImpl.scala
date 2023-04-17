@@ -1,14 +1,20 @@
 package shopping.cart
 
 import java.util.concurrent.TimeoutException
+
 import scala.concurrent.Future
+
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.grpc.GrpcServiceException
+import akka.persistence.typed.ReplicaId
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
+import shopping.cart.proto.Empty
+import shopping.cart.proto.ExcludeCartRequest
 
 class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[ShoppingCart.Command])
     extends proto.ShoppingCartService {
@@ -60,6 +66,20 @@ class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[S
           toProtoCart(cart)
       }
     convertError(response)
+  }
+
+  override def excludeCart(in: ExcludeCartRequest): Future[Empty] = {
+    val config = system.settings.config.getConfig(ShoppingCart.EntityType)
+    val selfReplicaId = config.getString("self-replica-id")
+    val otherReplicaId = if (selfReplicaId == "replica1") "replica2" else "replica1"
+
+    val filterCriteria =
+      if (in.exclude)
+        ConsumerFilter.ExcludeEntityIds(ReplicaId(otherReplicaId), Set(in.cartId))
+      else
+        ConsumerFilter.RemoveExcludeEntityIds(ReplicaId(otherReplicaId), Set(in.cartId))
+    ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(ShoppingCart.EntityType, Vector(filterCriteria))
+    Future.successful(Empty.defaultInstance)
   }
 
   private def toProtoCart(cart: ShoppingCart.Summary): proto.Cart = {

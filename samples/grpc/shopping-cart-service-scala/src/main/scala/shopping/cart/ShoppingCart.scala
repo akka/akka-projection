@@ -33,13 +33,22 @@ import akka.persistence.typed.scaladsl.RetentionCriteria
  * loaded from the database - each event will be replayed to recreate the state
  * of the entity.
  */
+//#tags
 object ShoppingCart {
+  //#tags
 
   /**
    * The current state held by the `EventSourcedBehavior`.
    */
-  final case class State(items: Map[String, Int], checkoutDate: Option[Instant])
+  //#tags
+  final case class State(
+      items: Map[String, Int],
+      checkoutDate: Option[Instant],
+      customerId: String,
+      customerCategory: String)
       extends CborSerializable {
+
+    //#tags
 
     def isCheckedOut: Boolean =
       checkoutDate.isDefined
@@ -63,12 +72,35 @@ object ShoppingCart {
     def checkout(now: Instant): State =
       copy(checkoutDate = Some(now))
 
+    def setCustomer(customerId: String, category: String): State =
+      copy(customerId = customerId, customerCategory = category)
+
     def toSummary: Summary =
-      Summary(items, isCheckedOut)
+      Summary(items, isCheckedOut, customerId, customerCategory)
+
+    //#tags
+    def totalQuantity: Int =
+      items.valuesIterator.sum
+
+    def tags: Set[String] = {
+      val total = totalQuantity
+      if (total == 0) Set.empty
+      else if (total >= 100) Set(LargeQuantityTag)
+      else if (total >= 10) Set(MediumQuantityTag)
+      else Set(SmallQuantityTag)
+    }
+
   }
+
+  //#tags
+
   object State {
-    val empty =
-      State(items = Map.empty, checkoutDate = None)
+    val empty: State =
+      State(
+        items = Map.empty,
+        checkoutDate = None,
+        customerId = "",
+        customerCategory = "")
   }
 
   /**
@@ -119,8 +151,18 @@ object ShoppingCart {
   /**
    * Summary of the shopping cart state, used in reply messages.
    */
-  final case class Summary(items: Map[String, Int], checkedOut: Boolean)
+  final case class Summary(
+      items: Map[String, Int],
+      checkedOut: Boolean,
+      customerId: String,
+      customerCategory: String)
       extends CborSerializable
+
+  final case class SetCustomer(
+      customerId: String,
+      category: String,
+      replyTo: ActorRef[StatusReply[Summary]])
+      extends Command
 
   /**
    * This interface defines all the events that the ShoppingCart supports.
@@ -144,16 +186,28 @@ object ShoppingCart {
 
   final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
 
+  final case class CustomerDefined(
+      cartId: String,
+      customerId: String,
+      category: String)
+      extends Event
+
   val EntityKey: EntityTypeKey[Command] =
     EntityTypeKey[Command]("ShoppingCart")
 
-  val tags = Vector.tabulate(5)(i => s"carts-$i")
+  //#tags
+  val SmallQuantityTag = "small"
+  val MediumQuantityTag = "medium"
+  val LargeQuantityTag = "large"
+
+  //#tags
 
   def init(system: ActorSystem[_]): Unit = {
-    ClusterSharding(system).init(
-      Entity(EntityKey)(entityContext => ShoppingCart(entityContext.entityId)))
+    ClusterSharding(system).init(Entity(EntityKey)(entityContext =>
+      ShoppingCart(entityContext.entityId)))
   }
 
+  //#tags
   def apply(cartId: String): Behavior[Command] = {
     EventSourcedBehavior
       .withEnforcedReplies[Command, Event, State](
@@ -162,11 +216,14 @@ object ShoppingCart {
         commandHandler =
           (state, command) => handleCommand(cartId, state, command),
         eventHandler = (state, event) => handleEvent(state, event))
-      .withRetention(RetentionCriteria
-        .snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+      .withTaggerForState { case (state, _) =>
+        state.tags
+      }
+      .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100))
       .onPersistFailure(
         SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }
+  //#tags
 
   private def handleCommand(
       cartId: String,
@@ -241,6 +298,12 @@ object ShoppingCart {
 
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
+
+      case SetCustomer(customerId, category, replyTo) =>
+        Effect
+          .persist(CustomerDefined(cartId, customerId, category))
+          .thenReply(replyTo)(updatedCart =>
+            StatusReply.Success(updatedCart.toSummary))
     }
   }
 
@@ -251,6 +314,11 @@ object ShoppingCart {
     command match {
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
+      case SetCustomer(customerId, category, replyTo) =>
+        Effect
+          .persist(CustomerDefined(cartId, customerId, category))
+          .thenReply(replyTo)(updatedCart =>
+            StatusReply.Success(updatedCart.toSummary))
       case cmd: AddItem =>
         Effect.reply(cmd.replyTo)(
           StatusReply.Error(
@@ -279,6 +347,10 @@ object ShoppingCart {
         state.updateItem(itemId, quantity)
       case CheckedOut(_, eventTime) =>
         state.checkout(eventTime)
+      case CustomerDefined(_, customerId, category) =>
+        state.setCustomer(customerId, category)
     }
   }
+  //#tags
 }
+//#tags

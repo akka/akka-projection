@@ -3,9 +3,6 @@ import akka.projections.Dependencies
 // avoid + in snapshot versions
 ThisBuild / dynverSeparator := "-"
 
-// FIXME for r2dbc snapshot, remove when release out with convenience transport factories
-ThisBuild / resolvers ++= Resolver.sonatypeOssRepos("snapshots")
-
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
     .configs(IntegrationTest)
@@ -122,6 +119,7 @@ lazy val grpcTests =
     .settings(Dependencies.grpcTest)
     .settings(publish / skip := true)
     .dependsOn(grpc)
+    .dependsOn(r2dbc % Test)
     .dependsOn(testkit % Test)
     .dependsOn(r2dbc % IntegrationTest)
     .enablePlugins(AkkaGrpcPlugin)
@@ -222,6 +220,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
     kafka,
     `durable-state`,
     grpc,
+    grpcTests,
     r2dbc,
     examples,
     docs)

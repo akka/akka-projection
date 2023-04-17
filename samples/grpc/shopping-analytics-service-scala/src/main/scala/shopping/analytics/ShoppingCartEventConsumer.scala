@@ -11,6 +11,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
@@ -28,7 +29,10 @@ object ShoppingCartEventConsumer {
     LoggerFactory.getLogger("shopping.analytics.ShoppingCartEventConsumer")
 
   //#eventHandler
-  private class EventHandler(projectionId: ProjectionId)
+  private class EventHandler(
+      projectionId: ProjectionId,
+      streamId: String,
+      system: ActorSystem[_])
       extends Handler[EventEnvelope[AnyRef]] {
     private var totalCount = 0
     private var throughputStartTime = System.nanoTime()
@@ -80,6 +84,7 @@ object ShoppingCartEventConsumer {
             projectionId.id,
             checkedOut.cartId,
             totalCount)
+
         case unknown =>
           throw new IllegalArgumentException(s"Unknown event $unknown")
       }
@@ -133,9 +138,29 @@ object ShoppingCartEventConsumer {
             projectionId,
             None,
             sourceProvider,
-            () => new EventHandler(projectionId)))
+            () =>
+              new EventHandler(
+                projectionId,
+                eventsBySlicesQuery.streamId,
+                sys)))
       })
   }
+
+  //#initProjections
+  //#update-filter
+  def updateConsumerFilter(
+      system: ActorSystem[_],
+      excludeTags: Set[String],
+      includeTags: Set[String]): Unit = {
+    val streamId = system.settings.config
+      .getString("akka.projection.grpc.consumer.stream-id")
+    val criteria = Vector(
+      ConsumerFilter.ExcludeTags(excludeTags),
+      ConsumerFilter.IncludeTags(includeTags))
+    ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(streamId, criteria)
+  }
+  //#update-filter
+  //#initProjections
 
 }
 //#initProjections

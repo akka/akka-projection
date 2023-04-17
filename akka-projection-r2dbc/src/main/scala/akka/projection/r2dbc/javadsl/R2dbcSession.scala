@@ -17,7 +17,7 @@ import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Row
 import io.r2dbc.spi.Statement
 
-import scala.jdk.CollectionConverters._
+import akka.util.ccompat.JavaConverters._
 
 @ApiMayChange
 final class R2dbcSession(val connection: Connection)(implicit ec: ExecutionContext, system: ActorSystem[_]) {

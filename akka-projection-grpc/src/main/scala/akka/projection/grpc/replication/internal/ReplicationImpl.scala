@@ -76,6 +76,7 @@ private[akka] object ReplicationImpl {
    */
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
+      producerFilter: EventEnvelope[Event] => Boolean,
       replicatedEntity: ReplicatedEntity[Command])(implicit system: ActorSystem[_]): ReplicationImpl[Command] = {
     require(
       system.classicSystem.asInstanceOf[ExtendedActorSystem].provider.isInstanceOf[ClusterActorRefProvider],
@@ -95,7 +96,8 @@ private[akka] object ReplicationImpl {
       settings.entityTypeKey.name,
       settings.streamId,
       onlyLocalOriginTransformer,
-      settings.eventProducerSettings)
+      settings.eventProducerSettings,
+      producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)

@@ -1,7 +1,9 @@
 package shopping.cart
 
 import java.time.Instant
+
 import scala.concurrent.duration._
+
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
@@ -9,6 +11,7 @@ import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.pattern.StatusReply
+import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
@@ -63,6 +66,17 @@ object ShoppingCart {
         case (id, quantity) if quantity > 0 => id -> quantity
       }
       Summary(cartItems, isClosed)
+    }
+
+    def totalQuantity: Int =
+      items.valuesIterator.sum
+
+    def tags: Set[String] = {
+      val total = totalQuantity
+      if (total == 0) Set.empty
+      else if (total >= 100) Set(LargeQuantityTag)
+      else if (total >= 10) Set(MediumQuantityTag)
+      else Set(SmallQuantityTag)
     }
   }
 
@@ -124,12 +138,20 @@ object ShoppingCart {
 
   final case class CheckedOut(eventTime: Instant) extends Event
 
+  val SmallQuantityTag = "small"
+  val MediumQuantityTag = "medium"
+  val LargeQuantityTag = "large"
+
+  val EntityType = "replicated-shopping-cart"
+
   // #init
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
-    val replicationSettings = ReplicationSettings[Command](
-      "replicated-shopping-cart",
-      R2dbcReplication())
-    Replication.grpcReplication(replicationSettings)(ShoppingCart.apply)
+    val replicationSettings = ReplicationSettings[Command](EntityType, R2dbcReplication())
+    val producerFilter: EventEnvelope[Event] => Boolean = { envelope =>
+      val tags = envelope.tags
+      tags.contains(ShoppingCart.MediumQuantityTag) || tags.contains(ShoppingCart.LargeQuantityTag)
+    }
+    Replication.grpcReplication(replicationSettings, producerFilter)(ShoppingCart.apply)
   }
 
   def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]): Behavior[Command] = {
@@ -159,8 +181,10 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
         emptyState = State.empty,
         commandHandler = handleCommand,
         eventHandler = handleEvent)
-      .withRetention(RetentionCriteria
-        .snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+      .withTaggerForState { case (state, _) =>
+        state.tags
+      }
+      .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100))
       .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }
 

@@ -1,16 +1,10 @@
 /*
- * Copyright (C) 2022 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.internal
 
 import akka.Done
-
-import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
-import scala.collection.immutable
-import scala.concurrent.Future
-import scala.concurrent.Promise
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -23,6 +17,7 @@ import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.EventTimestampRequest
@@ -46,6 +41,12 @@ import com.typesafe.config.ConfigFactory
 import io.grpc.Status
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
+import scala.collection.immutable
+import scala.concurrent.Future
+import scala.concurrent.Promise
 
 object EventProducerServiceSpec {
   val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
@@ -110,13 +111,30 @@ class EventProducerServiceSpec
   val streamId1 = "stream_id_" + entityType1
   val entityType2 = nextEntityType()
   val streamId2 = "stream_id_" + entityType2
+
+  private val notUsedCurrentEventsByPersistenceIdQuery = new CurrentEventsByPersistenceIdTypedQuery {
+
+    override def currentEventsByPersistenceIdTyped[Event](
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long): Source[EventEnvelope[Event], NotUsed] =
+      throw new IllegalStateException("Unexpected use of currentEventsByPersistenceId")
+  }
+  private val notUsedCurrentEventsByPersistenceIdQueries =
+    Map(streamId1 -> notUsedCurrentEventsByPersistenceIdQuery, streamId2 -> notUsedCurrentEventsByPersistenceIdQuery)
+
   private val eventProducerSources = Set(
     EventProducerSource(entityType1, streamId1, transformation, settings),
     EventProducerSource(entityType2, streamId2, transformation, settings))
   val queries =
     Map(streamId1 -> eventsBySlicesQuery1, streamId2 -> eventsBySlicesQuery2)
   private val eventProducerService =
-    new EventProducerServiceImpl(system, queries, eventProducerSources, None)
+    new EventProducerServiceImpl(
+      system,
+      queries,
+      notUsedCurrentEventsByPersistenceIdQueries,
+      eventProducerSources,
+      None)
 
   private def runEventsBySlices(streamIn: Source[StreamIn, NotUsed]) = {
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
@@ -132,7 +150,12 @@ class EventProducerServiceSpec
     probe
   }
 
-  private def createEnvelope(streamId: String, pid: PersistenceId, seqNr: Long, evt: String): EventEnvelope[String] = {
+  private def createEnvelope(
+      streamId: String,
+      pid: PersistenceId,
+      seqNr: Long,
+      evt: String,
+      tags: Set[String] = Set.empty): EventEnvelope[String] = {
     val now = Instant.now()
     EventEnvelope(
       TimestampOffset(Instant.now, Map(pid.id -> seqNr)),
@@ -141,7 +164,10 @@ class EventProducerServiceSpec
       evt,
       now.toEpochMilli,
       pid.entityTypeHint,
-      queries(streamId).sliceForPersistenceId(pid.id))
+      queries(streamId).sliceForPersistenceId(pid.id),
+      filtered = false,
+      source = "",
+      tags)
   }
 
   "EventProducerService" must {
@@ -159,7 +185,7 @@ class EventProducerServiceSpec
 
       val env1 = createEnvelope(streamId1, nextPid(entityType1), 1L, "e-1")
       testPublisher.sendNext(env1)
-      val env2 = createEnvelope(streamId1, nextPid(entityType1), 2L, "e-2")
+      val env2 = createEnvelope(streamId1, nextPid(entityType1), 2L, "e-2", tags = Set("tag-a", "tag-b"))
       testPublisher.sendNext(env2)
 
       val out1 = probe.expectNext()
@@ -169,6 +195,7 @@ class EventProducerServiceSpec
       val out2 = probe.expectNext()
       out2.getEvent.persistenceId shouldBe env2.persistenceId
       out2.getEvent.seqNr shouldBe env2.sequenceNr
+      out2.getEvent.tags.toSet shouldBe Set("tag-a", "tag-b")
     }
 
     "emit filtered events" in {
@@ -210,17 +237,22 @@ class EventProducerServiceSpec
 
     "intercept and fail requests" in {
       val interceptedProducerService =
-        new EventProducerServiceImpl(system, queries, eventProducerSources, Some(new EventProducerInterceptor {
-          def intercept(streamId: String, requestMetadata: Metadata): Future[Done] = {
-            if (streamId == "nono-direct")
-              throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-direct"))
-            else if (requestMetadata.getText("nono-meta-direct").isDefined)
-              throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-meta-direct"))
-            else if (streamId == "nono-async")
-              Future.failed(new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-async")))
-            else Future.successful(Done)
-          }
-        }))
+        new EventProducerServiceImpl(
+          system,
+          queries,
+          notUsedCurrentEventsByPersistenceIdQueries,
+          eventProducerSources,
+          Some(new EventProducerInterceptor {
+            def intercept(streamId: String, requestMetadata: Metadata): Future[Done] = {
+              if (streamId == "nono-direct")
+                throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-direct"))
+              else if (requestMetadata.getText("nono-meta-direct").isDefined)
+                throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-meta-direct"))
+              else if (streamId == "nono-async")
+                Future.failed(new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("nono-async")))
+              else Future.successful(Done)
+            }
+          }))
 
       def assertGrpcStatusDenied(
           fail: Throwable,

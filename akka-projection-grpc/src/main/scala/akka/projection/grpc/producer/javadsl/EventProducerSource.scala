@@ -5,6 +5,7 @@
 package akka.projection.grpc.producer.javadsl
 
 import akka.annotation.ApiMayChange
+import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.producer.EventProducerSettings
 
 /**
@@ -15,12 +16,25 @@ import akka.projection.grpc.producer.EventProducerSettings
  */
 @ApiMayChange
 final class EventProducerSource(
-    entityType: String,
-    streamId: String,
-    transformation: Transformation,
-    settings: EventProducerSettings) {
+    val entityType: String,
+    val streamId: String,
+    val transformation: Transformation,
+    val settings: EventProducerSettings,
+    val producerFilter: java.util.function.Predicate[EventEnvelope[Any]]) {
+
+  def this(entityType: String, streamId: String, transformation: Transformation, settings: EventProducerSettings) =
+    this(entityType, streamId, transformation, settings, producerFilter = _ => true)
+
+  def withProducerFilter[Event](
+      producerFilter: java.util.function.Predicate[EventEnvelope[Event]]): EventProducerSource =
+    new EventProducerSource(
+      entityType,
+      streamId,
+      transformation,
+      settings,
+      producerFilter.asInstanceOf[java.util.function.Predicate[EventEnvelope[Any]]])
 
   def asScala: akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource =
     akka.projection.grpc.producer.scaladsl.EventProducer
-      .EventProducerSource(entityType, streamId, transformation.delegate, settings)
+      .EventProducerSource(entityType, streamId, transformation.delegate, settings, producerFilter.test)
 }
