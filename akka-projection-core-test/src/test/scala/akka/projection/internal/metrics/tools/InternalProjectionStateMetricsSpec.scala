@@ -150,7 +150,6 @@ object InternalProjectionStateMetricsSpec {
                 override def process(envelopes: immutable.Seq[Envelope]): Future[Done] =
                   groupedHandlerStrategy
                     .handlerFactory()
-                    .asInstanceOf[Handler[Seq[Envelope]]]
                     .process(envelopes)
                     .flatMap { _ =>
                       offsetStore.saveOffset(projectionId, envelopes.last.offset)
