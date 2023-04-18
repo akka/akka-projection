@@ -85,12 +85,22 @@ lazy val eventsourced =
 lazy val kafka =
   Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
     .configs(IntegrationTest)
+    .settings(Dependencies.kafka)
+    .settings(Scala3.settings)
+    .dependsOn(testkit)
+    .dependsOn(core)
+
+// separated for Scala 3 support in Kafka, while it tests use Slick
+lazy val `kafka-tests` =
+  Project(id = "akka-projection-kafka-tests", base = file("akka-projection-kafka-tests"))
+    .configs(IntegrationTest)
+    .settings(Dependencies.kafkaTests)
+    .settings(Defaults.itSettings)
     .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
-    .settings(Dependencies.kafka)
-    .dependsOn(core)
-    .dependsOn(testkit % Test)
-    .dependsOn(slick % "test->test;it->it")
+    .settings(publish / skip := true)
+    .dependsOn(kafka, testkit % "test->it")
+    .dependsOn(slick % "test->test;it->test")
 
 // provides source providers for durable state changes
 lazy val `durable-state` =
@@ -218,6 +228,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
     cassandra,
     eventsourced,
     kafka,
+    `kafka-tests`,
     `durable-state`,
     grpc,
     grpcTests,
