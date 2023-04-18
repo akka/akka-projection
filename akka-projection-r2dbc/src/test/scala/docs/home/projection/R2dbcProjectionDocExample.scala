@@ -99,7 +99,7 @@ object R2dbcProjectionDocExample {
   }
   //#grouped-handler
 
-  implicit val system = ActorSystem[Nothing](Behaviors.empty, "Example")
+  implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "Example")
   implicit val ec: ExecutionContext = system.executionContext
 
   object IllustrateInit {
