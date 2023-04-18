@@ -24,6 +24,7 @@ lazy val coreTest =
     .settings(Defaults.itSettings)
     .settings(Dependencies.coreTest)
     .settings(publish / skip := true)
+    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(testkit % Test)
 
@@ -43,6 +44,7 @@ lazy val jdbc =
     .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.jdbc)
+    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
