@@ -197,9 +197,7 @@ object Dependencies {
         Test.scalatest,
         Test.akkaTypedTestkit,
         Test.akkaStreamTestkit,
-        Test.alpakkaKafkaTestkit,
-        Test.logback,
-        Test.scalatestJUnit)
+        Test.logback)
 
   val kafkaTests =
     deps ++= Seq(
