@@ -18,7 +18,6 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <akka-grpc-maven-plugin.version>2.3.0</akka-grpc-maven-plugin.version>
-        <akka-diagnostics.version>2.0.0</akka-diagnostics.version>
         <scala.binary.version>2.13</scala.binary.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
@@ -95,7 +94,6 @@
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-diagnostics_${scala.binary.version}</artifactId>
-            <version>${akka-diagnostics.version}</version>
         </dependency>
 
         <dependency>
