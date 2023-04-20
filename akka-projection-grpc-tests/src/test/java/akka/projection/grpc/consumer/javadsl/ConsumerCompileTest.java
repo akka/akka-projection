@@ -4,9 +4,11 @@
 
 package akka.projection.grpc.consumer.javadsl;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -21,6 +23,7 @@ import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
+import akka.projection.grpc.consumer.ConsumerFilter;
 import akka.projection.grpc.consumer.GrpcQuerySettings;
 import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
@@ -83,5 +86,19 @@ public class ConsumerCompileTest {
                       projectionId, Optional.empty(), sourceProvider, EventHandler::new, system));
             },
             ProjectionBehavior.stopMessage());
+  }
+
+  static void updateConsumerFilter(
+      ActorSystem<?> system,
+      Set<String> excludeTags,
+      Set<String> includeTags) {
+    String streamId = system.settings().config()
+        .getString("akka.projection.grpc.consumer.stream-id");
+
+    List<ConsumerFilter.FilterCriteria> criteria = Arrays.asList(
+        new ConsumerFilter.ExcludeTags(excludeTags),
+        new ConsumerFilter.IncludeTags(includeTags));
+
+    ConsumerFilter.get(system).ref().tell(new ConsumerFilter.UpdateFilter(streamId, criteria));
   }
 }

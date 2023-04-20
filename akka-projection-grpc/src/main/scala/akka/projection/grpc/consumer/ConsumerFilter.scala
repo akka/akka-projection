@@ -277,6 +277,11 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   override def createExtension(system: ActorSystem[_]): ConsumerFilter = new ConsumerFilter(system)
 
   /**
+   * Java API: retrieve the extension instance for the given system.
+   */
+  def get(system: ActorSystem[_]): ConsumerFilter = apply(system)
+
+  /**
    * INTERNAL API
    */
   @InternalApi private[akka] def mergeFilter(
