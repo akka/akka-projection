@@ -223,7 +223,7 @@ lazy val docs = project
     publishRsyncHost := "akkarepo@gustav.akka.io",
     apidocRootPackage := "akka")
 
-lazy val `akka-distributed-cluster-docs` = project.
+lazy val `akka-distributed-cluster-docs` = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, SitePreviewPlugin, PreprocessPlugin, PublishRsyncPlugin)
   .disablePlugins(MimaPlugin)
   .dependsOn(core, testkit)
