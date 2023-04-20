@@ -18,16 +18,12 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <akka-grpc-maven-plugin.version>2.3.0</akka-grpc-maven-plugin.version>
-        <akka-diagnostics.version>2.0.0</akka-diagnostics.version>
         <scala.binary.version>2.13</scala.binary.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
         <!-- Version of the Docker image is derived from git commit.
              It can be defined with -Dversion.number=0.1-SNAPSHOT if git is not used -->
         <version.number>${git.commit.time}-${git.commit.id.abbrev}</version.number>
-        <!-- FIXME: use Akka 23.02 release with updated akka-dependencies -->
-        <akka-projection.version>1.4.0-M3</akka-projection.version>
-        <akka-persistence-r2dbc.version>1.1.0-M5</akka-persistence-r2dbc.version>
     </properties>
 
     <!-- FIXME: switch back to just akka-dependencies once Akka 23.02 is released -->
@@ -43,7 +39,7 @@
             <dependency>
                 <groupId>com.lightbend.akka</groupId>
                 <artifactId>akka-dependencies_${scala.binary.version}</artifactId>
-                <version>22.10.4</version>
+                <version>23.04.0-M1</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -78,27 +74,22 @@
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-persistence-r2dbc_${scala.binary.version}</artifactId>
-            <version>${akka-persistence-r2dbc.version}</version>
         </dependency>
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-projection-r2dbc_${scala.binary.version}</artifactId>
-            <version>${akka-persistence-r2dbc.version}</version>
         </dependency>
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-projection-core_${scala.binary.version}</artifactId>
-            <version>${akka-projection.version}</version>
         </dependency>
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-projection-grpc_${scala.binary.version}</artifactId>
-            <version>${akka-projection.version}</version>
         </dependency>
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-projection-eventsourced_${scala.binary.version}</artifactId>
-            <version>${akka-projection.version}</version>
         </dependency>
         <dependency>
             <groupId>com.lightbend.akka.management</groupId>
@@ -115,7 +106,6 @@
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-diagnostics_${scala.binary.version}</artifactId>
-            <version>${akka-diagnostics.version}</version>
         </dependency>
 
         <dependency>
@@ -137,7 +127,6 @@
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-projection-testkit_${scala.binary.version}</artifactId>
-            <version>${akka-projection.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
