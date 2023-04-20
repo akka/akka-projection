@@ -228,7 +228,7 @@ lazy val `akka-distributed-cluster-docs` = project
   .disablePlugins(MimaPlugin)
   .dependsOn(core, testkit)
   .settings(
-    name := "Akka Distributed Cloud",
+    name := "Akka Distributed Cluster",
     publish / skip := true,
     previewPath := (Paradox / siteSubdirName).value,
     Paradox / siteSubdirName := s"docs/akka-distributed-cluster/${projectInfoVersion.value}",
