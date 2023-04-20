@@ -94,4 +94,4 @@ jobs:
           echo $GUSTAV_KEY | base64 -di > .github/id_rsa
           chmod 600 .github/id_rsa
           ssh-add .github/id_rsa
-          sbt "docs/publishRsync"
+          sbt "docs/publishRsync; akka-distributed-cluster-docs/publishRsync"
