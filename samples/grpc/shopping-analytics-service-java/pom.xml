@@ -74,6 +74,8 @@
         <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-projection-grpc_${scala.binary.version}</artifactId>
+            <!-- FIXME remove version and use bom -->
+            <version>1.4.0-M4-2-d957c592-20230420-1024-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.lightbend.akka</groupId>

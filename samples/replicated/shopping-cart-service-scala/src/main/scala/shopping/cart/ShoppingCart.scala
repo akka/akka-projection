@@ -147,11 +147,7 @@ object ShoppingCart {
   // #init
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
     val replicationSettings = ReplicationSettings[Command](EntityType, R2dbcReplication())
-    val producerFilter: EventEnvelope[Event] => Boolean = { envelope =>
-      val tags = envelope.tags
-      tags.contains(ShoppingCart.MediumQuantityTag) || tags.contains(ShoppingCart.LargeQuantityTag)
-    }
-    Replication.grpcReplication(replicationSettings, producerFilter)(ShoppingCart.apply)
+    Replication.grpcReplication(replicationSettings)(ShoppingCart.apply)
   }
 
   def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]): Behavior[Command] = {
@@ -162,6 +158,21 @@ object ShoppingCart {
     }
   }
   // #init
+
+  // Use `initWithProducerFilter` instead of `init` to enable filters based on tags.
+  // Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
+  // #init-producerFilter
+  def initWithProducerFilter(implicit system: ActorSystem[_]): Replication[Command] = {
+    val replicationSettings = ReplicationSettings[Command](EntityType, R2dbcReplication())
+    val producerFilter: EventEnvelope[Event] => Boolean = { envelope =>
+      val tags = envelope.tags
+      tags.contains(ShoppingCart.MediumQuantityTag) || tags.contains(ShoppingCart.LargeQuantityTag)
+    }
+
+    Replication.grpcReplication(replicationSettings, producerFilter)(ShoppingCart.apply)
+  }
+  // #init-producerFilter
+
 }
 
 class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationContext: ReplicationContext) {

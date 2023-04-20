@@ -187,10 +187,10 @@ Replicated Event Sourcing.
 The producer defined filter:
 
 Scala
-:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init }
+:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init-producerFilter }
 
 Java
-:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init }
+:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init-producerFilter }
 
 Consumer defined filters are updated as described in @ref:[Akka Projection gRPC Consumer defined filter](grpc.md#consumer-defined-filter)
 

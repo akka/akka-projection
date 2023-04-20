@@ -7,6 +7,7 @@ import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.pattern.StatusReply;
+import akka.persistence.query.typed.EventEnvelope;
 import akka.persistence.typed.ReplicaId;
 import akka.persistence.typed.javadsl.*;
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
@@ -17,6 +18,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -43,6 +45,10 @@ import java.util.stream.Collectors;
 public final class ShoppingCart
     extends EventSourcedBehaviorWithEnforcedReplies<
         ShoppingCart.Command, ShoppingCart.Event, ShoppingCart.State> {
+
+  static final String SMALL_QUANTITY_TAG = "small";
+  static final String MEDIUM_QUANTITY_TAG = "medium";
+  static final String LARGE_QUANTITY_TAG = "large";
 
   /** The current state held by the `EventSourcedBehavior`. */
   static final class State implements CborSerializable {
@@ -81,6 +87,22 @@ public final class ShoppingCart
 
     public Summary toSummary() {
       return new Summary(items, isClosed());
+    }
+
+    public int totalQuantity() {
+      return items.values().stream().reduce(0, Integer::sum);
+    }
+
+    public Set<String> tags() {
+      int total = totalQuantity();
+      if (total == 0)
+        return Collections.emptySet();
+      else if (total >= 100)
+        return Collections.singleton(LARGE_QUANTITY_TAG);
+      else if (total >= 10)
+        return Collections.singleton(MEDIUM_QUANTITY_TAG);
+      else
+        return Collections.singleton(SMALL_QUANTITY_TAG);
     }
   }
 
@@ -255,6 +277,27 @@ public final class ShoppingCart
   }
   // #init
 
+  // Use `initWithProducerFilter` instead of `init` to enable filters based on tags.
+  // Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
+  // #init-producerFilter
+  public static Replication<Command> initWithProducerFilter(ActorSystem<?> system) {
+    ReplicationSettings<Command> replicationSettings =
+        ReplicationSettings.create(
+            Command.class,
+            "replicated-shopping-cart",
+            R2dbcReplication.create(system),
+            system);
+
+    Predicate<EventEnvelope<Event>> producerFilter = envelope -> {
+      Set<String> tags = envelope.getTags();
+      return tags.contains(ShoppingCart.MEDIUM_QUANTITY_TAG) ||
+          tags.contains(ShoppingCart.LARGE_QUANTITY_TAG);
+    };
+
+    return Replication.grpcReplication(replicationSettings, producerFilter,  ShoppingCart::create, system);
+  }
+  // #init-producerFilter
+
   private final ActorContext<Command> context;
   private final ReplicationContext replicationContext;
   private final boolean isLeader;
@@ -389,5 +432,10 @@ public final class ShoppingCart
         if (allClosed) context.getSelf().tell(CompleteCheckout.INSTANCE);
       }
     }
+  }
+
+  @Override
+  public Set<String> tagsFor(State state, Event event) {
+    return state.tags();
   }
 }

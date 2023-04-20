@@ -26,16 +26,8 @@
         <version.number>${git.commit.time}-${git.commit.id.abbrev}</version.number>
     </properties>
 
-    <!-- FIXME: switch back to just akka-dependencies once Akka 23.02 is released -->
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>com.typesafe.akka</groupId>
-                <artifactId>akka-bom_${scala.binary.version}</artifactId>
-                <version>2.8.0</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
             <dependency>
                 <groupId>com.lightbend.akka</groupId>
                 <artifactId>akka-dependencies_${scala.binary.version}</artifactId>
