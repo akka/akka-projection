@@ -9,6 +9,6 @@
 * [Overview](overview.md)
 * [Example Use Cases](use-cases.md)
 * [Feature Summary](feature-summary.md)
-* [Sample](sample.md)
+* [Guide](guide.md)
 
 @@@

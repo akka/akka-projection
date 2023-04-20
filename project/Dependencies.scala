@@ -16,6 +16,7 @@ object Dependencies {
   val AlpakkaKafkaVersionInDocs = "4.0"
   val AkkaGrpcVersionInDocs = "2.3"
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
+  val AkkaProjectionVersionInDocs = "1.4.0"
 
   object Versions {
     // FIXME released version/milestone
