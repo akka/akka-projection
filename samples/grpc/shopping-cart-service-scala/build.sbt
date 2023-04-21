@@ -59,7 +59,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.3.6",
+  "ch.qos.logback" % "logback-classic" % "1.4.7",
   "org.scalatest" %% "scalatest" % "3.1.2" % Test,
   // 2. Using gRPC and/or protobuf
   "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
