@@ -1,5 +1,6 @@
 package shopping.analytics;
 
+import java.util.Set;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.management.cluster.bootstrap.ClusterBootstrap;
@@ -24,6 +25,11 @@ public class Main {
   public static void init(ActorSystem<Void> system) {
     AkkaManagement.get(system).start();
     ClusterBootstrap.get(system).start();
+
+    ShoppingCartEventConsumer.updateConsumerFilter(
+        system,
+        Set.of("small"),
+        Set.of("medium", "large"));
 
     ShoppingCartEventConsumer.init(system);
   }

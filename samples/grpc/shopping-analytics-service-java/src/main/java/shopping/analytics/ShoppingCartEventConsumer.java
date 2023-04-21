@@ -15,6 +15,11 @@ import shopping.cart.proto.ShoppingCartEvents;
 
 //#initProjections
 
+//#update-filter
+import akka.projection.grpc.consumer.ConsumerFilter;
+
+//#update-filter
+
 import akka.Done;
 import akka.actor.typed.ActorSystem;
 import akka.persistence.query.Offset;
@@ -28,6 +33,7 @@ import shopping.cart.proto.ItemRemoved;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -140,7 +146,19 @@ class ShoppingCartEventConsumer {
 
   //#initProjections
   //#update-filter
-  // FIXME
+  static void updateConsumerFilter(
+      ActorSystem<?> system,
+      Set<String> excludeTags,
+      Set<String> includeTags) {
+    String streamId = system.settings().config()
+        .getString("akka.projection.grpc.consumer.stream-id");
+
+    List<ConsumerFilter.FilterCriteria> criteria = List.of(
+        new ConsumerFilter.ExcludeTags(excludeTags),
+        new ConsumerFilter.IncludeTags(includeTags));
+
+    ConsumerFilter.get(system).ref().tell(new ConsumerFilter.UpdateFilter(streamId, criteria));
+  }
   //#update-filter
   //#initProjections
 

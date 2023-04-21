@@ -351,9 +351,8 @@ public final class ShoppingCart
 
   //#tags
   @Override
-  public Set<String> tagsFor(Event event) {
-    // FIXME state.tags
-    return Collections.emptySet();
+  public Set<String> tagsFor(State state, Event event) {
+    return state.tags();
   }
   //#tags
 

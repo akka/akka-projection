@@ -10,11 +10,8 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 
 import scala.concurrent.Future
 
-//#eventProducerService
-
 object PublishEvents {
 
-  //#eventProducerService
   def eventProducerService(system: ActorSystem[_])
       : PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val transformation = Transformation.empty
@@ -39,8 +36,8 @@ object PublishEvents {
       //#eventProducerService
       .withProducerFilter[ShoppingCart.Event] { envelope =>
         val tags = envelope.tags
-        tags.contains(ShoppingCart.MediumQuantityTag) || tags.contains(
-          ShoppingCart.LargeQuantityTag)
+        tags.contains(ShoppingCart.MediumQuantityTag) ||
+        tags.contains(ShoppingCart.LargeQuantityTag)
       }
     //#eventProducerService
     //#withProducerFilter
@@ -71,4 +68,6 @@ object PublishEvents {
   def transformCheckedOut(event: ShoppingCart.CheckedOut): proto.CheckedOut =
     proto.CheckedOut(event.cartId)
 
+  //#eventProducerService
 }
+//#eventProducerService

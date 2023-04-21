@@ -11,13 +11,11 @@ import akka.projection.grpc.producer.javadsl.EventProducerSource;
 import akka.projection.grpc.producer.javadsl.Transformation;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
-
-//#eventProducerService
 
 public class PublishEvents {
 
-  //#eventProducerService
   public static Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService(ActorSystem<?> system) {
     Transformation transformation =
         Transformation.empty()
@@ -32,12 +30,21 @@ public class PublishEvents {
         "cart",
         transformation,
         EventProducerSettings.apply(system)
+    //#eventProducerService
     )
-    //#eventProducerService
-    //#eventProducerService
-        // FIXME withProducerFilter
+    .withProducerFilter(envelope -> {
+      Set<String> tags = envelope.getTags();
+      return tags.contains(ShoppingCart.MEDIUM_QUANTITY_TAG) ||
+          tags.contains(ShoppingCart.LARGE_QUANTITY_TAG);
+    });
     //#withProducerFilter
-    ;
+
+    /* for doc snippet to render the ); at the right place
+    //#eventProducerService
+    );
+    //#eventProducerService
+    */
+    //#eventProducerService
 
     return EventProducer.grpcServiceHandler(system, eventProducerSource);
   }
@@ -73,4 +80,6 @@ public class PublishEvents {
         .setCartId(checkedOut.cartId)
         .build();
   }
+//#eventProducerService
 }
+//#eventProducerService
