@@ -116,10 +116,18 @@ Scala
 Java
 :  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #startServerNoPublish }
 
+The Akka HTTP server must be running with HTTP/2 to serve gRPC, this is done through config:
+
+Scala
+:  @@snip [ShoppingCartServer.scala](/samples/grpc/shopping-cart-service-scala/src/main/resources/grpc.conf) { #http2 }
+
+Java
+:  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/resources/grpc.conf) { #http2 }
+
 
 ## Running the sample
 
-The complete sample can be downloaded from, but note that it also includes the next step of the guide:
+The complete sample can be downloaded from github, but note that it also includes the next step of the guide:
 
   * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
   * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala

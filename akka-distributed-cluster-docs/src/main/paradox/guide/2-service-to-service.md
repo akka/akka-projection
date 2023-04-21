@@ -29,15 +29,51 @@ FIXME graphic that is more overview and less step by step? (this is the same as 
 1. Producer continues to read new events from the journal and emit to the stream. As an optimization, events can also be published directly from the entity to the producer.
 
 
-### Publish the events of the shopping cart
+## Publish the events of the shopping cart
 
-FIXME
+The cart itself does not need any changes for publishing persisted events, but we need to configure and bind a producer
+service for it to allow other services to consume the events.
 
-### Consume events
 
-FIXME
+Scala
+:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #eventProducerService }
 
-### Filters
+Java
+:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #eventProducerService }
+
+Events can be transformed by application specific code on the producer side. The purpose is to be able to have a
+different public representation from the internal representation (stored in journal). The transformation functions
+are registered when creating the `EventProducer` service. Here is an example of one of those transformation functions:
+
+Scala
+:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #transformItemAdded }
+
+Java
+:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #transformItemAdded }
+
+To omit an event the transformation function can return @scala[`None`]@java[`Optional.empty()`].
+
+That `EventProducer` service is started in an Akka gRPC server like this:
+
+Scala
+:  @@snip [ShoppingCartServer.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCartServer.scala) { #startServer }
+
+Java
+:  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #startServer }
+
+
+## Consume events
+
+FIXME more about the consumer project
+
+The configuration for the `GrpcReadJournal` may look like this:
+
+@@snip [grpc.conf](/samples/grpc/shopping-analytics-service-java/src/main/resources/grpc.conf) { }
+
+The `client` section in the configuration defines where the producer is running. It is an @extref:[Akka gRPC configuration](akka-grpc:client/configuration.html#by-configuration) with several connection options.
+
+
+## Filters
 
 The Service to Service eventing sample showcases filtering in two ways, one controlled on the producing side, one on the
 consuming side. The combined filtering doesn't make much sense, see this as an example of two different ways to do achieve
@@ -52,6 +88,20 @@ The analytics service is set up to not consume all shopping carts from the upstr
 carts containing 10 or more items.
 
 FIXME snippet
+
+## Complete Sample Projects
+
+The complete sample can be downloaded from github, the shopping cart:
+
+* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
+* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
+
+And the consuming analytics service:
+
+* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-java
+* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-scala
+
+FIXME running locally instructions here as well
 
 ## What's next?
 
