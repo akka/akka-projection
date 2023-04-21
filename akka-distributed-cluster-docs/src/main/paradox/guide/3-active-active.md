@@ -1,12 +1,12 @@
-## Part 3: Active-active
+# Part 3: Active-active
 
 For an Active-Active shopping cart, the same service will run in different data centers or cloud regions - each called a replica.
 
-### Turning the shopping cart into a Replicated Entity
+## Turning the shopping cart into a Replicated Entity
 
-FIXME show off RES API and all that is in the
+FIXME show off RES API
 
-### Filters
+## Filters
 
 By default, events from all Replicated Event Sourced entities are replicated.
 

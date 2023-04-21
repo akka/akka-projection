@@ -40,6 +40,7 @@ object ShoppingCart {
   /**
    * The current state held by the `EventSourcedBehavior`.
    */
+  //#state
   //#tags
   final case class State(
       items: Map[String, Int],
@@ -91,6 +92,7 @@ object ShoppingCart {
     }
 
   }
+  //#state
 
   //#tags
 
@@ -103,6 +105,7 @@ object ShoppingCart {
         customerCategory = "")
   }
 
+  //#commands
   /**
    * This interface defines all the commands (messages) that the ShoppingCart actor supports.
    */
@@ -163,7 +166,9 @@ object ShoppingCart {
       category: String,
       replyTo: ActorRef[StatusReply[Summary]])
       extends Command
+  //#commands
 
+  //#events
   /**
    * This interface defines all the events that the ShoppingCart supports.
    */
@@ -191,6 +196,7 @@ object ShoppingCart {
       customerId: String,
       category: String)
       extends Event
+  //#events
 
   val EntityKey: EntityTypeKey[Command] =
     EntityTypeKey[Command]("ShoppingCart")
@@ -202,11 +208,14 @@ object ShoppingCart {
 
   //#tags
 
+  //#init
   def init(system: ActorSystem[_]): Unit = {
     ClusterSharding(system).init(Entity(EntityKey)(entityContext =>
       ShoppingCart(entityContext.entityId)))
   }
+  //#init
 
+  //#init
   //#tags
   def apply(cartId: String): Behavior[Command] = {
     EventSourcedBehavior
@@ -224,7 +233,7 @@ object ShoppingCart {
         SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }
   //#tags
-
+  //#init
   private def handleCommand(
       cartId: String,
       state: State,
@@ -237,6 +246,7 @@ object ShoppingCart {
       openShoppingCart(cartId, state, command)
   }
 
+  //#commandHandler
   private def openShoppingCart(
       cartId: String,
       state: State,
@@ -306,6 +316,7 @@ object ShoppingCart {
             StatusReply.Success(updatedCart.toSummary))
     }
   }
+  //#commandHandler
 
   private def checkedOutShoppingCart(
       cartId: String,
@@ -337,6 +348,7 @@ object ShoppingCart {
     }
   }
 
+  //#eventHandler
   private def handleEvent(state: State, event: Event): State = {
     event match {
       case ItemAdded(_, itemId, quantity) =>
@@ -351,6 +363,8 @@ object ShoppingCart {
         state.setCustomer(customerId, category)
     }
   }
+  //#eventHandler
+
   //#tags
 }
 //#tags

@@ -1,23 +1,131 @@
 # Part 1: Event Sourced Shopping Cart
 
 As the other features of Akka Distributed Cluster build on top of Event Sourcing, let us start by implementing a shopping
-cart using the [Akka Event Sourced Behavior API](akka:typed/persistence.html).
+cart using the [Akka Event Sourced Behavior API](akka:typed/persistence.html). When this first step is complete, end users 
+will be able to add and remove items to a cart and finally check it out.
 
-## What is Event Sourcing
+We will build the cart as an Event Sourced entity, if you are unfamiliar with Event Sourcing, refer to the
+@extref[Event Sourcing section in the Akka guide](akka-guide:concepts/event-sourcing.html) for an explanation. 
+The [Event Sourcing with Akka 2.6 video](https://akka.io/blog/news/2020/01/07/akka-event-sourcing-video) is also a good starting point for learning Event Sourcing.
 
-FIXME
+## Implementing an Event Sourced shopping cart
 
-## Implementing an Event Sourced actor
+### Commands
 
-FIXME sample snippets for cart as just an ESB
+Commands are the "external" API of an entity. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, but different events might be generated depending on the current state of the entity. A command can also be validated and be rejected if it has invalid input or can’t be handled by current state of the entity.
 
-## Running the actor in an Akka cluster
+Scala
+:  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #commands #events }
 
-FIXME set up sharding
+Java
+:  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #commands #events }
 
-## Allowing access from the outside with Akka gRPC
+### State
 
-FIXME
+Items added to the Cart are added to a `Map`. The contents of the `Map` comprise the Cart’s state along with a customer id and customer category for the customer
+owning the cart, if set, and a checkout timestamp if the cart was checked out:
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #state }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #state }
+
+
+### Command handler
+
+The Cart entity will receive commands that request changes to Cart state. We will implement a command handler to process these commands and emit a reply. Our business logic allows only items to be added which are not in the cart yet and require a positive quantity.
+
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #commandHandler }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #commandHandler }
+
+
+### Event handler
+
+From commands, the entity creates events that represent state changes. Aligning with the command handler above, the entity’s event handler reacts to events and updates the state. The events are continuously persisted to the Event Journal datastore, while the entity state is kept in memory. Other parts of the application may listen to the events. In case of a restart, the entity recovers its latest state by replaying the events from the Event Journal.
+
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #eventHandler }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #eventHandler }
+
+
+### Wiring it all together
+
+To glue the command handler, event handler, and state together, we need some initialization code. Our code will distribute the Cart entities over nodes in the Akka Cluster with @extref[Cluster Sharding](akka:cluster-sharding.html), enable snapshots to reduce recovery time when the entity is started, and restart with backoff in the case of failure.
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init }
+
+
+## Serialization
+
+The state, commands and events of the entity must be serializable because they are written to the datastore or sent between nodes within the Akka cluster. The template project includes built-in CBOR serialization using the @extref[Akka Serialization Jackson module](akka:serialization-jackson.html). This section describes how serialization is implemented. You do not need to do anything specific to take advantage of CBOR, but this section explains how it is included.
+The state, commands and events are marked as CborSerializable which is configured to use the built-in CBOR serialization. The template project includes this marker interface CborSerializable:
+
+Scala
+:  @@snip [CborSerializable.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/CborSerializable.scala) { }
+
+Java
+:  @@snip [CborSerializable.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/CborSerializable.java) { }
+
+Configuration in the application configuration to select the serializer:
+
+Scala
+:  @@snip [application.conf](/samples/grpc/shopping-cart-service-scala/src/main/resources/serialization.conf) { }
+
+Java
+:  @@snip [application.conf](/samples/grpc/shopping-cart-service-java/src/main/resources/serialization.conf) { }
+
+## Client access with Akka gRPC
+
+To allow users to actually use the service we need a public API reachable over the internet. For this we will use @extref[Akka gRPC](akka-grpc:)
+giving us a type safe, efficient protocol that allows clients to be written in many languages.
+
+The service descriptor for the API is defined in protobuf and mirrors the set of commands the entity accepts:
+
+Scala
+:  @@snip [ShoppingCartService.proto](/samples/grpc/shopping-cart-service-scala/src/main/protobuf/ShoppingCartService.proto) { }
+
+Java
+:  @@snip [ShoppingCartService.proto](/samples/grpc/shopping-cart-service-java/src/main/protobuf/ShoppingCartService.proto) { }
+
+When compiling the project the Akka gRPC @scala[sbt]@java[maven] plugin generates a service interface for us to implement.
+Our implementation of it interacts with the entity:
+
+Scala
+:  @@snip [ShoppingCartServiceImpl.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCartServiceImpl.scala) {}
+
+Java
+:  @@snip [ShoppingCartServiceImpl.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServiceImpl.java) {}
+
+Finally, we need to start the HTTP server, making service implementation available for calls from external clients:
+
+FIXME this includes service-to-service publisher, should we create a separate server without that, or just methods perhaps
+
+Scala
+:  @@snip [ShoppingCartServer.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCartServer.scala) { #startServer }
+
+Java
+:  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #startServer }
+
+
+## Running the sample
+
+FIXME we don't really have a separate sample but maybe linking to the grpc-projection one would be fine?
+
+FIXME set up database with docker
+
+FIXME run commands for sbt and maven
 
 ## What's next?
 
