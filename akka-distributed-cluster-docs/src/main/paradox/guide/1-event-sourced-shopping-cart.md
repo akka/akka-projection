@@ -110,22 +110,76 @@ Java
 
 Finally, we need to start the HTTP server, making service implementation available for calls from external clients:
 
-FIXME this includes service-to-service publisher, should we create a separate server without that, or just methods perhaps
-
 Scala
-:  @@snip [ShoppingCartServer.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCartServer.scala) { #startServer }
+:  @@snip [ShoppingCartServer.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCartServer.scala) { #startServerNoPublish }
 
 Java
-:  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #startServer }
+:  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCartServer.java) { #startServerNoPublish }
 
 
 ## Running the sample
 
-FIXME we don't really have a separate sample but maybe linking to the grpc-projection one would be fine?
+The complete sample can be downloaded from, but note that it also includes the next step of the guide:
 
-FIXME set up database with docker
+  * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
+  * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
 
-FIXME run commands for sbt and maven
+Before running the sample locally you will need to run a PostgreSQL instance in docker, it can be started with the included
+`docker-compose.yml`. Run it and create the needed database schema:
+
+```shell
+docker-compose up -d
+docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+```
+
+@@@ div { .group-scala }
+
+To start the sample:
+
+```shell
+sbt -Dconfig.resource=local1.conf run
+```
+
+And optionally one or two more Akka cluster nodes:
+
+```shell
+sbt -Dconfig.resource=local2.conf run
+sbt -Dconfig.resource=local3.conf run
+```
+
+@@@
+
+@@@ div { .group-java }
+
+```shell
+mvn compile exec:exec -DAPP_CONFIG=local1.conf
+```
+
+And optionally one or two more Akka cluster nodes:
+```shell
+mvn compile exec:exec -DAPP_CONFIG=local2.conf
+mvn compile exec:exec -DAPP_CONFIG=local3.conf
+```
+
+@@@
+
+Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
+
+```shell
+# add item to cart
+grpcurl -d '{"cartId":"cart1", "itemId":"socks", "quantity":3}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.AddItem
+
+# get cart
+grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.GetCart
+
+# update quantity of item
+grpcurl -d '{"cartId":"cart1", "itemId":"socks", "quantity":5}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.UpdateItem
+
+# check out cart
+grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
+```
+
+or same `grpcurl` commands to port 8102 to reach node 2.
 
 ## What's next?
 

@@ -53,5 +53,40 @@ public final class ShoppingCartServer {
           }
         });
   }
+
+  //#startServer
+  // sample without event producer for Akka Distributed Cluster docs, initial step
+  //#startServerNoPublish
+  static void start(String host, int port, ActorSystem<?> system, ShoppingCartService grpcService) {
+    @SuppressWarnings("unchecked")
+    Function<HttpRequest, CompletionStage<HttpResponse>> service =
+        ServiceHandler.concatOrNotFound(
+            ShoppingCartServiceHandlerFactory.create(grpcService, system),
+            // ServerReflection enabled to support grpcurl without import-path and proto parameters
+            ServerReflection.create(
+                Collections.singletonList(ShoppingCartService.description), system));
+
+    CompletionStage<ServerBinding> bound =
+        Http.get(system).newServerAt(host, port).bind(service::apply);
+
+    bound.whenComplete(
+        (binding, ex) -> {
+          if (binding != null) {
+            binding.addToCoordinatedShutdown(Duration.ofSeconds(3), system);
+            InetSocketAddress address = binding.localAddress();
+            system
+                .log()
+                .info(
+                    "Shopping online at gRPC server {}:{}",
+                    address.getHostString(),
+                    address.getPort());
+          } else {
+            system.log().error("Failed to bind gRPC endpoint, terminating system", ex);
+            system.terminate();
+          }
+        });
+  }
+  //#startServerNoPublish
+  //#startServer
 }
 //#startServer
