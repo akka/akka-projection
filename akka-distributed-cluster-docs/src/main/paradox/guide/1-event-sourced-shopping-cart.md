@@ -1,12 +1,12 @@
 # Part 1: Event Sourced Shopping Cart
 
-As the other features of Akka Distributed Cluster build on top of Event Sourcing, let us start by implementing a shopping
+As the other features of Akka Distributed Cluster are build on top of Event Sourcing, let us start by implementing a shopping
 cart using the [Akka Event Sourced Behavior API](akka:typed/persistence.html). When this first step is complete, end users 
 will be able to add and remove items to a cart and finally check it out.
 
 We will build the cart as an Event Sourced entity, if you are unfamiliar with Event Sourcing, refer to the
 @extref[Event Sourcing section in the Akka guide](akka-guide:concepts/event-sourcing.html) for an explanation. 
-The [Event Sourcing with Akka 2.6 video](https://akka.io/blog/news/2020/01/07/akka-event-sourcing-video) is also a good starting point for learning Event Sourcing.
+The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-event-sourcing-video) is also a good starting point for learning Event Sourcing.
 
 ## Implementing an Event Sourced shopping cart
 
@@ -58,7 +58,7 @@ Java
 
 ### Wiring it all together
 
-To glue the command handler, event handler, and state together, we need some initialization code. Our code will distribute the Cart entities over nodes in the Akka Cluster with @extref[Cluster Sharding](akka:cluster-sharding.html), enable snapshots to reduce recovery time when the entity is started, and restart with backoff in the case of failure.
+To glue the command handler, event handler, and state together, we need some initialization code. Our code will distribute the Cart entities over nodes in the Akka Cluster with @extref[Cluster Sharding](akka:typed/cluster-sharding.html), enable snapshots to reduce recovery time when the entity is started, and restart with backoff in the case of failure.
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init }
