@@ -183,7 +183,7 @@ lazy val commonParadoxProperties = Def.settings(
       // Akka persistence R2DBC plugin
       "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/docs/akka-persistence-r2dbc/${Dependencies.AkkaPersistenceR2dbcVersionInDocs}/%s",
       // Projection (for the Distributed Cluster docs)
-      "extref.akka-projection.base_url" -> s"https://doc.akka.io/docs/akka-persistence-r2dbc/${Dependencies.AkkaProjectionVersionInDocs}/%s",
+      "extref.akka-projection.base_url" -> s"https://doc.akka.io/docs/akka-projection/${Dependencies.AkkaProjectionVersionInDocs}/%s",
       // Akka Guide
       "extref.akka-guide.base_url" -> "https://developer.lightbend.com/docs/akka-guide/microservices-tutorial/",
       // Java

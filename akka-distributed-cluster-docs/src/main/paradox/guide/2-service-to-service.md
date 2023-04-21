@@ -1,5 +1,12 @@
 # Part 2: Service to Service eventing
 
+Akka Projection allows for creating read side views, or projections, that are eventually consistent representations
+of the events for an entity. Such views have historically been possible to define in the same service that owns the entity,
+for an example of this, you can look at the [popularity projection in the Akka Microservice Guide](akka-guide:microservices-tutorial/projection-query.html).
+
+Service to Service defines a gRPC service in the service where the entity lives and that makes the events available for
+other services to consume with an effectively once delivery guarantee without requiring a message broker in between services.
+
 To implement Service to Service eventing, we will use two services, the shopping cart defined in the previous step and 
 a downstream analytics service. 
 
@@ -8,16 +15,9 @@ cloud regions.
 
 ## gRPC transport for consuming events
 
-Akka Projection allows for creating read side views, or projections, that are eventually consistent representations
-of the events for an entity. Such views have historically been possible to define in the service that owns the entity,
-for an example of this, you can look at the [popularity projection in the Akka Microservice Guide](https://developer.lightbend.com/docs/akka-guide/microservices-tutorial/projection-query.html).
-
-Service to Service defines a gRPC service in the service where the entity lives and that makes the events available for
-other services to consume with an effectively once delivery guarantee without requiring a message broker in between services.
-
 FIXME graphic that is more overview and less step by step? (this is the same as projection gRPC)
 
-![overview.png](images/service-to-service-overview.png)
+![service-to-service-overview.png](../images/service-to-service-overview.png)
 
 1. An Entity stores events in its journal in service A.
 1. Consumer in service B starts an Akka Projection which locally reads its offset for service A's replication stream.
@@ -64,14 +64,46 @@ Java
 
 ## Consume events
 
-FIXME more about the consumer project
+The consumer is defined in a separate service, the shopping analytics service. It is a separate project with its own lifecycle,
+it is started, stopped, deployed separately, and has its own separate database from the shopping cart service. It may run in the
+same data center or cloud region as the shopping cart, but it could also run in a completely different location.
 
-The configuration for the `GrpcReadJournal` may look like this:
+FIXME a bit messy this section
+
+On the consumer side the `Projection` is a @extref[SourceProvider for eventsBySlices](akka-projection:eventsourced.html#sourceprovider-for-eventsbyslices)
+that is using `eventsBySlices` from the GrpcReadJournal. We use @extref[ShardedDaemonProcess](akka:typed/cluster-sharded-daemon-process.html) to distribute the instances of the Projection across the cluster.
+
+Scala
+:  @@snip [ShoppingCartEventConsumer.scala](/samples/grpc/shopping-analytics-service-scala/src/main/scala/shopping/analytics/ShoppingCartEventConsumer.scala) { #initProjections }
+
+Java
+:  @@snip [ShoppingCartEventConsumer.java](/samples/grpc/shopping-analytics-service-java/src/main/java/shopping/analytics/ShoppingCartEventConsumer.java) { #initProjections }
+
+The Protobuf descriptors are defined when the GrpcReadJournal is created. The descriptors are used
+when deserializing the received events. @scala[The `protobufDescriptors` is a list of the `javaDescriptor` for the used protobuf messages.
+It is defined in the ScalaPB generated `Proto` companion object.]
+Note that GrpcReadJournal should be created with the GrpcReadJournal @scala[`apply`]@java[`create`] factory method
+and not from configuration via `GrpcReadJournalProvider` when using Protobuf serialization.
+
+The gRPC connection to the producer is defined in the @extref[consumer configuration](akka-projection:grpc#consumer-configuration).
+
+The @extref:[R2dbcProjection](akka-persistence-r2dbc:projection.html) has support for storing the offset in a relational database using R2DBC.
+
+The event handler for this sample is just logging the events rather than for example actually building its own read side:
+
+FIXME should we make it more realistic?
+
+Scala
+:  @@snip [ShoppingCartEventConsumer.scala](/samples/grpc/shopping-analytics-service-scala/src/main/scala/shopping/analytics/ShoppingCartEventConsumer.scala) { #eventHandler }
+
+Java
+:  @@snip [ShoppingCartEventConsumer.java](/samples/grpc/shopping-analytics-service-java/src/main/java/shopping/analytics/ShoppingCartEventConsumer.java) { #eventHandler }
+
+The configuration for the `GrpcReadJournal`, for ease of running locally without TLS, may look like this:
 
 @@snip [grpc.conf](/samples/grpc/shopping-analytics-service-java/src/main/resources/grpc.conf) { }
 
 The `client` section in the configuration defines where the producer is running. It is an @extref:[Akka gRPC configuration](akka-grpc:client/configuration.html#by-configuration) with several connection options.
-
 
 ## Filters
 
