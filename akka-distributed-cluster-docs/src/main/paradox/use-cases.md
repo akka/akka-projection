@@ -4,7 +4,7 @@
 
 A car company collects and aggregates telemetry data from millions of cars around the world. A car reports its status
 every third second to a backend service. The cars are connected to a nearby cloud region for low-latency and high
-availability reasons. All telemetry data is feed into an analytics system to find anomalies and statistics gathering,
+availability reasons. All telemetry data is feed into an analytics system to find anomalies and gather statistics,
 but it would be extremely much data and unnecessary cost to transfer all telemetry samples to the global analytics
 system. Instead, the data is aggregated at the "local" regions and then transferred with less frequency, but still
 near real time, to the analytics system.
