@@ -52,7 +52,8 @@ Learn more:
 ## Replicated Event Sourcing over gRPC
 
 You would use Replicated Event Sourcing over gRPC for entities that can be updated in more than one geographical
-location. This makes it possible to implement patterns such as active-active and hot standby.
+location, such as different cloud regions. This makes it possible to implement patterns such as active-active and
+hot standby.
 
 Replicated Event Sourcing gives:
 
