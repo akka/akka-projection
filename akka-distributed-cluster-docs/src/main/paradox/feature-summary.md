@@ -12,7 +12,7 @@ implemented with Akka.
 
 We often recommend asynchronous communication between Microservices by using a message broker, such as Kafka.
 With Projections over gRPC you could have the same advantages of loosely coupled and reliable message delivery
-without the burden and cost of operating the broker infrastructure? As a bonus, you would gain low latency cross
+without the burden and cost of operating the broker infrastructure. As a bonus, you would gain low-latency cross
 region delivery of messages.
 
 FIXME graphic that is more overview and less step by step? (this is the same as projection gRPC)
@@ -40,7 +40,7 @@ on both the producer side and on the consumer side, and they can be changed at r
 
 @@@ note
 Events are stored in a database on the producer side. There is no direct database access between consumer and
-producer. The offsets on the consumer side are stored in a database, but that is a different database than the
+producer. The offsets on the consumer side are stored in a database, but that is a different database from the
 database of the producer.
 @@@
 
