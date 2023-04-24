@@ -194,7 +194,7 @@ object InternalProjectionStateMetricsSpec {
         handlerStrategy,
         statusObserver,
         settings) {
-    override def logger: LoggingAdapter = Logging(system.classicSystem, this.getClass.asInstanceOf[Class[Any]])
+    override def logger: LoggingAdapter = Logging(system.classicSystem, classOf[InMemInternalProjectionState[_, _]])
 
     override implicit def executionContext: ExecutionContext = system.executionContext
 
