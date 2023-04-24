@@ -1,7 +1,7 @@
 # Part 1: Event Sourced Shopping Cart
 
 As the other features of Akka Distributed Cluster are build on top of Event Sourcing, let us start by implementing a shopping
-cart using the [Akka Event Sourced Behavior API](akka:typed/persistence.html). When this first step is completed, end users 
+cart using the @extref[Akka Event Sourced Behavior API](akka:typed/persistence.html). When this first step is completed, end users 
 will be able to add and remove items to a cart and finally check it out.
 
 We will build the cart as an Event Sourced entity, if you are unfamiliar with Event Sourcing, refer to the
