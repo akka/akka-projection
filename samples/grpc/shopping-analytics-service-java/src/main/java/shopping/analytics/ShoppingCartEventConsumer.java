@@ -44,7 +44,7 @@ class ShoppingCartEventConsumer {
   //#initProjections
   private static final Logger log = LoggerFactory.getLogger(ShoppingCartEventConsumer.class);
 
-  //#EventHandler
+  //#eventHandler
   static class EventHandler extends Handler<EventEnvelope<Object>> {
     private final ProjectionId projectionId;
 
@@ -68,7 +68,6 @@ class ShoppingCartEventConsumer {
       log.info("Stopped Projection [{}]. Consumed [{}] events.", projectionId.id(), totalCount);
       return super.stop();
     }
-
     @Override
     public CompletionStage<Done> process(EventEnvelope<Object> envelope) {
       Object event = envelope.getEvent();
@@ -104,7 +103,7 @@ class ShoppingCartEventConsumer {
       return CompletableFuture.completedFuture(done());
     }
   }
-  //#EventHandler
+  //#eventHandler
 
   //#initProjections
   public static void init(ActorSystem<?> system) {

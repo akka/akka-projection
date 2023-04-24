@@ -24,7 +24,8 @@ object ShoppingCartServer {
       port: Int,
       system: ActorSystem[_],
       grpcService: proto.ShoppingCartService,
-      eventProducerService: PartialFunction[HttpRequest, Future[HttpResponse]]): Unit = {
+      eventProducerService: PartialFunction[HttpRequest, Future[HttpResponse]])
+      : Unit = {
     implicit val sys: ActorSystem[_] = system
     implicit val ec: ExecutionContext =
       system.executionContext
@@ -34,8 +35,7 @@ object ShoppingCartServer {
         eventProducerService,
         proto.ShoppingCartServiceHandler.partial(grpcService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters
-        ServerReflection.partial(List(proto.ShoppingCartService))
-      )
+        ServerReflection.partial(List(proto.ShoppingCartService)))
 
     val bound =
       Http()
@@ -55,6 +55,45 @@ object ShoppingCartServer {
         system.terminate()
     }
   }
+
+  //#startServer
+  // sample without event producer for Akka Distributed Cluster docs, initial step
+  //#startServerNoPublish
+  def start(
+      interface: String,
+      port: Int,
+      system: ActorSystem[_],
+      grpcService: proto.ShoppingCartService): Unit = {
+    implicit val sys: ActorSystem[_] = system
+    implicit val ec: ExecutionContext =
+      system.executionContext
+
+    val service: HttpRequest => Future[HttpResponse] =
+      ServiceHandler.concatOrNotFound(
+        proto.ShoppingCartServiceHandler.partial(grpcService),
+        // ServerReflection enabled to support grpcurl without import-path and proto parameters
+        ServerReflection.partial(List(proto.ShoppingCartService)))
+
+    val bound =
+      Http()
+        .newServerAt(interface, port)
+        .bind(service)
+        .map(_.addToCoordinatedShutdown(3.seconds))
+
+    bound.onComplete {
+      case Success(binding) =>
+        val address = binding.localAddress
+        system.log.info(
+          "Shopping online at gRPC server {}:{}",
+          address.getHostString,
+          address.getPort)
+      case Failure(ex) =>
+        system.log.error("Failed to bind gRPC endpoint, terminating system", ex)
+        system.terminate()
+    }
+  }
+  //#startServerNoPublish
+  //#startServer
 
 }
 //#startServer

@@ -43,6 +43,7 @@ public final class ShoppingCart
   //#tags
 
   /** The current state held by the `EventSourcedBehavior`. */
+  //#state
   //#tags
   static final class State implements CborSerializable {
     final Map<String, Integer> items;
@@ -116,8 +117,10 @@ public final class ShoppingCart
     }
   }
 
+  //#state
   //#tags
 
+  //#commands
   /** This interface defines all the commands (messages) that the ShoppingCart actor supports. */
   interface Command extends CborSerializable {}
 
@@ -194,7 +197,9 @@ public final class ShoppingCart
       this.checkedOut = checkedOut;
     }
   }
+  //#commands
 
+  //#events
   abstract static class Event implements CborSerializable {
     public final String cartId;
 
@@ -321,7 +326,9 @@ public final class ShoppingCart
       return Objects.hash(eventTime);
     }
   }
+  //#events
 
+  //#init
   static final EntityTypeKey<Command> ENTITY_KEY =
       EntityTypeKey.create(Command.class, "ShoppingCart");
 
@@ -334,6 +341,7 @@ public final class ShoppingCart
                   ShoppingCart.create(entityContext.getEntityId())
                 ));
   }
+  //#init
 
   public static Behavior<Command> create(String cartId) {
     return Behaviors.setup(
@@ -371,6 +379,7 @@ public final class ShoppingCart
     return openShoppingCart().orElse(checkedOutShoppingCart()).orElse(getCommandHandler()).build();
   }
 
+  //#commandHandler
   private CommandHandlerWithReplyBuilderByState<Command, Event, State, State> openShoppingCart() {
     return newCommandHandlerWithReplyBuilder()
         .forState(state -> !state.isCheckedOut())
@@ -379,6 +388,7 @@ public final class ShoppingCart
         .onCommand(AdjustItemQuantity.class, this::onAdjustItemQuantity)
         .onCommand(Checkout.class, this::onCheckout);
   }
+  //#commandHandler
 
   private ReplyEffect<Event, State> onAddItem(State state, AddItem cmd) {
     if (state.hasItem(cmd.itemId)) {
@@ -483,6 +493,7 @@ public final class ShoppingCart
         .onCommand(Get.class, (state, cmd) -> Effect().reply(cmd.replyTo, state.toSummary()));
   }
 
+  //#eventHandler
   @Override
   public EventHandler<State, Event> eventHandler() {
     return newEventHandlerBuilder()
@@ -495,6 +506,7 @@ public final class ShoppingCart
         .onEvent(CheckedOut.class, (state, evt) -> state.checkout(evt.eventTime))
         .build();
   }
+  //#eventHandler
   //#tags
 }
 //#tags
