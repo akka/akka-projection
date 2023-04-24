@@ -622,7 +622,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         settings) {
 
     implicit val executionContext: ExecutionContext = system.executionContext
-    override val logger: LoggingAdapter = Logging(system.classicSystem, getClass.asInstanceOf[Class[Any]])
+    override val logger: LoggingAdapter = Logging(system.classicSystem, classOf[R2dbcProjectionImpl[_,_]])
 
     private val isExactlyOnceWithSkip: Boolean =
       offsetStrategy match {
