@@ -36,7 +36,12 @@ object Main {
     val grpcPort =
       system.settings.config.getInt("shopping-cart-service.grpc.port")
     val grpcService = new ShoppingCartServiceImpl(system)
-    ShoppingCartServer.start(grpcInterface, grpcPort, system, grpcService, eventProducerService)
+    ShoppingCartServer.start(
+      grpcInterface,
+      grpcPort,
+      system,
+      grpcService,
+      eventProducerService)
   }
 
 }
