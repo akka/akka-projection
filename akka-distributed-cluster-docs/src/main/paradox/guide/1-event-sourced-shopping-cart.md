@@ -1,7 +1,7 @@
 # Part 1: Event Sourced Shopping Cart
 
 As the other features of Akka Distributed Cluster are build on top of Event Sourcing, let us start by implementing a shopping
-cart using the [Akka Event Sourced Behavior API](akka:typed/persistence.html). When this first step is complete, end users 
+cart using the [Akka Event Sourced Behavior API](akka:typed/persistence.html). When this first step is completed, end users 
 will be able to add and remove items to a cart and finally check it out.
 
 We will build the cart as an Event Sourced entity, if you are unfamiliar with Event Sourcing, refer to the
@@ -12,7 +12,7 @@ The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-e
 
 ### Commands
 
-Commands are the "external" API of an entity. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, but different events might be generated depending on the current state of the entity. A command can also be validated and be rejected if it has invalid input or can’t be handled by current state of the entity.
+Commands are the "external" API of an entity. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, but different events might be generated depending on the current state of the entity. A command can also be rejected if it has invalid input or can’t be handled by current state of the entity.
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #commands #events }
