@@ -182,8 +182,6 @@ lazy val commonParadoxProperties = Def.settings(
       "extref.akka-grpc.base_url" -> s"https://doc.akka.io/docs/akka-grpc/${Dependencies.AkkaGrpcVersionInDocs}/%s",
       // Akka persistence R2DBC plugin
       "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/docs/akka-persistence-r2dbc/${Dependencies.AkkaPersistenceR2dbcVersionInDocs}/%s",
-      // Projection (for the Distributed Cluster docs)
-      "extref.akka-projection.base_url" -> s"https://doc.akka.io/docs/akka-projection/${Dependencies.AkkaProjectionVersionInDocs}/%s",
       // Akka Guide
       "extref.akka-guide.base_url" -> "https://developer.lightbend.com/docs/akka-guide/microservices-tutorial/",
       // Java
@@ -236,13 +234,15 @@ lazy val `akka-distributed-cluster-docs` = project
     publish / skip := true,
     previewPath := (Paradox / siteSubdirName).value,
     Paradox / siteSubdirName := s"docs/akka-distributed-cluster/${projectInfoVersion.value}",
+    commonParadoxProperties,
     Compile / paradoxProperties ++= Map(
         "project.url" -> "https://doc.akka.io/docs/akka-distributed-cluster/current/",
         "canonical.base_url" -> "https://doc.akka.io/docs/akka-distributed-cluster/current",
         "github.base_url" -> "https://github.com/akka/akka-projection",
         "akka.version" -> Dependencies.Versions.akka,
-        "akka.r2dbc.version" -> Dependencies.Versions.akkaPersistenceR2dbc),
-    commonParadoxProperties,
+        "akka.r2dbc.version" -> Dependencies.Versions.akkaPersistenceR2dbc,
+        "extref.akka-projection.base_url" -> s"https://doc.akka.io/docs/akka-projection/${Dependencies.AkkaProjectionVersionInDocs}/%s",
+        "scaladoc.akka.projection.base_url" -> s"https://doc.akka.io/api/akka-projection/${Dependencies.AkkaProjectionVersionInDocs}/"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     paradoxRoots := List("index.html"),
     resolvers += Resolver.jcenterRepo,

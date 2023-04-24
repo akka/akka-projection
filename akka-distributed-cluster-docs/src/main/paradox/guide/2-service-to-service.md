@@ -1,17 +1,16 @@
 # Part 2: Service to Service eventing
 
-Akka Projection allows for creating read side views, or projections, that are eventually consistent representations
-of the events for an entity. Such views have historically been possible to define in the same service that owns the entity,
-for an example of this, you can look at the [popularity projection in the Akka Microservice Guide](akka-guide:microservices-tutorial/projection-query.html).
+@extref[Akka Projection](akka-projection:/) allows for creating read side views, or projections, that are eventually consistent representations
+of the events for an entity. Such views have historically been possible to define in the same service that owns the entity.
+For an example of this, see the @extref[popularity projection in the Akka Microservice Guide](akka-guide:microservices-tutorial/projection-query.html).
 
-Service to Service defines a gRPC service in the service where the entity lives and that makes the events available for
-other services to consume with an effectively once delivery guarantee without requiring a message broker in between services.
+@extref[Akka Projection gRPC](akka-projection:grpc.html) defines a gRPC service in the service where the entity lives and that makes the events available for
+other, separately deployed services, to consume events with an effectively once delivery guarantee, 
+this without requiring a message broker in between services. Each of the services has its own lifecycle and is deployed 
+separately, possibly in different data centers or cloud regions.
 
 To implement Service to Service eventing, we will use two services, the shopping cart defined in the previous step and 
-a downstream analytics service. 
-
-Each of the services have their own lifecycle and are deployed separately, possibly in different data centers or
-cloud regions.
+a downstream analytics service.
 
 ## gRPC transport for consuming events
 
@@ -107,19 +106,68 @@ The `client` section in the configuration defines where the producer is running.
 
 ## Filters
 
-The Service to Service eventing sample showcases filtering in two ways, one controlled on the producing side, one on the
-consuming side. The combined filtering doesn't make much sense, see this as an example of two different ways to do achieve
-the same thing, but placing the control over it in the producing service or the consuming service.
+Events can be filtered to control what set of events are propagated to the consumers. What is filtered can be managed
+in two ways, on the producer side or on the consumer side:
 
-The shopping cart service is set up with a producer filter to only pass carts that has been tagged with the tag `medium` or `large`,
-triggered by the number of items in the cart:
+### Producer
 
-FIXME snippet
+The producer may define a filter function on the `EventProducerSource`.
 
-The analytics service is set up to not consume all shopping carts from the upstream shopping cart service but only include
-carts containing 10 or more items.
+Scala
+:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #withProducerFilter }
 
-FIXME snippet
+Java
+:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #withProducerFilter }
+
+In this example the decision is based on tags, but the filter function can use anything in the
+@apidoc[akka.persistence.query.typed.EventEnvelope] parameter or the event itself. Here, the entity sets the tag based
+on the total quantity of the shopping cart, which requires the full state of the shopping cart and is not known from
+an individual event.
+
+Note that the purpose of the `withProducerFilter` is to toggle if all events for the entity are to be emitted or not.
+If the purpose is to filter out certain events you should instead use the `Transformation`.
+
+The producer filter is evaluated before the transformation function, i.e. the event is the original event and not
+the transformed event.
+
+### Consumer
+
+The consumer may define declarative filters that are sent to the producer and evaluated on the producer side
+before emitting the events.
+
+Consumer filters consists of exclude and include criteria. In short, the exclude criteria are evaluated first and
+may be overridden by an include criteria. For more details about the consumer filtering capabilities, see @extref[Akka Projection gRPC](akka-projection:grpc.html#filters)
+
+The filter is updated with the @apidoc[akka.projection.grpc.consumer.ConsumerFilter] extension.
+
+Scala
+:  @@snip [ShoppingCartEventConsumer.scala](/samples/grpc/shopping-analytics-service-scala/src/main/scala/shopping/analytics/ShoppingCartEventConsumer.scala) { #update-filter }
+
+Java
+:  @@snip [ShoppingCartEventConsumer.java](/samples/grpc/shopping-analytics-service-java/src/main/java/shopping/analytics/ShoppingCartEventConsumer.java) { #update-filter }
+
+Note that the `streamId` must match what is used when initializing the `GrpcReadJournal`, which by default is from
+the config property `akka.projection.grpc.consumer.stream-id`.
+
+The filters can be dynamically changed in runtime without restarting the Projections or the `GrpcReadJournal`. The
+updates are incremental. For example if you first add an `IncludeTags` of tag `"medium"` and then update the filter
+with another `IncludeTags` of tag `"large"`, the full filter consists of both `"medium"` and `"large"`.
+
+To remove a filter criteria you would use the corresponding @apidoc[akka.projection.grpc.consumer.ConsumerFilter.RemoveCriteria], for example
+`RemoveIncludeTags`.
+
+The updated filter is kept and remains after restarts of the Projection instances. If the consumer side is
+running with Akka Cluster the filter is propagated to other nodes in the cluster automatically with
+Akka Distributed Data. You only have to update at one place and it will be applied to all running Projections
+with the given `streamId`.
+
+@@@ warning
+The filters will be cleared in case of a full Cluster stop, which means that you
+need to take care of populating the initial filters at startup.
+@@@
+
+See @apidoc[akka.projection.grpc.consumer.ConsumerFilter] for full API documentation.
+
 
 ## Complete Sample Projects
 
