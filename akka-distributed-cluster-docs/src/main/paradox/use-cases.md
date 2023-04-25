@@ -5,7 +5,7 @@
 A car company collects and aggregates telemetry data from millions of cars around the world. A car reports its status
 every third second to a backend service. The cars are connected to a nearby cloud region for low-latency and high
 availability reasons. All telemetry data is fed into an analytics system to find anomalies and gather statistics,
-but it would be an extrem amount of data and an unnecessary cost to transfer all telemetry samples to the global analytics
+but it would be an extreme amount of data and an unnecessary cost to transfer all telemetry samples to the global analytics
 system. Instead, the data is aggregated at the "local" regions and then transferred less frequent, but still
 near real time, to the analytics system.
 
@@ -27,3 +27,20 @@ Additionally, for best interactivity with low response times the users are conne
 It would be unnecessary to replicate all shopping carts to all cloud regions and providers and therefore the
 carts are replicated on demand to a region when a user of the cart connects to a new region.
 
+## World-wide online auction
+
+An online auction system is running in 20 regions around the globe. There are many active auctions in total,
+but all are not active in all regions since users connect to the closest region. Some information about the
+auctions are replicated to all regions, such as the list and summary status of active auctions. Replicating
+all bids and comments for all auctions to all regions would be wasteful. When a user shows interest in a
+specific auction, such as placing a bid or asking a question, the full history for that auction is replicated
+to the region of the user and updates are immediately replicated to the regions that participate in the auction.
+After inactivity in a region for a specific auction the replication is stopped.
+
+## Low cost Microservices
+
+A startup company would like to keep infrastructure costs low but still use a Reactive Systems architecture
+that can grow with their upcoming successful business. They use Akka to implement the Microservices. For
+the communication between the services they don't want the pay the cost of using a hosted message broker or
+the burden of operating a message broker infrastructure themselves. They use Akka Distributed Cluster for the
+service-to-service communication.
