@@ -24,6 +24,6 @@ the users connected to an available service. Simultaneous updates at different l
 the problem has been solved.
 
 Additionally, for best interactivity with low response times the users are connected to a nearby cloud region.
-It would be unnecessary to replicate all shopping carts to all cloud regions and providers and therefore are the
-carts replicated on demand to a region when a user of the cart connects to a new region.
+It would be unnecessary to replicate all shopping carts to all cloud regions and providers and therefore the
+carts are replicated on demand to a region when a user of the cart connects to a new region.
 
