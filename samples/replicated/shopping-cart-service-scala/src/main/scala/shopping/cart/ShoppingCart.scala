@@ -46,17 +46,25 @@ object ShoppingCart {
   /**
    * The current state held by the `EventSourcedBehavior`.
    */
+  //#checkoutStep1Event
+  //#stateUpdateItem
   final case class State(items: Map[String, Int], closed: Set[ReplicaId], checkedOut: Option[Instant])
       extends CborSerializable {
+    //#stateUpdateItem
+    //#checkoutStep1Event
 
     def isClosed: Boolean =
       closed.nonEmpty
 
+    //#stateUpdateItem
     def updateItem(itemId: String, quantity: Int): State =
       copy(items = items + (itemId -> (items.getOrElse(itemId, 0) + quantity)))
+    //#stateUpdateItem
 
+    //#checkoutStep1Event
     def close(replica: ReplicaId): State =
       copy(closed = closed + replica)
+    //#checkoutStep1Event
 
     def checkout(now: Instant): State =
       copy(checkedOut = Some(now))
@@ -132,7 +140,9 @@ object ShoppingCart {
    */
   sealed trait Event extends CborSerializable
 
+  // #itemUpdatedEvent
   final case class ItemUpdated(itemId: String, quantity: Int) extends Event
+  // #itemUpdatedEvent
 
   final case class Closed(replica: ReplicaId) extends Event
 
@@ -179,11 +189,13 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
   import ShoppingCart._
 
   // one of the replicas is responsible for checking out the shopping cart, once all replicas have closed
+  // #leader
   private val isLeader: Boolean = {
     val orderedReplicas = replicationContext.allReplicas.toSeq.sortBy(_.id)
     val leaderIndex = math.abs(replicationContext.entityId.hashCode % orderedReplicas.size)
     orderedReplicas(leaderIndex) == replicationContext.replicaId
   }
+  // #leader
 
   def behavior(): EventSourcedBehavior[Command, Event, State] = {
     EventSourcedBehavior
@@ -224,12 +236,14 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
             StatusReply.Success(updatedCart.toSummary)
           }
 
+      // #checkoutStep1
       case Checkout(replyTo) =>
         Effect
           .persist(Closed(replicationContext.replicaId))
           .thenReply(replyTo) { updatedCart =>
             StatusReply.Success(updatedCart.toSummary)
           }
+      // #checkoutStep1
 
       case CloseForCheckout =>
         Effect
@@ -267,6 +281,7 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
     }
   }
 
+  //#checkoutEventTrigger
   private def handleEvent(state: State, event: Event): State = {
     val newState = event match {
       case ItemUpdated(itemId, quantity) =>
@@ -294,4 +309,5 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
       }
     }
   }
+  //#checkoutEventTrigger
 }

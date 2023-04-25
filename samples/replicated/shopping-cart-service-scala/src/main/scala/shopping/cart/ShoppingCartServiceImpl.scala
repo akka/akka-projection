@@ -9,7 +9,6 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.grpc.GrpcServiceException
 import akka.persistence.typed.ReplicaId
-import akka.projection.grpc.consumer.ConsumerFilter
 import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory

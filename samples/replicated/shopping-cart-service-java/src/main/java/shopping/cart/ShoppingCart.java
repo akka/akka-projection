@@ -51,14 +51,20 @@ public final class ShoppingCart
   static final String LARGE_QUANTITY_TAG = "large";
 
   /** The current state held by the `EventSourcedBehavior`. */
+  //#stateUpdateItem
+  //#checkoutStep1Event
   static final class State implements CborSerializable {
     final Map<String, Integer> items;
     final Set<ReplicaId> closed;
     private Optional<Instant> checkedOut;
 
+    //#stateUpdateItem
+    //#checkoutStep1Event
+
     public State() {
       this(new HashMap<>(), new HashSet<>(), Optional.empty());
     }
+
 
     public State(Map<String, Integer> items, Set<ReplicaId> closed, Optional<Instant> checkedOut) {
       this.items = items;
@@ -70,15 +76,19 @@ public final class ShoppingCart
       return !closed.isEmpty();
     }
 
+    //#stateUpdateItem
     public State updateItem(String itemId, int quantity) {
       items.put(itemId, items.getOrDefault(itemId, 0) + quantity);
       return this;
     }
+    //#stateUpdateItem
 
+    //#checkoutStep1Event
     public State close(ReplicaId replica) {
       closed.add(replica);
       return this;
     }
+    //#checkoutStep1Event
 
     public State checkout(Instant now) {
       checkedOut = Optional.of(now);
@@ -185,6 +195,7 @@ public final class ShoppingCart
 
   abstract static class Event implements CborSerializable {}
 
+  // #itemUpdatedEvent
   static final class ItemUpdated extends Event {
     public final String itemId;
     public final int quantity;
@@ -193,6 +204,7 @@ public final class ShoppingCart
       this.itemId = itemId;
       this.quantity = quantity;
     }
+    // #itemUpdatedEvent
 
     @Override
     public boolean equals(Object o) {
@@ -312,6 +324,7 @@ public final class ShoppingCart
   }
 
   // one replica is responsible for checking out the shopping cart, once all replicas have closed
+  // #leader
   private static boolean isShoppingCartLeader(ReplicationContext replicationContext) {
     List<ReplicaId> orderedReplicas =
         replicationContext.getAllReplicas().stream()
@@ -320,6 +333,7 @@ public final class ShoppingCart
     int leaderIndex = Math.abs(replicationContext.entityId().hashCode() % orderedReplicas.size());
     return orderedReplicas.get(leaderIndex) == replicationContext.replicaId();
   }
+  // #leader
 
   @Override
   public RetentionCriteria retentionCriteria() {
@@ -356,11 +370,13 @@ public final class ShoppingCart
         .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
   }
 
+  //#checkoutStep1
   private ReplyEffect<Event, State> openOnCheckout(State state, Checkout cmd) {
     return Effect()
         .persist(new Closed(replicationContext.replicaId()))
         .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
   }
+  //#checkoutStep1
 
   private CommandHandlerWithReplyBuilderByState<Command, Event, State, State> closedShoppingCart() {
     return newCommandHandlerWithReplyBuilder()
@@ -406,6 +422,7 @@ public final class ShoppingCart
         .onCommand(Get.class, (state, cmd) -> Effect().reply(cmd.replyTo, state.toSummary()));
   }
 
+  //#checkoutEventTrigger
   @Override
   public EventHandler<State, Event> eventHandler() {
     return newEventHandlerBuilder()
@@ -433,6 +450,7 @@ public final class ShoppingCart
       }
     }
   }
+  //#checkoutEventTrigger
 
   @Override
   public Set<String> tagsFor(State state, Event event) {
