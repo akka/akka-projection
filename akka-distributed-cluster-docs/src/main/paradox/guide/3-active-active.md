@@ -4,10 +4,10 @@ Active-active means that the same shopping cart is in memory in multiple locatio
 in all of those locations, so that a cloud region outage does not block users from continuing to use the service.  
 
 @extref[Akka Replicated Event Sourcing](akka:typed/replicated-eventsourcing.html) stores persisted events in a local database,
-without any need for replication capabilities in the database itself, the events are then replicated using gRPC
-transport from @extref[Akka Projection gRPC](akka-projection:grpc-replicated-event-sourcing-transport.html).
+without any need for replication capabilities in the database itself, the events are then replicated using the @extref[Akka Replicated Event Sourcing gRPC transport](akka-projection:grpc-replicated-event-sourcing-transport.html).
 
-The shopping cart will be eventually consistent, meaning that an update to a 
+The shopping cart will be eventually consistent, meaning that an update to the cart in one replica will not immediately
+be visible in the other replicas, but eventually all replicas will reach the same state. 
 
 ## Turning the shopping cart into a Replicated Entity
 
@@ -95,7 +95,8 @@ Java
 
 
 Note that this still means that while adding and removing can be done in the face of an outage all replicas must be online 
-for any shopping cart to be able to close, so it does not give us complete high-availability for the shopping cart.
+for any shopping cart to be able to close, so it does not give us complete high-availability for the shopping cart, 
+but it illustrates how we can coordinate when needed.
 
 
 ## Filters
