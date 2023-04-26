@@ -1,0 +1,11 @@
+{
+  "kind": "Namespace",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "shopping-cart-namespace",
+    "labels": {
+      "name": "shopping-cart-namespace"
+    }
+  }
+}
+

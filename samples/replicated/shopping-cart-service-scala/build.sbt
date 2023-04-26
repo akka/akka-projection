@@ -41,6 +41,7 @@ enablePlugins(JavaAppPackaging, DockerPlugin)
 dockerBaseImage := "docker.io/library/adoptopenjdk:11-jre-hotspot"
 dockerUsername := sys.props.get("docker.username")
 dockerRepository := sys.props.get("docker.registry")
+dockerUpdateLatest := true
 ThisBuild / dynverSeparator := "-"
 
 libraryDependencies ++= Seq(
@@ -56,6 +57,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-http" % AkkaManagementVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
+  "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
   "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
   "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
   // Common dependencies for logging and testing
