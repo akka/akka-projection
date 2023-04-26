@@ -6,22 +6,10 @@ option java_package = "shopping.cart.proto";
 package shoppingcart;
 
 // Events published to external services
-
-message ItemAdded {
-    string cartId = 1;
-    string itemId = 2;
-    int32 quantity = 3;
-}
-
 message ItemQuantityAdjusted {
     string cartId = 1;
     string itemId = 2;
     int32 quantity = 3;
-}
-
-message ItemRemoved {
-    string cartId = 1;
-    string itemId = 2;
 }
 
 message CheckedOut {

@@ -21,8 +21,8 @@ especially in circumstances where there are outages or connectivity problems bet
 
 ### Updating the cart contents
 
-Because of this the data structure must always arrive at the same state even if events arrive in a different order. To handle 
-this in the shopping cart we replace the `ItemAdded` and `ItemRemoved` events with a single `ItemUpdated` event
+Because of this the data structure must always arrive at the same state even if events arrive in a different order. We have
+already prepared for this somewhat by representing both add and remove using a single `ItemUpdated` event
 with a positive quantity number when items were added and a negative when items were removed: 
 
 Scala

@@ -40,13 +40,14 @@ Java
 
 Events can be transformed by application specific code on the producer side. The purpose is to be able to have a
 different public representation from the internal representation (stored in journal). The transformation functions
-are registered when creating the `EventProducer` service. Here is an example of one of those transformation functions:
+are registered when creating the `EventProducer` service. Here is an example of one of those transformation functions
+accessing the projection envelope to include the shopping cart id in the public message type passed to consumers:
 
 Scala
-:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #transformItemAdded }
+:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #transformItemUpdated }
 
 Java
-:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #transformItemAdded }
+:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #transformItemUpdated }
 
 To omit an event the transformation function can return @scala[`None`]@java[`Optional.empty()`].
 

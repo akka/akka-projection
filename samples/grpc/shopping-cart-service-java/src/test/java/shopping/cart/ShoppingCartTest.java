@@ -48,28 +48,7 @@ public class ShoppingCartTest {
     assertFalse(summary.checkedOut);
     assertEquals(1, summary.items.size());
     assertEquals(42, summary.items.get("foo").intValue());
-    assertEquals(new ShoppingCart.ItemAdded(CART_ID, "foo", 42), result.event());
-  }
-
-  @Test
-  public void rejectAlreadyAddedItem() {
-    CommandResultWithReply<
-            ShoppingCart.Command,
-            ShoppingCart.Event,
-            ShoppingCart.State,
-            StatusReply<ShoppingCart.Summary>>
-        result1 =
-            eventSourcedTestKit.runCommand(replyTo -> new ShoppingCart.AddItem("foo", 42, replyTo));
-    assertTrue(result1.reply().isSuccess());
-    CommandResultWithReply<
-            ShoppingCart.Command,
-            ShoppingCart.Event,
-            ShoppingCart.State,
-            StatusReply<ShoppingCart.Summary>>
-        result2 =
-            eventSourcedTestKit.runCommand(replyTo -> new ShoppingCart.AddItem("foo", 42, replyTo));
-    assertTrue(result2.reply().isError());
-    assertTrue(result2.hasNoEvents());
+    assertEquals(new ShoppingCart.ItemUpdated("foo", 42), result.event());
   }
 
   @Test
@@ -88,9 +67,9 @@ public class ShoppingCartTest {
             ShoppingCart.State,
             StatusReply<ShoppingCart.Summary>>
         result2 =
-            eventSourcedTestKit.runCommand(replyTo -> new ShoppingCart.RemoveItem("foo", replyTo));
+            eventSourcedTestKit.runCommand(replyTo -> new ShoppingCart.RemoveItem("foo", 42, replyTo));
     assertTrue(result2.reply().isSuccess());
-    assertEquals(new ShoppingCart.ItemRemoved(CART_ID, "foo", 42), result2.event());
+    assertEquals(new ShoppingCart.ItemUpdated("foo", -42), result2.event());
   }
 
   @Test
@@ -110,10 +89,10 @@ public class ShoppingCartTest {
             StatusReply<ShoppingCart.Summary>>
         result2 =
             eventSourcedTestKit.runCommand(
-                replyTo -> new ShoppingCart.AdjustItemQuantity("foo", 43, replyTo));
+                replyTo -> new ShoppingCart.AddItem("foo", 1, replyTo));
     assertTrue(result2.reply().isSuccess());
     assertEquals(43, result2.reply().getValue().items.get("foo").intValue());
-    assertEquals(new ShoppingCart.ItemQuantityAdjusted(CART_ID, "foo", 42, 43), result2.event());
+    assertEquals(new ShoppingCart.ItemUpdated("foo", 1), result2.event());
   }
 
   @Test
@@ -134,7 +113,6 @@ public class ShoppingCartTest {
         result2 = eventSourcedTestKit.runCommand(replyTo -> new ShoppingCart.Checkout(replyTo));
     assertTrue(result2.reply().isSuccess());
     assertTrue(result2.event() instanceof ShoppingCart.CheckedOut);
-    assertEquals(CART_ID, result2.event().cartId);
 
     CommandResultWithReply<
             ShoppingCart.Command,

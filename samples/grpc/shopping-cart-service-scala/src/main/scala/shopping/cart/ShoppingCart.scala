@@ -54,21 +54,13 @@ object ShoppingCart {
     def isCheckedOut: Boolean =
       checkoutDate.isDefined
 
-    def hasItem(itemId: String): Boolean =
-      items.contains(itemId)
-
     def isEmpty: Boolean =
-      items.isEmpty
+      items.forall { case (_, quantity) => quantity <= 0 }
 
     def updateItem(itemId: String, quantity: Int): State = {
-      quantity match {
-        case 0 => copy(items = items - itemId)
-        case _ => copy(items = items + (itemId -> quantity))
-      }
+      val newQuantity = items.getOrElse(itemId, 0) + quantity
+      copy(items = items + (itemId -> newQuantity))
     }
-
-    def removeItem(itemId: String): State =
-      copy(items = items - itemId)
 
     def checkout(now: Instant): State =
       copy(checkoutDate = Some(now))
@@ -76,12 +68,14 @@ object ShoppingCart {
     def setCustomer(customerId: String, category: String): State =
       copy(customerId = customerId, customerCategory = category)
 
-    def toSummary: Summary =
-      Summary(items, isCheckedOut, customerId, customerCategory)
+    def toSummary: Summary = {
+      // filter out removed items
+      Summary(items.filter { case (_, quantity) => quantity > 0 }, isCheckedOut, customerId, customerCategory)
+    }
 
     //#tags
     def totalQuantity: Int =
-      items.valuesIterator.sum
+      items.collect { case (_, quantity) if quantity > 0 => quantity }.sum
 
     def tags: Set[String] = {
       val total = totalQuantity
@@ -128,14 +122,6 @@ object ShoppingCart {
    */
   final case class RemoveItem(
       itemId: String,
-      replyTo: ActorRef[StatusReply[Summary]])
-      extends Command
-
-  /**
-   * A command to adjust the quantity of an item in the cart.
-   */
-  final case class AdjustItemQuantity(
-      itemId: String,
       quantity: Int,
       replyTo: ActorRef[StatusReply[Summary]])
       extends Command
@@ -172,24 +158,11 @@ object ShoppingCart {
   /**
    * This interface defines all the events that the ShoppingCart supports.
    */
-  sealed trait Event extends CborSerializable {
-    def cartId: String
-  }
+  sealed trait Event extends CborSerializable
 
-  final case class ItemAdded(cartId: String, itemId: String, quantity: Int)
-      extends Event
+  final case class ItemUpdated(itemId: String, quantity: Int) extends Event
 
-  final case class ItemRemoved(cartId: String, itemId: String, oldQuantity: Int)
-      extends Event
-
-  final case class ItemQuantityAdjusted(
-      cartId: String,
-      itemId: String,
-      newQuantity: Int,
-      oldQuantity: Int)
-      extends Event
-
-  final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
+  final case class CheckedOut(eventTime: Instant) extends Event
 
   final case class CustomerDefined(
       cartId: String,
@@ -253,48 +226,26 @@ object ShoppingCart {
       command: Command): ReplyEffect[Event, State] = {
     command match {
       case AddItem(itemId, quantity, replyTo) =>
-        if (state.hasItem(itemId))
-          Effect.reply(replyTo)(
-            StatusReply.Error(
-              s"Item '$itemId' was already added to this shopping cart"))
-        else if (quantity <= 0)
+       if (quantity <= 0)
           Effect.reply(replyTo)(
             StatusReply.Error("Quantity must be greater than zero"))
         else
           Effect
-            .persist(ItemAdded(cartId, itemId, quantity))
+            .persist(ItemUpdated(itemId, quantity))
             .thenReply(replyTo) { updatedCart =>
               StatusReply.Success(updatedCart.toSummary)
             }
 
-      case RemoveItem(itemId, replyTo) =>
-        if (state.hasItem(itemId))
-          Effect
-            .persist(ItemRemoved(cartId, itemId, state.items(itemId)))
-            .thenReply(replyTo)(updatedCart =>
-              StatusReply.Success(updatedCart.toSummary))
-        else
-          Effect.reply(replyTo)(
-            StatusReply.Success(state.toSummary)
-          ) // removing an item is idempotent
-
-      case AdjustItemQuantity(itemId, quantity, replyTo) =>
+      case RemoveItem(itemId, quantity, replyTo) =>
         if (quantity <= 0)
           Effect.reply(replyTo)(
             StatusReply.Error("Quantity must be greater than zero"))
-        else if (state.hasItem(itemId))
+        else
           Effect
-            .persist(
-              ItemQuantityAdjusted(
-                cartId,
-                itemId,
-                quantity,
-                state.items(itemId)))
+            .persist(ItemUpdated(itemId, -quantity))
             .thenReply(replyTo)(updatedCart =>
               StatusReply.Success(updatedCart.toSummary))
-        else
-          Effect.reply(replyTo)(StatusReply.Error(
-            s"Cannot adjust quantity for item '$itemId'. Item not present on cart"))
+
 
       case Checkout(replyTo) =>
         if (state.isEmpty)
@@ -302,7 +253,7 @@ object ShoppingCart {
             StatusReply.Error("Cannot checkout an empty shopping cart"))
         else
           Effect
-            .persist(CheckedOut(cartId, Instant.now()))
+            .persist(CheckedOut(Instant.now()))
             .thenReply(replyTo)(updatedCart =>
               StatusReply.Success(updatedCart.toSummary))
 
@@ -338,10 +289,6 @@ object ShoppingCart {
         Effect.reply(cmd.replyTo)(
           StatusReply.Error(
             "Can't remove an item from an already checked out shopping cart"))
-      case cmd: AdjustItemQuantity =>
-        Effect.reply(cmd.replyTo)(
-          StatusReply.Error(
-            "Can't adjust item on an already checked out shopping cart"))
       case cmd: Checkout =>
         Effect.reply(cmd.replyTo)(
           StatusReply.Error("Can't checkout already checked out shopping cart"))
@@ -351,13 +298,9 @@ object ShoppingCart {
   //#eventHandler
   private def handleEvent(state: State, event: Event): State = {
     event match {
-      case ItemAdded(_, itemId, quantity) =>
+      case ItemUpdated(itemId, quantity) =>
         state.updateItem(itemId, quantity)
-      case ItemRemoved(_, itemId, _) =>
-        state.removeItem(itemId)
-      case ItemQuantityAdjusted(_, itemId, quantity, _) =>
-        state.updateItem(itemId, quantity)
-      case CheckedOut(_, eventTime) =>
+      case CheckedOut(eventTime) =>
         state.checkout(eventTime)
       case CustomerDefined(_, customerId, category) =>
         state.setCustomer(customerId, category)

@@ -8,12 +8,12 @@ import io.grpc.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shopping.cart.proto.AddItemRequest;
+import shopping.cart.proto.RemoveItemRequest;
 import shopping.cart.proto.Cart;
 import shopping.cart.proto.CheckoutRequest;
 import shopping.cart.proto.GetCartRequest;
 import shopping.cart.proto.Item;
 import shopping.cart.proto.ShoppingCartService;
-import shopping.cart.proto.UpdateItemRequest;
 
 import java.time.Duration;
 import java.util.List;
@@ -49,22 +49,14 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
   }
 
   @Override
-  public CompletionStage<Cart> updateItem(UpdateItemRequest in) {
+  public CompletionStage<Cart> removeItem(RemoveItemRequest in) {
     logger.info("updateItem {}", in.getCartId());
     EntityRef<ShoppingCart.Command> entityRef =
         sharding.entityRefFor(ShoppingCart.ENTITY_KEY, in.getCartId());
-    final CompletionStage<ShoppingCart.Summary> reply;
-    if (in.getQuantity() == 0) {
-      reply =
-          entityRef.askWithStatus(
-              replyTo -> new ShoppingCart.RemoveItem(in.getItemId(), replyTo), timeout);
-    } else {
-      reply =
-          entityRef.askWithStatus(
-              replyTo ->
-                  new ShoppingCart.AdjustItemQuantity(in.getItemId(), in.getQuantity(), replyTo),
-              timeout);
-    }
+    CompletionStage<ShoppingCart.Summary> reply =
+        entityRef.askWithStatus(
+            replyTo -> new ShoppingCart.RemoveItem(in.getItemId(), in.getQuantity(), replyTo),
+            timeout);
     CompletionStage<Cart> cart = reply.thenApply(ShoppingCartServiceImpl::toProtoCart);
     return convertError(cart);
   }

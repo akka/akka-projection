@@ -4,6 +4,9 @@ package shopping.cart
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
+import akka.persistence.query.typed
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
@@ -15,16 +18,10 @@ object PublishEvents {
   def eventProducerService(system: ActorSystem[_])
       : PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val transformation = Transformation.empty
-      .registerMapper[ShoppingCart.ItemAdded, proto.ItemAdded](event =>
-        Some(transformItemAdded(event)))
-      .registerMapper[
-        ShoppingCart.ItemQuantityAdjusted,
-        proto.ItemQuantityAdjusted](event =>
-        Some(transformItemQuantityAdjusted(event)))
-      .registerMapper[ShoppingCart.ItemRemoved, proto.ItemRemoved](event =>
-        Some(transformItemRemoved(event)))
-      .registerMapper[ShoppingCart.CheckedOut, proto.CheckedOut](event =>
-        Some(transformCheckedOut(event)))
+      .registerAsyncEnvelopeMapper[ShoppingCart.ItemUpdated, proto.ItemQuantityAdjusted](envelope =>
+        Future.successful(Some(transformItemUpdated(envelope))))
+      .registerAsyncEnvelopeMapper[ShoppingCart.CheckedOut, proto.CheckedOut](envelope =>
+        Future.successful(Some(transformCheckedOut(envelope))))
 
     //#withProducerFilter
     val eventProducerSource = EventProducer
@@ -46,27 +43,19 @@ object PublishEvents {
   }
   //#eventProducerService
 
-  //#transformItemAdded
-  private def transformItemAdded(
-      added: ShoppingCart.ItemAdded): proto.ItemAdded =
-    proto.ItemAdded(
-      cartId = added.cartId,
-      itemId = added.itemId,
-      quantity = added.quantity)
-  //#transformItemAdded
-
-  def transformItemQuantityAdjusted(
-      event: ShoppingCart.ItemQuantityAdjusted): proto.ItemQuantityAdjusted =
+  //#transformItemUpdated
+  def transformItemUpdated(
+      envelope: EventEnvelope[ShoppingCart.ItemUpdated]): proto.ItemQuantityAdjusted = {
+    val event = envelope.event
     proto.ItemQuantityAdjusted(
-      cartId = event.cartId,
+      cartId = PersistenceId.extractEntityId(envelope.persistenceId),
       itemId = event.itemId,
-      quantity = event.newQuantity)
+      quantity = event.quantity)
+  }
+  //#transformItemUpdated
 
-  def transformItemRemoved(event: ShoppingCart.ItemRemoved): proto.ItemRemoved =
-    proto.ItemRemoved(cartId = event.cartId, itemId = event.itemId)
-
-  def transformCheckedOut(event: ShoppingCart.CheckedOut): proto.CheckedOut =
-    proto.CheckedOut(event.cartId)
+  def transformCheckedOut(envelope: typed.EventEnvelope[ShoppingCart.CheckedOut]): proto.CheckedOut =
+    proto.CheckedOut(PersistenceId.extractEntityId(envelope.persistenceId))
 
   //#eventProducerService
 }

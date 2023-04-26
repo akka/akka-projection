@@ -70,33 +70,22 @@ public final class ShoppingCart
     }
 
     public Summary toSummary() {
-      return new Summary(items, isCheckedOut());
-    }
-
-    public boolean hasItem(String itemId) {
-      return items.containsKey(itemId);
+      // filter out removed items
+      final Map<String, Integer> itemsForSummary = new HashMap<>();
+      items.forEach((itemId, quantity) -> {
+        if (quantity > 0) itemsForSummary.put(itemId, quantity);
+      });
+      return new Summary(itemsForSummary, isCheckedOut());
     }
 
     public State updateItem(String itemId, int quantity) {
-      if (quantity == 0) {
-        items.remove(itemId);
-      } else {
-        items.put(itemId, quantity);
-      }
+      int newQuantity = items.getOrDefault(itemId, 0) + quantity;
+      items.put(itemId, newQuantity);
       return this;
     }
 
     public boolean isEmpty() {
-      return items.isEmpty();
-    }
-
-    public State removeItem(String itemId) {
-      items.remove(itemId);
-      return this;
-    }
-
-    public int itemCount(String itemId) {
-      return items.get(itemId);
+      return items.values().stream().allMatch(quantity -> quantity <= 0);
     }
 
     //#tags
@@ -145,21 +134,10 @@ public final class ShoppingCart
   /** A command to remove an item from the cart. */
   public static final class RemoveItem implements Command {
     final String itemId;
-    final ActorRef<StatusReply<Summary>> replyTo;
-
-    public RemoveItem(String itemId, ActorRef<StatusReply<Summary>> replyTo) {
-      this.itemId = itemId;
-      this.replyTo = replyTo;
-    }
-  }
-
-  /** A command to adjust the quantity of an item in the cart. */
-  public static final class AdjustItemQuantity implements Command {
-    final String itemId;
     final int quantity;
     final ActorRef<StatusReply<Summary>> replyTo;
 
-    public AdjustItemQuantity(String itemId, int quantity, ActorRef<StatusReply<Summary>> replyTo) {
+    public RemoveItem(String itemId, int quantity, ActorRef<StatusReply<Summary>> replyTo) {
       this.itemId = itemId;
       this.quantity = quantity;
       this.replyTo = replyTo;
@@ -201,106 +179,33 @@ public final class ShoppingCart
 
   //#events
   abstract static class Event implements CborSerializable {
-    public final String cartId;
-
-    public Event(String cartId) {
-      this.cartId = cartId;
-    }
   }
 
-  static final class ItemAdded extends Event {
+  static final class ItemUpdated extends Event {
     public final String itemId;
     public final int quantity;
 
-    public ItemAdded(String cartId, String itemId, int quantity) {
-      super(cartId);
+    public ItemUpdated(String itemId, int quantity) {
       this.itemId = itemId;
       this.quantity = quantity;
     }
+    // #itemUpdatedEvent
 
     @Override
     public boolean equals(Object o) {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
 
-      ItemAdded other = (ItemAdded) o;
+      ItemUpdated other = (ItemUpdated) o;
 
       if (quantity != other.quantity) return false;
-      if (!cartId.equals(other.cartId)) return false;
       return itemId.equals(other.itemId);
     }
 
     @Override
     public int hashCode() {
-      int result = cartId.hashCode();
-      result = 31 * result + itemId.hashCode();
+      int result = itemId.hashCode();
       result = 31 * result + quantity;
-      return result;
-    }
-  }
-
-  static final class ItemRemoved extends Event {
-    public final String itemId;
-    public final int oldQuantity;
-
-    public ItemRemoved(String cartId, String itemId, int oldQuantity) {
-      super(cartId);
-      this.itemId = itemId;
-      this.oldQuantity = oldQuantity;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
-
-      ItemRemoved other = (ItemRemoved) o;
-
-      if (oldQuantity != other.oldQuantity) return false;
-      if (!cartId.equals(other.cartId)) return false;
-      return itemId.equals(other.itemId);
-    }
-
-    @Override
-    public int hashCode() {
-      int result = cartId.hashCode();
-      result = 31 * result + itemId.hashCode();
-      result = 31 * result + oldQuantity;
-      return result;
-    }
-  }
-
-  static final class ItemQuantityAdjusted extends Event {
-    public final String itemId;
-    final int oldQuantity;
-    final int newQuantity;
-
-    public ItemQuantityAdjusted(String cartId, String itemId, int oldQuantity, int newQuantity) {
-      super(cartId);
-      this.itemId = itemId;
-      this.oldQuantity = oldQuantity;
-      this.newQuantity = newQuantity;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
-
-      ItemQuantityAdjusted other = (ItemQuantityAdjusted) o;
-
-      if (oldQuantity != other.oldQuantity) return false;
-      if (newQuantity != other.newQuantity) return false;
-      if (!cartId.equals(other.cartId)) return false;
-      return itemId.equals(other.itemId);
-    }
-
-    @Override
-    public int hashCode() {
-      int result = cartId.hashCode();
-      result = 31 * result + itemId.hashCode();
-      result = 31 * result + oldQuantity;
-      result = 31 * result + newQuantity;
       return result;
     }
   }
@@ -308,8 +213,8 @@ public final class ShoppingCart
   static final class CheckedOut extends Event {
     final Instant eventTime;
 
-    public CheckedOut(String cartId, Instant eventTime) {
-      super(cartId);
+    @JsonCreator
+    public CheckedOut(Instant eventTime) {
       this.eventTime = eventTime;
     }
 
@@ -385,23 +290,16 @@ public final class ShoppingCart
         .forState(state -> !state.isCheckedOut())
         .onCommand(AddItem.class, this::onAddItem)
         .onCommand(RemoveItem.class, this::onRemoveItem)
-        .onCommand(AdjustItemQuantity.class, this::onAdjustItemQuantity)
         .onCommand(Checkout.class, this::onCheckout);
   }
   //#commandHandler
 
   private ReplyEffect<Event, State> onAddItem(State state, AddItem cmd) {
-    if (state.hasItem(cmd.itemId)) {
-      return Effect()
-          .reply(
-              cmd.replyTo,
-              StatusReply.error(
-                  "Item '" + cmd.itemId + "' was already added to this shopping cart"));
-    } else if (cmd.quantity <= 0) {
+    if (cmd.quantity <= 0) {
       return Effect().reply(cmd.replyTo, StatusReply.error("Quantity must be greater than zero"));
     } else {
       return Effect()
-          .persist(new ItemAdded(cartId, cmd.itemId, cmd.quantity))
+          .persist(new ItemUpdated(cmd.itemId, cmd.quantity))
           .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
     }
   }
@@ -412,42 +310,15 @@ public final class ShoppingCart
           .reply(cmd.replyTo, StatusReply.error("Cannot checkout an empty shopping cart"));
     } else {
       return Effect()
-          .persist(new CheckedOut(cartId, Instant.now()))
+          .persist(new CheckedOut(Instant.now()))
           .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
     }
   }
 
   private ReplyEffect<Event, State> onRemoveItem(State state, RemoveItem cmd) {
-    if (state.hasItem(cmd.itemId)) {
-      return Effect()
-          .persist(new ItemRemoved(cartId, cmd.itemId, state.itemCount(cmd.itemId)))
-          .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
-    } else {
-      return Effect()
-          .reply(
-              cmd.replyTo,
-              StatusReply.success(state.toSummary())); // removing an item is idempotent
-    }
-  }
-
-  private ReplyEffect<Event, State> onAdjustItemQuantity(State state, AdjustItemQuantity cmd) {
-    if (cmd.quantity <= 0) {
-      return Effect().reply(cmd.replyTo, StatusReply.error("Quantity must be greater than zero"));
-    } else if (state.hasItem(cmd.itemId)) {
-      return Effect()
-          .persist(
-              new ItemQuantityAdjusted(
-                  cartId, cmd.itemId, state.itemCount(cmd.itemId), cmd.quantity))
-          .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
-    } else {
-      return Effect()
-          .reply(
-              cmd.replyTo,
-              StatusReply.error(
-                  "Cannot adjust quantity for item '"
-                      + cmd.itemId
-                      + "'. Item not present on cart"));
-    }
+    return Effect()
+        .persist(new ItemUpdated(cmd.itemId, -cmd.quantity))
+        .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
   }
 
   private CommandHandlerWithReplyBuilderByState<Command, Event, State, State>
@@ -471,14 +342,6 @@ public final class ShoppingCart
                         StatusReply.error(
                             "Can't remove an item from an already checked out shopping cart")))
         .onCommand(
-            AdjustItemQuantity.class,
-            cmd ->
-                Effect()
-                    .reply(
-                        cmd.replyTo,
-                        StatusReply.error(
-                            "Can't adjust item on an already checked out shopping cart")))
-        .onCommand(
             Checkout.class,
             cmd ->
                 Effect()
@@ -498,11 +361,9 @@ public final class ShoppingCart
   public EventHandler<State, Event> eventHandler() {
     return newEventHandlerBuilder()
         .forAnyState()
-        .onEvent(ItemAdded.class, (state, evt) -> state.updateItem(evt.itemId, evt.quantity))
-        .onEvent(ItemRemoved.class, (state, evt) -> state.removeItem(evt.itemId))
         .onEvent(
-            ItemQuantityAdjusted.class,
-            (state, evt) -> state.updateItem(evt.itemId, evt.newQuantity))
+            ItemUpdated.class,
+            (state, evt) -> state.updateItem(evt.itemId, evt.quantity))
         .onEvent(CheckedOut.class, (state, evt) -> state.checkout(evt.eventTime))
         .build();
   }

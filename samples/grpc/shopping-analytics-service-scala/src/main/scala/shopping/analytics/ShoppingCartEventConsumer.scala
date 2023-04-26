@@ -17,9 +17,7 @@ import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
 import org.slf4j.LoggerFactory
 import shoppingcart.CheckedOut
-import shoppingcart.ItemAdded
 import shoppingcart.ItemQuantityAdjusted
-import shoppingcart.ItemRemoved
 import shoppingcart.ShoppingCartEventsProto
 
 object ShoppingCartEventConsumer {
@@ -55,14 +53,6 @@ object ShoppingCartEventConsumer {
       totalCount += 1
 
       event match {
-        case itemAdded: ItemAdded =>
-          log.info(
-            "Projection [{}] consumed ItemAdded for cart {}, added {} {}. Total [{}] events.",
-            projectionId.id,
-            itemAdded.cartId,
-            itemAdded.quantity,
-            itemAdded.itemId,
-            totalCount)
         case quantityAdjusted: ItemQuantityAdjusted =>
           log.info(
             "Projection [{}] consumed ItemQuantityAdjusted for cart {}, changed {} {}. Total [{}] events.",
@@ -70,13 +60,6 @@ object ShoppingCartEventConsumer {
             quantityAdjusted.cartId,
             quantityAdjusted.quantity,
             quantityAdjusted.itemId,
-            totalCount)
-        case itemRemoved: ItemRemoved =>
-          log.info(
-            "Projection [{}] consumed ItemRemoved for cart {}, removed {}. Total [{}] events.",
-            projectionId.id,
-            itemRemoved.cartId,
-            itemRemoved.itemId,
             totalCount)
         case checkedOut: CheckedOut =>
           log.info(

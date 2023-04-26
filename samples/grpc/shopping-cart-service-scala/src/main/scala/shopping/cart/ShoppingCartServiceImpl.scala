@@ -12,9 +12,6 @@ import io.grpc.Status
 import org.slf4j.LoggerFactory
 
 // tag::moreOperations[]
-import akka.actor.typed.ActorRef
-import akka.pattern.StatusReply
-
 class ShoppingCartServiceImpl(system: ActorSystem[_])
     extends proto.ShoppingCartService {
 
@@ -37,18 +34,12 @@ class ShoppingCartServiceImpl(system: ActorSystem[_])
     convertError(response)
   }
 
-  override def updateItem(in: proto.UpdateItemRequest): Future[proto.Cart] = {
+  override def removeItem(in: proto.RemoveItemRequest): Future[proto.Cart] = {
     logger.info("updateItem {} to cart {}", in.itemId, in.cartId)
     val entityRef = sharding.entityRefFor(ShoppingCart.EntityKey, in.cartId)
 
-    def command(replyTo: ActorRef[StatusReply[ShoppingCart.Summary]]) =
-      if (in.quantity == 0)
-        ShoppingCart.RemoveItem(in.itemId, replyTo)
-      else
-        ShoppingCart.AdjustItemQuantity(in.itemId, in.quantity, replyTo)
-
     val reply: Future[ShoppingCart.Summary] =
-      entityRef.askWithStatus(command(_))
+      entityRef.askWithStatus(  ShoppingCart.RemoveItem(in.itemId, in.quantity, _))
     val response = reply.map(cart => toProtoCart(cart))
     convertError(response)
   }
