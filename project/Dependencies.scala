@@ -20,7 +20,7 @@ object Dependencies {
 
   object Versions {
     // FIXME released version/milestone
-    val akka = sys.props.getOrElse("build.akka.version", "2.8.1-M1")
+    val akka = sys.props.getOrElse("build.akka.version", "2.8.1")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
     // FIXME non-milestone
