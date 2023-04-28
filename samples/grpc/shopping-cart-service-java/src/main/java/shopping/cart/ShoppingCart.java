@@ -70,22 +70,20 @@ public final class ShoppingCart
     }
 
     public Summary toSummary() {
-      // filter out removed items
-      final Map<String, Integer> itemsForSummary = new HashMap<>();
-      items.forEach((itemId, quantity) -> {
-        if (quantity > 0) itemsForSummary.put(itemId, quantity);
-      });
-      return new Summary(itemsForSummary, isCheckedOut());
+      return new Summary(items, isCheckedOut());
     }
 
     public State updateItem(String itemId, int quantity) {
       int newQuantity = items.getOrDefault(itemId, 0) + quantity;
-      items.put(itemId, newQuantity);
+      if (newQuantity > 0)
+        items.put(itemId, newQuantity);
+      else
+        items.remove(itemId);
       return this;
     }
 
     public boolean isEmpty() {
-      return items.values().stream().allMatch(quantity -> quantity <= 0);
+      return items.isEmpty();
     }
 
     //#tags

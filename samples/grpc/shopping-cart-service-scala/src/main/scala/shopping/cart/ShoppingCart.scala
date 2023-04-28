@@ -55,11 +55,14 @@ object ShoppingCart {
       checkoutDate.isDefined
 
     def isEmpty: Boolean =
-      items.forall { case (_, quantity) => quantity <= 0 }
+      items.isEmpty
 
     def updateItem(itemId: String, quantity: Int): State = {
       val newQuantity = items.getOrElse(itemId, 0) + quantity
-      copy(items = items + (itemId -> newQuantity))
+      if (newQuantity > 0)
+        copy(items = items + (itemId -> newQuantity))
+      else
+        copy(items = items.removed(itemId))
     }
 
     def checkout(now: Instant): State =
@@ -70,12 +73,12 @@ object ShoppingCart {
 
     def toSummary: Summary = {
       // filter out removed items
-      Summary(items.filter { case (_, quantity) => quantity > 0 }, isCheckedOut)
+      Summary(items, isCheckedOut)
     }
 
     //#tags
     def totalQuantity: Int =
-      items.collect { case (_, quantity) if quantity > 0 => quantity }.sum
+      items.map { case (_, quantity) => quantity }.sum
 
     def tags: Set[String] = {
       val total = totalQuantity
