@@ -20,6 +20,10 @@ many problems that must be overcome:
 Instead, each geographical location can be a separate, fully autonomous, Akka Cluster and be connected to the other
 Akka Clusters with the communication mechanisms provided by Akka Distributed Cluster.
 
+FIXME make the drawing look nice
+
+![projection-over-grpc.png](images/connected-clusters.png)
+
 The communication transport between the Akka Clusters is then using reliable event replication over gRPC, which
 gives characteristics such as:
 
