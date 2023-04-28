@@ -70,7 +70,7 @@ object ShoppingCart {
 
     def toSummary: Summary = {
       // filter out removed items
-      Summary(items.filter { case (_, quantity) => quantity > 0 }, isCheckedOut, customerId, customerCategory)
+      Summary(items.filter { case (_, quantity) => quantity > 0 }, isCheckedOut)
     }
 
     //#tags
@@ -142,16 +142,8 @@ object ShoppingCart {
    */
   final case class Summary(
       items: Map[String, Int],
-      checkedOut: Boolean,
-      customerId: String,
-      customerCategory: String)
+      checkedOut: Boolean)
       extends CborSerializable
-
-  final case class SetCustomer(
-      customerId: String,
-      category: String,
-      replyTo: ActorRef[StatusReply[Summary]])
-      extends Command
   //#commands
 
   //#events
@@ -163,12 +155,6 @@ object ShoppingCart {
   final case class ItemUpdated(itemId: String, quantity: Int) extends Event
 
   final case class CheckedOut(eventTime: Instant) extends Event
-
-  final case class CustomerDefined(
-      cartId: String,
-      customerId: String,
-      category: String)
-      extends Event
   //#events
 
   val EntityKey: EntityTypeKey[Command] =
@@ -196,7 +182,7 @@ object ShoppingCart {
         persistenceId = PersistenceId(EntityKey.name, cartId),
         emptyState = State.empty,
         commandHandler =
-          (state, command) => handleCommand(cartId, state, command),
+          (state, command) => handleCommand(state, command),
         eventHandler = (state, event) => handleEvent(state, event))
       .withTaggerForState { case (state, _) =>
         state.tags
@@ -208,20 +194,18 @@ object ShoppingCart {
   //#tags
   //#init
   private def handleCommand(
-      cartId: String,
       state: State,
       command: Command): ReplyEffect[Event, State] = {
     // The shopping cart behavior changes if it's checked out or not.
     // The commands are handled differently for each case.
     if (state.isCheckedOut)
-      checkedOutShoppingCart(cartId, state, command)
+      checkedOutShoppingCart(state, command)
     else
-      openShoppingCart(cartId, state, command)
+      openShoppingCart(state, command)
   }
 
   //#commandHandler
   private def openShoppingCart(
-      cartId: String,
       state: State,
       command: Command): ReplyEffect[Event, State] = {
     command match {
@@ -259,28 +243,16 @@ object ShoppingCart {
 
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
-
-      case SetCustomer(customerId, category, replyTo) =>
-        Effect
-          .persist(CustomerDefined(cartId, customerId, category))
-          .thenReply(replyTo)(updatedCart =>
-            StatusReply.Success(updatedCart.toSummary))
     }
   }
   //#commandHandler
 
   private def checkedOutShoppingCart(
-      cartId: String,
       state: State,
       command: Command): ReplyEffect[Event, State] = {
     command match {
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
-      case SetCustomer(customerId, category, replyTo) =>
-        Effect
-          .persist(CustomerDefined(cartId, customerId, category))
-          .thenReply(replyTo)(updatedCart =>
-            StatusReply.Success(updatedCart.toSummary))
       case cmd: AddItem =>
         Effect.reply(cmd.replyTo)(
           StatusReply.Error(
@@ -302,8 +274,6 @@ object ShoppingCart {
         state.updateItem(itemId, quantity)
       case CheckedOut(eventTime) =>
         state.checkout(eventTime)
-      case CustomerDefined(_, customerId, category) =>
-        state.setCustomer(customerId, category)
     }
   }
   //#eventHandler

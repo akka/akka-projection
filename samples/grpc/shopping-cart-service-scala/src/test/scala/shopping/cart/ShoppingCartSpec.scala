@@ -16,7 +16,7 @@ object ShoppingCartSpec {
       """)
     .withFallback(EventSourcedBehaviorTestKit.config)
 
-  def summary(items: Map[String, Int], checkedOut: Boolean) = ShoppingCart.Summary(items, checkedOut, "", "")
+  def summary(items: Map[String, Int], checkedOut: Boolean) = ShoppingCart.Summary(items, checkedOut)
 }
 
 class ShoppingCartSpec
@@ -72,7 +72,7 @@ class ShoppingCartSpec
           ShoppingCart.AddItem("foo", 1, _))
       result2.reply should ===(
         StatusReply.Success(
-          ShoppingCart.Summary(Map("foo" -> 43), checkedOut = false, customerId = "", customerCategory = "")))
+          ShoppingCart.Summary(Map("foo" -> 43), checkedOut = false)))
       result2.event should ===(
         ShoppingCart.ItemUpdated("foo", 1))
     }
