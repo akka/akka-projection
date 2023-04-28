@@ -14,8 +14,6 @@ a downstream analytics service.
 
 ## gRPC transport for consuming events
 
-FIXME graphic that is more overview and less step by step? (this is the same as projection gRPC)
-
 ![service-to-service-overview.png](../images/service-to-service-overview.png)
 
 1. An Entity stores events in its journal in service A.
