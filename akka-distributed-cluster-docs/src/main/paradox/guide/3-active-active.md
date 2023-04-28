@@ -21,9 +21,12 @@ especially in circumstances where there are outages or connectivity problems bet
 
 ### Updating the cart contents
 
-Because of this the data structure must always arrive at the same state even if events arrive in a different order. We have
-already prepared for this somewhat by representing both add and remove using a single `ItemUpdated` event
-with a positive quantity number when items were added and a negative when items were removed: 
+Because of the possibility of seeing the events out of order when they have been written to different replicas we must
+make sure the state ends up the same even in the face of re-ordered events. 
+
+This can be handled by keeping track of the quantity of an item both when it is positive and negative, so that seeing
+a remove of 1 item before an add 1 of the same item ends up as the item removed with a zero quantity. We have already
+represented add and remove as a negative or positive number in the `ItemUpdatedEvent`
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #itemUpdatedEvent }
@@ -104,11 +107,24 @@ but it illustrates how we can coordinate when needed.
 By default, events from all Replicated Event Sourced entities are replicated.
 
 The same kind of filters as described for @ref:[Service to Service](2-service-to-service.md#filters) can be used for
-Replicated Event Sourcing.
+Replicated Event Sourcing. Replicated Event Sourcing is bidirectional replication, and therefore you would typically 
+have to define the same filters on both sides. That is not handled automatically. 
 
-The producer defined filter, only replicating carts once they reach a certain size:
+One way to make sure filtering is reflective is using a property of the state to tag events, an event applied to the 
+state triggering the tag will be replicated to other nodes and lead to the same property change there, eventually 
+causing the same filter on all replicas.
 
-FIXME filtering carts for RES doesn't really make sense, does it?
+To add such filtering to the shopping cart we have added a `vipCustomer` flag on the state, which when true
+will lead to adding the tag `vip` to any event emitted for the cart:
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #stateVipCustomer }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #stateVipCustomer }
+
+
+An alternative initialization method adds a filter looking for the `vip` tag: 
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init-producerFilter }
@@ -116,10 +132,17 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init-producerFilter }
 
-Consumer defined filters are updated as described in @extref:[Akka Projection gRPC Consumer defined filter](akka-projection:grpc.md#consumer-defined-filter)
+For carts not replicated the replica commit round triggered by check out would never complete, as the other 
+replicas can not see events from the non-replicated carts. 
 
-Replicated Event Sourcing is bidirectional replication, and therefore you would typically have to define the same
-filters on both sides. That is not handled automatically.
+An additional check immediately completes checkout for such carts:
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #checkoutEventTrigger }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #checkoutEventTrigger }
+
 
 ## What's next?
 
