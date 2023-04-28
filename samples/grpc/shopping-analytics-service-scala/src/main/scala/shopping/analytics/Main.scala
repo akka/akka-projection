@@ -13,7 +13,7 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     val system =
-      ActorSystem[Nothing](Behaviors.empty, "ShoppingAnalyticsService")
+      ActorSystem[Nothing](Behaviors.empty, "shopping-analytics-service")
     try {
       init(system)
     } catch {

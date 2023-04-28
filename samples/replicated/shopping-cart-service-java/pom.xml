@@ -96,6 +96,11 @@
             <version>${akka-management.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.lightbend.akka.discovery</groupId>
+            <artifactId>akka-discovery-kubernetes-api_${scala.binary.version}</artifactId>
+            <version>${akka-management.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.lightbend.akka.grpc</groupId>
             <artifactId>akka-grpc-runtime_${scala.binary.version}</artifactId>
             <version>${akka-grpc.version}</version>
