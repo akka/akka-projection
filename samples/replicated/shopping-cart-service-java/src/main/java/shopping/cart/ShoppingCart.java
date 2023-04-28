@@ -50,6 +50,8 @@ public final class ShoppingCart
   static final String MEDIUM_QUANTITY_TAG = "medium";
   static final String LARGE_QUANTITY_TAG = "large";
 
+  static final String VIP_CUSTOMER_TAG = "vip";
+
   /** The current state held by the `EventSourcedBehavior`. */
   //#stateUpdateItem
   //#checkoutStep1Event
@@ -57,6 +59,8 @@ public final class ShoppingCart
     final Map<String, Integer> items;
     final Set<ReplicaId> closed;
     private Optional<Instant> checkedOut;
+
+    private boolean vipCustomer = false;
 
     //#stateUpdateItem
     //#checkoutStep1Event
@@ -83,6 +87,11 @@ public final class ShoppingCart
     }
     //#stateUpdateItem
 
+    public State markCustomerVip() {
+      vipCustomer = true;
+      return this;
+    }
+
     //#checkoutStep1Event
     public State close(ReplicaId replica) {
       closed.add(replica);
@@ -105,14 +114,18 @@ public final class ShoppingCart
 
     public Set<String> tags() {
       int total = totalQuantity();
-      if (total == 0)
-        return Collections.emptySet();
-      else if (total >= 100)
-        return Collections.singleton(LARGE_QUANTITY_TAG);
-      else if (total >= 10)
-        return Collections.singleton(MEDIUM_QUANTITY_TAG);
-      else
-        return Collections.singleton(SMALL_QUANTITY_TAG);
+      Set<String> tags = new HashSet<>();
+      if (vipCustomer) {
+        tags.add(VIP_CUSTOMER_TAG);
+      }
+      if (total >= 100) {
+        tags.add(LARGE_QUANTITY_TAG);
+      } else if (total >= 10) {
+        tags.add(MEDIUM_QUANTITY_TAG);
+      } else {
+        tags.add(SMALL_QUANTITY_TAG);
+      }
+      return tags;
     }
   }
 
@@ -180,6 +193,15 @@ public final class ShoppingCart
     }
   }
 
+  public static final class MarkCustomerVip implements Command {
+    final ActorRef<StatusReply<Summary>> replyTo;
+
+    @JsonCreator
+    public MarkCustomerVip(ActorRef<StatusReply<Summary>> replyTo) {
+      this.replyTo = replyTo;
+    }
+  }
+
   /** Summary of the shopping cart state, used in reply messages. */
   public static final class Summary implements CborSerializable {
     final Map<String, Integer> items;
@@ -222,6 +244,14 @@ public final class ShoppingCart
       int result = itemId.hashCode();
       result = 31 * result + quantity;
       return result;
+    }
+  }
+
+  static final class CustomerMarkedVip extends Event {
+    final Instant timestamp;
+
+    public CustomerMarkedVip(Instant timestamp) {
+      this.timestamp = timestamp;
     }
   }
 
@@ -301,12 +331,22 @@ public final class ShoppingCart
             system);
 
     Predicate<EventEnvelope<Event>> producerFilter = envelope -> {
-      Set<String> tags = envelope.getTags();
-      return tags.contains(ShoppingCart.MEDIUM_QUANTITY_TAG) ||
-          tags.contains(ShoppingCart.LARGE_QUANTITY_TAG);
+      return envelope.getTags().contains(VIP_CUSTOMER_TAG);
     };
 
     return Replication.grpcReplication(replicationSettings, producerFilter,  ShoppingCart::create, system);
+  }
+
+  public static Behavior<Command> createWithProducerFilter(
+      ReplicatedBehaviors<Command, Event, State> replicatedBehaviors) {
+    return Behaviors.setup(
+        context ->
+            replicatedBehaviors.setup(
+                replicationContext -> new ShoppingCart(
+                    context,
+                    replicationContext,
+                    true // onlyReplicateVip flag
+                    )));
   }
   // #init-producerFilter
 
@@ -314,13 +354,20 @@ public final class ShoppingCart
   private final ReplicationContext replicationContext;
   private final boolean isLeader;
 
-  private ShoppingCart(ActorContext<Command> context, ReplicationContext replicationContext) {
+  private final boolean onlyReplicateVip;
+
+  private ShoppingCart(ActorContext<Command> context, ReplicationContext replicationContext, boolean onlyReplicateVip) {
     super(
         replicationContext.persistenceId(),
         SupervisorStrategy.restartWithBackoff(Duration.ofMillis(200), Duration.ofSeconds(5), 0.1));
     this.context = context;
     this.replicationContext = replicationContext;
     this.isLeader = isShoppingCartLeader(replicationContext);
+    this.onlyReplicateVip = onlyReplicateVip;
+  }
+
+  private ShoppingCart(ActorContext<Command> context, ReplicationContext replicationContext) {
+    this(context, replicationContext, false);
   }
 
   // one replica is responsible for checking out the shopping cart, once all replicas have closed
@@ -355,6 +402,7 @@ public final class ShoppingCart
         .forState(state -> !state.isClosed())
         .onCommand(AddItem.class, this::openOnAddItem)
         .onCommand(RemoveItem.class, this::openOnRemoveItem)
+        .onCommand(MarkCustomerVip.class, this::openOnMarkCustomerVip)
         .onCommand(Checkout.class, this::openOnCheckout);
   }
 
@@ -370,6 +418,15 @@ public final class ShoppingCart
         .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
   }
 
+  private ReplyEffect<Event, State> openOnMarkCustomerVip(State state, MarkCustomerVip cmd) {
+    if (!state.vipCustomer) {
+      return Effect().persist(new CustomerMarkedVip(Instant.now()))
+          .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
+    } else {
+      return Effect().none().thenReply(cmd.replyTo, cart -> StatusReply.success(cart.toSummary()));
+    }
+  }
+
   //#checkoutStep1
   private ReplyEffect<Event, State> openOnCheckout(State state, Checkout cmd) {
     return Effect()
@@ -383,6 +440,7 @@ public final class ShoppingCart
         .forState(State::isClosed)
         .onCommand(AddItem.class, this::closedOnAddItem)
         .onCommand(RemoveItem.class, this::closedOnRemoveItem)
+        .onCommand(MarkCustomerVip.class, this::closedOnMarkCustomerVip)
         .onCommand(Checkout.class, this::closedOnCheckout)
         .onCommand(CloseForCheckout.class, this::closedOnCloseForCheckout)
         .onCommand(CompleteCheckout.class, this::closedOnCompleteCheckout);
@@ -400,6 +458,13 @@ public final class ShoppingCart
         .reply(
             cmd.replyTo,
             StatusReply.error("Can't remove an item from an already checked out shopping cart"));
+  }
+
+  private ReplyEffect<Event, State> closedOnMarkCustomerVip(State state, MarkCustomerVip cmd) {
+    return Effect()
+        .reply(
+            cmd.replyTo,
+            StatusReply.error("Can't remove an already checked out shopping cart as vip customer"));
   }
 
   private ReplyEffect<Event, State> closedOnCheckout(State state, Checkout cmd) {
@@ -442,11 +507,16 @@ public final class ShoppingCart
 
   private void eventTriggers(State state) {
     if (!replicationContext.recoveryRunning()) {
-      if (!state.closed.contains(replicationContext.replicaId())) {
-        context.getSelf().tell(CloseForCheckout.INSTANCE);
-      } else if (isLeader) {
-        boolean allClosed = replicationContext.getAllReplicas().equals(state.closed);
-        if (allClosed) context.getSelf().tell(CompleteCheckout.INSTANCE);
+      if (onlyReplicateVip && !state.vipCustomer) {
+        // not replicated, no need to coordinate, we can close it right away
+        context.getSelf().tell(CompleteCheckout.INSTANCE);
+      } else {
+        if (!state.closed.contains(replicationContext.replicaId())) {
+          context.getSelf().tell(CloseForCheckout.INSTANCE);
+        } else if (isLeader) {
+          boolean allClosed = replicationContext.getAllReplicas().equals(state.closed);
+          if (allClosed) context.getSelf().tell(CompleteCheckout.INSTANCE);
+        }
       }
     }
   }

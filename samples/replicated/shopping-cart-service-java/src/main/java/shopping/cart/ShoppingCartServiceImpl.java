@@ -8,13 +8,7 @@ import akka.grpc.GrpcServiceException;
 import io.grpc.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import shopping.cart.proto.AddItemRequest;
-import shopping.cart.proto.Cart;
-import shopping.cart.proto.CheckoutRequest;
-import shopping.cart.proto.GetCartRequest;
-import shopping.cart.proto.Item;
-import shopping.cart.proto.RemoveItemRequest;
-import shopping.cart.proto.ShoppingCartService;
+import shopping.cart.proto.*;
 
 import java.time.Duration;
 import java.util.List;
@@ -89,6 +83,19 @@ public final class ShoppingCartServiceImpl implements ShoppingCartService {
               else return toProtoCart(cart);
             });
     return convertError(protoCart);
+  }
+
+  @Override
+  public CompletionStage<Cart> markCustomerVip(MarkCustomerVipRequest in) {
+    logger.info(
+        "markCustomerVip for cart {}", in.getCartId());
+    EntityRef<ShoppingCart.Command> entityRef = sharding.entityRefFor(entityKey, in.getCartId());
+    CompletionStage<ShoppingCart.Summary> reply =
+        entityRef.askWithStatus(
+            replyTo -> new ShoppingCart.MarkCustomerVip(replyTo),
+            timeout);
+    CompletionStage<Cart> cart = reply.thenApply(ShoppingCartServiceImpl::toProtoCart);
+    return convertError(cart);
   }
 
   private static Cart toProtoCart(ShoppingCart.Summary cart) {
