@@ -48,6 +48,7 @@ object ShoppingCart {
    */
   //#checkoutStep1Event
   //#stateUpdateItem
+  //#stateVipCustomer
   final case class State(
       items: Map[String, Int],
       closed: Set[ReplicaId],
@@ -56,6 +57,7 @@ object ShoppingCart {
       extends CborSerializable {
     //#stateUpdateItem
     //#checkoutStep1Event
+    //#stateVipCustomer
 
     def isClosed: Boolean =
       closed.nonEmpty
@@ -87,6 +89,8 @@ object ShoppingCart {
     def totalQuantity: Int =
       items.valuesIterator.sum
 
+    //#stateVipCustomer
+
     def tags: Set[String] = {
       val total = totalQuantity
       val quantityTags =
@@ -97,6 +101,7 @@ object ShoppingCart {
 
       quantityTags ++ (if (vipCustomer) Set(VipCustomerTag) else Set.empty)
     }
+    //#stateVipCustomer
   }
 
   object State {

@@ -55,15 +55,16 @@ public final class ShoppingCart
   /** The current state held by the `EventSourcedBehavior`. */
   //#stateUpdateItem
   //#checkoutStep1Event
+  //#stateVipCustomer
   static final class State implements CborSerializable {
     final Map<String, Integer> items;
     final Set<ReplicaId> closed;
     private Optional<Instant> checkedOut;
-
     private boolean vipCustomer = false;
 
     //#stateUpdateItem
     //#checkoutStep1Event
+    //#stateVipCustomer
 
     public State() {
       this(new HashMap<>(), new HashSet<>(), Optional.empty());
@@ -112,6 +113,7 @@ public final class ShoppingCart
       return items.values().stream().reduce(0, Integer::sum);
     }
 
+    //#stateVipCustomer
     public Set<String> tags() {
       int total = totalQuantity();
       Set<String> tags = new HashSet<>();
@@ -127,6 +129,7 @@ public final class ShoppingCart
       }
       return tags;
     }
+    //#stateVipCustomer
   }
 
   /** This interface defines all the commands (messages) that the ShoppingCart actor supports. */
