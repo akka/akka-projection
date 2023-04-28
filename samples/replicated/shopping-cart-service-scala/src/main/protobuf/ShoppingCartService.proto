@@ -12,6 +12,7 @@ service ShoppingCartService {
   rpc RemoveItem (RemoveItemRequest) returns (Cart) {}
   rpc Checkout (CheckoutRequest) returns (Cart) {}
   rpc GetCart (GetCartRequest) returns (Cart) {}
+  rpc MarkCustomerVip (MarkCustomerVipRequest) returns (Cart) {}
 }
 
 message AddItemRequest {
@@ -31,6 +32,10 @@ message CheckoutRequest {
 }
 
 message GetCartRequest {
+  string cartId = 1;
+}
+
+message MarkCustomerVipRequest {
   string cartId = 1;
 }
 

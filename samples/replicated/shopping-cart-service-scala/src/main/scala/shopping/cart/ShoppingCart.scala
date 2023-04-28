@@ -48,7 +48,11 @@ object ShoppingCart {
    */
   //#checkoutStep1Event
   //#stateUpdateItem
-  final case class State(items: Map[String, Int], closed: Set[ReplicaId], checkedOut: Option[Instant])
+  final case class State(
+      items: Map[String, Int],
+      closed: Set[ReplicaId],
+      checkedOut: Option[Instant],
+      vipCustomer: Boolean)
       extends CborSerializable {
     //#stateUpdateItem
     //#checkoutStep1Event
@@ -60,6 +64,10 @@ object ShoppingCart {
     def updateItem(itemId: String, quantity: Int): State =
       copy(items = items + (itemId -> (items.getOrElse(itemId, 0) + quantity)))
     //#stateUpdateItem
+
+    def markCustomerVip(): State =
+      if (vipCustomer) this
+      else copy(vipCustomer = true)
 
     //#checkoutStep1Event
     def close(replica: ReplicaId): State =
@@ -81,15 +89,18 @@ object ShoppingCart {
 
     def tags: Set[String] = {
       val total = totalQuantity
-      if (total == 0) Set.empty
-      else if (total >= 100) Set(LargeQuantityTag)
-      else if (total >= 10) Set(MediumQuantityTag)
-      else Set(SmallQuantityTag)
+      val quantityTags =
+        if (total == 0) Set.empty
+        else if (total >= 100) Set(LargeQuantityTag)
+        else if (total >= 10) Set(MediumQuantityTag)
+        else Set(SmallQuantityTag)
+
+      quantityTags ++ (if (vipCustomer) Set(VipCustomerTag) else Set.empty)
     }
   }
 
   object State {
-    val empty: State = State(items = Map.empty, closed = Set.empty, checkedOut = None)
+    val empty: State = State(items = Map.empty, closed = Set.empty, checkedOut = None, vipCustomer = false)
   }
 
   /**
@@ -109,6 +120,8 @@ object ShoppingCart {
    * A command to remove an item from the cart.
    */
   final case class RemoveItem(itemId: String, quantity: Int, replyTo: ActorRef[StatusReply[Summary]]) extends Command
+
+  final case class MarkCustomerVip(replyTo: ActorRef[StatusReply[Summary]]) extends Command
 
   /**
    * A command to check out the shopping cart.
@@ -144,6 +157,8 @@ object ShoppingCart {
   final case class ItemUpdated(itemId: String, quantity: Int) extends Event
   // #itemUpdatedEvent
 
+  final case class CustomerMarkedVip(timestamp: Instant) extends Event
+
   final case class Closed(replica: ReplicaId) extends Event
 
   final case class CheckedOut(eventTime: Instant) extends Event
@@ -151,6 +166,7 @@ object ShoppingCart {
   val SmallQuantityTag = "small"
   val MediumQuantityTag = "medium"
   val LargeQuantityTag = "large"
+  val VipCustomerTag = "vip"
 
   val EntityType = "replicated-shopping-cart"
 
@@ -170,22 +186,33 @@ object ShoppingCart {
   // #init
 
   // Use `initWithProducerFilter` instead of `init` to enable filters based on tags.
-  // Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
+  // The filter is defined to only replicate carts from VIP customers, other customer carts will stay in
+  // the replica they were created (but can be marked VIP at any point in time before being closed)
   // #init-producerFilter
   def initWithProducerFilter(implicit system: ActorSystem[_]): Replication[Command] = {
     val replicationSettings = ReplicationSettings[Command](EntityType, R2dbcReplication())
     val producerFilter: EventEnvelope[Event] => Boolean = { envelope =>
-      val tags = envelope.tags
-      tags.contains(ShoppingCart.MediumQuantityTag) || tags.contains(ShoppingCart.LargeQuantityTag)
+      envelope.tags.contains(VipCustomerTag)
     }
 
     Replication.grpcReplication(replicationSettings, producerFilter)(ShoppingCart.apply)
+  }
+
+  def applyWithProducerFilter(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]): Behavior[Command] = {
+    Behaviors.setup[Command] { context =>
+      replicatedBehaviors.setup { replicationContext =>
+        new ShoppingCart(context, replicationContext, onlyReplicateVip = true).behavior()
+      }
+    }
   }
   // #init-producerFilter
 
 }
 
-class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationContext: ReplicationContext) {
+class ShoppingCart(
+    context: ActorContext[ShoppingCart.Command],
+    replicationContext: ReplicationContext,
+    onlyReplicateVip: Boolean = false) {
   import ShoppingCart._
 
   // one of the replicas is responsible for checking out the shopping cart, once all replicas have closed
@@ -245,6 +272,15 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
           }
       // #checkoutStep1
 
+      case MarkCustomerVip(replyTo) =>
+        if (!state.vipCustomer)
+          Effect
+            .persist(CustomerMarkedVip(Instant.now()))
+            .thenReply(replyTo)(updatedCart => StatusReply.Success(updatedCart.toSummary))
+        else
+          // already marked vip
+          Effect.none.thenReply(replyTo)(updatedCart => StatusReply.Success(updatedCart.toSummary))
+
       case CloseForCheckout =>
         Effect
           .persist(Closed(replicationContext.replicaId))
@@ -267,6 +303,8 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
         Effect.reply(cmd.replyTo)(StatusReply.Error("Can't add an item to an already checked out shopping cart"))
       case cmd: RemoveItem =>
         Effect.reply(cmd.replyTo)(StatusReply.Error("Can't remove an item from an already checked out shopping cart"))
+      case cmd: MarkCustomerVip =>
+        Effect.reply(cmd.replyTo)(StatusReply.Error("Can't mark customer vip on an already checked out shopping cart"))
       case cmd: Checkout =>
         Effect.reply(cmd.replyTo)(StatusReply.Error("Can't checkout already checked out shopping cart"))
       case CloseForCheckout =>
@@ -286,6 +324,8 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
     val newState = event match {
       case ItemUpdated(itemId, quantity) =>
         state.updateItem(itemId, quantity)
+      case CustomerMarkedVip(_) =>
+        state.markCustomerVip()
       case Closed(replica) =>
         state.close(replica)
       case CheckedOut(eventTime) =>
@@ -297,15 +337,20 @@ class ShoppingCart(context: ActorContext[ShoppingCart.Command], replicationConte
 
   private def eventTriggers(state: State, event: Event): Unit = {
     if (!replicationContext.recoveryRunning) {
-      event match {
-        case _: Closed =>
-          if (!state.closed(replicationContext.replicaId)) {
-            context.self ! CloseForCheckout
-          } else if (isLeader) {
-            val allClosed = replicationContext.allReplicas.diff(state.closed).isEmpty
-            if (allClosed) context.self ! CompleteCheckout
-          }
-        case _ =>
+      if (onlyReplicateVip && !state.vipCustomer) {
+        // not replicated, no need to coordinate, we can close it right away
+        context.self ! CompleteCheckout
+      } else {
+        event match {
+          case _: Closed =>
+            if (!state.closed(replicationContext.replicaId)) {
+              context.self ! CloseForCheckout
+            } else if (isLeader) {
+              val allClosed = replicationContext.allReplicas.diff(state.closed).isEmpty
+              if (allClosed) context.self ! CompleteCheckout
+            }
+          case _ =>
+        }
       }
     }
   }

@@ -1,18 +1,16 @@
 package shopping.cart
 
 import java.util.concurrent.TimeoutException
-
 import scala.concurrent.Future
-
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.grpc.GrpcServiceException
-import akka.persistence.typed.ReplicaId
 import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-import shopping.cart.proto.Empty
+import shopping.cart.proto.Cart
+import shopping.cart.proto.MarkCustomerVipRequest
 
 class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[ShoppingCart.Command])
     extends proto.ShoppingCartService {
@@ -63,6 +61,15 @@ class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[S
         else
           toProtoCart(cart)
       }
+    convertError(response)
+  }
+
+  override def markCustomerVip(in: MarkCustomerVipRequest): Future[Cart] = {
+    logger.info("markCustomerVip {}", in.cartId)
+    val entityRef = sharding.entityRefFor(entityKey, in.cartId)
+    val reply: Future[ShoppingCart.Summary] =
+      entityRef.askWithStatus(ShoppingCart.MarkCustomerVip)
+    val response = reply.map(cart => toProtoCart(cart))
     convertError(response)
   }
 

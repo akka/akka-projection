@@ -29,6 +29,8 @@ object Main {
 
     // #single-service-handler
     val replicatedShoppingCart = ShoppingCart.init(system)
+    // alternatively
+    // val replicatedShoppingCart = ShoppingCart.initWithProducerFilter(system)
     val replicationService = replicatedShoppingCart.createSingleServiceHandler()
     // #single-service-handler
 
