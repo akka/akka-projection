@@ -12,7 +12,7 @@ The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-e
 
 ### Commands
 
-Commands are the public API of an entity that other parts of the system use to interact with it. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, but different events might be generated depending on the current state of the entity. A command can also be rejected if it has invalid input or can’t be handled by current state of the entity.
+Commands are the public API of an entity that other parts of the system use to interact with it. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, and different events might be generated depending on the current state of the entity. A command can also be rejected if it has invalid input or can’t be handled by current state of the entity.
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #commands #events }

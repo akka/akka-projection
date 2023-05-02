@@ -62,9 +62,9 @@ Java
 
 ## Consume events
 
-The consumer is defined in a separate @java[maven]@scala[sby] project the shopping analytics service.
+The consumer is defined in a separate @java[maven]@scala[sbt] project in the shopping analytics service.
 
-The analytics service runs in a separate Akka cluster which is scaled separately from the shopping cart service.
+The analytics service runs in a separate Akka cluster which is deployed and scaled separately from the shopping cart service.
 When running it will have its own separate database from the shopping cart service. It may run in the same region as 
 the shopping cart, but it could also run in a completely different location.
 
