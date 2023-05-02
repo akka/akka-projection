@@ -292,6 +292,7 @@ public final class ShoppingCart
   }
   //#commandHandler
 
+  //#onAddItem
   private ReplyEffect<Event, State> onAddItem(State state, AddItem cmd) {
     if (cmd.quantity <= 0) {
       return Effect().reply(cmd.replyTo, StatusReply.error("Quantity must be greater than zero"));
@@ -301,6 +302,7 @@ public final class ShoppingCart
           .thenReply(cmd.replyTo, updatedCart -> StatusReply.success(updatedCart.toSummary()));
     }
   }
+  //#onAddItem
 
   private ReplyEffect<Event, State> onCheckout(State state, Checkout cmd) {
     if (state.isEmpty()) {

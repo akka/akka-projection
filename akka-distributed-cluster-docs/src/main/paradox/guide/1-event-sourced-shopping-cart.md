@@ -12,7 +12,7 @@ The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-e
 
 ### Commands
 
-Commands are the "external" API of an entity. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, but different events might be generated depending on the current state of the entity. A command can also be rejected if it has invalid input or can’t be handled by current state of the entity.
+Commands are the public API of an entity that other parts of the system use to interact with it. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, but different events might be generated depending on the current state of the entity. A command can also be rejected if it has invalid input or can’t be handled by current state of the entity.
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #commands #events }
@@ -22,8 +22,8 @@ Java
 
 ### State
 
-Items added to the Cart are added to a `Map`. The contents of the `Map` comprise the Cart’s state along with a customer id and customer category for the customer
-owning the cart, if set, and a checkout timestamp if the cart was checked out:
+Items added to the Cart are added to a `Map`. The contents of the `Map` comprise the Cart’s state along with an optional checkout timestamp, which
+is set when the cart is checked out:
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #state }
@@ -34,8 +34,11 @@ Java
 
 ### Command handler
 
-The Cart entity will receive commands that request changes to Cart state. We will implement a command handler to process these commands and emit a reply. Our business logic allows only items to be added which are not in the cart yet and require a positive quantity.
+The Cart entity will receive commands that request changes to Cart state. We will implement a command handler to process these commands and emit a reply,
+the handler logic selected is different depending on if the cart is checked out already, replying with an error, or if the cart is still open for
+adding and removing items.
 
+The command handler for an open cart looks like this:
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #commandHandler }
@@ -43,6 +46,14 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #commandHandler }
 
+@@@ div { .group-java }
+
+The actual logic for handling the commands is implemented in methods on the `ShoppingCart` class, for example the `onAddItem` method: 
+
+Java
+:  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #onAddItem }
+
+@@@
 
 ### Event handler
 
@@ -69,8 +80,8 @@ Java
 
 ## Serialization
 
-The state, commands and events of the entity must be serializable because they are written to the datastore or sent between nodes within the Akka cluster. The template project includes built-in CBOR serialization using the @extref[Akka Serialization Jackson module](akka:serialization-jackson.html). This section describes how serialization is implemented. You do not need to do anything specific to take advantage of CBOR, but this section explains how it is included.
-The state, commands and events are marked as CborSerializable which is configured to use the built-in CBOR serialization. The template project includes this marker interface CborSerializable:
+The state, commands and events of the entity must be serializable because they are written to the datastore or sent between nodes within the Akka cluster. The sample project includes built-in CBOR serialization using the @extref[Akka Serialization Jackson module](akka:serialization-jackson.html). This section describes how serialization is implemented. You do not need to do anything specific to take advantage of CBOR, but this section explains how it is included.
+The state, commands and events are marked as CborSerializable which is configured to use the built-in CBOR serialization. The sample project includes this marker interface CborSerializable:
 
 Scala
 :  @@snip [CborSerializable.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/CborSerializable.scala) { }
