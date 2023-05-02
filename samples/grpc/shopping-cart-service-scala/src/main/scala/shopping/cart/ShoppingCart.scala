@@ -44,9 +44,7 @@ object ShoppingCart {
   //#tags
   final case class State(
       items: Map[String, Int],
-      checkoutDate: Option[Instant],
-      customerId: String,
-      customerCategory: String)
+      checkoutDate: Option[Instant])
       extends CborSerializable {
 
     //#tags
@@ -67,9 +65,6 @@ object ShoppingCart {
 
     def checkout(now: Instant): State =
       copy(checkoutDate = Some(now))
-
-    def setCustomer(customerId: String, category: String): State =
-      copy(customerId = customerId, customerCategory = category)
 
     def toSummary: Summary = {
       // filter out removed items
@@ -97,9 +92,7 @@ object ShoppingCart {
     val empty: State =
       State(
         items = Map.empty,
-        checkoutDate = None,
-        customerId = "",
-        customerCategory = "")
+        checkoutDate = None)
   }
 
   //#commands
