@@ -220,7 +220,8 @@ Java
     grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
 
     or same `grpcurl` commands to port 8102/8202 to reach node 2.
-
+    ```
+   
 @@@
 
 @@@ div { .group-java }
