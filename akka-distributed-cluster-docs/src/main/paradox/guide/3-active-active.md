@@ -23,7 +23,7 @@ especially in circumstances where there are outages or connectivity problems bet
 
 ### Updating the cart contents
 
-Because of the possibility of seeing the events out of order when they have been written to different replicas we must
+Because of the possibility of observing the events out of order when they have been written to different replicas, we must
 make sure the state ends up the same even in the face of re-ordered events. 
 
 This can be handled by keeping track of the quantity of an item both when it is positive and negative, so that seeing
@@ -36,7 +36,7 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #itemUpdatedEvent }
 
-In the state we keep a map from `itemId` to the current quantity for each product. For each update we see we add the positive or negative
+In the state, we keep a map from `itemId` to the current quantity for each product. For each update we see, we add the positive or negative
 number to the quantity, getting the same number regardless of what order the changes arrived:
 
 Scala
@@ -99,7 +99,7 @@ Java
 :  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #leader }
 
 
-Note that this still means that while adding and removing can be done in the face of an outage all replicas must be online 
+Note that this still means that while adding and removing can be done in the face of an outage, all replicas must be online 
 for any shopping cart to be able to close, so it does not give us complete high-availability for the shopping cart, 
 but it illustrates how we can coordinate when needed.
 
