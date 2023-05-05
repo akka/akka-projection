@@ -183,26 +183,15 @@ import org.slf4j.LoggerFactory
         replayHasBeenPulled = false
 
         replayEnv match {
-          case ReplayEnvelope(persistenceId, Some(env)) =>
+          case ReplayEnvelope(_, Some(env)) =>
             // the predicate to replay events from start for a given pid
-            // Note: we do not apply the producer filter here as that may be what triggered the replay
-            if (filter.matches(env)) {
-              log.traceN(
-                "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
-                logPrefix,
-                env.persistenceId,
-                env.sequenceNr)
-              push(outEnv, env)
-            } else {
-              log.debugN(
-                "Stream [{}]: Filter out replayed event persistenceId [{}], seqNr [{}]. Cancel remaining replay.",
-                logPrefix,
-                env.persistenceId,
-                env.sequenceNr)
-              val queue = replayInProgress(persistenceId).queue
-              queue.cancel()
-              replayCompleted()
-            }
+            // Note: we do not apply the filter here as that may be what triggered the replay
+            log.traceN(
+              "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
+              logPrefix,
+              env.persistenceId,
+              env.sequenceNr)
+            push(outEnv, env)
 
           case ReplayEnvelope(persistenceId, None) =>
             log.debug2("Stream [{}]: Completed replay of persistenceId [{}]", logPrefix, persistenceId)
