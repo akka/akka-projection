@@ -27,9 +27,7 @@ import akka.projection.javadsl.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shopping.cart.proto.CheckedOut;
-import shopping.cart.proto.ItemAdded;
 import shopping.cart.proto.ItemQuantityAdjusted;
-import shopping.cart.proto.ItemRemoved;
 
 import java.util.List;
 import java.util.Optional;
@@ -73,18 +71,10 @@ class ShoppingCartEventConsumer {
       Object event = envelope.getEvent();
       totalCount++;
 
-      if (event instanceof ItemAdded) {
-        ItemAdded itemAdded = (ItemAdded) event;
-        log.info("Projection [{}] consumed ItemAdded for cart {}, added {} {}. Total [{}] events.",
-            projectionId.id(), itemAdded.getCartId(), itemAdded.getQuantity(), itemAdded.getItemId(), totalCount);
-      } else if (event instanceof ItemQuantityAdjusted) {
+     if (event instanceof ItemQuantityAdjusted) {
         ItemQuantityAdjusted itemQuantityAdjusted = (ItemQuantityAdjusted) event;
         log.info("Projection [{}] consumed ItemQuantityAdjusted for cart {}, changed {} {}. Total [{}] events.",
             projectionId.id(), itemQuantityAdjusted.getCartId(), itemQuantityAdjusted.getQuantity(), itemQuantityAdjusted.getItemId(), totalCount);
-      } else if (event instanceof ItemRemoved) {
-        ItemRemoved itemRemoved = (ItemRemoved) event;
-        log.info("Projection [{}] consumed ItemRemoved for cart {}, removed {}. Total [{}] events.",
-            projectionId.id(), itemRemoved.getCartId(), itemRemoved.getItemId(), totalCount);
       } else if (event instanceof CheckedOut) {
         CheckedOut checkedOut = (CheckedOut) event;
         log.info("Projection [{}] consumed CheckedOut for cart {}. Total [{}] events.", projectionId.id(), checkedOut.getCartId(), totalCount);

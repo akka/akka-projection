@@ -35,6 +35,8 @@ public class Main {
 
     // #single-service-handler
     Replication<ShoppingCart.Command> replicatedShoppingCart = ShoppingCart.init(system);
+    // alternatively
+    // Replication<ShoppingCart.Command> replicatedShoppingCart = ShoppingCart.initWithProducerFilter(system);
     Function<HttpRequest, CompletionStage<HttpResponse>> replicationService =
         replicatedShoppingCart.createSingleServiceHandler();
     // #single-service-handler

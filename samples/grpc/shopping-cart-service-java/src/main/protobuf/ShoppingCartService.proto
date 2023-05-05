@@ -9,7 +9,7 @@ package shoppingcart;
 
 service ShoppingCartService {
     rpc AddItem (AddItemRequest) returns (Cart) {}
-    rpc UpdateItem (UpdateItemRequest) returns (Cart) {}
+    rpc RemoveItem (RemoveItemRequest) returns (Cart) {}
     rpc Checkout (CheckoutRequest) returns (Cart) {}
     rpc GetCart (GetCartRequest) returns (Cart) {}
 }
@@ -20,7 +20,7 @@ message AddItemRequest {
     int32 quantity = 3;
 }
 
-message UpdateItemRequest {
+message RemoveItemRequest {
     string cartId = 1;
     string itemId = 2;
     int32 quantity = 3;

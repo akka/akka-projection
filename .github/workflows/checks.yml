@@ -149,7 +149,7 @@ jobs:
       - name: Compile Scala Projection gRPC sample Shopping Cart
         run: |-
           cd samples/grpc/shopping-cart-service-scala
-          sbt compile -Dakka-projection.version=`cat ~/.version`
+          sbt test -Dakka-projection.version=`cat ~/.version`
 
       - name: Compile Scala Projection gRPC sample Analytics
         run: |-
@@ -159,7 +159,7 @@ jobs:
       - name: Compile Java Projection gRPC sample Shopping Cart
         run: |-
           cd samples/grpc/shopping-cart-service-java
-          mvn compile -nsu -Dakka-projection.version=`cat ~/.version`
+          mvn test -nsu -Dakka-projection.version=`cat ~/.version`
 
       - name: Compile Java Projection gRPC sample Analytics
         run: |-

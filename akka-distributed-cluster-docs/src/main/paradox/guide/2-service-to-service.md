@@ -40,13 +40,14 @@ Java
 
 Events can be transformed by application specific code on the producer side. The purpose is to be able to have a
 different public representation from the internal representation (stored in journal). The transformation functions
-are registered when creating the `EventProducer` service. Here is an example of one of those transformation functions:
+are registered when creating the `EventProducer` service. Here is an example of one of those transformation functions
+accessing the projection envelope to include the shopping cart id in the public message type passed to consumers:
 
 Scala
-:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #transformItemAdded }
+:  @@snip [PublishEvents.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/PublishEvents.scala) { #transformItemUpdated }
 
 Java
-:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #transformItemAdded }
+:  @@snip [PublishEvents.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/PublishEvents.java) { #transformItemUpdated }
 
 To omit an event the transformation function can return @scala[`None`]@java[`Optional.empty()`].
 
@@ -61,11 +62,11 @@ Java
 
 ## Consume events
 
-The consumer is defined in a separate service, the shopping analytics service. It is a separate project with its own lifecycle,
-it is started, stopped, deployed separately, and has its own separate database from the shopping cart service. It may run in the
-same data center or cloud region as the shopping cart, but it could also run in a completely different location.
+The consumer is defined in a separate @java[maven]@scala[sbt] project in the shopping analytics service.
 
-FIXME a bit messy this section
+The analytics service runs in a separate Akka cluster which is deployed and scaled separately from the shopping cart service.
+When running it will have its own separate database from the shopping cart service. It may run in the same region as 
+the shopping cart, but it could also run in a completely different location.
 
 On the consumer side the `Projection` is a @extref[SourceProvider for eventsBySlices](akka-projection:eventsourced.html#sourceprovider-for-eventsbyslices)
 that is using `eventsBySlices` from the GrpcReadJournal. We use @extref[ShardedDaemonProcess](akka:typed/cluster-sharded-daemon-process.html) to distribute the instances of the Projection across the cluster.
@@ -86,9 +87,8 @@ The gRPC connection to the producer is defined in the @extref[consumer configura
 
 The @extref:[R2dbcProjection](akka-persistence-r2dbc:projection.html) has support for storing the offset in a relational database using R2DBC.
 
-The event handler for this sample is just logging the events rather than for example actually building its own read side:
-
-FIXME should we make it more realistic?
+The event handler for this sample is just logging the events rather than for example actually building its own read side
+in a database for querying:
 
 Scala
 :  @@snip [ShoppingCartEventConsumer.scala](/samples/grpc/shopping-analytics-service-scala/src/main/scala/shopping/analytics/ShoppingCartEventConsumer.scala) { #eventHandler }
@@ -179,7 +179,184 @@ And the consuming analytics service:
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-scala
 
-FIXME running locally instructions here as well
+## Running the sample code locally
+
+With a copy of each of the two sample projects for the language of your liking you can run the two services locally on
+your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that needs to be installed.
+
+### The Shopping Cart
+
+@@@ div { .group-scala }
+
+1. Start a local PostgresSQL server on default port 5432. The `docker-compose.yml` included in the shopping-cart project starts everything required for running locally.
+
+    ```shell
+    docker-compose up -d
+
+    # creates the tables needed for Akka Persistence
+    # as well as the offset store table for Akka Projection
+    docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+    ```
+
+2. Start a first node:
+
+    ```shell
+    sbt -Dconfig.resource=local1.conf run
+    ```
+
+3. (Optional) Start another node with different ports:
+
+    ```shell
+    sbt -Dconfig.resource=local2.conf run
+    ```
+
+4. (Optional) More can be started:
+
+    ```shell
+    sbt -Dconfig.resource=local3.conf run
+    ```
+
+5. Check for service readiness
+
+    ```shell
+    curl http://localhost:9101/ready
+    ```
+
+6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl). Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
+
+    ```shell
+    # add item to cart
+    grpcurl -d '{"cartId":"cart1", "itemId":"socks", "quantity":3}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.AddItem
+    
+    # get cart
+    grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.GetCart
+    
+    # update quantity of item
+    grpcurl -d '{"cartId":"cart1", "itemId":"socks", "quantity":5}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.AddItem
+    
+    # check out cart
+    grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
+   
+    ```
+
+   or same `grpcurl` commands to port 8102 to reach node 2.
+
+@@@
+
+@@@ div { .group-java }
+
+1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally.
+
+    ```shell
+    docker-compose up -d
+
+    # creates the tables needed for Akka Persistence
+    # as well as the offset store table for Akka Projection
+    docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+    ```
+
+2. Make sure you have compiled the project
+
+    ```shell
+    mvn compile 
+    ```
+
+3. Start a first node:
+
+    ```shell
+    mvn compile exec:exec -DAPP_CONFIG=local1.conf
+    ```
+
+4. (Optional) Start another node with different ports:
+
+    ```shell
+    mvn compile exec:exec -DAPP_CONFIG=local2.conf
+    ```
+
+5. (Optional) More can be started:
+
+    ```shell
+    mvn compile exec:exec -DAPP_CONFIG=local3.conf
+    ```
+
+6. Check for service readiness
+
+    ```shell
+    curl http://localhost:9101/ready
+    ```
+
+7. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
+
+    ```shell
+    # add item to cart
+    grpcurl -d '{"cartId":"cart1", "itemId":"socks", "quantity":3}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.AddItem
+    
+    # get cart
+    grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.GetCart
+    
+    # update quantity of item
+    grpcurl -d '{"cartId":"cart1", "itemId":"socks", "quantity":5}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.AddItem
+    
+    # check out cart
+    grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
+    ```
+
+   or same `grpcurl` commands to port 8102 to reach node 2.
+
+@@@
+
+### The analytics service
+
+@@@ div { .group-scala }
+
+
+1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally. Note that for convenience this service and the shopping cart service is sharing the same database, in an actual service consuming events the consuming services are expected to have their own separate databases.
+
+    ```shell
+    docker-compose up -d
+
+    # creates the tables needed for Akka Persistence
+    # as well as the offset store table for Akka Projection
+    docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+    ```
+
+2. Start a first node:
+
+    ```shell 
+    sbt -Dconfig.resource=local1.conf run
+    ```
+
+3. Start `shopping-cart-service` and add item to cart
+
+4. Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
+
+5. Notice the log output in the terminal of the `shopping-analytics-service`
+
+@@@
+
+@@@ div { .group-java }
+
+1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally. Note that for convenience this service and the shopping cart service is sharing the same database, in an actual service consuming events the consuming services are expected to have their own separate databases.
+
+    ```shell
+    docker-compose up -d 
+
+    # creates the tables needed for Akka Persistence
+    # as well as the offset store table for Akka Projection
+    docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+    ```
+
+2. Start a first node:
+
+    ```shell
+    mvn compile exec:exec -DAPP_CONFIG=local1.conf
+    ```
+
+3. Start `shopping-cart-service` and add item to cart
+
+4. Notice the log output in the terminal of the `shopping-analytics-service`
+
+@@@
 
 ## What's next?
 
