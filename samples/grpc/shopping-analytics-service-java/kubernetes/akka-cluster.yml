@@ -64,16 +64,20 @@ spec:
             - name: SHOPPING_CART_SERVICE_GRPC_PORT
               value: "80"
             - name: DB_HOST
-              value: "todo"
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: DB_HOST
+                  optional: true
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
                   name: db-secret
-                  key: username
+                  key: DB_USER
                   optional: true
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: db-secret
-                  key: password
+                  key: DB_PASSWORD
                   optional: true
