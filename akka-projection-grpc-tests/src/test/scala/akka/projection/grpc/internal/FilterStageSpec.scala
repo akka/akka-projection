@@ -28,6 +28,7 @@ import akka.projection.grpc.internal.proto.ExcludeTags
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.IncludeEntityIds
+import akka.projection.grpc.internal.proto.IncludeTags
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
@@ -236,7 +237,13 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       override lazy val allEnvelopes = envelopes ++
         Vector(
           createEnvelope(PersistenceId(entityType, "d"), 1, "d1"),
-          createEnvelope(PersistenceId(entityType, "d"), 2, "d2"))
+          createEnvelope(PersistenceId(entityType, "d"), 2, "d2", tags = Set("WIP")))
+
+      // filter should not exclude events from replay, e.g. d1 without the WIP tag
+      val filterCriteria = List(
+        FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(List(".*")))),
+        FilterCriteria(FilterCriteria.Message.IncludeTags(IncludeTags(List("WIP")))))
+      inPublisher.sendNext(StreamIn(StreamIn.Message.Filter(FilterReq(filterCriteria))))
 
       inPublisher.sendNext(
         StreamIn(
@@ -253,7 +260,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
         StreamIn(StreamIn.Message.Replay(ReplayReq(List(PersistenceIdSeqNr(PersistenceId(entityType, "d").id, 1L))))))
       // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
       outProbe.expectNoMessage()
-      envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
+      envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1", tags = Set("WIP")))
       outProbe.expectNext().event shouldBe "e1"
       outProbe.expectNext().event shouldBe "d1"
       outProbe.expectNext().event shouldBe "d2"
