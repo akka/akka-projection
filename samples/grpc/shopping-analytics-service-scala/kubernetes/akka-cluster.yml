@@ -60,9 +60,9 @@ spec:
             - name: JAVA_TOOL_OPTIONS
               value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75"
             - name: SHOPPING_CART_SERVICE_GRPC_HOST
-              value: "shopping-cart-service-svc.akka-grpc-projection.svc.cluster.local"
+              value: "shopping-cart-service-svc"
             - name: SHOPPING_CART_SERVICE_GRPC_PORT
-              value: "80"
+              value: "8101"
             - name: DB_HOST
               valueFrom:
                 secretKeyRef:
