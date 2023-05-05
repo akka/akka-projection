@@ -18,16 +18,15 @@ spec:
     spec:
       containers:
         - name: shopping-cart-service
+          # use specific image version from docker publish
           image: shopping-cart-service:latest
-          # remove for real clusters, useful for minikube
-          imagePullPolicy: Never
           # these will need to be increased tuned for production environments!
-          #          resources:
-          #            limits:
-          #              memory: "2Gi"
-          #            requests:
-          #              memory: "2Gi"
-          #              cpu: "3000m"
+          resources:
+            limits:
+              memory: "2Gi"
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
           readinessProbe:
             httpGet:
               path: /ready

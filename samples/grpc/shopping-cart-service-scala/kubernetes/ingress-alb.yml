@@ -1,0 +1,21 @@
+# Application load balancer
+# https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/deploy-a-grpc-based-application-on-an-amazon-eks-cluster-and-access-it-with-an-application-load-balancer.html
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopping-cart-ingress
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/target-type: instance
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/backend-protocol-version: GRPC
+    alb.ingress.kubernetes.io/load-balancer-attributes: routing.http2.enabled=true
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:iam::803424716218:server-certificate/MyCertificate2
+spec:
+  defaultBackend:
+    service:
+      name: shopping-cart-service-svc
+      port:
+        number: 8101

@@ -145,6 +145,12 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #checkoutEventTrigger }
 
+## Complete Sample Projects
+
+The complete sample can be downloaded from github, the replicated shopping cart:
+
+* Java: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-java
+* Scala: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-scala
 
 ## Running the sample code locally
 

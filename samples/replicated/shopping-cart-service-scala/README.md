@@ -70,3 +70,10 @@
     grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.Checkout
 
     or same `grpcurl` commands to port 8102/8202 to reach node 2.
+    ```
+
+7. To enable filters you can `Main` to use `ShoppingCart.initWithProducerFilter` instead of `ShoppingCart.init`. Then you have to mark the cart as "wip" for replication to take place:
+
+    ```shell
+    grpcurl -d '{"cartId":"cart1"}' -plaintext 127.0.0.1:8101 shoppingcart.ShoppingCartService.MarkCustomerVip
+   ```
