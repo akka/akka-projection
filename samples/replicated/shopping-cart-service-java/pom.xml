@@ -240,7 +240,7 @@
                         <image>
                             <name>%a</name>
                             <build>
-                                <from>docker.io/library/adoptopenjdk:11-jre-hotspot</from>
+                                <from>docker.io/library/eclipse-temurin:17.0.3_7-jre-jammy</from>
                                 <tags>
                                     <tag>${version.number}</tag>
                                 </tags>

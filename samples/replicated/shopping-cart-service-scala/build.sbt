@@ -38,7 +38,7 @@ val AkkaDiagnosticsVersion = "2.0.0"
 enablePlugins(AkkaGrpcPlugin)
 
 enablePlugins(JavaAppPackaging, DockerPlugin)
-dockerBaseImage := "docker.io/library/adoptopenjdk:11-jre-hotspot"
+dockerBaseImage := "docker.io/library/eclipse-temurin:17.0.3_7-jre-jammy"
 dockerUsername := sys.props.get("docker.username")
 dockerRepository := sys.props.get("docker.registry")
 dockerUpdateLatest := true
