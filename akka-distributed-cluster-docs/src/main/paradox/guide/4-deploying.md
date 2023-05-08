@@ -1,5 +1,8 @@
 # Part 4: Deploying with Kubernetes
 
+In this part we will deploy @ref:[Service to Service eventing](2-service-to-service.md) and @ref:[Active-active](3-active-active.md)
+parts of the guide to Kubernetes in two separate regions.
+
 ## Setup Kubernetes cluster
 
 Use instructions from your preferred cloud provider of how to start two Kubernetes clusters in two separate regions.
@@ -36,15 +39,14 @@ eksctl create cluster \
 
 Use instructions from your preferred cloud provider of how to run a PostgreSQL database in each of the two regions.
 
-As an example, we use [Amazon RDS Postgres](https://console.aws.amazon.com/rds/home).
-
-For a trial PostgreSQL you can select the following aside from defaults:
+As an example, we use [Amazon RDS Postgres](https://console.aws.amazon.com/rds/home). For a trial PostgreSQL you can 
+select the following aside from defaults:
 
 - Standard create
 - PostgreSQL
 - Free tier (some regions don't offer free tier)
 - DB instance identifier: `shopping-db-us-east-2`
-- Master password: <a password>
+- Master password: `<a password>`
 - Turn off storage autoscaling
 - VPC: Use the same as your EKS cluster is running in
 - Create new VPC security group: `shopping-db-sg`
@@ -123,13 +125,13 @@ SQL
 
 ## Repeat for the other region
 
-If you haven't already, repeat the steps for namespace, rbac, and database secret in the other region.
+If you haven't already, repeat the steps for namespace, rbac, database secret, and database schema in the other region.
 
 ## Deploy shopping-cart-service
 
 We are going to deploy the `shopping-cart-service` in region `us-east-2`.
 
-This is for deploying:
+This step is for deploying:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
@@ -137,14 +139,12 @@ This is for deploying:
 Build the image:
 
 Scala
-:
-```
+:  ```
 sbt -Ddocker.username=<username> -Ddocker.registry=docker.io docker:publish
 ```
 
 Java
-:
-```
+:  ```
 mvn -DskipTests -Ddocker.registry=<username>/shopping-cart-service clean package docker:push
 ```
 
@@ -153,7 +153,7 @@ The Kubernetes `Deployment` in `deployment.yml` file:
 YAML
 :  @@snip [deployment.yml](/samples/grpc/shopping-cart-service-scala/kubernetes/deployment.yml) { }
 
-Update the image in the `deployment.yml` with the specific image version and location you published.
+Update the `image:` in the `deployment.yml` with the specific image version and location you published.
 
 ```
 kubectl -f apply kubernetes/debployment.yml
@@ -194,7 +194,7 @@ grpcurl -d '{"cartId":"cart1", "itemId":"t-shirt", "quantity":3}' -plaintext 127
 
 To access the `shopping-cart-service` from `shopping-analytics-service` running in another region we need an Internet facing load balancer.
 
-There are many alternatives for secure access with a load balancer and securing. An incomplete list of options:
+There are many alternatives for secure access with a load balancer. An incomplete list of options:
 
 * Network load balancer such as [AWS Load Balancer Controller](https://docs.aws.amazon.com/eks/latest/userguide/network-load-balancing.html) with with TLS all the way between the services.
 * Application load balancer such as [AWS Load Balancer Controller](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/deploy-a-grpc-based-application-on-an-amazon-eks-cluster-and-access-it-with-an-application-load-balancer.html), which terminates TLS.
@@ -204,7 +204,7 @@ There are many alternatives for secure access with a load balancer and securing.
 Mutual authentication with TLS (mTLS) can be very useful where only other known services are allowed to interact with
 a service, and public access should be denied. See [Akka gRPC documentation](https://doc.akka.io/docs/akka-grpc/current/mtls.html).
 
-We are going to use a network load balancer for simplicity of this example, and we are not using TLS. This is of course not a valid choice for real applications.
+We are going to use a network load balancer for simplicity of this example, and we are not using TLS. Real applications would of course require TLS.
 
 Follow the instructions of how to [install the AWS Load Balancer Controller add-on](https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html).
 
@@ -223,7 +223,7 @@ kubectl get services
 
 We are going to deploy the `shopping-analytics-service` in region `eu-central-1`.
 
-This is for deploying:
+This step is for deploying:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-scala
@@ -231,14 +231,12 @@ This is for deploying:
 Build the image:
 
 Scala
-:
-```
+:  ```
 sbt -Ddocker.username=<username> -Ddocker.registry=docker.io docker:publish
 ```
 
 Java
-:
-```
+:  ```
 mvn -DskipTests -Ddocker.registry=<username>/shopping-analytics-service clean package docker:push
 ```
 
@@ -283,7 +281,7 @@ Projection [cart-events-cart-768-1023] consumed ItemQuantityAdjusted for cart ca
 
 ## Deploy replicated shopping-cart-service
 
-This is for deploying:
+This step is for deploying:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-scala
@@ -312,13 +310,29 @@ replication-secret \
 --from-literal=REPLICA1_GRPC_PORT=80
 ```
 
-This secret is referenced for configuration environment variables from the `deployment.yml`:
+This secret is referenced from configuration environment variables from the `deployment.yml`:
 
 YAML
 :  @@snip [deployment.yml](/samples/replicated/shopping-cart-service-scala/kubernetes/deployment.yml) { }
 
 
-Build the image and deploy in the same way as described in @ref:[Deploy shopping-cart-service](#deploy-shopping-cart-service).
+Build the image and deploy in the same way as described previously.
+
+Scala
+:  ```
+sbt -Ddocker.username=<username> -Ddocker.registry=docker.io docker:publish
+```
+
+Java
+:  ```
+mvn -DskipTests -Ddocker.registry=<username>/shopping-cart-service clean package docker:push
+```
+
+Update the `image:` in the `deployment.yml` with the specific image version and location you published.
+
+```
+kubectl -f apply kubernetes/debployment.yml
+```
 
 ### Port forwards
 
