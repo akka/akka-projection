@@ -1,0 +1,17 @@
+# Network load balancer https://docs.aws.amazon.com/eks/latest/userguide/network-load-balancing.html
+apiVersion: v1
+kind: Service
+metadata:
+  name: shopping-cart-service-nlb
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  selector:
+    app: shopping-cart-service
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8101
