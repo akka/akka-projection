@@ -77,6 +77,8 @@ Java
 
 The @ref:[`ShoppingCartHandler` is shown below](#handler).
 
+It is possible to dynamically scale the number of Projection instances as described in @extref:[Sharded Daemon Process documentation](akka:typed/cluster-sharded-daemon-process.html#dynamic-scaling-of-number-of-workers). 
+
 There are alternative ways of running the `ProjectionBehavior` as described in @ref:[Running a Projection](running.md), but note that when using the R2DBC plugin as `SourceProvider` it is recommended to use `eventsBySlices` and not `eventsByTag`.
 
 ## Slices

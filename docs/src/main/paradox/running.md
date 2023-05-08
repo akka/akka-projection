@@ -20,7 +20,7 @@ For more information on using Akka Cluster consult Akka's reference documentatio
 
 The Sharded Daemon Process can be used to distribute `n` instances of a given Projection across the cluster. Therefore, it's important that each Projection instance consumes a subset of the stream of envelopes.
 
-How the subset is created depends on the kind of source we consume. If it's an Alpakka Kafka source, this is done by Kafka consumer groups. When consuming from Akka Persistence Journal, the events must be sliced by tagging them as demonstrated in the example below.
+How the subset is created depends on the kind of source we consume. If it's an Alpakka Kafka source, this is done by Kafka consumer groups. When consuming from Akka Persistence Journal, the events must be partitioned by tagging them as demonstrated in the example below, or by the built-in slices in @ref:[Projections R2DBC](r2dbc.md#slices).
 
 ### Tagging Events in EventSourcedBehavior
 
@@ -40,6 +40,10 @@ Projection instance on some nodes. More tags than the number of nodes means that
 Projection instance, which is fine. It's good to start with more tags than nodes to have some room for scaling out
 to more nodes later if needed. As a rule of thumb, the number of tags should be a factor of ten greater than the
 planned maximum number of cluster nodes. It doesn't have to be exact.
+
+@@@ note
+When using slices with @ref:[Projections R2DBC](r2dbc.md#slices) it is possible to dynamically change the number of projection instances at runtime.
+@@@
 
 We will use those tags to query the journal and create as many Projections instances, and distribute them in the cluster.
 
