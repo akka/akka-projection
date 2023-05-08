@@ -5,8 +5,7 @@ addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.9.0")
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.5.11")
 
 // remember to bump in samples/grpc/ projects as well if changing
-// FIXME non-milestone
-addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.3.0")
+addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.3.2")
 
 // Documentation
 addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.46")
