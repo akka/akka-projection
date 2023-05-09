@@ -3,7 +3,7 @@
 Akka Distributed Cluster is a set of features in Akka that will help you with:
 
 * stretching an Akka Cluster over geographically distributed locations for higher availability and lower latency
-* asynchronous communication between different Akka Microservices
+* brokerless asynchronous communication between different Akka Microservices
 
 FIXME make the drawing look nice
 
