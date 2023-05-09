@@ -4,7 +4,7 @@ Akka Cluster is great for building stateful distributed systems, such as Microse
 is a set of features in Akka that will help you with:
 
 * stretching an Akka Cluster over geographically distributed locations for higher availability and lower latency
-* asynchronous communication between different Akka Microservices 
+* brokerless asynchronous communication between different Akka Microservices 
 
 ## One Akka Cluster or many connected clusters?
 
