@@ -200,6 +200,7 @@ There are many alternatives for secure access with a load balancer. An incomplet
 * Application load balancer such as [AWS Load Balancer Controller](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/deploy-a-grpc-based-application-on-an-amazon-eks-cluster-and-access-it-with-an-application-load-balancer.html), which terminates TLS.
 * [NGINX Ingress Controller](https://docs.nginx.com/nginx-ingress-controller/)
 * [Contour](https://projectcontour.io)
+* [Linkerd multi-cluster](https://linkerd.io/2.13/features/multicluster/)
 
 Mutual authentication with TLS (mTLS) can be very useful where only other known services are allowed to interact with
 a service, and public access should be denied. See [Akka gRPC documentation](https://doc.akka.io/docs/akka-grpc/current/mtls.html).
