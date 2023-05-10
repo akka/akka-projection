@@ -48,9 +48,7 @@ jobs:
 
       - name: Start DB
         run: |-
-          docker-compose -f docker-files/docker-compose-postgres.yml up -d
-          # TODO: could we poll the port instead of sleep?
-          sleep 10
+          docker-compose -f docker-files/docker-compose-postgres.yml up --build --detach --wait
           docker exec -i postgres_db psql -U postgres -t < akka-projection-r2dbc/ddl-scripts/create_tables_postgres.sql
 
       - name: Run integration tests with with Scala and Java ${{ matrix.jdkVersion }}

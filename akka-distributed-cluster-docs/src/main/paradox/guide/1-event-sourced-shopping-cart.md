@@ -147,7 +147,7 @@ Before running the sample locally you will need to run a PostgreSQL instance in 
 `docker-compose.yml`. Run it and create the needed database schema:
 
 ```shell
-docker-compose up -d
+docker-compose up --build --detach --wait
 docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
 ```
 
