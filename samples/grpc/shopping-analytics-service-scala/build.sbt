@@ -6,6 +6,11 @@ licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")
 
 scalaVersion := "2.13.10"
 
+enablePlugins(Cinnamon)
+run / cinnamon := true
+test / cinnamon := true
+cinnamonLogLevel := "INFO"
+
 Compile / scalacOptions ++= Seq(
   "-target:11",
   "-deprecation",
@@ -75,4 +80,14 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
   "com.lightbend.akka" %% "akka-projection-grpc" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
-  "com.lightbend.akka" %% "akka-projection-testkit" % AkkaProjectionVersion % Test)
+  "com.lightbend.akka" %% "akka-projection-testkit" % AkkaProjectionVersion % Test,
+Cinnamon.library.cinnamonCHMetrics,
+Cinnamon.library.cinnamonAkka,
+Cinnamon.library.cinnamonAkkaTyped,
+Cinnamon.library.cinnamonAkkaPersistence,
+Cinnamon.library.cinnamonAkkaStream,
+Cinnamon.library.cinnamonAkkaProjection,
+Cinnamon.library.cinnamonAkkaHttp,
+Cinnamon.library.cinnamonAkkaGrpc,
+Cinnamon.library.cinnamonSlf4jEvents
+)
