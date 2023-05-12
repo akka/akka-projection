@@ -53,9 +53,7 @@ You would use Replicated Event Sourcing over gRPC for entities that can be updat
 location, such as different cloud regions. This makes it possible to implement patterns such as active-active and
 hot standby.
 
-FIXME make the drawing look nice
-
-![projection-over-grpc.png](images/res-over-grpc.png)
+![projection-over-grpc.png](images/res-over-grpc.svg)
 
 Replicated Event Sourcing gives:
 

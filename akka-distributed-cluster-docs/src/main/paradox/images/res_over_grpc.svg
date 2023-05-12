@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 27.5.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 721.7 619.8" style="enable-background:new 0 0 721.7 619.8;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:none;stroke:#662D91;stroke-width:2;stroke-miterlimit:10;}
+	.st1{fill:#EEEEEE;}
+	.st2{fill:none;stroke:#333333;stroke-miterlimit:10;stroke-dasharray:4,2;}
+	.st3{fill:#11A9CE;stroke:#FFFFFF;stroke-miterlimit:10;}
+	.st4{fill:#FFFFFF;}
+	.st5{font-family:'Roboto-Medium';}
+	.st6{font-size:12px;}
+	.st7{fill:#231F20;}
+	.st8{fill:#662D91;}
+</style>
+<circle class="st0" cx="367.7" cy="308.1" r="213.7"/>
+<path class="st1" d="M297.9,423.4H45.5c-7.3,0-13.2-5.9-13.2-13.2V200c0-7.3,5.9-13.2,13.2-13.2h252.4c7.3,0,13.2,5.9,13.2,13.2
+	v210.2C311.1,417.5,305.2,423.4,297.9,423.4z"/>
+<g>
+	<path class="st2" d="M110.4,284.1c0,0-7,57.6,54.4,80.6"/>
+	<path class="st2" d="M177.4,244.9c0,0-20.2,51.8-6.2,107.5"/>
+	<path class="st2" d="M231.3,290.4c0,0-39.9,15-46.2,71.7"/>
+	<ellipse class="st3" cx="177.4" cy="226.5" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 156.7593 229.9641)" class="st4 st5 st6">entity C</text>
+	<ellipse class="st3" cx="233.1" cy="277.9" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 212.3605 281.3869)" class="st4 st5 st6">entity B</text>
+	<g>
+		<ellipse class="st3" cx="110.4" cy="271.7" rx="42.9" ry="18.5"/>
+		<text transform="matrix(1 0 0 1 89.6481 275.1661)" class="st4 st5 st6">entity A</text>
+	</g>
+	<g>
+		<ellipse class="st3" cx="171.2" cy="379.7" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="171.2" cy="375.2" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="171.2" cy="370.6" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="171.2" cy="366.1" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="171.2" cy="361.6" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="171.2" cy="357" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="171.2" cy="352.5" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="171.2" cy="347.9" rx="31" ry="7.9"/>
+	</g>
+	<text transform="matrix(1 0 0 1 136.1536 401.6227)" class="st7 st5 st6">event journal</text>
+</g>
+<path class="st1" d="M679.1,268.8H426.7c-7.3,0-13.2-5.9-13.2-13.2V45.4c0-7.3,5.9-13.2,13.2-13.2h252.4c7.3,0,13.2,5.9,13.2,13.2
+	v210.2C692.3,262.9,686.3,268.8,679.1,268.8z"/>
+<g>
+	<path class="st2" d="M491.5,129.6c0,0-7,57.6,54.4,80.6"/>
+	<path class="st2" d="M558.6,90.3c0,0-20.2,51.8-6.2,107.5"/>
+	<path class="st2" d="M612.5,135.8c0,0-39.9,15-46.2,71.7"/>
+	<ellipse class="st3" cx="558.6" cy="71.9" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 537.9276 75.3757)" class="st4 st5 st6">entity C</text>
+	<ellipse class="st3" cx="614.2" cy="123.3" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 593.5289 126.7985)" class="st4 st5 st6">entity B</text>
+	<g>
+		<ellipse class="st3" cx="491.5" cy="117.1" rx="42.9" ry="18.5"/>
+		<text transform="matrix(1 0 0 1 470.8164 120.5777)" class="st4 st5 st6">entity A</text>
+	</g>
+	<g>
+		<ellipse class="st3" cx="552.4" cy="225.1" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="220.6" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="216.1" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="211.5" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="207" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="202.4" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="197.9" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="193.3" rx="31" ry="7.9"/>
+	</g>
+	<text transform="matrix(1 0 0 1 517.322 247.0343)" class="st7 st5 st6">event journal</text>
+</g>
+<path class="st1" d="M679.1,586.6H426.7c-7.3,0-13.2-5.9-13.2-13.2V363.3c0-7.3,5.9-13.2,13.2-13.2h252.4c7.3,0,13.2,5.9,13.2,13.2
+	v210.2C692.3,580.7,686.3,586.6,679.1,586.6z"/>
+<g>
+	<path class="st2" d="M491.5,447.4c0,0-7,57.6,54.4,80.6"/>
+	<path class="st2" d="M558.6,408.2c0,0-20.2,51.8-6.2,107.5"/>
+	<path class="st2" d="M612.5,453.6c0,0-39.9,15-46.2,71.7"/>
+	<ellipse class="st3" cx="558.6" cy="389.7" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 537.9276 393.1809)" class="st4 st5 st6">entity C</text>
+	<ellipse class="st3" cx="614.2" cy="441.1" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 593.5289 444.6038)" class="st4 st5 st6">entity B</text>
+	<g>
+		<ellipse class="st3" cx="491.5" cy="434.9" rx="42.9" ry="18.5"/>
+		<text transform="matrix(1 0 0 1 470.8164 438.383)" class="st4 st5 st6">entity A</text>
+	</g>
+	<g>
+		<ellipse class="st3" cx="552.4" cy="543" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="538.4" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="533.9" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="529.3" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="524.8" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="520.2" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="515.7" rx="31" ry="7.9"/>
+		<ellipse class="st3" cx="552.4" cy="511.1" rx="31" ry="7.9"/>
+	</g>
+	<text transform="matrix(1 0 0 1 517.322 564.8396)" class="st7 st5 st6">event journal</text>
+</g>
+<text transform="matrix(1 0 0 1 248.8318 474.1097)"><tspan x="0" y="0" class="st8 st5 st6">event  </tspan><tspan x="0" y="14.4" class="st8 st5 st6">     replication</tspan></text>
+</svg>
