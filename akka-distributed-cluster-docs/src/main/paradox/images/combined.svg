@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 27.5.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 829.1 917.8" style="enable-background:new 0 0 829.1 917.8;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#FFFFFF;stroke:#231F20;stroke-miterlimit:10;}
+	.st1{fill:none;stroke:#333333;stroke-miterlimit:10;stroke-dasharray:4,2;}
+	.st2{fill:none;stroke:#662D91;stroke-width:2;stroke-miterlimit:10;}
+	.st3{fill:none;}
+	.st4{font-family:'Roboto-Medium';}
+	.st5{font-size:12px;}
+	.st6{fill:#EEEEEE;}
+	.st7{fill:#11A9CE;stroke:#FFFFFF;stroke-miterlimit:10;}
+	.st8{fill:#FFFFFF;}
+	.st9{fill:#231F20;}
+	.st10{fill:#F04B55;stroke:#FFFFFF;stroke-miterlimit:10;}
+	.st11{fill:#F58320;stroke:#FFFFFF;stroke-miterlimit:10;}
+</style>
+<rect x="41.1" y="173.1" class="st0" width="351.8" height="523.2"/>
+<path class="st1" d="M290.8,401.2c0,0-23.8,28.3-47.9,106.1"/>
+<rect x="446.4" y="19.9" class="st0" width="351.8" height="320.5"/>
+<rect x="446.4" y="368.8" class="st0" width="351.8" height="518.6"/>
+<path class="st2" d="M733.1,643.8c0,0,61.4-183,0-384.5"/>
+<path class="st2" d="M579.7,165.3c30.8-18.7-151,144-259.8,168.7"/>
+<path class="st2" d="M608.3,619.6c34.8,9.3-251.9-85.7-352.6-181.9"/>
+<path id="SVGID_x5F_1_x5F_" class="st3" d="M258.8,432.6c100.7,96.1,387.4,191.2,352.6,181.9"/>
+<text><textPath  xlink:href="#SVGID_x5F_1_x5F_" startOffset="11.171%">
+<tspan  class="st4 st5" style="fill:#662D91;">event    replication</tspan></textPath>
+</text>
+<text transform="matrix(1 0 0 1 458.8715 44.8951)" class="st4 st5">region: eu-central-1</text>
+<path class="st6" d="M343.2,456.3H90.9c-7.3,0-13.2-5.9-13.2-13.2V232.9c0-7.3,5.9-13.2,13.2-13.2h252.4c7.3,0,13.2,5.9,13.2,13.2
+	v210.2C356.4,450.4,350.5,456.3,343.2,456.3z"/>
+<path class="st1" d="M133,317c0,0-7,57.6,54.4,80.6"/>
+<path class="st1" d="M200,277.8c0,0-20.2,51.8-6.2,107.5"/>
+<path class="st1" d="M253.9,323.2c0,0-39.9,15-46.2,71.7"/>
+<path class="st6" d="M268.1,665.3H157.5c-7.3,0-13.2-5.9-13.2-13.2v-148c0-7.3,5.9-13.2,13.2-13.2h110.6c7.3,0,13.2,5.9,13.2,13.2
+	v148C281.3,659.4,275.4,665.3,268.1,665.3z"/>
+<path class="st1" d="M225.6,607c0,0,30.2-13.4,18.7-59.1"/>
+<ellipse class="st7" cx="200" cy="259.3" rx="42.9" ry="18.5"/>
+<text transform="matrix(1 0 0 1 179.3859 262.8513)" class="st8 st4 st5">entity C</text>
+<ellipse class="st7" cx="255.7" cy="310.8" rx="42.9" ry="18.5"/>
+<text transform="matrix(1 0 0 1 234.9871 314.2741)" class="st8 st4 st5">entity B</text>
+<g>
+	<ellipse class="st7" cx="133" cy="304.5" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 112.2746 308.0533)" class="st8 st4 st5">entity A</text>
+</g>
+<g>
+	<ellipse class="st7" cx="193.8" cy="412.6" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="193.8" cy="408.1" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="193.8" cy="403.5" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="193.8" cy="399" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="193.8" cy="394.4" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="193.8" cy="389.9" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="193.8" cy="385.4" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="193.8" cy="380.8" rx="31" ry="7.9"/>
+</g>
+<text transform="matrix(1 0 0 1 158.7802 434.5099)" class="st9 st4 st5">event journal</text>
+<path class="st7" d="M329.9,411.4h-78.3c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+	C335.5,409,333,411.4,329.9,411.4z"/>
+<text transform="matrix(1 0 0 1 266.7484 401.1555)" class="st8 st4 st5">producer</text>
+<g>
+	<g>
+		<path class="st10" d="M247.2,554.2H169c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+			C252.8,551.7,250.3,554.2,247.2,554.2z"/>
+		<text transform="matrix(1 0 0 1 181.1679 543.9269)" class="st8 st4 st5">consumer</text>
+	</g>
+	<g>
+		<path class="st10" d="M256.6,529.9h-78.3c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+			C262.1,527.4,259.7,529.9,256.6,529.9z"/>
+		<text transform="matrix(1 0 0 1 190.5389 519.5686)" class="st8 st4 st5">consumer</text>
+	</g>
+</g>
+<g>
+	<g>
+		<g>
+			<path class="st10" d="M231.2,597v30.2c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6V597"/>
+			<ellipse class="st10" cx="212.8" cy="597" rx="18.4" ry="6"/>
+			<path class="st10" d="M231.2,607c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+			<path class="st10" d="M231.2,617.1c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+		</g>
+	</g>
+	<path class="st10" d="M231.2,607c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+</g>
+<text transform="matrix(1 0 0 1 187.8194 646.3201)" class="st9 st4 st5">database</text>
+<text transform="matrix(1 0 0 1 53.6121 198.0912)" class="st4 st5">region: us-west-1</text>
+<path class="st6" d="M748.5,856.3H496.1c-7.3,0-13.2-5.9-13.2-13.2V629c0-7.3,5.9-13.2,13.2-13.2h252.4c7.3,0,13.2,5.9,13.2,13.2
+	v214.1C761.7,850.4,755.8,856.3,748.5,856.3z"/>
+<path class="st6" d="M748.5,309.3H496.1c-7.3,0-13.2-5.9-13.2-13.2v-215c0-7.3,5.9-13.2,13.2-13.2h252.4c7.3,0,13.2,5.9,13.2,13.2
+	v215C761.7,303.4,755.8,309.3,748.5,309.3z"/>
+<path class="st1" d="M579.7,165.3c0,0-7,57.6,54.4,80.6"/>
+<path class="st1" d="M646.8,126.1c0,0-20.2,51.8-6.2,107.5"/>
+<path class="st1" d="M700.7,171.5c0,0-39.9,15-46.2,71.7"/>
+<ellipse class="st7" cx="646.8" cy="107.6" rx="42.9" ry="18.5"/>
+<text transform="matrix(1 0 0 1 626.1173 111.0905)" class="st8 st4 st5">entity C</text>
+<ellipse class="st7" cx="702.4" cy="159" rx="42.9" ry="18.5"/>
+<text transform="matrix(1 0 0 1 681.7184 162.5134)" class="st8 st4 st5">entity B</text>
+<g>
+	<ellipse class="st7" cx="579.7" cy="152.8" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 559.0062 156.2926)" class="st8 st4 st5">entity A</text>
+</g>
+<g>
+	<ellipse class="st7" cx="640.5" cy="260.9" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="640.5" cy="256.3" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="640.5" cy="251.8" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="640.5" cy="247.2" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="640.5" cy="242.7" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="640.5" cy="238.1" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="640.5" cy="233.6" rx="31" ry="7.9"/>
+	<ellipse class="st7" cx="640.5" cy="229.1" rx="31" ry="7.9"/>
+</g>
+<text transform="matrix(1 0 0 1 605.5117 281.7986)" class="st9 st4 st5">event journal</text>
+<path class="st6" d="M673.3,589.3H562.8c-7.3,0-13.2-5.9-13.2-13.2v-148c0-7.3,5.9-13.2,13.2-13.2h110.6c7.3,0,13.2,5.9,13.2,13.2
+	v148C686.5,583.4,680.6,589.3,673.3,589.3z"/>
+<path class="st1" d="M630.9,531.1c0,0,30.2-13.4,18.7-59.1"/>
+<g>
+	<g>
+		<g>
+			<path class="st11" d="M636.4,521v30.2c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6V521"/>
+			<ellipse class="st11" cx="618" cy="521" rx="18.4" ry="6"/>
+			<path class="st10" d="M636.4,531.1c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+			<path class="st11" d="M636.4,541.2c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+		</g>
+	</g>
+	<path class="st11" d="M636.4,531.1c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+</g>
+<text transform="matrix(1 0 0 1 593.0789 570.3589)" class="st9 st4 st5">database</text>
+<text transform="matrix(1 0 0 1 458.8715 393.7383)" class="st4 st5">region: eu-central-1</text>
+<path class="st1" d="M510.9,251.8C371.5,513.1,252.8,516.1,252.8,516.1s64.5,58.2,267.3,138.7"/>
+<g>
+	<path class="st1" d="M581.3,714.2c0,0-7,57.6,54.4,80.6"/>
+	<path class="st1" d="M648.3,675c0,0-20.2,51.8-6.2,107.5"/>
+	<path class="st1" d="M702.2,720.5c0,0-39.9,15-46.2,71.7"/>
+	<ellipse class="st7" cx="648.3" cy="656.6" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 627.6707 660.0629)" class="st8 st4 st5">entity C</text>
+	<ellipse class="st7" cx="704" cy="708" rx="42.9" ry="18.5"/>
+	<text transform="matrix(1 0 0 1 683.2719 711.4858)" class="st8 st4 st5">entity B</text>
+	<g>
+		<ellipse class="st7" cx="581.3" cy="701.8" rx="42.9" ry="18.5"/>
+		<text transform="matrix(1 0 0 1 560.5595 705.265)" class="st8 st4 st5">entity A</text>
+	</g>
+	<g>
+		<ellipse class="st7" cx="642.1" cy="809.8" rx="31" ry="7.9"/>
+		<ellipse class="st7" cx="642.1" cy="805.3" rx="31" ry="7.9"/>
+		<ellipse class="st7" cx="642.1" cy="800.7" rx="31" ry="7.9"/>
+		<ellipse class="st7" cx="642.1" cy="796.2" rx="31" ry="7.9"/>
+		<ellipse class="st7" cx="642.1" cy="791.7" rx="31" ry="7.9"/>
+		<ellipse class="st7" cx="642.1" cy="787.1" rx="31" ry="7.9"/>
+		<ellipse class="st7" cx="642.1" cy="782.6" rx="31" ry="7.9"/>
+		<ellipse class="st7" cx="642.1" cy="778" rx="31" ry="7.9"/>
+	</g>
+	<text transform="matrix(1 0 0 1 607.0651 830.771)" class="st9 st4 st5">event journal</text>
+	<path class="st7" d="M582.5,671.4h-78.3c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+		C588,668.9,585.5,671.4,582.5,671.4z"/>
+	<text transform="matrix(1 0 0 1 519.285 661.0999)" class="st8 st4 st5">producer</text>
+</g>
+<path class="st1" d="M554.4,255.2c0,0,14.3,86,64.4,182"/>
+<g>
+	<path class="st7" d="M579.1,259.7h-78.3c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+		C584.7,257.2,582.2,259.7,579.1,259.7z"/>
+	<text transform="matrix(1 0 0 1 515.9249 249.3948)" class="st8 st4 st5">producer</text>
+</g>
+<g>
+	<g>
+		<path class="st11" d="M652.5,478.3h-78.3c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+			C658,475.8,655.5,478.3,652.5,478.3z"/>
+		<text transform="matrix(1 0 0 1 586.4274 467.9657)" class="st8 st4 st5">consumer</text>
+	</g>
+	<g>
+		<path class="st11" d="M661.9,453.9h-78.3c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+			C667.4,451.4,664.9,453.9,661.9,453.9z"/>
+		<text transform="matrix(1 0 0 1 595.7984 443.6074)" class="st8 st4 st5">consumer</text>
+	</g>
+</g>
+</svg>
