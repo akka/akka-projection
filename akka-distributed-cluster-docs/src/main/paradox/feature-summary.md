@@ -15,9 +15,7 @@ With Projections over gRPC you could have the same advantages of loosely coupled
 without the burden and cost of operating the broker infrastructure. As a bonus, you would gain low-latency cross
 region delivery of messages.
 
-FIXME make the drawing look nice
-
-![projection-over-grpc.png](images/projection-over-grpc.png)
+![projection-over-grpc.png](images/projection-over-grpc.svg)
 
 Projections over gRPC uses the event journal on the producer side and Akka Projections event processing and offset
 tracking on the consumer side. The transparent data transfer between producers and consumers is implemented with
@@ -55,9 +53,7 @@ You would use Replicated Event Sourcing over gRPC for entities that can be updat
 location, such as different cloud regions. This makes it possible to implement patterns such as active-active and
 hot standby.
 
-FIXME make the drawing look nice
-
-![projection-over-grpc.png](images/res-over-grpc.png)
+![projection-over-grpc.png](images/res-over-grpc.svg)
 
 Replicated Event Sourcing gives:
 
