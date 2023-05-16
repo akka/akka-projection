@@ -14,7 +14,7 @@ a downstream analytics service.
 
 ## gRPC transport for consuming events
 
-![service-to-service-overview.png](../images/service-to-service-overview.png)
+![Diagram showing the internals of Akka Projection gRPC step for step](../images/service-to-service-overview.png)
 
 1. An Entity stores events in its journal in service A.
 1. Consumer in service B starts an Akka Projection which locally reads its offset for service A's replication stream.
