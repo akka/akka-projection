@@ -3,7 +3,7 @@
 Active-active means that the same shopping cart is in memory in multiple locations, replicas, and can accept updates
 in all of those locations, so that a cloud region outage does not block users from continuing to use the service.  
 
-![projection-over-grpc.png](../images/res-over-grpc.png)
+![Diagram showing Replicated Ecent Sourcing over gRPC between three services](../images/res-over-grpc.svg)
 
 @extref[Akka Replicated Event Sourcing](akka:typed/replicated-eventsourcing.html) stores persisted events in a local database,
 without any need for replication capabilities in the database itself, the events are then replicated using the @extref[Akka Replicated Event Sourcing gRPC transport](akka-projection:grpc-replicated-event-sourcing-transport.html).
