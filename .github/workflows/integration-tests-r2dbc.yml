@@ -10,7 +10,7 @@ on:
 jobs:
   test-r2dbc-postgres:
     name: Run r2dbc test with Postgres
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-23.04
     if: github.repository == 'akka/akka-projection'
     strategy:
       fail-fast: false
@@ -57,7 +57,7 @@ jobs:
 
   test-r2dbc-yugabyte:
     name: Run r2dbc tests with Yugabyte
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-23.04
     if: github.repository == 'akka/akka-projection'
     strategy:
       fail-fast: false
