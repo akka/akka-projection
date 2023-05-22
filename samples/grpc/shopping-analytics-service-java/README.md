@@ -3,7 +3,7 @@
 1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally. Note that for convenience this service and the shopping cart service is sharing the same database, in an actual service consuming events the consuming services are expected to have their own separate databases.
 
     ```shell
-    docker-compose up --build --detach --wait
+    docker-compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
