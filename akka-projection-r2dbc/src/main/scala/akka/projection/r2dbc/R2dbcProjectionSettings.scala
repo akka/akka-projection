@@ -50,7 +50,8 @@ object R2dbcProjectionSettings {
       evictInterval = config.getDuration("offset-store.evict-interval"),
       deleteInterval = config.getDuration("offset-store.delete-interval"),
       logDbCallsExceeding,
-      warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"))
+      warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
+      offsetBatchSize = config.getInt("offset-store.offset-batch-size"))
   }
 
   /**
@@ -72,7 +73,8 @@ final class R2dbcProjectionSettings private (
     val evictInterval: JDuration,
     val deleteInterval: JDuration,
     val logDbCallsExceeding: FiniteDuration,
-    val warnAboutFilteredEventsInFlow: Boolean) {
+    val warnAboutFilteredEventsInFlow: Boolean,
+    val offsetBatchSize: Int) {
 
   val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
@@ -123,6 +125,9 @@ final class R2dbcProjectionSettings private (
   def withWarnAboutFilteredEventsInFlow(warnAboutFilteredEventsInFlow: Boolean): R2dbcProjectionSettings =
     copy(warnAboutFilteredEventsInFlow = warnAboutFilteredEventsInFlow)
 
+  def withOffsetBatchSize(offsetBatchSize: Int): R2dbcProjectionSettings =
+    copy(offsetBatchSize = offsetBatchSize)
+
   private def copy(
       schema: Option[String] = schema,
       offsetTable: String = offsetTable,
@@ -134,7 +139,8 @@ final class R2dbcProjectionSettings private (
       evictInterval: JDuration = evictInterval,
       deleteInterval: JDuration = deleteInterval,
       logDbCallsExceeding: FiniteDuration = logDbCallsExceeding,
-      warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow) =
+      warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
+      offsetBatchSize: Int = offsetBatchSize) =
     new R2dbcProjectionSettings(
       schema,
       offsetTable,
@@ -146,8 +152,9 @@ final class R2dbcProjectionSettings private (
       evictInterval,
       deleteInterval,
       logDbCallsExceeding,
-      warnAboutFilteredEventsInFlow)
+      warnAboutFilteredEventsInFlow,
+      offsetBatchSize)
 
   override def toString =
-    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $keepNumberOfEntries, $evictInterval, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow)"
+    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $keepNumberOfEntries, $evictInterval, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
 }

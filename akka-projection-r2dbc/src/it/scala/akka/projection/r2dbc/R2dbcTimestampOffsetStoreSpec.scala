@@ -4,10 +4,12 @@
 
 package akka.projection.r2dbc
 
+import scala.concurrent.duration._
 import java.time.Instant
 import java.time.{ Duration => JDuration }
 import java.util.UUID
 
+import scala.concurrent.Await
 import scala.concurrent.Future
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -257,6 +259,73 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().byPid("p4").seqNr shouldBe 9L
       offsetStore.getState().byPid("p5").seqNr shouldBe 1L
       offsetStore.getState().byPid("p6").seqNr shouldBe 6L
+    }
+
+    "save batch of many TimestampOffsets" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      def test(pidPrefix: String, numberOfOffsets: Int): Unit = {
+        withClue(s"with $numberOfOffsets offsets: ") {
+          val offsetsBatch = (1 to numberOfOffsets).map { n =>
+            tick()
+            val offset = TimestampOffset(clock.instant(), Map.empty)
+            OffsetPidSeqNr(offset, s"$pidPrefix$n", n)
+          }
+          offsetStore.saveOffsets(offsetsBatch).futureValue
+          offsetStore.readOffset[TimestampOffset]().futureValue
+          (1 to numberOfOffsets).map { n =>
+            offsetStore.getState().byPid(s"$pidPrefix$n").seqNr shouldBe n
+          }
+        }
+      }
+
+      test("a", settings.offsetBatchSize)
+      test("a", settings.offsetBatchSize - 1)
+      test("a", settings.offsetBatchSize + 1)
+      test("a", settings.offsetBatchSize * 2)
+      test("a", settings.offsetBatchSize * 2 - 1)
+      test("a", settings.offsetBatchSize * 2 + 1)
+    }
+
+    "perf save batch of TimestampOffsets" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val warmupIterations = 1 // increase this for serious testing
+      val iterations = 2000 // increase this for serious testing
+      val batchSize = 100
+
+      // warmup
+      (1 to warmupIterations).foreach { _ =>
+        val offsets = (1 to batchSize).map { n =>
+          val offset = TimestampOffset(Instant.now(), Map(s"p$n" -> 1L))
+          OffsetPidSeqNr(offset, s"p$n", 1L)
+        }
+        Await.result(offsetStore.saveOffsets(offsets), 5.seconds)
+      }
+
+      val totalStartTime = System.nanoTime()
+      var startTime = System.nanoTime()
+      var count = 0
+
+      (1 to iterations).foreach { i =>
+        val offsets = (1 to batchSize).map { n =>
+          val offset = TimestampOffset(Instant.now(), Map(s"p$n" -> 1L))
+          OffsetPidSeqNr(offset, s"p$n", 1L)
+        }
+        count += batchSize
+        Await.result(offsetStore.saveOffsets(offsets), 5.seconds)
+
+        if (i % 1000 == 0) {
+          val totalDurationMs = (System.nanoTime() - totalStartTime) / 1000 / 1000
+          val durationMs = (System.nanoTime() - startTime) / 1000 / 1000
+          println(
+            s"#${i * batchSize}: $count took $durationMs ms, RPS ${1000L * count / durationMs}, Total RPS ${1000L * i * batchSize / totalDurationMs}")
+          startTime = System.nanoTime()
+          count = 0
+        }
+      }
     }
 
     "not update when earlier seqNr" in {
