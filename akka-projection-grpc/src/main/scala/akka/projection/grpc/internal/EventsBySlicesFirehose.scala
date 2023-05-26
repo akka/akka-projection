@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.annotation.nowarn
+import scala.util.control.NoStackTrace
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -36,21 +37,24 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] {
   // Java API
   def get(system: ActorSystem[_]): EventsBySlicesFirehose = apply(system)
 
+  final class SlowConsumerException(message: String) extends RuntimeException(message) with NoStackTrace
+
   final case class FirehoseKey(entityType: String, sliceRange: Range)
 
-  final case class ConsumerTracking(count: Long, timestamp: Instant)
+  final case class ConsumerTracking(count: Long, timestamp: Instant, consumerKillSwitch: KillSwitch)
 
-  class Firehose(val firehoseHub: Source[EventEnvelope[Any], NotUsed]) {
+  class Firehose(val firehoseHub: Source[EventEnvelope[Any], NotUsed], bufferSize: Int) {
     val inCount: AtomicLong = new AtomicLong
     val consumerTracking: ConcurrentHashMap[String, ConsumerTracking] = new ConcurrentHashMap
+    private val gapTreshold = math.max(2, bufferSize - 4)
 
-    def updateConsumerTracking(consumerId: String, timestamp: Instant): Boolean = {
+    def updateConsumerTracking(consumerId: String, timestamp: Instant, consumerKillSwitch: KillSwitch): Unit = {
       val tracking = consumerTracking.get(consumerId) match {
         case null =>
-          ConsumerTracking(count = 1, timestamp)
+          ConsumerTracking(count = 1, timestamp, consumerKillSwitch)
         case existing =>
           if (timestamp.compareTo(existing.timestamp) > 0)
-            ConsumerTracking(count = existing.count + 1, timestamp)
+            existing.copy(count = existing.count + 1, timestamp)
           else
             existing.copy(count = existing.count + 1)
       }
@@ -58,7 +62,21 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] {
       log.debug("Consumer [{}] count [{}], in count [{}]", consumerId, tracking.count, inCount.get)
       // no concurrent updates for a given consumerId
       consumerTracking.put(consumerId, tracking)
-      true // FIXME detect slow consumer
+
+      val slowConsumers = findLaggingBehindMost()
+      if (slowConsumers.nonEmpty) {
+        log.info("[{}] slow consumers are aborted, behind by at least [{}].", slowConsumers.size, gapTreshold)
+        // FIXME should wait a while until aborting slow consumers, might be temporary glitch?
+        slowConsumers.foreach { tracking =>
+          tracking.consumerKillSwitch.abort(new SlowConsumerException(s"Consumer is too slow."))
+        }
+      }
+    }
+
+    private def findLaggingBehindMost(): Vector[ConsumerTracking] = {
+      import akka.util.ccompat.JavaConverters._
+      val inCountValue = inCount.get
+      consumerTracking.values.iterator.asScala.filter(inCountValue - _.count >= gapTreshold).toVector
     }
   }
 
@@ -89,6 +107,8 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
   private def createFirehose(key: FirehoseKey): Firehose = {
     implicit val sys: ActorSystem[_] = system
 
+    val bufferSize = 32 // FIXME config
+
     val firehoseHub =
       eventsBySlices[Any](
         key.entityType,
@@ -104,11 +124,11 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
           }
           env
         }
-        .runWith(BroadcastHub.sink[EventEnvelope[Any]](bufferSize = 32)) // FIXME config
+        .runWith(BroadcastHub.sink[EventEnvelope[Any]](bufferSize))
 
     // FIXME hub will be closed when last consumer is closed, need to detect that and start again (difficult concurrency)?
 
-    new Firehose(firehoseHub)
+    new Firehose(firehoseHub, bufferSize)
   }
 
   // FIXME can this be in a ReadJournal
@@ -128,14 +148,17 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
         }
         .via(catchupKillSwitch.flow)
 
+    val consumerKillSwitch = KillSwitches.shared("consumerKillSwitch")
+
     firehose.firehoseHub
       .map { env =>
-        firehose.updateConsumerTracking(consumerId, timestampOffset(env).timestamp)
+        firehose.updateConsumerTracking(consumerId, timestampOffset(env).timestamp, consumerKillSwitch)
         FirehoseEventEnvelope(env)
       }
       .merge(catchup)
       .via(MergeSelector.flow(consumerId, catchupKillSwitch))
       .map(_.asInstanceOf[EventEnvelope[Event]])
+      .via(consumerKillSwitch.flow)
   }
 
   // can be overridden in tests

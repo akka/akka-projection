@@ -4,7 +4,8 @@
 
 package akka.projection.grpc.internal
 
-import java.time.Duration
+import scala.concurrent.duration._
+import java.time.{ Duration => JDuration }
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.Promise
@@ -18,10 +19,12 @@ import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
+import akka.projection.grpc.internal.EventsBySlicesFirehose.SlowConsumerException
 import akka.projection.testkit.internal.TestClock
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
+import akka.stream.testkit.TestSubscriber.OnNext
 import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -40,7 +43,7 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
       seqNr: Long,
       evt: String,
       tags: Set[String] = Set.empty): EventEnvelope[Any] = {
-    clock.tick(Duration.ofMillis(1))
+    clock.tick(JDuration.ofMillis(1))
     val now = clock.instant()
     EventEnvelope(
       TimestampOffset(now, Map(pid.id -> seqNr)),
@@ -123,8 +126,6 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
       }
     }
 
-//    outProbe
-//    catchupPublisher
     lazy val firehosePublisher = {
       outProbe // materialize at least one
       firehosePublisherPromise.future.futureValue
@@ -158,7 +159,7 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
       catchupPublisher.sendNext(allEnvelopes(3))
       outProbe.expectNext(allEnvelopes(3)) // from catchup, emitting from both
 
-      clock.tick(Duration.ofSeconds(60))
+      clock.tick(JDuration.ofSeconds(60))
       val env5 = createEnvelope(PersistenceId(entityType, "a"), 2, "a2")
       catchupPublisher.sendNext(env5)
       outProbe.expectNext(env5)
@@ -174,6 +175,10 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
       // using two consumers
       outProbe(0).request(2)
       outProbe(1).request(2)
+
+      // FIXME is there a way to know that it has been added to the hub?
+      Thread.sleep(1000)
+
       firehosePublisher.sendNext(allEnvelopes(0))
       catchupPublisher(0).sendNext(allEnvelopes(0))
       catchupPublisher(1).sendNext(allEnvelopes(0))
@@ -204,6 +209,61 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
       firehose.consumerTracking.values.asScala.exists(_.count == 1 + moreEnvelopes.size) shouldBe true
       // no demand from outProbe(1), but I think there is an internal buffer that makes it 2
       firehose.consumerTracking.values.asScala.exists(_.count <= 2) shouldBe true
+    }
+
+    "abort slow consumers" in new Setup {
+      // using two consumers
+      outProbe(0).request(2)
+      outProbe(1).request(2)
+
+      // FIXME is there a way to know that it has been added to the hub?
+      Thread.sleep(1000)
+
+      firehosePublisher.sendNext(allEnvelopes(0))
+      catchupPublisher(0).sendNext(allEnvelopes(0))
+      catchupPublisher(1).sendNext(allEnvelopes(0))
+      outProbe(0).expectNext(allEnvelopes(0))
+      outProbe(1).expectNext(allEnvelopes(0))
+
+      catchupPublisher(0).sendNext(allEnvelopes(1))
+      catchupPublisher(1).sendNext(allEnvelopes(1))
+      outProbe(0).expectNext(allEnvelopes(1))
+      outProbe(1).expectNext(allEnvelopes(1))
+
+      // only requesting for outProbe(0)
+      outProbe(0).request(100)
+      // less than BroadcastHub buffer size, but close to the limit
+      val moreEnvelopes = (1 to 30).map(n => createEnvelope(PersistenceId(entityType, "x"), n, s"x$n"))
+      moreEnvelopes.foreach(firehosePublisher.sendNext)
+      outProbe(0).expectNextN(moreEnvelopes.size) shouldBe moreEnvelopes
+      outProbe(1).expectError().getClass shouldBe classOf[SlowConsumerException]
+    }
+
+    "not abort consumers when fast" in new Setup {
+      val numberOfConsumers = 10
+      (0 until numberOfConsumers).foreach { i =>
+        outProbe(i).request(10000)
+      }
+
+      // FIXME is there a way to know that it has been added to the hub?
+      Thread.sleep(1000)
+
+      val moreEnvelopes = (1 to 100).map { n =>
+        createEnvelope(PersistenceId(entityType, "x"), n, s"x$n")
+      }
+
+      moreEnvelopes.foreach { env =>
+        firehosePublisher.sendNext(env)
+        (0 until numberOfConsumers).foreach { i =>
+          catchupPublisher(i).sendNext(env)
+        }
+      }
+
+      (0 until numberOfConsumers).foreach { i =>
+        // there may be duplicates
+        val received = outProbe(i).receiveWhile(max = 10.seconds, idle = 100.millis) { case OnNext(env) => env }
+        received.toSet shouldBe moreEnvelopes.toSet
+      }
     }
   }
 
