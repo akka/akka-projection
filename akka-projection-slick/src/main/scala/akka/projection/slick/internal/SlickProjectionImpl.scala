@@ -28,6 +28,7 @@ import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.ManagementState
+import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
@@ -128,8 +129,9 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       recoveryStrategy: HandlerRecoveryStrategy): SlickProjectionImpl[Offset, Envelope, P] = {
     val newStrategy =
       offsetStrategy match {
-        case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
-        case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+        case s: ExactlyOnce           => s.copy(recoveryStrategy = Some(recoveryStrategy))
+        case s: AtLeastOnce           => s.copy(recoveryStrategy = Some(recoveryStrategy))
+        case s: OffsetStoredByHandler => s.copy(recoveryStrategy = Some(recoveryStrategy))
         //NOTE: AtMostOnce has its own withRecoveryStrategy variant
         // this method is not available for AtMostOnceProjection
         case s: AtMostOnce => s

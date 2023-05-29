@@ -50,6 +50,13 @@ private[projection] final case class AtLeastOnce(
  * INTERNAL API
  */
 @InternalApi
+private[projection] final case class OffsetStoredByHandler(recoveryStrategy: Option[HandlerRecoveryStrategy] = None)
+    extends OffsetStrategy
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
 private[projection] sealed trait HandlerStrategy {
   def recreateHandlerOnNextAccess(): Unit
 

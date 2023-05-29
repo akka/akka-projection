@@ -226,7 +226,10 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     }
   }
 
-  private def exactlyOnceProcessing(
+  /**
+   * ExactlyOnce or async store of offset by the handler adapter.
+   */
+  private def offsetStoredByHandlerProcessing(
       source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed],
       recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
 
@@ -434,7 +437,10 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     val composedSource: Source[Done, NotUsed] =
       offsetStrategy match {
         case ExactlyOnce(recoveryStrategyOpt) =>
-          exactlyOnceProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
+          offsetStoredByHandlerProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
+
+        case OffsetStoredByHandler(recoveryStrategyOpt) =>
+          offsetStoredByHandlerProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
 
         case AtLeastOnce(afterEnvelopesOpt, orAfterDurationOpt, recoveryStrategyOpt) =>
           atLeastOnceProcessing(

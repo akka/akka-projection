@@ -29,6 +29,7 @@ import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.ManagementState
+import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
@@ -198,7 +199,7 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       .copy(afterEnvelopes = Some(afterEnvelopes), orAfterDuration = Some(afterDuration)))
 
   /**
-   * Settings for GroupedSlickProjection
+   * Settings for GroupedJdbcProjection
    */
   override def withGroup(
       groupAfterEnvelopes: Int,
@@ -210,8 +211,9 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
   override def withRecoveryStrategy(
       recoveryStrategy: HandlerRecoveryStrategy): JdbcProjectionImpl[Offset, Envelope, S] = {
     val newStrategy = offsetStrategy match {
-      case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
-      case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s: ExactlyOnce           => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s: AtLeastOnce           => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s: OffsetStoredByHandler => s.copy(recoveryStrategy = Some(recoveryStrategy))
       //NOTE: AtMostOnce has its own withRecoveryStrategy variant
       // this method is not available for AtMostOnceProjection
       case s: AtMostOnce => s

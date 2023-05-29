@@ -725,9 +725,12 @@ class R2dbcTimestampOffsetProjectionSpec
     }
 
     "handle grouped async projection" in {
-      implicit val pid = UUID.randomUUID().toString
+      val pid1 = UUID.randomUUID().toString
+      val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
-      val envelopes = createEnvelopes(pid, 6)
+      val envelopes1 = createEnvelopes(pid1, 3)
+      val envelopes2 = createEnvelopes(pid2, 3)
+      val envelopes = envelopes1.zip(envelopes2).flatMap { case (a, b) => List(a, b) }
       val sourceProvider = createSourceProvider(envelopes)
       implicit val offsetStore = createOffsetStore(projectionId, sourceProvider)
 
@@ -737,7 +740,7 @@ class R2dbcTimestampOffsetProjectionSpec
         new Handler[immutable.Seq[EventEnvelope[String]]] {
           override def process(envelopes: immutable.Seq[EventEnvelope[String]]): Future[Done] = {
             Future {
-              envelopes.foreach(env => result.append(env.event).append("|"))
+              envelopes.foreach(env => result.append(env.persistenceId).append("_").append(env.event).append("|"))
             }.map(_ => Done)
           }
         }
@@ -749,12 +752,14 @@ class R2dbcTimestampOffsetProjectionSpec
 
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
-        result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
+        result.toString shouldBe s"${pid1}_e1|${pid2}_e1|${pid1}_e2|${pid2}_e2|${pid1}_e3|${pid2}_e3|"
       }
 
       eventually {
         offsetShouldBe(envelopes.last.offset)
       }
+      offsetStore.getState().byPid(pid1).seqNr shouldBe 3
+      offsetStore.getState().byPid(pid2).seqNr shouldBe 3
     }
 
     "filter duplicates for grouped async projection" in {
