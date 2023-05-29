@@ -47,6 +47,7 @@ import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.ManagementState
+import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionContextImpl
 import akka.projection.internal.ProjectionSettings
@@ -390,17 +391,14 @@ private[projection] object R2dbcProjectionImpl {
           } else {
             Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
               loadedEnvelopes =>
+                val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
                 val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
                 if (filteredEnvelopes.isEmpty) {
-                  offsetStore.addInflights(loadedEnvelopes)
-                  FutureDone
+                  offsetStore.saveOffsets(offsets)
                 } else {
-                  delegate
-                    .process(filteredEnvelopes)
-                    .map { _ =>
-                      offsetStore.addInflights(loadedEnvelopes)
-                      Done
-                    }
+                  delegate.process(filteredEnvelopes).flatMap { _ =>
+                    offsetStore.saveOffsets(offsets)
+                  }
                 }
             }
           }
@@ -582,8 +580,9 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
   override def withRecoveryStrategy(
       recoveryStrategy: HandlerRecoveryStrategy): R2dbcProjectionImpl[Offset, Envelope] = {
     val newStrategy = offsetStrategy match {
-      case s: ExactlyOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
-      case s: AtLeastOnce => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s: ExactlyOnce           => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s: AtLeastOnce           => s.copy(recoveryStrategy = Some(recoveryStrategy))
+      case s: OffsetStoredByHandler => s.copy(recoveryStrategy = Some(recoveryStrategy))
       //NOTE: AtMostOnce has its own withRecoveryStrategy variant
       // this method is not available for AtMostOnceProjection
       case s: AtMostOnce => s

@@ -5,7 +5,6 @@
 package akka.projection.r2dbc.scaladsl
 
 import scala.collection.immutable
-import scala.concurrent.duration.Duration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -20,6 +19,7 @@ import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.NoopStatusObserver
+import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl
@@ -262,7 +262,7 @@ object R2dbcProjection {
       settingsOpt = None,
       sourceProvider,
       restartBackoffOpt = None,
-      offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1), orAfterDuration = Some(Duration.Zero)),
+      offsetStrategy = OffsetStoredByHandler(),
       handlerStrategy = GroupedHandlerStrategy(adaptedHandler),
       NoopStatusObserver,
       offsetStore)
