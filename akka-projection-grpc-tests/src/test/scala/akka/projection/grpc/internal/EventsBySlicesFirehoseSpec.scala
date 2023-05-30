@@ -134,7 +134,6 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
 
   "EventsBySlicesFirehose" must {
     "emit from catchup" in new Setup {
-      outProbe
       allEnvelopes.foreach(catchupPublisher.sendNext)
       outProbe.request(10)
       outProbe.expectNextN(envelopes.size) shouldBe envelopes
@@ -264,6 +263,22 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
         val received = outProbe(i).receiveWhile(max = 10.seconds, idle = 100.millis) { case OnNext(env) => env }
         received.toSet shouldBe moreEnvelopes.toSet
       }
+    }
+
+    "not close when catchup is closed" in new Setup {
+      allEnvelopes.foreach(catchupPublisher.sendNext)
+      outProbe.request(10)
+      catchupPublisher.sendComplete()
+      outProbe.expectNextN(envelopes.size) shouldBe envelopes
+      outProbe.expectNoMessage() // not OnComplete
+    }
+
+    "close when firehose is closed" in new Setup {
+      allEnvelopes.foreach(catchupPublisher.sendNext)
+      outProbe.request(10)
+      outProbe.expectNextN(envelopes.size) shouldBe envelopes
+      firehosePublisher.sendComplete()
+      outProbe.expectComplete()
     }
   }
 

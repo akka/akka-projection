@@ -21,11 +21,21 @@ import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.stream.Attributes
+import akka.stream.FanInShape2
+import akka.stream.FlowShape
+import akka.stream.Inlet
 import akka.stream.KillSwitch
 import akka.stream.KillSwitches
+import akka.stream.Outlet
 import akka.stream.scaladsl.BroadcastHub
-import akka.stream.scaladsl.Flow
+import akka.stream.scaladsl.GraphDSL
 import akka.stream.scaladsl.Source
+import akka.stream.stage.GraphStage
+import akka.stream.stage.GraphStageLogic
+import akka.stream.stage.InHandler
+import akka.stream.stage.OutHandler
+import akka.util.OptionVal
 import org.slf4j.LoggerFactory
 
 object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] {
@@ -79,11 +89,6 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] {
       consumerTracking.values.iterator.asScala.filter(inCountValue - _.count >= gapTreshold).toVector
     }
   }
-
-  sealed trait WrappedEventEnvelope
-
-  final case class FirehoseEventEnvelope(env: EventEnvelope[Any]) extends WrappedEventEnvelope
-  final case class CatchupEventEnvelope(env: EventEnvelope[Any]) extends WrappedEventEnvelope
 
   def timestampOffset(env: EventEnvelope[Any]): TimestampOffset =
     env match {
@@ -141,24 +146,30 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
     val firehose = getFirehose(entityType, minSlice to maxSlice)
     val consumerId = UUID.randomUUID().toString
     val catchupKillSwitch = KillSwitches.shared("catchupKillSwitch")
-    val catchup =
-      eventsBySlices[Event](entityType, minSlice, maxSlice, offset, firehose = false)
-        .map {
-          case env: EventEnvelope[Any] @unchecked => CatchupEventEnvelope(env)
-        }
+    val catchupSource =
+      eventsBySlices[Any](entityType, minSlice, maxSlice, offset, firehose = false)
         .via(catchupKillSwitch.flow)
 
     val consumerKillSwitch = KillSwitches.shared("consumerKillSwitch")
 
-    firehose.firehoseHub
+    val firehoseSource = firehose.firehoseHub
       .map { env =>
         firehose.updateConsumerTracking(consumerId, timestampOffset(env).timestamp, consumerKillSwitch)
-        FirehoseEventEnvelope(env)
+        env
       }
-      .merge(catchup)
-      .via(MergeSelector.flow(consumerId, catchupKillSwitch))
+
+    import GraphDSL.Implicits._
+    val catchupOrFirehose = GraphDSL.createGraph(catchupSource) { implicit b => r =>
+      val merge = b.add(new CatchupOrFirehose(consumerId, catchupKillSwitch))
+      r ~> merge.in1
+      FlowShape(merge.in0, merge.out)
+    }
+
+    firehoseSource
+      .via(catchupOrFirehose)
       .map(_.asInstanceOf[EventEnvelope[Event]])
       .via(consumerKillSwitch.flow)
+
   }
 
   // can be overridden in tests
@@ -177,19 +188,120 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
 
 }
 
-// FIXME maybe write as GraphStage instead
-object MergeSelector {
-  import EventsBySlicesFirehose._
+object CatchupOrFirehose {
   private sealed trait Mode
   private case object CatchUpOnly extends Mode
   private final case class Both(caughtUpTimestamp: Instant) extends Mode
   private case object FirehoseOnly extends Mode
 
-  private val log = LoggerFactory.getLogger(classOf[MergeSelector.type])
+  private val log = LoggerFactory.getLogger(classOf[CatchupOrFirehose])
 
-  def flow(consumerId: String, catchupKillSwitch: KillSwitch): Flow[WrappedEventEnvelope, EventEnvelope[Any], NotUsed] =
-    Flow[WrappedEventEnvelope].statefulMapConcat {
-      var mode: Mode = CatchUpOnly
+}
+
+class CatchupOrFirehose(consumerId: String, catchupKillSwitch: KillSwitch)
+    extends GraphStage[FanInShape2[EventEnvelope[Any], EventEnvelope[Any], EventEnvelope[Any]]] {
+  import CatchupOrFirehose._
+  import EventsBySlicesFirehose.isDurationGreaterThan
+  import EventsBySlicesFirehose.timestampOffset
+
+  override def initialAttributes = Attributes.name("CatchupOrFirehose")
+  override val shape: FanInShape2[EventEnvelope[Any], EventEnvelope[Any], EventEnvelope[Any]] =
+    new FanInShape2[EventEnvelope[Any], EventEnvelope[Any], EventEnvelope[Any]]("CatchupOrFirehose")
+  def out: Outlet[EventEnvelope[Any]] = shape.out
+  val in0: Inlet[EventEnvelope[Any]] = shape.in0
+  val in1: Inlet[EventEnvelope[Any]] = shape.in1
+
+  override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
+
+    // Without this the completion signalling would take one extra pull
+    private def willShutDown: Boolean = isClosed(in0)
+
+    private val firehoseInlet = new FirehoseInlet(in0)
+    private val catchupInlet = new CatchupInlet(in1)
+
+    private var mode: Mode = CatchUpOnly
+
+    setHandler(out, new OutHandler {
+      override def onPull(): Unit = {
+        tryPushOutput()
+        tryPullAllIfNeeded()
+      }
+    })
+
+    setHandler(in0, firehoseInlet)
+    setHandler(in1, catchupInlet)
+
+    private def tryPushOutput(): Unit = {
+      def tryPushFirehoseValue(): Boolean =
+        firehoseInlet.value match {
+          case OptionVal.Some(env) =>
+            firehoseInlet.value = OptionVal.None
+            log.debug(
+              "Consumer [{}] push from firehose [{}] seqNr [{}]",
+              consumerId,
+              env.persistenceId,
+              env.sequenceNr
+            ) // FIXME trace
+            push(out, env)
+            true
+          case _ =>
+            false
+        }
+
+      def tryPushCatchupValue(): Boolean =
+        catchupInlet.value match {
+          case OptionVal.Some(env) =>
+            catchupInlet.value = OptionVal.None
+            log.debug(
+              "Consumer [{}] push from catchup [{}] seqNr [{}]",
+              consumerId,
+              env.persistenceId,
+              env.sequenceNr
+            ) // FIXME trace
+            push(out, env)
+            true
+          case _ =>
+            false
+        }
+
+      if (isAvailable(out)) {
+        mode match {
+          case FirehoseOnly =>
+            // there can be one final value from catchup when switching to FirehoseOnly
+            if (!tryPushCatchupValue())
+              tryPushFirehoseValue()
+          case Both(_) =>
+            if (!tryPushFirehoseValue())
+              tryPushCatchupValue()
+          case CatchUpOnly =>
+            tryPushCatchupValue()
+        }
+      }
+
+      if (willShutDown) completeStage()
+    }
+
+    private def tryPullAllIfNeeded(): Unit = {
+      if (isClosed(in0)) {
+        completeStage()
+      } else {
+        if (!hasBeenPulled(in0) && firehoseInlet.value.isEmpty) {
+          tryPull(in0)
+        }
+        if (mode != FirehoseOnly && !hasBeenPulled(in1) && catchupInlet.value.isEmpty) {
+          tryPull(in1)
+        }
+      }
+    }
+
+    def isCaughtUp(env: EventEnvelope[Any]): Boolean = {
+      val offset = timestampOffset(env)
+      firehoseInlet.firehoseOffset.timestamp != Instant.EPOCH && !firehoseInlet.firehoseOffset.timestamp
+        .isAfter(offset.timestamp)
+    }
+
+    private class FirehoseInlet(in: Inlet[EventEnvelope[Any]]) extends InHandler {
+      var value: OptionVal[EventEnvelope[Any]] = OptionVal.None
       var firehoseOffset: TimestampOffset = TimestampOffset(Instant.EPOCH, Map.empty)
 
       def updateFirehoseOffset(env: EventEnvelope[Any]): Unit = {
@@ -198,49 +310,72 @@ object MergeSelector {
           firehoseOffset = offset // update when newer
       }
 
-      def isCaughtUp(env: EventEnvelope[Any]): Boolean = {
-        val offset = timestampOffset(env)
-        firehoseOffset.timestamp != Instant.EPOCH && !firehoseOffset.timestamp.isAfter(offset.timestamp)
-      }
+      override def onPush(): Unit = {
+        if (value.isDefined)
+          throw new IllegalStateException("FirehoseInlet.onPush but has already value. This is a bug.")
 
-      () => {
-        case FirehoseEventEnvelope(env) =>
-          mode match {
-            case CatchUpOnly =>
-              updateFirehoseOffset(env)
-              Nil // skip
-            case Both(_) =>
-              updateFirehoseOffset(env)
-              env :: Nil // emit
-            case FirehoseOnly =>
-              env :: Nil // emit
-          }
+        val env = grab(in)
 
-        case CatchupEventEnvelope(env) =>
-          mode match {
-            case CatchUpOnly =>
-              if (isCaughtUp(env)) {
-                val timestamp = timestampOffset(env).timestamp
-                log.debug("Consumer [{}] caught up at [{}]", consumerId, timestamp)
-                mode = Both(timestamp)
-              }
-              env :: Nil // emit
-            case Both(caughtUpTimestamp) =>
-              val timestamp = timestampOffset(env).timestamp
-              if (isCaughtUp(env) && isDurationGreaterThan(caughtUpTimestamp, timestamp, JDuration.ofSeconds(20))) {
-                // FIXME config duration ^
-                log.debug("Consumer [{}] switching to firehose only [{}]", consumerId, timestamp)
-                catchupKillSwitch.shutdown()
-                mode = FirehoseOnly
-              }
-              // FIXME do we need to fall back to CatchUpOnly if it's not caught up for a longer period of time?
+        mode match {
+          case FirehoseOnly =>
+            value = OptionVal.Some(env)
+          case Both(_) =>
+            updateFirehoseOffset(env)
+            value = OptionVal.Some(env)
+          case CatchUpOnly =>
+            updateFirehoseOffset(env)
+        }
 
-              env :: Nil // emit
-            case FirehoseOnly =>
-              Nil // skip
-          }
-
+        tryPushOutput()
+        tryPullAllIfNeeded()
       }
     }
 
+    private class CatchupInlet(in: Inlet[EventEnvelope[Any]]) extends InHandler {
+      var value: OptionVal[EventEnvelope[Any]] = OptionVal.None
+
+      override def onPush(): Unit = {
+        if (value.isDefined)
+          throw new IllegalStateException("CatchupInlet.onPush but has already value. This is a bug.")
+
+        val env = grab(in)
+
+        mode match {
+          case CatchUpOnly =>
+            if (isCaughtUp(env)) {
+              val timestamp = timestampOffset(env).timestamp
+              log.debug("Consumer [{}] caught up at [{}]", consumerId, timestamp)
+              mode = Both(timestamp)
+            }
+            value = OptionVal.Some(env)
+
+          case Both(caughtUpTimestamp) =>
+            val timestamp = timestampOffset(env).timestamp
+            if (isCaughtUp(env) && isDurationGreaterThan(caughtUpTimestamp, timestamp, JDuration.ofSeconds(20))) {
+              // FIXME config duration ^
+              log.debug("Consumer [{}] switching to firehose only [{}]", consumerId, timestamp)
+              catchupKillSwitch.shutdown()
+              mode = FirehoseOnly
+            }
+            // FIXME do we need to fall back to CatchUpOnly if it's not caught up for a longer period of time?
+
+            value = OptionVal.Some(env)
+
+          case FirehoseOnly =>
+          // skip
+        }
+
+        tryPushOutput()
+        tryPullAllIfNeeded()
+      }
+
+      override def onUpstreamFinish(): Unit = {
+        // important to override onUpstreamFinish, otherwise it will close everything
+        log.debug("Consumer [{}] catchup closed", consumerId)
+      }
+    }
+
+  }
+
+  override def toString = "CatchupOrFirehose"
 }
