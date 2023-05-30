@@ -6,6 +6,7 @@ package akka.projection.grpc.internal
 
 import scala.concurrent.duration._
 import java.time.{ Duration => JDuration }
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.Promise
@@ -13,6 +14,7 @@ import scala.concurrent.Promise
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
@@ -21,6 +23,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.EventsBySlicesFirehose.SlowConsumerException
 import akka.projection.testkit.internal.TestClock
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
@@ -102,12 +105,17 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
     def outProbe(consumerIndex: Int): TestSubscriber.Probe[EventEnvelope[Any]] = consumers(consumerIndex).outProbe
     def outProbe: TestSubscriber.Probe[EventEnvelope[Any]] = outProbe(0)
 
+    val firehoseRunning = new AtomicBoolean
     private val firehosePublisherPromise = Promise[TestPublisher.Probe[EventEnvelope[Any]]]()
     private val firehoseSource: Source[EventEnvelope[Any], NotUsed] =
       TestSource[EventEnvelope[Any]]()
-        .mapMaterializedValue { probe =>
-          firehosePublisherPromise.success(probe)
-          NotUsed
+        .watchTermination()(Keep.both)
+        .mapMaterializedValue {
+          case (probe, termination) =>
+            firehoseRunning.set(true)
+            termination.onComplete(_ => firehoseRunning.set(false))(ExecutionContexts.parasitic)
+            firehosePublisherPromise.success(probe)
+            NotUsed
         }
 
     val eventsBySlicesFirehose = new EventsBySlicesFirehose(system) {
@@ -279,6 +287,45 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNextN(envelopes.size) shouldBe envelopes
       firehosePublisher.sendComplete()
       outProbe.expectComplete()
+    }
+
+    "close when last consumer is removed, but more consumers can be added later" in new Setup {
+      // using two consumers first
+      outProbe(0).request(10)
+      outProbe(1).request(10)
+
+      // FIXME is there a way to know that it has been added to the hub?
+      Thread.sleep(1000)
+
+      catchupPublisher(0).sendNext(allEnvelopes(0))
+      catchupPublisher(1).sendNext(allEnvelopes(0))
+      outProbe(0).expectNext(allEnvelopes(0))
+      outProbe(1).expectNext(allEnvelopes(0))
+      firehoseRunning.get shouldBe true
+
+      outProbe(0).cancel()
+      catchupPublisher(1).sendNext(allEnvelopes(1))
+      outProbe(1).expectNext(allEnvelopes(1))
+      firehoseRunning.get shouldBe true
+
+      outProbe(1).cancel()
+
+      // another consumer
+      outProbe(2).request(10)
+      // FIXME is there a way to know that it has been added to the hub?
+      Thread.sleep(1000)
+      catchupPublisher(2).sendNext(allEnvelopes(2))
+      outProbe(2).expectNext(allEnvelopes(2))
+      firehoseRunning.get shouldBe true
+
+      outProbe(2).cancel()
+      // after a while the firehose will be shutdown
+      eventually {
+        firehoseRunning.get shouldBe false
+      }
+
+      // FIXME add another (more integration test) that verifies similar that consumers can be added to the
+      // EventsBySlicesFirehose extension after the firehose has been shutdown
     }
   }
 

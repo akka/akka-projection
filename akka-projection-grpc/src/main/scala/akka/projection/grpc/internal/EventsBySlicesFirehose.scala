@@ -9,7 +9,9 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
+import scala.concurrent.duration._
 import scala.annotation.nowarn
+import scala.annotation.tailrec
 import scala.util.control.NoStackTrace
 
 import akka.NotUsed
@@ -30,6 +32,7 @@ import akka.stream.KillSwitches
 import akka.stream.Outlet
 import akka.stream.scaladsl.BroadcastHub
 import akka.stream.scaladsl.GraphDSL
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import akka.stream.stage.GraphStage
 import akka.stream.stage.GraphStageLogic
@@ -53,10 +56,38 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] {
 
   final case class ConsumerTracking(count: Long, timestamp: Instant, consumerKillSwitch: KillSwitch)
 
-  class Firehose(val firehoseHub: Source[EventEnvelope[Any], NotUsed], bufferSize: Int) {
+  class Firehose(
+      val firehoseHub: Source[EventEnvelope[Any], NotUsed],
+      bufferSize: Int,
+      firehoseKillSwitch: KillSwitch) {
     val inCount: AtomicLong = new AtomicLong
     val consumerTracking: ConcurrentHashMap[String, ConsumerTracking] = new ConcurrentHashMap
     private val gapTreshold = math.max(2, bufferSize - 4)
+    @volatile private var firehoseIsShutdown = false
+
+    def consumerStarted(consumerId: String, consumerKillSwitch: KillSwitch): Unit = {
+      log.debug("Consumer [{}] started", consumerId)
+      consumerTracking.putIfAbsent(consumerId, ConsumerTracking(count = 0, Instant.EPOCH, consumerKillSwitch))
+    }
+
+    def consumerTerminated(consumerId: String): Int = {
+      log.debug("Consumer [{}] terminated", consumerId)
+      consumerTracking.remove(consumerId)
+      consumerTracking.size
+    }
+
+    def shutdownFirehoseIfNoConsumers(): Boolean = {
+      if (consumerTracking.isEmpty) {
+        log.debug("Shutdown firehose, no consumers")
+        firehoseIsShutdown = true
+        firehoseKillSwitch.shutdown()
+        true
+      } else
+        false
+    }
+
+    def isShutdown: Boolean =
+      firehoseIsShutdown
 
     def updateConsumerTracking(consumerId: String, timestamp: Instant, consumerKillSwitch: KillSwitch): Unit = {
       val tracking = consumerTracking.get(consumerId) match {
@@ -106,13 +137,25 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
   import EventsBySlicesFirehose._
   private val firehoses = new ConcurrentHashMap[FirehoseKey, Firehose]()
 
-  def getFirehose(entityType: String, sliceRange: Range): Firehose =
-    firehoses.computeIfAbsent(FirehoseKey(entityType, sliceRange), key => createFirehose(key))
+  @tailrec final def getFirehose(entityType: String, sliceRange: Range): Firehose = {
+    val key = FirehoseKey(entityType, sliceRange)
+    val firehose = firehoses.computeIfAbsent(key, key => createFirehose(key))
+    if (firehose.isShutdown) {
+      // concurrency race condition, but it should be removed
+      firehoses.remove(key, firehose)
+      getFirehose(entityType, sliceRange) // try again
+    } else
+      firehose
+  }
 
   private def createFirehose(key: FirehoseKey): Firehose = {
     implicit val sys: ActorSystem[_] = system
 
+    log.debug("Create firehose entityType [{}], sliceRange [{}]", key.entityType, key.sliceRange)
+
     val bufferSize = 32 // FIXME config
+
+    val firehoseKillSwitch = KillSwitches.shared("firehoseKillSwitch")
 
     val firehoseHub =
       eventsBySlices[Any](
@@ -124,16 +167,17 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
         .map { env =>
           // increment counter before the hub
           firehoses.get(key) match {
-            case null     => throw new IllegalStateException(s"Firehose [$key] not created. This is a bug.")
+            case null     => // already shutdown
             case firehose => firehose.inCount.incrementAndGet()
           }
           env
         }
+        .via(firehoseKillSwitch.flow)
         .runWith(BroadcastHub.sink[EventEnvelope[Any]](bufferSize))
 
     // FIXME hub will be closed when last consumer is closed, need to detect that and start again (difficult concurrency)?
 
-    new Firehose(firehoseHub, bufferSize)
+    new Firehose(firehoseHub, bufferSize, firehoseKillSwitch)
   }
 
   // FIXME can this be in a ReadJournal
@@ -142,9 +186,21 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
       minSlice: Int,
       maxSlice: Int,
       offset: Offset): Source[EventEnvelope[Event], NotUsed] = {
-
-    val firehose = getFirehose(entityType, minSlice to maxSlice)
+    val sliceRange = minSlice to maxSlice
+    val firehose = getFirehose(entityType, sliceRange)
     val consumerId = UUID.randomUUID().toString
+
+    def consumerTerminated(): Unit = {
+      if (firehose.consumerTerminated(consumerId) == 0) {
+        // Don't shutdown firehose immediately because Projection it should survive Projection restart
+        system.scheduler.scheduleOnce(2.seconds, () => {
+          // FIXME config ^
+          if (firehose.shutdownFirehoseIfNoConsumers())
+            firehoses.remove(FirehoseKey(entityType, sliceRange))
+        })(system.executionContext)
+      }
+    }
+
     val catchupKillSwitch = KillSwitches.shared("catchupKillSwitch")
     val catchupSource =
       eventsBySlices[Any](entityType, minSlice, maxSlice, offset, firehose = false)
@@ -169,7 +225,14 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
       .via(catchupOrFirehose)
       .map(_.asInstanceOf[EventEnvelope[Event]])
       .via(consumerKillSwitch.flow)
-
+      .watchTermination()(Keep.right)
+      .mapMaterializedValue { termination =>
+        firehose.consumerStarted(consumerId, consumerKillSwitch)
+        termination.onComplete { _ =>
+          consumerTerminated()
+        }(system.executionContext)
+        NotUsed
+      }
   }
 
   // can be overridden in tests
