@@ -295,9 +295,12 @@ class CatchupOrFirehose(consumerId: String, catchupKillSwitch: KillSwitch)
     }
 
     def isCaughtUp(env: EventEnvelope[Any]): Boolean = {
-      val offset = timestampOffset(env)
-      firehoseInlet.firehoseOffset.timestamp != Instant.EPOCH && !firehoseInlet.firehoseOffset.timestamp
-        .isAfter(offset.timestamp)
+      if (env.source == "") {
+        val offset = timestampOffset(env)
+        firehoseInlet.firehoseOffset.timestamp != Instant.EPOCH && !firehoseInlet.firehoseOffset.timestamp
+          .isAfter(offset.timestamp)
+      } else
+        false // don't look at pub-sub or backtracking events
     }
 
     private class FirehoseInlet(in: Inlet[EventEnvelope[Any]]) extends InHandler {
@@ -305,9 +308,12 @@ class CatchupOrFirehose(consumerId: String, catchupKillSwitch: KillSwitch)
       var firehoseOffset: TimestampOffset = TimestampOffset(Instant.EPOCH, Map.empty)
 
       def updateFirehoseOffset(env: EventEnvelope[Any]): Unit = {
-        val offset = timestampOffset(env)
-        if (offset.timestamp.isAfter(firehoseOffset.timestamp))
-          firehoseOffset = offset // update when newer
+        // don't look at pub-sub or backtracking events
+        if (env.source == "") {
+          val offset = timestampOffset(env)
+          if (offset.timestamp.isAfter(firehoseOffset.timestamp))
+            firehoseOffset = offset // update when newer
+        }
       }
 
       override def onPush(): Unit = {
@@ -350,14 +356,17 @@ class CatchupOrFirehose(consumerId: String, catchupKillSwitch: KillSwitch)
             value = OptionVal.Some(env)
 
           case Both(caughtUpTimestamp) =>
-            val timestamp = timestampOffset(env).timestamp
-            if (isCaughtUp(env) && isDurationGreaterThan(caughtUpTimestamp, timestamp, JDuration.ofSeconds(20))) {
-              // FIXME config duration ^
-              log.debug("Consumer [{}] switching to firehose only [{}]", consumerId, timestamp)
-              catchupKillSwitch.shutdown()
-              mode = FirehoseOnly
+            // don't look at pub-sub or backtracking events
+            if (env.source == "") {
+              val timestamp = timestampOffset(env).timestamp
+              if (isCaughtUp(env) && isDurationGreaterThan(caughtUpTimestamp, timestamp, JDuration.ofSeconds(20))) {
+                // FIXME config duration ^
+                log.debug("Consumer [{}] switching to firehose only [{}]", consumerId, timestamp)
+                catchupKillSwitch.shutdown()
+                mode = FirehoseOnly
+              }
+              // FIXME do we need to fall back to CatchUpOnly if it's not caught up for a longer period of time?
             }
-            // FIXME do we need to fall back to CatchUpOnly if it's not caught up for a longer period of time?
 
             value = OptionVal.Some(env)
 
