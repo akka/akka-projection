@@ -66,26 +66,32 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] with E
       consumerKillSwitch: KillSwitch,
       slowConsumerCandidate: Option[Instant])
 
-  final class Firehose(val firehoseHub: Source[EventEnvelope[Any], NotUsed], firehoseKillSwitch: KillSwitch) {
+  final class Firehose(
+      val firehoseKey: FirehoseKey,
+      val firehoseHub: Source[EventEnvelope[Any], NotUsed],
+      firehoseKillSwitch: KillSwitch) {
     val consumerTracking: ConcurrentHashMap[String, ConsumerTracking] = new ConcurrentHashMap
     @volatile private var firehoseIsShutdown = false
 
+    private def entityType = firehoseKey.entityType
+    private def sliceRange = firehoseKey.sliceRange
+
     def consumerStarted(consumerId: String, consumerKillSwitch: KillSwitch): Unit = {
-      log.debug("Consumer [{}] started", consumerId)
+      log.debug("Firehose entityType [{}] sliceRange [{}] consumer [{}] started", entityType, sliceRange, consumerId)
       consumerTracking.putIfAbsent(
         consumerId,
         ConsumerTracking(consumerId, Instant.EPOCH, firehoseOnly = false, consumerKillSwitch, None))
     }
 
     def consumerTerminated(consumerId: String): Int = {
-      log.debug("Consumer [{}] terminated", consumerId)
+      log.debug("Firehose entityType [{}] sliceRange [{}] consumer [{}] terminated", entityType, sliceRange, consumerId)
       consumerTracking.remove(consumerId)
       consumerTracking.size
     }
 
     def shutdownFirehoseIfNoConsumers(): Boolean = {
       if (consumerTracking.isEmpty) {
-        log.debug("Shutdown firehose, no consumers")
+        log.debug("Firehose entityType [{}] sliceRange [{}] is shutting down, no consumers", entityType, sliceRange)
         firehoseIsShutdown = true
         firehoseKillSwitch.shutdown()
         true
@@ -169,7 +175,9 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] with E
               else if (diffSlowest < 0) s"ahead of slowest [${-diffSlowest}] ms"
               else "same as slowest"
             log.debug(
-              "Consumer [{}], {}, {}, firehoseOnly [{}]",
+              "Firehose entityType [{}] sliceRange [{}] consumer [{}], {}, {}, firehoseOnly [{}]",
+              entityType,
+              sliceRange,
               tracking.consumerId,
               diffFastestStr,
               diffSlowestStr,
@@ -189,7 +197,10 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] with E
         if (confirmedSlowConsumers.nonEmpty && confirmedSlowConsumers.size < firehoseConsumerCount) {
           if (log.isInfoEnabled)
             log.info(
-              "[{}] slow consumers are aborted [{}], behind by at least [{}] ms. [{}] firehose consumers, [{}] catchup consumers.",
+              "Firehose entityType [{}] sliceRange [{}], [{}] slow consumers are aborted [{}], " +
+              "behind by at least [{}] ms. [{}] firehose consumers, [{}] catchup consumers.",
+              entityType,
+              sliceRange,
               slowConsumers.size,
               slowConsumers.keysIterator.mkString(", "),
               JDuration
@@ -279,7 +290,7 @@ class EventsBySlicesFirehose(system: ActorSystem) extends Extension {
 
     // FIXME hub will be closed when last consumer is closed, need to detect that and start again (difficult concurrency)?
 
-    new Firehose(firehoseHub, firehoseKillSwitch)
+    new Firehose(key, firehoseHub, firehoseKillSwitch)
   }
 
   // FIXME can this be in a ReadJournal
@@ -378,6 +389,9 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
   val firehoseInlet: Inlet[EventEnvelope[Any]] = shape.in0
   val catchupInlet: Inlet[EventEnvelope[Any]] = shape.in1
 
+  private def entityType = firehose.firehoseKey.entityType
+  private def sliceRange = firehose.firehoseKey.sliceRange
+
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
 
     // Without this the completion signalling would take one extra pull
@@ -404,7 +418,9 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
           case OptionVal.Some(env) =>
             firehoseHandler.value = OptionVal.None
             log.debug(
-              "Consumer [{}] push from firehose [{}] seqNr [{}], source [{}]",
+              "Firehose entityType [{}] sliceRange [{}] consumer [{}] push from firehose [{}] seqNr [{}], source [{}]",
+              entityType,
+              sliceRange,
               consumerId,
               env.persistenceId,
               env.sequenceNr,
@@ -421,7 +437,9 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
           case OptionVal.Some(env) =>
             catchupHandler.value = OptionVal.None
             log.debug(
-              "Consumer [{}] push from catchup [{}] seqNr [{}], source [{}]",
+              "Firehose entityType [{}] sliceRange [{}] consumer [{}] push from catchup [{}] seqNr [{}], source [{}]",
+              entityType,
+              sliceRange,
               consumerId,
               env.persistenceId,
               env.sequenceNr,
@@ -519,7 +537,12 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
           case CatchUpOnly =>
             if (isCaughtUp(env)) {
               val timestamp = timestampOffset(env).timestamp
-              log.debug("Consumer [{}] caught up at [{}]", consumerId, timestamp)
+              log.debug(
+                "Firehose entityType [{}] sliceRange [{}] consumer [{}] caught up at [{}]",
+                entityType,
+                sliceRange,
+                consumerId,
+                timestamp)
               mode = Both(timestamp)
             }
             value = OptionVal.Some(env)
@@ -531,7 +554,12 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
               if (isDurationGreaterThan(caughtUpTimestamp, timestamp, JDuration.ofSeconds(10))) {
                 firehose.updateConsumerFirehoseOnly(consumerId)
                 // FIXME config duration ^
-                log.debug("Consumer [{}] switching to firehose only [{}]", consumerId, timestamp)
+                log.debug(
+                  "Firehose entityType [{}] sliceRange [{}] consumer [{}] switching to firehose only [{}]",
+                  entityType,
+                  sliceRange,
+                  consumerId,
+                  timestamp)
                 catchupKillSwitch.shutdown()
                 mode = FirehoseOnly
               }
@@ -549,7 +577,11 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
 
       override def onUpstreamFinish(): Unit = {
         // important to override onUpstreamFinish, otherwise it will close everything
-        log.debug("Consumer [{}] catchup closed", consumerId)
+        log.debug(
+          "Firehose entityType [{}] sliceRange [{}] consumer [{}] catchup closed",
+          entityType,
+          sliceRange,
+          consumerId)
       }
     }
 
