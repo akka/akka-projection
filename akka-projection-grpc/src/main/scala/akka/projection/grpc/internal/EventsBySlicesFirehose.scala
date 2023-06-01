@@ -7,17 +7,19 @@ import java.time.Instant
 import java.time.{ Duration => JDuration }
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
 
-import scala.concurrent.duration._
 import scala.annotation.nowarn
 import scala.annotation.tailrec
+import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
 
 import akka.NotUsed
-import akka.actor.typed.ActorSystem
-import akka.actor.typed.Extension
-import akka.actor.typed.ExtensionId
+import akka.actor.ActorSystem
+import akka.actor.ClassicActorSystemProvider
+import akka.actor.ExtendedActorSystem
+import akka.actor.Extension
+import akka.actor.ExtensionId
+import akka.actor.ExtensionIdProvider
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.TimestampOffset
@@ -41,33 +43,38 @@ import akka.stream.stage.OutHandler
 import akka.util.OptionVal
 import org.slf4j.LoggerFactory
 
-object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] {
+object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] with ExtensionIdProvider {
   private val log = LoggerFactory.getLogger(classOf[EventsBySlicesFirehose])
 
-  def createExtension(system: ActorSystem[_]): EventsBySlicesFirehose =
-    new EventsBySlicesFirehose(system)
+  override def get(system: ActorSystem): EventsBySlicesFirehose = super.get(system)
 
-  // Java API
-  def get(system: ActorSystem[_]): EventsBySlicesFirehose = apply(system)
+  override def get(system: ClassicActorSystemProvider): EventsBySlicesFirehose = super.get(system)
+
+  override def lookup = EventsBySlicesFirehose
+
+  override def createExtension(system: ExtendedActorSystem): EventsBySlicesFirehose =
+    new EventsBySlicesFirehose(system)
 
   final class SlowConsumerException(message: String) extends RuntimeException(message) with NoStackTrace
 
   final case class FirehoseKey(entityType: String, sliceRange: Range)
 
-  final case class ConsumerTracking(count: Long, timestamp: Instant, consumerKillSwitch: KillSwitch)
+  final case class ConsumerTracking(
+      consumerId: String,
+      timestamp: Instant,
+      firehoseOnly: Boolean,
+      consumerKillSwitch: KillSwitch,
+      slowConsumerCandidate: Option[Instant])
 
-  class Firehose(
-      val firehoseHub: Source[EventEnvelope[Any], NotUsed],
-      bufferSize: Int,
-      firehoseKillSwitch: KillSwitch) {
-    val inCount: AtomicLong = new AtomicLong
+  final class Firehose(val firehoseHub: Source[EventEnvelope[Any], NotUsed], firehoseKillSwitch: KillSwitch) {
     val consumerTracking: ConcurrentHashMap[String, ConsumerTracking] = new ConcurrentHashMap
-    private val gapTreshold = math.max(2, bufferSize - 4)
     @volatile private var firehoseIsShutdown = false
 
     def consumerStarted(consumerId: String, consumerKillSwitch: KillSwitch): Unit = {
       log.debug("Consumer [{}] started", consumerId)
-      consumerTracking.putIfAbsent(consumerId, ConsumerTracking(count = 0, Instant.EPOCH, consumerKillSwitch))
+      consumerTracking.putIfAbsent(
+        consumerId,
+        ConsumerTracking(consumerId, Instant.EPOCH, firehoseOnly = false, consumerKillSwitch, None))
     }
 
     def consumerTerminated(consumerId: String): Int = {
@@ -89,36 +96,130 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] {
     def isShutdown: Boolean =
       firehoseIsShutdown
 
-    def updateConsumerTracking(consumerId: String, timestamp: Instant, consumerKillSwitch: KillSwitch): Unit = {
-      val tracking = consumerTracking.get(consumerId) match {
-        case null =>
-          ConsumerTracking(count = 1, timestamp, consumerKillSwitch)
-        case existing =>
-          if (timestamp.compareTo(existing.timestamp) > 0)
-            existing.copy(count = existing.count + 1, timestamp)
-          else
-            existing.copy(count = existing.count + 1)
-      }
-      // FIXME trace
-      log.debug("Consumer [{}] count [{}], in count [{}]", consumerId, tracking.count, inCount.get)
-      // no concurrent updates for a given consumerId
-      consumerTracking.put(consumerId, tracking)
+    @tailrec def updateConsumerTracking(
+        consumerId: String,
+        timestamp: Instant,
+        consumerKillSwitch: KillSwitch): Unit = {
 
-      val slowConsumers = findLaggingBehindMost()
-      if (slowConsumers.nonEmpty) {
-        log.info("[{}] slow consumers are aborted, behind by at least [{}].", slowConsumers.size, gapTreshold)
-        // FIXME should wait a while until aborting slow consumers, might be temporary glitch?
-        slowConsumers.foreach { tracking =>
-          tracking.consumerKillSwitch.abort(new SlowConsumerException(s"Consumer is too slow."))
+      val existingTracking = consumerTracking.get(consumerId)
+      val tracking = existingTracking match {
+        case null =>
+          ConsumerTracking(consumerId, timestamp, firehoseOnly = false, consumerKillSwitch, None)
+        case existing =>
+          if (timestamp.isAfter(existing.timestamp))
+            existing.copy(timestamp = timestamp)
+          else
+            existing
+      }
+
+      if (!consumerTracking.replace(consumerId, existingTracking, tracking)) {
+        // concurrent update, try again
+        updateConsumerTracking(consumerId, timestamp, consumerKillSwitch)
+      }
+    }
+
+    def detectSlowConsumers(now: Instant): Unit = {
+      import akka.util.ccompat.JavaConverters._
+      val consumerTrackingValues = consumerTracking.values.iterator.asScala.toVector
+      if (consumerTrackingValues.size > 1) {
+        val slowestConsumer = consumerTrackingValues.minBy(_.timestamp)
+        val fastestConsumer = consumerTrackingValues.maxBy(_.timestamp)
+
+        val slowConsumers = consumerTrackingValues.collect {
+          case t
+              if t.firehoseOnly &&
+              isDurationGreaterThan(t.timestamp, fastestConsumer.timestamp, JDuration.ofSeconds(5)) // FIXME config
+              =>
+            t.consumerId -> t
+        }.toMap
+
+        val changedConsumerTrackingValues = consumerTrackingValues.flatMap { tracking =>
+          if (slowConsumers.contains(tracking.consumerId)) {
+            if (tracking.slowConsumerCandidate.isDefined)
+              None // keep original
+            else
+              Some(tracking.copy(slowConsumerCandidate = Some(now)))
+          } else if (tracking.slowConsumerCandidate.isDefined) {
+            Some(tracking.copy(slowConsumerCandidate = None)) // not slow any more
+          } else {
+            None
+          }
+        }
+
+        changedConsumerTrackingValues.foreach { tracking =>
+          consumerTracking.merge(
+            tracking.consumerId,
+            tracking,
+            (existing, _) => existing.copy(slowConsumerCandidate = tracking.slowConsumerCandidate))
+        }
+
+        val newConsumerTrackingValues = consumerTracking.values.iterator.asScala.toVector
+
+        // FIXME trace
+        if (log.isDebugEnabled && newConsumerTrackingValues.iterator.map(_.timestamp).toSet.size > 1) {
+          newConsumerTrackingValues.foreach { tracking =>
+            val diffFastest = fastestConsumer.timestamp.toEpochMilli - tracking.timestamp.toEpochMilli
+            val diffFastestStr =
+              if (diffFastest > 0) s"behind fastest [$diffFastest] ms"
+              else if (diffFastest < 0) s"ahead of fastest [$diffFastest] ms" // not possible
+              else "same as fastest"
+            val diffSlowest = slowestConsumer.timestamp.toEpochMilli - tracking.timestamp.toEpochMilli
+            val diffSlowestStr =
+              if (diffSlowest > 0) s"behind slowest [$diffSlowest] ms" // not possible
+              else if (diffSlowest < 0) s"ahead of slowest [${-diffSlowest}] ms"
+              else "same as slowest"
+            log.debug(
+              "Consumer [{}], {}, {}, firehoseOnly [{}]",
+              tracking.consumerId,
+              diffFastestStr,
+              diffSlowestStr,
+              tracking.firehoseOnly)
+          }
+        }
+
+        val firehoseConsumerCount = newConsumerTrackingValues.count(_.firehoseOnly)
+        val confirmedSlowConsumers = newConsumerTrackingValues.filter { tracking =>
+          tracking.slowConsumerCandidate match {
+            case None => false
+            case Some(detectedTimestamp) =>
+              isDurationGreaterThan(detectedTimestamp, now, JDuration.ofSeconds(3))
+          }
+        }
+
+        if (confirmedSlowConsumers.nonEmpty && confirmedSlowConsumers.size < firehoseConsumerCount) {
+          if (log.isInfoEnabled)
+            log.info(
+              "[{}] slow consumers are aborted [{}], behind by at least [{}] ms. [{}] firehose consumers, [{}] catchup consumers.",
+              slowConsumers.size,
+              slowConsumers.keysIterator.mkString(", "),
+              JDuration
+                .between(slowConsumers.valuesIterator.maxBy(_.timestamp).timestamp, fastestConsumer.timestamp)
+                .toMillis,
+              firehoseConsumerCount,
+              newConsumerTrackingValues.size - firehoseConsumerCount)
+
+          confirmedSlowConsumers.foreach { tracking =>
+            tracking.consumerKillSwitch.abort(
+              new SlowConsumerException(s"Consumer [${tracking.consumerId}] is too slow."))
+          }
         }
       }
     }
 
-    private def findLaggingBehindMost(): Vector[ConsumerTracking] = {
-      import akka.util.ccompat.JavaConverters._
-      val inCountValue = inCount.get
-      consumerTracking.values.iterator.asScala.filter(inCountValue - _.count >= gapTreshold).toVector
+    @tailrec def updateConsumerFirehoseOnly(consumerId: String): Unit = {
+      val existingTracking = consumerTracking.get(consumerId)
+      val tracking = existingTracking match {
+        case null =>
+          throw new IllegalStateException(s"Expected existing tracking for consumer [$consumerId]")
+        case existing =>
+          existing.copy(firehoseOnly = true)
+      }
+
+      if (!consumerTracking.replace(consumerId, existingTracking, tracking))
+        // concurrent update, try again
+        updateConsumerFirehoseOnly(consumerId)
     }
+
   }
 
   def timestampOffset(env: EventEnvelope[Any]): TimestampOffset =
@@ -133,9 +234,18 @@ object EventsBySlicesFirehose extends ExtensionId[EventsBySlicesFirehose] {
     JDuration.between(from, to).compareTo(duration) > 0
 }
 
-class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
+class EventsBySlicesFirehose(system: ActorSystem) extends Extension {
   import EventsBySlicesFirehose._
   private val firehoses = new ConcurrentHashMap[FirehoseKey, Firehose]()
+
+  // FIXME config
+  system.scheduler.scheduleWithFixedDelay(2.seconds, 2.seconds) { () =>
+    import akka.util.ccompat.JavaConverters._
+    firehoses.values().asScala.foreach { firehose =>
+      if (!firehose.isShutdown)
+        firehose.detectSlowConsumers(Instant.now)
+    }
+  }(system.dispatcher)
 
   @tailrec final def getFirehose(entityType: String, sliceRange: Range): Firehose = {
     val key = FirehoseKey(entityType, sliceRange)
@@ -149,11 +259,11 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
   }
 
   private def createFirehose(key: FirehoseKey): Firehose = {
-    implicit val sys: ActorSystem[_] = system
+    implicit val sys: ActorSystem = system
 
     log.debug("Create firehose entityType [{}], sliceRange [{}]", key.entityType, key.sliceRange)
 
-    val bufferSize = 32 // FIXME config
+    val bufferSize = 256 // FIXME config
 
     val firehoseKillSwitch = KillSwitches.shared("firehoseKillSwitch")
 
@@ -164,20 +274,12 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
         key.sliceRange.max,
         TimestampOffset(Instant.now(), Map.empty),
         firehose = true)
-        .map { env =>
-          // increment counter before the hub
-          firehoses.get(key) match {
-            case null     => // already shutdown
-            case firehose => firehose.inCount.incrementAndGet()
-          }
-          env
-        }
         .via(firehoseKillSwitch.flow)
         .runWith(BroadcastHub.sink[EventEnvelope[Any]](bufferSize))
 
     // FIXME hub will be closed when last consumer is closed, need to detect that and start again (difficult concurrency)?
 
-    new Firehose(firehoseHub, bufferSize, firehoseKillSwitch)
+    new Firehose(firehoseHub, firehoseKillSwitch)
   }
 
   // FIXME can this be in a ReadJournal
@@ -193,11 +295,11 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
     def consumerTerminated(): Unit = {
       if (firehose.consumerTerminated(consumerId) == 0) {
         // Don't shutdown firehose immediately because Projection it should survive Projection restart
-        system.scheduler.scheduleOnce(2.seconds, () => {
+        system.scheduler.scheduleOnce(2.seconds) {
           // FIXME config ^
           if (firehose.shutdownFirehoseIfNoConsumers())
             firehoses.remove(FirehoseKey(entityType, sliceRange))
-        })(system.executionContext)
+        }(system.dispatcher)
       }
     }
 
@@ -210,13 +312,15 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
 
     val firehoseSource = firehose.firehoseHub
       .map { env =>
-        firehose.updateConsumerTracking(consumerId, timestampOffset(env).timestamp, consumerKillSwitch)
+        // don't look at pub-sub or backtracking events
+        if (env.source == "")
+          firehose.updateConsumerTracking(consumerId, timestampOffset(env).timestamp, consumerKillSwitch)
         env
       }
 
     import GraphDSL.Implicits._
     val catchupOrFirehose = GraphDSL.createGraph(catchupSource) { implicit b => r =>
-      val merge = b.add(new CatchupOrFirehose(consumerId, catchupKillSwitch))
+      val merge = b.add(new CatchupOrFirehose(consumerId, firehose, catchupKillSwitch))
       r ~> merge.in1
       FlowShape(merge.in0, merge.out)
     }
@@ -230,7 +334,7 @@ class EventsBySlicesFirehose(system: ActorSystem[_]) extends Extension {
         firehose.consumerStarted(consumerId, consumerKillSwitch)
         termination.onComplete { _ =>
           consumerTerminated()
-        }(system.executionContext)
+        }(system.dispatcher)
         NotUsed
       }
   }
@@ -261,7 +365,7 @@ object CatchupOrFirehose {
 
 }
 
-class CatchupOrFirehose(consumerId: String, catchupKillSwitch: KillSwitch)
+class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Firehose, catchupKillSwitch: KillSwitch)
     extends GraphStage[FanInShape2[EventEnvelope[Any], EventEnvelope[Any], EventEnvelope[Any]]] {
   import CatchupOrFirehose._
   import EventsBySlicesFirehose.isDurationGreaterThan
@@ -300,10 +404,11 @@ class CatchupOrFirehose(consumerId: String, catchupKillSwitch: KillSwitch)
           case OptionVal.Some(env) =>
             firehoseInlet.value = OptionVal.None
             log.debug(
-              "Consumer [{}] push from firehose [{}] seqNr [{}]",
+              "Consumer [{}] push from firehose [{}] seqNr [{}], source [{}]",
               consumerId,
               env.persistenceId,
-              env.sequenceNr
+              env.sequenceNr,
+              env.source
             ) // FIXME trace
             push(out, env)
             true
@@ -316,10 +421,11 @@ class CatchupOrFirehose(consumerId: String, catchupKillSwitch: KillSwitch)
           case OptionVal.Some(env) =>
             catchupInlet.value = OptionVal.None
             log.debug(
-              "Consumer [{}] push from catchup [{}] seqNr [{}]",
+              "Consumer [{}] push from catchup [{}] seqNr [{}], source [{}]",
               consumerId,
               env.persistenceId,
-              env.sequenceNr
+              env.sequenceNr,
+              env.source
             ) // FIXME trace
             push(out, env)
             true
@@ -422,13 +528,13 @@ class CatchupOrFirehose(consumerId: String, catchupKillSwitch: KillSwitch)
             // don't look at pub-sub or backtracking events
             if (env.source == "") {
               val timestamp = timestampOffset(env).timestamp
-              if (isCaughtUp(env) && isDurationGreaterThan(caughtUpTimestamp, timestamp, JDuration.ofSeconds(20))) {
+              if (isDurationGreaterThan(caughtUpTimestamp, timestamp, JDuration.ofSeconds(10))) {
+                firehose.updateConsumerFirehoseOnly(consumerId)
                 // FIXME config duration ^
                 log.debug("Consumer [{}] switching to firehose only [{}]", consumerId, timestamp)
                 catchupKillSwitch.shutdown()
                 mode = FirehoseOnly
               }
-              // FIXME do we need to fall back to CatchUpOnly if it's not caught up for a longer period of time?
             }
 
             value = OptionVal.Some(env)

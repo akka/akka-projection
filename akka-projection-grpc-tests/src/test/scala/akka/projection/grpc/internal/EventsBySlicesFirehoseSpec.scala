@@ -118,7 +118,7 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
             NotUsed
         }
 
-    val eventsBySlicesFirehose = new EventsBySlicesFirehose(system) {
+    val eventsBySlicesFirehose = new EventsBySlicesFirehose(system.classicSystem) {
       override protected def eventsBySlices[Event](
           entityType: String,
           minSlice: Int,
@@ -198,11 +198,11 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
       outProbe(1).expectNext(allEnvelopes(1))
 
       val firehose = eventsBySlicesFirehose.getFirehose(entityType, sliceRange)
-      firehose.inCount.get shouldBe 1
       firehose.consumerTracking.size shouldBe 2
       import akka.util.ccompat.JavaConverters._
       firehose.consumerTracking.values.asScala.foreach { tracking =>
-        tracking.count shouldBe 1
+        // allEnvelopes(0) from firehosePublisher
+        tracking.timestamp shouldBe allEnvelopes(0).offset.asInstanceOf[TimestampOffset].timestamp
       }
 
       // only requesting for outProbe(0)
@@ -211,38 +211,55 @@ class EventsBySlicesFirehoseSpec extends ScalaTestWithActorTestKit("""
       val moreEnvelopes = (1 to 20).map(n => createEnvelope(PersistenceId(entityType, "x"), n, s"x$n"))
       moreEnvelopes.foreach(firehosePublisher.sendNext)
       outProbe(0).expectNextN(moreEnvelopes.size) shouldBe moreEnvelopes
-      firehose.inCount.get shouldBe 1 + moreEnvelopes.size
       firehose.consumerTracking.size shouldBe 2
-      firehose.consumerTracking.values.asScala.exists(_.count == 1 + moreEnvelopes.size) shouldBe true
-      // no demand from outProbe(1), but I think there is an internal buffer that makes it 2
-      firehose.consumerTracking.values.asScala.exists(_.count <= 2) shouldBe true
+      firehose.consumerTracking.values.asScala
+        .count(_.timestamp == moreEnvelopes.last.offset.asInstanceOf[TimestampOffset].timestamp) shouldBe 1
     }
 
     "abort slow consumers" in new Setup {
       // using two consumers
-      outProbe(0).request(2)
-      outProbe(1).request(2)
+      outProbe(0).request(3)
+      outProbe(1).request(3)
 
       // FIXME is there a way to know that it has been added to the hub?
       Thread.sleep(1000)
 
-      firehosePublisher.sendNext(allEnvelopes(0))
       catchupPublisher(0).sendNext(allEnvelopes(0))
       catchupPublisher(1).sendNext(allEnvelopes(0))
       outProbe(0).expectNext(allEnvelopes(0))
       outProbe(1).expectNext(allEnvelopes(0))
+      firehosePublisher.sendNext(allEnvelopes(0))
+      // this "sleep" is needed so that the firehose envelope is received first
+      outProbe.expectNoMessage()
 
       catchupPublisher(0).sendNext(allEnvelopes(1))
       catchupPublisher(1).sendNext(allEnvelopes(1))
       outProbe(0).expectNext(allEnvelopes(1))
       outProbe(1).expectNext(allEnvelopes(1))
 
+      // switch to firehose only
+      clock.tick(JDuration.ofSeconds(60))
+      // less than BroadcastHub buffer size
+      val moreEnvelopes = (1 to 30).map { n =>
+        clock.tick(JDuration.ofSeconds(1))
+        createEnvelope(PersistenceId(entityType, "x"), n, s"x$n")
+      }
+      // both consumers will now switch to firehose only
+      catchupPublisher(0).sendNext(moreEnvelopes.head)
+      catchupPublisher(1).sendNext(moreEnvelopes.head)
+      outProbe(0).expectNext(moreEnvelopes.head)
+      outProbe(1).expectNext(moreEnvelopes.head)
       // only requesting for outProbe(0)
       outProbe(0).request(100)
-      // less than BroadcastHub buffer size, but close to the limit
-      val moreEnvelopes = (1 to 30).map(n => createEnvelope(PersistenceId(entityType, "x"), n, s"x$n"))
       moreEnvelopes.foreach(firehosePublisher.sendNext)
       outProbe(0).expectNextN(moreEnvelopes.size) shouldBe moreEnvelopes
+      val firehose = eventsBySlicesFirehose.getFirehose(entityType, sliceRange)
+      // FIXME disable scheduled detectSlowConsumers in this test
+      firehose.detectSlowConsumers(clock.instant())
+      clock.tick(JDuration.ofSeconds(2))
+      firehose.detectSlowConsumers(clock.instant())
+      clock.tick(JDuration.ofSeconds(2))
+      firehose.detectSlowConsumers(clock.instant())
       outProbe(1).expectError().getClass shouldBe classOf[SlowConsumerException]
     }
 
