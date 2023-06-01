@@ -375,16 +375,16 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
   override val shape: FanInShape2[EventEnvelope[Any], EventEnvelope[Any], EventEnvelope[Any]] =
     new FanInShape2[EventEnvelope[Any], EventEnvelope[Any], EventEnvelope[Any]]("CatchupOrFirehose")
   def out: Outlet[EventEnvelope[Any]] = shape.out
-  val in0: Inlet[EventEnvelope[Any]] = shape.in0
-  val in1: Inlet[EventEnvelope[Any]] = shape.in1
+  val firehoseInlet: Inlet[EventEnvelope[Any]] = shape.in0
+  val catchupInlet: Inlet[EventEnvelope[Any]] = shape.in1
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
 
     // Without this the completion signalling would take one extra pull
-    private def willShutDown: Boolean = isClosed(in0)
+    private def willShutDown: Boolean = isClosed(firehoseInlet)
 
-    private val firehoseInlet = new FirehoseInlet(in0)
-    private val catchupInlet = new CatchupInlet(in1)
+    private val firehoseHandler = new FirehoseHandler(firehoseInlet)
+    private val catchupHandler = new CatchupHandler(catchupInlet)
 
     private var mode: Mode = CatchUpOnly
 
@@ -395,14 +395,14 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
       }
     })
 
-    setHandler(in0, firehoseInlet)
-    setHandler(in1, catchupInlet)
+    setHandler(firehoseInlet, firehoseHandler)
+    setHandler(catchupInlet, catchupHandler)
 
     private def tryPushOutput(): Unit = {
       def tryPushFirehoseValue(): Boolean =
-        firehoseInlet.value match {
+        firehoseHandler.value match {
           case OptionVal.Some(env) =>
-            firehoseInlet.value = OptionVal.None
+            firehoseHandler.value = OptionVal.None
             log.debug(
               "Consumer [{}] push from firehose [{}] seqNr [{}], source [{}]",
               consumerId,
@@ -417,9 +417,9 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
         }
 
       def tryPushCatchupValue(): Boolean =
-        catchupInlet.value match {
+        catchupHandler.value match {
           case OptionVal.Some(env) =>
-            catchupInlet.value = OptionVal.None
+            catchupHandler.value = OptionVal.None
             log.debug(
               "Consumer [{}] push from catchup [{}] seqNr [{}], source [{}]",
               consumerId,
@@ -451,14 +451,14 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
     }
 
     private def tryPullAllIfNeeded(): Unit = {
-      if (isClosed(in0)) {
+      if (isClosed(firehoseInlet)) {
         completeStage()
       } else {
-        if (!hasBeenPulled(in0) && firehoseInlet.value.isEmpty) {
-          tryPull(in0)
+        if (!hasBeenPulled(firehoseInlet) && firehoseHandler.value.isEmpty) {
+          tryPull(firehoseInlet)
         }
-        if (mode != FirehoseOnly && !hasBeenPulled(in1) && catchupInlet.value.isEmpty) {
-          tryPull(in1)
+        if (mode != FirehoseOnly && !hasBeenPulled(catchupInlet) && catchupHandler.value.isEmpty) {
+          tryPull(catchupInlet)
         }
       }
     }
@@ -466,13 +466,13 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
     def isCaughtUp(env: EventEnvelope[Any]): Boolean = {
       if (env.source == "") {
         val offset = timestampOffset(env)
-        firehoseInlet.firehoseOffset.timestamp != Instant.EPOCH && !firehoseInlet.firehoseOffset.timestamp
+        firehoseHandler.firehoseOffset.timestamp != Instant.EPOCH && !firehoseHandler.firehoseOffset.timestamp
           .isAfter(offset.timestamp)
       } else
         false // don't look at pub-sub or backtracking events
     }
 
-    private class FirehoseInlet(in: Inlet[EventEnvelope[Any]]) extends InHandler {
+    private class FirehoseHandler(in: Inlet[EventEnvelope[Any]]) extends InHandler {
       var value: OptionVal[EventEnvelope[Any]] = OptionVal.None
       var firehoseOffset: TimestampOffset = TimestampOffset(Instant.EPOCH, Map.empty)
 
@@ -506,7 +506,7 @@ class CatchupOrFirehose(consumerId: String, firehose: EventsBySlicesFirehose.Fir
       }
     }
 
-    private class CatchupInlet(in: Inlet[EventEnvelope[Any]]) extends InHandler {
+    private class CatchupHandler(in: Inlet[EventEnvelope[Any]]) extends InHandler {
       var value: OptionVal[EventEnvelope[Any]] = OptionVal.None
 
       override def onPush(): Unit = {
