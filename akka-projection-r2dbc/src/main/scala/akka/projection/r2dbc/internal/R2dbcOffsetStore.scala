@@ -206,6 +206,8 @@ private[projection] class R2dbcOffsetStore(
 
   private val evictWindow = settings.timeWindow.plus(settings.evictInterval)
 
+  private val dialectName = system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect")
+
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
   import offsetSerialization.toStorageRepresentation
@@ -249,17 +251,28 @@ private[projection] class R2dbcOffsetStore(
   private val selectOffsetSql: String =
     sql"SELECT projection_key, current_offset, manifest, mergeable FROM $offsetTable WHERE projection_name = ?"
 
-  // FIXME needs merge for H2
-  private val upsertOffsetSql: String = sql"""
-    INSERT INTO $offsetTable
-    (projection_name, projection_key, current_offset, manifest, mergeable, last_updated)
-    VALUES (?,?,?,?,?,?)
-    ON CONFLICT (projection_name, projection_key)
-    DO UPDATE SET
-    current_offset = excluded.current_offset,
-    manifest = excluded.manifest,
-    mergeable = excluded.mergeable,
-    last_updated = excluded.last_updated"""
+  private val upsertOffsetSql: String = {
+    if (dialectName == "h2") {
+      // FIXME is branching good enough for now?
+      sql"""
+        MERGE INTO $offsetTable
+        (projection_name, projection_key, current_offset, manifest, mergeable, last_updated)
+        KEY(projection_name, projection_key)
+        VALUES (?,?,?,?,?,?)
+       """
+    } else {
+      sql"""
+        INSERT INTO $offsetTable
+        (projection_name, projection_key, current_offset, manifest, mergeable, last_updated)
+        VALUES (?,?,?,?,?,?)
+        ON CONFLICT (projection_name, projection_key)
+        DO UPDATE SET
+        current_offset = excluded.current_offset,
+        manifest = excluded.manifest,
+        mergeable = excluded.mergeable,
+        last_updated = excluded.last_updated"""
+    }
+  }
 
   private val clearOffsetSql: String =
     sql"DELETE FROM $offsetTable WHERE projection_name = ? AND projection_key = ?"
@@ -269,16 +282,25 @@ private[projection] class R2dbcOffsetStore(
     projection_name = ? AND
     projection_key = ? """
 
-  // FIXME needs merge for H2
-  val updateManagementStateSql: String = sql"""
-    INSERT INTO $managementTable
-    (projection_name, projection_key, paused, last_updated)
-    VALUES (?,?,?,?)
-    ON CONFLICT (projection_name, projection_key)
-    DO UPDATE SET
-    paused = excluded.paused,
-    last_updated = excluded.last_updated"""
-
+  val updateManagementStateSql: String =
+    if (dialectName == "h2") {
+      // FIXME is branching good enough for now?
+      sql"""
+        MERGE INTO $managementTable
+        (projection_name, projection_key, paused, last_updated)
+        KEY(projection_name, projection_key)
+        VALUES (?,?,?,?)
+      """
+    } else {
+      sql"""
+        INSERT INTO $managementTable
+        (projection_name, projection_key, paused, last_updated)
+        VALUES (?,?,?,?)
+        ON CONFLICT (projection_name, projection_key)
+        DO UPDATE SET
+        paused = excluded.paused,
+        last_updated = excluded.last_updated"""
+    }
   // The OffsetStore instance is used by a single projectionId and there shouldn't be any concurrent
   // calls to methods that access the `state`. To detect any violations of that concurrency assumption
   // we use AtomicReference and fail if the CAS fails.

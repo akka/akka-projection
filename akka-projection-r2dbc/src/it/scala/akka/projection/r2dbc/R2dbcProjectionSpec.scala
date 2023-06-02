@@ -84,7 +84,7 @@ object R2dbcProjectionSpec {
   }
 
   object TestRepository {
-    // FIXME H2 wants table names to be UC
+    // FIXME H2 wants table names to be UC?
     val table = "PROJECTION_SPEC_MODEL"
 
     val createTableSql: String =
@@ -125,14 +125,23 @@ object R2dbcProjectionSpec {
     private def upsert(concatStr: ConcatStr): Future[Done] = {
       logger.debug("TestRepository.upsert: [{}]", concatStr)
 
-      val stmtSql =
-        sql"""
-          INSERT INTO "$table" (id, concatenated)  VALUES (?, ?)
-          ON CONFLICT (id)
-          DO UPDATE SET
-            id = excluded.id,
-            concatenated = excluded.concatenated
+      val stmtSql = {
+        if (system.settings.config.getString("akka.persistence.r2dbc.connection-factory.dialect") == "h2") {
+          sql"""
+             MERGE INTO "$table" (id, concatenated)
+             KEY (id)
+             VALUES (?, ?)
+          """
+        } else {
+          sql"""
+            INSERT INTO "$table" (id, concatenated)  VALUES (?, ?)
+            ON CONFLICT (id)
+            DO UPDATE SET
+              id = excluded.id,
+              concatenated = excluded.concatenated
          """
+        }
+      }
       val stmt = session
         .createStatement(stmtSql)
         .bind(0, concatStr.id)
