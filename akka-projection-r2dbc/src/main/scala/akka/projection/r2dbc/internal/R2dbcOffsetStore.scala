@@ -223,10 +223,10 @@ private[projection] class R2dbcOffsetStore(
   private val insertTimestampOffsetSql: String = sql"""
     INSERT INTO $timestampOffsetTable
     (projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)
-    VALUES (?,?,?,?,?,?, transaction_timestamp())"""
+    VALUES (?,?,?,?,?,?, CURRENT_TIMESTAMP)"""
 
   private val insertTimestampOffsetBatchSql: String = {
-    val values = (1 to settings.offsetBatchSize).map(_ => "(?,?,?,?,?,?, transaction_timestamp())").mkString(", ")
+    val values = (1 to settings.offsetBatchSize).map(_ => "(?,?,?,?,?,?, CURRENT_TIMESTAMP)").mkString(", ")
     sql"""
     INSERT INTO $timestampOffsetTable
     (projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)
@@ -249,6 +249,7 @@ private[projection] class R2dbcOffsetStore(
   private val selectOffsetSql: String =
     sql"SELECT projection_key, current_offset, manifest, mergeable FROM $offsetTable WHERE projection_name = ?"
 
+  // FIXME needs merge for H2
   private val upsertOffsetSql: String = sql"""
     INSERT INTO $offsetTable
     (projection_name, projection_key, current_offset, manifest, mergeable, last_updated)
@@ -268,6 +269,7 @@ private[projection] class R2dbcOffsetStore(
     projection_name = ? AND
     projection_key = ? """
 
+  // FIXME needs merge for H2
   val updateManagementStateSql: String = sql"""
     INSERT INTO $managementTable
     (projection_name, projection_key, paused, last_updated)

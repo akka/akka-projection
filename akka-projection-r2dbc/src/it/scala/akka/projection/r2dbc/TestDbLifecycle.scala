@@ -36,7 +36,7 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
 
   override protected def beforeAll(): Unit = {
     lazy val r2dbcSettings: R2dbcSettings =
-      new R2dbcSettings(typedSystem.settings.config.getConfig("akka.persistence.r2dbc"))
+      R2dbcSettings(typedSystem.settings.config.getConfig("akka.persistence.r2dbc"))
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(
         _.createStatement(s"delete from ${r2dbcSettings.journalTableWithSchema}")),
