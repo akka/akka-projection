@@ -108,7 +108,7 @@ jobs:
           
 
   test-r2dbc-h2:
-    name: Run h2 tests with Yugabyte
+    name: Run r2dbc tests with H2
     runs-on: ubuntu-22.04
     if: github.repository == 'akka/akka-projection'
     strategy:

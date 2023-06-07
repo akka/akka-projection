@@ -85,7 +85,7 @@ object R2dbcProjectionSpec {
 
   object TestRepository {
     // FIXME H2 wants table names to be UC?
-    val table = "PROJECTION_SPEC_MODEL"
+    val table = "projection_spec_model"
 
     val createTableSql: String =
       s"""|CREATE table IF NOT EXISTS "$table" (
