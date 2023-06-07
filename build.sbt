@@ -150,11 +150,13 @@ lazy val r2dbc =
       // include all passed -Dakka. properties to the javaOptions for forked tests
       // useful to switch DB dialects for example
       val akkaProperties = System.getProperties.stringPropertyNames.asScala.toList.collect {
-        case key: String if key.startsWith("akka.") || key.startsWith("conf") =>
+        case key: String if key.startsWith("akka.") || key.startsWith("config") =>
           "-D" + key + "=" + System.getProperty(key)
       }
       akkaProperties
     })
+    .settings(IntegrationTest / javaOptions := (Test / javaOptions).value)
+    .settings(Test / fork := true)
     .dependsOn(core, grpc, eventsourced, `durable-state`)
     .dependsOn(testkit % Test)
 

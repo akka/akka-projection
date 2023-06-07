@@ -6,7 +6,6 @@ package akka.projection.r2dbc
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
 import akka.actor.typed.ActorSystem
 import akka.persistence.Persistence
 import akka.persistence.r2dbc.ConnectionFactoryProvider
@@ -16,6 +15,8 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
 import org.slf4j.LoggerFactory
 
+import scala.util.control.NonFatal
+
 trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
 
   def typedSystem: ActorSystem[_]
@@ -24,7 +25,10 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
 
   lazy val r2dbcProjectionSettings: R2dbcProjectionSettings =
     R2dbcProjectionSettings(typedSystem.settings.config.getConfig(testConfigPath))
-
+  lazy val r2dbcSettings: R2dbcSettings =
+    R2dbcSettings(
+      typedSystem.settings.config
+        .getConfig(r2dbcProjectionSettings.useConnectionFactory.replace(".connection-factory", "")))
   lazy val r2dbcExecutor: R2dbcExecutor = {
     new R2dbcExecutor(
       ConnectionFactoryProvider(typedSystem).connectionFactoryFor(r2dbcProjectionSettings.useConnectionFactory),
@@ -35,31 +39,33 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
   lazy val persistenceExt: Persistence = Persistence(typedSystem)
 
   override protected def beforeAll(): Unit = {
-    lazy val r2dbcSettings: R2dbcSettings =
-      R2dbcSettings(typedSystem.settings.config.getConfig("akka.persistence.r2dbc"))
-    Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(
-        _.createStatement(s"delete from ${r2dbcSettings.journalTableWithSchema}")),
-      10.seconds)
-    Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(
-        _.createStatement(s"delete from ${r2dbcSettings.durableStateTableWithSchema}")),
-      10.seconds)
-    if (r2dbcProjectionSettings.isOffsetTableDefined) {
+    try {
       Await.result(
         r2dbcExecutor.updateOne("beforeAll delete")(
-          _.createStatement(s"delete from ${r2dbcProjectionSettings.offsetTableWithSchema}")),
+          _.createStatement(s"delete from ${r2dbcSettings.journalTableWithSchema}")),
         10.seconds)
+      Await.result(
+        r2dbcExecutor.updateOne("beforeAll delete")(
+          _.createStatement(s"delete from ${r2dbcSettings.durableStateTableWithSchema}")),
+        10.seconds)
+      if (r2dbcProjectionSettings.isOffsetTableDefined) {
+        Await.result(
+          r2dbcExecutor.updateOne("beforeAll delete")(
+            _.createStatement(s"delete from ${r2dbcProjectionSettings.offsetTableWithSchema}")),
+          10.seconds)
+      }
+      Await.result(
+        r2dbcExecutor.updateOne("beforeAll delete")(
+          _.createStatement(s"delete from ${r2dbcProjectionSettings.timestampOffsetTableWithSchema}")),
+        10.seconds)
+      Await.result(
+        r2dbcExecutor.updateOne("beforeAll delete")(
+          _.createStatement(s"delete from ${r2dbcProjectionSettings.managementTableWithSchema}")),
+        10.seconds)
+    } catch {
+      case NonFatal(ex) =>
+        throw new RuntimeException("Failed to clean up tables before test", ex)
     }
-    Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(
-        _.createStatement(s"delete from ${r2dbcProjectionSettings.timestampOffsetTableWithSchema}")),
-      10.seconds)
-    Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(
-        _.createStatement(s"delete from ${r2dbcProjectionSettings.managementTableWithSchema}")),
-      10.seconds)
     super.beforeAll()
   }
-
 }
