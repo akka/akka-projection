@@ -206,7 +206,15 @@ private[projection] class R2dbcOffsetStore(
 
   private val evictWindow = settings.timeWindow.plus(settings.evictInterval)
 
-  private val dialectName = system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect")
+  private val dialect: Dialect =
+    system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect") match {
+      case "postgres" => PostgresDialect
+      case "yugabyte" => YugabyteDialect
+      case "h2"       => H2Dialect
+      case unknown =>
+        throw new IllegalArgumentException(
+          s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
+    }
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -252,7 +260,7 @@ private[projection] class R2dbcOffsetStore(
     sql"SELECT projection_key, current_offset, manifest, mergeable FROM $offsetTable WHERE projection_name = ?"
 
   private val upsertOffsetSql: String = {
-    if (dialectName == "h2") {
+    if (dialect == H2Dialect) {
       // FIXME is branching good enough for now?
       sql"""
         MERGE INTO $offsetTable
@@ -283,7 +291,7 @@ private[projection] class R2dbcOffsetStore(
     projection_key = ? """
 
   val updateManagementStateSql: String =
-    if (dialectName == "h2") {
+    if (dialect == H2Dialect) {
       // FIXME is branching good enough for now?
       sql"""
         MERGE INTO $managementTable
