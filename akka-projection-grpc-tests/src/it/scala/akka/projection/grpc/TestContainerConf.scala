@@ -33,20 +33,17 @@ class TestContainerConf {
          query-plugin-id = "akka.persistence.r2dbc.query"
        }
      }
-     akka.persistence.r2dbc {
-       # yugabyte or postgres
-       dialect = "postgres"
-       connection-factory {
-         driver = "postgres"
-         host = "${container.getHost}"
-         port = ${container.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT)}
-         database = "${container.getDatabaseName}"
-         user = "${container.getUsername}"
-         password = "${container.getPassword}"
-       }
+     akka.persistence.r2dbc.connection-factory = $${akka.persistence.r2dbc.postgres}
+     akka.persistence.r2dbc.connection-factory = {
+       host = "${container.getHost}"
+       port = ${container.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT)}
+       database = "${container.getDatabaseName}"
+       user = "${container.getUsername}"
+       password = "${container.getPassword}"
      }
      """)
       .withFallback(ConfigFactory.load("persistence.conf"))
+      .resolve()
 
   def stop(): Unit = container.stop()
 }
