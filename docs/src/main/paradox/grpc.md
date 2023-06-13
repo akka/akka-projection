@@ -15,7 +15,7 @@ messages or stored data.
 
 ## Overview
 
-![overview.png](images/grpc-overview.png)
+![overview.png](images/service-to-service-overview.png)
 
 1. An Entity stores events in its journal in service A.
 1. Consumer in service B starts an Akka Projection which locally reads its offset for service A's replication stream.
