@@ -4,7 +4,10 @@
 
 package akka.projection.r2dbc.internal
 
+import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
+import akka.persistence.r2dbc.internal.R2dbcExecutor
+import akka.projection.BySlicesSourceProvider
 import akka.projection.r2dbc.R2dbcProjectionSettings
 
 /**
@@ -12,7 +15,11 @@ import akka.projection.r2dbc.R2dbcProjectionSettings
  */
 @InternalApi
 private[projection] trait Dialect {
-  def createOffsetStoreDao(r2dbcProjectionSettings: R2dbcProjectionSettings): OffsetStoreDao
+  def createOffsetStoreDao(
+      settings: R2dbcProjectionSettings,
+      sourceProvider: Option[BySlicesSourceProvider],
+      system: ActorSystem[_],
+      r2dbcExecutor: R2dbcExecutor): OffsetStoreDao
 }
 
 /**
@@ -20,8 +27,12 @@ private[projection] trait Dialect {
  */
 @InternalApi
 private[projection] object PostgresDialect extends Dialect {
-  def createOffsetStoreDao(r2dbcProjectionSettings: R2dbcProjectionSettings): OffsetStoreDao =
-    new PostgresOffsetStoreDao
+  def createOffsetStoreDao(
+      settings: R2dbcProjectionSettings,
+      sourceProvider: Option[BySlicesSourceProvider],
+      system: ActorSystem[_],
+      r2dbcExecutor: R2dbcExecutor): OffsetStoreDao =
+    new PostgresOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor)
 }
 
 /**
@@ -29,8 +40,12 @@ private[projection] object PostgresDialect extends Dialect {
  */
 @InternalApi
 private[projection] object YugabyteDialect extends Dialect {
-  def createOffsetStoreDao(r2dbcProjectionSettings: R2dbcProjectionSettings): OffsetStoreDao =
-    new PostgresOffsetStoreDao
+  def createOffsetStoreDao(
+      settings: R2dbcProjectionSettings,
+      sourceProvider: Option[BySlicesSourceProvider],
+      system: ActorSystem[_],
+      r2dbcExecutor: R2dbcExecutor): OffsetStoreDao =
+    PostgresDialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor)
 }
 
 /**
@@ -38,6 +53,10 @@ private[projection] object YugabyteDialect extends Dialect {
  */
 @InternalApi
 private[projection] object H2Dialect extends Dialect {
-  def createOffsetStoreDao(r2dbcProjectionSettings: R2dbcProjectionSettings): OffsetStoreDao =
-    new H2OffsetStoreDao
+  def createOffsetStoreDao(
+      settings: R2dbcProjectionSettings,
+      sourceProvider: Option[BySlicesSourceProvider],
+      system: ActorSystem[_],
+      r2dbcExecutor: R2dbcExecutor): OffsetStoreDao =
+    new H2OffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor)
 }

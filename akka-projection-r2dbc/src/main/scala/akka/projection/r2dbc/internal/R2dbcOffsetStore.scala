@@ -4,18 +4,6 @@
 
 package akka.projection.r2dbc.internal
 
-import java.time.Clock
-import java.time.Instant
-import java.time.{ Duration => JDuration }
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
-
-import scala.annotation.tailrec
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
@@ -30,7 +18,6 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.r2dbc.internal.EnvelopeOrigin
 import akka.persistence.r2dbc.internal.R2dbcExecutor
-import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
@@ -38,11 +25,20 @@ import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
-import akka.projection.internal.OffsetSerialization.SingleOffset
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import io.r2dbc.spi.Connection
-import io.r2dbc.spi.Statement
 import org.slf4j.LoggerFactory
+
+import java.time.Clock
+import java.time.Instant
+import java.time.{ Duration => JDuration }
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import scala.annotation.tailrec
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 /**
  * INTERNAL API
@@ -206,109 +202,27 @@ private[projection] class R2dbcOffsetStore(
 
   private val evictWindow = settings.timeWindow.plus(settings.evictInterval)
 
-  private val dialect: Dialect =
-    system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect") match {
-      case "postgres" => PostgresDialect
-      case "yugabyte" => YugabyteDialect
-      case "h2"       => H2Dialect
-      case unknown =>
-        throw new IllegalArgumentException(
-          s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
-    }
-
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
   import offsetSerialization.toStorageRepresentation
 
-  private val timestampOffsetTable = settings.timestampOffsetTableWithSchema
-  private val offsetTable = settings.offsetTableWithSchema
-  private val managementTable = settings.managementTableWithSchema
+  private val dao = {
+    val dialectName = system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect")
+    val dialect =
+      dialectName match {
+        case "postgres" => PostgresDialect
+        case "yugabyte" => YugabyteDialect
+        case "h2"       => H2Dialect
+        case unknown =>
+          throw new IllegalArgumentException(
+            s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
+      }
+    logger.debug2("Offset store [{}] created, with dialect [{}]", projectionId, dialectName)
+    dialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor)
+  }
 
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
-  private val selectTimestampOffsetSql: String = sql"""
-    SELECT slice, persistence_id, seq_nr, timestamp_offset
-    FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
-
-  private val insertTimestampOffsetSql: String = sql"""
-    INSERT INTO $timestampOffsetTable
-    (projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)
-    VALUES (?,?,?,?,?,?, CURRENT_TIMESTAMP)"""
-
-  private val insertTimestampOffsetBatchSql: String = {
-    val values = (1 to settings.offsetBatchSize).map(_ => "(?,?,?,?,?,?, CURRENT_TIMESTAMP)").mkString(", ")
-    sql"""
-    INSERT INTO $timestampOffsetTable
-    (projection_name, projection_key, slice, persistence_id, seq_nr, timestamp_offset, timestamp_consumed)
-    VALUES $values
-    """
-  }
-
-  // delete less than a timestamp
-  private val deleteOldTimestampOffsetSql: String = sql"""
-    DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset < ?
-    AND NOT (persistence_id || '-' || seq_nr) = ANY (?)"""
-
-  // delete greater than or equal a timestamp
-  private val deleteNewTimestampOffsetSql: String =
-    sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset >= ?"
-
-  private val clearTimestampOffsetSql: String =
-    sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"
-
-  private val selectOffsetSql: String =
-    sql"SELECT projection_key, current_offset, manifest, mergeable FROM $offsetTable WHERE projection_name = ?"
-
-  private val upsertOffsetSql: String = {
-    if (dialect == H2Dialect) {
-      // FIXME is branching good enough for now?
-      sql"""
-        MERGE INTO $offsetTable
-        (projection_name, projection_key, current_offset, manifest, mergeable, last_updated)
-        KEY(projection_name, projection_key)
-        VALUES (?,?,?,?,?,?)
-       """
-    } else {
-      sql"""
-        INSERT INTO $offsetTable
-        (projection_name, projection_key, current_offset, manifest, mergeable, last_updated)
-        VALUES (?,?,?,?,?,?)
-        ON CONFLICT (projection_name, projection_key)
-        DO UPDATE SET
-        current_offset = excluded.current_offset,
-        manifest = excluded.manifest,
-        mergeable = excluded.mergeable,
-        last_updated = excluded.last_updated"""
-    }
-  }
-
-  private val clearOffsetSql: String =
-    sql"DELETE FROM $offsetTable WHERE projection_name = ? AND projection_key = ?"
-
-  private val readManagementStateSql = sql"""
-    SELECT paused FROM $managementTable WHERE
-    projection_name = ? AND
-    projection_key = ? """
-
-  val updateManagementStateSql: String =
-    if (dialect == H2Dialect) {
-      // FIXME is branching good enough for now?
-      sql"""
-        MERGE INTO $managementTable
-        (projection_name, projection_key, paused, last_updated)
-        KEY(projection_name, projection_key)
-        VALUES (?,?,?,?)
-      """
-    } else {
-      sql"""
-        INSERT INTO $managementTable
-        (projection_name, projection_key, paused, last_updated)
-        VALUES (?,?,?,?)
-        ON CONFLICT (projection_name, projection_key)
-        DO UPDATE SET
-        paused = excluded.paused,
-        last_updated = excluded.last_updated"""
-    }
   // The OffsetStore instance is used by a single projectionId and there shouldn't be any concurrent
   // calls to methods that access the `state`. To detect any violations of that concurrency assumption
   // we use AtomicReference and fail if the CAS fails.
@@ -388,22 +302,7 @@ private[projection] class R2dbcOffsetStore(
       }
     }
 
-    val recordsFut = r2dbcExecutor.select("read timestamp offset")(
-      conn => {
-        logger.trace("reading timestamp offset for [{}]", projectionId)
-        conn
-          .createStatement(selectTimestampOffsetSql)
-          .bind(0, minSlice)
-          .bind(1, maxSlice)
-          .bind(2, projectionId.name)
-      },
-      row => {
-        val slice = row.get("slice", classOf[java.lang.Integer])
-        val pid = row.get("persistence_id", classOf[String])
-        val seqNr = row.get("seq_nr", classOf[java.lang.Long])
-        val timestamp = row.get("timestamp_offset", classOf[Instant])
-        Record(slice, pid, seqNr, timestamp)
-      })
+    val recordsFut = dao.readTimestampOffset(projectionId, minSlice, maxSlice)
     recordsFut.map { records =>
       val newState = State(records)
       logger.debugN(
@@ -424,23 +323,7 @@ private[projection] class R2dbcOffsetStore(
 
   private def readPrimitiveOffset[Offset](): Future[Option[Offset]] = {
     if (settings.isOffsetTableDefined) {
-      val singleOffsets = r2dbcExecutor.select("read offset")(
-        conn => {
-          logger.trace("reading offset for [{}]", projectionId)
-          conn
-            .createStatement(selectOffsetSql)
-            .bind(0, projectionId.name)
-        },
-        row => {
-          val offsetStr = row.get("current_offset", classOf[String])
-          val manifest = row.get("manifest", classOf[String])
-          val mergeable = row.get("mergeable", classOf[java.lang.Boolean])
-          val key = row.get("projection_key", classOf[String])
-
-          val adaptedProjectionId = ProjectionId(projectionId.name, key)
-          SingleOffset(adaptedProjectionId, manifest, offsetStr, mergeable)
-        })
-
+      val singleOffsets = dao.readPrimitiveOffset(projectionId)
       singleOffsets.map { offsets =>
         val result =
           if (offsets.isEmpty) None
@@ -557,7 +440,7 @@ private[projection] class R2dbcOffsetStore(
         } else
           newState
 
-      val offsetInserts = insertTimestampOffsetInTx(conn, filteredRecords)
+      val offsetInserts = dao.insertTimestampOffsetInTx(conn, projectionId, filteredRecords)
 
       offsetInserts.map { _ =>
         if (state.compareAndSet(oldState, evictedNewState))
@@ -568,71 +451,6 @@ private[projection] class R2dbcOffsetStore(
       }
     }
   }
-
-  private def insertTimestampOffsetInTx(conn: Connection, records: immutable.IndexedSeq[Record]): Future[Long] = {
-    def bindRecord(stmt: Statement, record: Record, bindStartIndex: Int): Statement = {
-      val slice = persistenceExt.sliceForPersistenceId(record.pid)
-      val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-      val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-      if (slice < minSlice || slice > maxSlice)
-        throw new IllegalArgumentException(
-          s"This offset store [$projectionId] manages slices " +
-          s"[$minSlice - $maxSlice] but received slice [$slice] for persistenceId [${record.pid}]")
-
-      stmt
-        .bind(bindStartIndex, projectionId.name)
-        .bind(bindStartIndex + 1, projectionId.key)
-        .bind(bindStartIndex + 2, slice)
-        .bind(bindStartIndex + 3, record.pid)
-        .bind(bindStartIndex + 4, record.seqNr)
-        .bind(bindStartIndex + 5, record.timestamp)
-    }
-
-    require(records.nonEmpty)
-
-    logger.trace2("saving timestamp offset [{}], {}", records.last.timestamp, records)
-
-    if (records.size == 1) {
-      val statement = conn.createStatement(insertTimestampOffsetSql)
-      val boundStatement = bindRecord(statement, records.head, bindStartIndex = 0)
-      R2dbcExecutor.updateOneInTx(boundStatement)
-    } else {
-      val batchSize = settings.offsetBatchSize
-      val batches = if (batchSize > 0) records.size / batchSize else 0
-      val batchResult =
-        if (batches > 0) {
-          val batchStatements =
-            (0 until batches).map { i =>
-              val stmt = conn.createStatement(insertTimestampOffsetBatchSql)
-              records.slice(i * batchSize, i * batchSize + batchSize).zipWithIndex.foreach {
-                case (rec, recIdx) =>
-                  bindRecord(stmt, rec, recIdx * 6) // 6 bind parameters per record
-              }
-              stmt
-            }
-          R2dbcExecutor.updateInTx(batchStatements).map(_.sum)
-        } else
-          Future.successful(0L)
-
-      batchResult.flatMap { batchResultCount =>
-        val remainingRecords = records.drop(batches * batchSize)
-        if (remainingRecords.nonEmpty) {
-          val statement = conn.createStatement(insertTimestampOffsetSql)
-          val boundStatement =
-            remainingRecords.foldLeft(statement) { (stmt, rec) =>
-              stmt.add()
-              bindRecord(stmt, rec, bindStartIndex = 0)
-            }
-          // This "batch" statement is not efficient, see issue #897
-          R2dbcExecutor
-            .updateBatchInTx(boundStatement)
-            .map(_ + batchResultCount)(ExecutionContexts.parasitic)
-        } else
-          Future.successful(batchResultCount)
-      }
-    }
-  }
-
   @tailrec private def cleanupInflight(newState: State): Unit = {
     val currentInflight = getInflight()
     val newInflight =
@@ -667,28 +485,12 @@ private[projection] class R2dbcOffsetStore(
           "Offset table has been disabled config 'akka.projection.r2dbc.offset-store.offset-table', " +
           s"but trying to save a non-timestamp offset [$offset]"))
 
-    val now = Instant.now(clock).toEpochMilli
+    val now = Instant.now(clock)
 
     // FIXME can we move serialization outside the transaction?
     val storageReps = toStorageRepresentation(projectionId, offset)
 
-    def upsertStmt(singleOffset: SingleOffset): Statement = {
-      conn
-        .createStatement(upsertOffsetSql)
-        .bind(0, singleOffset.id.name)
-        .bind(1, singleOffset.id.key)
-        .bind(2, singleOffset.offsetStr)
-        .bind(3, singleOffset.manifest)
-        .bind(4, java.lang.Boolean.valueOf(singleOffset.mergeable))
-        .bind(5, now)
-    }
-
-    val statements = storageReps match {
-      case single: SingleOffset  => Vector(upsertStmt(single))
-      case MultipleOffsets(many) => many.map(upsertStmt).toVector
-    }
-
-    R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContexts.parasitic)
+    dao.updatePrimitiveOffsetInTx(conn, projectionId, now, storageReps)
   }
 
   /**
@@ -918,18 +720,9 @@ private[projection] class R2dbcOffsetStore(
             // note that deleteOldTimestampOffsetSql already has `AND timestamp_offset < ?`
             // and that's why timestamp >= until don't have to be included here
             s"${record.pid}-${record.seqNr}"
-        }.toArray
-
-        val result = r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
-          conn
-            .createStatement(deleteOldTimestampOffsetSql)
-            .bind(0, minSlice)
-            .bind(1, maxSlice)
-            .bind(2, projectionId.name)
-            .bind(3, until)
-            .bind(4, notInLatestBySlice)
         }
 
+        val result = dao.deleteOldTimestampOffset(projectionId, minSlice, maxSlice, until, notInLatestBySlice)
         result.failed.foreach { exc =>
           idle.set(false) // try again next tick
           logger.warn(
@@ -974,7 +767,7 @@ private[projection] class R2dbcOffsetStore(
                       val slice = persistenceExt.sliceForPersistenceId(pid)
                       Record(slice, pid, seqNr, t.timestamp)
                   }.toVector
-              insertTimestampOffsetInTx(conn, records)
+              dao.insertTimestampOffsetInTx(conn, projectionId, records)
             }
           }
           .map(_ => Done)(ExecutionContexts.parasitic)
@@ -996,13 +789,7 @@ private[projection] class R2dbcOffsetStore(
     } else {
       val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
       val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-      val result = R2dbcExecutor.updateOneInTx(
-        conn
-          .createStatement(deleteNewTimestampOffsetSql)
-          .bind(0, minSlice)
-          .bind(1, maxSlice)
-          .bind(2, projectionId.name)
-          .bind(3, timestamp))
+      val result = dao.deleteNewTimestampOffsetsInTx(conn, projectionId, minSlice, maxSlice, timestamp)
 
       if (logger.isDebugEnabled)
         result.foreach { rows =>
@@ -1029,17 +816,10 @@ private[projection] class R2dbcOffsetStore(
     sourceProvider match {
       case Some(_) =>
         idle.set(false)
-        r2dbcExecutor
-          .updateOne("clear timestamp offset") { conn =>
-            val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-            val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-            logger.debug("clearing timestamp offset for [{}]", projectionId)
-            conn
-              .createStatement(clearTimestampOffsetSql)
-              .bind(0, minSlice)
-              .bind(1, maxSlice)
-              .bind(2, projectionId.name)
-          }
+        val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+        val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+        dao
+          .clearTimestampOffset(projectionId, minSlice, maxSlice)
           .map { n =>
             logger.debug(s"clearing timestamp offset for [{}] - executed statement returned [{}]", projectionId, n)
             Done
@@ -1051,46 +831,21 @@ private[projection] class R2dbcOffsetStore(
 
   private def clearPrimitiveOffset(): Future[Done] = {
     if (settings.isOffsetTableDefined) {
-      r2dbcExecutor
-        .updateOne("clear offset") { conn =>
-          logger.debug("clearing offset for [{}]", projectionId)
-          conn
-            .createStatement(clearOffsetSql)
-            .bind(0, projectionId.name)
-            .bind(1, projectionId.key)
-        }
-        .map { n =>
-          logger.debug(s"clearing offset for [{}] - executed statement returned [{}]", projectionId, n)
-          Done
-        }
+      dao.clearPrimitiveOffset(projectionId).map { n =>
+        logger.debug(s"clearing offset for [{}] - executed statement returned [{}]", projectionId, n)
+        Done
+      }
     } else {
       FutureDone
     }
   }
 
-  def readManagementState(): Future[Option[ManagementState]] = {
-    def createStatement(connection: Connection) =
-      connection
-        .createStatement(readManagementStateSql)
-        .bind(0, projectionId.name)
-        .bind(1, projectionId.key)
-
-    r2dbcExecutor
-      .selectOne("read management state")(
-        conn => createStatement(conn),
-        row => ManagementState(row.get[java.lang.Boolean]("paused", classOf[java.lang.Boolean])))
-  }
+  def readManagementState(): Future[Option[ManagementState]] =
+    dao.readManagementState(projectionId)
 
   def savePaused(paused: Boolean): Future[Done] = {
-    r2dbcExecutor
-      .updateOne("update management state") { conn =>
-        conn
-          .createStatement(updateManagementStateSql)
-          .bind(0, projectionId.name)
-          .bind(1, projectionId.key)
-          .bind(2, paused)
-          .bind(3, Instant.now(clock).toEpochMilli)
-      }
+    dao
+      .updateManagementState(projectionId, paused, Instant.now(clock))
       .flatMap {
         case i if i == 1 => Future.successful(Done)
         case _ =>
