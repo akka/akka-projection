@@ -10,6 +10,7 @@ As the source you can select from:
 
 * @ref:[Events from Akka Persistence](eventsourced.md)
 * @ref:[State changes from Akka Persistence](durable-state.md)
+* @ref:[Events from Akka Persistence published over gRPC](grpc.md)
 * @ref:[Messages from Kafka](kafka.md)
 * Building your own @apidoc[SourceProvider]
 
@@ -17,6 +18,7 @@ For the offset storage you can select from:
 
 * @ref:[Offset in Cassandra](cassandra.md)
 * @ref:[Offset in a relational DB with JDBC](jdbc.md)
+* @ref:[Offset in a relational DB with R2DBC](r2dbc.md)
 * @ref:[Offset in a relational DB with Slick](slick.md) (community-driven module)
 
 Those building blocks are assembled into a `Projection`. You can have many instances of it

@@ -27,6 +27,10 @@ artifact2=akka-persistence-r2dbc_$scala.binary.version$
 version2=$akka.r2dbc.version$
 }
 
+Note that Akka R2DBC changed configuration structure in 1.2.0 needed for this version of Akka Projection, if 
+upgrading from Akka Projection 1.4.x you will likely need to update your configuration according to 
+@extref:[the migration guide](akka-persistence-r2dbc:migration-guide.html)
+
 Akka Projections R2DBC depends on Akka $akka.version$ or later, and note that it is important that all `akka-*`
 dependencies are in the same version, so it is recommended to depend on them explicitly to avoid problems
 with transient dependencies causing an unlucky mix of versions.
@@ -43,7 +47,7 @@ The table below shows `akka-projection-r2dbc`'s direct dependencies, and the sec
 ## Schema
 
 The `akka_projection_offset_store`, `akka_projection_timestamp_offset_store` and `akka_projection_management` tables
-need to be created in the configured database:
+need to be created in the configured database, unless using H2 where the schema is created automatically:
 
 PostgreSQL
 :  @@snip [PostgreSQL Schema](/akka-projection-r2dbc/ddl-scripts/create_tables_postgres.sql)
