@@ -8,6 +8,7 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.BySlicesSourceProvider
+import akka.projection.ProjectionId
 import akka.projection.r2dbc.R2dbcProjectionSettings
 
 /**
@@ -19,7 +20,8 @@ private[projection] trait Dialect {
       settings: R2dbcProjectionSettings,
       sourceProvider: Option[BySlicesSourceProvider],
       system: ActorSystem[_],
-      r2dbcExecutor: R2dbcExecutor): OffsetStoreDao
+      r2dbcExecutor: R2dbcExecutor,
+      projectionId: ProjectionId): OffsetStoreDao
 }
 
 /**
@@ -31,8 +33,9 @@ private[projection] object PostgresDialect extends Dialect {
       settings: R2dbcProjectionSettings,
       sourceProvider: Option[BySlicesSourceProvider],
       system: ActorSystem[_],
-      r2dbcExecutor: R2dbcExecutor): OffsetStoreDao =
-    new PostgresOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor)
+      r2dbcExecutor: R2dbcExecutor,
+      projectionId: ProjectionId): OffsetStoreDao =
+    new PostgresOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
 }
 
 /**
@@ -44,8 +47,9 @@ private[projection] object YugabyteDialect extends Dialect {
       settings: R2dbcProjectionSettings,
       sourceProvider: Option[BySlicesSourceProvider],
       system: ActorSystem[_],
-      r2dbcExecutor: R2dbcExecutor): OffsetStoreDao =
-    PostgresDialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor)
+      r2dbcExecutor: R2dbcExecutor,
+      projectionId: ProjectionId): OffsetStoreDao =
+    PostgresDialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
 }
 
 /**
@@ -57,6 +61,7 @@ private[projection] object H2Dialect extends Dialect {
       settings: R2dbcProjectionSettings,
       sourceProvider: Option[BySlicesSourceProvider],
       system: ActorSystem[_],
-      r2dbcExecutor: R2dbcExecutor): OffsetStoreDao =
-    new H2OffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor)
+      r2dbcExecutor: R2dbcExecutor,
+      projectionId: ProjectionId): OffsetStoreDao =
+    new H2OffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
 }

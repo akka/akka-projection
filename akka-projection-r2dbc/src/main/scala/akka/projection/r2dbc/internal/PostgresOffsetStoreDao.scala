@@ -38,7 +38,8 @@ private[projection] class PostgresOffsetStoreDao(
     settings: R2dbcProjectionSettings,
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
-    r2dbcExecutor: R2dbcExecutor)
+    r2dbcExecutor: R2dbcExecutor,
+    projectionId: ProjectionId)
     extends OffsetStoreDao {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -131,7 +132,6 @@ private[projection] class PostgresOffsetStoreDao(
     }
 
   override def readTimestampOffset(
-      projectionId: ProjectionId,
       minSlice: Int,
       maxSlice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.Record]] =
     r2dbcExecutor.select("read timestamp offset")(
@@ -151,8 +151,7 @@ private[projection] class PostgresOffsetStoreDao(
         R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
       })
 
-  override def readPrimitiveOffset(
-      projectionId: ProjectionId): Future[immutable.IndexedSeq[OffsetSerialization.SingleOffset]] =
+  override def readPrimitiveOffset(): Future[immutable.IndexedSeq[OffsetSerialization.SingleOffset]] =
     r2dbcExecutor.select("read offset")(
       conn => {
         logger.trace("reading offset for [{}]", projectionId)
@@ -172,7 +171,6 @@ private[projection] class PostgresOffsetStoreDao(
 
   override def insertTimestampOffsetInTx(
       connection: Connection,
-      projectionId: ProjectionId,
       records: immutable.IndexedSeq[R2dbcOffsetStore.Record]): Future[Long] = {
     def bindRecord(stmt: Statement, record: Record, bindStartIndex: Int): Statement = {
       val slice = persistenceExt.sliceForPersistenceId(record.pid)
@@ -239,7 +237,6 @@ private[projection] class PostgresOffsetStoreDao(
 
   override def updatePrimitiveOffsetInTx(
       connection: Connection,
-      projectionId: ProjectionId,
       timestamp: Instant,
       storageRepresentation: StorageRepresentation): Future[Done] = {
     def upsertStmt(singleOffset: SingleOffset): Statement = {
@@ -262,7 +259,6 @@ private[projection] class PostgresOffsetStoreDao(
   }
 
   override def deleteOldTimestampOffset(
-      projectionId: ProjectionId,
       minSlice: Int,
       maxSlice: Int,
       until: Instant,
@@ -279,7 +275,6 @@ private[projection] class PostgresOffsetStoreDao(
 
   override def deleteNewTimestampOffsetsInTx(
       connection: Connection,
-      projectionId: ProjectionId,
       minSlice: Int,
       maxSlice: Int,
       timestamp: Instant): Future[Long] =
@@ -291,7 +286,7 @@ private[projection] class PostgresOffsetStoreDao(
         .bind(2, projectionId.name)
         .bind(3, timestamp))
 
-  override def clearTimestampOffset(projectionId: ProjectionId, minSlice: Int, maxSlice: Int): Future[Long] =
+  override def clearTimestampOffset(minSlice: Int, maxSlice: Int): Future[Long] =
     r2dbcExecutor
       .updateOne("clear timestamp offset") { conn =>
         logger.debug("clearing timestamp offset for [{}]", projectionId)
@@ -302,7 +297,7 @@ private[projection] class PostgresOffsetStoreDao(
           .bind(2, projectionId.name)
       }
 
-  override def clearPrimitiveOffset(projectionId: ProjectionId): Future[Long] =
+  override def clearPrimitiveOffset(): Future[Long] =
     r2dbcExecutor
       .updateOne("clear offset") { conn =>
         logger.debug("clearing offset for [{}]", projectionId)
@@ -312,7 +307,7 @@ private[projection] class PostgresOffsetStoreDao(
           .bind(1, projectionId.key)
       }
 
-  override def readManagementState(projectionId: ProjectionId): Future[Option[ManagementState]] = {
+  override def readManagementState(): Future[Option[ManagementState]] = {
     r2dbcExecutor
       .selectOne("read management state")(
         _.createStatement(readManagementStateSql)
@@ -321,7 +316,7 @@ private[projection] class PostgresOffsetStoreDao(
         row => ManagementState(row.get[java.lang.Boolean]("paused", classOf[java.lang.Boolean])))
   }
 
-  override def updateManagementState(projectionId: ProjectionId, paused: Boolean, timestamp: Instant): Future[Long] =
+  override def updateManagementState(paused: Boolean, timestamp: Instant): Future[Long] =
     r2dbcExecutor
       .updateOne("update management state") { conn =>
         conn

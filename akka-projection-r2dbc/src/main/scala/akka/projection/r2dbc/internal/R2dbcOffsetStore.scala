@@ -218,7 +218,7 @@ private[projection] class R2dbcOffsetStore(
             s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
       }
     logger.debug2("Offset store [{}] created, with dialect [{}]", projectionId, dialectName)
-    dialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor)
+    dialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
   }
 
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
@@ -302,7 +302,7 @@ private[projection] class R2dbcOffsetStore(
       }
     }
 
-    val recordsFut = dao.readTimestampOffset(projectionId, minSlice, maxSlice)
+    val recordsFut = dao.readTimestampOffset(minSlice, maxSlice)
     recordsFut.map { records =>
       val newState = State(records)
       logger.debugN(
@@ -323,7 +323,7 @@ private[projection] class R2dbcOffsetStore(
 
   private def readPrimitiveOffset[Offset](): Future[Option[Offset]] = {
     if (settings.isOffsetTableDefined) {
-      val singleOffsets = dao.readPrimitiveOffset(projectionId)
+      val singleOffsets = dao.readPrimitiveOffset()
       singleOffsets.map { offsets =>
         val result =
           if (offsets.isEmpty) None
@@ -440,7 +440,7 @@ private[projection] class R2dbcOffsetStore(
         } else
           newState
 
-      val offsetInserts = dao.insertTimestampOffsetInTx(conn, projectionId, filteredRecords)
+      val offsetInserts = dao.insertTimestampOffsetInTx(conn, filteredRecords)
 
       offsetInserts.map { _ =>
         if (state.compareAndSet(oldState, evictedNewState))
@@ -490,7 +490,7 @@ private[projection] class R2dbcOffsetStore(
     // FIXME can we move serialization outside the transaction?
     val storageReps = toStorageRepresentation(projectionId, offset)
 
-    dao.updatePrimitiveOffsetInTx(conn, projectionId, now, storageReps)
+    dao.updatePrimitiveOffsetInTx(conn, now, storageReps)
   }
 
   /**
@@ -722,7 +722,7 @@ private[projection] class R2dbcOffsetStore(
             s"${record.pid}-${record.seqNr}"
         }
 
-        val result = dao.deleteOldTimestampOffset(projectionId, minSlice, maxSlice, until, notInLatestBySlice)
+        val result = dao.deleteOldTimestampOffset(minSlice, maxSlice, until, notInLatestBySlice)
         result.failed.foreach { exc =>
           idle.set(false) // try again next tick
           logger.warn(
@@ -767,7 +767,7 @@ private[projection] class R2dbcOffsetStore(
                       val slice = persistenceExt.sliceForPersistenceId(pid)
                       Record(slice, pid, seqNr, t.timestamp)
                   }.toVector
-              dao.insertTimestampOffsetInTx(conn, projectionId, records)
+              dao.insertTimestampOffsetInTx(conn, records)
             }
           }
           .map(_ => Done)(ExecutionContexts.parasitic)
@@ -789,7 +789,7 @@ private[projection] class R2dbcOffsetStore(
     } else {
       val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
       val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-      val result = dao.deleteNewTimestampOffsetsInTx(conn, projectionId, minSlice, maxSlice, timestamp)
+      val result = dao.deleteNewTimestampOffsetsInTx(conn, minSlice, maxSlice, timestamp)
 
       if (logger.isDebugEnabled)
         result.foreach { rows =>
@@ -819,7 +819,7 @@ private[projection] class R2dbcOffsetStore(
         val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
         val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
         dao
-          .clearTimestampOffset(projectionId, minSlice, maxSlice)
+          .clearTimestampOffset(minSlice, maxSlice)
           .map { n =>
             logger.debug(s"clearing timestamp offset for [{}] - executed statement returned [{}]", projectionId, n)
             Done
@@ -831,7 +831,7 @@ private[projection] class R2dbcOffsetStore(
 
   private def clearPrimitiveOffset(): Future[Done] = {
     if (settings.isOffsetTableDefined) {
-      dao.clearPrimitiveOffset(projectionId).map { n =>
+      dao.clearPrimitiveOffset().map { n =>
         logger.debug(s"clearing offset for [{}] - executed statement returned [{}]", projectionId, n)
         Done
       }
@@ -841,11 +841,11 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def readManagementState(): Future[Option[ManagementState]] =
-    dao.readManagementState(projectionId)
+    dao.readManagementState()
 
   def savePaused(paused: Boolean): Future[Done] = {
     dao
-      .updateManagementState(projectionId, paused, Instant.now(clock))
+      .updateManagementState(paused, Instant.now(clock))
       .flatMap {
         case i if i == 1 => Future.successful(Done)
         case _ =>

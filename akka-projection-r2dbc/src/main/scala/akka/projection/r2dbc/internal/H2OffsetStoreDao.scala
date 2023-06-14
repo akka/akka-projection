@@ -9,6 +9,7 @@ import akka.annotation.InternalApi
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.projection.BySlicesSourceProvider
+import akka.projection.ProjectionId
 import akka.projection.r2dbc.R2dbcProjectionSettings
 
 /**
@@ -19,8 +20,9 @@ private[projection] final class H2OffsetStoreDao(
     settings: R2dbcProjectionSettings,
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
-    executor: R2dbcExecutor)
-    extends PostgresOffsetStoreDao(settings, sourceProvider, system, executor) {
+    executor: R2dbcExecutor,
+    projectionId: ProjectionId)
+    extends PostgresOffsetStoreDao(settings, sourceProvider, system, executor, projectionId) {
   override protected def createUpsertOffsetSql(): String =
     sql"""
       MERGE INTO ${settings.offsetTable}
