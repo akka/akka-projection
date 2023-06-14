@@ -242,25 +242,20 @@ private[projection] class R2dbcOffsetStore(
     () => deleteOldTimestampOffsets(),
     system.executionContext)
 
-  private def timestampOffsetBySlicesSourceProvider: BySlicesSourceProvider =
-    sourceProvider match {
-      case Some(provider) => provider
-      case None =>
-        throw new IllegalArgumentException(
-          s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
-    }
-
   private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
-    timestampOffsetBySlicesSourceProvider match {
-      case timestampQuery: EventTimestampQuery =>
+    sourceProvider match {
+      case Some(timestampQuery: EventTimestampQuery) =>
         timestampQuery.timestampOf(persistenceId, sequenceNr)
-      case timestampQuery: akka.persistence.query.typed.javadsl.EventTimestampQuery =>
+      case Some(timestampQuery: akka.persistence.query.typed.javadsl.EventTimestampQuery) =>
         import scala.compat.java8.FutureConverters._
         import scala.compat.java8.OptionConverters._
         timestampQuery.timestampOf(persistenceId, sequenceNr).toScala.map(_.asScala)
-      case _ =>
+      case Some(_) =>
         throw new IllegalArgumentException(
           s"Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
+      case None =>
+        throw new IllegalArgumentException(
+          s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
   }
 
@@ -294,16 +289,7 @@ private[projection] class R2dbcOffsetStore(
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
     idle.set(false)
     val oldState = state.get()
-
-    val (minSlice, maxSlice) = {
-      sourceProvider match {
-        case Some(provider) => (provider.minSlice, provider.maxSlice)
-        case None           => (0, persistenceExt.numberOfSlices - 1)
-      }
-    }
-
-    val recordsFut = dao.readTimestampOffset(minSlice, maxSlice)
-    recordsFut.map { records =>
+    dao.readTimestampOffset().map { records =>
       val newState = State(records)
       logger.debugN(
         "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
@@ -713,16 +699,14 @@ private[projection] class R2dbcOffsetStore(
         Future.successful(0)
       } else {
         val until = currentState.latestTimestamp.minus(settings.timeWindow)
-        val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-        val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+
         val notInLatestBySlice = currentState.latestBySlice.collect {
           case record if record.timestamp.isBefore(until) =>
             // note that deleteOldTimestampOffsetSql already has `AND timestamp_offset < ?`
             // and that's why timestamp >= until don't have to be included here
             s"${record.pid}-${record.seqNr}"
         }
-
-        val result = dao.deleteOldTimestampOffset(minSlice, maxSlice, until, notInLatestBySlice)
+        val result = dao.deleteOldTimestampOffset(until, notInLatestBySlice)
         result.failed.foreach { exc =>
           idle.set(false) // try again next tick
           logger.warn(
@@ -787,10 +771,7 @@ private[projection] class R2dbcOffsetStore(
       // nothing to delete
       Future.successful(0)
     } else {
-      val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-      val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
-      val result = dao.deleteNewTimestampOffsetsInTx(conn, minSlice, maxSlice, timestamp)
-
+      val result = dao.deleteNewTimestampOffsetsInTx(conn, timestamp)
       if (logger.isDebugEnabled)
         result.foreach { rows =>
           logger.debugN(
@@ -816,10 +797,8 @@ private[projection] class R2dbcOffsetStore(
     sourceProvider match {
       case Some(_) =>
         idle.set(false)
-        val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-        val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
         dao
-          .clearTimestampOffset(minSlice, maxSlice)
+          .clearTimestampOffset()
           .map { n =>
             logger.debug(s"clearing timestamp offset for [{}] - executed statement returned [{}]", projectionId, n)
             Done

@@ -20,7 +20,7 @@ import scala.concurrent.Future
 @InternalApi
 private[projection] trait OffsetStoreDao {
 
-  def readTimestampOffset(minSlice: Int, maxSlice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.Record]]
+  def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.Record]]
 
   def readPrimitiveOffset(): Future[immutable.IndexedSeq[OffsetSerialization.SingleOffset]]
 
@@ -33,19 +33,11 @@ private[projection] trait OffsetStoreDao {
       timestamp: Instant,
       storageRepresentation: OffsetSerialization.StorageRepresentation): Future[Done]
 
-  def deleteOldTimestampOffset(
-      minSlice: Int,
-      maxSlice: Int,
-      until: Instant,
-      notInLatestBySlice: Seq[String]): Future[Long]
+  def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[String]): Future[Long]
 
-  def deleteNewTimestampOffsetsInTx(
-      connection: Connection,
-      minSlice: Int,
-      maxSlice: Int,
-      timestamp: Instant): Future[Long]
+  def deleteNewTimestampOffsetsInTx(connection: Connection, timestamp: Instant): Future[Long]
 
-  def clearTimestampOffset(minSlice: Int, maxSlice: Int): Future[Long]
+  def clearTimestampOffset(): Future[Long]
 
   def clearPrimitiveOffset(): Future[Long]
 

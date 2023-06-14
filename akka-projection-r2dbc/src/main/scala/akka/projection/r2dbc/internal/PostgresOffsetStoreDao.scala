@@ -131,9 +131,13 @@ private[projection] class PostgresOffsetStoreDao(
           s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
 
-  override def readTimestampOffset(
-      minSlice: Int,
-      maxSlice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.Record]] =
+  override def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.Record]] = {
+    val (minSlice, maxSlice) = {
+      sourceProvider match {
+        case Some(provider) => (provider.minSlice, provider.maxSlice)
+        case None           => (0, persistenceExt.numberOfSlices - 1)
+      }
+    }
     r2dbcExecutor.select("read timestamp offset")(
       conn => {
         logger.trace("reading timestamp offset for [{}]", projectionId)
@@ -150,6 +154,7 @@ private[projection] class PostgresOffsetStoreDao(
         val timestamp = row.get("timestamp_offset", classOf[Instant])
         R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
       })
+  }
 
   override def readPrimitiveOffset(): Future[immutable.IndexedSeq[OffsetSerialization.SingleOffset]] =
     r2dbcExecutor.select("read offset")(
@@ -258,11 +263,9 @@ private[projection] class PostgresOffsetStoreDao(
     R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContexts.parasitic)
   }
 
-  override def deleteOldTimestampOffset(
-      minSlice: Int,
-      maxSlice: Int,
-      until: Instant,
-      notInLatestBySlice: Seq[String]): Future[Long] =
+  override def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[String]): Future[Long] = {
+    val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+    val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
     r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
       conn
         .createStatement(deleteOldTimestampOffsetSql)
@@ -272,12 +275,11 @@ private[projection] class PostgresOffsetStoreDao(
         .bind(3, until)
         .bind(4, notInLatestBySlice.toArray[String])
     }
+  }
 
-  override def deleteNewTimestampOffsetsInTx(
-      connection: Connection,
-      minSlice: Int,
-      maxSlice: Int,
-      timestamp: Instant): Future[Long] =
+  override def deleteNewTimestampOffsetsInTx(connection: Connection, timestamp: Instant): Future[Long] = {
+    val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+    val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
     R2dbcExecutor.updateOneInTx(
       connection
         .createStatement(deleteNewTimestampOffsetSql)
@@ -285,8 +287,11 @@ private[projection] class PostgresOffsetStoreDao(
         .bind(1, maxSlice)
         .bind(2, projectionId.name)
         .bind(3, timestamp))
+  }
 
-  override def clearTimestampOffset(minSlice: Int, maxSlice: Int): Future[Long] =
+  override def clearTimestampOffset(): Future[Long] = {
+    val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
+    val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
     r2dbcExecutor
       .updateOne("clear timestamp offset") { conn =>
         logger.debug("clearing timestamp offset for [{}]", projectionId)
@@ -296,6 +301,7 @@ private[projection] class PostgresOffsetStoreDao(
           .bind(1, maxSlice)
           .bind(2, projectionId.name)
       }
+  }
 
   override def clearPrimitiveOffset(): Future[Long] =
     r2dbcExecutor
