@@ -1,0 +1,53 @@
+// Copyright 2022 Lightbend Inc.
+
+syntax = "proto3";
+
+package akka.projection.grpc;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "akka/projection/grpc/event_producer.proto";
+
+option java_package = "akka.projection.grpc.internal.proto";
+
+// In some topologies the consumer cannot create a connection to the producer
+// because of firewalls, NAT etc. Through this endpoint we can instead let
+// the producer initiate the connection to the consumer, and have the consumer
+// respond with what would usually be calls to the EventProducerService
+service EventConsumerService {
+  // consumer connects to this stream, waits for control commands,
+  rpc Control(ControlStreamRequest) returns (stream ControlCommand);
+  // when consumer gets an InitReq it calls this method and feeds it with the event stream
+  //
+  rpc EventStream(stream ConsumerStreamIn) returns (stream ConsumerStreamOut);
+}
+
+message ControlStreamRequest {
+  // logical id or ip or something vaguely identifying the producer, mostly for debugging
+  string producer_identifier = 1;
+}
+
+message ControlCommand {
+  oneof message {
+    // start streaming events to EventStream using this
+    // FIXME do we need an additional stream id
+    InitReq init = 1;
+  }
+}
+
+message ConsumerStreamIn {
+  oneof message {
+    Event event = 1;
+    FilteredEvent filtered_event = 2;
+  }
+}
+
+message ConsumerStreamOut {
+  oneof message {
+    FilterReq filter = 1;
+    ReplayReq replay = 2;
+    // FIXME EventTimestamp req
+    // FIXME LoadEvent req
+  }
+}
