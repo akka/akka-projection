@@ -47,13 +47,19 @@ The table below shows `akka-projection-r2dbc`'s direct dependencies, and the sec
 ## Schema
 
 The `akka_projection_offset_store`, `akka_projection_timestamp_offset_store` and `akka_projection_management` tables
-need to be created in the configured database, unless using H2 where the schema is created automatically:
+need to be created in the configured database:
 
 PostgreSQL
 :  @@snip [PostgreSQL Schema](/akka-projection-r2dbc/ddl-scripts/create_tables_postgres.sql)
 
 YugaByte
 :  @@snip [YugaByte Schema](/akka-projection-r2dbc/ddl-scripts/create_tables_yugabyte.sql)
+
+For H2 the schema need to be defined as the `additional-init` setting in your config. This means it is created on first
+connection instead of up front (needed as there is no way to connect to the database from outside the JVM process):
+
+H2
+:  @@snip [H2 Schema](/akka-projection-r2dbc/src/it/resources/application-h2.conf) { #schema }
 
 ## Configuration
 

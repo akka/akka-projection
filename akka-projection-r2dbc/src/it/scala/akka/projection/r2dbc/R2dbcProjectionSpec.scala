@@ -190,7 +190,6 @@ class R2dbcProjectionSpec
       Await.result(
         r2dbcExecutor.executeDdl("beforeAll createTable")(_.createStatement(TestRepository.createTableSql)),
         10.seconds)
-      Thread.sleep(1000L)
       Await.result(
         r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
         10.seconds)
