@@ -208,6 +208,10 @@ Source code and build files for complete sample projects can be found in the `ak
 * [Replicated shopping cart service in Scala](https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-scala)
 * [Replicated shopping cart service in Java](https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-java)
 
+## Security
+
+Mutual authentication with TLS can be setup according to the @extref:[Akka gRPC documentation](akka-grpc:mtls.html)
+
 ## Access control
 
 ### From the consumer
