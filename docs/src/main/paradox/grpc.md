@@ -281,6 +281,10 @@ Scala:
 * [Producer service: shopping-cart-service-scala](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala)
 * [Consumer service: shopping-analytics-service-scala](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-scala)
 
+## Security
+
+Mutual authentication with TLS can be setup according to the @extref:[Akka gRPC documentation](akka-grpc:mtls.html)
+
 ## Access control
 
 ### From the consumer
