@@ -10,18 +10,43 @@ import "google/protobuf/empty.proto";
 
 option java_package = "akka.projection.grpc.internal.proto";
 
+// EventProducerService runs on the producer side and implements the
+// producer side of the EventsBySlices query, which can be used with
+// Akka Projection over gRPC.
+//
+// 1. Events are stored in the event journal on the producer side.
+// 2. Consumer side starts an Akka Projection which locally reads its offset
+//    from the Projection offset store.
+// 3. Consumer side establishes a replication stream from the producer service
+//    by sending the `InitReq` with the offset to start from.
+// 4. Events are read from the journal on the producer side and emitted to the
+//    replication stream.
+// 5. Consumer side processes the events in a Projection handler.
+// 6. Offset is stored on the consumer side by the Projection offset store.
+// 7. Producer continues to read new events from the journal and emit to the stream.
+//
+// The consumer can define event filters with the `FilterCriteria`, which can be included
+// in the `InitReq` and also changed in runtime by sending `FilterReq`.
 service EventProducerService {
   rpc EventsBySlices(stream StreamIn) returns (stream StreamOut);
 
+  // Used in some edge cases by the offset store to retrieve the timestamp for
+  // a certain event.
   rpc EventTimestamp(EventTimestampRequest) returns (EventTimestampResponse);
 
+  // Lazy loading of a specific event.
   rpc LoadEvent(LoadEventRequest) returns (LoadEventResponse);
 }
 
 message StreamIn {
   oneof message {
+    // Consumer side establishes a replication stream from the producer service
+    // by sending the `InitReq` with the offset and `FilterCriteria` to start from.
     InitReq init = 1;
+    // Consumer defined event filters can be changed in runtime by sending `FilterReq`.
     FilterReq filter = 2;
+    // If the consumer detects a missing sequence number it can request a replay of
+    // events for a specific entity.
     ReplayReq replay = 3;
   }
 }
@@ -36,7 +61,9 @@ message InitReq {
   // a consumer would handle a slice range from slice_min to slice_max
   int32 slice_min = 2;
   int32 slice_max = 3;
+  // start from this offset
   Offset offset = 4;
+  // consumer defined event filters
   repeated FilterCriteria filter = 5;
 }
 
@@ -72,22 +99,33 @@ message FilterCriteria {
   }
 }
 
+// Exclude events with any of the given tags, unless there is a
+// matching include filter that overrides the exclude.
 message ExcludeTags {
   repeated string tags = 1;
 }
 
+// Remove a previously added `ExcludeTags`.
 message RemoveExcludeTags {
   repeated string tags = 1;
 }
 
+// Include events with any of the given tags. A matching include overrides
+// a matching exclude.
 message IncludeTags {
   repeated string tags = 1;
 }
 
+// Remove a previously added `IncludeTags`.
 message RemoveIncludeTags {
   repeated string tags = 1;
 }
 
+// Include events for entities with the given entity ids. A matching include overrides
+// a matching exclude.
+//
+// For the given entity ids a `seq_nr` can be defined to replay all events for the entity
+// from the sequence number (inclusive). If `seq_nr` is 0 events will not be replayed.
 message IncludeEntityIds {
   repeated EntityIdOffset entity_id_offset = 1;
 }
@@ -99,30 +137,40 @@ message EntityIdOffset {
   int64 seq_nr = 2;
 }
 
+// Remove a previously added `IncludeEntityIds`.
 message RemoveIncludeEntityIds {
   repeated string entity_ids = 1;
 }
 
+// Exclude events for entities with the given entity ids,
+// unless there is a matching include filter that overrides the exclude.
 message ExcludeEntityIds {
   repeated string entity_ids = 1;
 }
 
+// Remove a previously added `ExcludeEntityIds`.
 message RemoveExcludeEntityIds {
   repeated string entity_ids = 1;
 }
 
+// Exclude events for entities with entity ids matching the given regular expressions,
+// unless there is a matching include filter that overrides the exclude.
 message ExcludeRegexEntityIds {
   repeated string matching = 1;
 }
 
+// Remove a previously added `ExcludeRegexEntityIds`.
 message RemoveExcludeRegexEntityIds {
   repeated string matching = 1;
 }
 
+// Include events for entities with entity ids matching the given regular expressions.
+// A matching include overrides a matching exclude.
 message IncludeRegexEntityIds {
   repeated string matching = 1;
 }
 
+// Remove a previously added `IncludeRegexEntityIds`.
 message RemoveIncludeRegexEntityIds {
   repeated string matching = 1;
 }
@@ -152,9 +200,15 @@ message Event {
   int64 seq_nr = 2;
   int32 slice = 3;
   Offset offset = 4;
-  // Actual payload and metadata serialization is deferred to Akka serialization,
-  // the serializer id and manifest are encoded into a custom type_url schema
+  // The event payload may be serialized as Protobuf message when the type_url
+  // prefix is `type.googleapis.com/` or with Akka serialization when the type_url
+  // prefix `ser.akka.io/`. For Akka serialization, the serializer id and manifest
+  // are encoded into a custom type_url schema.
+  // Note that the payload is empty for backtracking events, see `source`.
   google.protobuf.Any payload = 5;
+  // "" for ordinary events.
+  // "BT" for backtracking events.
+  // "PS" for PubSub events.
   string source = 6;
   google.protobuf.Any metadata = 7;
   repeated string tags = 8;
@@ -171,16 +225,20 @@ message FilteredEvent {
   string source = 5;
 }
 
+// Retrieve the timestamp of a specific event.
 message EventTimestampRequest {
   string stream_id = 1;
   string persistence_id = 2;
   int64 seq_nr = 3;
 }
 
+// Response to `EventTimestampRequest`.
 message EventTimestampResponse {
   google.protobuf.Timestamp timestamp = 1;
 }
 
+// Lazy loading of a specific event. Used when payload for a backtracking event
+// is needed.
 message LoadEventRequest {
   // the logical stream identifier, mapped to a specific internal entity type by
   // the producer settings
@@ -189,6 +247,7 @@ message LoadEventRequest {
   int64 seq_nr = 3;
 }
 
+// Response to `LoadEventRequest`.
 message LoadEventResponse {
   oneof message {
     Event event = 1;
