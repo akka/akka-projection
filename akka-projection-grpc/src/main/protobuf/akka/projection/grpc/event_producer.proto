@@ -21,7 +21,7 @@ option java_package = "akka.projection.grpc.internal.proto";
 //    by sending the `InitReq` with the offset to start from.
 // 4. Events are read from the journal on the producer side and emitted to the
 //    replication stream.
-// 5. Consumer side process the events in a Projection handler.
+// 5. Consumer side processes the events in a Projection handler.
 // 6. Offset is stored on the consumer side by the Projection offset store.
 // 7. Producer continues to read new events from the journal and emit to the stream.
 //
