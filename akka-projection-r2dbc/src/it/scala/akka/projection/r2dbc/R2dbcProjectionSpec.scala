@@ -7,14 +7,12 @@ package akka.projection.r2dbc
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
-
 import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.TestException
@@ -48,6 +46,8 @@ import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
+
+import scala.util.control.NonFatal
 
 object R2dbcProjectionSpec {
   final case class Envelope(id: String, offset: Long, message: String)
@@ -87,7 +87,7 @@ object R2dbcProjectionSpec {
     val table = "projection_spec_model"
 
     val createTableSql: String =
-      s"""|CREATE table IF NOT EXISTS "$table" (
+      s"""|CREATE table IF NOT EXISTS $table (
           |  id VARCHAR(255) NOT NULL,
           |  concatenated VARCHAR(255) NOT NULL,
           |  PRIMARY KEY(id)
@@ -124,14 +124,23 @@ object R2dbcProjectionSpec {
     private def upsert(concatStr: ConcatStr): Future[Done] = {
       logger.debug("TestRepository.upsert: [{}]", concatStr)
 
-      val stmtSql =
-        sql"""
-          INSERT INTO "$table" (id, concatenated)  VALUES (?, ?)
-          ON CONFLICT (id)
-          DO UPDATE SET
-            id = excluded.id,
-            concatenated = excluded.concatenated
+      val stmtSql = {
+        if (system.settings.config.getString("akka.persistence.r2dbc.connection-factory.dialect") == "h2") {
+          sql"""
+             MERGE INTO $table (id, concatenated)
+             KEY (id)
+             VALUES (?, ?)
+          """
+        } else {
+          sql"""
+            INSERT INTO $table (id, concatenated)  VALUES (?, ?)
+            ON CONFLICT (id)
+            DO UPDATE SET
+              id = excluded.id,
+              concatenated = excluded.concatenated
          """
+        }
+      }
       val stmt = session
         .createStatement(stmtSql)
         .bind(0, concatStr.id)
@@ -177,13 +186,17 @@ class R2dbcProjectionSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-
-    Await.result(r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
-      conn.createStatement(TestRepository.createTableSql)
-    }, 10.seconds)
-    Await.result(
-      r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
-      10.seconds)
+    try {
+      Await.result(
+        r2dbcExecutor.executeDdl("beforeAll createTable")(_.createStatement(TestRepository.createTableSql)),
+        10.seconds)
+      Await.result(
+        r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),
+        10.seconds)
+    } catch {
+      case NonFatal(ex) =>
+        throw new RuntimeException("Failed to create or clean up tables specific to the R2dbcProjectionSpec", ex)
+    }
   }
 
   private def offsetShouldBe(expected: Long)(implicit offsetStore: R2dbcOffsetStore) = {

@@ -128,7 +128,7 @@ class EventSourcedEndToEndSpec
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val journalSettings = new R2dbcSettings(system.settings.config.getConfig("akka.persistence.r2dbc"))
+  private val journalSettings = R2dbcSettings(system.settings.config.getConfig("akka.persistence.r2dbc"))
   private val projectionSettings = R2dbcProjectionSettings(system)
   private val stringSerializer = SerializationExtension(system).serializerFor(classOf[String])
 

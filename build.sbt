@@ -145,6 +145,18 @@ lazy val r2dbc =
     .settings(headerSettings(IntegrationTest))
     .settings(Defaults.itSettings)
     .settings(Dependencies.r2dbc)
+    .settings(Test / javaOptions ++= {
+      import scala.collection.JavaConverters._
+      // include all passed -Dakka. properties to the javaOptions for forked tests
+      // useful to switch DB dialects for example
+      val akkaProperties = System.getProperties.stringPropertyNames.asScala.toList.collect {
+        case key: String if key.startsWith("akka.") || key.startsWith("config") =>
+          "-D" + key + "=" + System.getProperty(key)
+      }
+      akkaProperties
+    })
+    .settings(IntegrationTest / javaOptions := (Test / javaOptions).value)
+    .settings(Test / fork := true)
     .dependsOn(core, grpc, eventsourced, `durable-state`)
     .dependsOn(testkit % Test)
 

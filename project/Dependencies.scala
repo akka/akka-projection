@@ -22,7 +22,7 @@ object Dependencies {
     val akka = sys.props.getOrElse("build.akka.version", "2.8.1")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
-    val akkaPersistenceR2dbc = "1.1.0"
+    val akkaPersistenceR2dbc = "1.2.0-M1"
     val alpakka = "5.0.0"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.2")
     val slick = "3.4.1"
@@ -49,6 +49,9 @@ object Dependencies {
       "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.akkaPersistenceR2dbc
     val akkaPersistenceR2dbcState =
       "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.akkaPersistenceR2dbc
+
+    val h2 = "com.h2database" % "h2" % "2.1.210" % Provided // EPL 1.0
+    val r2dbcH2 = "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Provided // ApacheV2
 
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
@@ -230,6 +233,8 @@ object Dependencies {
   val r2dbc = deps ++= Seq(
         Compile.akkaPersistenceQuery,
         Compile.akkaPersistenceR2dbc,
+        Compile.h2, // provided
+        Compile.r2dbcH2, // provided
         Test.akkaStreamTestkit,
         Test.akkaTypedTestkit,
         Test.akkaClusterShardingTyped,
