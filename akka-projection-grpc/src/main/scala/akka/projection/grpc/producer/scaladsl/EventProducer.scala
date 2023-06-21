@@ -9,6 +9,7 @@ import scala.reflect.ClassTag
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
@@ -176,6 +177,19 @@ object EventProducer {
         sources,
         interceptor))
   }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def eventProducer(sources: Set[EventProducerSource], interceptor: Option[EventProducerInterceptor])(
+      implicit system: ActorSystem[_]): EventProducerServiceImpl =
+    new EventProducerServiceImpl(
+      system,
+      eventsBySlicesQueriesForStreamIds(sources, system),
+      currentEventsByPersistenceIdQueriesForStreamIds(sources, system),
+      sources,
+      interceptor)
 
   /**
    * INTERNAL API

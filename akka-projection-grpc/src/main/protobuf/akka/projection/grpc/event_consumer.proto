@@ -32,14 +32,21 @@ message ControlCommand {
   oneof message {
     // start streaming events to EventStream using this
     // FIXME do we need an additional stream id
-    InitReq init = 1;
+    InitConsumerStream init = 1;
   }
+}
+
+message InitConsumerStream {
+  // for correlating the request
+  string request_id = 1;
+  InitReq init = 2;
 }
 
 message ConsumerStreamIn {
   oneof message {
-    Event event = 1;
-    FilteredEvent filtered_event = 2;
+    InitConsumerStream init = 1;
+    Event event = 2;
+    FilteredEvent filtered_event = 3;
   }
 }
 

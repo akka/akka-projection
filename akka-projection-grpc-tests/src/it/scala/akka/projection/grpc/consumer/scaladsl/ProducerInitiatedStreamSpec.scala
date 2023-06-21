@@ -26,6 +26,10 @@ import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.internal.EventConsumerServiceImpl
 import akka.projection.grpc.internal.ReverseEventProducer
 import akka.projection.grpc.internal.proto.EventConsumerServiceHandler
+import akka.projection.grpc.producer.EventProducerSettings
+import akka.projection.grpc.producer.scaladsl.EventProducer
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
+import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.stream.scaladsl.FlowWithContext
 import com.typesafe.config.ConfigFactory
@@ -135,7 +139,7 @@ class ProducerInitiatedStreamSpec(testContainerConf: TestContainerConf)
       // FIXME bind consumer service from inside projections gRPC?
       // FIXME limit what stream ids to allow?
       // FIXME consumer filters?
-      val handler = EventConsumerServiceHandler(new EventConsumerServiceImpl)
+      val handler = EventConsumerServiceHandler(new EventConsumerServiceImpl(system))
       val _ = Http(system).newServerAt("localhost", 8080).bind(handler)
       spawnProjection()
 
@@ -143,7 +147,8 @@ class ProducerInitiatedStreamSpec(testContainerConf: TestContainerConf)
       // FIXME startup producer from inside projections gRPC, no EventProducerService
       // FIXME additional request metadata for auth
       // FIXME producer filters?
-      spawn(ReverseEventProducer(), "ReverseProducer")
+      val eps = EventProducerSource(entityType, streamId, Transformation.identity, EventProducerSettings(system))
+      spawn(ReverseEventProducer(EventProducer.eventProducer(Set(eps), None)), "ReverseProducer")
 
       // FIXME write some events on the "producer side"
       val probe = createTestProbe[Any]()
