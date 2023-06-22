@@ -101,17 +101,12 @@ class ProducerInitiatedStreamSpec(testContainerConf: TestContainerConf)
   private val streamId = "producer-initiated-stream-e2e-test"
   private val projectionId = ProjectionId("producer-initiated-stream-e2e-projection", "0-1023")
 
+  val journal = GrpcReadJournal.reverseGrpcServiceHandler(GrpcQuerySettings(streamId), Nil)
+
   private def grpcJournalSource() =
     EventSourcedProvider.eventsBySlices[String](
       system,
-      GrpcReadJournal(
-        GrpcQuerySettings(streamId),
-        // FIXME settings that doesn't actively connect?
-        //       or do we do a special SourceProvider?
-        GrpcClientSettings
-          .connectToServiceAt("127.0.0.1", 9090)
-          .withTls(false),
-        protobufDescriptors = Nil),
+      journal,
       streamId,
       // just the one consumer for now
       // FIXME will we support slicing at all or always consume all?
@@ -139,7 +134,7 @@ class ProducerInitiatedStreamSpec(testContainerConf: TestContainerConf)
       // FIXME bind consumer service from inside projections gRPC?
       // FIXME limit what stream ids to allow?
       // FIXME consumer filters?
-      val handler = EventConsumerServiceHandler(new ReverseGrpcReadJournal(system))
+      val handler = EventConsumerServiceHandler(journal)
       val _ = Http(system).newServerAt("localhost", 8080).bind(handler)
       spawnProjection()
 

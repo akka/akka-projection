@@ -4,15 +4,11 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
+import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.ApiMayChange
@@ -22,8 +18,6 @@ import akka.grpc.scaladsl.BytesEntry
 import akka.grpc.scaladsl.SingleResponseRequestBuilder
 import akka.grpc.scaladsl.StreamResponseRequestBuilder
 import akka.grpc.scaladsl.StringEntry
-import akka.http.scaladsl.model.HttpRequest
-import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.Persistence
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
@@ -39,6 +33,7 @@ import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
 import akka.projection.grpc.internal.ProtoAnySerialization
+import akka.projection.grpc.internal.ReverseGrpcReadJournal
 import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.Event
@@ -77,6 +72,12 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 @ApiMayChange
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
@@ -112,9 +113,10 @@ object GrpcReadJournal {
       implicit system: ClassicActorSystemProvider): GrpcReadJournal =
     apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
 
-  def reverseGrpcServiceHandler(settings: GrpcQuerySettings, protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(implicit system: ClassicActorSystemProvider): PartialFunction[HttpRequest, Future[HttpResponse]] =
-
-
+  def reverseGrpcServiceHandler(
+      settings: GrpcQuerySettings)(
+      implicit system: ActorSystem[_]): ReverseGrpcReadJournal =
+    new ReverseGrpcReadJournal(settings: GrpcQuerySettings)(system)
 
   /**
    * INTERNAL API
@@ -325,6 +327,7 @@ final class GrpcReadJournal private (
 
     val initFilter = {
       import akka.actor.typed.scaladsl.AskPattern._
+
       import scala.concurrent.duration._
       implicit val askTimeout: Timeout = 10.seconds
       consumerFilter.ref.ask[ConsumerFilter.CurrentFilter](ConsumerFilter.GetFilter(streamId, _))

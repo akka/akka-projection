@@ -14,12 +14,14 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.internal.proto.ConsumerStreamIn
 import akka.projection.grpc.internal.proto.ConsumerStreamOut
 import akka.projection.grpc.internal.proto.ControlCommand
 import akka.projection.grpc.internal.proto.ControlStreamRequest
 import akka.projection.grpc.internal.proto.EventConsumerService
 import akka.projection.grpc.internal.proto.InitConsumerStream
+import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.internal.CanTriggerReplay
 import akka.stream.BoundedSourceQueue
 import akka.stream.scaladsl.Flow
@@ -45,7 +47,8 @@ import scala.concurrent.Future
 // FIXME where/who/what binds this
 // FIXME connect to SDP running the projection somehow?
 // FIXME how/where do we configure producer to connect
-@InternalApi private[akka] class ReverseGrpcReadJournal()(implicit system: ActorSystem[_])
+// FIXME what stream ids does it handle?
+@InternalApi private[akka] class ReverseGrpcReadJournal(settings: GrpcQuerySettings)(implicit system: ActorSystem[_])
     extends EventConsumerService
     with ReadJournal
     with EventsBySliceQuery
@@ -104,7 +107,6 @@ import scala.concurrent.Future
                 tail.runWith(waitingSink)
             }
 
-
             tail
           case unexpected =>
             throw new IllegalArgumentException(
@@ -125,11 +127,31 @@ import scala.concurrent.Future
       offset: Offset): Source[EventEnvelope[Event], NotUsed] = {
     // FIXME turn into control request
     val requestId = UUID.randomUUID().toString
-    // register waiting sink/subscriber
+    logger.debugN(
+      "Events by slice query, entity type [{}], slices [{}-{}], offset [{}], request id [{}]",
+      entityType,
+      minSlice,
+      maxSlice,
+      offset,
+      requestId)
+    val control = ControlCommand(ControlCommand.Message.Init(
+      InitConsumerStream(
+       requestId = requestId,
+        init = Some(InitReq(
+          streamId = settings.streamId,
+          sliceMin = minSlice,
+          sliceMax = maxSlice,
+          offset = ??? // offset to proto offset
+        ))
+      )
+    ))
+
+    controlStreams.values().forEach(queue => queue.offer(control))
+
     // pass request id to control
+    // register waiting sink/subscriber
     ???
   }
-
 
   override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     // FIXME turn into control request

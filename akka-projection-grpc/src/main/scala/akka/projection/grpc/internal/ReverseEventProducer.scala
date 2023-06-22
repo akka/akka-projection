@@ -95,7 +95,7 @@ import akka.stream.scaladsl.Source
 
         val clientEventStreamIn: Source[ConsumerStreamIn, NotUsed] =
           Source
-            // we start with the initReq so that the producer can correlate command with actual stream
+          // we start with the initReq so that the producer can correlate command with actual stream
             .single(ConsumerStreamIn(ConsumerStreamIn.Message.Init(InitConsumerStream(requestId, Some(initReq)))))
             .concat(eventsToClient)
         client.eventStream(clientEventStreamIn).runWith(controlFromClient)
