@@ -4,13 +4,6 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -33,12 +26,12 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
-import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
 import akka.projection.grpc.internal.ProtoAnySerialization
+import akka.projection.grpc.internal.ProtobufProtocolConversions
 import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.Event
@@ -76,6 +69,12 @@ import com.typesafe.config.Config
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 @ApiMayChange
 object GrpcReadJournal {
@@ -321,6 +320,7 @@ final class GrpcReadJournal private (
 
     val initFilter = {
       import akka.actor.typed.scaladsl.AskPattern._
+
       import scala.concurrent.duration._
       implicit val askTimeout: Timeout = 10.seconds
       consumerFilter.ref.ask[ConsumerFilter.CurrentFilter](ConsumerFilter.GetFilter(streamId, _))
@@ -419,24 +419,7 @@ final class GrpcReadJournal private (
       // not the normal entity type which is internal to the producing side
       streamId: String): EventEnvelope[Evt] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    val eventOffset = timestampOffset(event.offset.get)
-    val evt =
-      event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
-
-    val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
-
-    new EventEnvelope(
-      eventOffset,
-      event.persistenceId,
-      event.seqNr,
-      evt,
-      eventOffset.timestamp.toEpochMilli,
-      eventMetadata = metadata,
-      PersistenceId.extractEntityType(event.persistenceId),
-      event.slice,
-      filtered = false,
-      source = event.source,
-      tags = event.tags.toSet)
+    ProtobufProtocolConversions.eventToEnvelope(event, protoAnySerialization)
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {

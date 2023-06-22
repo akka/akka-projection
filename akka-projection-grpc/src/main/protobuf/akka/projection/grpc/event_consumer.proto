@@ -1,0 +1,32 @@
+// Copyright 2022 Lightbend Inc.
+
+syntax = "proto3";
+
+package akka.projection.grpc;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "akka/projection/grpc/event_producer.proto";
+
+option java_package = "akka.projection.grpc.internal.proto";
+
+// EventConsumerService runs on the consumer side and allows a producer
+// to initiate/push events to the consumer.
+//
+// 1. Events are stored in the event journal on the producer side.
+// 2. Producer side starts an Akka Projection which locally tracks its offset
+//    and as projection handler pushes events to a consuming EventConsumerService
+// 3. FIXME Consumer does something with the events
+//
+// FIXME filtering on producer and consumer side
+service EventConsumerService {
+  // FIXME accept batches of events instead of only single events?
+  rpc ConsumeEvent(Event) returns (google.protobuf.Empty);
+}
+
+message ConsumerEvent {
+  // unique producer identifier showing where the event came from/was produced
+  string origin_id = 1;
+  Event event = 2;
+}
