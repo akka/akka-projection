@@ -23,7 +23,7 @@ import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.consumer.GrpcQuerySettings
-import akka.projection.grpc.internal.EventConsumerServiceImpl
+import akka.projection.grpc.internal.ReverseGrpcReadJournal
 import akka.projection.grpc.internal.ReverseEventProducer
 import akka.projection.grpc.internal.proto.EventConsumerServiceHandler
 import akka.projection.grpc.producer.EventProducerSettings
@@ -139,7 +139,7 @@ class ProducerInitiatedStreamSpec(testContainerConf: TestContainerConf)
       // FIXME bind consumer service from inside projections gRPC?
       // FIXME limit what stream ids to allow?
       // FIXME consumer filters?
-      val handler = EventConsumerServiceHandler(new EventConsumerServiceImpl(system))
+      val handler = EventConsumerServiceHandler(new ReverseGrpcReadJournal(system))
       val _ = Http(system).newServerAt("localhost", 8080).bind(handler)
       spawnProjection()
 

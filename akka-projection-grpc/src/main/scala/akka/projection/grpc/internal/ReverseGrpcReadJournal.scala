@@ -7,6 +7,7 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.persistence.Persistence
 import akka.persistence.query.Offset
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
@@ -27,7 +28,9 @@ import akka.stream.scaladsl.Source
 import org.slf4j.LoggerFactory
 
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Flow.Subscriber
 import java.util.concurrent.atomic.AtomicLong
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -35,13 +38,14 @@ import scala.concurrent.Future
 /**
  * INTERNAL API
  *
- * Optionally runs on the consuming side, accepting connections from the gRPC projection event producer instead
- * of the normal where the producer hosts the service and the consumer connects and events are streamed back.
+ * Implements both the EventConsumerService gRPC interface and a read journal.
+ * The producer connects over gRPC and accepts commands streamed over a control channel, control commands
+ * trigger streaming events back from the producer.
  */
 // FIXME where/who/what binds this
 // FIXME connect to SDP running the projection somehow?
 // FIXME how/where do we configure producer to connect
-@InternalApi private[akka] class EventConsumerServiceImpl(system: ActorSystem[_])
+@InternalApi private[akka] class ReverseGrpcReadJournal()(implicit system: ActorSystem[_])
     extends EventConsumerService
     with ReadJournal
     with EventsBySliceQuery
@@ -51,10 +55,14 @@ import scala.concurrent.Future
 
   private val logger = LoggerFactory.getLogger(classOf[EventProducerServiceImpl])
   private implicit val ec: ExecutionContext = system.executionContext
+  private lazy val persistenceExt = Persistence(system)
 
   private val connectionCounter = new AtomicLong()
   // FIXME could it be a broadcast hub instead?
   private val controlStreams = new ConcurrentHashMap[String, BoundedSourceQueue[ControlCommand]]()
+
+  // request-id to stream to send events back through
+  private val waitingRequests = new ConcurrentHashMap[String, Sink[ConsumerStreamIn, NotUsed]]()
 
   // FIXME do we need to keep a set of currently executing queries in case a new control connection appears
   // FIXME we need to query all connected?
@@ -79,12 +87,24 @@ import scala.concurrent.Future
       case (Seq(head), tail) =>
         head match {
           case ConsumerStreamIn(ConsumerStreamIn.Message.Init(InitConsumerStream(requestId, Some(initReq), _)), _) =>
-            logger.debugN(
-              "Consumer stream started, request id [{}], stream id [{}], slices [{}-{}]",
-              requestId,
-              initReq.streamId,
-              initReq.sliceMin,
-              initReq.sliceMax)
+            waitingRequests.get(requestId) match {
+              case null =>
+                logger.warn("Unknown request id [{}] in stream from producer")
+                tail.runWith(Sink.cancelled)
+              case waitingSink =>
+                logger.debugN(
+                  "Producer started event stream, request id [{}], stream id [{}], slices [{}-{}]",
+                  requestId,
+                  initReq.streamId,
+                  initReq.sliceMin,
+                  initReq.sliceMax)
+                // FIXME this isn't good enough, will be a number of event streams from each connected (and future connecting
+                //       subscriber), we need to merge those somehow
+                waitingRequests.remove(requestId)
+                tail.runWith(waitingSink)
+            }
+
+
             tail
           case unexpected =>
             throw new IllegalArgumentException(
@@ -102,15 +122,34 @@ import scala.concurrent.Future
       entityType: String,
       minSlice: Int,
       maxSlice: Int,
-      offset: Offset): Source[EventEnvelope[Event], NotUsed] = ???
+      offset: Offset): Source[EventEnvelope[Event], NotUsed] = {
+    // FIXME turn into control request
+    val requestId = UUID.randomUUID().toString
+    // register waiting sink/subscriber
+    // pass request id to control
+    ???
+  }
 
-  override def sliceForPersistenceId(persistenceId: String): Int = ???
 
-  override def sliceRanges(numberOfRanges: Int): Seq[Range] = ???
+  override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
+    // FIXME turn into control request
+    ???
+  }
 
-  override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = ???
+  override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Event]] = {
+    // FIXME turn into control request
+    ???
+  }
 
-  override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Event]] = ???
+  override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = {
+    // FIXME turn into control request
+    ???
+  }
 
-  override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = ???
+  override def sliceForPersistenceId(persistenceId: String): Int =
+    persistenceExt.sliceForPersistenceId(persistenceId)
+
+  override def sliceRanges(numberOfRanges: Int): Seq[Range] =
+    persistenceExt.sliceRanges(numberOfRanges)
+
 }

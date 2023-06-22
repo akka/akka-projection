@@ -6,11 +6,9 @@ package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -24,6 +22,8 @@ import akka.grpc.scaladsl.BytesEntry
 import akka.grpc.scaladsl.SingleResponseRequestBuilder
 import akka.grpc.scaladsl.StreamResponseRequestBuilder
 import akka.grpc.scaladsl.StringEntry
+import akka.http.scaladsl.model.HttpRequest
+import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.Persistence
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
@@ -111,6 +111,10 @@ object GrpcReadJournal {
       protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
       implicit system: ClassicActorSystemProvider): GrpcReadJournal =
     apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
+
+  def reverseGrpcServiceHandler(settings: GrpcQuerySettings, protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(implicit system: ClassicActorSystemProvider): PartialFunction[HttpRequest, Future[HttpResponse]] =
+
+
 
   /**
    * INTERNAL API

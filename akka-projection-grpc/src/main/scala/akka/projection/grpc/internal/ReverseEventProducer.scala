@@ -44,11 +44,14 @@ import akka.stream.scaladsl.Source
     val grpcClientSettings = GrpcClientSettings.fromConfig(destinations.get(0).getConfig("client"))
     val client = EventConsumerServiceClient(grpcClientSettings)
 
+    // FIXME restart call if connection lost
+    // FIXME tie client stream lifecycle to actor
+    // tail control events from the consumer
     client
       .control(ControlStreamRequest(producerId))
       .runWith(Sink.foreach { controlCommand => context.self ! Handle(controlCommand) })
 
-    Behaviors.receiveMessage {
+    Behaviors.receiveMessagePartial {
       case Handle(ControlCommand(ControlCommand.Message.Init(InitConsumerStream(requestId, Some(initReq), _)), _)) =>
         context.log.infoN(
           "Starting reverse event stream to [{}:{}], request id [{}], for stream id [{}], slice range [{}-{}]{} (FIXME not really, yet)",
@@ -59,6 +62,9 @@ import akka.stream.scaladsl.Source
           initReq.sliceMin,
           initReq.sliceMax,
           initReq.offset.map(o => s", offset [$o]").getOrElse(""))
+
+        // FIXME could we separate/abstract the querying/filtering from the transformation in EventProducerServiceImpl
+        //       and avoid the extra protobuf message roundtrip for every message?
 
         // connect client stream out to query control in
         val (controlSubscriber, controlPublisher) =
@@ -89,19 +95,11 @@ import akka.stream.scaladsl.Source
 
         val clientEventStreamIn: Source[ConsumerStreamIn, NotUsed] =
           Source
-          // we start with the initReq so that the producer can correlate command with actual stream
+            // we start with the initReq so that the producer can correlate command with actual stream
             .single(ConsumerStreamIn(ConsumerStreamIn.Message.Init(InitConsumerStream(requestId, Some(initReq)))))
             .concat(eventsToClient)
         client.eventStream(clientEventStreamIn).runWith(controlFromClient)
 
-        Behaviors.same
-
-      case Handle(ControlCommand(ControlCommand.Message.Empty, _)) =>
-        context.log.debug("Ignoring empty command")
-        Behaviors.same
-
-      case unexpected =>
-        context.log.debug("Ignoring unexpected command {}", unexpected)
         Behaviors.same
     }
   }
