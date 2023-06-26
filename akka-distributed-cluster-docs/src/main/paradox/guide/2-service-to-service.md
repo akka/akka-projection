@@ -85,7 +85,7 @@ and not from configuration via `GrpcReadJournalProvider` when using Protobuf ser
 
 The gRPC connection to the producer is defined in the @extref[consumer configuration](akka-projection:grpc#consumer-configuration).
 
-The @extref:[R2dbcProjection](akka-persistence-r2dbc:projection.html) has support for storing the offset in a relational database using R2DBC.
+The @ref:[R2dbcProjection](akka-projection:r2dbc.html) has support for storing the offset in a relational database using R2DBC.
 
 The event handler for this sample is just logging the events rather than for example actually building its own read side
 in a database for querying:

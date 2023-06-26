@@ -40,8 +40,8 @@ Akka Projections require Akka $akka.version$ or later, see @ref:[Akka version](o
 
 @@project-info{ projectId="akka-projection-grpc" }
 
-It is currently only possible to use @extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:projection.html) as the
-projection storage and journal for this module.
+It is currently only possible to use @ref:[akka-projection-r2dbc](r2dbc.md) ad offset storage and
+@extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:journal.html) as journal for this module.
 
 @@dependency [sbt,Maven,Gradle] {
 group=com.lightbend.akka
@@ -77,12 +77,12 @@ and not from configuration via `GrpcReadJournalProvider` when using Protobuf ser
 
 The gRPC connection to the producer is defined in the [consumer configuration](#consumer-configuration).
 
-The @extref:[R2dbcProjection](akka-persistence-r2dbc:projection.html) has support for storing the offset in a relational database using R2DBC.
+The @ref:[R2dbcProjection](r2dbc.md) has support for storing the offset in a relational database using R2DBC.
 
 The above example is using the @extref:[ShardedDaemonProcess](akka:typed/cluster-sharded-daemon-process.html) to distribute the instances of the Projection across the cluster.
 There are alternative ways of running the `ProjectionBehavior` as described in @ref:[Running a Projection](running.md)
 
-How to implement the `EventHandler` and choose between different processing semantics is described in the @extref:[R2dbcProjection documentation](akka-persistence-r2dbc:projection.html).
+How to implement the `EventHandler` and choose between different processing semantics is described in the @ref:[R2dbcProjection documentation](r2dbc.md).
 
 ### gRPC client lifecycle
 
@@ -304,15 +304,17 @@ gRPC request metadata for each incoming request and can return a suitable error 
 See @extref:[Publish events for lower latency of eventsBySlices](akka-persistence-r2dbc:query.html#publish-events-for-lower-latency-of-eventsbyslices)
 for low latency use cases.
 
-### Scalability limitations
+### Many consumers
 
 Each connected consumer will start a `eventsBySlices` query that will periodically poll and read events from the journal.
-That means that the journal database will become a bottleneck, unless it can be scaled out, when number of consumers increase.
-The producer service itself can easily be scaled out to more instances. 
+That means that the journal database will become a bottleneck, unless it can be scaled out, when number of consumers increase. 
 
-For the case of many consumers of the same event stream a future improvement to reduce the
-database load would be to share results of the queries across the different consumers, since most of them are
-probably reading at the tail of the same event stream.
+For the case of many consumers of the same event stream it is recommended to use
+@apidoc[akka.persistence.query.typed.*.EventsBySliceFirehoseQuery]. The purpose is to share the stream of events
+from the database and fan out to connected consumer streams. Thereby fewer queries and loading of events from the
+database.
+
+The producer service itself can easily be scaled out to more instances.
 
 ### Starting from snapshots
 
