@@ -113,7 +113,7 @@ object JdbcProjectionDocExample {
   }
   //#grouped-handler
 
-  implicit val system = ActorSystem[Nothing](Behaviors.empty, "Example")
+  implicit val system: ActorSystem[Nothing] = ActorSystem[Nothing](Behaviors.empty, "Example")
 
   //#sourceProvider
   val sourceProvider =
