@@ -6,14 +6,13 @@ package akka.projection.cassandra
 
 import java.time.Instant
 import java.util.UUID
-
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Try
-
 import akka.Done
+import akka.actor.Scheduler
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Sequence
@@ -38,7 +37,7 @@ class CassandraOffsetStoreSpec
   private val offsetStore = new CassandraOffsetStore(system, clock)
   private val session = CassandraSessionRegistry(system).sessionFor("akka.projection.cassandra.session-config")
   private implicit val ec: ExecutionContext = system.executionContext
-  private implicit val classicScheduler = system.classicSystem.scheduler
+  private implicit val classicScheduler: Scheduler = system.classicSystem.scheduler
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
