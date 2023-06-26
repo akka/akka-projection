@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.util.control.NonFatal
 
 /**
  * INTERNAL API
@@ -23,6 +24,8 @@ private[akka] object EventPusher {
 
 /**
  * INTERNAL API
+ *
+ * gRPC push protocol handler for the producing side
  */
 private[akka] class EventPusher[Event](client: EventConsumerServiceClient, transformation: Transformation)(
     implicit system: ActorSystem[_])
@@ -38,7 +41,12 @@ private[akka] class EventPusher[Event](client: EventConsumerServiceClient, trans
       case None => EventPusher.FutureDone
       case Some(event) =>
         logger.debug("Pushing event for pid [{}], seq nr [{}]", envelope.persistenceId, envelope.sequenceNr)
-        client.consumeEvent(event).map(_ => Done)(ExecutionContext.parasitic)
+        client.consumeEvent(event).map(_ => Done)(ExecutionContext.parasitic).recover {
+          case NonFatal(ex) =>
+            throw new RuntimeException(
+              s"Error pushing event with pid [${envelope.persistenceId}] and sequence nr [${envelope.sequenceNr}] to consumer",
+              ex)
+        }
     }
   }
 

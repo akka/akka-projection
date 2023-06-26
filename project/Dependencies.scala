@@ -222,6 +222,8 @@ object Dependencies {
 
   val grpcTest = deps ++= Seq(
         Test.postgresDriver,
+        Test.h2Driver,
+        Compile.r2dbcH2,
         Test.akkaShardingTyped,
         Test.akkaStreamTestkit,
         Test.akkaSerializationJackson,
