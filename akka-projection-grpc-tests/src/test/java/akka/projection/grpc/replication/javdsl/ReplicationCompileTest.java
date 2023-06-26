@@ -86,7 +86,7 @@ public class ReplicationCompileTest {
        MyCommand.class,
        "my-entity",
        ReplicaId.apply("DCA"),
-       EventProducerSettings.apply(system),
+       EventProducerSettings.create(system),
        otherReplicas,
        Duration.ofSeconds(10),
        // parallel updates

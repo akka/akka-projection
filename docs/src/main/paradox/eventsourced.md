@@ -70,3 +70,14 @@ The @scala[`EventEnvelope[ShoppingCart.Event]`]@java[`EventEnvelope<ShoppingCart
 handler will process. It contains the `Event` and additional meta data, such as the offset that will be stored
 by the `Projection`. See @apidoc[akka.persistence.query.typed.EventEnvelope] for full details of what the
 envelope contains.
+
+## SourceProvider for eventsBySlicesStartingFromSnapshots
+
+The Projection can use snapshots as starting points and thereby reducing number of events that have to be loaded.
+This can be useful if the consumer start from zero without any previously processed offset or if it has been
+disconnected for a long while and its offset is far behind.
+
+You need to define the snapshot to event transformation function in `EventSourcedProvider.eventsBySlicesStartingFromSnapshots`.
+
+The underlying read journal must implement @apidoc[EventsBySliceStartingFromSnapshotsQuery].
+See how to enable @extref:[eventsBySlicesStartingFromSnapshots in Akka Persistence R2DBC](akka-persistence-r2dbc:query.html#eventsbyslicesstartingfromsnapshots).

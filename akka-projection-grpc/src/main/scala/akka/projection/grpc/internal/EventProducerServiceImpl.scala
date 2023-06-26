@@ -42,10 +42,12 @@ import com.google.protobuf.timestamp.Timestamp
 import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import java.time.Instant
+
 import scala.concurrent.Future
 import scala.util.Success
+
+import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 
 /**
  * INTERNAL API
@@ -62,6 +64,7 @@ import scala.util.Success
 @InternalApi private[akka] class EventProducerServiceImpl(
     system: ActorSystem[_],
     eventsBySlicesQueriesPerStreamId: Map[String, EventsBySliceQuery],
+    eventsBySlicesStartingFromSnapshotsQueriesPerStreamId: Map[String, EventsBySliceStartingFromSnapshotsQuery],
     currentEventsByPersistenceIdQueriesPerStreamId: Map[String, CurrentEventsByPersistenceIdTypedQuery],
     sources: Set[EventProducer.EventProducerSource],
     interceptor: Option[EventProducerInterceptor])
@@ -75,7 +78,8 @@ import scala.util.Success
   sources.foreach { s =>
     require(s.streamId.nonEmpty, s"EventProducerSource for [${s.entityType}] contains empty stream id, not allowed")
     require(
-      eventsBySlicesQueriesPerStreamId.contains(s.streamId),
+      eventsBySlicesQueriesPerStreamId.contains(s.streamId) ||
+      eventsBySlicesStartingFromSnapshotsQueriesPerStreamId.contains(s.streamId),
       s"No events by slices query defined for stream id [${s.streamId}]")
   }
 
@@ -148,8 +152,24 @@ import scala.util.Success
         })
 
       val events: Source[EventEnvelope[Any], NotUsed] =
-        eventsBySlicesQueriesPerStreamId(init.streamId)
-          .eventsBySlices[Any](producerSource.entityType, init.sliceMin, init.sliceMax, offset)
+        eventsBySlicesQueriesPerStreamId.get(init.streamId) match {
+          case Some(query) =>
+            query.eventsBySlices[Any](producerSource.entityType, init.sliceMin, init.sliceMax, offset)
+          case None =>
+            eventsBySlicesStartingFromSnapshotsQueriesPerStreamId.get(init.streamId) match {
+              case Some(query) =>
+                val transformSnapshot = streamIdToSourceMap(init.streamId).transformSnapshot.get
+                query.eventsBySlicesStartingFromSnapshots[Any, Any](
+                  producerSource.entityType,
+                  init.sliceMin,
+                  init.sliceMax,
+                  offset,
+                  transformSnapshot)
+              case None =>
+                Source.failed(
+                  new IllegalArgumentException(s"No events by slices query defined for stream id [${init.streamId}]"))
+            }
+        }
 
       val eventsFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
         BidiFlow

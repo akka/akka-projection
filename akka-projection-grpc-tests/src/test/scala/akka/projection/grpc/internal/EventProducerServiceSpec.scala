@@ -41,17 +41,22 @@ import com.typesafe.config.ConfigFactory
 import io.grpc.Status
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
-
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.Promise
 
+import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
+
 object EventProducerServiceSpec {
   val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
 
-  class TestEventsBySliceQuery()(implicit system: ActorSystem[_]) extends ReadJournal with EventsBySliceQuery {
+  class TestEventsBySliceQuery()(implicit system: ActorSystem[_])
+      extends ReadJournal
+      with EventsBySliceQuery
+      with EventsBySliceStartingFromSnapshotsQuery {
     private val persistenceExt = Persistence(system)
 
     private val testPublisherPromise =
@@ -79,11 +84,36 @@ object EventProducerServiceSpec {
         .asInstanceOf[Source[EventEnvelope[Event], NotUsed]]
     }
 
+    override def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+        entityType: String,
+        minSlice: Int,
+        maxSlice: Int,
+        offset: Offset,
+        transformSnapshot: Snapshot => Event): Source[EventEnvelope[Event], NotUsed] =
+      eventsBySlices[Event](entityType, minSlice, maxSlice, offset)
+        .map { env =>
+          if (env.event.toString.contains("snap")) {
+            EventEnvelope(
+              env.offset,
+              env.persistenceId,
+              env.sequenceNr,
+              transformSnapshot(env.event.asInstanceOf[Snapshot]),
+              env.timestamp,
+              env.entityType,
+              env.slice,
+              env.filtered,
+              env.source,
+              env.tags)
+          } else
+            env
+        }
+
     override def sliceForPersistenceId(persistenceId: String): Int =
       persistenceExt.sliceForPersistenceId(persistenceId)
 
     override def sliceRanges(numberOfRanges: Int): immutable.Seq[Range] =
       persistenceExt.sliceRanges(numberOfRanges)
+
   }
 }
 
@@ -99,6 +129,7 @@ class EventProducerServiceSpec
 
   private val eventsBySlicesQuery1 = new TestEventsBySliceQuery
   private val eventsBySlicesQuery2 = new TestEventsBySliceQuery
+  private val eventsBySlicesQuery3 = new TestEventsBySliceQuery
   private val transformation =
     Transformation.empty.registerAsyncMapper((event: String) => {
       if (event.contains("*"))
@@ -111,6 +142,7 @@ class EventProducerServiceSpec
   val streamId1 = "stream_id_" + entityType1
   val entityType2 = nextEntityType()
   val streamId2 = "stream_id_" + entityType2
+  val streamId3 = streamId1 + "_snap"
 
   private val notUsedCurrentEventsByPersistenceIdQuery = new CurrentEventsByPersistenceIdTypedQuery {
 
@@ -121,17 +153,30 @@ class EventProducerServiceSpec
       throw new IllegalStateException("Unexpected use of currentEventsByPersistenceId")
   }
   private val notUsedCurrentEventsByPersistenceIdQueries =
-    Map(streamId1 -> notUsedCurrentEventsByPersistenceIdQuery, streamId2 -> notUsedCurrentEventsByPersistenceIdQuery)
+    Map(
+      streamId1 -> notUsedCurrentEventsByPersistenceIdQuery,
+      streamId2 -> notUsedCurrentEventsByPersistenceIdQuery,
+      streamId3 -> notUsedCurrentEventsByPersistenceIdQuery)
 
   private val eventProducerSources = Set(
     EventProducerSource(entityType1, streamId1, transformation, settings),
-    EventProducerSource(entityType2, streamId2, transformation, settings))
+    EventProducerSource(entityType2, streamId2, transformation, settings),
+    EventProducerSource(entityType1, streamId3, transformation, settings)
+      .withStartingFromSnapshots[String, String] { evt =>
+        if (evt.contains("-snap"))
+          evt.replace("-snap", "")
+        else
+          evt
+      })
   val queries =
     Map(streamId1 -> eventsBySlicesQuery1, streamId2 -> eventsBySlicesQuery2)
+  val queriesStartingFromSnapshots =
+    Map(streamId3 -> eventsBySlicesQuery3)
   private val eventProducerService =
     new EventProducerServiceImpl(
       system,
       queries,
+      queriesStartingFromSnapshots,
       notUsedCurrentEventsByPersistenceIdQueries,
       eventProducerSources,
       None)
@@ -240,6 +285,7 @@ class EventProducerServiceSpec
         new EventProducerServiceImpl(
           system,
           queries,
+          queriesStartingFromSnapshots,
           notUsedCurrentEventsByPersistenceIdQueries,
           eventProducerSources,
           Some(new EventProducerInterceptor {
@@ -314,6 +360,38 @@ class EventProducerServiceSpec
         .failed
         .futureValue
       assertGrpcStatusDenied(timestampFailure, "nono-async")
+    }
+
+    "emit events StartingFromSnapshots" in {
+      val initReq = InitReq(streamId3, 0, 1023, offset = None)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+
+      probe.request(100)
+      val testPublisher =
+        eventsBySlicesQuery3.testPublisher(entityType1).futureValue
+
+      val pid = nextPid(entityType1)
+      val env2 = createEnvelope(streamId1, pid, 2L, "e-2-snap")
+      testPublisher.sendNext(env2)
+      val env3 = createEnvelope(streamId1, pid, 3L, "e-3")
+      testPublisher.sendNext(env3)
+
+      val protoAnySerialization = new ProtoAnySerialization(system)
+
+      val out1 = probe.expectNext()
+      out1.getEvent.persistenceId shouldBe env2.persistenceId
+      out1.getEvent.seqNr shouldBe env2.sequenceNr
+      // transformSnapshot removes the "-snap"
+      protoAnySerialization.deserialize(out1.getEvent.payload.get) shouldBe "E-2"
+
+      val out2 = probe.expectNext()
+      out2.getEvent.persistenceId shouldBe env3.persistenceId
+      out2.getEvent.seqNr shouldBe env3.sequenceNr
+      protoAnySerialization.deserialize(out2.getEvent.payload.get) shouldBe "E-3"
     }
   }
 

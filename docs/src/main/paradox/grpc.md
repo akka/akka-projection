@@ -314,6 +314,17 @@ For the case of many consumers of the same event stream a future improvement to 
 database load would be to share results of the queries across the different consumers, since most of them are
 probably reading at the tail of the same event stream.
 
+### Starting from snapshots
+
+The producer can use snapshots as starting points and thereby reducing number of events that have to be loaded.
+This can be useful if the consumer start from zero without any previously processed offset or if it has been
+disconnected for a long while and its offset is far behind.
+
+To enable starting from snapshots you need to enable @extref:[eventsBySlicesStartingFromSnapshots in Akka Persistence R2DBC](akka-persistence-r2dbc:query.html#eventsbyslicesstartingfromsnapshots).
+
+Then you need to define the snapshot to event transformation function in `EventProducerSource.withStartingFromSnapshots`
+when registering the @ref:[Producer](#producer).
+
 ## Configuration
 
 ### Consumer configuration
