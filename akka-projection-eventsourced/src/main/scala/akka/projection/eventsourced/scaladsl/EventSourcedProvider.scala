@@ -5,17 +5,21 @@
 package akka.projection.eventsourced.scaladsl
 
 import java.time.Instant
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.EventsByTagQuery
+import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
 import akka.projection.eventsourced.EventEnvelope
@@ -90,6 +94,50 @@ object EventSourcedProvider {
     }
   }
 
+  def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+      system: ActorSystem[_],
+      readJournalPluginId: String,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      transformSnapshot: Snapshot => Event)
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    val eventsBySlicesQuery =
+      PersistenceQuery(system).readJournalFor[EventsBySliceStartingFromSnapshotsQuery](readJournalPluginId)
+    eventsBySlicesStartingFromSnapshots(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, transformSnapshot)
+  }
+
+  def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      transformSnapshot: Snapshot => Event)
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    eventsBySlicesQuery match {
+      case query: EventsBySliceStartingFromSnapshotsQuery with CanTriggerReplay =>
+        new EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
+          eventsBySlicesQuery,
+          entityType,
+          minSlice,
+          maxSlice,
+          transformSnapshot,
+          system) with CanTriggerReplay {
+          override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
+            query.triggerReplay(persistenceId, fromSeqNr)
+        }
+      case _ =>
+        new EventsBySlicesStartingFromSnapshotsSourceProvider(
+          eventsBySlicesQuery,
+          entityType,
+          minSlice,
+          maxSlice,
+          transformSnapshot,
+          system)
+    }
+  }
+
   def sliceForPersistenceId(system: ActorSystem[_], readJournalPluginId: String, persistenceId: String): Int =
     PersistenceQuery(system)
       .readJournalFor[EventsBySliceQuery](readJournalPluginId)
@@ -106,9 +154,11 @@ object EventSourcedProvider {
       system: ActorSystem[_])
       extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
-      with EventTimestampQuery
-      with LoadEventQuery {
+      with EventTimestampQuerySourceProvider
+      with LoadEventQuerySourceProvider {
     implicit val executionContext: ExecutionContext = system.executionContext
+
+    override def readJournal: ReadJournal = eventsBySlicesQuery
 
     override def source(offset: () => Future[Option[Offset]])
         : Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] =
@@ -122,26 +172,69 @@ object EventSourcedProvider {
     override def extractCreationTime(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Long =
       envelope.timestamp
 
+  }
+
+  private class EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
+      eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
+      entityType: String,
+      override val minSlice: Int,
+      override val maxSlice: Int,
+      transformSnapshot: Snapshot => Event,
+      system: ActorSystem[_])
+      extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
+      with BySlicesSourceProvider
+      with EventTimestampQuerySourceProvider
+      with LoadEventQuerySourceProvider {
+    implicit val executionContext: ExecutionContext = system.executionContext
+
+    override def readJournal: ReadJournal = eventsBySlicesQuery
+
+    override def source(offset: () => Future[Option[Offset]])
+        : Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] =
+      offset().map { offsetOpt =>
+        val offset = offsetOpt.getOrElse(NoOffset)
+        eventsBySlicesQuery.eventsBySlicesStartingFromSnapshots(
+          entityType,
+          minSlice,
+          maxSlice,
+          offset,
+          transformSnapshot)
+      }
+
+    override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset
+
+    override def extractCreationTime(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Long =
+      envelope.timestamp
+
+  }
+
+  private trait EventTimestampQuerySourceProvider extends EventTimestampQuery {
+    def readJournal: ReadJournal
+
     override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] =
-      eventsBySlicesQuery match {
+      readJournal match {
         case timestampQuery: EventTimestampQuery =>
           timestampQuery.timestampOf(persistenceId, sequenceNr)
         case _ =>
           Future.failed(
             new IllegalStateException(
-              s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[EventTimestampQuery].getName}]"))
+              s"[${readJournal.getClass.getName}] must implement [${classOf[EventTimestampQuery].getName}]"))
       }
+  }
+
+  private trait LoadEventQuerySourceProvider extends LoadEventQuery {
+    def readJournal: ReadJournal
 
     override def loadEnvelope[Evt](
         persistenceId: String,
         sequenceNr: Long): Future[akka.persistence.query.typed.EventEnvelope[Evt]] =
-      eventsBySlicesQuery match {
+      readJournal match {
         case laodEventQuery: LoadEventQuery =>
           laodEventQuery.loadEnvelope(persistenceId, sequenceNr)
         case _ =>
           Future.failed(
             new IllegalStateException(
-              s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[LoadEventQuery].getName}]"))
+              s"[${readJournal.getClass.getName}] must implement [${classOf[LoadEventQuery].getName}]"))
       }
   }
 
