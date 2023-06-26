@@ -6,7 +6,8 @@ import sbt._
 object Dependencies {
 
   val Scala213 = "2.13.11"
-  val Scala212 = "2.12.17"
+  val Scala212 = "2.12.18"
+
   val Scala3 = "3.2.2"
   val Scala2Versions = Seq(Scala213, Scala212)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
@@ -27,7 +28,7 @@ object Dependencies {
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.2")
     val slick = "3.4.1"
     val scalaTest = "3.2.16"
-    val testContainers = "1.18.0"
+    val testContainers = "1.18.3"
     val junit = "4.13.2"
     val jacksonDatabind = "2.13.5" // this should match the version of jackson used by akka-serialization-jackson
   }
