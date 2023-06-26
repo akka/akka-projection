@@ -7,6 +7,7 @@ package akka.projection.kafka
 import akka.actor.ActorSystem
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.typed
 import akka.actor.typed.scaladsl.adapter._
 import akka.kafka.testkit.KafkaTestkitTestcontainersSettings
 import akka.kafka.testkit.internal.TestFrameworkInterface
@@ -23,6 +24,8 @@ import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import scala.concurrent.ExecutionContextExecutor
 
 abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
     extends KafkaSpec(kafkaPort, kafkaPort + 1, ActorSystem("Spec", config))
@@ -44,8 +47,8 @@ abstract class KafkaSpecBase(val config: Config, kafkaPort: Int)
   val testKit = ActorTestKit(system.toTyped)
   val projectionTestKit = ProjectionTestKit(system.toTyped)
 
-  implicit val actorSystem = testKit.system
-  implicit val dispatcher = testKit.system.executionContext
+  implicit val actorSystem: typed.ActorSystem[Nothing] = testKit.system
+  implicit val dispatcher: ExecutionContextExecutor = testKit.system.executionContext
 
   override val testcontainersSettings = KafkaTestkitTestcontainersSettings(system)
 }
