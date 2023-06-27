@@ -4,6 +4,13 @@
 
 package akka.projection.grpc.internal
 
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
+
+import scala.collection.immutable
+import scala.concurrent.Future
+import scala.concurrent.Promise
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -17,12 +24,16 @@ import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
+import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
+import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.EventProducerSettings
@@ -41,22 +52,16 @@ import com.typesafe.config.ConfigFactory
 import io.grpc.Status
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
-import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
-
-import scala.collection.immutable
-import scala.concurrent.Future
-import scala.concurrent.Promise
-
-import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 
 object EventProducerServiceSpec {
   val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
 
-  class TestEventsBySliceQuery()(implicit system: ActorSystem[_])
+  class TestQuery()(implicit system: ActorSystem[_])
       extends ReadJournal
       with EventsBySliceQuery
-      with EventsBySliceStartingFromSnapshotsQuery {
+      with EventsBySliceStartingFromSnapshotsQuery
+      with CurrentEventsByPersistenceIdTypedQuery
+      with CurrentEventsByPersistenceIdStartingFromSnapshotQuery {
     private val persistenceExt = Persistence(system)
 
     private val testPublisherPromise =
@@ -114,6 +119,48 @@ object EventProducerServiceSpec {
     override def sliceRanges(numberOfRanges: Int): immutable.Seq[Range] =
       persistenceExt.sliceRanges(numberOfRanges)
 
+    override def currentEventsByPersistenceIdTyped[Event](
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long): Source[EventEnvelope[Event], NotUsed] = {
+      Source((fromSequenceNr to 3).map { n =>
+        createEnvelope(PersistenceId.ofUniqueId(persistenceId), n, s"e-$n")
+      }).asInstanceOf[Source[EventEnvelope[Event], NotUsed]]
+    }
+
+    override def currentEventsByPersistenceIdStartingFromSnapshot[Snapshot, Event](
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long,
+        transformSnapshot: Snapshot => Event): Source[EventEnvelope[Event], NotUsed] = {
+      Source((math.max(fromSequenceNr, 2) to 3).map { n =>
+        if (n == 2) {
+          val transform = transformSnapshot.asInstanceOf[String => String]
+          createEnvelope(PersistenceId.ofUniqueId(persistenceId), n, transform(s"e-$n-snap"))
+        } else
+          createEnvelope(PersistenceId.ofUniqueId(persistenceId), n, s"e-$n")
+      }).asInstanceOf[Source[EventEnvelope[Event], NotUsed]]
+    }
+  }
+
+  private def createEnvelope(
+      pid: PersistenceId,
+      seqNr: Long,
+      evt: String,
+      tags: Set[String] = Set.empty): EventEnvelope[String] = {
+    val now = Instant.now()
+    val slice = math.abs(pid.hashCode % 1024)
+    EventEnvelope(
+      TimestampOffset(Instant.now, Map(pid.id -> seqNr)),
+      pid.id,
+      seqNr,
+      evt,
+      now.toEpochMilli,
+      pid.entityTypeHint,
+      slice,
+      filtered = false,
+      source = "",
+      tags)
   }
 }
 
@@ -127,9 +174,7 @@ class EventProducerServiceSpec
 
   private implicit val sys = system.classicSystem
 
-  private val eventsBySlicesQuery1 = new TestEventsBySliceQuery
-  private val eventsBySlicesQuery2 = new TestEventsBySliceQuery
-  private val eventsBySlicesQuery3 = new TestEventsBySliceQuery
+  private val query = new TestQuery
   private val transformation =
     Transformation.empty.registerAsyncMapper((event: String) => {
       if (event.contains("*"))
@@ -138,46 +183,54 @@ class EventProducerServiceSpec
         Future.successful(Some(event.toUpperCase))
     })
   private val settings = EventProducerSettings(system)
+
+  // one per test
   val entityType1 = nextEntityType()
   val streamId1 = "stream_id_" + entityType1
   val entityType2 = nextEntityType()
   val streamId2 = "stream_id_" + entityType2
-  val streamId3 = streamId1 + "_snap"
+  val entityType3 = nextEntityType()
+  val streamId3 = "stream_id_" + entityType3
+  val entityType4 = nextEntityType() + "_snap"
+  val streamId4 = "stream_id_" + entityType4
+  val entityType5 = nextEntityType() + "_snap"
+  val streamId5 = "stream_id_" + entityType5
 
-  private val notUsedCurrentEventsByPersistenceIdQuery = new CurrentEventsByPersistenceIdTypedQuery {
-
-    override def currentEventsByPersistenceIdTyped[Event](
-        persistenceId: String,
-        fromSequenceNr: Long,
-        toSequenceNr: Long): Source[EventEnvelope[Event], NotUsed] =
-      throw new IllegalStateException("Unexpected use of currentEventsByPersistenceId")
-  }
-  private val notUsedCurrentEventsByPersistenceIdQueries =
-    Map(
-      streamId1 -> notUsedCurrentEventsByPersistenceIdQuery,
-      streamId2 -> notUsedCurrentEventsByPersistenceIdQuery,
-      streamId3 -> notUsedCurrentEventsByPersistenceIdQuery)
+  private val eventsBySlicesQueries =
+    Map(streamId1 -> query, streamId2 -> query, streamId3 -> query)
+  private val eventsBySlicesStartingFromSnapshotsQueries =
+    Map(streamId4 -> query, streamId5 -> query)
+  private val currentEventsByPersistenceIdQueries =
+    Map(streamId1 -> query, streamId2 -> query, streamId3 -> query)
+  private val currentEventsByPersistenceIdStartingFromSnapshotQueries =
+    Map(streamId4 -> query, streamId5 -> query)
 
   private val eventProducerSources = Set(
     EventProducerSource(entityType1, streamId1, transformation, settings),
     EventProducerSource(entityType2, streamId2, transformation, settings),
-    EventProducerSource(entityType1, streamId3, transformation, settings)
+    EventProducerSource(entityType3, streamId3, transformation, settings),
+    EventProducerSource(entityType4, streamId4, transformation, settings)
+      .withStartingFromSnapshots[String, String] { evt =>
+        if (evt.contains("-snap"))
+          evt.replace("-snap", "")
+        else
+          evt
+      },
+    EventProducerSource(entityType5, streamId5, transformation, settings)
       .withStartingFromSnapshots[String, String] { evt =>
         if (evt.contains("-snap"))
           evt.replace("-snap", "")
         else
           evt
       })
-  val queries =
-    Map(streamId1 -> eventsBySlicesQuery1, streamId2 -> eventsBySlicesQuery2)
-  val queriesStartingFromSnapshots =
-    Map(streamId3 -> eventsBySlicesQuery3)
+
   private val eventProducerService =
     new EventProducerServiceImpl(
       system,
-      queries,
-      queriesStartingFromSnapshots,
-      notUsedCurrentEventsByPersistenceIdQueries,
+      eventsBySlicesQueries,
+      eventsBySlicesStartingFromSnapshotsQueries,
+      currentEventsByPersistenceIdQueries,
+      currentEventsByPersistenceIdStartingFromSnapshotQueries,
       eventProducerSources,
       None)
 
@@ -195,26 +248,6 @@ class EventProducerServiceSpec
     probe
   }
 
-  private def createEnvelope(
-      streamId: String,
-      pid: PersistenceId,
-      seqNr: Long,
-      evt: String,
-      tags: Set[String] = Set.empty): EventEnvelope[String] = {
-    val now = Instant.now()
-    EventEnvelope(
-      TimestampOffset(Instant.now, Map(pid.id -> seqNr)),
-      pid.id,
-      seqNr,
-      evt,
-      now.toEpochMilli,
-      pid.entityTypeHint,
-      queries(streamId).sliceForPersistenceId(pid.id),
-      filtered = false,
-      source = "",
-      tags)
-  }
-
   "EventProducerService" must {
     "emit events" in {
       val initReq = InitReq(streamId1, 0, 1023, offset = None)
@@ -226,11 +259,11 @@ class EventProducerServiceSpec
 
       probe.request(100)
       val testPublisher =
-        eventsBySlicesQuery1.testPublisher(entityType1).futureValue
+        query.testPublisher(entityType1).futureValue
 
-      val env1 = createEnvelope(streamId1, nextPid(entityType1), 1L, "e-1")
+      val env1 = createEnvelope(nextPid(entityType1), 1L, "e-1")
       testPublisher.sendNext(env1)
-      val env2 = createEnvelope(streamId1, nextPid(entityType1), 2L, "e-2", tags = Set("tag-a", "tag-b"))
+      val env2 = createEnvelope(nextPid(entityType1), 2L, "e-2", tags = Set("tag-a", "tag-b"))
       testPublisher.sendNext(env2)
 
       val out1 = probe.expectNext()
@@ -253,15 +286,15 @@ class EventProducerServiceSpec
 
       probe.request(100)
       val testPublisher =
-        eventsBySlicesQuery2.testPublisher(entityType2).futureValue
+        query.testPublisher(entityType2).futureValue
 
       val pid = nextPid(entityType2)
-      val env1 = createEnvelope(streamId2, pid, 1L, "e-1")
+      val env1 = createEnvelope(pid, 1L, "e-1")
       testPublisher.sendNext(env1)
       // will be filtered by the transformation
-      val env2 = createEnvelope(streamId2, pid, 2L, "e-2*")
+      val env2 = createEnvelope(pid, 2L, "e-2*")
       testPublisher.sendNext(env2)
-      val env3 = createEnvelope(streamId2, pid, 2L, "e-2")
+      val env3 = createEnvelope(pid, 2L, "e-2")
       testPublisher.sendNext(env3)
 
       val out1 = probe.expectNext()
@@ -284,9 +317,10 @@ class EventProducerServiceSpec
       val interceptedProducerService =
         new EventProducerServiceImpl(
           system,
-          queries,
-          queriesStartingFromSnapshots,
-          notUsedCurrentEventsByPersistenceIdQueries,
+          eventsBySlicesQueries,
+          eventsBySlicesStartingFromSnapshotsQueries,
+          currentEventsByPersistenceIdQueries,
+          currentEventsByPersistenceIdStartingFromSnapshotQueries,
           eventProducerSources,
           Some(new EventProducerInterceptor {
             def intercept(streamId: String, requestMetadata: Metadata): Future[Done] = {
@@ -362,8 +396,37 @@ class EventProducerServiceSpec
       assertGrpcStatusDenied(timestampFailure, "nono-async")
     }
 
-    "emit events StartingFromSnapshots" in {
+    "replay events" in {
+      val persistenceId = nextPid(entityType3)
       val initReq = InitReq(streamId3, 0, 1023, offset = None)
+      val replayReq = ReplayReq(List(PersistenceIdSeqNr(persistenceId.id, 2L)))
+      val streamIn =
+        Source(List(StreamIn(StreamIn.Message.Init(initReq)), StreamIn(StreamIn.Message.Replay(replayReq))))
+          .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      val testPublisher =
+        query.testPublisher(entityType3).futureValue
+
+      // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
+      val env1 = createEnvelope(nextPid(entityType3), 1L, "e-1")
+      testPublisher.sendNext(env1)
+      val out1 = probe.expectNext()
+      out1.getEvent.persistenceId shouldBe env1.persistenceId
+      out1.getEvent.seqNr shouldBe env1.sequenceNr
+
+      val out2 = probe.expectNext()
+      out2.getEvent.persistenceId shouldBe persistenceId.id
+      out2.getEvent.seqNr shouldBe 2L
+
+      val out3 = probe.expectNext()
+      out3.getEvent.persistenceId shouldBe persistenceId.id
+      out3.getEvent.seqNr shouldBe 3L
+    }
+
+    "emit events StartingFromSnapshots" in {
+      val initReq = InitReq(streamId4, 0, 1023, offset = None)
       val streamIn = Source
         .single(StreamIn(StreamIn.Message.Init(initReq)))
         .concat(Source.maybe)
@@ -372,12 +435,12 @@ class EventProducerServiceSpec
 
       probe.request(100)
       val testPublisher =
-        eventsBySlicesQuery3.testPublisher(entityType1).futureValue
+        query.testPublisher(entityType4).futureValue
 
-      val pid = nextPid(entityType1)
-      val env2 = createEnvelope(streamId1, pid, 2L, "e-2-snap")
+      val pid = nextPid(entityType4)
+      val env2 = createEnvelope(pid, 2L, "e-2-snap")
       testPublisher.sendNext(env2)
-      val env3 = createEnvelope(streamId1, pid, 3L, "e-3")
+      val env3 = createEnvelope(pid, 3L, "e-3")
       testPublisher.sendNext(env3)
 
       val protoAnySerialization = new ProtoAnySerialization(system)
@@ -392,6 +455,41 @@ class EventProducerServiceSpec
       out2.getEvent.persistenceId shouldBe env3.persistenceId
       out2.getEvent.seqNr shouldBe env3.sequenceNr
       protoAnySerialization.deserialize(out2.getEvent.payload.get) shouldBe "E-3"
+    }
+
+    "replay events StartingFromSnapshots" in {
+      val persistenceId = nextPid(entityType5)
+      val initReq = InitReq(streamId5, 0, 1023, offset = None)
+      val replayReq = ReplayReq(List(PersistenceIdSeqNr(persistenceId.id, 1L)))
+      val streamIn =
+        Source(List(StreamIn(StreamIn.Message.Init(initReq)), StreamIn(StreamIn.Message.Replay(replayReq))))
+          .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      val testPublisher =
+        query.testPublisher(entityType5).futureValue
+
+      // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
+      val env1 = createEnvelope(nextPid(entityType5), 1L, "e-1")
+      testPublisher.sendNext(env1)
+      val out1 = probe.expectNext()
+      out1.getEvent.persistenceId shouldBe env1.persistenceId
+      out1.getEvent.seqNr shouldBe env1.sequenceNr
+
+      val protoAnySerialization = new ProtoAnySerialization(system)
+
+      val out2 = probe.expectNext()
+      out2.getEvent.persistenceId shouldBe persistenceId.id
+      out2.getEvent.seqNr shouldBe 2L
+      // transformSnapshot removes the "-snap"
+      protoAnySerialization.deserialize(out2.getEvent.payload.get) shouldBe "E-2"
+
+      val out3 = probe.expectNext()
+      out3.getEvent.persistenceId shouldBe persistenceId.id
+      out3.getEvent.seqNr shouldBe 3L
+      // transformSnapshot removes the "-snap"
+      protoAnySerialization.deserialize(out3.getEvent.payload.get) shouldBe "E-3"
     }
   }
 

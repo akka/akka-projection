@@ -15,7 +15,6 @@ import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
-import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
@@ -29,6 +28,7 @@ import akka.stream.Inlet
 import akka.stream.Outlet
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.SinkQueueWithCancel
+import akka.stream.scaladsl.Source
 import akka.stream.stage.GraphStage
 import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
@@ -134,7 +134,7 @@ import org.slf4j.LoggerFactory
     entityType: String,
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
-    currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
+    currentEventsByPersistenceId: (String, Long) => Source[EventEnvelope[Any], NotUsed],
     val producerFilter: EventEnvelope[Any] => Boolean,
     replayParallelism: Int)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
@@ -341,8 +341,7 @@ import org.slf4j.LoggerFactory
           } else if (replayInProgress.size < replayParallelism) {
             log.debugN("Stream [{}]: Starting replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
             val queue =
-              currentEventsByPersistenceIdQuery
-                .currentEventsByPersistenceIdTyped[Any](pid, fromSeqNr, Long.MaxValue)
+              currentEventsByPersistenceId(pid, fromSeqNr)
                 .runWith(Sink.queue())(materializer)
             replayInProgress = replayInProgress.updated(pid, ReplaySession(fromSeqNr, queue))
             tryPullReplay(pid)
