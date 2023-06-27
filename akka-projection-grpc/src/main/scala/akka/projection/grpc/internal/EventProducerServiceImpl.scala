@@ -47,6 +47,7 @@ import java.time.Instant
 import scala.concurrent.Future
 import scala.util.Success
 
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 
 /**
@@ -63,9 +64,12 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
  */
 @InternalApi private[akka] class EventProducerServiceImpl(
     system: ActorSystem[_],
-    eventsBySlicesQueriesPerStreamId: Map[String, EventsBySliceQuery],
-    eventsBySlicesStartingFromSnapshotsQueriesPerStreamId: Map[String, EventsBySliceStartingFromSnapshotsQuery],
-    currentEventsByPersistenceIdQueriesPerStreamId: Map[String, CurrentEventsByPersistenceIdTypedQuery],
+    eventsBySlicesPerStreamId: Map[String, EventsBySliceQuery],
+    eventsBySlicesStartingFromSnapshotsPerStreamId: Map[String, EventsBySliceStartingFromSnapshotsQuery],
+    currentEventsByPersistenceIdPerStreamId: Map[String, CurrentEventsByPersistenceIdTypedQuery],
+    currentEventsByPersistenceIdStartingFromSnapshotPerStreamId: Map[
+      String,
+      CurrentEventsByPersistenceIdStartingFromSnapshotQuery],
     sources: Set[EventProducer.EventProducerSource],
     interceptor: Option[EventProducerInterceptor])
     extends EventProducerServicePowerApi {
@@ -78,8 +82,8 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
   sources.foreach { s =>
     require(s.streamId.nonEmpty, s"EventProducerSource for [${s.entityType}] contains empty stream id, not allowed")
     require(
-      eventsBySlicesQueriesPerStreamId.contains(s.streamId) ||
-      eventsBySlicesStartingFromSnapshotsQueriesPerStreamId.contains(s.streamId),
+      eventsBySlicesPerStreamId.contains(s.streamId) ||
+      eventsBySlicesStartingFromSnapshotsPerStreamId.contains(s.streamId),
       s"No events by slices query defined for stream id [${s.streamId}]")
   }
 
@@ -152,11 +156,11 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
         })
 
       val events: Source[EventEnvelope[Any], NotUsed] =
-        eventsBySlicesQueriesPerStreamId.get(init.streamId) match {
+        eventsBySlicesPerStreamId.get(init.streamId) match {
           case Some(query) =>
             query.eventsBySlices[Any](producerSource.entityType, init.sliceMin, init.sliceMax, offset)
           case None =>
-            eventsBySlicesStartingFromSnapshotsQueriesPerStreamId.get(init.streamId) match {
+            eventsBySlicesStartingFromSnapshotsPerStreamId.get(init.streamId) match {
               case Some(query) =>
                 val transformSnapshot = streamIdToSourceMap(init.streamId).transformSnapshot.get
                 query.eventsBySlicesStartingFromSnapshots[Any, Any](
@@ -171,6 +175,28 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
             }
         }
 
+      val currentEventsByPersistenceId: (String, Long) => Source[EventEnvelope[Any], NotUsed] =
+        currentEventsByPersistenceIdPerStreamId.get(init.streamId) match {
+          case Some(query) =>
+            (pid, seqNr) => query.currentEventsByPersistenceIdTyped[Any](pid, seqNr, Long.MaxValue)
+          case None =>
+            currentEventsByPersistenceIdStartingFromSnapshotPerStreamId.get(init.streamId) match {
+              case Some(query) =>
+                val transformSnapshot = streamIdToSourceMap(init.streamId).transformSnapshot.get
+                (pid, seqNr) =>
+                  query.currentEventsByPersistenceIdStartingFromSnapshot[Any, Any](
+                    pid,
+                    seqNr,
+                    Long.MaxValue,
+                    transformSnapshot)
+              case None =>
+                (_, _) =>
+                  Source.failed(
+                    new IllegalArgumentException(
+                      s"No currentEventsByPersistenceId query defined for stream id [${init.streamId}]"))
+            }
+        }
+
       val eventsFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
         BidiFlow
           .fromGraph(
@@ -179,7 +205,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
               producerSource.entityType,
               init.sliceMin to init.sliceMax,
               init.filter,
-              currentEventsByPersistenceIdQueriesPerStreamId(init.streamId),
+              currentEventsByPersistenceId,
               producerFilter = producerSource.producerFilter,
               replayParallelism = producerSource.settings.replayParallelism))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
@@ -277,7 +303,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
           s"Persistence id is for a type of entity that is not available for consumption (expected type " +
           s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
       }
-      eventsBySlicesQueriesPerStreamId(req.streamId) match {
+      eventsBySlicesPerStreamId(req.streamId) match {
         case q: EventTimestampQuery =>
           import system.executionContext
           q.timestampOf(req.persistenceId, req.seqNr).map {
@@ -299,7 +325,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
         throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
           s"Persistence id is for a type of entity that is not available for consumption (expected type " +
           s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
-      eventsBySlicesQueriesPerStreamId(req.streamId) match {
+      eventsBySlicesPerStreamId(req.streamId) match {
         case q: LoadEventQuery =>
           import system.executionContext
           q.loadEnvelope[Any](req.persistenceId, req.seqNr)
