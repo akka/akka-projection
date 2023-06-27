@@ -12,7 +12,9 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.grpc.GrpcClientSettings
 import akka.http.scaladsl.Http
+import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.r2dbc.R2dbcSettings
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.projection.ProjectionBehavior
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
@@ -22,14 +24,18 @@ import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.internal.EventConsumerServiceImpl
 import akka.projection.grpc.internal.EventPusher
+import akka.projection.grpc.internal.FilteredPayloadMapper
 import akka.projection.grpc.internal.proto.EventConsumerServiceClient
 import akka.projection.grpc.internal.proto.EventConsumerServiceHandler
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
+import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
+import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -78,12 +84,16 @@ object ProducerPushSpec {
          # reducing this to have quicker test, triggers backtracking earlier
          backtracking.behind-current-time = 3 seconds
        }
+       journal.publish-events-number-of-topics = 2
      }
 
      # consumer uses its own h2
      test.consumer.r2dbc = $${akka.persistence.r2dbc}
      test.consumer.r2dbc.connection-factory = $${akka.persistence.r2dbc.h2}
      test.consumer.r2dbc.connection-factory.database = "consumer-db"
+     
+     test.consumer.projection = $${akka.projection.r2dbc}
+     test.consumer.projection.use-connection-factory = "test.consumer.r2dbc.connection-factory"
     """).withFallback(ConfigFactory.load("persistence.conf")).resolve()
 }
 class ProducerPushSpec(testContainerConf: TestContainerConf)
@@ -104,29 +114,36 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
   override def typedSystem: ActorSystem[_] = system
 
   val entityType = nextEntityType()
+  val streamId = "entity_stream_id"
   val producerProjectionId = randomProjectionId()
   val consumerProjectionId = randomProjectionId()
 
+  lazy val consumerProjectionSettings: R2dbcProjectionSettings =
+    R2dbcProjectionSettings(typedSystem.settings.config.getConfig("test.consumer.projection"))
+
   val grpcPort = 9588
 
-  def producerSourceProvider =
-    EventSourcedProvider.eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityType, 0, 1023)
+  def producerSourceProvider(eps: EventProducerSource) =
+    EventSourcedProvider.eventsBySlices[String](system, R2dbcReadJournal.Identifier, eps.entityType, 0, 1023)
 
   val eventConsumerClient = EventConsumerServiceClient(
     GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false))
 
   // this projection runs in the producer and pushes events over grpc to the consumer
-  def spawnProducerReplicationProjection(): ActorRef[ProjectionBehavior.Command] =
+  def spawnProducerReplicationProjection(eps: EventProducerSource): ActorRef[ProjectionBehavior.Command] =
     spawn(
       ProjectionBehavior(
-        R2dbcProjection.atLeastOnceAsync(
+        R2dbcProjection.atLeastOnceAsync[Offset, EventEnvelope[String]](
           producerProjectionId,
           settings = None,
-          sourceProvider = producerSourceProvider,
-          handler = () => new EventPusher[String](eventConsumerClient, Transformation.identity))))
+          sourceProvider = producerSourceProvider(eps),
+          handler = () => new EventPusher(eventConsumerClient, eps))))
 
-  def counsumerSourceProvider =
-    EventSourcedProvider.eventsBySlices[String](system, "test.consumer.r2dbc.query", entityType, 0, 1023)
+  def counsumerSourceProvider = {
+    // FIXME how do we auto-wrap with this?
+    new FilteredPayloadMapper(
+      EventSourcedProvider.eventsBySlices[String](system, "test.consumer.r2dbc.query", entityType, 0, 1023))
+  }
 
   // this projection runs in the consumer and just consumes the already projected events
   def spawnConsumerProjection(probe: ActorRef[EventEnvelope[String]]) =
@@ -141,6 +158,21 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
               probe ! envelope
               Future.successful(Done)
           })))
+
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+    lazy val consumerSettings: R2dbcSettings =
+      R2dbcSettings(typedSystem.settings.config.getConfig("test.consumer.r2dbc"))
+    Await.result(
+      r2dbcExecutor.updateOne("beforeAll delete")(
+        _.createStatement(s"delete from ${consumerSettings.journalTableWithSchema}")),
+      10.seconds)
+    Await.result(
+      r2dbcExecutor.updateOne("beforeAll delete")(
+        _.createStatement(s"delete from ${consumerProjectionSettings.timestampOffsetTableWithSchema}")),
+      10.seconds)
+    // FIXME clean up consumer tables!
+  }
 
   "Producer pushed events" should {
 
@@ -162,7 +194,19 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
       // FIXME higher level API for the producer side of this?
       // FIXME producer filters
-      spawnProducerReplicationProjection()
+      val veggies = Set("cucumber")
+      // FIXME features provided by EventProducerSource may not be overlapping enough that we need it here
+      val eps =
+        EventProducerSource[String](
+          entityType,
+          streamId,
+          Transformation.identity,
+          EventProducerSettings(system),
+          producerFilter = envelope =>
+            // no veggies allowed
+            !veggies(envelope.event))
+
+      spawnProducerReplicationProjection(eps)
 
       // local "regular" projections consume the projected events
       val consumerProbe = createTestProbe[EventEnvelope[String]]()
@@ -174,11 +218,17 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       val pid = nextPid(entityType)
       // running this directly, as in producing system (even though they share actor system)
       // written in its own db, replicated over grpc to the consumer db.
-      val entity = spawn(TestEntity(pid))
-      entity ! TestEntity.Persist("bananas")
+      val entity1 = spawn(TestEntity(pid))
+      entity1 ! TestEntity.Persist("bananas")
+      entity1 ! TestEntity.Persist("cucumber") // producer filter - never seen in consumer
+      entity1 ! TestEntity.Persist("mangos")
 
       // event projected into consumer journal and shows up in local projection
       consumerProbe.receiveMessage(10.seconds).event should be("bananas")
+
+      // Note: filtered does not show up in projection at all
+
+      consumerProbe.receiveMessage().event should be("mangos")
     }
   }
 

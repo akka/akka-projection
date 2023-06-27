@@ -9,6 +9,7 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.scaladsl.AskPattern.schedulerFromActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.dispatch.ExecutionContexts
 import akka.persistence.EventWriter
 import akka.persistence.query.typed.EventEnvelope
@@ -49,6 +50,7 @@ private[akka] final class EventConsumerServiceImpl(
     eventWriter: ActorRef[EventWriter.Command],
     persistenceIdTransformer: String => String)(implicit system: ActorSystem[_])
     extends EventConsumerService {
+
   private val logger = LoggerFactory.getLogger(classOf[EventConsumerServiceImpl])
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
@@ -59,14 +61,25 @@ private[akka] final class EventConsumerServiceImpl(
     val persistenceId = persistenceIdTransformer(envelope.persistenceId)
 
     // FIXME can we skip the ask for each event?
-    eventWriter.askWithStatus[Done](replyTo =>
-      EventWriter.Write(persistenceId, envelope.sequenceNr, envelope.event, envelope.eventMetadata, replyTo))
+    eventWriter.askWithStatus[Done](
+      replyTo =>
+        EventWriter.Write(
+          persistenceId,
+          envelope.sequenceNr,
+          // FIXME how to deal with filtered - can't be null, should we have a marker filtered payload?
+          envelope.eventOption.getOrElse(FilteredPayload),
+          envelope.eventMetadata,
+          replyTo))
   }
 
   override def consumeEvent(in: Event): Future[Empty] = {
     // FIXME do we need to make sure events for the same pid are ordered? Should be single writer per pid but?
     val envelope = ProtobufProtocolConversions.eventToEnvelope[Any](in, protoAnySerialization)
-    logger.trace("Saw event [{}] for pid [{}]", envelope.sequenceNr, envelope.persistenceId)
+    logger.traceN(
+      "Saw event [{}] for pid [{}]{}",
+      envelope.sequenceNr,
+      envelope.persistenceId,
+      if (envelope.filtered) " filtered" else "")
 
     writeEventToJournal(envelope).map(_ => Empty.defaultInstance)(ExecutionContexts.parasitic)
   }
