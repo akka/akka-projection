@@ -22,10 +22,13 @@
     <logger name="akka.actor.typed.pubsub" level="INFO" />
     <logger name="akka.http" level="INFO" />
     <logger name="akka.cluster.typed.internal.receptionist" level="INFO" />
-    <logger name="io.grpc.netty.shaded.io.grpc.netty" level="INFO" />
+    <logger name="io.grpc.netty" level="INFO" />
+    <logger name="io.netty" level="INFO" />
     <logger name="io.r2dbc.postgresql" level="INFO" />
     <logger name="reactor.netty.resources" level="INFO" />
     <logger name="io.r2dbc.pool" level="INFO" />
+    <logger name="com.github.dockerjava" level="INFO" />
+    <logger name="org.testcontainers" level="INFO" />
 
     <root level="TRACE">
         <appender-ref ref="CapturingAppender"/>
