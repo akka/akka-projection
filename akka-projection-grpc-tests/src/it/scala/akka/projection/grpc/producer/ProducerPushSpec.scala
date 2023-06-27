@@ -2,7 +2,7 @@
  * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.grpc.replication
+package akka.projection.grpc.producer
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-object ProducerPushReplicationSpec {
+object ProducerPushSpec {
 
   private val tripleQuote = "\"\"\""
 
@@ -72,18 +72,26 @@ object ProducerPushReplicationSpec {
        );
      $tripleQuote
 
+     akka.persistence.r2dbc {
+       query {
+         refresh-interval = 500 millis
+         # reducing this to have quicker test, triggers backtracking earlier
+         backtracking.behind-current-time = 3 seconds
+       }
+     }
+
      # consumer uses its own h2
      test.consumer.r2dbc = $${akka.persistence.r2dbc}
      test.consumer.r2dbc.connection-factory = $${akka.persistence.r2dbc.h2}
      test.consumer.r2dbc.connection-factory.database = "consumer-db"
     """).withFallback(ConfigFactory.load("persistence.conf")).resolve()
 }
-class ProducerPushReplicationSpec(testContainerConf: TestContainerConf)
+class ProducerPushSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
       akka.actor
         .ActorSystem(
           "ProducerPushReplicationSpec",
-          ProducerPushReplicationSpec.config
+          ProducerPushSpec.config
             .withFallback(testContainerConf.config))
         .toTyped)
     with AnyWordSpecLike
