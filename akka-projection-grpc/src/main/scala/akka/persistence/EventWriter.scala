@@ -4,7 +4,6 @@
 
 package akka.persistence
 
-import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
 import akka.actor.typed.SupervisorStrategy
@@ -31,8 +30,9 @@ private[akka] object EventWriter {
       sequenceNumber: Long,
       event: Any,
       metadata: Option[Any],
-      replyTo: ActorRef[StatusReply[Done]])
+      replyTo: ActorRef[StatusReply[WriteAck]])
       extends Command
+  final case class WriteAck(persistenceId: String, sequenceNumber: Long)
 
   def apply(journalPluginId: String): Behavior[Command] =
     Behaviors
@@ -42,7 +42,7 @@ private[akka] object EventWriter {
           val journal = Persistence(context.system).journalFor(journalPluginId)
           context.log.debug("Event writer for journal [{}] starting up", journalPluginId)
 
-          val waitingForResponse = new util.HashMap[(String, Long), ActorRef[StatusReply[Done]]]()
+          val waitingForResponse = new util.HashMap[(String, Long), ActorRef[StatusReply[WriteAck]]]()
 
           Behaviors.receiveMessage {
             case Write(persistenceId, sequenceNumber, event, metadata, replyTo) =>
@@ -71,6 +71,8 @@ private[akka] object EventWriter {
               Behaviors.same
 
             case JournalProtocol.WriteMessageSuccess(message, _) =>
+              // FIXME make sure writes for same pid are sequential (or is that really important)?
+              // FIXME if already writing for same pid, queue up and do a batch write?
               val pidSeqnr = (message.persistenceId, message.sequenceNr)
               waitingForResponse.get(pidSeqnr) match {
                 case null =>
@@ -85,7 +87,7 @@ private[akka] object EventWriter {
                       "Successfully wrote event persistence id [{}], sequence nr [{}]",
                       message.persistenceId,
                       message.sequenceNr)
-                  replyTo ! StatusReply.success(Done)
+                  replyTo ! StatusReply.success(WriteAck(message.persistenceId, message.sequenceNr))
                   waitingForResponse.remove(pidSeqnr)
                   Behaviors.same
               }

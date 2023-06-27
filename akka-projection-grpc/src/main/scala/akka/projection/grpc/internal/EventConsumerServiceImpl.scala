@@ -4,24 +4,22 @@
 
 package akka.projection.grpc.internal
 
-import akka.Done
+import akka.NotUsed
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.AskPattern.Askable
-import akka.actor.typed.scaladsl.AskPattern.schedulerFromActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
-import akka.dispatch.ExecutionContexts
+import akka.pattern.StatusReply
 import akka.persistence.EventWriter
-import akka.persistence.query.typed.EventEnvelope
-import akka.projection.grpc.internal.proto.Event
+import akka.projection.grpc.internal.proto.ConsumerEvent
+import akka.projection.grpc.internal.proto.ConsumerEventAck
 import akka.projection.grpc.internal.proto.EventConsumerService
+import akka.stream.scaladsl.Source
+import akka.stream.typed.scaladsl.ActorFlow
 import akka.util.ByteString
 import akka.util.Timeout
-import com.google.protobuf.empty.Empty
 import org.slf4j.LoggerFactory
 
 import java.net.URLEncoder
-import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
 /**
@@ -55,33 +53,42 @@ private[akka] final class EventConsumerServiceImpl(
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
 
-  implicit val timeout: Timeout = 5.seconds // FIXME from config or can we get rid of it
-  private def writeEventToJournal(envelope: EventEnvelope[Any]): Future[Done] = {
-    // FIXME would we want request metadata/producer ip/entire envelope in to persistence id transformer?
-    val persistenceId = persistenceIdTransformer(envelope.persistenceId)
+  private implicit val timeout: Timeout = 5.seconds // FIXME from config or can we get rid of it
 
-    // FIXME can we skip the ask for each event?
-    eventWriter.askWithStatus[Done](
-      replyTo =>
-        EventWriter.Write(
-          persistenceId,
-          envelope.sequenceNr,
-          // FIXME how to deal with filtered - can't be null, should we have a marker filtered payload?
-          envelope.eventOption.getOrElse(FilteredPayload),
-          envelope.eventMetadata,
-          replyTo))
-  }
-
-  override def consumeEvent(in: Event): Future[Empty] = {
+  override def consumeEvent(in: Source[ConsumerEvent, NotUsed]): Source[ConsumerEventAck, NotUsed] = {
     // FIXME do we need to make sure events for the same pid are ordered? Should be single writer per pid but?
-    val envelope = ProtobufProtocolConversions.eventToEnvelope[Any](in, protoAnySerialization)
-    logger.traceN(
-      "Saw event [{}] for pid [{}]{}",
-      envelope.sequenceNr,
-      envelope.persistenceId,
-      if (envelope.filtered) " filtered" else "")
+    in.prefixAndTail(1)
+      .flatMapConcat {
+        case (Seq(ConsumerEvent(ConsumerEvent.Message.Init(init), _)), tail) =>
+          logger.info("Event stream from [{}] started", init.originId)
+          tail.collect {
+            case ConsumerEvent(ConsumerEvent.Message.Event(event), _) => event
+          }
+        case (_, _) =>
+          throw new IllegalArgumentException(
+            "Expected stream in starts with Init event followed by events but got something else")
+      }
+      .via(ActorFlow.askWithStatus(8)(eventWriter) {
+        (in: proto.Event, replyTo: ActorRef[StatusReply[EventWriter.WriteAck]]) =>
+          // FIXME would we want request metadata/producer ip/entire envelope in to persistence id transformer?
+          val envelope = ProtobufProtocolConversions.eventToEnvelope[Any](in, protoAnySerialization)
+          val persistenceId = persistenceIdTransformer(envelope.persistenceId)
+          if (logger.isTraceEnabled)
+            logger.traceN(
+              "Saw event [{}] for pid [{}]{}",
+              envelope.sequenceNr,
+              envelope.persistenceId,
+              if (envelope.filtered) " filtered" else "")
 
-    writeEventToJournal(envelope).map(_ => Empty.defaultInstance)(ExecutionContexts.parasitic)
+          EventWriter.Write(
+            persistenceId,
+            envelope.sequenceNr,
+            // FIXME how to deal with filtered - can't be null, should we have a marker filtered payload?
+            envelope.eventOption.getOrElse(FilteredPayload),
+            envelope.eventMetadata,
+            replyTo)
+      })
+      .map(ack => ConsumerEventAck(ack.persistenceId, ack.sequenceNumber))
   }
 
 }

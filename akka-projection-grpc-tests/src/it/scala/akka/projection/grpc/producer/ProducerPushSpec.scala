@@ -133,11 +133,11 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
   def spawnProducerReplicationProjection(eps: EventProducerSource): ActorRef[ProjectionBehavior.Command] =
     spawn(
       ProjectionBehavior(
-        R2dbcProjection.atLeastOnceAsync[Offset, EventEnvelope[String]](
+        R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[String]](
           producerProjectionId,
           settings = None,
           sourceProvider = producerSourceProvider(eps),
-          handler = () => new EventPusher(eventConsumerClient, eps))))
+          handler = EventPusher(eventConsumerClient, eps))))
 
   def counsumerSourceProvider = {
     // FIXME how do we auto-wrap with this?
@@ -225,10 +225,17 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
       // event projected into consumer journal and shows up in local projection
       consumerProbe.receiveMessage(10.seconds).event should be("bananas")
-
-      // Note: filtered does not show up in projection at all
-
+      // Note: filtered ends up in the consumer journal, but does not show up in projection
       consumerProbe.receiveMessage().event should be("mangos")
+
+      val entity2 = spawn(TestEntity(nextPid(entityType)))
+      val entity3 = spawn(TestEntity(nextPid(entityType)))
+      for (i <- 0 to 10) {
+        entity1 ! TestEntity.Persist(s"peach-$i-entity1")
+        entity2 ! TestEntity.Persist(s"peach-$i-entity2")
+        entity3 ! TestEntity.Persist(s"peach-$i-entity3")
+      }
+      consumerProbe.receiveMessages(30)
     }
   }
 
