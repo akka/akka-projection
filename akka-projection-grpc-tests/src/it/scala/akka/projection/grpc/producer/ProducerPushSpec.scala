@@ -145,20 +145,30 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
   "Producer pushed events" should {
 
     "show up on consumer side" in {
-      // producer runs gRPC server accepting pushed events
+      // consumer runs gRPC server accepting pushed events from producers
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
         .bind(
+          // FIXME higher level api doing both these steps and returning the handler?
+          // FIXME how does it fit with the existing EPS-binding APIs?
+          // FIXME auth should be possible just like the regular gRPC transport - we don't anyone to push events directly into the journal
+          // FIXME consumer filters
           EventConsumerServiceHandler(
             // events are written directly into the journal on the consumer side, pushing over gRPC is only
             // allowed if no two pushing systems push events for the same persistence id
-            EventConsumerServiceImpl.directJournalConsumer("test.consumer.r2dbc.journal")))
+            EventConsumerServiceImpl
+              .directJournalConsumer("test.consumer.r2dbc.journal", persistenceIdTransformer = identity)))
       bound.futureValue
 
+      // FIXME higher level API for the producer side of this?
+      // FIXME producer filters
       spawnProducerReplicationProjection()
 
       // local "regular" projections consume the projected events
       val consumerProbe = createTestProbe[EventEnvelope[String]]()
+
+      // FIXME do we provide some higher level API for both accepting and consuming or do
+      //       we leave that up to the user (so that they can decide on using SDP or whatnot?)
       spawnConsumerProjection(consumerProbe.ref)
 
       val pid = nextPid(entityType)

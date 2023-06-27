@@ -12,7 +12,6 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.TypedActorRefOps
 import akka.annotation.InternalApi
 import akka.pattern.StatusReply
-import akka.persistence.query.typed.EventEnvelope
 
 import java.util
 import java.util.UUID
@@ -26,7 +25,13 @@ import java.util.UUID
 private[akka] object EventWriter {
 
   sealed trait Command
-  final case class Write(envelope: EventEnvelope[Any], replyTo: ActorRef[StatusReply[Done]]) extends Command
+  final case class Write(
+      persistenceId: String,
+      sequenceNumber: Long,
+      event: Any,
+      metadata: Option[Any],
+      replyTo: ActorRef[StatusReply[Done]])
+      extends Command
 
   def apply(journalPluginId: String): Behavior[Command] =
     Behaviors
@@ -38,32 +43,25 @@ private[akka] object EventWriter {
         val waitingForResponse = new util.HashMap[(String, Long), ActorRef[StatusReply[Done]]]()
 
         Behaviors.receiveMessage {
-          case Write(envelope, replyTo) =>
+          case Write(persistenceId, sequenceNumber, event, metadata, replyTo) =>
             // FIXME trace or remove
-            context.log.debug(
-              "Writing event persistence id [{}], sequence nr [{}]",
-              envelope.persistenceId,
-              envelope.sequenceNr)
+            context.log.debug("Writing event persistence id [{}], sequence nr [{}]", persistenceId, sequenceNumber)
             val repr = PersistentRepr(
-              envelope.event,
-              persistenceId = envelope.persistenceId,
-              sequenceNr = envelope.sequenceNr,
+              event,
+              persistenceId = persistenceId,
+              sequenceNr = sequenceNumber,
               manifest = "", // adapters would be on the producing side, already applied
               writerUuid = writerUuid,
               sender = akka.actor.ActorRef.noSender)
 
-            val write = AtomicWrite(envelope.eventMetadata match {
+            val write = AtomicWrite(metadata match {
                 case Some(meta) => repr.withMetadata(meta)
                 case _          => repr
               }) :: Nil
 
-            waitingForResponse.put((envelope.persistenceId, envelope.sequenceNr), replyTo)
+            waitingForResponse.put((persistenceId, sequenceNumber), replyTo)
 
-            journal ! JournalProtocol.WriteMessages(
-              write,
-              // FIXME is this the ref to pass?
-              context.self.toClassic,
-              context.self.path.uid)
+            journal ! JournalProtocol.WriteMessages(write, context.self.toClassic, context.self.path.uid)
             Behaviors.same
 
           case JournalProtocol.WriteMessageSuccess(message, _) =>
@@ -76,11 +74,11 @@ private[akka] object EventWriter {
                   message.sequenceNr)
                 Behaviors.same
               case replyTo =>
-                // FIXME trace or remove
-                context.log.debug2(
-                  "Successfully wrote event persistence id [{}], sequence nr [{}]",
-                  message.persistenceId,
-                  message.sequenceNr)
+                if (context.log.isTraceEnabled)
+                  context.log.trace2(
+                    "Successfully wrote event persistence id [{}], sequence nr [{}]",
+                    message.persistenceId,
+                    message.sequenceNr)
                 replyTo ! StatusReply.success(Done)
                 waitingForResponse.remove(pidSeqnr)
                 Behaviors.same
@@ -91,10 +89,9 @@ private[akka] object EventWriter {
             val pidSeqnr = (message.persistenceId, message.sequenceNr)
             waitingForResponse.get(pidSeqnr) match {
               case null =>
-                context.log.warn2(
-                  "Got error reply for event with no waiting request, probably a bug (pid {}, seq nr {})",
-                  message.persistenceId,
-                  message.sequenceNr)
+                context.log.warnN(
+                  s"Got error reply for event with no waiting request, probably a bug (pid ${message.persistenceId}, seq nr ${message.sequenceNr})",
+                  error)
                 Behaviors.same
               case replyTo =>
                 context.log.warnN(
@@ -116,7 +113,5 @@ private[akka] object EventWriter {
         }
       }
       .narrow[Command]
-
-  val WriteMessages = JournalProtocol.WriteMessages.apply _
 
 }
