@@ -5,8 +5,8 @@
 package jdocs.jdbc;
 
 // #hibernate-factory-imports
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.Persistence;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
 
 // #hibernate-factory-imports
 

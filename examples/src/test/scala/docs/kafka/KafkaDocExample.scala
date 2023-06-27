@@ -5,11 +5,9 @@
 package docs.kafka
 
 import java.lang.{ Long => JLong }
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -28,7 +26,7 @@ import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import javax.persistence.EntityManager
+import jakarta.persistence.EntityManager
 import jdocs.jdbc.HibernateJdbcSession
 import jdocs.jdbc.HibernateSessionFactory
 import org.slf4j.LoggerFactory
