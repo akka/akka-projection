@@ -68,7 +68,8 @@ private[akka] final class EventConsumerServiceImpl(
           throw new IllegalArgumentException(
             "Expected stream in starts with Init event followed by events but got something else")
       }
-      .via(ActorFlow.askWithStatus(8)(eventWriter) {
+      // FIXME config for parallelism, or possibly switch to mapAsyncPartitioned + ask
+      .via(ActorFlow.askWithStatus(100)(eventWriter) {
         (in: proto.Event, replyTo: ActorRef[StatusReply[EventWriter.WriteAck]]) =>
           // FIXME would we want request metadata/producer ip/entire envelope in to persistence id transformer?
           val envelope = ProtobufProtocolConversions.eventToEnvelope[Any](in, protoAnySerialization)

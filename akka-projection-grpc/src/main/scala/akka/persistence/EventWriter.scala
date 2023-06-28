@@ -13,7 +13,6 @@ import akka.actor.typed.scaladsl.adapter.TypedActorRefOps
 import akka.annotation.InternalApi
 import akka.pattern.StatusReply
 
-import java.util
 import java.util.UUID
 
 // FIXME move to akka-persistence-typed for access
@@ -34,6 +33,10 @@ private[akka] object EventWriter {
       extends Command
   final case class WriteAck(persistenceId: String, sequenceNumber: Long)
 
+  private case class StateForPid(
+      waitingForReply: Map[Long, ActorRef[StatusReply[WriteAck]]],
+      waitingForWriteReverse: List[(PersistentRepr, ActorRef[StatusReply[WriteAck]])])
+
   def apply(journalPluginId: String): Behavior[Command] =
     Behaviors
       .supervise(Behaviors
@@ -42,7 +45,28 @@ private[akka] object EventWriter {
           val journal = Persistence(context.system).journalFor(journalPluginId)
           context.log.debug("Event writer for journal [{}] starting up", journalPluginId)
 
-          val waitingForResponse = new util.HashMap[(String, Long), ActorRef[StatusReply[WriteAck]]]()
+          var perPidWriteState = Map.empty[String, StateForPid]
+
+          def handleUpdatedStateForPid(pid: String, newStateForPid: StateForPid): Unit = {
+            if (newStateForPid.waitingForReply.nonEmpty) {
+              // more waiting replyTo before we could batch it or scrap the entry
+              perPidWriteState = perPidWriteState.updated(pid, newStateForPid)
+            } else {
+              if (newStateForPid.waitingForWriteReverse.isEmpty) {
+                perPidWriteState = perPidWriteState - pid
+              } else {
+                // batch waiting for pid
+                val inOrder = newStateForPid.waitingForWriteReverse.reverse
+                val batchWrite = AtomicWrite(inOrder.map { case (repr, _) => repr })
+                journal ! JournalProtocol
+                  .WriteMessages(batchWrite :: Nil, context.self.toClassic, context.self.path.uid)
+
+                val newReplyTo = inOrder.map { case (repr, replyTo) => repr.sequenceNr -> replyTo }.toMap
+                // FIXME do we need to limit batch size?
+                perPidWriteState = perPidWriteState.updated(pid, StateForPid(newReplyTo, Nil))
+              }
+            }
+          }
 
           Behaviors.receiveMessage {
             case Write(persistenceId, sequenceNumber, event, metadata, replyTo) =>
@@ -60,58 +84,74 @@ private[akka] object EventWriter {
                 writerUuid = writerUuid,
                 sender = akka.actor.ActorRef.noSender)
 
-              val write = AtomicWrite(metadata match {
-                  case Some(meta) => repr.withMetadata(meta)
-                  case _          => repr
-                }) :: Nil
+              val reprWithMeta = metadata match {
+                case Some(meta) => repr.withMetadata(meta)
+                case _          => repr
+              }
 
-              waitingForResponse.put((persistenceId, sequenceNumber), replyTo)
-
-              journal ! JournalProtocol.WriteMessages(write, context.self.toClassic, context.self.path.uid)
+              val newStateForPid =
+                perPidWriteState.get(persistenceId) match {
+                  case None =>
+                    val write = AtomicWrite(reprWithMeta) :: Nil
+                    journal ! JournalProtocol.WriteMessages(write, context.self.toClassic, context.self.path.uid)
+                    StateForPid(Map(reprWithMeta.sequenceNr -> replyTo), Nil)
+                  case Some(state) =>
+                    // write in progress for pid, add write to batch and perform once current write completes
+                    state.copy(waitingForWriteReverse = (reprWithMeta, replyTo) :: state.waitingForWriteReverse)
+                }
+              perPidWriteState = perPidWriteState.updated(persistenceId, newStateForPid)
               Behaviors.same
 
             case JournalProtocol.WriteMessageSuccess(message, _) =>
-              // FIXME make sure writes for same pid are sequential (or is that really important)?
-              // FIXME if already writing for same pid, queue up and do a batch write?
-              val pidSeqnr = (message.persistenceId, message.sequenceNr)
-              waitingForResponse.get(pidSeqnr) match {
-                case null =>
-                  context.log.warn2(
-                    "Got write success reply for event with no waiting request, probably a bug (pid {}, seq nr {})",
-                    message.persistenceId,
-                    message.sequenceNr)
-                  Behaviors.same
-                case replyTo =>
-                  if (context.log.isTraceEnabled)
-                    context.log.trace2(
-                      "Successfully wrote event persistence id [{}], sequence nr [{}]",
-                      message.persistenceId,
-                      message.sequenceNr)
-                  replyTo ! StatusReply.success(WriteAck(message.persistenceId, message.sequenceNr))
-                  waitingForResponse.remove(pidSeqnr)
-                  Behaviors.same
+              val pid = message.persistenceId
+              val sequenceNr = message.sequenceNr
+              perPidWriteState.get(pid) match {
+                case None =>
+                  throw new IllegalStateException(
+                    s"Got write success reply for event with no waiting request, probably a bug (pid $pid, seq nr $sequenceNr)")
+                case Some(stateForPid) =>
+                  stateForPid.waitingForReply.get(sequenceNr) match {
+                    case None =>
+                      throw new IllegalStateException(
+                        s"Got write success reply for event with no waiting request, probably a bug (pid $pid, seq nr $sequenceNr)")
+                    case Some(waiting) =>
+                      if (context.log.isTraceEnabled)
+                        context.log.trace2(
+                          "Successfully wrote event persistence id [{}], sequence nr [{}]",
+                          pid,
+                          message.sequenceNr)
+                      waiting ! StatusReply.success(WriteAck(pid, sequenceNr))
+                      val newState = stateForPid.copy(waitingForReply = stateForPid.waitingForReply - sequenceNr)
+                      handleUpdatedStateForPid(pid, newState)
+                      Behaviors.same
+                  }
               }
-              Behaviors.same
 
             case JournalProtocol.WriteMessageFailure(message, error, _) =>
-              val pidSeqnr = (message.persistenceId, message.sequenceNr)
-              waitingForResponse.get(pidSeqnr) match {
-                case null =>
-                  context.log.warnN(
-                    s"Got error reply for event with no waiting request, probably a bug (pid ${message.persistenceId}, seq nr ${message.sequenceNr})",
+              val pid = message.persistenceId
+              val sequenceNr = message.sequenceNr
+              perPidWriteState.get(pid) match {
+                case None =>
+                  throw new IllegalStateException(
+                    s"Got error reply for event with no waiting request, probably a bug (pid $pid, seq nr $sequenceNr)",
                     error)
-                  Behaviors.same
-                case replyTo =>
-                  context.log.warnN(
-                    "Failed writing event persistence id [{}], sequence nr [{}]: {}",
-                    message.persistenceId,
-                    message.sequenceNr,
-                    error.getMessage)
-
-                  replyTo ! StatusReply.error(error.getMessage)
-
-                  waitingForResponse.remove(pidSeqnr)
-                  Behaviors.same
+                case Some(state) =>
+                  state.waitingForReply.get(sequenceNr) match {
+                    case None =>
+                      throw new IllegalStateException(
+                        s"Got error reply for event with no waiting request, probably a bug (pid $pid, seq nr $sequenceNr)",
+                        error)
+                    case Some(replyTo) =>
+                      context.log.warnN(
+                        "Failed writing event persistence id [{}], sequence nr [{}]: {}",
+                        pid,
+                        sequenceNr,
+                        error.getMessage)
+                      replyTo ! StatusReply.error(error.getMessage)
+                      val newState = state.copy(waitingForReply = state.waitingForReply - sequenceNr)
+                      handleUpdatedStateForPid(pid, newState)
+                      Behaviors.same
+                  }
               }
 
             case _ =>
