@@ -204,8 +204,8 @@ object R2dbcProjection {
 
   private def adaptSourceProvider[Offset, Envelope](sourceProvider: SourceProvider[Offset, Envelope]) =
     sourceProvider match {
-      case _: BySlicesSourceProvider => new BySliceSourceProviderAdapter(sourceProvider)
-      case _                         => new SourceProviderAdapter(sourceProvider)
+      case _: BySlicesSourceProvider => BySliceSourceProviderAdapter(sourceProvider)
+      case _                         => SourceProviderAdapter(sourceProvider)
     }
 
 }

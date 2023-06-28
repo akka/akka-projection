@@ -27,6 +27,19 @@ import akka.projection.BySlicesSourceProvider
 /**
  * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
  */
+@InternalApi private[projection] object BySliceSourceProviderAdapter {
+  def apply[Offset, Envelope](
+      delegate: javadsl.SourceProvider[Offset, Envelope]): BySliceSourceProviderAdapter[Offset, Envelope] =
+    delegate match {
+      case c: javadsl.CustomStartOffsetSourceProvider[Offset, Envelope] =>
+        new CustomStartOffsetBySliceSourceProviderAdapter(c)
+      case _ => new BySliceSourceProviderAdapter(delegate)
+    }
+}
+
+/**
+ * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
+ */
 @InternalApi private[projection] class BySliceSourceProviderAdapter[Offset, Envelope](
     delegate: javadsl.SourceProvider[Offset, Envelope])
     extends scaladsl.SourceProvider[Offset, Envelope]
@@ -75,4 +88,30 @@ import akka.projection.BySlicesSourceProvider
             s"Expected SourceProvider [${delegate.getClass.getName}] to implement " +
             s"EventTimestampQuery when LoadEventQuery is used."))
     }
+}
+
+/**
+ * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
+ */
+@InternalApi private[projection] class CustomStartOffsetBySliceSourceProviderAdapter[Offset, Envelope](
+    delegate: javadsl.CustomStartOffsetSourceProvider[Offset, Envelope])
+    extends BySliceSourceProviderAdapter[Offset, Envelope](delegate)
+    with scaladsl.CustomStartOffsetSourceProvider[Offset, Envelope] {
+
+  import scala.compat.java8.FutureConverters._
+  import scala.compat.java8.OptionConverters._
+
+  override def withStartOffset(
+      loadFromOffsetStore: Boolean,
+      startOffset: Option[Offset] => Future[Option[Offset]]): Unit =
+    delegate.withStartOffset(
+      loadFromOffsetStore,
+      offsetOpt => startOffset(offsetOpt.asScala).map(_.asJava)(ExecutionContexts.parasitic).toJava)
+
+  override def loadFromOffsetStore: Boolean =
+    delegate.loadFromOffsetStore
+
+  override def startOffset: Option[Offset] => Future[Option[Offset]] = { offsetOpt =>
+    delegate.startOffset(offsetOpt.asJava).toScala.map(_.asScala)(ExecutionContexts.parasitic)
+  }
 }

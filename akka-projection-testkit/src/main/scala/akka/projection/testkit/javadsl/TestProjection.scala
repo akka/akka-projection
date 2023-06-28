@@ -45,7 +45,7 @@ object TestProjection {
       handler: Supplier[akka.projection.javadsl.Handler[Envelope]]): TestProjection[Offset, Envelope] =
     new TestProjectionImpl(
       projectionId = projectionId,
-      sourceProvider = new SourceProviderAdapter(sourceProvider),
+      sourceProvider = SourceProviderAdapter(sourceProvider),
       handlerStrategy = SingleHandlerStrategy(() => new HandlerAdapter[Envelope](handler.get())),
       // Disable batching so that `ProjectionTestKit.runWithTestSink` emits 1 `Done` per envelope.
       offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1)),
