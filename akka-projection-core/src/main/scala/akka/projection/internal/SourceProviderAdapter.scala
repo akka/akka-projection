@@ -25,23 +25,11 @@ import akka.stream.javadsl.{ Source => JSource }
 /**
  * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
  */
-@InternalStableApi private[projection] object SourceProviderAdapter {
-  def apply[Offset, Envelope](
-      delegate: javadsl.SourceProvider[Offset, Envelope]): SourceProviderAdapter[Offset, Envelope] =
-    delegate match {
-      case c: javadsl.CustomStartOffsetSourceProvider[Offset, Envelope] => new CustomStartOffsetSourceProviderAdapter(c)
-      case _                                                            => new SourceProviderAdapter(delegate)
-    }
-}
-
-/**
- * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
- */
 @InternalStableApi private[projection] class SourceProviderAdapter[Offset, Envelope](
     delegate: javadsl.SourceProvider[Offset, Envelope])
     extends scaladsl.SourceProvider[Offset, Envelope] {
 
-  def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
+  override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
     // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,	
     // it _should_ not be used for the blocking operation of getting offsets themselves	
     val ec = akka.dispatch.ExecutionContexts.parasitic
@@ -51,35 +39,9 @@ import akka.stream.javadsl.{ Source => JSource }
     delegate.source(offsetAdapter).toScala.map(_.asScala)(ec)
   }
 
-  def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
+  override def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
 
-  def extractCreationTime(envelope: Envelope): Long = delegate.extractCreationTime(envelope)
-}
-
-/**
- * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
- */
-@InternalStableApi private[projection] class CustomStartOffsetSourceProviderAdapter[Offset, Envelope](
-    delegate: javadsl.CustomStartOffsetSourceProvider[Offset, Envelope])
-    extends SourceProviderAdapter[Offset, Envelope](delegate)
-    with scaladsl.CustomStartOffsetSourceProvider[Offset, Envelope] {
-
-  import scala.compat.java8.FutureConverters._
-  import scala.compat.java8.OptionConverters._
-
-  override def withStartOffset(
-      loadFromOffsetStore: Boolean,
-      startOffset: Option[Offset] => Future[Option[Offset]]): Unit =
-    delegate.withStartOffset(
-      loadFromOffsetStore,
-      offsetOpt => startOffset(offsetOpt.asScala).map(_.asJava)(ExecutionContexts.parasitic).toJava)
-
-  override def loadFromOffsetStore: Boolean =
-    delegate.loadFromOffsetStore
-
-  override def startOffset: Option[Offset] => Future[Option[Offset]] = { offsetOpt =>
-    delegate.startOffset(offsetOpt.asJava).toScala.map(_.asScala)(ExecutionContexts.parasitic)
-  }
+  override def extractCreationTime(envelope: Envelope): Long = delegate.extractCreationTime(envelope)
 }
 
 /**

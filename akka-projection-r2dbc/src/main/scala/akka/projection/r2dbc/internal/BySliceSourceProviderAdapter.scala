@@ -6,55 +6,77 @@ package akka.projection.r2dbc.internal
 
 import java.time.Instant
 import java.util.Optional
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
+import java.util.function.{ Function => JFunction }
+
+import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
 import scala.concurrent.Future
+
 import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
-import akka.projection.javadsl
-import akka.projection.scaladsl
-import akka.stream.scaladsl.Source
-
-import scala.compat.java8.FutureConverters._
-
-import scala.compat.java8.OptionConverters._
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
+import akka.projection.internal.SourceProviderAdapter
+import akka.projection.javadsl
+import akka.projection.javadsl.CustomStartOffsetSourceProvider
+import akka.projection.scaladsl
+import akka.stream.scaladsl.Source
 
-/**
- * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
- */
 @InternalApi private[projection] object BySliceSourceProviderAdapter {
   def apply[Offset, Envelope](
-      delegate: javadsl.SourceProvider[Offset, Envelope]): BySliceSourceProviderAdapter[Offset, Envelope] =
-    delegate match {
-      case c: javadsl.CustomStartOffsetSourceProvider[Offset, Envelope] =>
-        new CustomStartOffsetBySliceSourceProviderAdapter(c)
-      case _ => new BySliceSourceProviderAdapter(delegate)
+      sourceProvider: javadsl.SourceProvider[Offset, Envelope]): scaladsl.SourceProvider[Offset, Envelope] =
+    sourceProvider match {
+      case _: BySlicesSourceProvider =>
+        new BySliceSourceProviderAdapter[Offset, Envelope](
+          loadFromOffsetStore = true,
+          adjustStartOffset = offset => CompletableFuture.completedFuture(offset),
+          sourceProvider)
+      case c: CustomStartOffsetSourceProvider[Offset, Envelope] @unchecked =>
+        c.delegate match {
+          case _: BySlicesSourceProvider =>
+            new BySliceSourceProviderAdapter[Offset, Envelope](
+              loadFromOffsetStore = true,
+              adjustStartOffset = offset => CompletableFuture.completedFuture(offset),
+              c.delegate)
+          case _ =>
+            new SourceProviderAdapter(sourceProvider)
+        }
+      case _ =>
+        new SourceProviderAdapter(sourceProvider)
     }
+
 }
 
 /**
  * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
  */
 @InternalApi private[projection] class BySliceSourceProviderAdapter[Offset, Envelope](
+    loadFromOffsetStore: Boolean,
+    adjustStartOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]],
     delegate: javadsl.SourceProvider[Offset, Envelope])
     extends scaladsl.SourceProvider[Offset, Envelope]
     with BySlicesSourceProvider
     with EventTimestampQuery
     with LoadEventQuery {
 
-  def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
-    // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,
-    // it _should_ not be used for the blocking operation of getting offsets themselves
-    val ec = akka.dispatch.ExecutionContexts.parasitic
-    val offsetAdapter = new Supplier[CompletionStage[Optional[Offset]]] {
-      override def get(): CompletionStage[Optional[Offset]] = offset().map(_.asJava)(ec).toJava
+  def source(fromOffsetStore: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
+    val startOffsetFn: Supplier[CompletionStage[Optional[Offset]]] = {
+      if (loadFromOffsetStore) { () =>
+        fromOffsetStore().toJava.thenCompose { offset =>
+          adjustStartOffset(offset.asJava)
+        }
+      } else { () =>
+        adjustStartOffset(Optional.empty[Offset])
+      }
     }
-    delegate.source(offsetAdapter).toScala.map(_.asScala)(ec)
+
+    delegate.source(startOffsetFn).thenApply(_.asScala).toScala
   }
 
   def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
@@ -88,30 +110,4 @@ import akka.projection.BySlicesSourceProvider
             s"Expected SourceProvider [${delegate.getClass.getName}] to implement " +
             s"EventTimestampQuery when LoadEventQuery is used."))
     }
-}
-
-/**
- * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
- */
-@InternalApi private[projection] class CustomStartOffsetBySliceSourceProviderAdapter[Offset, Envelope](
-    delegate: javadsl.CustomStartOffsetSourceProvider[Offset, Envelope])
-    extends BySliceSourceProviderAdapter[Offset, Envelope](delegate)
-    with scaladsl.CustomStartOffsetSourceProvider[Offset, Envelope] {
-
-  import scala.compat.java8.FutureConverters._
-  import scala.compat.java8.OptionConverters._
-
-  override def withStartOffset(
-      loadFromOffsetStore: Boolean,
-      startOffset: Option[Offset] => Future[Option[Offset]]): Unit =
-    delegate.withStartOffset(
-      loadFromOffsetStore,
-      offsetOpt => startOffset(offsetOpt.asScala).map(_.asJava)(ExecutionContexts.parasitic).toJava)
-
-  override def loadFromOffsetStore: Boolean =
-    delegate.loadFromOffsetStore
-
-  override def startOffset: Option[Offset] => Future[Option[Offset]] = { offsetOpt =>
-    delegate.startOffset(offsetOpt.asJava).toScala.map(_.asScala)(ExecutionContexts.parasitic)
-  }
 }

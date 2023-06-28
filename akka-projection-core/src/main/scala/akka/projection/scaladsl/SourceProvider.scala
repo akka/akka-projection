@@ -4,10 +4,10 @@
 
 package akka.projection.scaladsl
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.NotUsed
-import akka.annotation.InternalApi
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
 import akka.stream.scaladsl.Source
@@ -29,42 +29,38 @@ trait SourceProvider[Offset, Envelope] {
 
 /**
  * By default, a `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
- * by defining the `startOffset` function.
+ * by decorating the `SourceProvider` with this class and defining the `adjustStartOffset` function.
+ *
+ * @param loadFromOffsetStore whether the offset should be loaded from the offset store or not, loaded offset
+ *                            is passed as the parameter to the `startOffset` function
+ * @param adjustStartOffset function from loaded offset (if any) to the adjusted offset
+ * @param delegate the original `SourceProvider`
  */
-trait CustomStartOffsetSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
+final class CustomStartOffsetSourceProvider[Offset, Envelope](
+    loadFromOffsetStore: Boolean,
+    adjustStartOffset: Option[Offset] => Future[Option[Offset]],
+    delegate: SourceProvider[Offset, Envelope])(implicit ec: ExecutionContext)
+    extends SourceProvider[Offset, Envelope] {
 
-  /**
-   * Adjust the start offset by defining a function that returns the offset to use.
-   *
-   * @param loadFromOffsetStore whether the offset should be loaded from the offset store or not, loaded offset
-   *                            is passed as the parameter to the `startOffset` function
-   * @param startOffset function from loaded offset (if any) to the adjusted offset
-   */
-  def withStartOffset(loadFromOffsetStore: Boolean, startOffset: Option[Offset] => Future[Option[Offset]]): Unit
+  override def source(fromOffsetStore: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
+    val startOffsetFn: () => Future[Option[Offset]] = {
+      if (loadFromOffsetStore) { () =>
+        fromOffsetStore().flatMap { offset =>
+          adjustStartOffset(offset)
+        }
+      } else { () =>
+        adjustStartOffset(None)
+      }
+    }
 
-  def loadFromOffsetStore: Boolean
-
-  def startOffset: Option[Offset] => Future[Option[Offset]]
-}
-
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] trait CustomStartOffsetSourceProviderImpl[Offset, Envelope]
-    extends CustomStartOffsetSourceProvider[Offset, Envelope] {
-  private var _loadFromOffsetStore: Boolean = true
-  private var _startOffset: Option[Offset] => Future[Option[Offset]] = offset => Future.successful(offset)
-
-  final override def withStartOffset(
-      loadFromOffsetStore: Boolean,
-      startOffset: Option[Offset] => Future[Option[Offset]]): Unit = {
-    _loadFromOffsetStore = loadFromOffsetStore
-    _startOffset = startOffset
+    delegate.source(startOffsetFn)
   }
 
-  final override def loadFromOffsetStore: Boolean = _loadFromOffsetStore
+  override def extractOffset(envelope: Envelope): Offset =
+    delegate.extractOffset(envelope)
 
-  final override def startOffset: Option[Offset] => Future[Option[Offset]] = _startOffset
+  override def extractCreationTime(envelope: Envelope): Long =
+    delegate.extractCreationTime(envelope)
 }
 
 trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {

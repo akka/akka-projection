@@ -26,7 +26,6 @@ import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
-import akka.projection.scaladsl.CustomStartOffsetSourceProvider
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.MergeableOffsetSourceProvider
@@ -396,19 +395,6 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     statusObserver.started(projectionId)
     telemetry = TelemetryProvider.start(projectionId, system)
 
-    val startOffsetFn: () => Future[Option[Offset]] = {
-      sourceProvider match {
-        case c: CustomStartOffsetSourceProvider[Offset, Envelope] @unchecked =>
-          () =>
-            if (c.loadFromOffsetStore)
-              readOffsets().flatMap(c.startOffset)
-            else
-              c.startOffset(None)
-        case _ =>
-          () => readOffsets()
-      }
-    }
-
     val source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed] =
       Source
         .futureSource(readPaused().flatMap {
@@ -417,7 +403,8 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
             handlerLifecycle
               .tryStart()
               .flatMap { _ =>
-                sourceProvider.source(startOffsetFn)
+                sourceProvider
+                  .source(() => readOffsets())
               }
           case true =>
             logger.info("Projection [{}] started in paused mode.", projectionId)

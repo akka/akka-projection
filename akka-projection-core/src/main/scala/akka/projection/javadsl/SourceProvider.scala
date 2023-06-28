@@ -4,14 +4,12 @@
 
 package akka.projection.javadsl
 
-import java.util.function.{ Function => JFunction }
 import java.util.Optional
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
+import java.util.function.{ Function => JFunction }
 
 import akka.NotUsed
-import akka.annotation.InternalApi
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification
 
@@ -33,45 +31,39 @@ abstract class SourceProvider[Offset, Envelope] {
 
 /**
  * By default, a `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
- * by defining the `startOffset` function.
+ * by decorating the `SourceProvider` with this class and defining the `adjustStartOffset` function.
+ *
+ * @param loadFromOffsetStore whether the offset should be loaded from the offset store or not, loaded offset
+ *                            is passed as the parameter to the `startOffset` function
+ * @param adjustStartOffset function from loaded offset (if any) to the adjusted offset
+ * @param delegate the original `SourceProvider`
  */
-abstract class CustomStartOffsetSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
+final class CustomStartOffsetSourceProvider[Offset, Envelope](
+    val loadFromOffsetStore: Boolean,
+    val adjustStartOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]],
+    val delegate: SourceProvider[Offset, Envelope])
+    extends SourceProvider[Offset, Envelope] {
 
-  /**
-   * Adjust the start offset by defining a function that returns the offset to use.
-   *
-   * @param loadFromOffsetStore whether the offset should be loaded from the offset store or not, loaded offset
-   *                            is passed as the parameter to the `startOffset` function
-   * @param startOffset function from loaded offset (if any) to the adjusted offset
-   */
-  def withStartOffset(
-      loadFromOffsetStore: Boolean,
-      startOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]]): Unit
+  override def source(fromOffsetStore: Supplier[CompletionStage[Optional[Offset]]])
+      : CompletionStage[akka.stream.javadsl.Source[Envelope, NotUsed]] = {
+    val startOffsetFn: Supplier[CompletionStage[Optional[Offset]]] = {
+      if (loadFromOffsetStore) { () =>
+        fromOffsetStore.get().thenCompose { offset =>
+          adjustStartOffset(offset)
+        }
+      } else { () =>
+        adjustStartOffset(Optional.empty[Offset])
+      }
+    }
 
-  def loadFromOffsetStore: Boolean
-
-  def startOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]]
-}
-
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] trait CustomStartOffsetSourceProviderImpl[Offset, Envelope]
-    extends CustomStartOffsetSourceProvider[Offset, Envelope] {
-  private var _loadFromOffsetStore: Boolean = true
-  private var _startOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]] = offset =>
-    CompletableFuture.completedFuture(offset)
-
-  final override def withStartOffset(
-      loadFromOffsetStore: Boolean,
-      startOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]]): Unit = {
-    _loadFromOffsetStore = loadFromOffsetStore
-    _startOffset = startOffset
+    delegate.source(startOffsetFn)
   }
 
-  final override def loadFromOffsetStore: Boolean = _loadFromOffsetStore
+  override def extractOffset(envelope: Envelope): Offset =
+    delegate.extractOffset(envelope)
 
-  final def startOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]] = _startOffset
+  override def extractCreationTime(envelope: Envelope): Long =
+    delegate.extractCreationTime(envelope)
 }
 
 trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {

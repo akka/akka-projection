@@ -24,8 +24,7 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.internal.CanTriggerReplay
-import akka.projection.scaladsl.CustomStartOffsetSourceProvider
-import akka.projection.scaladsl.CustomStartOffsetSourceProviderImpl
+import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
 object EventSourcedProvider {
@@ -33,7 +32,7 @@ object EventSourcedProvider {
   def eventsByTag[Event](
       system: ActorSystem[_],
       readJournalPluginId: String,
-      tag: String): CustomStartOffsetSourceProvider[Offset, EventEnvelope[Event]] = {
+      tag: String): SourceProvider[Offset, EventEnvelope[Event]] = {
     val eventsByTagQuery =
       PersistenceQuery(system).readJournalFor[EventsByTagQuery](readJournalPluginId)
     eventsByTag(system, eventsByTagQuery, tag)
@@ -42,7 +41,7 @@ object EventSourcedProvider {
   def eventsByTag[Event](
       system: ActorSystem[_],
       eventsByTagQuery: EventsByTagQuery,
-      tag: String): CustomStartOffsetSourceProvider[Offset, EventEnvelope[Event]] = {
+      tag: String): SourceProvider[Offset, EventEnvelope[Event]] = {
     new EventsByTagSourceProvider(eventsByTagQuery, tag, system)
   }
 
@@ -50,7 +49,7 @@ object EventSourcedProvider {
       eventsByTagQuery: EventsByTagQuery,
       tag: String,
       system: ActorSystem[_])
-      extends CustomStartOffsetSourceProviderImpl[Offset, EventEnvelope[Event]] {
+      extends SourceProvider[Offset, EventEnvelope[Event]] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[Event], NotUsed]] =
@@ -71,7 +70,7 @@ object EventSourcedProvider {
       readJournalPluginId: String,
       entityType: String,
       minSlice: Int,
-      maxSlice: Int): CustomStartOffsetSourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+      maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     val eventsBySlicesQuery =
       PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId)
     eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice)
@@ -82,7 +81,7 @@ object EventSourcedProvider {
       eventsBySlicesQuery: EventsBySliceQuery,
       entityType: String,
       minSlice: Int,
-      maxSlice: Int): CustomStartOffsetSourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+      maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     eventsBySlicesQuery match {
       case query: EventsBySliceQuery with CanTriggerReplay =>
         new EventsBySlicesSourceProvider[Event](eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
@@ -102,7 +101,7 @@ object EventSourcedProvider {
       minSlice: Int,
       maxSlice: Int,
       transformSnapshot: Snapshot => Event)
-      : CustomStartOffsetSourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     val eventsBySlicesQuery =
       PersistenceQuery(system).readJournalFor[EventsBySliceStartingFromSnapshotsQuery](readJournalPluginId)
     eventsBySlicesStartingFromSnapshots(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, transformSnapshot)
@@ -115,7 +114,7 @@ object EventSourcedProvider {
       minSlice: Int,
       maxSlice: Int,
       transformSnapshot: Snapshot => Event)
-      : CustomStartOffsetSourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     eventsBySlicesQuery match {
       case query: EventsBySliceStartingFromSnapshotsQuery with CanTriggerReplay =>
         new EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
@@ -153,7 +152,7 @@ object EventSourcedProvider {
       override val minSlice: Int,
       override val maxSlice: Int,
       system: ActorSystem[_])
-      extends CustomStartOffsetSourceProviderImpl[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
+      extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
       with LoadEventQuerySourceProvider {
@@ -182,7 +181,7 @@ object EventSourcedProvider {
       override val maxSlice: Int,
       transformSnapshot: Snapshot => Event,
       system: ActorSystem[_])
-      extends CustomStartOffsetSourceProviderImpl[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
+      extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
       with LoadEventQuerySourceProvider {

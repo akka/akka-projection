@@ -51,7 +51,7 @@ object JdbcProjection {
       system: ActorSystem[_]): ExactlyOnceProjection[Offset, Envelope] = {
 
     val sessionFactory = () => sessionCreator.get()
-    val javaSourceProvider = SourceProviderAdapter(sourceProvider)
+    val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
     val adaptedHandler =
@@ -104,7 +104,7 @@ object JdbcProjection {
 
     new JdbcProjectionImpl(
       projectionId,
-      SourceProviderAdapter(sourceProvider),
+      new SourceProviderAdapter(sourceProvider),
       sessionFactory = sessionFactory,
       settingsOpt = None,
       restartBackoffOpt = None,
@@ -141,7 +141,7 @@ object JdbcProjection {
 
     new JdbcProjectionImpl(
       projectionId,
-      SourceProviderAdapter(sourceProvider),
+      new SourceProviderAdapter(sourceProvider),
       sessionFactory = sessionFactory,
       settingsOpt = None,
       restartBackoffOpt = None,
@@ -169,7 +169,7 @@ object JdbcProjection {
       system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
     val sessionFactory = () => sessionCreator.get()
-    val javaSourceProvider = SourceProviderAdapter(sourceProvider)
+    val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
     val adaptedHandler =
@@ -215,7 +215,7 @@ object JdbcProjection {
       system: ActorSystem[_]): GroupedProjection[Offset, Envelope] = {
 
     val sessionFactory = () => sessionCreator.get()
-    val javaSourceProvider = SourceProviderAdapter(sourceProvider)
+    val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
     new JdbcProjectionImpl(
@@ -259,7 +259,7 @@ object JdbcProjection {
       system: ActorSystem[_]): AtLeastOnceFlowProjection[Offset, Envelope] = {
 
     val sessionFactory = () => sessionCreator.get()
-    val javaSourceProvider = SourceProviderAdapter(sourceProvider)
+    val javaSourceProvider = new SourceProviderAdapter(sourceProvider)
     val offsetStore = JdbcProjectionImpl.createOffsetStore(sessionFactory)(system)
 
     new JdbcProjectionImpl(
