@@ -7,14 +7,13 @@ package akka.projection.grpc.internal
 import akka.NotUsed
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.LoggerOps
-import akka.pattern.StatusReply
 import akka.persistence.EventWriter
 import akka.projection.grpc.internal.proto.ConsumerEvent
 import akka.projection.grpc.internal.proto.ConsumerEventAck
 import akka.projection.grpc.internal.proto.EventConsumerService
 import akka.stream.scaladsl.Source
-import akka.stream.typed.scaladsl.ActorFlow
 import akka.util.ByteString
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
@@ -56,7 +55,6 @@ private[akka] final class EventConsumerServiceImpl(
   private implicit val timeout: Timeout = 5.seconds // FIXME from config or can we get rid of it
 
   override def consumeEvent(in: Source[ConsumerEvent, NotUsed]): Source[ConsumerEventAck, NotUsed] = {
-    // FIXME do we need to make sure events for the same pid are ordered? Should be single writer per pid but?
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(ConsumerEvent(ConsumerEvent.Message.Init(init), _)), tail) =>
@@ -68,27 +66,26 @@ private[akka] final class EventConsumerServiceImpl(
           throw new IllegalArgumentException(
             "Expected stream in starts with Init event followed by events but got something else")
       }
-      // FIXME config for parallelism, or possibly switch to mapAsyncPartitioned + ask
-      .via(ActorFlow.askWithStatus(100)(eventWriter) {
-        (in: proto.Event, replyTo: ActorRef[StatusReply[EventWriter.WriteAck]]) =>
-          // FIXME would we want request metadata/producer ip/entire envelope in to persistence id transformer?
-          val envelope = ProtobufProtocolConversions.eventToEnvelope[Any](in, protoAnySerialization)
-          val persistenceId = persistenceIdTransformer(envelope.persistenceId)
-          if (logger.isTraceEnabled)
-            logger.traceN(
-              "Saw event [{}] for pid [{}]{}",
-              envelope.sequenceNr,
-              envelope.persistenceId,
-              if (envelope.filtered) " filtered" else "")
-
-          EventWriter.Write(
-            persistenceId,
+      // FIXME config for parallelism, and perPartition (aligned with event writer batch config)
+      .mapAsyncPartitioned(1000, 20)(_.persistenceId) { (in, _) =>
+        // FIXME would we want request metadata/producer ip/entire envelope in to persistence id transformer?
+        val envelope = ProtobufProtocolConversions.eventToEnvelope[Any](in, protoAnySerialization)
+        val persistenceId = persistenceIdTransformer(envelope.persistenceId)
+        if (logger.isTraceEnabled)
+          logger.traceN(
+            "Saw event [{}] for pid [{}]{}",
             envelope.sequenceNr,
-            // FIXME how to deal with filtered - can't be null, should we have a marker filtered payload?
-            envelope.eventOption.getOrElse(FilteredPayload),
-            envelope.eventMetadata,
-            replyTo)
-      })
+            envelope.persistenceId,
+            if (envelope.filtered) " filtered" else "")
+
+        eventWriter.askWithStatus[EventWriter.WriteAck](EventWriter.Write(
+          persistenceId,
+          envelope.sequenceNr,
+          // FIXME how to deal with filtered - can't be null, should we have a marker filtered payload?
+          envelope.eventOption.getOrElse(FilteredPayload),
+          envelope.eventMetadata,
+          _))
+      }
       .map(ack => ConsumerEventAck(ack.persistenceId, ack.sequenceNumber))
   }
 
