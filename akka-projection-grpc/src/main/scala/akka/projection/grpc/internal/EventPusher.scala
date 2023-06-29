@@ -83,7 +83,7 @@ private[akka] object EventPusher {
               tags = Seq.empty)
         }
       }
-      .via(Flow.fromGraph(new EventPusherStage(originId = "FIXME", client)))
+      .via(Flow.fromGraph(new EventPusherStage(originId = "FIXME", eps, client)))
 
   }
 }
@@ -92,7 +92,7 @@ private[akka] object EventPusher {
  * INTERNAL API
  */
 @InternalApi
-private[akka] class EventPusherStage(originId: String, client: EventConsumerServiceClient)
+private[akka] class EventPusherStage(originId: String, eps: EventProducerSource, client: EventConsumerServiceClient)
     extends GraphStage[FlowShape[(proto.Event, ProjectionContext), (Done, ProjectionContext)]] {
 
   val in = Inlet[(proto.Event, ProjectionContext)]("EventPusherStage.in")
@@ -138,11 +138,11 @@ private[akka] class EventPusherStage(originId: String, client: EventConsumerServ
     })
 
     override def preStart(): Unit = {
-      // FIXME failure handling?
       client
         .consumeEvent(
           Source
-            .single(ConsumerEvent(ConsumerEvent.Message.Init(ConsumerEventInit(originId))))
+            .single(ConsumerEvent(
+              ConsumerEvent.Message.Init(ConsumerEventInit(originId = originId, streamId = eps.streamId))))
             .concat(Source.fromGraph(toConsumer.source)))
         .runWith(Sink.fromGraph(fromConsumer.sink))(materializer)
     }

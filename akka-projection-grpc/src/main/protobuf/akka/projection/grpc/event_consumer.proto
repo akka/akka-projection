@@ -39,4 +39,6 @@ message ConsumerEvent {
 message ConsumerEventInit {
   // unique producer identifier showing where the events came from/was produced
   string origin_id = 1;
+  // the stream id of the type of entity the producer wants to push
+  string stream_id = 2;
 }

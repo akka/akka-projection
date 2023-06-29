@@ -161,6 +161,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
+    // clean up consumer tables as well as producer tables (happens in super)
     lazy val consumerSettings: R2dbcSettings =
       R2dbcSettings(typedSystem.settings.config.getConfig("test.consumer.r2dbc"))
     Await.result(
@@ -171,7 +172,6 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       r2dbcExecutor.updateOne("beforeAll delete")(
         _.createStatement(s"delete from ${consumerProjectionSettings.timestampOffsetTableWithSchema}")),
       10.seconds)
-    // FIXME clean up consumer tables!
   }
 
   "Producer pushed events" should {
@@ -189,13 +189,19 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
             // events are written directly into the journal on the consumer side, pushing over gRPC is only
             // allowed if no two pushing systems push events for the same persistence id
             EventConsumerServiceImpl
-              .directJournalConsumer("test.consumer.r2dbc.journal", persistenceIdTransformer = identity)))
+              .directJournalConsumer(
+                journalPluginId = "test.consumer.r2dbc.journal",
+                // FIXME we might want to allow transforming more aspects of the events (payloads even?)
+                persistenceIdTransformer = identity,
+                // FIXME or should it be entity type right away, rationale for separating entity type from stream id
+                //       was that consumer shouldn't necessarily know the internal entity type string for a producer,
+                //       but maybe less important when it is the producer doing the pushing?
+                acceptedStreamIds = Set(streamId))))
       bound.futureValue
 
       // FIXME higher level API for the producer side of this?
       // FIXME producer filters
       val veggies = Set("cucumber")
-      // FIXME features provided by EventProducerSource may not be overlapping enough that we need it here
       val eps =
         EventProducerSource[String](
           entityType,
@@ -230,12 +236,12 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
       val entity2 = spawn(TestEntity(nextPid(entityType)))
       val entity3 = spawn(TestEntity(nextPid(entityType)))
-      for (i <- 0 to 10) {
+      for (i <- 0 to 100) {
         entity1 ! TestEntity.Persist(s"peach-$i-entity1")
         entity2 ! TestEntity.Persist(s"peach-$i-entity2")
         entity3 ! TestEntity.Persist(s"peach-$i-entity3")
       }
-      consumerProbe.receiveMessages(30)
+      consumerProbe.receiveMessages(300)
     }
   }
 

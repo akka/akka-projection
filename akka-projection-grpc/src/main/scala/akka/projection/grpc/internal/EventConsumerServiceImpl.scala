@@ -28,14 +28,16 @@ import scala.concurrent.duration.DurationInt
  */
 private[akka] object EventConsumerServiceImpl {
 
-  def directJournalConsumer(journalPluginId: String, persistenceIdTransformer: String => String)(
-      implicit system: ActorSystem[_]): EventConsumerServiceImpl = {
+  def directJournalConsumer(
+      journalPluginId: String,
+      acceptedStreamIds: Set[String],
+      persistenceIdTransformer: String => String)(implicit system: ActorSystem[_]): EventConsumerServiceImpl = {
     // FIXME is this name unique, could we create multiple for the same journal? (we wouldn't be able to bind them to the same port)
     val eventWriter = system.systemActorOf(
       EventWriter(journalPluginId),
       s"EventWriter-${URLEncoder.encode(journalPluginId, ByteString.UTF_8)}")
 
-    new EventConsumerServiceImpl(eventWriter, persistenceIdTransformer)
+    new EventConsumerServiceImpl(eventWriter, acceptedStreamIds, persistenceIdTransformer)
   }
 
 }
@@ -45,6 +47,7 @@ private[akka] object EventConsumerServiceImpl {
  */
 private[akka] final class EventConsumerServiceImpl(
     eventWriter: ActorRef[EventWriter.Command],
+    acceptedStreamIds: Set[String],
     persistenceIdTransformer: String => String)(implicit system: ActorSystem[_])
     extends EventConsumerService {
 
@@ -58,6 +61,8 @@ private[akka] final class EventConsumerServiceImpl(
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(ConsumerEvent(ConsumerEvent.Message.Init(init), _)), tail) =>
+          if (!acceptedStreamIds(init.streamId))
+            throw new IllegalArgumentException(s"Events for stream id [${init.streamId}] not accepted by this consumer")
           logger.info("Event stream from [{}] started", init.originId)
           tail.collect {
             case ConsumerEvent(ConsumerEvent.Message.Event(event), _) => event
