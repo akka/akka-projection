@@ -19,6 +19,8 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.LoggerOps
+import akka.persistence.query.Offset
+import akka.persistence.query.TimestampOffset.toTimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.R2dbcSettings
 import akka.persistence.r2dbc.internal.Sql.Interpolation
@@ -382,6 +384,100 @@ class EventSourcedEndToEndSpec
       processedProbe.receiveMessage(possibleDelay).envelope.event shouldBe "e3-9"
 
       projection ! ProjectionBehavior.Stop
+    }
+
+    "start from adjusted offset" in {
+      val entityType = nextEntityType()
+      val persistenceId1 = PersistenceId(entityType, "p1")
+      val persistenceId2 = PersistenceId(entityType, "p2")
+      val doneProbe = createTestProbe[Done]()
+
+      val persister1 = spawn(Persister(persistenceId1), s"$entityType-p1")
+      val persister2 = spawn(Persister(persistenceId2), s"$entityType-p2")
+
+      persister1 ! Persister.Persist(mkEvent(1))
+      persister1 ! Persister.Persist(mkEvent(2))
+      persister1 ! Persister.PersistWithAck(mkEvent(3), doneProbe.ref)
+      doneProbe.expectMessage(Done)
+
+      val projectionName = UUID.randomUUID().toString
+      val processedProbe = createTestProbe[Processed]()
+      val sliceRange = EventSourcedProvider.sliceRanges(system, R2dbcReadJournal.Identifier, 1).head
+      val projectionId = ProjectionId(projectionName, s"${sliceRange.min}-${sliceRange.max}")
+      val projection1 = {
+        val sourceProvider =
+          EventSourcedProvider
+            .eventsBySlices[String](
+              system,
+              R2dbcReadJournal.Identifier,
+              entityType,
+              sliceRange.min,
+              sliceRange.max,
+              adjustStartOffset = { (storedOffset: Option[Offset]) =>
+                if (storedOffset.isDefined)
+                  throw new IllegalStateException(s"Expected no stored offset, but was $storedOffset")
+                Future.successful(storedOffset)
+              })
+        val projection = R2dbcProjection
+          .exactlyOnce(
+            projectionId,
+            Some(projectionSettings),
+            sourceProvider = sourceProvider,
+            handler = () => new TestHandler(projectionId, processedProbe.ref))
+        spawn(ProjectionBehavior(projection))
+      }
+
+      processedProbe.receiveMessage().envelope.sequenceNr shouldBe 1L
+      processedProbe.receiveMessage().envelope.sequenceNr shouldBe 2L
+      val processed3 = processedProbe.receiveMessage()
+      processed3.envelope.persistenceId shouldBe persistenceId1.id
+      processed3.envelope.sequenceNr shouldBe 3L
+      val offset3 = toTimestampOffset(processed3.envelope.offset)
+      projection1 ! ProjectionBehavior.Stop
+      doneProbe.expectTerminated(projection1)
+
+      persister2 ! Persister.Persist(mkEvent(1))
+      persister2 ! Persister.Persist(mkEvent(2))
+      persister2 ! Persister.PersistWithAck(mkEvent(3), doneProbe.ref)
+      doneProbe.expectMessage(Done)
+
+      val projection2 = {
+        val sourceProvider =
+          EventSourcedProvider
+            .eventsBySlices[String](
+              system,
+              R2dbcReadJournal.Identifier,
+              entityType,
+              sliceRange.min,
+              sliceRange.max,
+              adjustStartOffset = { (storedOffset: Option[Offset]) =>
+                storedOffset match {
+                  case None => throw new IllegalStateException(s"Expected stored offset, but was $storedOffset")
+                  case Some(o) =>
+                    if (toTimestampOffset(o).timestamp != offset3.timestamp)
+                      throw new IllegalStateException(
+                        s"Expected offset [offset3.timestamp], but was ${toTimestampOffset(o).timestamp}")
+                }
+
+                // increase offset so that events from p2 are not received
+                val startOffset = Offset.timestamp(offset3.timestamp.plusSeconds(2))
+                Future.successful(Some(startOffset))
+              })
+        val projection = R2dbcProjection
+          .exactlyOnce(
+            projectionId,
+            Some(projectionSettings),
+            sourceProvider = sourceProvider,
+            handler = () => new TestHandler(projectionId, processedProbe.ref))
+        spawn(ProjectionBehavior(projection))
+      }
+
+      // this would fail if it didn't use the adjusted offset because then it would receive events from p2
+      processedProbe.expectNoMessage(1.second)
+
+      // the events from p1 and p2 would be retrieved via backtracking but that is 5 seconds behind
+
+      projection2 ! ProjectionBehavior.Stop
     }
 
   }
