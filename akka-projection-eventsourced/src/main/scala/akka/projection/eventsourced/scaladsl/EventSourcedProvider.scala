@@ -42,13 +42,13 @@ object EventSourcedProvider {
       system: ActorSystem[_],
       eventsByTagQuery: EventsByTagQuery,
       tag: String): SourceProvider[Offset, EventEnvelope[Event]] = {
-    new EventsByTagSourceProvider(eventsByTagQuery, tag, system)
+    new EventsByTagSourceProvider(system, eventsByTagQuery, tag)
   }
 
   private class EventsByTagSourceProvider[Event](
+      system: ActorSystem[_],
       eventsByTagQuery: EventsByTagQuery,
-      tag: String,
-      system: ActorSystem[_])
+      tag: String)
       extends SourceProvider[Offset, EventEnvelope[Event]] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
@@ -76,21 +76,60 @@ object EventSourcedProvider {
     eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice)
   }
 
+  /**
+   * By default, the `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
+   * by defining the `adjustStartOffset` function, which is a function from loaded offset (if any) to the
+   * adjusted offset that will be used to by the `eventsBySlicesQuery`.
+   */
+  def eventsBySlices[Event](
+      system: ActorSystem[_],
+      readJournalPluginId: String,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      adjustStartOffset: Option[Offset] => Future[Option[Offset]])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    val eventsBySlicesQuery =
+      PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId)
+    eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, adjustStartOffset)
+  }
+
   def eventsBySlices[Event](
       system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceQuery,
       entityType: String,
       minSlice: Int,
       maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, offset => Future.successful(offset))
+  }
+
+  /**
+   * By default, the `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
+   * by defining the `adjustStartOffset` function, which is a function from loaded offset (if any) to the
+   * adjusted offset that will be used to by the `eventsBySlicesQuery`.
+   */
+  def eventsBySlices[Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceQuery,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      adjustStartOffset: Option[Offset] => Future[Option[Offset]])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     eventsBySlicesQuery match {
       case query: EventsBySliceQuery with CanTriggerReplay =>
-        new EventsBySlicesSourceProvider[Event](eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
-          with CanTriggerReplay {
+        new EventsBySlicesSourceProvider[Event](
+          system,
+          eventsBySlicesQuery,
+          entityType,
+          minSlice,
+          maxSlice,
+          adjustStartOffset) with CanTriggerReplay {
           override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
             query.triggerReplay(persistenceId, fromSeqNr)
         }
       case _ =>
-        new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
+        new EventsBySlicesSourceProvider(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, adjustStartOffset)
     }
   }
 
@@ -107,34 +146,84 @@ object EventSourcedProvider {
     eventsBySlicesStartingFromSnapshots(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, transformSnapshot)
   }
 
+  /**
+   * By default, the `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
+   * by defining the `adjustStartOffset` function, which is a function from loaded offset (if any) to the
+   * adjusted offset that will be used to by the `eventsBySlicesQuery`.
+   */
+  def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+      system: ActorSystem[_],
+      readJournalPluginId: String,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      transformSnapshot: Snapshot => Event,
+      adjustStartOffset: Option[Offset] => Future[Option[Offset]])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    val eventsBySlicesQuery =
+      PersistenceQuery(system).readJournalFor[EventsBySliceStartingFromSnapshotsQuery](readJournalPluginId)
+    eventsBySlicesStartingFromSnapshots(
+      system,
+      eventsBySlicesQuery,
+      entityType,
+      minSlice,
+      maxSlice,
+      transformSnapshot,
+      adjustStartOffset)
+  }
+
   def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
       system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
       entityType: String,
       minSlice: Int,
       maxSlice: Int,
-      transformSnapshot: Snapshot => Event)
+      transformSnapshot: Snapshot => Event): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] =
+    eventsBySlicesStartingFromSnapshots(
+      system,
+      eventsBySlicesQuery,
+      entityType,
+      minSlice,
+      maxSlice,
+      transformSnapshot,
+      offset => Future.successful(offset))
+
+  /**
+   * By default, the `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
+   * by defining the `adjustStartOffset` function, which is a function from loaded offset (if any) to the
+   * adjusted offset that will be used to by the `eventsBySlicesQuery`.
+   */
+  def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      transformSnapshot: Snapshot => Event,
+      adjustStartOffset: Option[Offset] => Future[Option[Offset]])
       : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     eventsBySlicesQuery match {
       case query: EventsBySliceStartingFromSnapshotsQuery with CanTriggerReplay =>
         new EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
+          system,
           eventsBySlicesQuery,
           entityType,
           minSlice,
           maxSlice,
           transformSnapshot,
-          system) with CanTriggerReplay {
+          adjustStartOffset) with CanTriggerReplay {
           override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
             query.triggerReplay(persistenceId, fromSeqNr)
         }
       case _ =>
         new EventsBySlicesStartingFromSnapshotsSourceProvider(
+          system,
           eventsBySlicesQuery,
           entityType,
           minSlice,
           maxSlice,
           transformSnapshot,
-          system)
+          adjustStartOffset)
     }
   }
 
@@ -147,11 +236,12 @@ object EventSourcedProvider {
     PersistenceQuery(system).readJournalFor[EventsBySliceQuery](readJournalPluginId).sliceRanges(numberOfRanges)
 
   private class EventsBySlicesSourceProvider[Event](
+      system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceQuery,
       entityType: String,
       override val minSlice: Int,
       override val maxSlice: Int,
-      system: ActorSystem[_])
+      adjustStartOffset: Option[Offset] => Future[Option[Offset]])
       extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
@@ -161,11 +251,14 @@ object EventSourcedProvider {
     override def readJournal: ReadJournal = eventsBySlicesQuery
 
     override def source(offset: () => Future[Option[Offset]])
-        : Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] =
-      offset().map { offsetOpt =>
-        val offset = offsetOpt.getOrElse(NoOffset)
-        eventsBySlicesQuery.eventsBySlices(entityType, minSlice, maxSlice, offset)
+        : Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      for {
+        storedOffset <- offset()
+        startOffset <- adjustStartOffset(storedOffset)
+      } yield {
+        eventsBySlicesQuery.eventsBySlices(entityType, minSlice, maxSlice, startOffset.getOrElse(NoOffset))
       }
+    }
 
     override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset
 
@@ -175,12 +268,13 @@ object EventSourcedProvider {
   }
 
   private class EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
+      system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
       entityType: String,
       override val minSlice: Int,
       override val maxSlice: Int,
       transformSnapshot: Snapshot => Event,
-      system: ActorSystem[_])
+      adjustStartOffset: Option[Offset] => Future[Option[Offset]])
       extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
@@ -190,16 +284,19 @@ object EventSourcedProvider {
     override def readJournal: ReadJournal = eventsBySlicesQuery
 
     override def source(offset: () => Future[Option[Offset]])
-        : Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] =
-      offset().map { offsetOpt =>
-        val offset = offsetOpt.getOrElse(NoOffset)
+        : Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      for {
+        storedOffset <- offset()
+        startOffset <- adjustStartOffset(storedOffset)
+      } yield {
         eventsBySlicesQuery.eventsBySlicesStartingFromSnapshots(
           entityType,
           minSlice,
           maxSlice,
-          offset,
+          startOffset.getOrElse(NoOffset),
           transformSnapshot)
       }
+    }
 
     override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset
 

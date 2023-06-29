@@ -8,9 +8,7 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.compat.java8.FutureConverters._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import scala.annotation.nowarn
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -53,21 +51,22 @@ object DurableStateSourceProvider {
     new DurableStateStoreQuerySourceProvider(durableStateStoreQuery, tag, system)
   }
 
+  /**
+   * INTERNAL API
+   */
   @InternalApi
+  @nowarn("msg=never used") // system
   private class DurableStateStoreQuerySourceProvider[A](
       durableStateStoreQuery: DurableStateStoreQuery[A],
       tag: String,
       system: ActorSystem[_])
       extends javadsl.SourceProvider[Offset, DurableStateChange[A]] {
-    implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[DurableStateChange[A], NotUsed]] = {
-      val source: Future[Source[DurableStateChange[A], NotUsed]] = offsetAsync.get().toScala.map { offsetOpt =>
-        durableStateStoreQuery
-          .changes(tag, offsetOpt.orElse(NoOffset))
+      offsetAsync.get().thenApply { storedOffset =>
+        durableStateStoreQuery.changes(tag, storedOffset.orElse(NoOffset))
       }
-      source.toJava
     }
 
     override def extractOffset(stateChange: DurableStateChange[A]): Offset = stateChange.offset
@@ -117,6 +116,11 @@ object DurableStateSourceProvider {
       .getDurableStateStoreFor(classOf[DurableStateStoreBySliceQuery[Any]], durableStateStoreQueryPluginId)
       .sliceRanges(numberOfRanges)
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  @nowarn("msg=never used") // system
   private class DurableStateBySlicesSourceProvider[A](
       durableStateStoreQuery: DurableStateStoreBySliceQuery[A],
       entityType: String,
@@ -126,15 +130,12 @@ object DurableStateSourceProvider {
       extends SourceProvider[Offset, DurableStateChange[A]]
       with BySlicesSourceProvider
       with DurableStateStore[A] {
-    implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[DurableStateChange[A], NotUsed]] = {
-      val source: Future[Source[DurableStateChange[A], NotUsed]] = offsetAsync.get().toScala.map { offsetOpt =>
-        durableStateStoreQuery
-          .changesBySlices(entityType, minSlice, maxSlice, offsetOpt.orElse(NoOffset))
+      offsetAsync.get().thenApply { storedOffset =>
+        durableStateStoreQuery.changesBySlices(entityType, minSlice, maxSlice, storedOffset.orElse(NoOffset))
       }
-      source.toJava
     }
 
     override def extractOffset(stateChange: DurableStateChange[A]): Offset = stateChange.offset
