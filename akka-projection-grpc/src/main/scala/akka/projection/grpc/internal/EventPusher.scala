@@ -42,7 +42,8 @@ private[akka] object EventPusher {
 
   private val logger = LoggerFactory.getLogger(getClass)
 
-  def apply[Event](client: EventConsumerServiceClient, eps: EventProducerSource)(implicit system: ActorSystem[_])
+  def apply[Event](originId: String, client: EventConsumerServiceClient, eps: EventProducerSource)(
+      implicit system: ActorSystem[_])
       : FlowWithContext[EventEnvelope[Event], ProjectionContext, Done, ProjectionContext, NotUsed] = {
     import akka.projection.grpc.internal.ProtobufProtocolConversions.transformAndEncodeEvent
 
@@ -83,7 +84,7 @@ private[akka] object EventPusher {
               tags = Seq.empty)
         }
       }
-      .via(Flow.fromGraph(new EventPusherStage(originId = "FIXME", eps, client)))
+      .via(Flow.fromGraph(new EventPusherStage(originId, eps, client)))
 
   }
 }

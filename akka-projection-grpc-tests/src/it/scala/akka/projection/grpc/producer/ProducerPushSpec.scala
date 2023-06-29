@@ -137,7 +137,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
           producerProjectionId,
           settings = None,
           sourceProvider = producerSourceProvider(eps),
-          handler = EventPusher(eventConsumerClient, eps))))
+          handler = EventPusher("local-producer-1", eventConsumerClient, eps))))
 
   def counsumerSourceProvider = {
     // FIXME how do we auto-wrap with this?

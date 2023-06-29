@@ -165,7 +165,7 @@ private[akka] object EventWriter {
                         "the same pid may be in flight at the same time")
                       state
                     } else {
-                      state.copy(waitingForWrite = state.waitingForWrite :+ (reprWithMeta, replyTo))
+                      state.copy(waitingForWrite = state.waitingForWrite :+ ((reprWithMeta, replyTo)))
                     }
                 }
               perPidWriteState = perPidWriteState.updated(persistenceId, newStateForPid)
