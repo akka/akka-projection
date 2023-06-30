@@ -117,7 +117,7 @@ class EventSourcedChaosSpec
     "e" + (template + s).takeRight(5)
   }
 
-  "A R2DBC projection under random conditions" must {
+  s"A R2DBC projection under random conditions (dialect ${r2dbcSettings.dialectName})" must {
 
     "handle all events exactlyOnce" in {
       val rnd = new Random(seed)

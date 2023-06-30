@@ -222,7 +222,7 @@ class EventSourcedEndToEndSpec
     }
   }
 
-  "A R2DBC projection with eventsBySlices source" must {
+  s"A R2DBC projection with eventsBySlices source (dialect ${r2dbcSettings.dialectName})" must {
 
     "handle all events exactlyOnce" in {
       val numberOfEntities = 20

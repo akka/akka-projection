@@ -55,7 +55,7 @@ class R2dbcOffsetStoreSpec
       .getOrElse(throw new RuntimeException(s"no records found for $projectionId"))
   }
 
-  "The R2dbcOffsetStore" must {
+  s"The R2dbcOffsetStore (dialect ${r2dbcSettings.dialectName})" must {
 
     s"save and read offsets" in {
       val projectionId = genRandomProjectionId()
