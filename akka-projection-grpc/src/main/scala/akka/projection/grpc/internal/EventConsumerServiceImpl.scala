@@ -28,14 +28,18 @@ import scala.concurrent.duration.DurationInt
  */
 private[akka] object EventConsumerServiceImpl {
 
+  /**
+   *
+   * @param journalPluginId empty to use default
+   */
   def directJournalConsumer(
-      journalPluginId: String,
+      journalPluginId: Option[String],
       acceptedStreamIds: Set[String],
       persistenceIdTransformer: String => String)(implicit system: ActorSystem[_]): EventConsumerServiceImpl = {
     // FIXME is this name unique, could we create multiple for the same journal? (we wouldn't be able to bind them to the same port)
     val eventWriter = system.systemActorOf(
-      EventWriter(journalPluginId),
-      s"EventWriter-${URLEncoder.encode(journalPluginId, ByteString.UTF_8)}")
+      EventWriter(journalPluginId.getOrElse("")),
+      s"EventWriter-${URLEncoder.encode(journalPluginId.getOrElse("default"), ByteString.UTF_8)}")
 
     new EventConsumerServiceImpl(eventWriter, acceptedStreamIds, persistenceIdTransformer)
   }

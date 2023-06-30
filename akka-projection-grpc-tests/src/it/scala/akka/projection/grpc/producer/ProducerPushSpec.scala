@@ -190,7 +190,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
             // allowed if no two pushing systems push events for the same persistence id
             EventConsumerServiceImpl
               .directJournalConsumer(
-                journalPluginId = "test.consumer.r2dbc.journal",
+                journalPluginId = Some("test.consumer.r2dbc.journal"),
                 // FIXME we might want to allow transforming more aspects of the events (payloads even?)
                 persistenceIdTransformer = identity,
                 // FIXME or should it be entity type right away, rationale for separating entity type from stream id
