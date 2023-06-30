@@ -56,10 +56,14 @@ YugaByte
 :  @@snip [YugaByte Schema](/akka-projection-r2dbc/ddl-scripts/create_tables_yugabyte.sql)
 
 H2
-:  @@snip [H2 Schema](/akka-projection-r2dbc/src/it/resources/application-h2.conf) { #schema }
+:  @@snip [H2 Schema](/akka-projection-r2dbc/src/main/resources/h2-default-projection-schema.conf) { #schema }
 
 For H2 the schema need to be defined as the `additional-init` setting in your config. This means it is created on first
 connection instead of up front (needed as there is no way to connect to the database from outside the JVM process):
+
+When using default table names a pre-packaged schema for H2 can be used through config:
+
+@@snip [Default H2 Schema](/akka-projection-r2dbc/src/it/resources/application-h2.conf) { #default-schema }
 
 
 ## Configuration

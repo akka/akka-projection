@@ -132,7 +132,7 @@ class R2dbcTimestampOffsetStoreSpec
       TimestampOffset(timestamp, timestamp.plusMillis(1000), Map(pid -> revision)),
       timestamp.toEpochMilli)
 
-  "The R2dbcOffsetStore for TimestampOffset" must {
+  s"The R2dbcOffsetStore for TimestampOffset (dialect ${r2dbcSettings.dialectName})" must {
 
     "save TimestampOffset with one entry" in {
       val projectionId = genRandomProjectionId()

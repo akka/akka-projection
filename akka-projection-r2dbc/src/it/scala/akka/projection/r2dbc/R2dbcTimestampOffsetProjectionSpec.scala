@@ -355,7 +355,7 @@ class R2dbcTimestampOffsetProjectionSpec
       env.source)
   }
 
-  "A R2DBC exactly-once projection with TimestampOffset" must {
+  s"A R2DBC exactly-once projection with TimestampOffset (dialect ${r2dbcSettings.dialectName})" must {
 
     "persist projection and offset in the same write operation (transactional)" in {
       implicit val pid = UUID.randomUUID().toString

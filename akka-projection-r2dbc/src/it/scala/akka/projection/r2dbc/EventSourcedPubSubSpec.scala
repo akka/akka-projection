@@ -147,7 +147,7 @@ class EventSourcedPubSubSpec
     processed
   }
 
-  "A R2DBC projection with eventsBySlices source and publish-events" must {
+  s"A R2DBC projection with eventsBySlices source and publish-events (dialect ${r2dbcSettings.dialectName})" must {
 
     "handle all events exactlyOnce" in {
       val numberOfEntities = 20

@@ -266,7 +266,7 @@ class R2dbcProjectionSpec
     }
   }
 
-  "A R2DBC exactly-once projection" must {
+  s"A R2DBC exactly-once projection (dialect ${r2dbcSettings.dialectName})" must {
 
     "persist projection and offset in the same write operation (transactional)" in {
       implicit val entityId = UUID.randomUUID().toString
