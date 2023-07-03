@@ -132,6 +132,27 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   }
 
   /**
+   * Include events with any of the given matching topics. A matching include overrides
+   * a matching exclude.
+   */
+  final case class IncludeTopics(expressions: Set[String]) extends FilterCriteria {
+
+    /** Java API */
+    def this(expressions: JSet[String]) =
+      this(expressions.asScala.toSet)
+  }
+
+  /**
+   * Remove a previously added [[IncludeTopics]].
+   */
+  final case class RemoveIncludeTopics(expressions: Set[String]) extends FilterCriteria {
+
+    /** Java API */
+    def this(expressions: JSet[String]) =
+      this(expressions.asScala.toSet)
+  }
+
+  /**
    * Exclude events for entities with entity ids matching the given regular expressions,
    * unless there is a matching include filter that overrides the exclude.
    */
@@ -304,6 +325,13 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       }.toSet
     val includeTags2 = includeTags(both).diff(removeIncludeTags)
 
+    val removeIncludeTopics =
+      both.flatMap {
+        case rem: RemoveIncludeTopics => rem.expressions
+        case _                        => Set.empty[String]
+      }.toSet
+    val includeTopics2 = includeTopics(both).diff(removeIncludeTopics)
+
     val removeExcludeRegexEntityIds =
       both.flatMap {
         case rem: RemoveExcludeRegexEntityIds => rem.matching
@@ -336,6 +364,7 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     Vector(
       if (excludeTags2.isEmpty) None else Some(ExcludeTags(excludeTags2)),
       if (includeTags2.isEmpty) None else Some(IncludeTags(includeTags2)),
+      if (includeTopics2.isEmpty) None else Some(IncludeTopics(includeTopics2)),
       if (excludeRegexEntityIds2.isEmpty) None else Some(ExcludeRegexEntityIds(excludeRegexEntityIds2)),
       if (includeRegexEntityIds2.isEmpty) None else Some(IncludeRegexEntityIds(includeRegexEntityIds2)),
       if (excludeEntityIds2.isEmpty) None else Some(ExcludeEntityIds(excludeEntityIds2)),
@@ -390,6 +419,15 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     val removeIncludeTagsCriteria =
       if (includeTagsDiffAB.isEmpty) None else Some(RemoveIncludeTags(includeTagsDiffAB))
 
+    val includeTopicsA = includeTopics(a)
+    val includeTopicsB = includeTopics(b)
+    val includeTopicsDiffAB = includeTopicsA.diff(includeTopicsB)
+    val includeTopicsDiffBA = includeTopicsB.diff(includeTopicsA)
+    val includeTopicsCriteria =
+      if (includeTopicsDiffBA.isEmpty) None else Some(IncludeTopics(includeTopicsDiffBA))
+    val removeIncludeTopicsCriteria =
+      if (includeTopicsDiffAB.isEmpty) None else Some(RemoveIncludeTopics(includeTopicsDiffAB))
+
     val excludeRegexEntityIdsA = excludeRegexEntityIds(a)
     val excludeRegexEntityIdsB = excludeRegexEntityIds(b)
     val excludeRegexEntityIdsDiffAB = excludeRegexEntityIdsA.diff(excludeRegexEntityIdsB)
@@ -439,6 +477,8 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       removeExcludeTagsCriteria,
       includeTagsCriteria,
       removeIncludeTagsCriteria,
+      includeTopicsCriteria,
+      removeIncludeTopicsCriteria,
       excludeRegexEntityIdCriteria,
       removeExcludeRegexEntityIdCriteria,
       includeRegexEntityIdCriteria,
@@ -471,6 +511,14 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     filter.flatMap {
       case incl: IncludeTags => incl.tags
       case _                 => Set.empty[String]
+    }.toSet
+  }
+
+  /** INTERNAL API */
+  @InternalApi private[akka] def includeTopics(filter: immutable.Seq[FilterCriteria]): Set[String] = {
+    filter.flatMap {
+      case incl: IncludeTopics => incl.expressions
+      case _                   => Set.empty[String]
     }.toSet
   }
 

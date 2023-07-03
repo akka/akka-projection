@@ -79,6 +79,7 @@ import scalapb.GeneratedMessage
   private def stateToProto(state: DdataConsumerFilterStore.State): proto.ConsumerFilterStoreState = {
     val excludeTagsBytes = orsetToBytes(state.excludeTags)
     val includeTagsBytes = orsetToBytes(state.includeTags)
+    val includeTopicsBytes = orsetToBytes(state.includeTopics)
     val excludeRegexEntityIdsBytes = orsetToBytes(state.excludeRegexEntityIds)
     val includeRegexEntityIdsBytes = orsetToBytes(state.includeRegexEntityIds)
     val excludeEntityIdsBytes = orsetToBytes(state.excludeEntityIds)
@@ -90,7 +91,8 @@ import scalapb.GeneratedMessage
       excludeRegexEntityIdsBytes,
       includeRegexEntityIdsBytes,
       excludeEntityIdsBytes,
-      seqNrMap)
+      seqNrMap,
+      includeTopicsBytes)
   }
 
   private def seqNrMapToProto(seqNrMap: DdataConsumerFilterStore.SeqNrMap): proto.SeqNrMap = {
@@ -106,6 +108,7 @@ import scalapb.GeneratedMessage
     val protoState = proto.ConsumerFilterStoreState.parseFrom(bytes)
     val excludeTags = orsetFromBinary(protoState.excludeTags.toByteArray)
     val includeTags = orsetFromBinary(protoState.includeTags.toByteArray)
+    val includeTopics = orsetFromBinary(protoState.includeTopics.toByteArray)
     val excludeRegexEntityIds = orsetFromBinary(protoState.excludeRegexEntityIds.toByteArray)
     val includeRegexEntityIds = orsetFromBinary(protoState.includeRegexEntityIds.toByteArray)
     val excludeEntityIds = orsetFromBinary(protoState.excludeEntityIds.toByteArray)
@@ -116,6 +119,7 @@ import scalapb.GeneratedMessage
     DdataConsumerFilterStore.State(
       excludeTags,
       includeTags,
+      includeTopics,
       excludeRegexEntityIds,
       includeRegexEntityIds,
       excludeEntityIds,

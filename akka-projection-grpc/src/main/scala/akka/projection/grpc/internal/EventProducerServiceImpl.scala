@@ -181,6 +181,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
               init.filter,
               currentEventsByPersistenceIdQueriesPerStreamId(init.streamId),
               producerFilter = producerSource.producerFilter,
+              topicTagPrefix = producerSource.settings.topicTagPrefix,
               replayParallelism = producerSource.settings.replayParallelism))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 

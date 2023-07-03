@@ -36,6 +36,18 @@ class ConsumerFilterSpec extends AnyWordSpecLike with Matchers {
       mergeFilter(filter3, filter1 ++ filter2) shouldBe filter1
     }
 
+    "merge and remove include of topics" in {
+      val filter1 = Vector(IncludeTopics(Set("a", "b")))
+      mergeFilter(Nil, filter1) shouldBe filter1
+      mergeFilter(filter1, Nil) shouldBe filter1
+      val filter2 = Vector(IncludeTopics(Set("a", "c")))
+      mergeFilter(filter1, filter2) shouldBe Vector(IncludeTopics(Set("a", "b", "c")))
+      mergeFilter(filter2, filter1) shouldBe Vector(IncludeTopics(Set("a", "b", "c")))
+      val filter3 = Vector(RemoveIncludeTopics(Set("a", "c")))
+      mergeFilter(filter1 ++ filter2, filter3) shouldBe Vector(IncludeTopics(Set("b")))
+      mergeFilter(filter3, filter1 ++ filter2) shouldBe Vector(IncludeTopics(Set("b")))
+    }
+
     "merge and reduce filter" in {
       val filter1 =
         Vector(
@@ -95,6 +107,15 @@ class ConsumerFilterSpec extends AnyWordSpecLike with Matchers {
 
       val filter2 = Vector(IncludeTags(Set("a", "c")))
       createDiff(filter1, filter2) shouldBe Vector(IncludeTags(Set("c")), RemoveIncludeTags(Set("b")))
+    }
+
+    "create diff for IncludeTopics" in {
+      val filter1 = Vector(IncludeTopics(Set("a", "b")))
+      createDiff(Nil, filter1) shouldBe filter1
+      createDiff(filter1, Nil) shouldBe Vector(RemoveIncludeTopics(Set("a", "b")))
+
+      val filter2 = Vector(IncludeTopics(Set("a", "c")))
+      createDiff(filter1, filter2) shouldBe Vector(IncludeTopics(Set("c")), RemoveIncludeTopics(Set("b")))
     }
 
     "create diff for ExcludeRegexEntityIds" in {

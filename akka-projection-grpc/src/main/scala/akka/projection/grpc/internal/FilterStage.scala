@@ -42,12 +42,15 @@ import org.slf4j.LoggerFactory
   private val ReplicationIdSeparator = '|'
 
   object Filter {
-    val empty: Filter = Filter(Set.empty, Set.empty, Set.empty, Set.empty, Map.empty, Map.empty)
+    def empty(topicTagPrefix: String): Filter =
+      Filter(Set.empty, Set.empty, Set.empty, topicTagPrefix, Set.empty, Set.empty, Map.empty, Map.empty)
   }
 
   final case class Filter(
       includeTags: Set[String],
       excludeTags: Set[String],
+      includeTopics: Set[String],
+      topicTagPrefix: String,
       includePersistenceIds: Set[String],
       excludePersistenceIds: Set[String],
       includeRegexEntityIds: Map[String, Regex],
@@ -64,6 +67,12 @@ import org.slf4j.LoggerFactory
 
     def removeExcludeTags(tags: Iterable[String]): Filter =
       copy(excludeTags = excludeTags -- tags)
+
+    def addIncludeTopics(expressions: Iterable[String]): Filter =
+      copy(includeTopics = includeTopics ++ expressions)
+
+    def removeIncludeTopics(expressions: Iterable[String]): Filter =
+      copy(includeTopics = includeTopics -- expressions)
 
     def addIncludePersistenceIds(pids: Iterable[String]): Filter =
       copy(includePersistenceIds = includePersistenceIds ++ pids)
@@ -89,6 +98,8 @@ import org.slf4j.LoggerFactory
     def removeIncludeRegexEntityIds(reqexStr: Iterable[String]): Filter =
       copy(includeRegexEntityIds = includeRegexEntityIds -- reqexStr)
 
+    private val topicMatchers = includeTopics.iterator.map(TopicMatcher(_)).toVector
+
     /**
      * Exclude criteria are evaluated first.
      * Returns `true` if no matching exclude criteria.
@@ -111,9 +122,26 @@ import org.slf4j.LoggerFactory
       def matchesIncludeRegexEntityIds: Boolean =
         matchesRegexEntityIds(includeRegexEntityIds.values)
 
-      if (env.tags.intersect(excludeTags).nonEmpty || excludePersistenceIds.contains(pid) ||
+      def matchesTopics: Boolean = {
+        if (env.tags.isEmpty)
+          false
+        else {
+          env.tags.iterator.exists { tag =>
+            if (tag.startsWith(topicTagPrefix))
+              topicMatchers.exists(_.matches(tag.substring(topicTagPrefix.length)))
+            else
+              false
+          }
+        }
+      }
+
+      if (env.tags.intersect(excludeTags).nonEmpty ||
+          excludePersistenceIds.contains(pid) ||
           matchesExcludeRegexEntityIds) {
-        env.tags.intersect(includeTags).nonEmpty || includePersistenceIds.contains(pid) || matchesIncludeRegexEntityIds
+        env.tags.intersect(includeTags).nonEmpty ||
+        matchesTopics ||
+        includePersistenceIds.contains(pid) ||
+        matchesIncludeRegexEntityIds
       } else {
         true
       }
@@ -136,6 +164,7 @@ import org.slf4j.LoggerFactory
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
     val producerFilter: EventEnvelope[Any] => Boolean,
+    topicTagPrefix: String,
     replayParallelism: Int)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
 
@@ -216,7 +245,7 @@ import org.slf4j.LoggerFactory
         }
       }
 
-      private var filter = Filter.empty
+      private var filter = Filter.empty(topicTagPrefix)
 
       private def updateFilter(criteria: Iterable[FilterCriteria]): Unit = {
         filter = criteria.foldLeft(filter) {
@@ -230,6 +259,10 @@ import org.slf4j.LoggerFactory
                 acc.addExcludeTags(exclude.tags)
               case FilterCriteria.Message.RemoveExcludeTags(exclude) =>
                 acc.removeExcludeTags(exclude.tags)
+              case FilterCriteria.Message.IncludeTopics(include) =>
+                acc.addIncludeTopics(include.expression)
+              case FilterCriteria.Message.RemoveIncludeTopics(include) =>
+                acc.removeIncludeTopics(include.expression)
               case FilterCriteria.Message.IncludeEntityIds(include) =>
                 val pids = mapEntityIdToPidHandledByThisStream(include.entityIdOffset.map(_.entityId))
                 acc.addIncludePersistenceIds(pids)

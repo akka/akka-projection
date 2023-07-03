@@ -52,6 +52,7 @@ import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.IncludeEntityIds
 import akka.projection.grpc.internal.proto.IncludeRegexEntityIds
+import akka.projection.grpc.internal.proto.IncludeTopics
 import akka.projection.grpc.internal.proto.IncludeTags
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
@@ -63,6 +64,7 @@ import akka.projection.grpc.internal.proto.RemoveExcludeTags
 import akka.projection.grpc.internal.proto.RemoveIncludeEntityIds
 import akka.projection.grpc.internal.proto.RemoveIncludeRegexEntityIds
 import akka.projection.grpc.internal.proto.RemoveIncludeTags
+import akka.projection.grpc.internal.proto.RemoveIncludeTopics
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
@@ -390,6 +392,10 @@ final class GrpcReadJournal private (
         FilterCriteria(FilterCriteria.Message.IncludeTags(IncludeTags(tags.toVector)))
       case ConsumerFilter.RemoveIncludeTags(tags) =>
         FilterCriteria(FilterCriteria.Message.RemoveIncludeTags(RemoveIncludeTags(tags.toVector)))
+      case ConsumerFilter.IncludeTopics(expressions) =>
+        FilterCriteria(FilterCriteria.Message.IncludeTopics(IncludeTopics(expressions.toVector)))
+      case ConsumerFilter.RemoveIncludeTopics(expressions) =>
+        FilterCriteria(FilterCriteria.Message.RemoveIncludeTopics(RemoveIncludeTopics(expressions.toVector)))
       case ConsumerFilter.IncludeEntityIds(entityOffsets) =>
         FilterCriteria(FilterCriteria.Message.IncludeEntityIds(IncludeEntityIds(entityOffsets.map {
           case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
