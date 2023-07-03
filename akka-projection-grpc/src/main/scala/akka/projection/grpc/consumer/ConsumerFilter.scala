@@ -20,6 +20,7 @@ import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.internal.ConsumerFilterRegistry
+import akka.projection.grpc.internal.TopicMatcher
 import akka.util.JavaDurationConverters._
 import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.Config
@@ -140,6 +141,8 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     /** Java API */
     def this(expressions: JSet[String]) =
       this(expressions.asScala.toSet)
+
+    expressions.foreach(TopicMatcher.checkValid)
   }
 
   /**
