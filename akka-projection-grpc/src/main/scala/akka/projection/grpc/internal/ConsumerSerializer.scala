@@ -32,7 +32,6 @@ import scalapb.GeneratedMessage
     with BaseSerializer {
   private val ConsumerFilterStoreStateManifest = "A"
   private val ConsumerFilterKeyManifest = "B"
-  private val FilteredPayloadManifest = "C"
 
   private final val CompressionBufferSize = 1024 * 4
 
@@ -41,7 +40,6 @@ import scalapb.GeneratedMessage
   override def manifest(obj: AnyRef): String = obj match {
     case _: DdataConsumerFilterStore.State             => ConsumerFilterStoreStateManifest
     case _: DdataConsumerFilterStore.ConsumerFilterKey => ConsumerFilterKeyManifest
-    case FilteredPayload                               => FilteredPayloadManifest
     case _ =>
       throw new IllegalArgumentException(s"Can't serialize object of type ${obj.getClass} in [${getClass.getName}]")
   }
@@ -49,7 +47,6 @@ import scalapb.GeneratedMessage
   override def toBinary(obj: AnyRef): Array[Byte] = obj match {
     case state: DdataConsumerFilterStore.State           => compress(stateToProto(state))
     case key: DdataConsumerFilterStore.ConsumerFilterKey => replicatedDataSerializer.keyIdToBinary(key.id)
-    case FilteredPayload                                 => Array.empty[Byte]
     case _ =>
       throw new IllegalArgumentException(s"Can't serialize object of type ${obj.getClass} in [${getClass.getName}]")
   }
@@ -58,7 +55,6 @@ import scalapb.GeneratedMessage
     case ConsumerFilterStoreStateManifest => stateFromBinary(decompress(bytes))
     case ConsumerFilterKeyManifest =>
       DdataConsumerFilterStore.ConsumerFilterKey(replicatedDataSerializer.keyIdFromBinary(bytes))
-    case FilteredPayloadManifest => FilteredPayload
     case _ =>
       throw new NotSerializableException(
         s"Unimplemented deserialization of message with manifest [$manifest] in [${getClass.getName}]")

@@ -5,8 +5,8 @@
 package akka.projection.grpc.internal
 
 import akka.NotUsed
-import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
+import akka.persistence.FilteredPayload
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.BySlicesSourceProvider
 import akka.projection.scaladsl.SourceProvider
@@ -17,16 +17,9 @@ import scala.concurrent.Future
 /**
  * INTERNAL API
  *
- * Placeholder object for filtered events when producer event push is used
- */
-@InternalApi
-private[akka] case object FilteredPayload
-
-/**
- * INTERNAL API
- *
  * Turns envelopes with placeholder events into filtered envelopes on the consuming side of the journal
  */
+// FIXME use built in filtering in akka-persistence-r2dbc once milestone out
 private[akka] final class FilteredPayloadMapper[OffsetType, Event](
     actual: SourceProvider[OffsetType, EventEnvelope[Event]])
     extends SourceProvider[OffsetType, EventEnvelope[Event]]

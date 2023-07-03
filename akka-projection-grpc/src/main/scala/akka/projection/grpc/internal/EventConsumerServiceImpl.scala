@@ -10,6 +10,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.EventWriter
+import akka.persistence.FilteredPayload
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventAck
@@ -99,13 +100,13 @@ private[akka] final class EventConsumerServiceImpl(
             if (envelope.filtered) " filtered" else "")
 
         eventWriter
-          .askWithStatus[EventWriter.WriteAck](EventWriter.Write(
-            persistenceId,
-            envelope.sequenceNr,
-            // FIXME how to deal with filtered - can't be null, should we have a marker filtered payload?
-            envelope.eventOption.getOrElse(FilteredPayload),
-            envelope.eventMetadata,
-            _))
+          .askWithStatus[EventWriter.WriteAck](
+            EventWriter.Write(
+              persistenceId,
+              envelope.sequenceNr,
+              envelope.eventOption.getOrElse(FilteredPayload),
+              envelope.eventMetadata,
+              _))
           .recover {
             case NonFatal(ex) =>
               logger.warn(s"Failing event stream because of event writer error", ex)
