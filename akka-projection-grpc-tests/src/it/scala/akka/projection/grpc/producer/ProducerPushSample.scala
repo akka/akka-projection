@@ -8,6 +8,7 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Props
 import akka.actor.typed.SpawnProtocol
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
@@ -151,15 +152,15 @@ object ProducerPushSampleProducer {
       sharding.entityRefFor(entityTypeKey, s"${producerId}_$n")
     }
 
-    (0 to numberOfEventsPerEntity).zip(fruits).foreach {
-      case (n, fruit) =>
-        refs.foreach { ref =>
-          val persist = TestEntity.Persist(s"$fruit-$n")
-          log.info("Sending {} to {}", persist, ref.entityId)
-          ref.tell(persist)
-        }
-        // slow it down so we can easier start many producers before the first completes
-        Thread.sleep(1000)
+    (0 to numberOfEventsPerEntity).foreach { n =>
+      val fruit = fruits.next()
+      refs.foreach { ref =>
+        val persist = TestEntity.Persist(s"$fruit-$n")
+        log.info2("Sending {} to {}", persist, ref.entityId)
+        ref.tell(persist)
+      }
+      // slow it down so we can easier start many producers before the first completes
+      Thread.sleep(1000)
     }
   }
 }
@@ -194,7 +195,7 @@ object ProducerPushSampleConsumer {
           sourceProvider = consumerProjectionProvider,
           handler = () => {
             envelope: EventEnvelope[String] =>
-              log.info(
+              log.infoN(
                 "Saw projected event: {}-{}: {}",
                 envelope.persistenceId,
                 envelope.sequenceNr,
@@ -221,6 +222,6 @@ object ProducerPushSampleConsumer {
               //       but maybe less important when it is the producer doing the pushing?
               acceptedStreamIds = Set(streamId))))
     bound.foreach(binding =>
-      log.info(s"Consumer listening at: {}:{}", binding.localAddress.getHostString, binding.localAddress.getPort))
+      log.info2(s"Consumer listening at: {}:{}", binding.localAddress.getHostString, binding.localAddress.getPort))
   }
 }
