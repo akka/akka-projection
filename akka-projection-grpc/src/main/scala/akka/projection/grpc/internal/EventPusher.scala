@@ -11,9 +11,11 @@ import akka.annotation.InternalApi
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionContext
 import akka.projection.grpc.internal.ProtobufProtocolConversions.offsetToProtoOffset
-import akka.projection.grpc.internal.proto.ConsumerEvent
+import akka.projection.grpc.internal.proto.ConsumeEventIn
+import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventInit
 import akka.projection.grpc.internal.proto.EventConsumerServiceClient
+import akka.projection.grpc.internal.proto.KeepAlive
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.stream.Attributes
 import akka.stream.FlowShape
@@ -32,6 +34,7 @@ import org.slf4j.LoggerFactory
 import java.util
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 
 /**
  * INTERNAL API
@@ -46,6 +49,8 @@ private[akka] object EventPusher {
       implicit system: ActorSystem[_])
       : FlowWithContext[EventEnvelope[Event], ProjectionContext, Done, ProjectionContext, NotUsed] = {
     import akka.projection.grpc.internal.ProtobufProtocolConversions.transformAndEncodeEvent
+
+    val keepAliveTimeout = 5.seconds // FIXME config
 
     implicit val ec: ExecutionContext = system.executionContext
     val protoAnySerialization = new ProtoAnySerialization(system)
@@ -84,9 +89,13 @@ private[akka] object EventPusher {
               tags = Seq.empty)
         }
       }
+      // default service idle timeout 4 seconds
+      .via(Flow[(proto.Event, ProjectionContext)].keepAlive(keepAliveTimeout, () => KeepAliveTuple))
       .via(Flow.fromGraph(new EventPusherStage(originId, eps, client)))
 
   }
+
+  private[internal] val KeepAliveTuple: (proto.Event, ProjectionContext) = (null, null)
 }
 
 /**
@@ -95,6 +104,7 @@ private[akka] object EventPusher {
 @InternalApi
 private[akka] class EventPusherStage(originId: String, eps: EventProducerSource, client: EventConsumerServiceClient)
     extends GraphStage[FlowShape[(proto.Event, ProjectionContext), (Done, ProjectionContext)]] {
+  import EventPusher.KeepAliveTuple
 
   val in = Inlet[(proto.Event, ProjectionContext)]("EventPusherStage.in")
   val out = Outlet[(Done, ProjectionContext)]("EventPusherStage.out")
@@ -105,17 +115,24 @@ private[akka] class EventPusherStage(originId: String, eps: EventProducerSource,
 
     private val inFlight = new util.HashMap[(String, Long), ProjectionContext]()
 
-    private val toConsumer: SubSourceOutlet[proto.ConsumerEvent] = new SubSourceOutlet("EventPusherStage.toConsumer")
-    private val fromConsumer: SubSinkInlet[proto.ConsumerEventAck] = new SubSinkInlet("EventPusherStage.fromConsumer")
+    private val toConsumer: SubSourceOutlet[proto.ConsumeEventIn] = new SubSourceOutlet("EventPusherStage.toConsumer")
+    private val fromConsumer: SubSinkInlet[proto.ConsumeEventOut] = new SubSinkInlet("EventPusherStage.fromConsumer")
 
-    setHandler(in, new InHandler {
-      override def onPush(): Unit = {
-        val (event, context) = grab(in)
-        val key = (event.persistenceId, event.seqNr)
-        inFlight.put(key, context)
-        toConsumer.push(ConsumerEvent(ConsumerEvent.Message.Event(event)))
-      }
-    })
+    setHandler(
+      in,
+      new InHandler {
+        override def onPush(): Unit = {
+          grab(in) match {
+            case KeepAliveTuple =>
+              toConsumer.push(ConsumeEventIn(ConsumeEventIn.Message.KeepAlive(KeepAlive.defaultInstance)))
+            case (event, context) =>
+              val key = (event.persistenceId, event.seqNr)
+              inFlight.put(key, context)
+              toConsumer.push(ConsumeEventIn(ConsumeEventIn.Message.Event(event)))
+          }
+
+        }
+      })
     toConsumer.setHandler(new OutHandler {
       override def onPull(): Unit =
         pull(in)
@@ -123,12 +140,18 @@ private[akka] class EventPusherStage(originId: String, eps: EventProducerSource,
     })
     fromConsumer.setHandler(new InHandler {
       override def onPush(): Unit = {
-        val eventAck = fromConsumer.grab()
-        val key = (eventAck.persistenceId, eventAck.seqNr)
-        val context = inFlight.get(key)
-        if (context eq null) throw new IllegalStateException(s"Saw ack for $key but in inFlight tracker map")
-        inFlight.remove(key)
-        push(out, (Done, context))
+        val eventOut = fromConsumer.grab()
+        eventOut match {
+          case ConsumeEventOut(ConsumeEventOut.Message.Ack(eventAck), _) =>
+            val key = (eventAck.persistenceId, eventAck.seqNr)
+            val context = inFlight.get(key)
+            if (context eq null) throw new IllegalStateException(s"Saw ack for $key but in inFlight tracker map")
+            inFlight.remove(key)
+            push(out, (Done, context))
+          case unexpected =>
+            throw new IllegalArgumentException(s"Unexpected ConsumeEventOut message: ${unexpected.getClass}")
+        }
+
       }
 
       override def onUpstreamFinish(): Unit = complete(out)
@@ -142,8 +165,8 @@ private[akka] class EventPusherStage(originId: String, eps: EventProducerSource,
       client
         .consumeEvent(
           Source
-            .single(ConsumerEvent(
-              ConsumerEvent.Message.Init(ConsumerEventInit(originId = originId, streamId = eps.streamId))))
+            .single(ConsumeEventIn(
+              ConsumeEventIn.Message.Init(ConsumerEventInit(originId = originId, streamId = eps.streamId))))
             .concat(Source.fromGraph(toConsumer.source)))
         .runWith(Sink.fromGraph(fromConsumer.sink))(materializer)
     }

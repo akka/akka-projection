@@ -20,7 +20,13 @@ option java_package = "akka.projection.grpc.internal.proto";
 // 3. Consumer stores events directly into a journal
 // 4. Consumer side projections can run against the local journal
 service EventConsumerService {
-  rpc ConsumeEvent(stream ConsumerEvent) returns (stream ConsumerEventAck);
+  rpc ConsumeEvent(stream ConsumeEventIn) returns (stream ConsumeEventOut);
+}
+
+message ConsumeEventOut {
+  oneof message {
+    ConsumerEventAck ack = 1;
+  }
 }
 
 message ConsumerEventAck {
@@ -28,11 +34,12 @@ message ConsumerEventAck {
   int64 seq_nr = 2;
 }
 
-message ConsumerEvent {
+message ConsumeEventIn {
   oneof message {
     // always sent first
     ConsumerEventInit init = 1;
     Event event = 2;
+    KeepAlive keep_alive = 3;
   }
 }
 
@@ -42,3 +49,5 @@ message ConsumerEventInit {
   // the stream id of the type of entity the producer wants to push
   string stream_id = 2;
 }
+
+message KeepAlive { }

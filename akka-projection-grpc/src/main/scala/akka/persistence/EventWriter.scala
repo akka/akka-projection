@@ -58,6 +58,13 @@ private[akka] object EventWriter {
                 perPidWriteState = perPidWriteState - pid
               } else {
                 // batch waiting for pid
+                if (context.log.isTraceEnabled())
+                  context.log.traceN(
+                    "Writing batch of {} events for pid [{}], seq nrs [{}-{}]",
+                    newStateForPid.waitingForWrite.size,
+                    pid,
+                    newStateForPid.waitingForWrite.head._1.sequenceNr,
+                    newStateForPid.waitingForWrite.last._1.sequenceNr)
                 val batchWrite = AtomicWrite(newStateForPid.waitingForWrite.map { case (repr, _) => repr })
                 journal ! JournalProtocol
                   .WriteMessages(batchWrite :: Nil, context.self.toClassic, context.self.path.uid)
@@ -65,7 +72,6 @@ private[akka] object EventWriter {
                 val newReplyTo = newStateForPid.waitingForWrite.map {
                   case (repr, replyTo) => repr.sequenceNr -> replyTo
                 }.toMap
-                // FIXME do we need to limit batch size?
                 perPidWriteState = perPidWriteState.updated(pid, StateForPid(newReplyTo, emptyWaitingForWrite))
               }
             }
@@ -132,12 +138,6 @@ private[akka] object EventWriter {
 
           Behaviors.receiveMessage {
             case Write(persistenceId, sequenceNumber, event, metadata, replyTo) =>
-              if (context.log.isTraceEnabled)
-                context.log.traceN(
-                  "Writing event persistence id [{}], sequence nr [{}], payload {}",
-                  persistenceId,
-                  sequenceNumber,
-                  event)
               val repr = PersistentRepr(
                 event,
                 persistenceId = persistenceId,
@@ -154,6 +154,12 @@ private[akka] object EventWriter {
               val newStateForPid =
                 perPidWriteState.get(persistenceId) match {
                   case None =>
+                    if (context.log.isTraceEnabled)
+                      context.log.traceN(
+                        "Writing event persistence id [{}], sequence nr [{}], payload {}",
+                        persistenceId,
+                        sequenceNumber,
+                        event)
                     val write = AtomicWrite(reprWithMeta) :: Nil
                     journal ! JournalProtocol.WriteMessages(write, context.self.toClassic, context.self.path.uid)
                     StateForPid(Map(reprWithMeta.sequenceNr -> replyTo), emptyWaitingForWrite)
@@ -165,6 +171,12 @@ private[akka] object EventWriter {
                         "the same pid may be in flight at the same time")
                       state
                     } else {
+                      if (context.log.isTraceEnabled)
+                        context.log.traceN(
+                          "Writing event in progress for persistence id [{}], adding sequence nr [{}], payload {} to batch",
+                          persistenceId,
+                          sequenceNumber,
+                          event)
                       state.copy(waitingForWrite = state.waitingForWrite :+ ((reprWithMeta, replyTo)))
                     }
                 }
