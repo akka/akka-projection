@@ -148,19 +148,18 @@ object ProducerPushSampleProducer {
       Props.empty,
       system.ignoreRef)
 
-    val refs = (0 to numberOfEntities).map { n =>
+    val refs = (1 to numberOfEntities).map { n =>
       sharding.entityRefFor(entityTypeKey, s"${producerId}_$n")
     }
 
-    (0 to numberOfEventsPerEntity).foreach { n =>
+    (1 to numberOfEventsPerEntity).foreach { n =>
       val fruit = fruits.next()
       refs.foreach { ref =>
         val persist = TestEntity.Persist(s"$fruit-$n")
         log.info2("Sending {} to {}", persist, ref.entityId)
         ref.tell(persist)
+        Thread.sleep(10) // slow it down a bit
       }
-      // slow it down so we can easier start many producers before the first completes
-      Thread.sleep(1000)
     }
   }
 }
@@ -170,8 +169,9 @@ object ProducerPushSampleConsumer {
   val log = LoggerFactory.getLogger(getClass)
   def config =
     ConfigFactory
-      .parseString("""
+      .parseString(s"""
      akka.http.server.enable-http2 = on
+     akka.persistence.r2dbc.connection-factory = $${akka.persistence.r2dbc.h2}
      """)
       .withFallback(ProducerPushSampleCommon.h2ProjectionSchema)
       .withFallback(ConfigFactory.load("application-h2.conf"))

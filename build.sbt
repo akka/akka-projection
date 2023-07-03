@@ -137,6 +137,16 @@ lazy val grpcTests =
     .dependsOn(r2dbc % IntegrationTest)
     .enablePlugins(AkkaGrpcPlugin)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
+    .settings(Test / javaOptions ++= {
+      import scala.collection.JavaConverters._
+      // include all passed -Dakka. properties to the javaOptions for forked tests
+      // useful to switch DB dialects for example
+      val akkaProperties = System.getProperties.stringPropertyNames.asScala.toList.collect {
+        case key: String if key.startsWith("akka.") || key.startsWith("config") =>
+          "-D" + key + "=" + System.getProperty(key)
+      }
+      akkaProperties
+    })
 
 // provides offset storage backed by akka-persistence-r2dbc
 lazy val r2dbc =

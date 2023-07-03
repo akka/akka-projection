@@ -133,7 +133,7 @@ private[akka] object ProtobufProtocolConversions {
       eventMetadata = None,
       PersistenceId.extractEntityType(filtered.persistenceId),
       filtered.slice,
-      filtered = false,
+      filtered = true,
       source = filtered.source,
       tags = Set.empty)
   }
