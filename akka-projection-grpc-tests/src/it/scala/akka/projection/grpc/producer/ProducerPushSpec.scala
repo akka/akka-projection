@@ -41,60 +41,30 @@ import scala.concurrent.duration._
 
 object ProducerPushSpec {
 
-  private val tripleQuote = "\"\"\""
+  def config =
+    ConfigFactory
+      .parseString(s"""
+    akka.http.server.enable-http2 = on
 
-  def config = ConfigFactory.parseString(s"""
-     akka.http.server.enable-http2 = on
+    akka.persistence.r2dbc {
+      query {
+        refresh-interval = 500 millis
+        # reducing this to have quicker test, triggers backtracking earlier
+        backtracking.behind-current-time = 3 seconds
+      }
+      journal.publish-events-number-of-topics = 2
+    }
 
-     # producer uses default journal
+    # consumer uses its own h2
+    test.consumer.r2dbc = $${akka.persistence.r2dbc}
+    test.consumer.r2dbc.connection-factory = $${akka.persistence.r2dbc.h2}
+    test.consumer.r2dbc.connection-factory.database = "consumer-db"
 
-     # Projection schema if using h2
-     akka.persistence.r2dbc.h2.additional-init = $tripleQuote
-       CREATE TABLE IF NOT EXISTS akka_projection_offset_store (
-        projection_name VARCHAR(255) NOT NULL,
-        projection_key VARCHAR(255) NOT NULL,
-        current_offset VARCHAR(255) NOT NULL,
-        manifest VARCHAR(32) NOT NULL,
-        mergeable BOOLEAN NOT NULL,
-        last_updated BIGINT NOT NULL,
-        PRIMARY KEY(projection_name, projection_key)
-      );
-      CREATE TABLE IF NOT EXISTS akka_projection_timestamp_offset_store (
-        projection_name VARCHAR(255) NOT NULL,
-        projection_key VARCHAR(255) NOT NULL,
-        slice INT NOT NULL,
-        persistence_id VARCHAR(255) NOT NULL,
-        seq_nr BIGINT NOT NULL,
-        timestamp_offset timestamp with time zone NOT NULL,
-        timestamp_consumed timestamp with time zone NOT NULL,
-        PRIMARY KEY(slice, projection_name, timestamp_offset, persistence_id, seq_nr)
-      );
-      CREATE TABLE IF NOT EXISTS akka_projection_management (
-        projection_name VARCHAR(255) NOT NULL,
-        projection_key VARCHAR(255) NOT NULL,
-        paused BOOLEAN NOT NULL,
-        last_updated BIGINT NOT NULL,
-        PRIMARY KEY(projection_name, projection_key)
-       );
-     $tripleQuote
-
-     akka.persistence.r2dbc {
-       query {
-         refresh-interval = 500 millis
-         # reducing this to have quicker test, triggers backtracking earlier
-         backtracking.behind-current-time = 3 seconds
-       }
-       journal.publish-events-number-of-topics = 2
-     }
-
-     # consumer uses its own h2
-     test.consumer.r2dbc = $${akka.persistence.r2dbc}
-     test.consumer.r2dbc.connection-factory = $${akka.persistence.r2dbc.h2}
-     test.consumer.r2dbc.connection-factory.database = "consumer-db"
-     
-     test.consumer.projection = $${akka.projection.r2dbc}
-     test.consumer.projection.use-connection-factory = "test.consumer.r2dbc.connection-factory"
-    """).withFallback(ConfigFactory.load("persistence.conf")).resolve()
+    test.consumer.projection = $${akka.projection.r2dbc}
+    test.consumer.projection.use-connection-factory = "test.consumer.r2dbc.connection-factory"
+   """)
+      .withFallback(ConfigFactory.load("application-h2.conf"))
+      .resolve()
 }
 class ProducerPushSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
