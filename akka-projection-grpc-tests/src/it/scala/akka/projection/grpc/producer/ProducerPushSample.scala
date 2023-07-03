@@ -39,39 +39,6 @@ import scala.concurrent.Future
 
 // FIXME pull out to real sample for docs etc
 object ProducerPushSampleCommon {
-  val tripleQuote = "\"\"\""
-  def h2ProjectionSchema = ConfigFactory.parseString(s"""
-    # Projection schema if using h2
-      akka.persistence.r2dbc.h2.additional-init = $tripleQuote
-        CREATE TABLE IF NOT EXISTS akka_projection_offset_store (
-         projection_name VARCHAR(255) NOT NULL,
-         projection_key VARCHAR(255) NOT NULL,
-         current_offset VARCHAR(255) NOT NULL,
-         manifest VARCHAR(32) NOT NULL,
-         mergeable BOOLEAN NOT NULL,
-         last_updated BIGINT NOT NULL,
-         PRIMARY KEY(projection_name, projection_key)
-       );
-       CREATE TABLE IF NOT EXISTS akka_projection_timestamp_offset_store (
-         projection_name VARCHAR(255) NOT NULL,
-         projection_key VARCHAR(255) NOT NULL,
-         slice INT NOT NULL,
-         persistence_id VARCHAR(255) NOT NULL,
-         seq_nr BIGINT NOT NULL,
-         timestamp_offset timestamp with time zone NOT NULL,
-         timestamp_consumed timestamp with time zone NOT NULL,
-         PRIMARY KEY(slice, projection_name, timestamp_offset, persistence_id, seq_nr)
-       );
-       CREATE TABLE IF NOT EXISTS akka_projection_management (
-         projection_name VARCHAR(255) NOT NULL,
-         projection_key VARCHAR(255) NOT NULL,
-         paused BOOLEAN NOT NULL,
-         last_updated BIGINT NOT NULL,
-         PRIMARY KEY(projection_name, projection_key)
-        );
-      $tripleQuote
-      """)
-
   val streamId = "fruit_stream_id"
   val entityTypeKey = EntityTypeKey[TestEntity.Command]("Fruit")
   val grpcPort = 9588
@@ -96,7 +63,6 @@ object ProducerPushSampleProducer {
            journal.publish-events-number-of-topics = 2
          }
         """)
-      .withFallback(ProducerPushSampleCommon.h2ProjectionSchema)
       .withFallback(ConfigFactory.load("application-h2.conf"))
   }
 
@@ -173,7 +139,6 @@ object ProducerPushSampleConsumer {
      akka.http.server.enable-http2 = on
      akka.persistence.r2dbc.connection-factory = $${akka.persistence.r2dbc.h2}
      """)
-      .withFallback(ProducerPushSampleCommon.h2ProjectionSchema)
       .withFallback(ConfigFactory.load("application-h2.conf"))
       .resolve()
 
