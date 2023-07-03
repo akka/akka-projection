@@ -22,11 +22,10 @@ import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
-import akka.projection.grpc.internal.EventConsumerServiceImpl
+import akka.projection.grpc.consumer.scaladsl.ConsumerService
 import akka.projection.grpc.internal.EventPusher
 import akka.projection.grpc.internal.FilteredPayloadMapper
 import akka.projection.grpc.internal.proto.EventConsumerServiceClient
-import akka.projection.grpc.internal.proto.EventConsumerServiceHandler
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.R2dbcProjectionSettings
@@ -148,25 +147,18 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
     "show up on consumer side" in {
       // consumer runs gRPC server accepting pushed events from producers
+      // FIXME how does it fit with the existing EPS-binding APIs?
+      // FIXME auth should be possible just like the regular gRPC transport - we don't anyone to push events directly into the journal
+      // FIXME consumer filters
+      // FIXME we might want to allow transforming more aspects of the events (payloads even?)
+      val handler = ConsumerService(journalPluginId = "test.consumer.r2dbc.journal", acceptedStreamIds = Set(streamId))
+
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
         .bind(
-          // FIXME higher level api doing both these steps and returning the handler?
-          // FIXME how does it fit with the existing EPS-binding APIs?
-          // FIXME auth should be possible just like the regular gRPC transport - we don't anyone to push events directly into the journal
-          // FIXME consumer filters
-          EventConsumerServiceHandler(
-            // events are written directly into the journal on the consumer side, pushing over gRPC is only
-            // allowed if no two pushing systems push events for the same persistence id
-            EventConsumerServiceImpl
-              .directJournalConsumer(
-                journalPluginId = Some("test.consumer.r2dbc.journal"),
-                // FIXME we might want to allow transforming more aspects of the events (payloads even?)
-                persistenceIdTransformer = identity,
-                // FIXME or should it be entity type right away, rationale for separating entity type from stream id
-                //       was that consumer shouldn't necessarily know the internal entity type string for a producer,
-                //       but maybe less important when it is the producer doing the pushing?
-                acceptedStreamIds = Set(streamId))))
+          // events are written directly into the journal on the consumer side, pushing over gRPC is only
+          // allowed if no two pushing systems push events for the same persistence id
+          handler)
       bound.futureValue
 
       // FIXME higher level API for the producer side of this?

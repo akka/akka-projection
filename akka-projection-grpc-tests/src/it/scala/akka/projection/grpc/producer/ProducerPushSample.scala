@@ -24,11 +24,10 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.TestEntity
-import akka.projection.grpc.internal.EventConsumerServiceImpl
+import akka.projection.grpc.consumer.scaladsl.ConsumerService
 import akka.projection.grpc.internal.EventPusher
 import akka.projection.grpc.internal.FilteredPayloadMapper
 import akka.projection.grpc.internal.proto.EventConsumerServiceClient
-import akka.projection.grpc.internal.proto.EventConsumerServiceHandler
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
@@ -172,20 +171,10 @@ object ProducerPushSampleConsumer {
       system.ignoreRef)
 
     // consumer runs gRPC server accepting pushed events from producers
+    val handler = ConsumerService(Set(streamId))
     val bound = Http(system)
       .newServerAt("127.0.0.1", grpcPort)
-      .bind(
-        EventConsumerServiceHandler(
-          // events are written directly into the journal on the consumer side, pushing over gRPC is only
-          // allowed if no two pushing systems push events for the same persistence id
-          EventConsumerServiceImpl
-            .directJournalConsumer(
-              journalPluginId = None,
-              persistenceIdTransformer = identity,
-              // FIXME or should it be entity type right away, rationale for separating entity type from stream id
-              //       was that consumer shouldn't necessarily know the internal entity type string for a producer,
-              //       but maybe less important when it is the producer doing the pushing?
-              acceptedStreamIds = Set(streamId))))
+      .bind(handler)
     bound.foreach(binding =>
       log.info2(s"Consumer listening at: {}:{}", binding.localAddress.getHostString, binding.localAddress.getPort))
   }
