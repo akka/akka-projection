@@ -74,6 +74,7 @@ lazy val cassandra =
     // however, without it the generated pom.xml doesn't get this test dependencies
     .dependsOn(coreTest % "test->test;it->test")
     .dependsOn(testkit % "test->compile;it->compile")
+    .settings(Scala3.settings)
 
 // provides source providers for akka-persistence-query
 lazy val eventsourced =
