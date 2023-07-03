@@ -39,7 +39,8 @@ message ConsumeEventIn {
     // always sent first
     ConsumerEventInit init = 1;
     Event event = 2;
-    KeepAlive keep_alive = 3;
+    FilteredEvent filtered_event = 3;
+    KeepAlive keep_alive = 4;
   }
 }
 

@@ -10,6 +10,7 @@ import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.Event
+import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import com.google.protobuf.timestamp.Timestamp
@@ -118,6 +119,23 @@ private[akka] object ProtobufProtocolConversions {
       filtered = false,
       source = event.source,
       tags = event.tags.toSet)
+  }
+
+  def filteredEventToEnvelope[Evt](filtered: FilteredEvent): EventEnvelope[Evt] = {
+    val eventOffset = protocolOffsetToOffset(filtered.offset).asInstanceOf[TimestampOffset]
+
+    new EventEnvelope(
+      eventOffset,
+      filtered.persistenceId,
+      filtered.seqNr,
+      None,
+      eventOffset.timestamp.toEpochMilli,
+      eventMetadata = None,
+      PersistenceId.extractEntityType(filtered.persistenceId),
+      filtered.slice,
+      filtered = false,
+      source = filtered.source,
+      tags = Set.empty)
   }
 
 }

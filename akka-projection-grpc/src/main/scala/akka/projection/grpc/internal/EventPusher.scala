@@ -15,6 +15,7 @@ import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventInit
 import akka.projection.grpc.internal.proto.EventConsumerServiceClient
+import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.KeepAlive
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.stream.Attributes
@@ -77,25 +78,26 @@ private[akka] object EventPusher {
           }
 
         filteredTransformed.map {
-          case Some(protoEvent) => protoEvent
+          case Some(protoEvent) => ConsumeEventIn(ConsumeEventIn.Message.Event(protoEvent))
           case None             =>
             // Filtered or transformed to None, we still need to push a placeholder to not get seqnr gaps on the receiving side
-            proto.Event(
-              persistenceId = envelope.persistenceId,
-              seqNr = envelope.sequenceNr,
-              slice = envelope.slice,
-              offset = offsetToProtoOffset(envelope.offset),
-              payload = None,
-              tags = Seq.empty)
+            ConsumeEventIn(
+              ConsumeEventIn.Message.FilteredEvent(
+                FilteredEvent(
+                  persistenceId = envelope.persistenceId,
+                  seqNr = envelope.sequenceNr,
+                  slice = envelope.slice,
+                  offset = offsetToProtoOffset(envelope.offset))))
         }
       }
       // default service idle timeout 4 seconds
-      .via(Flow[(proto.Event, ProjectionContext)].keepAlive(keepAliveTimeout, () => KeepAliveTuple))
+      .via(Flow[(proto.ConsumeEventIn, ProjectionContext)].keepAlive(keepAliveTimeout, () => KeepAliveTuple))
       .via(Flow.fromGraph(new EventPusherStage(originId, eps, client)))
 
   }
 
-  private[internal] val KeepAliveTuple: (proto.Event, ProjectionContext) = (null, null)
+  private[internal] val KeepAliveTuple: (proto.ConsumeEventIn, ProjectionContext) =
+    (ConsumeEventIn(ConsumeEventIn.Message.KeepAlive(KeepAlive.defaultInstance)), null)
 }
 
 /**
@@ -103,10 +105,10 @@ private[akka] object EventPusher {
  */
 @InternalApi
 private[akka] class EventPusherStage(originId: String, eps: EventProducerSource, client: EventConsumerServiceClient)
-    extends GraphStage[FlowShape[(proto.Event, ProjectionContext), (Done, ProjectionContext)]] {
+    extends GraphStage[FlowShape[(ConsumeEventIn, ProjectionContext), (Done, ProjectionContext)]] {
   import EventPusher.KeepAliveTuple
 
-  val in = Inlet[(proto.Event, ProjectionContext)]("EventPusherStage.in")
+  val in = Inlet[(ConsumeEventIn, ProjectionContext)]("EventPusherStage.in")
   val out = Outlet[(Done, ProjectionContext)]("EventPusherStage.out")
 
   override val shape = FlowShape(in, out)
@@ -124,13 +126,19 @@ private[akka] class EventPusherStage(originId: String, eps: EventProducerSource,
         override def onPush(): Unit = {
           grab(in) match {
             case KeepAliveTuple =>
-              toConsumer.push(ConsumeEventIn(ConsumeEventIn.Message.KeepAlive(KeepAlive.defaultInstance)))
+              // no keep track of context for these
+              toConsumer.push(KeepAliveTuple._1)
             case (event, context) =>
-              val key = (event.persistenceId, event.seqNr)
+              val key =
+                event.message match {
+                  case ConsumeEventIn.Message.Event(evt)              => (evt.persistenceId, evt.seqNr)
+                  case ConsumeEventIn.Message.FilteredEvent(filtered) => (filtered.persistenceId, filtered.seqNr)
+                  case unexpected =>
+                    throw new IllegalArgumentException(s"Unexpected ConsumeMessageIn: ${unexpected.getClass}")
+                }
               inFlight.put(key, context)
-              toConsumer.push(ConsumeEventIn(ConsumeEventIn.Message.Event(event)))
+              toConsumer.push(event)
           }
-
         }
       })
     toConsumer.setHandler(new OutHandler {

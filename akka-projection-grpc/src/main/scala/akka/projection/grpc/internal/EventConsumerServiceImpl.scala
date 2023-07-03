@@ -71,17 +71,25 @@ private[akka] final class EventConsumerServiceImpl(
             throw new IllegalArgumentException(s"Events for stream id [${init.streamId}] not accepted by this consumer")
           logger.info("Event stream from [{}] started", init.originId)
           tail.collect {
-            case ConsumeEventIn(ConsumeEventIn.Message.Event(event), _) => event
+            case c if c.message.isEvent || c.message.isFilteredEvent => c
             // keepalive consumed and dropped here
           }
         case (_, _) =>
           throw new IllegalArgumentException(
             "Expected stream in starts with Init event followed by events but got something else")
       }
+      .map { consumeEventIn =>
+        if (consumeEventIn.message.isEvent)
+          // FIXME would we want request metadata/producer ip/entire envelope in to persistence id transformer?
+          ProtobufProtocolConversions.eventToEnvelope[Any](consumeEventIn.getEvent, protoAnySerialization)
+        else if (consumeEventIn.message.isFilteredEvent) {
+          ProtobufProtocolConversions.filteredEventToEnvelope[Any](consumeEventIn.getFilteredEvent)
+        } else {
+          throw new IllegalArgumentException(s"Unexpected type of ConsumeEventIn: ${consumeEventIn.message.getClass}")
+        }
+      }
       // FIXME config for parallelism, and perPartition (aligned with event writer batch config)
-      .mapAsyncPartitioned(1000, 20)(_.persistenceId) { (in, _) =>
-        // FIXME would we want request metadata/producer ip/entire envelope in to persistence id transformer?
-        val envelope = ProtobufProtocolConversions.eventToEnvelope[Any](in, protoAnySerialization)
+      .mapAsyncPartitioned(1000, 20)(_.persistenceId) { (envelope, _) =>
         val persistenceId = persistenceIdTransformer(envelope.persistenceId)
         if (logger.isTraceEnabled)
           logger.traceN(
