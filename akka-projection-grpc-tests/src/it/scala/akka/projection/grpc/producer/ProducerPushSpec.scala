@@ -10,7 +10,6 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
-import akka.grpc.GrpcClientSettings
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.http.scaladsl.Http
@@ -25,9 +24,8 @@ import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.consumer.scaladsl.EventConsumer
-import akka.projection.grpc.internal.EventPusher
 import akka.projection.grpc.internal.FilteredPayloadMapper
-import akka.projection.grpc.internal.proto.EventConsumerServiceClient
+import akka.projection.grpc.producer.scaladsl.ActiveEventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.R2dbcProjectionSettings
@@ -95,23 +93,21 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
   val grpcPort = 9588
 
-  def producerSourceProvider(eps: EventProducerSource) =
-    EventSourcedProvider.eventsBySlices[String](system, R2dbcReadJournal.Identifier, eps.entityType, 0, 1023)
-
-  val eventConsumerClient = EventConsumerServiceClient(
-    GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false))
-
   // this projection runs in the producer and pushes events over grpc to the consumer
-  def spawnProducerReplicationProjection(eps: EventProducerSource): ActorRef[ProjectionBehavior.Command] = {
-    val authMetadata = (new MetadataBuilder).addText("secret", "password").build()
+  def spawnProducerReplicationProjection(
+      activeEventProducer: ActiveEventProducer[String]): ActorRef[ProjectionBehavior.Command] =
     spawn(
       ProjectionBehavior(
         R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[String]](
           producerProjectionId,
           settings = None,
-          sourceProvider = producerSourceProvider(eps),
-          handler = EventPusher("local-producer-1", eventConsumerClient, eps, authMetadata))))
-  }
+          sourceProvider = EventSourcedProvider.eventsBySlices[String](
+            system,
+            R2dbcReadJournal.Identifier,
+            activeEventProducer.eventProducerSource.entityType,
+            0,
+            1023),
+          handler = activeEventProducer.handler())))
 
   def counsumerSourceProvider = {
     // FIXME how do we auto-wrap with this?
@@ -172,20 +168,23 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
           EventConsumer.grpcServiceHandler(destinationWithAuth))
       bound.futureValue
 
-      // FIXME higher level API for the producer side of this?
+      // FIXME even higher level API for the producer side of this?
       // FIXME producer filters
       val veggies = Set("cucumber")
-      val eps =
-        EventProducerSource[String](
+      val authMetadata = (new MetadataBuilder).addText("secret", "password").build()
+      val activeEventProducer = ActiveEventProducer[String](
+        originId = "producer-1",
+        eventProducerSource = EventProducerSource[String](
           entityType,
           streamId,
           Transformation.identity,
           EventProducerSettings(system),
-          producerFilter = envelope =>
-            // no veggies allowed
-            !veggies(envelope.event))
-
-      spawnProducerReplicationProjection(eps)
+          // no veggies allowed
+          producerFilter = envelope => !veggies(envelope.event)),
+        connectionMetadata = authMetadata,
+        "localhost",
+        grpcPort)
+      spawnProducerReplicationProjection(activeEventProducer)
 
       // local "regular" projections consume the projected events
       val consumerProbe = createTestProbe[EventEnvelope[String]]()

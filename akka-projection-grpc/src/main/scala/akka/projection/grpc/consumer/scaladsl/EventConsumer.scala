@@ -21,6 +21,8 @@ import scala.concurrent.Future
  *
  * The event consumer service is not needed for normal projections over gRPC where the consuming side can access and initiate
  * connections to the producing side.
+ *
+ * Producers are started using the [[akka.projection.grpc.producer.scaladsl.ActiveEventProducer]] API.
  */
 // FIXME Java API
 @ApiMayChange

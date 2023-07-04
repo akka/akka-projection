@@ -14,8 +14,6 @@ import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
-import akka.grpc.GrpcClientSettings
-import akka.grpc.scaladsl.MetadataBuilder
 import akka.http.scaladsl.Http
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
@@ -26,9 +24,8 @@ import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.consumer.scaladsl.EventConsumer
-import akka.projection.grpc.internal.EventPusher
 import akka.projection.grpc.internal.FilteredPayloadMapper
-import akka.projection.grpc.internal.proto.EventConsumerServiceClient
+import akka.projection.grpc.producer.scaladsl.ActiveEventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
@@ -94,14 +91,13 @@ object ProducerPushSampleProducer {
     val sharding = ClusterSharding(system)
     sharding.init(entity)
 
-    val eps =
-      EventProducerSource(entityTypeKey.name, streamId, Transformation.identity, EventProducerSettings(system))
-
+    val activeEventProducer = ActiveEventProducer[String](
+      producerId,
+      EventProducerSource(entityTypeKey.name, streamId, Transformation.identity, EventProducerSettings(system)),
+      "127.0.0.1",
+      grpcPort)
     val eventSourcedProvider =
       EventSourcedProvider.eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityTypeKey.name, 0, 1023)
-
-    val eventConsumerClient = EventConsumerServiceClient(
-      GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false))
 
     system ! SpawnProtocol.Spawn(
       ProjectionBehavior(
@@ -109,7 +105,7 @@ object ProducerPushSampleProducer {
           producerProjectionId,
           settings = None,
           sourceProvider = eventSourcedProvider,
-          handler = EventPusher(producerId, eventConsumerClient, eps, MetadataBuilder.empty))),
+          handler = activeEventProducer.handler())),
       "EventPusherProjection",
       Props.empty,
       system.ignoreRef)
