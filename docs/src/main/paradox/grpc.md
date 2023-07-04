@@ -157,6 +157,63 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #tags }
 
+### Topics
+
+Topics are typically used in publish-subscribe systems, such as [MQTT Topics](https://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices/).
+Event filters can be defined as topic match expressions, with topic hierarchies and wildcards according to the MQTT specification.
+
+A topic consists of one or more levels separated by a forward slash, for example:
+```
+myhome/groundfloor/livingroom/temperature
+```
+
+The topic of an event is defined by a tag with a `t:` prefix. See @ref:[above example of how to set tags in the entity](#tags).
+You should typically tag all events for a certain entity instance with the same topic tag. The tag prefix can be configured:
+
+```hcon
+akka.projection.grpc.producer.filter.topic-tag-prefix = "t:"
+```
+
+It is not recommended to use:
+
+* `+` or `#` in the topic names
+*  a leading slash in topic names, e.g. `/myhome/groundfloor/livingroom`
+
+#### Single level wildcard: `+`
+
+The single-level wildcard is represented by the plus symbol (`+`) and allows the replacement of a single topic level.
+By subscribing to a topic with a single-level wildcard, any topic that contains an arbitrary string in place of the
+wildcard will be matched.
+
+`myhome/groundfloor/+/temperature` will match these topics:
+
+* `myhome/groundfloor/livingroom/temperature`
+* `myhome/groundfloor/kitchen/temperature`
+
+but it will not match:
+
+* `myhome/groundfloor/kitchen/brightness`
+* `myhome/firstfloor/kitchen/temperature`
+* `myhome/groundfloor/kitchen/fridge/temperature`
+
+#### Multi level wildcard: `#`
+
+The multi-level wildcard covers multiple topic levels. It is represented by the hash symbol (`#`) and must be placed
+as the last character in the topic expression, preceded by a forward slash.
+
+By subscribing to a topic with a multi-level wildcard, you will receive all events of a topic that begins with the
+pattern before the wildcard character, regardless of the length or depth of the topic. If the topic expression is
+specified as `#` alone, all events will be received.
+
+`myhome/groundfloor/#` will match these topics:
+
+* `myhome/groundfloor/livingroom/temperature`
+* `myhome/groundfloor/kitchen/temperature`
+* `myhome/groundfloor/kitchen/brightness`
+
+but it will not match:
+
+* `myhome/firstfloor/kitchen/temperature`
 
 ### Producer defined filter
 
@@ -173,7 +230,9 @@ In this example the decision is based on tags, but the filter function can use a
 on the total quantity of the shopping cart, which requires the full state of the shopping cart and is not known from
 an individual event.
 
-Note that the purpose of the `withProducerFilter` is to toggle if all events for the entity are to be emitted or not.
+@ref:[Topic filters](#topics) can be defined in similar way, using `withTopicProducerFilter`. 
+
+Note that the purpose of `withProducerFilter` and `withTopicProducerFilter` is to toggle if all events for the entity are to be emitted or not.
 If the purpose is to filter out certain events you should instead use the `Transformation`.
 
 The producer filter is evaluated before the transformation function, i.e. the event is the original event and not
@@ -206,6 +265,7 @@ To exclude all events you can use `ExcludeRegexEntityIds` with `.*`.
 
 The exclude criteria can be a combination of:
 
+* `IncludeTopics` - include events with any of the given matching topics
 * `IncludeTags` - include events with any of the given tags
 * `IncludeRegexEntityIds` - include events for entities with entity ids matching the given regular expressions
 * `IncludeEntityIds` - include events for entities with the given entity ids

@@ -97,6 +97,9 @@ import akka.persistence.query.typed.EventEnvelope
 @InternalApi object AllTopicMatcher extends TopicMatcher {
   override def matches(topic: String): Boolean =
     true
+
+  override def matches(env: EventEnvelope[_], topicTagPrefix: String): Boolean =
+    true // also true if no topic tags in EventEnvelope
 }
 
 /** INTERNAL API */
