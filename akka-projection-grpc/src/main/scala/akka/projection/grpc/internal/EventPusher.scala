@@ -8,6 +8,10 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
+import akka.grpc.scaladsl.BytesEntry
+import akka.grpc.scaladsl.Metadata
+import akka.grpc.scaladsl.StreamResponseRequestBuilder
+import akka.grpc.scaladsl.StringEntry
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionContext
 import akka.projection.grpc.internal.ProtobufProtocolConversions.offsetToProtoOffset
@@ -46,8 +50,11 @@ private[akka] object EventPusher {
 
   private val logger = LoggerFactory.getLogger(getClass)
 
-  def apply[Event](originId: String, client: EventConsumerServiceClient, eps: EventProducerSource)(
-      implicit system: ActorSystem[_])
+  def apply[Event](
+      originId: String,
+      client: EventConsumerServiceClient,
+      eps: EventProducerSource,
+      additionalRequestMetadata: Metadata)(implicit system: ActorSystem[_])
       : FlowWithContext[EventEnvelope[Event], ProjectionContext, Done, ProjectionContext, NotUsed] = {
     import akka.projection.grpc.internal.ProtobufProtocolConversions.transformAndEncodeEvent
 
@@ -92,7 +99,7 @@ private[akka] object EventPusher {
       }
       // default service idle timeout 4 seconds
       .via(Flow[(proto.ConsumeEventIn, ProjectionContext)].keepAlive(keepAliveTimeout, () => KeepAliveTuple))
-      .via(Flow.fromGraph(new EventPusherStage(originId, eps, client)))
+      .via(Flow.fromGraph(new EventPusherStage(originId, eps, client, additionalRequestMetadata)))
 
   }
 
@@ -104,7 +111,11 @@ private[akka] object EventPusher {
  * INTERNAL API
  */
 @InternalApi
-private[akka] class EventPusherStage(originId: String, eps: EventProducerSource, client: EventConsumerServiceClient)
+private[akka] class EventPusherStage(
+    originId: String,
+    eps: EventProducerSource,
+    client: EventConsumerServiceClient,
+    additionalRequestMetadata: Metadata)
     extends GraphStage[FlowShape[(ConsumeEventIn, ProjectionContext), (Done, ProjectionContext)]] {
   import EventPusher.KeepAliveTuple
 
@@ -170,13 +181,24 @@ private[akka] class EventPusherStage(originId: String, eps: EventProducerSource,
     })
 
     override def preStart(): Unit = {
-      client
-        .consumeEvent(
+      addRequestHeaders(
+        client
+          .consumeEvent())
+        .invokeWithMetadata(
           Source
             .single(ConsumeEventIn(
               ConsumeEventIn.Message.Init(ConsumerEventInit(originId = originId, streamId = eps.streamId))))
             .concat(Source.fromGraph(toConsumer.source)))
         .runWith(Sink.fromGraph(fromConsumer.sink))(materializer)
+    }
+
+    private def addRequestHeaders[Req, Res](
+        builder: StreamResponseRequestBuilder[Req, Res]): StreamResponseRequestBuilder[Req, Res] = {
+      val additionalRequestHeaders = additionalRequestMetadata.asList
+      additionalRequestHeaders.foldLeft(builder) {
+        case (acc, (key, StringEntry(str)))  => acc.addHeader(key, str)
+        case (acc, (key, BytesEntry(bytes))) => acc.addHeader(key, bytes)
+      }
     }
   }
 }

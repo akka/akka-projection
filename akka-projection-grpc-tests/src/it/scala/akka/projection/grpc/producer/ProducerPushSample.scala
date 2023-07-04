@@ -15,6 +15,7 @@ import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
+import akka.grpc.scaladsl.MetadataBuilder
 import akka.http.scaladsl.Http
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
@@ -108,7 +109,7 @@ object ProducerPushSampleProducer {
           producerProjectionId,
           settings = None,
           sourceProvider = eventSourcedProvider,
-          handler = EventPusher(producerId, eventConsumerClient, eps))),
+          handler = EventPusher(producerId, eventConsumerClient, eps, MetadataBuilder.empty))),
       "EventPusherProjection",
       Props.empty,
       system.ignoreRef)

@@ -11,6 +11,8 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.grpc.GrpcClientSettings
+import akka.grpc.GrpcServiceException
+import akka.grpc.scaladsl.MetadataBuilder
 import akka.http.scaladsl.Http
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
@@ -31,6 +33,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import com.typesafe.config.ConfigFactory
+import io.grpc.Status
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -99,14 +102,16 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
     GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false))
 
   // this projection runs in the producer and pushes events over grpc to the consumer
-  def spawnProducerReplicationProjection(eps: EventProducerSource): ActorRef[ProjectionBehavior.Command] =
+  def spawnProducerReplicationProjection(eps: EventProducerSource): ActorRef[ProjectionBehavior.Command] = {
+    val authMetadata = (new MetadataBuilder).addText("secret", "password").build()
     spawn(
       ProjectionBehavior(
         R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[String]](
           producerProjectionId,
           settings = None,
           sourceProvider = producerSourceProvider(eps),
-          handler = EventPusher("local-producer-1", eventConsumerClient, eps))))
+          handler = EventPusher("local-producer-1", eventConsumerClient, eps, authMetadata))))
+  }
 
   def counsumerSourceProvider = {
     // FIXME how do we auto-wrap with this?
@@ -155,9 +160,9 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
           acceptedStreamIds = Set(streamId))
 
       val destinationWithAuth = destination.withInterceptor(
-        (_, _) =>
-          // anything goes
-          Future.successful(Done))
+        (_, metadata) =>
+          if (metadata.getText("secret").contains("password")) Future.successful(Done)
+          else throw new GrpcServiceException(Status.PERMISSION_DENIED))
 
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
