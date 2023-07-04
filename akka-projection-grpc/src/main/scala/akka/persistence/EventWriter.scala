@@ -14,6 +14,7 @@ import akka.annotation.InternalApi
 import akka.pattern.StatusReply
 
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 
 // FIXME move to akka-persistence-typed for access
 
@@ -22,6 +23,8 @@ import java.util.UUID
  */
 @InternalApi
 private[akka] object EventWriter {
+
+  private val instanceCounter = new AtomicInteger(1)
 
   sealed trait Command
   final case class Write(
@@ -43,6 +46,7 @@ private[akka] object EventWriter {
       .supervise(Behaviors
         .setup[AnyRef] { context =>
           val maxBatchSize = 20 // FIXME from config
+          val actorInstanceId = instanceCounter.getAndIncrement()
           val writerUuid = UUID.randomUUID().toString
           val journal = Persistence(context.system).journalFor(journalPluginId)
           context.log.debug("Event writer for journal [{}] starting up", journalPluginId)
@@ -67,7 +71,7 @@ private[akka] object EventWriter {
                     newStateForPid.waitingForWrite.last._1.sequenceNr)
                 val batchWrite = AtomicWrite(newStateForPid.waitingForWrite.map { case (repr, _) => repr })
                 journal ! JournalProtocol
-                  .WriteMessages(batchWrite :: Nil, context.self.toClassic, context.self.path.uid)
+                  .WriteMessages(batchWrite :: Nil, context.self.toClassic, actorInstanceId)
 
                 val newReplyTo = newStateForPid.waitingForWrite.map {
                   case (repr, replyTo) => repr.sequenceNr -> replyTo
@@ -79,7 +83,7 @@ private[akka] object EventWriter {
 
           def handleJournalResponse(response: JournalProtocol.Response): Behavior[AnyRef] =
             response match {
-              case JournalProtocol.WriteMessageSuccess(message, _) =>
+              case JournalProtocol.WriteMessageSuccess(message, `actorInstanceId`) =>
                 val pid = message.persistenceId
                 val sequenceNr = message.sequenceNr
                 perPidWriteState.get(pid) match {
@@ -104,7 +108,7 @@ private[akka] object EventWriter {
                     }
                 }
 
-              case JournalProtocol.WriteMessageFailure(message, error, _) =>
+              case JournalProtocol.WriteMessageFailure(message, error, `actorInstanceId`) =>
                 val pid = message.persistenceId
                 val sequenceNr = message.sequenceNr
                 perPidWriteState.get(pid) match {
@@ -161,7 +165,7 @@ private[akka] object EventWriter {
                         sequenceNumber,
                         event)
                     val write = AtomicWrite(reprWithMeta) :: Nil
-                    journal ! JournalProtocol.WriteMessages(write, context.self.toClassic, context.self.path.uid)
+                    journal ! JournalProtocol.WriteMessages(write, context.self.toClassic, actorInstanceId)
                     StateForPid(Map(reprWithMeta.sequenceNr -> replyTo), emptyWaitingForWrite)
                   case Some(state) =>
                     // write in progress for pid, add write to batch and perform once current write completes
