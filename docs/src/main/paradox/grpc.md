@@ -145,6 +145,14 @@ events are still transferred to the consumer, to ensure sequence number validati
 Filters can be used when a consumer is only interested in a subset of the entities. The filters can be defined
 on both the producer side and on the consumer side, and they can be changed at runtime.
 
+@@@ note
+
+The purpose of filters is to toggle if all events for the entity are to be emitted or not.
+If the purpose is to filter out certain events you should instead use the
+@ref:[transformation function of the producer](#producer).
+
+@@@
+
 ### Tags
 
 Tags are typically used for the filters, so first an example of how to tag events in the entity. Here, the tag is
