@@ -20,6 +20,7 @@ import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQu
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
+import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.javadsl.{ Transformation => JTransformation }
@@ -71,8 +72,20 @@ object EventProducer {
     require(entityType.nonEmpty, "Stream id must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
+    /**
+     * Filter events matching the predicate, for example based on tags.
+     */
     def withProducerFilter[Event](producerFilter: EventEnvelope[Event] => Boolean): EventProducerSource =
       copy(producerFilter = producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+
+    /**
+     * Filter events matching the topic expression according to MQTT specification, including wildcards.
+     * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
+     */
+    def withTopicProducerFilter(topicExpression: String): EventProducerSource = {
+      val topicMatcher = TopicMatcher(topicExpression)
+      withProducerFilter[Any](topicMatcher.matches(_, settings.topicTagPrefix))
+    }
 
     def withStartingFromSnapshots[Snapshot, Event](transformSnapshot: Snapshot => Event): EventProducerSource =
       copy(transformSnapshot = Some(transformSnapshot.asInstanceOf[Any => Any]))

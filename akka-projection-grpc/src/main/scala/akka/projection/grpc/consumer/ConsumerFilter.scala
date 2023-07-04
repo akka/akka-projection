@@ -133,8 +133,10 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   }
 
   /**
-   * Include events with any of the given matching topics. A matching include overrides
-   * a matching exclude.
+   * Include events with any of the given matching topics. A matching include overrides a matching exclude.
+   *
+   * Topic match expression according to MQTT specification, including wildcards.
+   * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
    */
   final case class IncludeTopics(expressions: Set[String]) extends FilterCriteria {
 

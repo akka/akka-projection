@@ -122,18 +122,8 @@ import org.slf4j.LoggerFactory
       def matchesIncludeRegexEntityIds: Boolean =
         matchesRegexEntityIds(includeRegexEntityIds.values)
 
-      def matchesTopics: Boolean = {
-        if (env.tags.isEmpty)
-          false
-        else {
-          env.tags.iterator.exists { tag =>
-            if (tag.startsWith(topicTagPrefix))
-              topicMatchers.exists(_.matches(tag.substring(topicTagPrefix.length)))
-            else
-              false
-          }
-        }
-      }
+      def matchesTopics: Boolean =
+        topicMatchers.exists(_.matches(env, topicTagPrefix))
 
       if (env.tags.intersect(excludeTags).nonEmpty ||
           excludePersistenceIds.contains(pid) ||

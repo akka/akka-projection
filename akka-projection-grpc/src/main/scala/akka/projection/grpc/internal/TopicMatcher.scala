@@ -7,6 +7,7 @@ package akka.projection.grpc.internal
 import scala.annotation.tailrec
 
 import akka.annotation.InternalApi
+import akka.persistence.query.typed.EventEnvelope
 
 /**
  * INTERNAL API
@@ -77,6 +78,19 @@ import akka.annotation.InternalApi
 /** INTERNAL API */
 @InternalApi private[akka] sealed trait TopicMatcher {
   def matches(topic: String): Boolean
+
+  def matches(env: EventEnvelope[_], topicTagPrefix: String): Boolean = {
+    if (env.tags.isEmpty)
+      false
+    else {
+      env.tags.iterator.exists { tag =>
+        if (tag.startsWith(topicTagPrefix))
+          matches(tag.substring(topicTagPrefix.length))
+        else
+          false
+      }
+    }
+  }
 }
 
 /** INTERNAL API */
