@@ -5,15 +5,20 @@
 package akka.persistence
 
 import akka.actor.typed.ActorRef
+import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
+import akka.actor.typed.Extension
+import akka.actor.typed.ExtensionId
 import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.TypedActorRefOps
-import akka.annotation.InternalApi
+import akka.annotation.InternalStableApi
 import akka.pattern.StatusReply
 
+import java.net.URLEncoder
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 // FIXME move to akka-persistence-typed for access
@@ -21,7 +26,34 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * INTERNAL API
  */
-@InternalApi
+@InternalStableApi
+private[akka] object EventWriterExtension extends ExtensionId[EventWriterExtension] {
+  def createExtension(system: ActorSystem[_]): EventWriterExtension = new EventWriterExtension(system)
+
+  def get(system: ActorSystem[_]): EventWriterExtension = apply(system)
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalStableApi
+private[akka] class EventWriterExtension(system: ActorSystem[_]) extends Extension {
+  private val writersPerJournalId = new ConcurrentHashMap[String, ActorRef[EventWriter.Command]]()
+
+  def writerForJournal(journalId: Option[String]): ActorRef[EventWriter.Command] =
+    writersPerJournalId.computeIfAbsent(
+      journalId.getOrElse(""), { _ =>
+        system.systemActorOf(
+          EventWriter(journalId.getOrElse("")),
+          s"EventWriter-${URLEncoder.encode(journalId.getOrElse("default"), "UTF-8")}")
+      })
+
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalStableApi
 private[akka] object EventWriter {
 
   private val instanceCounter = new AtomicInteger(1)
