@@ -16,6 +16,7 @@ import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
@@ -182,9 +183,10 @@ object EventProducer {
     EventProducerServicePowerApiHandler.partial(
       new EventProducerServiceImpl(
         system,
-        eventsBySlicesQueriesForStreamIds(sources, system),
-        eventsBySlicesStartingFromSnapshotsQueriesForStreamIds(sources, system),
-        currentEventsByPersistenceIdQueriesForStreamIds(sources, system),
+        eventsBySlicesForStreamIds(sources, system),
+        eventsBySlicesStartingFromSnapshotsForStreamIds(sources, system),
+        currentEventsByPersistenceIdForStreamIds(sources, system),
+        currentEventsByPersistenceIdStartingFromSnapshotForStreamIds(sources, system),
         sources,
         interceptor))
   }
@@ -192,7 +194,7 @@ object EventProducer {
   /**
    * INTERNAL API
    */
-  private[akka] def eventsBySlicesQueriesForStreamIds(
+  private[akka] def eventsBySlicesForStreamIds(
       sources: Set[EventProducerSource],
       system: ActorSystem[_]): Map[String, EventsBySliceQuery] = {
     val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
@@ -206,7 +208,7 @@ object EventProducer {
   /**
    * INTERNAL API
    */
-  private[akka] def eventsBySlicesStartingFromSnapshotsQueriesForStreamIds(
+  private[akka] def eventsBySlicesStartingFromSnapshotsForStreamIds(
       sources: Set[EventProducerSource],
       system: ActorSystem[_]): Map[String, EventsBySliceStartingFromSnapshotsQuery] = {
     val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
@@ -221,11 +223,30 @@ object EventProducer {
   /**
    * INTERNAL API
    */
-  private[akka] def currentEventsByPersistenceIdQueriesForStreamIds(
+  private[akka] def currentEventsByPersistenceIdForStreamIds(
       sources: Set[EventProducerSource],
       system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdTypedQuery] = {
+    val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
+      sources.map(s => s.streamId -> s).toMap
     queriesForStreamIds(sources, system).collect {
-      case (streamId, q: CurrentEventsByPersistenceIdTypedQuery) => streamId -> q
+      case (streamId, q: CurrentEventsByPersistenceIdTypedQuery)
+          if streamIdToSourceMap(streamId).transformSnapshot.isEmpty =>
+        streamId -> q
+    }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  private[akka] def currentEventsByPersistenceIdStartingFromSnapshotForStreamIds(
+      sources: Set[EventProducerSource],
+      system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdStartingFromSnapshotQuery] = {
+    val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
+      sources.map(s => s.streamId -> s).toMap
+    queriesForStreamIds(sources, system).collect {
+      case (streamId, q: CurrentEventsByPersistenceIdStartingFromSnapshotQuery)
+          if streamIdToSourceMap(streamId).transformSnapshot.isDefined =>
+        streamId -> q
     }
   }
 
