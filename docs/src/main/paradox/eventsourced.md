@@ -61,7 +61,7 @@ Scala
 Java
 :  @@snip [EventSourcedDocExample.java](/examples/src/test/java/jdocs/eventsourced/EventSourcedBySlicesDocExample.java) { #eventsBySlicesSourceProvider }
 
-This example is using the [R2DBC plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-r2dbc/current/query.html).
+This example is using the @extref:[R2DBC plugin for Akka Persistence](akka-persistence-r2dbc:query.html).
 You will use the same plugin as you have configured for the write side that is used by the `EventSourcedBehavior`.
 
 This source is consuming all events from the `ShoppingCart` `EventSourcedBehavior` for the given slice range. In a production application, you would need to start as many instances as the number of slice ranges. That way you consume the events from all entities.
@@ -81,3 +81,14 @@ You need to define the snapshot to event transformation function in `EventSource
 
 The underlying read journal must implement @apidoc[EventsBySliceStartingFromSnapshotsQuery].
 See how to enable @extref:[eventsBySlicesStartingFromSnapshots in Akka Persistence R2DBC](akka-persistence-r2dbc:query.html#eventsbyslicesstartingfromsnapshots).
+
+## Many Projections 
+
+@apidoc[akka.persistence.query.typed.*.EventsBySliceFirehoseQuery] can give better scalability when many
+consumers retrieve the same events, for example many Projections of the same entity type. The purpose is
+to share the stream of events from the database and fan out to connected consumer streams. Thereby fewer queries
+and loading of events from the database.
+
+`EventsBySliceFirehoseQuery` is used in place of `EventsBySliceQuery` with the `EventSourcedProvider`.
+
+It is typically used together with @extref:[Sharded Daemon Process with colocated processes](akka:typed/cluster-sharded-daemon-process.md#colocate-processes).
