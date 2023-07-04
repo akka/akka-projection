@@ -15,6 +15,7 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.TypedActorRefOps
 import akka.annotation.InternalStableApi
 import akka.pattern.StatusReply
+import akka.persistence.journal.Tagged
 
 import java.net.URLEncoder
 import java.util.UUID
@@ -64,6 +65,7 @@ private[akka] object EventWriter {
       sequenceNumber: Long,
       event: Any,
       metadata: Option[Any],
+      tags: Set[String],
       replyTo: ActorRef[StatusReply[WriteAck]])
       extends Command
   final case class WriteAck(persistenceId: String, sequenceNumber: Long)
@@ -173,9 +175,10 @@ private[akka] object EventWriter {
             }
 
           Behaviors.receiveMessage {
-            case Write(persistenceId, sequenceNumber, event, metadata, replyTo) =>
+            case Write(persistenceId, sequenceNumber, event, metadata, tags, replyTo) =>
+              val payload = if (tags.isEmpty) event else Tagged(event, tags)
               val repr = PersistentRepr(
-                event,
+                payload,
                 persistenceId = persistenceId,
                 sequenceNr = sequenceNumber,
                 manifest = "", // adapters would be on the producing side, already applied

@@ -161,6 +161,13 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
           .withInterceptor((_, metadata) =>
             if (metadata.getText("secret").contains("password")) Future.successful(Done)
             else throw new GrpcServiceException(Status.PERMISSION_DENIED))
+          // FIXME not sure about the mini DSL
+          .withTransformation(
+            EventConsumer.Transformation
+              .mapPersistenceId[String](envelope => envelope.persistenceId.replace("p-", "q-"))
+              .andThen(EventConsumer.Transformation.mapTags[String](_ => Set("added-tag")))
+              .andThen(EventConsumer.Transformation.mapPayload[String, String](env =>
+                env.eventOption.map(_.toUpperCase))))
 
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
@@ -203,9 +210,12 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       entity1 ! TestEntity.Persist("mangos")
 
       // event projected into consumer journal and shows up in local projection
-      consumerProbe.receiveMessage(10.seconds).event should be("bananas")
+      val first = consumerProbe.receiveMessage(10.seconds)
+      first.event should be("BANANAS")
+      first.persistenceId should include("q-")
+      first.tags should ===(Set("added-tag"))
       // Note: filtered ends up in the consumer journal, but does not show up in projection
-      consumerProbe.receiveMessage().event should be("mangos")
+      consumerProbe.receiveMessage().event should be("MANGOS")
 
       val entity2 = spawn(TestEntity(nextPid(entityType)))
       val entity3 = spawn(TestEntity(nextPid(entityType)))

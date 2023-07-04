@@ -10,10 +10,12 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.dispatch.ExecutionContexts
 import akka.grpc.scaladsl.Metadata
 import akka.persistence.EventWriter
 import akka.persistence.EventWriterExtension
 import akka.persistence.FilteredPayload
+import akka.projection.grpc.consumer.scaladsl.EventConsumer
 import akka.projection.grpc.consumer.scaladsl.EventConsumerInterceptor
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
@@ -38,10 +40,10 @@ private[akka] object EventConsumerServiceImpl {
   def apply(
       journalPluginId: Option[String],
       acceptedStreamIds: Set[String],
-      persistenceIdTransformer: String => String,
+      eventTransformer: EventConsumer.Transformation,
       interceptor: Option[EventConsumerInterceptor])(implicit system: ActorSystem[_]): EventConsumerServiceImpl = {
     val eventWriter = EventWriterExtension(system).writerForJournal(journalPluginId)
-    new EventConsumerServiceImpl(eventWriter, acceptedStreamIds, persistenceIdTransformer, interceptor)
+    new EventConsumerServiceImpl(eventWriter, acceptedStreamIds, eventTransformer, interceptor)
   }
 
 }
@@ -52,7 +54,7 @@ private[akka] object EventConsumerServiceImpl {
 private[akka] final class EventConsumerServiceImpl(
     eventWriter: ActorRef[EventWriter.Command],
     acceptedStreamIds: Set[String],
-    persistenceIdTransformer: String => String,
+    eventTransformer: EventConsumer.Transformation,
     interceptor: Option[EventConsumerInterceptor])(implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
@@ -103,30 +105,34 @@ private[akka] final class EventConsumerServiceImpl(
         }
       }
       // FIXME config for parallelism, and perPartition (aligned with event writer batch config)
-      .mapAsyncPartitioned(1000, 20)(_.persistenceId) { (envelope, _) =>
-        val persistenceId = persistenceIdTransformer(envelope.persistenceId)
+      .mapAsyncPartitioned(1000, 20)(_.persistenceId) { (originalEnvelope, _) =>
+        val transformedEventEnvelope = eventTransformer(originalEnvelope)
         if (logger.isTraceEnabled)
           logger.traceN(
             "Saw event [{}] for pid [{}]{}",
-            envelope.sequenceNr,
-            envelope.persistenceId,
-            if (envelope.filtered) " filtered" else "")
+            transformedEventEnvelope.sequenceNr,
+            transformedEventEnvelope.persistenceId,
+            if (transformedEventEnvelope.filtered) " filtered" else "")
 
         eventWriter
-          .askWithStatus[EventWriter.WriteAck](
-            EventWriter.Write(
-              persistenceId,
-              envelope.sequenceNr,
-              envelope.eventOption.getOrElse(FilteredPayload),
-              envelope.eventMetadata,
-              _))
+          .askWithStatus[EventWriter.WriteAck](EventWriter.Write(
+            transformedEventEnvelope.persistenceId,
+            transformedEventEnvelope.sequenceNr,
+            transformedEventEnvelope.eventOption.getOrElse(FilteredPayload),
+            transformedEventEnvelope.eventMetadata,
+            transformedEventEnvelope.tags,
+            _))
+          .map(_ =>
+            // ack using the original pid in case it was transformed
+            ConsumeEventOut(ConsumeEventOut.Message.Ack(
+              ConsumerEventAck(originalEnvelope.persistenceId, originalEnvelope.sequenceNr))))(
+            ExecutionContexts.parasitic)
           .recover {
             case NonFatal(ex) =>
               logger.warn(s"Failing event stream because of event writer error", ex)
               throw ex;
           }(system.executionContext)
       }
-      .map(ack => ConsumeEventOut(ConsumeEventOut.Message.Ack(ConsumerEventAck(ack.persistenceId, ack.sequenceNumber))))
   }
 
 }
