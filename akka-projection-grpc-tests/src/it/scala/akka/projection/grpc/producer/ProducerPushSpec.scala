@@ -10,6 +10,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
+import akka.grpc.GrpcClientSettings
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.http.scaladsl.Http
@@ -182,8 +183,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
           // no veggies allowed
           producerFilter = envelope => !veggies(envelope.event)),
         connectionMetadata = authMetadata,
-        "localhost",
-        grpcPort)
+        GrpcClientSettings.connectToServiceAt("localhost", grpcPort).withTls(false))
       spawnProducerReplicationProjection(activeEventProducer)
 
       // local "regular" projections consume the projected events

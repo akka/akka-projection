@@ -14,6 +14,7 @@ import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
+import akka.grpc.GrpcClientSettings
 import akka.http.scaladsl.Http
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
@@ -94,8 +95,7 @@ object ProducerPushSampleProducer {
     val activeEventProducer = ActiveEventProducer[String](
       producerId,
       EventProducerSource(entityTypeKey.name, streamId, Transformation.identity, EventProducerSettings(system)),
-      "127.0.0.1",
-      grpcPort)
+      GrpcClientSettings.connectToServiceAt("localhost", grpcPort).withTls(false))
     val eventSourcedProvider =
       EventSourcedProvider.eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityTypeKey.name, 0, 1023)
 

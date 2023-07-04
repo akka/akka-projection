@@ -23,30 +23,26 @@ object ActiveEventProducer {
       originId: String,
       eventProducerSource: EventProducerSource,
       connectionMetadata: Metadata,
-      grpcHost: String,
-      grpcPort: Int): ActiveEventProducer[Event] =
-    new ActiveEventProducer[Event](originId, eventProducerSource, Some(connectionMetadata), grpcHost, grpcPort)
+      grpcClientSettings: GrpcClientSettings): ActiveEventProducer[Event] =
+    new ActiveEventProducer[Event](originId, eventProducerSource, Some(connectionMetadata), grpcClientSettings)
 
   def apply[Event](
       originId: String,
       eventProducerSource: EventProducerSource,
-      grpcHost: String,
-      grpcPort: Int): ActiveEventProducer[Event] =
-    new ActiveEventProducer[Event](originId, eventProducerSource, None, grpcHost, grpcPort)
+      grpcClientSettings: GrpcClientSettings): ActiveEventProducer[Event] =
+    new ActiveEventProducer[Event](originId, eventProducerSource, None, grpcClientSettings)
 }
 
 final class ActiveEventProducer[Event](
     val originId: String,
     val eventProducerSource: EventProducerSource,
     val connectionMetadata: Option[Metadata],
-    val grpcHost: String,
-    val grpcPort: Int) {
+    val grpcClientSettings: GrpcClientSettings) {
 
   def handler()(implicit system: ActorSystem[_])
       : FlowWithContext[EventEnvelope[Event], ProjectionContext, Done, ProjectionContext, NotUsed] = {
     // FIXME gprc client config - use stream id to look up block? Use host to lookup port (normal gRPC client config)? Something else?
-    val eventConsumerClient = EventConsumerServiceClient(
-      GrpcClientSettings.connectToServiceAt(grpcHost, grpcPort).withTls(false))
+    val eventConsumerClient = EventConsumerServiceClient(grpcClientSettings)
     EventPusher(originId, eventConsumerClient, eventProducerSource, connectionMetadata.getOrElse(MetadataBuilder.empty))
   }
 }
