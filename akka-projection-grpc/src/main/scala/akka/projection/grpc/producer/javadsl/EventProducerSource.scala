@@ -8,6 +8,7 @@ import java.util.Optional
 
 import akka.annotation.ApiMayChange
 import akka.persistence.query.typed.EventEnvelope
+import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.producer.EventProducerSettings
 
 /**
@@ -42,6 +43,9 @@ final class EventProducerSource(
       producerFilter: java.util.function.Predicate[EventEnvelope[Any]]) =
     this(entityType, streamId, transformation, settings, producerFilter, Optional.empty())
 
+  /**
+   * Filter events matching the predicate, for example based on tags.
+   */
   def withProducerFilter[Event](
       producerFilter: java.util.function.Predicate[EventEnvelope[Event]]): EventProducerSource =
     new EventProducerSource(
@@ -51,6 +55,15 @@ final class EventProducerSource(
       settings,
       producerFilter.asInstanceOf[java.util.function.Predicate[EventEnvelope[Any]]],
       Optional.empty())
+
+  /**
+   * Filter events matching the topic expression according to MQTT specification, including wildcards.
+   * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
+   */
+  def withTopicProducerFilter(topicExpression: String): EventProducerSource = {
+    val topicMatcher = TopicMatcher(topicExpression)
+    withProducerFilter[Any](topicMatcher.matches(_, settings.topicTagPrefix))
+  }
 
   def withStartingFromSnapshots[Snapshot, Event](transformSnapshot: java.util.function.Function[Snapshot, Event]) =
     new EventProducerSource(

@@ -122,7 +122,9 @@ In this example the decision is based on tags, but the filter function can use a
 on the total quantity of the shopping cart, which requires the full state of the shopping cart and is not known from
 an individual event.
 
-Note that the purpose of the `withProducerFilter` is to toggle if all events for the entity are to be emitted or not.
+@extref[Topic filters](akka-projection:grpc.html#topics) can be defined in similar way, using `withTopicProducerFilter`.
+
+Note that the purpose of `withProducerFilter` and `withTopicProducerFilter` is to toggle if all events for the entity are to be emitted or not.
 If the purpose is to filter out certain events you should instead use the `Transformation`.
 
 The producer filter is evaluated before the transformation function, i.e. the event is the original event and not

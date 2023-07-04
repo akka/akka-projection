@@ -27,6 +27,7 @@ import java.util.concurrent.CompletionStage
 import java.util.function.Predicate
 
 import akka.persistence.query.typed.EventEnvelope
+import akka.projection.grpc.internal.TopicMatcher
 
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
@@ -86,6 +87,8 @@ object Replication {
 
   /**
    * Called to bootstrap the entity on each cluster node in each of the replicas.
+   *
+   * Filter events matching the `producerFilter` predicate, for example based on tags.
    *
    * Important: Note that this does not publish the endpoint, additional steps are needed!
    */
@@ -147,6 +150,28 @@ object Replication {
 
       override def toString: String = scalaRESOG.toString
     }
+  }
+
+  /**
+   * Called to bootstrap the entity on each cluster node in each of the replicas.
+   *
+   * Filter events matching the topic expression according to MQTT specification, including wildcards.
+   * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
+   *
+   * Important: Note that this does not publish the endpoint, additional steps are needed!
+   */
+  def grpcReplication[Command, Event, State](
+      settings: ReplicationSettings[Command],
+      topicExpression: String,
+      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
+      system: ActorSystem[_]): Replication[Command] = {
+    val topicMatcher = TopicMatcher(topicExpression)
+    grpcReplication(
+      settings,
+      (env: EventEnvelope[Event]) => topicMatcher.matches(env, settings.eventProducerSettings.topicTagPrefix),
+      replicatedBehaviorFactory,
+      system)
+
   }
 
 }

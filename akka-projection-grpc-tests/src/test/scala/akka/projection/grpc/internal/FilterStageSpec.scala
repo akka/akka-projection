@@ -122,6 +122,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             initFilter,
             testCurrentEventsByPersistenceIdQuery(allEnvelopes),
             producerFilter = initProducerFilter,
+            topicTagPrefix = producerSettings.topicTagPrefix,
             replayParallelism = producerSettings.replayParallelism))
         .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
     private val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
