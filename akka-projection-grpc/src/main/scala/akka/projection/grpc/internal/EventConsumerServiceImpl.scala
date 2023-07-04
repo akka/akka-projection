@@ -9,6 +9,7 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.LoggerOps
+import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.persistence.EventWriter
 import akka.persistence.FilteredPayload
@@ -18,11 +19,11 @@ import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventAck
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
 import akka.stream.scaladsl.Source
-import akka.util.ByteString
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
 
 import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
 import scala.util.control.NonFatal
@@ -32,21 +33,19 @@ import scala.util.control.NonFatal
  *
  * gRPC push protocol service for the consuming side
  */
+@InternalApi
 private[akka] object EventConsumerServiceImpl {
 
-  /**
-   *
-   * @param journalPluginId empty to use default
-   */
-  def directJournalConsumer(
+  def apply(
       journalPluginId: Option[String],
       acceptedStreamIds: Set[String],
       persistenceIdTransformer: String => String,
       interceptor: Option[EventConsumerInterceptor])(implicit system: ActorSystem[_]): EventConsumerServiceImpl = {
     // FIXME is this name unique, could we create multiple for the same journal? (we wouldn't be able to bind them to the same port)
+    // FIXME should it be a system extension instead of us starting it here?
     val eventWriter = system.systemActorOf(
       EventWriter(journalPluginId.getOrElse("")),
-      s"EventWriter-${URLEncoder.encode(journalPluginId.getOrElse("default"), ByteString.UTF_8)}")
+      s"EventWriter-${URLEncoder.encode(journalPluginId.getOrElse("default"), StandardCharsets.UTF_8)}")
 
     new EventConsumerServiceImpl(eventWriter, acceptedStreamIds, persistenceIdTransformer, interceptor)
   }

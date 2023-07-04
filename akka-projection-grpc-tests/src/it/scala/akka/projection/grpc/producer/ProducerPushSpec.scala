@@ -152,21 +152,19 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       // FIXME consumer filters
       // FIXME we might want to allow transforming more aspects of the events (payloads even?)
       val destination =
-        EventConsumer.EventConsumerDestination(
-          journalPluginId = "test.consumer.r2dbc.journal",
-          acceptedStreamIds = Set(streamId))
-
-      val destinationWithAuth = destination.withInterceptor(
-        (_, metadata) =>
-          if (metadata.getText("secret").contains("password")) Future.successful(Done)
-          else throw new GrpcServiceException(Status.PERMISSION_DENIED))
+        EventConsumer
+          .EventConsumerDestination(streamId)
+          .withJournalPluginId("test.consumer.r2dbc.journal")
+          .withInterceptor((_, metadata) =>
+            if (metadata.getText("secret").contains("password")) Future.successful(Done)
+            else throw new GrpcServiceException(Status.PERMISSION_DENIED))
 
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
         .bind(
           // events are written directly into the journal on the consumer side, pushing over gRPC is only
           // allowed if no two pushing systems push events for the same persistence id
-          EventConsumer.grpcServiceHandler(destinationWithAuth))
+          EventConsumer.grpcServiceHandler(destination))
       bound.futureValue
 
       // FIXME even higher level API for the producer side of this?

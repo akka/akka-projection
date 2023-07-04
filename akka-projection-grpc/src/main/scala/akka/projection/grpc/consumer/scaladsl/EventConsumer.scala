@@ -35,40 +35,45 @@ object EventConsumer {
       val interceptor: Option[EventConsumerInterceptor] = None) {
 
     def withInterceptor(interceptor: EventConsumerInterceptor): EventConsumerDestination =
-      new EventConsumerDestination(journalPluginId, acceptedStreamIds, persistenceIdTransformer, Some(interceptor))
+      copy(interceptor = Some(interceptor))
 
+    def withJournalPluginId(journalPluginId: String): EventConsumerDestination =
+      copy(journalPluginId = Some(journalPluginId))
+
+    def withPersistenceIdTransformer(transformer: String => String): EventConsumerDestination =
+      copy(persistenceIdTransformer = transformer)
+
+    private def copy(
+        journalPluginId: Option[String] = journalPluginId,
+        acceptedStreamIds: Set[String] = acceptedStreamIds,
+        persistenceIdTransformer: String => String = persistenceIdTransformer,
+        interceptor: Option[EventConsumerInterceptor] = interceptor): EventConsumerDestination =
+      new EventConsumerDestination(journalPluginId, acceptedStreamIds, persistenceIdTransformer, interceptor)
   }
 
   object EventConsumerDestination {
 
     /**
-     * Accept pushed events, write to the default journal
-     *
      * @param acceptedStreamIds Only accept these stream ids, deny others
-     * @return An Akka HTTP handler for the service, needs to be bound to a port to actually handle pushes
      */
     def apply(acceptedStreamIds: Set[String]): EventConsumerDestination =
       new EventConsumerDestination(None, acceptedStreamIds, identity[String])
 
-    def apply(journalPluginId: String, acceptedStreamIds: Set[String]): EventConsumerDestination =
-      new EventConsumerDestination(Some(journalPluginId), acceptedStreamIds, identity)
-
-    def apply(
-        journalPluginId: String,
-        acceptedStreamIds: Set[String],
-        persistenceIdTransformer: String => String): EventConsumerDestination =
-      new EventConsumerDestination(Some(journalPluginId), acceptedStreamIds, persistenceIdTransformer)
+    /**
+     * @param acceptedStreamId Only accept this stream ids, deny others
+     */
+    def apply(acceptedStreamId: String): EventConsumerDestination =
+      apply(Set(acceptedStreamId))
   }
 
   def grpcServiceHandler(eventConsumer: EventConsumerDestination)(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
     EventConsumerServicePowerApiHandler(
-      EventConsumerServiceImpl
-        .directJournalConsumer(
-          journalPluginId = eventConsumer.journalPluginId,
-          persistenceIdTransformer = eventConsumer.persistenceIdTransformer,
-          acceptedStreamIds = eventConsumer.acceptedStreamIds,
-          interceptor = eventConsumer.interceptor))
+      EventConsumerServiceImpl(
+        journalPluginId = eventConsumer.journalPluginId,
+        persistenceIdTransformer = eventConsumer.persistenceIdTransformer,
+        acceptedStreamIds = eventConsumer.acceptedStreamIds,
+        interceptor = eventConsumer.interceptor))
 
   // FIXME do we need a handler taking a set of EventConsumerDestinations like for EventProducerSource?
 

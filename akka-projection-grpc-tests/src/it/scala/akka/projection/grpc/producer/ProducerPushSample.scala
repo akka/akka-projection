@@ -168,7 +168,7 @@ object ProducerPushSampleConsumer {
       system.ignoreRef)
 
     // consumer runs gRPC server accepting pushed events from producers
-    val destination = EventConsumer.EventConsumerDestination(Set(streamId))
+    val destination = EventConsumer.EventConsumerDestination(streamId)
     val bound = Http(system)
       .newServerAt("127.0.0.1", grpcPort)
       .bind(EventConsumer.grpcServiceHandler(destination))
