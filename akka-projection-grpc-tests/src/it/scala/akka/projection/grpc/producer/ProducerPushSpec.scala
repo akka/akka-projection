@@ -147,8 +147,6 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
     "show up on consumer side" in {
       // consumer runs gRPC server accepting pushed events from producers
-      // FIXME how does it fit with the existing EPS-binding APIs?
-      // FIXME auth should be possible just like the regular gRPC transport - we don't anyone to push events directly into the journal
       // FIXME consumer filters
       // FIXME we might want to allow transforming more aspects of the events (payloads even?)
       val destination =
@@ -156,12 +154,17 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
           journalPluginId = "test.consumer.r2dbc.journal",
           acceptedStreamIds = Set(streamId))
 
+      val destinationWithAuth = destination.withInterceptor(
+        (_, _) =>
+          // anything goes
+          Future.successful(Done))
+
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
         .bind(
           // events are written directly into the journal on the consumer side, pushing over gRPC is only
           // allowed if no two pushing systems push events for the same persistence id
-          EventConsumer.grpcServiceHandler(destination))
+          EventConsumer.grpcServiceHandler(destinationWithAuth))
       bound.futureValue
 
       // FIXME higher level API for the producer side of this?

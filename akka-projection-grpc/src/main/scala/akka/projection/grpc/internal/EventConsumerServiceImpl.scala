@@ -9,18 +9,21 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.LoggerOps
+import akka.grpc.scaladsl.Metadata
 import akka.persistence.EventWriter
 import akka.persistence.FilteredPayload
+import akka.projection.grpc.consumer.scaladsl.EventConsumerInterceptor
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventAck
-import akka.projection.grpc.internal.proto.EventConsumerService
+import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
 
 import java.net.URLEncoder
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
 import scala.util.control.NonFatal
 
@@ -38,13 +41,14 @@ private[akka] object EventConsumerServiceImpl {
   def directJournalConsumer(
       journalPluginId: Option[String],
       acceptedStreamIds: Set[String],
-      persistenceIdTransformer: String => String)(implicit system: ActorSystem[_]): EventConsumerServiceImpl = {
+      persistenceIdTransformer: String => String,
+      interceptor: Option[EventConsumerInterceptor])(implicit system: ActorSystem[_]): EventConsumerServiceImpl = {
     // FIXME is this name unique, could we create multiple for the same journal? (we wouldn't be able to bind them to the same port)
     val eventWriter = system.systemActorOf(
       EventWriter(journalPluginId.getOrElse("")),
       s"EventWriter-${URLEncoder.encode(journalPluginId.getOrElse("default"), ByteString.UTF_8)}")
 
-    new EventConsumerServiceImpl(eventWriter, acceptedStreamIds, persistenceIdTransformer)
+    new EventConsumerServiceImpl(eventWriter, acceptedStreamIds, persistenceIdTransformer, interceptor)
   }
 
 }
@@ -55,26 +59,42 @@ private[akka] object EventConsumerServiceImpl {
 private[akka] final class EventConsumerServiceImpl(
     eventWriter: ActorRef[EventWriter.Command],
     acceptedStreamIds: Set[String],
-    persistenceIdTransformer: String => String)(implicit system: ActorSystem[_])
-    extends EventConsumerService {
+    persistenceIdTransformer: String => String,
+    interceptor: Option[EventConsumerInterceptor])(implicit system: ActorSystem[_])
+    extends EventConsumerServicePowerApi {
 
   private val logger = LoggerFactory.getLogger(classOf[EventConsumerServiceImpl])
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
-
+  private implicit val ec: ExecutionContext = system.executionContext
   private implicit val timeout: Timeout = 5.seconds // FIXME from config or can we get rid of it
 
-  override def consumeEvent(in: Source[ConsumeEventIn, NotUsed]): Source[ConsumeEventOut, NotUsed] = {
+  override def consumeEvent(
+      in: Source[ConsumeEventIn, NotUsed],
+      metadata: Metadata): Source[ConsumeEventOut, NotUsed] = {
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(ConsumeEventIn(ConsumeEventIn.Message.Init(init), _)), tail) =>
           if (!acceptedStreamIds(init.streamId))
             throw new IllegalArgumentException(s"Events for stream id [${init.streamId}] not accepted by this consumer")
-          logger.info("Event stream from [{}] started", init.originId)
-          tail.collect {
+
+          val eventsAndFiltered = tail.collect {
             case c if c.message.isEvent || c.message.isFilteredEvent => c
             // keepalive consumed and dropped here
           }
+
+          // allow interceptor to block request based on metadata
+          interceptor match {
+            case Some(interceptor) =>
+              Source.futureSource(interceptor.intercept(init.streamId, metadata).map { _ =>
+                logger.info("Event stream from [{}] started", init.originId)
+                eventsAndFiltered
+              })
+            case None =>
+              logger.info("Event stream from [{}] started", init.originId)
+              eventsAndFiltered
+          }
+
         case (_, _) =>
           throw new IllegalArgumentException(
             "Expected stream in starts with Init event followed by events but got something else")
