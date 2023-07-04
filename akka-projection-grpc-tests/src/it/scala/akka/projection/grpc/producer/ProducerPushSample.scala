@@ -97,7 +97,12 @@ object ProducerPushSampleProducer {
       EventProducerSource(entityTypeKey.name, streamId, Transformation.identity, EventProducerSettings(system)),
       GrpcClientSettings.connectToServiceAt("localhost", grpcPort).withTls(false))
     val eventSourcedProvider =
-      EventSourcedProvider.eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityTypeKey.name, 0, 1023)
+      EventSourcedProvider.eventsBySlices[String](
+        system,
+        R2dbcReadJournal.Identifier,
+        activeEventProducer.eventProducerSource.entityType,
+        0,
+        1023)
 
     system ! SpawnProtocol.Spawn(
       ProjectionBehavior(

@@ -64,7 +64,7 @@ private[akka] object EventPusher {
     val protoAnySerialization = new ProtoAnySerialization(system)
 
     FlowWithContext[EventEnvelope[Event], ProjectionContext]
-      .mapAsync(1) { envelope =>
+      .mapAsync(eps.settings.transformationParallelism) { envelope =>
         val filteredTransformed =
           if (eps.producerFilter(envelope.asInstanceOf[EventEnvelope[Any]])) {
             if (logger.isTraceEnabled())

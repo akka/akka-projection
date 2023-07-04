@@ -65,6 +65,7 @@ object ProducerPushSpec {
     test.consumer.projection.use-connection-factory = "test.consumer.r2dbc.connection-factory"
    """)
       .withFallback(ConfigFactory.load("application-h2.conf"))
+      .withFallback(ConfigFactory.load())
       .resolve()
 }
 class ProducerPushSpec(testContainerConf: TestContainerConf)
@@ -104,8 +105,10 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
           settings = None,
           sourceProvider = EventSourcedProvider.eventsBySlices[String](
             system,
+            // FIXME: could we use activeEventProducer.eventProducerSource.settings.queryPluginId (user would have to configure)
             R2dbcReadJournal.Identifier,
             activeEventProducer.eventProducerSource.entityType,
+            // FIXME make these and the projetion id automatic (we would have to run SDP then, maybe it is better handled by the user for flexibility)
             0,
             1023),
           handler = activeEventProducer.handler())))
