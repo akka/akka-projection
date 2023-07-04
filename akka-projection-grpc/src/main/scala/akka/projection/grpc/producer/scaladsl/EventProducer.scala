@@ -6,6 +6,7 @@ package akka.projection.grpc.producer.scaladsl
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -17,6 +18,7 @@ import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.projection.grpc.producer.EventProducerSettings
@@ -34,7 +36,7 @@ object EventProducer {
         streamId: String,
         transformation: Transformation,
         settings: EventProducerSettings): EventProducerSource =
-      new EventProducerSource(entityType, streamId, transformation, settings, _ => true)
+      new EventProducerSource(entityType, streamId, transformation, settings, _ => true, transformSnapshot = None)
 
     def apply[Event](
         entityType: String,
@@ -47,7 +49,8 @@ object EventProducer {
         streamId,
         transformation,
         settings,
-        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean],
+        transformSnapshot = None)
 
   }
 
@@ -63,17 +66,25 @@ object EventProducer {
       val streamId: String,
       val transformation: Transformation,
       val settings: EventProducerSettings,
-      val producerFilter: EventEnvelope[Any] => Boolean) {
+      val producerFilter: EventEnvelope[Any] => Boolean,
+      val transformSnapshot: Option[Any => Any]) {
     require(entityType.nonEmpty, "Stream id must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
     def withProducerFilter[Event](producerFilter: EventEnvelope[Event] => Boolean): EventProducerSource =
-      new EventProducerSource(
-        entityType,
-        streamId,
-        transformation,
-        settings,
-        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+      copy(producerFilter = producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+
+    def withStartingFromSnapshots[Snapshot, Event](transformSnapshot: Snapshot => Event): EventProducerSource =
+      copy(transformSnapshot = Some(transformSnapshot.asInstanceOf[Any => Any]))
+
+    def copy(
+        entityType: String = entityType,
+        streamId: String = streamId,
+        transformation: Transformation = transformation,
+        settings: EventProducerSettings = settings,
+        producerFilter: EventEnvelope[Any] => Boolean = producerFilter,
+        transformSnapshot: Option[Any => Any] = transformSnapshot): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter, transformSnapshot)
 
   }
 
@@ -172,6 +183,7 @@ object EventProducer {
       new EventProducerServiceImpl(
         system,
         eventsBySlicesQueriesForStreamIds(sources, system),
+        eventsBySlicesStartingFromSnapshotsQueriesForStreamIds(sources, system),
         currentEventsByPersistenceIdQueriesForStreamIds(sources, system),
         sources,
         interceptor))
@@ -183,10 +195,26 @@ object EventProducer {
   private[akka] def eventsBySlicesQueriesForStreamIds(
       sources: Set[EventProducerSource],
       system: ActorSystem[_]): Map[String, EventsBySliceQuery] = {
-    queriesForStreamIds(sources, system).map {
-      case (streamId, q: EventsBySliceQuery) => streamId -> q
-      case (_, other) =>
-        throw new IllegalArgumentException(s"Expected EventsBySliceQuery but was [${other.getClass.getName}]")
+    val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
+      sources.map(s => s.streamId -> s).toMap
+    queriesForStreamIds(sources, system).collect {
+      case (streamId, q: EventsBySliceQuery) if streamIdToSourceMap(streamId).transformSnapshot.isEmpty =>
+        streamId -> q
+    }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  private[akka] def eventsBySlicesStartingFromSnapshotsQueriesForStreamIds(
+      sources: Set[EventProducerSource],
+      system: ActorSystem[_]): Map[String, EventsBySliceStartingFromSnapshotsQuery] = {
+    val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
+      sources.map(s => s.streamId -> s).toMap
+    queriesForStreamIds(sources, system).collect {
+      case (streamId, q: EventsBySliceStartingFromSnapshotsQuery)
+          if streamIdToSourceMap(streamId).transformSnapshot.isDefined =>
+        streamId -> q
     }
   }
 
@@ -196,11 +224,8 @@ object EventProducer {
   private[akka] def currentEventsByPersistenceIdQueriesForStreamIds(
       sources: Set[EventProducerSource],
       system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdTypedQuery] = {
-    queriesForStreamIds(sources, system).map {
+    queriesForStreamIds(sources, system).collect {
       case (streamId, q: CurrentEventsByPersistenceIdTypedQuery) => streamId -> q
-      case (_, other) =>
-        throw new IllegalArgumentException(
-          s"Expected CurrentEventsByPersistenceIdQuery but was [${other.getClass.getName}]")
     }
   }
 
