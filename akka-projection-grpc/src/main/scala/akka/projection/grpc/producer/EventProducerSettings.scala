@@ -10,16 +10,26 @@ import com.typesafe.config.Config
 
 @ApiMayChange
 object EventProducerSettings {
+
+  /** Scala API */
   def apply(system: ActorSystem[_]): EventProducerSettings =
     apply(system.settings.config.getConfig("akka.projection.grpc.producer"))
 
+  /** Scala API */
   def apply(config: Config): EventProducerSettings = {
-
     new EventProducerSettings(
       queryPluginId = config.getString("query-plugin-id"),
       transformationParallelism = config.getInt("transformation-parallelism"),
       replayParallelism = config.getInt("filter.replay-parallelism"))
   }
+
+  /** Java API */
+  def create(system: ActorSystem[_]): EventProducerSettings =
+    apply(system)
+
+  /** Java API */
+  def create(config: Config): EventProducerSettings =
+    apply(config)
 }
 
 @ApiMayChange
