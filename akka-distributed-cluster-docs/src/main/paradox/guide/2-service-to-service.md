@@ -83,9 +83,9 @@ It is defined in the ScalaPB generated `Proto` companion object.]
 Note that GrpcReadJournal should be created with the GrpcReadJournal @scala[`apply`]@java[`create`] factory method
 and not from configuration via `GrpcReadJournalProvider` when using Protobuf serialization.
 
-The gRPC connection to the producer is defined in the @extref[consumer configuration](akka-projection:grpc#consumer-configuration).
+The gRPC connection to the producer is defined in the @extref[consumer configuration](akka-projection:grpc.html#consumer-configuration).
 
-The @ref:[R2dbcProjection](akka-projection:r2dbc.html) has support for storing the offset in a relational database using R2DBC.
+The @extref[R2dbcProjection](akka-projection:r2dbc.html) has support for storing the offset in a relational database using R2DBC.
 
 The event handler for this sample is just logging the events rather than for example actually building its own read side
 in a database for querying:
