@@ -24,7 +24,7 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.TestEntity
-import akka.projection.grpc.consumer.scaladsl.ConsumerService
+import akka.projection.grpc.consumer.scaladsl.EventConsumer
 import akka.projection.grpc.internal.EventPusher
 import akka.projection.grpc.internal.FilteredPayloadMapper
 import akka.projection.grpc.internal.proto.EventConsumerServiceClient
@@ -171,10 +171,10 @@ object ProducerPushSampleConsumer {
       system.ignoreRef)
 
     // consumer runs gRPC server accepting pushed events from producers
-    val handler = ConsumerService(Set(streamId))
+    val destination = EventConsumer.EventConsumerDestination(Set(streamId))
     val bound = Http(system)
       .newServerAt("127.0.0.1", grpcPort)
-      .bind(handler)
+      .bind(EventConsumer.grpcServiceHandler(destination))
     bound.foreach(binding =>
       log.info2(s"Consumer listening at: {}:{}", binding.localAddress.getHostString, binding.localAddress.getPort))
   }

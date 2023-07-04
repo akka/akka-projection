@@ -22,7 +22,7 @@ import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
-import akka.projection.grpc.consumer.scaladsl.ConsumerService
+import akka.projection.grpc.consumer.scaladsl.EventConsumer
 import akka.projection.grpc.internal.EventPusher
 import akka.projection.grpc.internal.FilteredPayloadMapper
 import akka.projection.grpc.internal.proto.EventConsumerServiceClient
@@ -151,14 +151,17 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       // FIXME auth should be possible just like the regular gRPC transport - we don't anyone to push events directly into the journal
       // FIXME consumer filters
       // FIXME we might want to allow transforming more aspects of the events (payloads even?)
-      val handler = ConsumerService(journalPluginId = "test.consumer.r2dbc.journal", acceptedStreamIds = Set(streamId))
+      val destination =
+        EventConsumer.EventConsumerDestination(
+          journalPluginId = "test.consumer.r2dbc.journal",
+          acceptedStreamIds = Set(streamId))
 
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
         .bind(
           // events are written directly into the journal on the consumer side, pushing over gRPC is only
           // allowed if no two pushing systems push events for the same persistence id
-          handler)
+          EventConsumer.grpcServiceHandler(destination))
       bound.futureValue
 
       // FIXME higher level API for the producer side of this?
