@@ -155,7 +155,6 @@ private[akka] object EventWriter {
                       error)
                   case Some(state) =>
                     // write failure could be re-delivery, we need to check
-
                     state.waitingForReply.get(sequenceNr) match {
                       case None =>
                         throw new IllegalStateException(
@@ -164,7 +163,7 @@ private[akka] object EventWriter {
                       case Some(_) =>
                         // quite likely a re-delivery of already persisted events, check highest seqnr
                         val sortedSeqNrs = state.waitingForReply.keys.toSeq.sorted
-                        val maxSeqNrFinderName = s"MaxSeqNrFinder-$pid"
+                        val maxSeqNrFinderName = URLEncoder.encode(s"MaxSeqNrFinder-$pid", "UTF-8")
                         if (context.child(maxSeqNrFinderName).isEmpty) {
                           // first failure in batch, but batch is atomic so we know it all failed
                           context.spawn[Nothing](
