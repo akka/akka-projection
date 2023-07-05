@@ -25,7 +25,6 @@ import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.consumer.scaladsl.EventConsumer
-import akka.projection.grpc.internal.FilteredPayloadMapper
 import akka.projection.grpc.producer.scaladsl.ActiveEventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
@@ -148,8 +147,8 @@ object ProducerPushSampleConsumer {
       ActorSystem(SpawnProtocol(), "ProducerPushSampleConsumer", config)
     import system.executionContext
 
-    val consumerProjectionProvider = new FilteredPayloadMapper(
-      EventSourcedProvider.eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityTypeKey.name, 0, 1023))
+    val consumerProjectionProvider =
+      EventSourcedProvider.eventsBySlices[String](system, R2dbcReadJournal.Identifier, entityTypeKey.name, 0, 1023)
 
     val consumerProjectionId = ProjectionId("fruit-consumer", "0-1023")
 

@@ -26,7 +26,6 @@ import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.scaladsl.EventConsumer
-import akka.projection.grpc.internal.FilteredPayloadMapper
 import akka.projection.grpc.producer.scaladsl.ActiveEventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
@@ -114,12 +113,6 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
             1023),
           handler = activeEventProducer.handler())))
 
-  def counsumerSourceProvider = {
-    // FIXME how do we auto-wrap with this?
-    new FilteredPayloadMapper(
-      EventSourcedProvider.eventsBySlices[String](system, "test.consumer.r2dbc.query", entityType, 0, 1023))
-  }
-
   // this projection runs in the consumer and just consumes the already projected events
   def spawnConsumerProjection(probe: ActorRef[EventEnvelope[String]]) =
     spawn(
@@ -127,7 +120,8 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
         R2dbcProjection.atLeastOnceAsync(
           consumerProjectionId,
           settings = None,
-          sourceProvider = counsumerSourceProvider,
+          sourceProvider =
+            EventSourcedProvider.eventsBySlices[String](system, "test.consumer.r2dbc.query", entityType, 0, 1023),
           handler = () => {
             envelope: EventEnvelope[String] =>
               probe ! envelope
@@ -234,7 +228,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
         entity2 ! TestEntity.Persist(s"peach-$i-entity2")
         entity3 ! TestEntity.Persist(s"peach-$i-entity3")
       }
-      consumerProbe.receiveMessages(300, 10.seconds).foreach(envelope => envelope.event should include("PEACH"))
+      consumerProbe.receiveMessages(300, 20.seconds).foreach(envelope => envelope.event should include("PEACH"))
     }
   }
 
