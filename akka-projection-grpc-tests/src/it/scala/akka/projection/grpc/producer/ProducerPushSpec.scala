@@ -151,6 +151,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
   "Producer pushed events" should {
 
     "show up on consumer side" in {
+      val producerOriginId = "producer1"
       // consumer runs gRPC server accepting pushed events from producers
       // FIXME consumer filters
       // FIXME we might want to allow transforming more aspects of the events (payloads even?)
@@ -162,12 +163,13 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
             if (metadata.getText("secret").contains("password")) Future.successful(Done)
             else throw new GrpcServiceException(Status.PERMISSION_DENIED))
           // FIXME not sure about the mini DSL
-          .withTransformation(
+          .withTransformationForOrigin { (originId, _) =>
             EventConsumer.Transformation
-              .mapPersistenceId[String](envelope => envelope.persistenceId.replace("p-", "q-"))
+              .mapPersistenceId[String](envelope => envelope.persistenceId.replace("p-", s"$originId-"))
               .andThen(EventConsumer.Transformation.mapTags[String](_ => Set("added-tag")))
               .andThen(EventConsumer.Transformation.mapPayload[String, String](env =>
-                env.eventOption.map(_.toUpperCase))))
+                env.eventOption.map(_.toUpperCase)))
+          }
 
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
@@ -182,7 +184,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       val veggies = Set("cucumber")
       val authMetadata = (new MetadataBuilder).addText("secret", "password").build()
       val activeEventProducer = ActiveEventProducer[String](
-        originId = "producer-1",
+        originId = producerOriginId,
         eventProducerSource = EventProducerSource[String](
           entityType,
           streamId,
@@ -212,7 +214,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       // event projected into consumer journal and shows up in local projection
       val first = consumerProbe.receiveMessage(10.seconds)
       first.event should be("BANANAS")
-      first.persistenceId should include("q-")
+      first.persistenceId should include(producerOriginId)
       first.tags should ===(Set("added-tag"))
       // Note: filtered ends up in the consumer journal, but does not show up in projection
       consumerProbe.receiveMessage().event should be("MANGOS")

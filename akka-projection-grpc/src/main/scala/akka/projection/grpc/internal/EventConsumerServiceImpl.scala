@@ -5,12 +5,12 @@
 package akka.projection.grpc.internal
 
 import akka.NotUsed
-import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
+import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
 import akka.persistence.EventWriter
 import akka.persistence.EventWriterExtension
@@ -23,6 +23,7 @@ import akka.projection.grpc.internal.proto.ConsumerEventAck
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
+import io.grpc.Status
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
@@ -35,30 +36,15 @@ import scala.util.control.NonFatal
  * gRPC push protocol service for the consuming side
  */
 @InternalApi
-private[akka] object EventConsumerServiceImpl {
-
-  def apply(
-      journalPluginId: Option[String],
-      acceptedStreamIds: Set[String],
-      eventTransformer: EventConsumer.Transformation,
-      interceptor: Option[EventConsumerInterceptor])(implicit system: ActorSystem[_]): EventConsumerServiceImpl = {
-    val eventWriter = EventWriterExtension(system).writerForJournal(journalPluginId)
-    new EventConsumerServiceImpl(eventWriter, acceptedStreamIds, eventTransformer, interceptor)
-  }
-
-}
-
-/**
- * INTERNAL API
- */
 private[akka] final class EventConsumerServiceImpl(
-    eventWriter: ActorRef[EventWriter.Command],
+    journalPluginId: Option[String],
     acceptedStreamIds: Set[String],
-    eventTransformer: EventConsumer.Transformation,
+    eventTransformerFactory: (String, Metadata) => EventConsumer.Transformation,
     interceptor: Option[EventConsumerInterceptor])(implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
   private val logger = LoggerFactory.getLogger(classOf[EventConsumerServiceImpl])
+  val eventWriter = EventWriterExtension(system).writerForJournal(journalPluginId)
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
   private implicit val ec: ExecutionContext = system.executionContext
@@ -67,46 +53,54 @@ private[akka] final class EventConsumerServiceImpl(
   override def consumeEvent(
       in: Source[ConsumeEventIn, NotUsed],
       metadata: Metadata): Source[ConsumeEventOut, NotUsed] = {
+    @volatile var transformer: EventConsumer.Transformation = null
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(ConsumeEventIn(ConsumeEventIn.Message.Init(init), _)), tail) =>
-          if (!acceptedStreamIds(init.streamId))
-            throw new IllegalArgumentException(s"Events for stream id [${init.streamId}] not accepted by this consumer")
+          if (!acceptedStreamIds(init.streamId)) {
+            logger.debug2(
+              "Event producer [{}] wanted to push events for stream id [{}] but that is not among the accepted stream ids",
+              init.originId,
+              init.streamId)
+            throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription(
+              s"Events for stream id [${init.streamId}] not accepted by this consumer"))
+          }
 
           val eventsAndFiltered = tail.collect {
             case c if c.message.isEvent || c.message.isFilteredEvent => c
             // keepalive consumed and dropped here
           }
+          transformer = eventTransformerFactory(init.originId, metadata)
 
           // allow interceptor to block request based on metadata
           interceptor match {
             case Some(interceptor) =>
               Source.futureSource(interceptor.intercept(init.streamId, metadata).map { _ =>
-                logger.info("Event stream from [{}] started", init.originId)
+                logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
                 eventsAndFiltered
               })
             case None =>
-              logger.info("Event stream from [{}] started", init.originId)
+              logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
               eventsAndFiltered
           }
 
         case (_, _) =>
-          throw new IllegalArgumentException(
-            "Expected stream in starts with Init event followed by events but got something else")
+          throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
+            "Consumer stream in must start with Init event followed by events but got something else"))
       }
       .map { consumeEventIn =>
         if (consumeEventIn.message.isEvent)
-          // FIXME would we want request metadata/producer ip/entire envelope in to persistence id transformer?
           ProtobufProtocolConversions.eventToEnvelope[Any](consumeEventIn.getEvent, protoAnySerialization)
         else if (consumeEventIn.message.isFilteredEvent) {
           ProtobufProtocolConversions.filteredEventToEnvelope[Any](consumeEventIn.getFilteredEvent)
         } else {
-          throw new IllegalArgumentException(s"Unexpected type of ConsumeEventIn: ${consumeEventIn.message.getClass}")
+          throw new GrpcServiceException(Status.INVALID_ARGUMENT
+            .withDescription(s"Unexpected type of ConsumeEventIn: ${consumeEventIn.message.getClass}"))
         }
       }
       // FIXME config for parallelism, and perPartition (aligned with event writer batch config)
       .mapAsyncPartitioned(1000, 20)(_.persistenceId) { (originalEnvelope, _) =>
-        val transformedEventEnvelope = eventTransformer(originalEnvelope)
+        val transformedEventEnvelope = transformer(originalEnvelope)
         if (logger.isTraceEnabled)
           logger.traceN(
             "Saw event [{}] for pid [{}]{}",

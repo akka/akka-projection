@@ -6,6 +6,7 @@ package akka.projection.grpc.consumer.scaladsl
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.typed.EventEnvelope
@@ -32,7 +33,7 @@ object EventConsumer {
   final class EventConsumerDestination private (
       val journalPluginId: Option[String],
       val acceptedStreamIds: Set[String],
-      val transformation: Transformation,
+      val transformationForOrigin: (String, Metadata) => Transformation,
       val interceptor: Option[EventConsumerInterceptor] = None) {
 
     def withInterceptor(interceptor: EventConsumerInterceptor): EventConsumerDestination =
@@ -41,15 +42,28 @@ object EventConsumer {
     def withJournalPluginId(journalPluginId: String): EventConsumerDestination =
       copy(journalPluginId = Some(journalPluginId))
 
+    /**
+     * @param transformation A transformation to use for all events.
+     */
     def withTransformation(transformation: Transformation): EventConsumerDestination =
-      copy(transformation = transformation)
+      copy(transformationForOrigin = (_, _) => transformation)
+
+    /**
+     * @param transformation A function to create a transformation from the origin id and request metadata
+     *                       of an active event producer connecting to the consumer. Invoked once per stream
+     *                       so that transformations can be individual to each producer, for example modify
+     *                       the persistence id or tags to include the origin id.
+     */
+    def withTransformationForOrigin(
+        transformationForOrigin: (String, Metadata) => Transformation): EventConsumerDestination =
+      copy(transformationForOrigin = transformationForOrigin)
 
     private def copy(
         journalPluginId: Option[String] = journalPluginId,
         acceptedStreamIds: Set[String] = acceptedStreamIds,
-        transformation: Transformation = transformation,
+        transformationForOrigin: (String, Metadata) => Transformation = transformationForOrigin,
         interceptor: Option[EventConsumerInterceptor] = interceptor): EventConsumerDestination =
-      new EventConsumerDestination(journalPluginId, acceptedStreamIds, transformation, interceptor)
+      new EventConsumerDestination(journalPluginId, acceptedStreamIds, transformationForOrigin, interceptor)
   }
 
   object EventConsumerDestination {
@@ -58,7 +72,7 @@ object EventConsumer {
      * @param acceptedStreamIds Only accept these stream ids, deny others
      */
     def apply(acceptedStreamIds: Set[String]): EventConsumerDestination =
-      new EventConsumerDestination(None, acceptedStreamIds, Transformation)
+      new EventConsumerDestination(None, acceptedStreamIds, (_, _) => Transformation)
 
     /**
      * @param acceptedStreamId Only accept this stream ids, deny others
@@ -166,9 +180,9 @@ object EventConsumer {
   def grpcServiceHandler(eventConsumer: EventConsumerDestination)(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
     EventConsumerServicePowerApiHandler(
-      EventConsumerServiceImpl(
+      new EventConsumerServiceImpl(
         journalPluginId = eventConsumer.journalPluginId,
-        eventTransformer = eventConsumer.transformation,
+        eventTransformerFactory = eventConsumer.transformationForOrigin,
         acceptedStreamIds = eventConsumer.acceptedStreamIds,
         interceptor = eventConsumer.interceptor))
 
