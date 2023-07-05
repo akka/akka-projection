@@ -15,18 +15,22 @@ import akka.grpc.scaladsl.Metadata
 import akka.persistence.EventWriter
 import akka.persistence.EventWriterExtension
 import akka.persistence.FilteredPayload
+import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import akka.projection.grpc.consumer.scaladsl.EventConsumer
 import akka.projection.grpc.consumer.scaladsl.EventConsumerInterceptor
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventAck
+import akka.projection.grpc.internal.proto.ConsumerEventStart
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
+import scala.concurrent.Promise
 import scala.concurrent.duration.DurationInt
 import scala.util.control.NonFatal
 
@@ -40,8 +44,11 @@ private[akka] final class EventConsumerServiceImpl(
     journalPluginId: Option[String],
     acceptedStreamIds: Set[String],
     eventTransformerFactory: (String, Metadata) => EventConsumer.Transformation,
-    interceptor: Option[EventConsumerInterceptor])(implicit system: ActorSystem[_])
+    interceptor: Option[EventConsumerInterceptor],
+    filters: immutable.Seq[FilterCriteria])(implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
+
+  import ProtobufProtocolConversions._
 
   private val logger = LoggerFactory.getLogger(classOf[EventConsumerServiceImpl])
   val eventWriter = EventWriterExtension(system).writerForJournal(journalPluginId)
@@ -54,6 +61,7 @@ private[akka] final class EventConsumerServiceImpl(
       in: Source[ConsumeEventIn, NotUsed],
       metadata: Metadata): Source[ConsumeEventOut, NotUsed] = {
     @volatile var transformer: EventConsumer.Transformation = null
+    val startEvent = Promise[ConsumeEventOut]()
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(ConsumeEventIn(ConsumeEventIn.Message.Init(init), _)), tail) =>
@@ -65,6 +73,9 @@ private[akka] final class EventConsumerServiceImpl(
             throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription(
               s"Events for stream id [${init.streamId}] not accepted by this consumer"))
           }
+
+          startEvent.success(
+            ConsumeEventOut(ConsumeEventOut.Message.Start(ConsumerEventStart(toProtoFilterCriteria(filters)))))
 
           val eventsAndFiltered = tail.collect {
             case c if c.message.isEvent || c.message.isFilteredEvent => c
@@ -127,6 +138,7 @@ private[akka] final class EventConsumerServiceImpl(
               throw ex;
           }(system.executionContext)
       }
+      .prepend(Source.future(startEvent.future))
   }
 
 }

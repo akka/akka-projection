@@ -24,6 +24,7 @@ import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.scaladsl.EventConsumer
 import akka.projection.grpc.internal.FilteredPayloadMapper
 import akka.projection.grpc.producer.scaladsl.ActiveEventProducer
@@ -152,6 +153,8 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
     "show up on consumer side" in {
       val producerOriginId = "producer1"
+      val consumerFilterExcludedPid = nextPid(entityType)
+
       // consumer runs gRPC server accepting pushed events from producers
       // FIXME consumer filters
       // FIXME we might want to allow transforming more aspects of the events (payloads even?)
@@ -170,6 +173,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
               .andThen(EventConsumer.Transformation.mapPayload[String, String](env =>
                 env.eventOption.map(_.toUpperCase)))
           }
+          .withConsumerFilters(Vector(ConsumerFilter.ExcludeEntityIds(Set(consumerFilterExcludedPid.id))))
 
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
@@ -216,8 +220,12 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       first.event should be("BANANAS")
       first.persistenceId should include(producerOriginId)
       first.tags should ===(Set("added-tag"))
-      // Note: filtered ends up in the consumer journal, but does not show up in projection
+      // Note: producer filtered cucumber ends up in the consumer journal, but does not show up in projection
       consumerProbe.receiveMessage().event should be("MANGOS")
+
+      val consumerExcludedEntity = spawn(TestEntity(consumerFilterExcludedPid))
+      // Note: consumer filtered guarana ends up in the consumer journal, but does not show up in projection
+      consumerExcludedEntity ! TestEntity.Persist(s"cumquat")
 
       val entity2 = spawn(TestEntity(nextPid(entityType)))
       val entity3 = spawn(TestEntity(nextPid(entityType)))
@@ -226,7 +234,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
         entity2 ! TestEntity.Persist(s"peach-$i-entity2")
         entity3 ! TestEntity.Persist(s"peach-$i-entity3")
       }
-      consumerProbe.receiveMessages(300)
+      consumerProbe.receiveMessages(300, 10.seconds).foreach(envelope => envelope.event should include("PEACH"))
     }
   }
 

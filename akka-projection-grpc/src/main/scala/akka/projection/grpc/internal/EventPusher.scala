@@ -14,7 +14,9 @@ import akka.grpc.scaladsl.StreamResponseRequestBuilder
 import akka.grpc.scaladsl.StringEntry
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.ProjectionContext
+import akka.projection.grpc.internal.FilterStage.Filter
 import akka.projection.grpc.internal.ProtobufProtocolConversions.offsetToProtoOffset
+import akka.projection.grpc.internal.ProtobufProtocolConversions.updateFilterFromProto
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventInit
@@ -37,8 +39,10 @@ import akka.stream.stage.OutHandler
 import org.slf4j.LoggerFactory
 
 import java.util
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration.DurationInt
 
 /**
@@ -62,44 +66,63 @@ private[akka] object EventPusher {
 
     implicit val ec: ExecutionContext = system.executionContext
     val protoAnySerialization = new ProtoAnySerialization(system)
+    val topicFiltersPromise = Promise[immutable.Seq[proto.FilterCriteria]]()
+
+    val filterAndTransformFlow
+        : Flow[(EventEnvelope[Event], ProjectionContext), (ConsumeEventIn, ProjectionContext), NotUsed] =
+      Flow
+        .futureFlow(topicFiltersPromise.future.map { filterCriteria =>
+          val consumerFilter =
+            updateFilterFromProto(
+              Filter.empty(eps.settings.topicTagPrefix),
+              filterCriteria,
+              // FIXME not replicated, so maybe this is safe?
+              mapEntityIdToPidHandledByThisStream = identity)
+
+          Flow[(EventEnvelope[Event], ProjectionContext)]
+            .mapAsync(eps.settings.transformationParallelism) {
+              case (envelope, projectionContext) =>
+                val filteredTransformed =
+                  if (eps.producerFilter(envelope.asInstanceOf[EventEnvelope[Any]]) &&
+                      consumerFilter.matches(envelope)) {
+                    if (logger.isTraceEnabled())
+                      logger.trace(
+                        "Pushing event persistence id [{}], sequence number [{}]",
+                        envelope.persistenceId,
+                        envelope.sequenceNr)
+
+                    transformAndEncodeEvent(eps.transformation, envelope, protoAnySerialization)
+                  } else {
+                    if (logger.isTraceEnabled())
+                      logger.trace(
+                        "Filtering event persistence id [{}], sequence number [{}]",
+                        envelope.persistenceId,
+                        envelope.sequenceNr)
+
+                    Future.successful(None)
+                  }
+                filteredTransformed.map {
+                  case Some(protoEvent) => (ConsumeEventIn(ConsumeEventIn.Message.Event(protoEvent)), projectionContext)
+                  case None             =>
+                    // Filtered or transformed to None, we still need to push a placeholder to not get seqnr gaps on the receiving side
+                    (
+                      ConsumeEventIn(
+                        ConsumeEventIn.Message.FilteredEvent(
+                          FilteredEvent(
+                            persistenceId = envelope.persistenceId,
+                            seqNr = envelope.sequenceNr,
+                            slice = envelope.slice,
+                            offset = offsetToProtoOffset(envelope.offset)))),
+                      projectionContext)
+                }
+            }
+        })
+        .mapMaterializedValue(_ => NotUsed)
 
     FlowWithContext[EventEnvelope[Event], ProjectionContext]
-      .mapAsync(eps.settings.transformationParallelism) { envelope =>
-        val filteredTransformed =
-          if (eps.producerFilter(envelope.asInstanceOf[EventEnvelope[Any]])) {
-            if (logger.isTraceEnabled())
-              logger.trace(
-                "Pushing event persistence id [{}], sequence number [{}]",
-                envelope.persistenceId,
-                envelope.sequenceNr)
-
-            transformAndEncodeEvent(eps.transformation, envelope, protoAnySerialization)
-          } else {
-            if (logger.isTraceEnabled())
-              logger.trace(
-                "Filtering event persistence id [{}], sequence number [{}]",
-                envelope.persistenceId,
-                envelope.sequenceNr)
-
-            Future.successful(None)
-          }
-
-        filteredTransformed.map {
-          case Some(protoEvent) => ConsumeEventIn(ConsumeEventIn.Message.Event(protoEvent))
-          case None             =>
-            // Filtered or transformed to None, we still need to push a placeholder to not get seqnr gaps on the receiving side
-            ConsumeEventIn(
-              ConsumeEventIn.Message.FilteredEvent(
-                FilteredEvent(
-                  persistenceId = envelope.persistenceId,
-                  seqNr = envelope.sequenceNr,
-                  slice = envelope.slice,
-                  offset = offsetToProtoOffset(envelope.offset))))
-        }
-      }
-      // default service idle timeout 4 seconds
+      .via(filterAndTransformFlow)
       .via(Flow[(proto.ConsumeEventIn, ProjectionContext)].keepAlive(keepAliveTimeout, () => KeepAliveTuple))
-      .via(Flow.fromGraph(new EventPusherStage(originId, eps, client, additionalRequestMetadata)))
+      .via(Flow.fromGraph(new EventPusherStage(originId, eps, client, additionalRequestMetadata, topicFiltersPromise)))
 
   }
 
@@ -115,7 +138,8 @@ private[akka] class EventPusherStage(
     originId: String,
     eps: EventProducerSource,
     client: EventConsumerServiceClient,
-    additionalRequestMetadata: Metadata)
+    additionalRequestMetadata: Metadata,
+    topicFilterPromise: Promise[immutable.Seq[proto.FilterCriteria]])
     extends GraphStage[FlowShape[(ConsumeEventIn, ProjectionContext), (Done, ProjectionContext)]] {
   import EventPusher.KeepAliveTuple
 
@@ -128,30 +152,17 @@ private[akka] class EventPusherStage(
 
     private val inFlight = new util.HashMap[(String, Long), ProjectionContext]()
 
+    // hold off pushing events until we saw start response message
+    private var waitingForStart: Boolean = true
+
     private val toConsumer: SubSourceOutlet[proto.ConsumeEventIn] = new SubSourceOutlet("EventPusherStage.toConsumer")
     private val fromConsumer: SubSinkInlet[proto.ConsumeEventOut] = new SubSinkInlet("EventPusherStage.fromConsumer")
 
-    setHandler(
-      in,
-      new InHandler {
-        override def onPush(): Unit = {
-          grab(in) match {
-            case KeepAliveTuple =>
-              // no keep track of context for these
-              toConsumer.push(KeepAliveTuple._1)
-            case (event, context) =>
-              val key =
-                event.message match {
-                  case ConsumeEventIn.Message.Event(evt)              => (evt.persistenceId, evt.seqNr)
-                  case ConsumeEventIn.Message.FilteredEvent(filtered) => (filtered.persistenceId, filtered.seqNr)
-                  case unexpected =>
-                    throw new IllegalArgumentException(s"Unexpected ConsumeMessageIn: ${unexpected.getClass}")
-                }
-              inFlight.put(key, context)
-              toConsumer.push(event)
-          }
-        }
-      })
+    setHandler(in, new InHandler {
+      override def onPush(): Unit = {
+        tryGrabInAndPushToClient()
+      }
+    })
     toConsumer.setHandler(new OutHandler {
       override def onPull(): Unit =
         pull(in)
@@ -167,6 +178,11 @@ private[akka] class EventPusherStage(
             if (context eq null) throw new IllegalStateException(s"Saw ack for $key but in inFlight tracker map")
             inFlight.remove(key)
             push(out, (Done, context))
+          case ConsumeEventOut(ConsumeEventOut.Message.Start(start), _) =>
+            waitingForStart = false
+            topicFilterPromise.success(start.filter.toVector)
+            tryGrabInAndPushToClient()
+            fromConsumer.pull()
           case unexpected =>
             throw new IllegalArgumentException(s"Unexpected ConsumeEventOut message: ${unexpected.getClass}")
         }
@@ -179,6 +195,26 @@ private[akka] class EventPusherStage(
     setHandler(out, new OutHandler {
       override def onPull(): Unit = fromConsumer.pull()
     })
+
+    def tryGrabInAndPushToClient(): Unit = {
+      if (!waitingForStart && isAvailable(in)) {
+        grab(in) match {
+          case KeepAliveTuple =>
+            // no keep track of context for these
+            toConsumer.push(KeepAliveTuple._1)
+          case (event, context) =>
+            val key =
+              event.message match {
+                case ConsumeEventIn.Message.Event(evt)              => (evt.persistenceId, evt.seqNr)
+                case ConsumeEventIn.Message.FilteredEvent(filtered) => (filtered.persistenceId, filtered.seqNr)
+                case unexpected =>
+                  throw new IllegalArgumentException(s"Unexpected ConsumeMessageIn: ${unexpected.getClass}")
+              }
+            inFlight.put(key, context)
+            toConsumer.push(event)
+        }
+      }
+    }
 
     override def preStart(): Unit = {
       addRequestHeaders(
@@ -199,6 +235,10 @@ private[akka] class EventPusherStage(
         case (acc, (key, StringEntry(str)))  => acc.addHeader(key, str)
         case (acc, (key, BytesEntry(bytes))) => acc.addHeader(key, bytes)
       }
+    }
+
+    override def postStop(): Unit = {
+      topicFilterPromise.tryFailure(new RuntimeException("Stage stopped before getting a start message from consumer"))
     }
   }
 }

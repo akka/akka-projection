@@ -10,9 +10,11 @@ import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.typed.EventEnvelope
+import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import akka.projection.grpc.internal.EventConsumerServiceImpl
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 
+import scala.collection.immutable
 import scala.concurrent.Future
 
 /**
@@ -34,7 +36,8 @@ object EventConsumer {
       val journalPluginId: Option[String],
       val acceptedStreamIds: Set[String],
       val transformationForOrigin: (String, Metadata) => Transformation,
-      val interceptor: Option[EventConsumerInterceptor] = None) {
+      val interceptor: Option[EventConsumerInterceptor],
+      val filters: immutable.Seq[FilterCriteria]) {
 
     def withInterceptor(interceptor: EventConsumerInterceptor): EventConsumerDestination =
       copy(interceptor = Some(interceptor))
@@ -58,12 +61,19 @@ object EventConsumer {
         transformationForOrigin: (String, Metadata) => Transformation): EventConsumerDestination =
       copy(transformationForOrigin = transformationForOrigin)
 
+    /**
+     * FIXME we may want to remove this and make the consumer filters dynamic just like for "normal consumers"
+     */
+    def withConsumerFilters(filters: immutable.Seq[FilterCriteria]): EventConsumerDestination =
+      copy(filters = filters)
+
     private def copy(
         journalPluginId: Option[String] = journalPluginId,
         acceptedStreamIds: Set[String] = acceptedStreamIds,
         transformationForOrigin: (String, Metadata) => Transformation = transformationForOrigin,
-        interceptor: Option[EventConsumerInterceptor] = interceptor): EventConsumerDestination =
-      new EventConsumerDestination(journalPluginId, acceptedStreamIds, transformationForOrigin, interceptor)
+        interceptor: Option[EventConsumerInterceptor] = interceptor,
+        filters: immutable.Seq[FilterCriteria] = filters): EventConsumerDestination =
+      new EventConsumerDestination(journalPluginId, acceptedStreamIds, transformationForOrigin, interceptor, filters)
   }
 
   object EventConsumerDestination {
@@ -72,7 +82,7 @@ object EventConsumer {
      * @param acceptedStreamIds Only accept these stream ids, deny others
      */
     def apply(acceptedStreamIds: Set[String]): EventConsumerDestination =
-      new EventConsumerDestination(None, acceptedStreamIds, (_, _) => Transformation)
+      new EventConsumerDestination(None, acceptedStreamIds, (_, _) => Transformation, None, immutable.Seq.empty)
 
     /**
      * @param acceptedStreamId Only accept this stream ids, deny others
@@ -184,7 +194,8 @@ object EventConsumer {
         journalPluginId = eventConsumer.journalPluginId,
         eventTransformerFactory = eventConsumer.transformationForOrigin,
         acceptedStreamIds = eventConsumer.acceptedStreamIds,
-        interceptor = eventConsumer.interceptor))
+        interceptor = eventConsumer.interceptor,
+        filters = eventConsumer.filters))
 
   // FIXME do we need a handler taking a set of EventConsumerDestinations like for EventProducerSource?
 
