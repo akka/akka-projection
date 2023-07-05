@@ -66,12 +66,11 @@ private[akka] object EventPusher {
 
     implicit val ec: ExecutionContext = system.executionContext
     val protoAnySerialization = new ProtoAnySerialization(system)
-    val topicFiltersPromise = Promise[immutable.Seq[proto.FilterCriteria]]()
 
-    val filterAndTransformFlow
+    def filterAndTransformFlow(topicFiltersFuture: Future[immutable.Seq[proto.FilterCriteria]])
         : Flow[(EventEnvelope[Event], ProjectionContext), (ConsumeEventIn, ProjectionContext), NotUsed] =
       Flow
-        .futureFlow(topicFiltersPromise.future.map { filterCriteria =>
+        .futureFlow(topicFiltersFuture.map { filterCriteria =>
           val consumerFilter =
             updateFilterFromProto(
               Filter.empty(eps.settings.topicTagPrefix),
@@ -119,11 +118,20 @@ private[akka] object EventPusher {
         })
         .mapMaterializedValue(_ => NotUsed)
 
-    FlowWithContext[EventEnvelope[Event], ProjectionContext]
-      .via(filterAndTransformFlow)
-      .via(Flow[(proto.ConsumeEventIn, ProjectionContext)].keepAlive(keepAliveTimeout, () => KeepAliveTuple))
-      .via(Flow.fromGraph(new EventPusherStage(originId, eps, client, additionalRequestMetadata, topicFiltersPromise)))
+    FlowWithContext
+      .fromTuples(
+        Flow
+          .fromMaterializer { (_, _) =>
+            val topicFiltersPromise = Promise[immutable.Seq[proto.FilterCriteria]]()
 
+            Flow[(EventEnvelope[Event], ProjectionContext)]
+              .via(filterAndTransformFlow(topicFiltersPromise.future))
+              .via(Flow[(proto.ConsumeEventIn, ProjectionContext)].keepAlive(keepAliveTimeout, () => KeepAliveTuple))
+              .via(Flow.fromGraph(
+                new EventPusherStage(originId, eps, client, additionalRequestMetadata, topicFiltersPromise)))
+
+          }
+          .mapMaterializedValue(_ => NotUsed))
   }
 
   private[internal] val KeepAliveTuple: (proto.ConsumeEventIn, ProjectionContext) =
@@ -180,7 +188,7 @@ private[akka] class EventPusherStage(
             push(out, (Done, context))
           case ConsumeEventOut(ConsumeEventOut.Message.Start(start), _) =>
             waitingForStart = false
-            topicFilterPromise.success(start.filter.toVector)
+            topicFilterPromise.trySuccess(start.filter.toVector)
             tryGrabInAndPushToClient()
             fromConsumer.pull()
           case unexpected =>
