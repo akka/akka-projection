@@ -84,6 +84,26 @@ There are alternative ways of running the `ProjectionBehavior` as described in @
 
 How to implement the `EventHandler` and choose between different processing semantics is described in the @ref:[R2dbcProjection documentation](r2dbc.md).
 
+### Start from custom offset
+
+By default, a `SourceProvider` uses the stored offset when starting the Projection. For some cases, especially
+with Projections over gRPC, it can be useful to adjust the start offset. The consumer might only be interested
+in new events, or only most recent events. 
+
+The start offset can be adjusted by using the `EventSourcedProvider.eventsBySlices` method that takes an
+`adjustStartOffset` function, which is a function from loaded offset (if any) to the adjusted offset that
+will be used to by the `eventsBySlicesQuery`.
+
+This can also be useful in combination with @ref:[Starting from snapshots](#starting-from-snapshots), which
+is enabled on the producer side. In that way the consumer can start without any stored offset and only load
+snapshots for the most recently used entities.
+
+Scala
+:  @@snip [CustomOffset.scala](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/consumer/ConsumerDocSpec.scala) { #adjustStartOffset }
+
+Java
+:  @@snip [CustomOffset.java](/akka-projection-grpc-tests/src/test/java/akka/projection/grpc/consumer/javadsl/ConsumerCompileTest.java) { #adjustStartOffset }
+
 ### gRPC client lifecycle
 
 When creating the @apidoc[GrpcReadJournal] a gRPC client is created for the target producer. The same `GrpcReadJournal` 

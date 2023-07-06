@@ -1,0 +1,6 @@
+# internal changes
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.eventsourced.javadsl.EventSourcedProvider#EventsBySlicesSourceProvider.executionContext")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.eventsourced.javadsl.EventSourcedProvider#EventsBySlicesSourceProvider.this")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.eventsourced.javadsl.EventSourcedProvider#EventsByTagSourceProvider.executionContext")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.eventsourced.scaladsl.EventSourcedProvider#EventsBySlicesSourceProvider.this")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.eventsourced.scaladsl.EventSourcedProvider#EventsByTagSourceProvider.this")

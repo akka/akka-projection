@@ -1,0 +1,4 @@
+# internal changes
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.state.javadsl.DurableStateSourceProvider#DurableStateBySlicesSourceProvider.executionContext")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.state.javadsl.DurableStateSourceProvider#DurableStateStoreQuerySourceProvider.executionContext")
+

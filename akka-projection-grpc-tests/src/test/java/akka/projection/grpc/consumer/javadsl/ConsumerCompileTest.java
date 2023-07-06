@@ -4,6 +4,7 @@
 
 package akka.projection.grpc.consumer.javadsl;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -19,6 +20,7 @@ import akka.grpc.GrpcClientSettings;
 import akka.japi.Pair;
 import akka.persistence.Persistence;
 import akka.persistence.query.Offset;
+import akka.persistence.query.TimestampOffset;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
@@ -100,5 +102,36 @@ public class ConsumerCompileTest {
         new ConsumerFilter.IncludeTags(includeTags));
 
     ConsumerFilter.get(system).ref().tell(new ConsumerFilter.UpdateFilter(streamId, criteria));
+  }
+
+  public static void customStartOffset(ActorSystem<?> system) {
+    int numberOfProjectionInstances = 1;
+    String projectionName = "cart-events";
+    List<Pair<Integer, Integer>> sliceRanges =
+        Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
+    String streamId = "ShoppingCart";
+    int idx = 0;
+
+    GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
+        system,
+        Collections.singletonList(ShoppingcartApiProto.javaDescriptor()));
+
+    Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
+
+    //#adjustStartOffset
+    SourceProvider<Offset, EventEnvelope<String>> sourceProvider =
+        EventSourcedProvider.eventsBySlices(
+            system,
+            eventsBySlicesQuery,
+            eventsBySlicesQuery.streamId(),
+            sliceRange.first(),
+            sliceRange.second(),
+            (Optional<Offset> storedOffset) -> {
+                TimestampOffset startOffset = Offset.timestamp(Instant.now().minusSeconds(3600));
+                return CompletableFuture.completedFuture(Optional.of(startOffset));
+              }
+            );
+    //#adjustStartOffset
+
   }
 }
