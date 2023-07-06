@@ -104,7 +104,7 @@ private[akka] object EventWriter {
 
           var perPidWriteState = Map.empty[String, StateForPid]
 
-          def sendToJournal(reprs: Seq[PersistentRepr]) = {
+          def sendToJournal(reprs: Vector[PersistentRepr]) = {
             journal ! JournalProtocol
               .WriteMessages(AtomicWrite(reprs) :: Nil, context.self.toClassic, actorInstanceId)
           }
