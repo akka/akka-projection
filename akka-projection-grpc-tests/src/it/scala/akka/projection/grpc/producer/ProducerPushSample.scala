@@ -91,7 +91,7 @@ object ProducerPushSampleProducer {
     val sharding = ClusterSharding(system)
     sharding.init(entity)
 
-    val activeEventProducer = EventProducerPush[String](
+    val eventProducer = EventProducerPush[String](
       producerId,
       EventProducerSource(entityTypeKey.name, streamId, Transformation.identity, EventProducerSettings(system)),
       GrpcClientSettings.connectToServiceAt("localhost", grpcPort).withTls(false))
@@ -99,7 +99,7 @@ object ProducerPushSampleProducer {
       EventSourcedProvider.eventsBySlices[String](
         system,
         R2dbcReadJournal.Identifier,
-        activeEventProducer.eventProducerSource.entityType,
+        eventProducer.eventProducerSource.entityType,
         0,
         1023)
 
@@ -109,7 +109,7 @@ object ProducerPushSampleProducer {
           producerProjectionId,
           settings = None,
           sourceProvider = eventSourcedProvider,
-          handler = activeEventProducer.handler())),
+          handler = eventProducer.handler())),
       "EventPusherProjection",
       Props.empty,
       system.ignoreRef)

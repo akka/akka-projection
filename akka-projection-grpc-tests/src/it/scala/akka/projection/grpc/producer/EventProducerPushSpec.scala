@@ -99,7 +99,7 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
 
   // this projection runs in the producer and pushes events over grpc to the consumer
   def spawnProducerReplicationProjection(
-      activeEventProducer: EventProducerPush[String]): ActorRef[ProjectionBehavior.Command] =
+      eventProducer: EventProducerPush[String]): ActorRef[ProjectionBehavior.Command] =
     spawn(
       ProjectionBehavior(
         R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[String]](
@@ -107,13 +107,12 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
           settings = None,
           sourceProvider = EventSourcedProvider.eventsBySlices[String](
             system,
-            // FIXME: could we use activeEventProducer.eventProducerSource.settings.queryPluginId (user would have to configure)
+            // FIXME: could we use eventProducer.eventProducerSource.settings.queryPluginId (user would have to configure)
             R2dbcReadJournal.Identifier,
-            activeEventProducer.eventProducerSource.entityType,
-            // FIXME make these and the projetion id automatic (we would have to run SDP then, maybe it is better handled by the user for flexibility)
+            eventProducer.eventProducerSource.entityType,
             0,
             1023),
-          handler = activeEventProducer.handler())))
+          handler = eventProducer.handler())))
 
   // this projection runs in the consumer and just consumes the already projected events
   def spawnConsumerProjection(probe: ActorRef[EventEnvelope[String]]) =
@@ -152,8 +151,6 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
       val consumerFilterExcludedPid = nextPid(entityType)
 
       // consumer runs gRPC server accepting pushed events from producers
-      // FIXME consumer filters
-      // FIXME we might want to allow transforming more aspects of the events (payloads even?)
       val destination =
         EventProducerPushDestination(streamId)
           .withJournalPluginId("test.consumer.r2dbc.journal")
@@ -176,11 +173,9 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
           EventProducerPushDestination.grpcServiceHandler(destination))
       bound.futureValue
 
-      // FIXME even higher level API for the producer side of this?
-      // FIXME producer filters
       val veggies = Set("cucumber")
       val authMetadata = (new MetadataBuilder).addText("secret", "password").build()
-      val activeEventProducer = EventProducerPush[String](
+      val eventProducer = EventProducerPush[String](
         originId = producerOriginId,
         eventProducerSource = EventProducerSource[String](
           entityType,
@@ -191,13 +186,10 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
           producerFilter = envelope => !veggies(envelope.event)),
         connectionMetadata = authMetadata,
         GrpcClientSettings.connectToServiceAt("localhost", grpcPort).withTls(false))
-      spawnProducerReplicationProjection(activeEventProducer)
+      spawnProducerReplicationProjection(eventProducer)
 
       // local "regular" projections consume the projected events
       val consumerProbe = createTestProbe[EventEnvelope[String]]()
-
-      // FIXME do we provide some higher level API for both accepting and consuming or do
-      //       we leave that up to the user (so that they can decide on using SDP or whatnot?)
       spawnConsumerProjection(consumerProbe.ref)
 
       val pid = nextPid(entityType)
