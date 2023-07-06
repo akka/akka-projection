@@ -50,6 +50,7 @@ import scala.concurrent.duration.Duration
  *
  * gRPC push protocol handler for the producing side
  */
+@InternalApi
 private[akka] object EventPusher {
 
   private val logger = LoggerFactory.getLogger(getClass)

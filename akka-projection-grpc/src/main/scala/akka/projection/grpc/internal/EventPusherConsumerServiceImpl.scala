@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
-import scala.util.control.NonFatal
 
 /**
  * INTERNAL API
@@ -131,9 +130,9 @@ private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinatio
                         ConsumerEventAck(originalEnvelope.persistenceId, originalEnvelope.sequenceNr))))(
                       ExecutionContexts.parasitic)
                     .recover {
-                      case NonFatal(ex) =>
+                      case ex: Throwable =>
                         logger.warn(s"Failing event stream because of event writer error", ex)
-                        throw ex;
+                        throw ex
                     }(system.executionContext)
                 }
                 .prepend(Source.future(startEvent.future))
