@@ -138,6 +138,9 @@ object ProducerPushSampleConsumer {
       .parseString(s"""
      akka.http.server.enable-http2 = on
      akka.persistence.r2dbc.connection-factory = $${akka.persistence.r2dbc.h2}
+     # until present in reference.conf
+     akka.persistence.typed.event-writer.max-batch-size=40
+     akka.persistence.typed.event-writer.ask-timeout=5s
      """)
       .withFallback(ConfigFactory.load("application-h2.conf"))
       .resolve()

@@ -13,9 +13,9 @@ import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
-import akka.persistence.EventWriter
-import akka.persistence.EventWriterExtension
 import akka.persistence.FilteredPayload
+import akka.persistence.typed.EventWriter
+import akka.persistence.typed.EventWriterExtension
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
@@ -53,7 +53,7 @@ private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinatio
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
   private val perPartitionParallelism =
-    system.settings.config.getInt("akka.persistence.event-writer.max-batch-size") / 2
+    system.settings.config.getInt("akka.persistence.typed.event-writer.max-batch-size") / 2
 
   private implicit val ec: ExecutionContext = system.executionContext
 

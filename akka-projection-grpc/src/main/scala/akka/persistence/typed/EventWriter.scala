@@ -2,7 +2,7 @@
  * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.persistence
+package akka.persistence.typed
 
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -12,15 +12,24 @@ import akka.actor.typed.ExtensionId
 import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.LoggerOps
+import akka.actor.typed.scaladsl.adapter.ClassicActorRefOps
 import akka.actor.typed.scaladsl.adapter.TypedActorRefOps
 import akka.annotation.InternalStableApi
 import akka.pattern.StatusReply
+import akka.persistence.AtomicWrite
+import akka.persistence.JournalProtocol
+import akka.persistence.Persistence
+import akka.persistence.PersistentRepr
 import akka.persistence.journal.Tagged
+import akka.util.JavaDurationConverters.JavaDurationOps
+import akka.util.Timeout
 
 import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import scala.util.Failure
+import scala.util.Success
 
 // FIXME move to akka-persistence-typed for access
 
@@ -76,7 +85,8 @@ private[akka] object EventWriter {
   private def emptyWaitingForWrite = Vector.empty[(PersistentRepr, ActorRef[StatusReply[WriteAck]])]
   private case class StateForPid(
       waitingForReply: Map[Long, (PersistentRepr, ActorRef[StatusReply[WriteAck]])],
-      waitingForWrite: Vector[(PersistentRepr, ActorRef[StatusReply[WriteAck]])] = emptyWaitingForWrite)
+      waitingForWrite: Vector[(PersistentRepr, ActorRef[StatusReply[WriteAck]])] = emptyWaitingForWrite,
+      writeErrorHandlingInProgress: Boolean = false)
 
   def apply(journalPluginId: String): Behavior[Command] =
     Behaviors
@@ -84,13 +94,20 @@ private[akka] object EventWriter {
         .setup[AnyRef] { context =>
           // FIXME do we need to allow configuring per journal?
           val maxBatchSize =
-            context.system.settings.config.getInt("akka.persistence.event-writer.max-batch-size")
+            context.system.settings.config.getInt("akka.persistence.typed.event-writer.max-batch-size")
+          implicit val askTimeout: Timeout =
+            context.system.settings.config.getDuration("akka.persistence.typed.event-writer.ask-timeout").asScala
           val actorInstanceId = instanceCounter.getAndIncrement()
           val writerUuid = UUID.randomUUID().toString
           val journal = Persistence(context.system).journalFor(journalPluginId)
           context.log.debug("Event writer for journal [{}] starting up", journalPluginId)
 
           var perPidWriteState = Map.empty[String, StateForPid]
+
+          def sendToJournal(reprs: Seq[PersistentRepr]) = {
+            journal ! JournalProtocol
+              .WriteMessages(AtomicWrite(reprs) :: Nil, context.self.toClassic, actorInstanceId)
+          }
 
           def handleUpdatedStateForPid(pid: String, newStateForPid: StateForPid): Unit = {
             if (newStateForPid.waitingForReply.nonEmpty) {
@@ -108,9 +125,8 @@ private[akka] object EventWriter {
                     pid,
                     newStateForPid.waitingForWrite.head._1.sequenceNr,
                     newStateForPid.waitingForWrite.last._1.sequenceNr)
-                val batchWrite = AtomicWrite(newStateForPid.waitingForWrite.map { case (repr, _) => repr })
-                journal ! JournalProtocol
-                  .WriteMessages(batchWrite :: Nil, context.self.toClassic, actorInstanceId)
+                val batch = newStateForPid.waitingForWrite.map { case (repr, _) => repr }
+                sendToJournal(batch)
 
                 val newReplyTo = newStateForPid.waitingForWrite.map {
                   case (repr, replyTo) => (repr.sequenceNr, (repr, replyTo))
@@ -163,14 +179,31 @@ private[akka] object EventWriter {
                           s"Got error reply for event with no waiting request, probably a bug (pid $pid, seq nr $sequenceNr)",
                           error)
                       case Some(_) =>
-                        // quite likely a re-delivery of already persisted events, check highest seqnr
-                        val sortedSeqNrs = state.waitingForReply.keys.toSeq.sorted
-                        val maxSeqNrFinderName = URLEncoder.encode(s"MaxSeqNrFinder-$pid", "UTF-8")
-                        if (context.child(maxSeqNrFinderName).isEmpty) {
-                          // first failure in batch, but batch is atomic so we know it all failed
-                          context.spawn[Nothing](
-                            MaxSeqNrFinder(context.self, journal, pid, sortedSeqNrs.last, error.getMessage),
-                            maxSeqNrFinderName)
+                        // quite likely a re-delivery of already persisted events, the whole batch will fail
+                        // check highest seqnr and see if we can ack events
+                        if (!state.writeErrorHandlingInProgress) {
+                          perPidWriteState =
+                            perPidWriteState.updated(pid, state.copy(writeErrorHandlingInProgress = true))
+                          context.ask(
+                            journal.toTyped,
+                            (replyTo: ActorRef[JournalProtocol.Response]) =>
+                              JournalProtocol.ReplayMessages(0L, 0L, 1L, pid, replyTo.toClassic)) {
+                            case Success(JournalProtocol.RecoverySuccess(highestSequenceNr)) =>
+                              MaxSeqNrForPid(pid, highestSequenceNr, error.getMessage)
+                            case Success(unexpected) =>
+                              throw new IllegalArgumentException(
+                                s"Got unexpected reply from journal ${unexpected.getClass} for pid $pid")
+                            case Failure(exception) =>
+                              throw new RuntimeException(
+                                s"Error finding highest sequence number in journal for pid $pid",
+                                exception)
+                          }
+                        } else {
+                          if (context.log.isTraceEnabled)
+                            context.log.trace2(
+                              "Ignoring failure for pid [{}], seqnr [{}], since write error handling already in progress",
+                              pid,
+                              sequenceNr)
                         }
                         Behaviors.same
                     }
@@ -206,8 +239,7 @@ private[akka] object EventWriter {
                         persistenceId,
                         sequenceNumber,
                         event)
-                    val write = AtomicWrite(reprWithMeta) :: Nil
-                    journal ! JournalProtocol.WriteMessages(write, context.self.toClassic, actorInstanceId)
+                    sendToJournal(Vector(reprWithMeta))
                     StateForPid(Map((reprWithMeta.sequenceNr, (reprWithMeta, replyTo))), emptyWaitingForWrite)
                   case Some(state) =>
                     // write in progress for pid, add write to batch and perform once current write completes
@@ -250,15 +282,17 @@ private[akka] object EventWriter {
                       sortedSeqs.head,
                       sortedSeqs.last,
                       originalErrorDesc)
-                    val newState = state.copy(waitingForReply = Map.empty)
+                    val newState = state.copy(waitingForReply = Map.empty, writeErrorHandlingInProgress = false)
                     handleUpdatedStateForPid(pid, newState)
                   } else {
                     // ack all already written
-                    val stateAfterWritten = alreadyInJournal.foldLeft(state) { (state, seqNr) =>
-                      val (_, replyTo) = state.waitingForReply(seqNr)
-                      replyTo ! StatusReply.success(WriteAck(pid, seqNr))
-                      state.copy(waitingForReply = state.waitingForReply - seqNr)
-                    }
+                    val stateAfterWritten = alreadyInJournal
+                      .foldLeft(state) { (state, seqNr) =>
+                        val (_, replyTo) = state.waitingForReply(seqNr)
+                        replyTo ! StatusReply.success(WriteAck(pid, seqNr))
+                        state.copy(waitingForReply = state.waitingForReply - seqNr)
+                      }
+                      .copy(writeErrorHandlingInProgress = false)
                     if (needsWrite.isEmpty) {
                       handleUpdatedStateForPid(pid, stateAfterWritten)
                     } else {
@@ -290,34 +324,5 @@ private[akka] object EventWriter {
         })
       .onFailure[Exception](SupervisorStrategy.restart)
       .narrow[Command]
-
-  private object MaxSeqNrFinder {
-    def apply(
-        replyTo: ActorRef[EventWriter.MaxSeqNrForPid],
-        journal: akka.actor.ActorRef,
-        persistenceId: String,
-        toSeqNr: Long,
-        originalErrorDesc: String): Behavior[Nothing] =
-      Behaviors
-        .setup[AnyRef] { context =>
-          journal ! JournalProtocol.ReplayMessages(
-            toSeqNr,
-            toSeqNr,
-            Long.MaxValue,
-            persistenceId,
-            context.self.toClassic)
-
-          Behaviors.receiveMessage {
-            case JournalProtocol.ReplayedMessage(_) => Behaviors.same // ignore
-            case JournalProtocol.RecoverySuccess(highestSequenceNr) =>
-              replyTo ! MaxSeqNrForPid(persistenceId, highestSequenceNr, originalErrorDesc)
-              Behaviors.stopped
-            case unexpected =>
-              throw new IllegalArgumentException(s"Unexpected message from journal: ${unexpected.getClass}")
-          }
-        }
-        .narrow
-
-  }
 
 }
