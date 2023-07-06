@@ -4,7 +4,6 @@
 
 package akka.persistence.typed
 
-import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.pattern.StatusReply
@@ -79,7 +78,6 @@ class EventWriterSpec extends ScalaTestWithActorTestKit(EventWriterSpec.config) 
           for (n <- 0 to 20) {
             writer ! EventWriter.Write(s"pid$pidN", n.toLong, n.toString, None, Set.empty, probe.ref)
           }
-          Done
         }
       }
       probe.receiveMessages(20 * 1000, 20.seconds)
