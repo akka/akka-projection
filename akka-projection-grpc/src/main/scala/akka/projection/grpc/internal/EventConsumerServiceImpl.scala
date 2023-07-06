@@ -5,6 +5,7 @@
 package akka.projection.grpc.internal
 
 import akka.NotUsed
+import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.LoggerOps
@@ -37,7 +38,7 @@ import scala.util.control.NonFatal
  * gRPC push protocol service for the consuming side
  */
 @InternalApi
-private[akka] final class EventConsumerServiceImpl(eventProducerDestination: EventProducerPushDestination)(
+private[akka] final class EventConsumerServiceImpl(eventProducerDestinations: Set[EventProducerPushDestination])(
     implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
@@ -45,8 +46,13 @@ private[akka] final class EventConsumerServiceImpl(eventProducerDestination: Eve
 
   private val logger = LoggerFactory.getLogger(classOf[EventConsumerServiceImpl])
 
-  private def journalPluginId = eventProducerDestination.journalPluginId
-  private val eventWriter = EventWriterExtension(system).writerForJournal(journalPluginId)
+  private case class Destination(
+      eventProducerPushDestination: EventProducerPushDestination,
+      eventWriter: ActorRef[EventWriter.Command])
+
+  private val destinationPerStreamId = eventProducerDestinations.map { d =>
+    d.acceptedStreamId -> Destination(d, EventWriterExtension(system).writerForJournal(d.journalPluginId))
+  }.toMap
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
   private val parallelism = 1000 // FIXME config
@@ -56,47 +62,52 @@ private[akka] final class EventConsumerServiceImpl(eventProducerDestination: Eve
 
   private implicit val ec: ExecutionContext = system.executionContext
 
-  logger.info2(
-    "Passive event consumer service created, accepting stream ids [{}], will write to journal [{}]",
-    eventProducerDestination.acceptedStreamIds.mkString(", "),
-    journalPluginId.getOrElse("default journal"))
+  logger.info(
+    "Passive event consumer service created, accepting stream ids [{}]",
+    destinationPerStreamId.keys.mkString(", "))
 
   override def consumeEvent(
       in: Source[ConsumeEventIn, NotUsed],
       metadata: Metadata): Source[ConsumeEventOut, NotUsed] = {
-    @volatile var transformer: EventProducerPushDestination.Transformation = null
+    @volatile var destinationAndTransformerForStream: (Destination, EventProducerPushDestination.Transformation) = null
     val startEvent = Promise[ConsumeEventOut]()
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(ConsumeEventIn(ConsumeEventIn.Message.Init(init), _)), tail) =>
-          if (!eventProducerDestination.acceptedStreamIds(init.streamId)) {
-            logger.debug2(
-              "Event producer [{}] wanted to push events for stream id [{}] but that is not among the accepted stream ids",
-              init.originId,
-              init.streamId)
-            throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription(
-              s"Events for stream id [${init.streamId}] not accepted by this consumer"))
-          }
+          destinationPerStreamId.get(init.streamId) match {
+            case Some(destination) =>
+              startEvent.success(ConsumeEventOut(ConsumeEventOut.Message.Start(
+                ConsumerEventStart(toProtoFilterCriteria(destination.eventProducerPushDestination.filters)))))
 
-          startEvent.success(ConsumeEventOut(
-            ConsumeEventOut.Message.Start(ConsumerEventStart(toProtoFilterCriteria(eventProducerDestination.filters)))))
+              val eventsAndFiltered = tail.collect {
+                case c if c.message.isEvent || c.message.isFilteredEvent => c
+                // keepalive consumed and dropped here
+              }
+              val transformer =
+                destination.eventProducerPushDestination.transformationForOrigin(init.originId, metadata)
 
-          val eventsAndFiltered = tail.collect {
-            case c if c.message.isEvent || c.message.isFilteredEvent => c
-            // keepalive consumed and dropped here
-          }
-          transformer = eventProducerDestination.transformationForOrigin(init.originId, metadata)
+              // needed further down the stream
+              destinationAndTransformerForStream = (destination, transformer)
 
-          // allow interceptor to block request based on metadata
-          eventProducerDestination.interceptor match {
-            case Some(interceptor) =>
-              Source.futureSource(interceptor.intercept(init.streamId, metadata).map { _ =>
-                logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
-                eventsAndFiltered
-              })
+              // allow interceptor to block request based on metadata
+              destination.eventProducerPushDestination.interceptor match {
+                case Some(interceptor) =>
+                  Source.futureSource(interceptor.intercept(init.streamId, metadata).map { _ =>
+                    logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
+                    eventsAndFiltered
+                  })
+                case None =>
+                  logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
+                  eventsAndFiltered
+              }
+
             case None =>
-              logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
-              eventsAndFiltered
+              logger.debug2(
+                "Event producer [{}] wanted to push events for stream id [{}] but that is not among the accepted stream ids",
+                init.originId,
+                init.streamId)
+              throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription(
+                s"Events for stream id [${init.streamId}] not accepted by this consumer"))
           }
 
         case (_, _) =>
@@ -117,6 +128,7 @@ private[akka] final class EventConsumerServiceImpl(eventProducerDestination: Eve
       // Note that perPartition must be something like half the siez of the event writer max buffer as the previous
       // in flight batch will complete one by one
       .mapAsyncPartitioned(parallelism, perPartitionParallelism)(_.persistenceId) { (originalEnvelope, _) =>
+        val (destination, transformer) = destinationAndTransformerForStream
         val transformedEventEnvelope = transformer(originalEnvelope)
         if (logger.isTraceEnabled)
           logger.traceN(
@@ -125,7 +137,7 @@ private[akka] final class EventConsumerServiceImpl(eventProducerDestination: Eve
             transformedEventEnvelope.persistenceId,
             if (transformedEventEnvelope.filtered) " filtered" else "")
 
-        eventWriter
+        destination.eventWriter
           .askWithStatus[EventWriter.WriteAck](EventWriter.Write(
             transformedEventEnvelope.persistenceId,
             transformedEventEnvelope.sequenceNr,

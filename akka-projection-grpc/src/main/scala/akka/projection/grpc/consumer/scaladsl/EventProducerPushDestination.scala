@@ -35,16 +35,11 @@ import scala.concurrent.Future
 object EventProducerPushDestination {
 
   /**
-   * @param acceptedStreamIds Only accept these stream ids, deny others
-   */
-  def apply(acceptedStreamIds: Set[String]): EventProducerPushDestination =
-    new EventProducerPushDestination(None, acceptedStreamIds, (_, _) => Transformation.empty, None, immutable.Seq.empty)
-
-  /**
    * @param acceptedStreamId Only accept this stream ids, deny others
    */
   def apply(acceptedStreamId: String): EventProducerPushDestination =
-    apply(Set(acceptedStreamId))
+    new EventProducerPushDestination(None, acceptedStreamId, (_, _) => Transformation.empty, None, immutable.Seq.empty)
+
   @ApiMayChange
   object Transformation {
     val empty = new Transformation {
@@ -133,15 +128,17 @@ object EventProducerPushDestination {
 
   def grpcServiceHandler(eventConsumer: EventProducerPushDestination)(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
-    EventConsumerServicePowerApiHandler(new EventConsumerServiceImpl(eventConsumer))
+    EventConsumerServicePowerApiHandler(new EventConsumerServiceImpl(Set(eventConsumer)))
 
-  // FIXME do we need a handler taking a set of EventConsumerDestinations like for EventProducerSource?
+  def grpcServiceHandler(eventConsumer: Set[EventProducerPushDestination])(
+      implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
+    EventConsumerServicePowerApiHandler(new EventConsumerServiceImpl(eventConsumer))
 
 }
 
 final class EventProducerPushDestination private (
     val journalPluginId: Option[String],
-    val acceptedStreamIds: Set[String],
+    val acceptedStreamId: String,
     val transformationForOrigin: (String, Metadata) => EventProducerPushDestination.Transformation,
     val interceptor: Option[EventConsumerInterceptor],
     val filters: immutable.Seq[FilterCriteria]) {
@@ -177,9 +174,9 @@ final class EventProducerPushDestination private (
 
   private def copy(
       journalPluginId: Option[String] = journalPluginId,
-      acceptedStreamIds: Set[String] = acceptedStreamIds,
+      acceptedStreamId: String = acceptedStreamId,
       transformationForOrigin: (String, Metadata) => Transformation = transformationForOrigin,
       interceptor: Option[EventConsumerInterceptor] = interceptor,
       filters: immutable.Seq[FilterCriteria] = filters): EventProducerPushDestination =
-    new EventProducerPushDestination(journalPluginId, acceptedStreamIds, transformationForOrigin, interceptor, filters)
+    new EventProducerPushDestination(journalPluginId, acceptedStreamId, transformationForOrigin, interceptor, filters)
 }
