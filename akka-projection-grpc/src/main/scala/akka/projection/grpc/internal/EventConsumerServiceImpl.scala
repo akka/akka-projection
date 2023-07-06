@@ -15,7 +15,7 @@ import akka.grpc.scaladsl.Metadata
 import akka.persistence.EventWriter
 import akka.persistence.EventWriterExtension
 import akka.persistence.FilteredPayload
-import akka.projection.grpc.consumer.scaladsl.EventConsumer
+import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventAck
@@ -37,7 +37,7 @@ import scala.util.control.NonFatal
  * gRPC push protocol service for the consuming side
  */
 @InternalApi
-private[akka] final class EventConsumerServiceImpl(eventProducerDestination: EventConsumer.EventConsumerDestination)(
+private[akka] final class EventConsumerServiceImpl(eventProducerDestination: EventProducerPushDestination)(
     implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
@@ -64,7 +64,7 @@ private[akka] final class EventConsumerServiceImpl(eventProducerDestination: Eve
   override def consumeEvent(
       in: Source[ConsumeEventIn, NotUsed],
       metadata: Metadata): Source[ConsumeEventOut, NotUsed] = {
-    @volatile var transformer: EventConsumer.Transformation = null
+    @volatile var transformer: EventProducerPushDestination.Transformation = null
     val startEvent = Promise[ConsumeEventOut]()
     in.prefixAndTail(1)
       .flatMapConcat {

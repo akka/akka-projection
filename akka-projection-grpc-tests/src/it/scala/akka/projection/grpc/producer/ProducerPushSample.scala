@@ -24,8 +24,8 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.TestEntity
-import akka.projection.grpc.consumer.scaladsl.EventConsumer
-import akka.projection.grpc.producer.scaladsl.ActiveEventProducer
+import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
+import akka.projection.grpc.producer.scaladsl.EventProducerPush
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
@@ -91,7 +91,7 @@ object ProducerPushSampleProducer {
     val sharding = ClusterSharding(system)
     sharding.init(entity)
 
-    val activeEventProducer = ActiveEventProducer[String](
+    val activeEventProducer = EventProducerPush[String](
       producerId,
       EventProducerSource(entityTypeKey.name, streamId, Transformation.identity, EventProducerSettings(system)),
       GrpcClientSettings.connectToServiceAt("localhost", grpcPort).withTls(false))
@@ -172,10 +172,10 @@ object ProducerPushSampleConsumer {
       system.ignoreRef)
 
     // consumer runs gRPC server accepting pushed events from producers
-    val destination = EventConsumer.EventConsumerDestination(streamId)
+    val destination = EventProducerPushDestination(streamId)
     val bound = Http(system)
       .newServerAt("127.0.0.1", grpcPort)
-      .bind(EventConsumer.grpcServiceHandler(destination))
+      .bind(EventProducerPushDestination.grpcServiceHandler(destination))
     bound.foreach(binding =>
       log.info2(s"Consumer listening at: {}:{}", binding.localAddress.getHostString, binding.localAddress.getPort))
   }

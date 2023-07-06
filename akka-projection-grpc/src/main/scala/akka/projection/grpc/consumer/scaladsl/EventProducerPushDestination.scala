@@ -18,79 +18,31 @@ import scala.collection.immutable
 import scala.concurrent.Future
 
 /**
- * The EventConsumer is an optional passive consumer service that can be bound as a gRPC endpoint accepting active producers
- * pushing events, for example to run a projection piercing firewalls or NAT. Events are pushed directly into the configured
- * journal and can then be consumed through a local projection. A producer can push events for multiple entities but no two
- * producer are allowed to push events for the same entity.
+ * A passive consumer service for event producer push that can be bound as a gRPC endpoint accepting active producers
+ * pushing events, for example to run a projection piercing firewalls or NAT. Events are pushed directly into the
+ * configured journal and can then be consumed through a local projection. A producer can push events for multiple
+ * entities but no two producer are allowed to push events for the same entity.
  *
- * The event consumer service is not needed for normal projections over gRPC where the consuming side can access and initiate
- * connections to the producing side.
+ * The event consumer service is not needed for normal projections over gRPC where the consuming side can access and
+ * initiate connections to the producing side.
  *
- * Producers are started using the [[akka.projection.grpc.producer.scaladsl.ActiveEventProducer]] API.
+ * Producers are started using the [[akka.projection.grpc.producer.scaladsl.EventProducerPush]] API.
  */
 // FIXME Java API
 @ApiMayChange
-object EventConsumer {
+object EventProducerPushDestination {
 
-  final class EventConsumerDestination private (
-      val journalPluginId: Option[String],
-      val acceptedStreamIds: Set[String],
-      val transformationForOrigin: (String, Metadata) => Transformation,
-      val interceptor: Option[EventConsumerInterceptor],
-      val filters: immutable.Seq[FilterCriteria]) {
+  /**
+   * @param acceptedStreamIds Only accept these stream ids, deny others
+   */
+  def apply(acceptedStreamIds: Set[String]): EventProducerPushDestination =
+    new EventProducerPushDestination(None, acceptedStreamIds, (_, _) => Transformation, None, immutable.Seq.empty)
 
-    def withInterceptor(interceptor: EventConsumerInterceptor): EventConsumerDestination =
-      copy(interceptor = Some(interceptor))
-
-    def withJournalPluginId(journalPluginId: String): EventConsumerDestination =
-      copy(journalPluginId = Some(journalPluginId))
-
-    /**
-     * @param transformation A transformation to use for all events.
-     */
-    def withTransformation(transformation: Transformation): EventConsumerDestination =
-      copy(transformationForOrigin = (_, _) => transformation)
-
-    /**
-     * @param transformation A function to create a transformation from the origin id and request metadata
-     *                       of an active event producer connecting to the consumer. Invoked once per stream
-     *                       so that transformations can be individual to each producer, for example modify
-     *                       the persistence id or tags to include the origin id.
-     */
-    def withTransformationForOrigin(
-        transformationForOrigin: (String, Metadata) => Transformation): EventConsumerDestination =
-      copy(transformationForOrigin = transformationForOrigin)
-
-    /**
-     * FIXME we may want to remove this and make the consumer filters dynamic just like for "normal consumers"
-     */
-    def withConsumerFilters(filters: immutable.Seq[FilterCriteria]): EventConsumerDestination =
-      copy(filters = filters)
-
-    private def copy(
-        journalPluginId: Option[String] = journalPluginId,
-        acceptedStreamIds: Set[String] = acceptedStreamIds,
-        transformationForOrigin: (String, Metadata) => Transformation = transformationForOrigin,
-        interceptor: Option[EventConsumerInterceptor] = interceptor,
-        filters: immutable.Seq[FilterCriteria] = filters): EventConsumerDestination =
-      new EventConsumerDestination(journalPluginId, acceptedStreamIds, transformationForOrigin, interceptor, filters)
-  }
-
-  object EventConsumerDestination {
-
-    /**
-     * @param acceptedStreamIds Only accept these stream ids, deny others
-     */
-    def apply(acceptedStreamIds: Set[String]): EventConsumerDestination =
-      new EventConsumerDestination(None, acceptedStreamIds, (_, _) => Transformation, None, immutable.Seq.empty)
-
-    /**
-     * @param acceptedStreamId Only accept this stream ids, deny others
-     */
-    def apply(acceptedStreamId: String): EventConsumerDestination =
-      apply(Set(acceptedStreamId))
-  }
-
+  /**
+   * @param acceptedStreamId Only accept this stream ids, deny others
+   */
+  def apply(acceptedStreamId: String): EventProducerPushDestination =
+    apply(Set(acceptedStreamId))
   @ApiMayChange
   object Transformation extends Transformation {
     // Note: this is also the empty/identity transformation
@@ -187,10 +139,55 @@ object EventConsumer {
     private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any]
   }
 
-  def grpcServiceHandler(eventConsumer: EventConsumerDestination)(
+  def grpcServiceHandler(eventConsumer: EventProducerPushDestination)(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
     EventConsumerServicePowerApiHandler(new EventConsumerServiceImpl(eventConsumer))
 
   // FIXME do we need a handler taking a set of EventConsumerDestinations like for EventProducerSource?
 
+}
+
+final class EventProducerPushDestination private (
+    val journalPluginId: Option[String],
+    val acceptedStreamIds: Set[String],
+    val transformationForOrigin: (String, Metadata) => EventProducerPushDestination.Transformation,
+    val interceptor: Option[EventConsumerInterceptor],
+    val filters: immutable.Seq[FilterCriteria]) {
+  import EventProducerPushDestination._
+
+  def withInterceptor(interceptor: EventConsumerInterceptor): EventProducerPushDestination =
+    copy(interceptor = Some(interceptor))
+
+  def withJournalPluginId(journalPluginId: String): EventProducerPushDestination =
+    copy(journalPluginId = Some(journalPluginId))
+
+  /**
+   * @param transformation A transformation to use for all events.
+   */
+  def withTransformation(transformation: Transformation): EventProducerPushDestination =
+    copy(transformationForOrigin = (_, _) => transformation)
+
+  /**
+   * @param transformation A function to create a transformation from the origin id and request metadata
+   *                       of an active event producer connecting to the consumer. Invoked once per stream
+   *                       so that transformations can be individual to each producer, for example modify
+   *                       the persistence id or tags to include the origin id.
+   */
+  def withTransformationForOrigin(
+      transformationForOrigin: (String, Metadata) => Transformation): EventProducerPushDestination =
+    copy(transformationForOrigin = transformationForOrigin)
+
+  /**
+   * FIXME we may want to remove this and make the consumer filters dynamic just like for "normal consumers"
+   */
+  def withConsumerFilters(filters: immutable.Seq[FilterCriteria]): EventProducerPushDestination =
+    copy(filters = filters)
+
+  private def copy(
+      journalPluginId: Option[String] = journalPluginId,
+      acceptedStreamIds: Set[String] = acceptedStreamIds,
+      transformationForOrigin: (String, Metadata) => Transformation = transformationForOrigin,
+      interceptor: Option[EventConsumerInterceptor] = interceptor,
+      filters: immutable.Seq[FilterCriteria] = filters): EventProducerPushDestination =
+    new EventProducerPushDestination(journalPluginId, acceptedStreamIds, transformationForOrigin, interceptor, filters)
 }

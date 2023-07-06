@@ -17,23 +17,34 @@ import akka.projection.grpc.internal.proto.EventConsumerServiceClient
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.stream.scaladsl.FlowWithContext
 
-object ActiveEventProducer {
+/**
+ * An active producer for event producer push that can be started on the producer to connect to consumers to
+ * push events, for example to run a projection piercing firewalls or NAT. A producer can push events for multiple
+ * entities but no two producer are allowed to push events for the same entity.
+ *
+ * The event consumer service is not needed for normal projections over gRPC where the consuming side can access and
+ * initiate connections to the producing side.
+ *
+ * Expects a [[akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination]] gRPC service
+ * to be set up to accept the events on the consuming side.
+ */
+object EventProducerPush {
 
   def apply[Event](
       originId: String,
       eventProducerSource: EventProducerSource,
       connectionMetadata: Metadata,
-      grpcClientSettings: GrpcClientSettings): ActiveEventProducer[Event] =
-    new ActiveEventProducer[Event](originId, eventProducerSource, Some(connectionMetadata), grpcClientSettings)
+      grpcClientSettings: GrpcClientSettings): EventProducerPush[Event] =
+    new EventProducerPush[Event](originId, eventProducerSource, Some(connectionMetadata), grpcClientSettings)
 
   def apply[Event](
       originId: String,
       eventProducerSource: EventProducerSource,
-      grpcClientSettings: GrpcClientSettings): ActiveEventProducer[Event] =
-    new ActiveEventProducer[Event](originId, eventProducerSource, None, grpcClientSettings)
+      grpcClientSettings: GrpcClientSettings): EventProducerPush[Event] =
+    new EventProducerPush[Event](originId, eventProducerSource, None, grpcClientSettings)
 }
 
-final class ActiveEventProducer[Event](
+final class EventProducerPush[Event](
     val originId: String,
     val eventProducerSource: EventProducerSource,
     val connectionMetadata: Option[Metadata],

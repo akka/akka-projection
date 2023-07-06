@@ -25,8 +25,8 @@ import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.consumer.ConsumerFilter
-import akka.projection.grpc.consumer.scaladsl.EventConsumer
-import akka.projection.grpc.producer.scaladsl.ActiveEventProducer
+import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
+import akka.projection.grpc.producer.scaladsl.EventProducerPush
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.R2dbcProjectionSettings
@@ -40,7 +40,7 @@ import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-object ProducerPushSpec {
+object EventProducerPushSpec {
 
   def config =
     ConfigFactory
@@ -70,12 +70,12 @@ object ProducerPushSpec {
       .withFallback(ConfigFactory.load())
       .resolve()
 }
-class ProducerPushSpec(testContainerConf: TestContainerConf)
+class EventProducerPushSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
       akka.actor
         .ActorSystem(
-          "ProducerPushReplicationSpec",
-          ProducerPushSpec.config
+          "EventProducerPushSpec",
+          EventProducerPushSpec.config
             .withFallback(testContainerConf.config))
         .toTyped)
     with AnyWordSpecLike
@@ -99,7 +99,7 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
 
   // this projection runs in the producer and pushes events over grpc to the consumer
   def spawnProducerReplicationProjection(
-      activeEventProducer: ActiveEventProducer[String]): ActorRef[ProjectionBehavior.Command] =
+      activeEventProducer: EventProducerPush[String]): ActorRef[ProjectionBehavior.Command] =
     spawn(
       ProjectionBehavior(
         R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[String]](
@@ -155,18 +155,17 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
       // FIXME consumer filters
       // FIXME we might want to allow transforming more aspects of the events (payloads even?)
       val destination =
-        EventConsumer
-          .EventConsumerDestination(streamId)
+        EventProducerPushDestination(streamId)
           .withJournalPluginId("test.consumer.r2dbc.journal")
           .withInterceptor((_, metadata) =>
             if (metadata.getText("secret").contains("password")) Future.successful(Done)
             else throw new GrpcServiceException(Status.PERMISSION_DENIED))
           // FIXME not sure about the mini DSL
           .withTransformationForOrigin { (originId, _) =>
-            EventConsumer.Transformation
+            EventProducerPushDestination.Transformation
               .mapPersistenceId[String](envelope => envelope.persistenceId.replace("p-", s"$originId-"))
-              .andThen(EventConsumer.Transformation.mapTags[String](_ => Set("added-tag")))
-              .andThen(EventConsumer.Transformation.mapPayload[String, String](env =>
+              .andThen(EventProducerPushDestination.Transformation.mapTags[String](_ => Set("added-tag")))
+              .andThen(EventProducerPushDestination.Transformation.mapPayload[String, String](env =>
                 env.eventOption.map(_.toUpperCase)))
           }
           .withConsumerFilters(Vector(ConsumerFilter.ExcludeEntityIds(Set(consumerFilterExcludedPid.id))))
@@ -176,14 +175,14 @@ class ProducerPushSpec(testContainerConf: TestContainerConf)
         .bind(
           // events are written directly into the journal on the consumer side, pushing over gRPC is only
           // allowed if no two pushing systems push events for the same persistence id
-          EventConsumer.grpcServiceHandler(destination))
+          EventProducerPushDestination.grpcServiceHandler(destination))
       bound.futureValue
 
       // FIXME even higher level API for the producer side of this?
       // FIXME producer filters
       val veggies = Set("cucumber")
       val authMetadata = (new MetadataBuilder).addText("secret", "password").build()
-      val activeEventProducer = ActiveEventProducer[String](
+      val activeEventProducer = EventProducerPush[String](
         originId = producerOriginId,
         eventProducerSource = EventProducerSource[String](
           entityType,
