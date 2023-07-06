@@ -113,7 +113,7 @@ private[akka] object EventWriter {
                   .WriteMessages(batchWrite :: Nil, context.self.toClassic, actorInstanceId)
 
                 val newReplyTo = newStateForPid.waitingForWrite.map {
-                  case (repr, replyTo) => repr.sequenceNr -> (repr, replyTo)
+                  case (repr, replyTo) => (repr.sequenceNr, (repr, replyTo))
                 }.toMap
                 perPidWriteState = perPidWriteState.updated(pid, StateForPid(newReplyTo, emptyWaitingForWrite))
               }
@@ -214,7 +214,7 @@ private[akka] object EventWriter {
                         event)
                     val write = AtomicWrite(reprWithMeta) :: Nil
                     journal ! JournalProtocol.WriteMessages(write, context.self.toClassic, actorInstanceId)
-                    StateForPid(Map(reprWithMeta.sequenceNr -> (reprWithMeta, replyTo)), emptyWaitingForWrite)
+                    StateForPid(Map((reprWithMeta.sequenceNr, (reprWithMeta, replyTo))), emptyWaitingForWrite)
                   case Some(state) =>
                     // write in progress for pid, add write to batch and perform once current write completes
                     if (state.waitingForWrite.size == maxBatchSize) {
@@ -297,7 +297,7 @@ private[akka] object EventWriter {
       .onFailure[Exception](SupervisorStrategy.restart)
       .narrow[Command]
 
-  object MaxSeqNrFinder {
+  private object MaxSeqNrFinder {
     def apply(
         replyTo: ActorRef[EventWriter.MaxSeqNrForPid],
         journal: akka.actor.ActorRef,

@@ -160,13 +160,11 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
           .withInterceptor((_, metadata) =>
             if (metadata.getText("secret").contains("password")) Future.successful(Done)
             else throw new GrpcServiceException(Status.PERMISSION_DENIED))
-          // FIXME not sure about the mini DSL
           .withTransformationForOrigin { (originId, _) =>
-            EventProducerPushDestination.Transformation
-              .mapPersistenceId[String](envelope => envelope.persistenceId.replace("p-", s"$originId-"))
-              .andThen(EventProducerPushDestination.Transformation.mapTags[String](_ => Set("added-tag")))
-              .andThen(EventProducerPushDestination.Transformation.mapPayload[String, String](env =>
-                env.eventOption.map(_.toUpperCase)))
+            EventProducerPushDestination.Transformation.empty
+              .registerPersistenceIdMapper[String](envelope => envelope.persistenceId.replace("p-", s"$originId-"))
+              .registerTagMapper[String](_ => Set("added-tag"))
+              .registerPayloadMapper[String, String](env => env.eventOption.map(_.toUpperCase))
           }
           .withConsumerFilters(Vector(ConsumerFilter.ExcludeEntityIds(Set(consumerFilterExcludedPid.id))))
 

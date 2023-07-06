@@ -6,9 +6,11 @@ package akka.projection.grpc.consumer.scaladsl
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
+import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import akka.projection.grpc.internal.EventConsumerServiceImpl
@@ -36,7 +38,7 @@ object EventProducerPushDestination {
    * @param acceptedStreamIds Only accept these stream ids, deny others
    */
   def apply(acceptedStreamIds: Set[String]): EventProducerPushDestination =
-    new EventProducerPushDestination(None, acceptedStreamIds, (_, _) => Transformation, None, immutable.Seq.empty)
+    new EventProducerPushDestination(None, acceptedStreamIds, (_, _) => Transformation.empty, None, immutable.Seq.empty)
 
   /**
    * @param acceptedStreamId Only accept this stream ids, deny others
@@ -44,29 +46,19 @@ object EventProducerPushDestination {
   def apply(acceptedStreamId: String): EventProducerPushDestination =
     apply(Set(acceptedStreamId))
   @ApiMayChange
-  object Transformation extends Transformation {
-    // Note: this is also the empty/identity transformation
-    override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] =
-      eventEnvelope
+  object Transformation {
+    val empty = new Transformation {
+      // Note: this is also the empty/identity transformation
+      override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] =
+        eventEnvelope
+    }
   }
 
   private final case class MapTags(f: EventEnvelope[Any] => Set[String]) extends Transformation {
     override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] = {
       val newTags = f(eventEnvelope)
       if (newTags eq eventEnvelope.tags) eventEnvelope
-      else
-        new EventEnvelope[Any](
-          offset = eventEnvelope.offset,
-          persistenceId = eventEnvelope.persistenceId,
-          sequenceNr = eventEnvelope.sequenceNr,
-          eventOption = eventEnvelope.eventOption,
-          timestamp = eventEnvelope.timestamp,
-          eventMetadata = eventEnvelope.eventMetadata,
-          entityType = eventEnvelope.entityType,
-          slice = eventEnvelope.slice,
-          filtered = eventEnvelope.filtered,
-          source = eventEnvelope.source,
-          tags = newTags)
+      else copyEnvelope(eventEnvelope)(tags = newTags)
     }
 
   }
@@ -75,19 +67,7 @@ object EventProducerPushDestination {
     override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] = {
       val newPid = f(eventEnvelope)
       if (newPid eq eventEnvelope.persistenceId) eventEnvelope
-      else
-        new EventEnvelope[Any](
-          offset = eventEnvelope.offset,
-          persistenceId = newPid,
-          sequenceNr = eventEnvelope.sequenceNr,
-          eventOption = eventEnvelope.eventOption,
-          timestamp = eventEnvelope.timestamp,
-          eventMetadata = eventEnvelope.eventMetadata,
-          entityType = eventEnvelope.entityType,
-          slice = eventEnvelope.slice,
-          filtered = eventEnvelope.filtered,
-          source = eventEnvelope.source,
-          tags = eventEnvelope.tags)
+      else copyEnvelope(eventEnvelope)(persistenceId = newPid)
     }
   }
 
@@ -95,21 +75,7 @@ object EventProducerPushDestination {
     override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] = {
       val newMaybePayload = f(eventEnvelope)
       if (newMaybePayload eq eventEnvelope.eventOption) eventEnvelope
-      else {
-        new EventEnvelope[Any](
-          offset = eventEnvelope.offset,
-          persistenceId = eventEnvelope.persistenceId,
-          sequenceNr = eventEnvelope.sequenceNr,
-          eventOption = newMaybePayload,
-          timestamp = eventEnvelope.timestamp,
-          eventMetadata = eventEnvelope.eventMetadata,
-          entityType = eventEnvelope.entityType,
-          slice = eventEnvelope.slice,
-          filtered = newMaybePayload.isEmpty,
-          source = eventEnvelope.source,
-          tags = eventEnvelope.tags)
-      }
-
+      else copyEnvelope(eventEnvelope)(eventOption = newMaybePayload)
     }
   }
 
@@ -125,18 +91,44 @@ object EventProducerPushDestination {
    * Events can be excluded by mapping them to `None`.
    */
   sealed trait Transformation {
-    def mapTags[Event](f: EventEnvelope[Event] => Set[String]): Transformation =
-      MapTags(f.asInstanceOf[EventEnvelope[Any] => Set[String]])
-    def mapPersistenceId[Event](f: EventEnvelope[Event] => String): Transformation =
-      MapPersistenceId(f.asInstanceOf[EventEnvelope[Any] => String])
-    def mapPayload[Event, B <: Event](f: EventEnvelope[Event] => Option[B]): Transformation =
-      MapPayload(f.asInstanceOf[EventEnvelope[Any] => Option[B]])
+    def registerTagMapper[Event](f: EventEnvelope[Event] => Set[String]): Transformation =
+      this.andThen(MapTags(f.asInstanceOf[EventEnvelope[Any] => Set[String]]))
+    def registerPersistenceIdMapper[Event](f: EventEnvelope[Event] => String): Transformation =
+      this.andThen(MapPersistenceId(f.asInstanceOf[EventEnvelope[Any] => String]))
+    def registerPayloadMapper[Event, B <: Event](f: EventEnvelope[Event] => Option[B]): Transformation =
+      this.andThen(MapPayload(f.asInstanceOf[EventEnvelope[Any] => Option[B]]))
 
-    def andThen(transformation: Transformation): Transformation =
+    protected def andThen(transformation: Transformation): Transformation =
       AndThen(this, transformation)
 
     // FIXME do we need async?
+    @InternalApi
     private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any]
+
+    protected def copyEnvelope(original: EventEnvelope[Any])(
+        offset: Offset = original.offset,
+        persistenceId: String = original.persistenceId,
+        sequenceNr: Long = original.sequenceNr,
+        eventOption: Option[Any] = original.eventOption,
+        timestamp: Long = original.timestamp,
+        eventMetadata: Option[Any] = original.eventMetadata,
+        entityType: String = original.entityType,
+        slice: Int = original.slice,
+        filtered: Boolean = original.filtered,
+        source: String = original.source,
+        tags: Set[String] = original.tags): EventEnvelope[Any] =
+      new EventEnvelope[Any](
+        offset,
+        persistenceId,
+        sequenceNr,
+        eventOption,
+        timestamp,
+        eventMetadata,
+        entityType,
+        slice,
+        filtered,
+        source,
+        tags)
   }
 
   def grpcServiceHandler(eventConsumer: EventProducerPushDestination)(
