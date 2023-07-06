@@ -169,13 +169,7 @@ private[akka] object EventWriter {
                         if (context.child(maxSeqNrFinderName).isEmpty) {
                           // first failure in batch, but batch is atomic so we know it all failed
                           context.spawn[Nothing](
-                            MaxSeqNrFinder(
-                              context.self,
-                              journal,
-                              pid,
-                              sortedSeqNrs.head,
-                              sortedSeqNrs.last,
-                              error.getMessage),
+                            MaxSeqNrFinder(context.self, journal, pid, sortedSeqNrs.last, error.getMessage),
                             maxSeqNrFinderName)
                         }
                         Behaviors.same
@@ -302,38 +296,28 @@ private[akka] object EventWriter {
         replyTo: ActorRef[EventWriter.MaxSeqNrForPid],
         journal: akka.actor.ActorRef,
         persistenceId: String,
-        fromSeqNr: Long,
         toSeqNr: Long,
         originalErrorDesc: String): Behavior[Nothing] =
       Behaviors
         .setup[AnyRef] { context =>
           journal ! JournalProtocol.ReplayMessages(
-            fromSeqNr,
+            toSeqNr,
             toSeqNr,
             Long.MaxValue,
             persistenceId,
             context.self.toClassic)
 
-          waitingForReplay(replyTo, persistenceId, 0L, originalErrorDesc)
+          Behaviors.receiveMessage {
+            case JournalProtocol.ReplayedMessage(_) => Behaviors.same // ignore
+            case JournalProtocol.RecoverySuccess(highestSequenceNr) =>
+              replyTo ! MaxSeqNrForPid(persistenceId, highestSequenceNr, originalErrorDesc)
+              Behaviors.stopped
+            case unexpected =>
+              throw new IllegalArgumentException(s"Unexpected message from journal: ${unexpected.getClass}")
+          }
         }
         .narrow
 
-    def waitingForReplay(
-        replyTo: ActorRef[EventWriter.MaxSeqNrForPid],
-        persistenceId: String,
-        maxSequenceNumber: Long,
-        originalErrorDesc: String): Behavior[AnyRef] = {
-
-      Behaviors.receiveMessage {
-        case JournalProtocol.ReplayedMessage(repr) =>
-          waitingForReplay(replyTo, persistenceId, repr.sequenceNr, originalErrorDesc)
-        case JournalProtocol.RecoverySuccess =>
-          replyTo ! MaxSeqNrForPid(persistenceId, maxSequenceNumber, originalErrorDesc)
-          Behaviors.stopped
-        case unexpected =>
-          throw new IllegalArgumentException(s"Unexpected message from journal: ${unexpected.getClass}")
-      }
-    }
   }
 
 }
