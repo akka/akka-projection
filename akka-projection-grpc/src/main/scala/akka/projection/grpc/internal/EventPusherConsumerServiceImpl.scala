@@ -38,13 +38,13 @@ import scala.util.control.NonFatal
  * gRPC push protocol service for the consuming side
  */
 @InternalApi
-private[akka] final class EventConsumerServiceImpl(eventProducerDestinations: Set[EventProducerPushDestination])(
+private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinations: Set[EventProducerPushDestination])(
     implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
   import ProtobufProtocolConversions._
 
-  private val logger = LoggerFactory.getLogger(classOf[EventConsumerServiceImpl])
+  private val logger = LoggerFactory.getLogger(classOf[EventPusherConsumerServiceImpl])
 
   private case class Destination(
       eventProducerPushDestination: EventProducerPushDestination,
@@ -124,12 +124,10 @@ private[akka] final class EventConsumerServiceImpl(eventProducerDestinations: Se
             .withDescription(s"Unexpected type of ConsumeEventIn: ${consumeEventIn.message.getClass}"))
         }
       }
-      // FIXME config for parallelism, and perPartition (aligned with event writer batch config)
-      // Note that perPartition must be something like half the siez of the event writer max buffer as the previous
-      // in flight batch will complete one by one
       .mapAsyncPartitioned(parallelism, perPartitionParallelism)(_.persistenceId) { (originalEnvelope, _) =>
         val (destination, transformer) = destinationAndTransformerForStream
         val transformedEventEnvelope = transformer(originalEnvelope)
+
         if (logger.isTraceEnabled)
           logger.traceN(
             "Saw event [{}] for pid [{}]{}",

@@ -6,10 +6,10 @@ package akka.projection.grpc.producer.scaladsl
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
@@ -157,6 +157,10 @@ object EventProducer {
       new Transformation(mappers, m)
     }
 
+    /**
+     * INTERNAL API
+     */
+    @InternalApi
     private[akka] def apply(envelope: EventEnvelope[Any]): Future[Option[Any]] = {
       val mapper = mappers.getOrElse(envelope.event.getClass, orElse)
       mapper.apply(envelope)

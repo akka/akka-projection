@@ -6,18 +6,19 @@ package akka.projection.grpc.consumer.scaladsl
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
-import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
+import akka.persistence.FilteredPayload
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
-import akka.projection.grpc.internal.EventConsumerServiceImpl
+import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 
 import scala.collection.immutable
 import scala.concurrent.Future
+import scala.reflect.ClassTag
 
 /**
  * A passive consumer service for event producer push that can be bound as a gRPC endpoint accepting active producers
@@ -42,65 +43,81 @@ object EventProducerPushDestination {
 
   @ApiMayChange
   object Transformation {
-    val empty = new Transformation {
-      // Note: this is also the empty/identity transformation
-      override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] =
-        eventEnvelope
-    }
-  }
-
-  private final case class MapTags(f: EventEnvelope[Any] => Set[String]) extends Transformation {
-    override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] = {
-      val newTags = f(eventEnvelope)
-      if (newTags eq eventEnvelope.tags) eventEnvelope
-      else copyEnvelope(eventEnvelope)(tags = newTags)
-    }
-
-  }
-
-  private final case class MapPersistenceId(f: EventEnvelope[Any] => String) extends Transformation {
-    override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] = {
-      val newPid = f(eventEnvelope)
-      if (newPid eq eventEnvelope.persistenceId) eventEnvelope
-      else copyEnvelope(eventEnvelope)(persistenceId = newPid)
-    }
-  }
-
-  private final case class MapPayload(f: EventEnvelope[Any] => Option[Any]) extends Transformation {
-    override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] = {
-      val newMaybePayload = f(eventEnvelope)
-      if (newMaybePayload eq eventEnvelope.eventOption) eventEnvelope
-      else copyEnvelope(eventEnvelope)(eventOption = newMaybePayload)
-    }
-  }
-
-  private final case class AndThen(first: Transformation, next: Transformation) extends Transformation {
-    override private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any] =
-      next.apply(first.apply(eventEnvelope))
+    val empty: Transformation = new Transformation(Map.empty, Predef.identity)
   }
 
   /**
    * Transformation of events from the producer type to the internal representation stored in the journal
    * and seen by local projections.
-   *
-   * Events can be excluded by mapping them to `None`.
    */
-  sealed trait Transformation {
-    def registerTagMapper[Event](f: EventEnvelope[Event] => Set[String]): Transformation =
-      this.andThen(MapTags(f.asInstanceOf[EventEnvelope[Any] => Set[String]]))
-    def registerPersistenceIdMapper[Event](f: EventEnvelope[Event] => String): Transformation =
-      this.andThen(MapPersistenceId(f.asInstanceOf[EventEnvelope[Any] => String]))
-    def registerPayloadMapper[Event, B <: Event](f: EventEnvelope[Event] => Option[B]): Transformation =
-      this.andThen(MapPayload(f.asInstanceOf[EventEnvelope[Any] => Option[B]]))
+  final class Transformation private (
+      private[akka] val typedMappers: Map[Class[_], EventEnvelope[Any] => EventEnvelope[Any]],
+      untypedMappers: EventEnvelope[Any] => EventEnvelope[Any]) {
+    def registerTagMapper[A: ClassTag](f: EventEnvelope[A] => Set[String]): Transformation = {
+      val clazz = implicitly[ClassTag[A]].runtimeClass
+      val mapTags = { (eventEnvelope: EventEnvelope[Any]) =>
+        val newTags = f(eventEnvelope.asInstanceOf[EventEnvelope[A]])
+        if (newTags eq eventEnvelope.tags) eventEnvelope
+        else copyEnvelope(eventEnvelope)(tags = newTags)
+      }
+      appendMapper(clazz, mapTags)
+    }
 
-    protected def andThen(transformation: Transformation): Transformation =
-      AndThen(this, transformation)
+    def registerPersistenceIdMapper(f: EventEnvelope[Any] => String): Transformation = {
+      val mapId = { (eventEnvelope: EventEnvelope[Any]) =>
+        val newPid = f(eventEnvelope)
+        if (newPid eq eventEnvelope.persistenceId) eventEnvelope
+        else copyEnvelope(eventEnvelope)(persistenceId = newPid)
+      }
+      // needs to be untyped since not mapping filtered events the same way will cause gaps in seqnrs
+      new Transformation(typedMappers, untypedMappers.andThen(mapId))
+    }
 
-    // FIXME do we need async?
-    @InternalApi
-    private[akka] def apply(eventEnvelope: EventEnvelope[Any]): EventEnvelope[Any]
+    /**
+     * Events can be excluded by mapping them to `None`.
+     */
+    def registerPayloadMapper[A: ClassTag, B](f: EventEnvelope[A] => Option[B]): Transformation = {
+      val clazz = implicitly[ClassTag[A]].runtimeClass
+      val mapPayload = { (eventEnvelope: EventEnvelope[Any]) =>
+        if (eventEnvelope.filtered) eventEnvelope
+        else {
+          val newMaybePayload = f(eventEnvelope.asInstanceOf[EventEnvelope[A]])
+          if (newMaybePayload eq eventEnvelope.eventOption) eventEnvelope
+          else copyEnvelope(eventEnvelope)(eventOption = newMaybePayload)
+        }
+      }
+      appendMapper(clazz, mapPayload)
+    }
 
-    protected def copyEnvelope(original: EventEnvelope[Any])(
+    def registerOrElsePayloadMapper(f: EventEnvelope[Any] => Option[Any]): Transformation = {
+      val anyPayloadMapper = { (eventEnvelope: EventEnvelope[Any]) =>
+        if (eventEnvelope.filtered) eventEnvelope
+        else {
+          val newMaybePayload = f(eventEnvelope)
+          if (newMaybePayload eq eventEnvelope.eventOption) eventEnvelope
+          else copyEnvelope(eventEnvelope)(eventOption = newMaybePayload)
+        }
+      }
+      new Transformation(typedMappers, untypedMappers.andThen(anyPayloadMapper))
+    }
+
+    private[akka] def apply(envelope: EventEnvelope[Any]): EventEnvelope[Any] = {
+      val payloadClass = envelope.eventOption.map(_.getClass).getOrElse(FilteredPayload.getClass)
+      val typedMapResult = typedMappers.get(payloadClass) match {
+        case Some(mapper) => mapper(envelope)
+        case None         => envelope
+      }
+      untypedMappers(typedMapResult)
+    }
+
+    private def appendMapper(clazz: Class[_], transformF: EventEnvelope[Any] => EventEnvelope[Any]): Transformation = {
+      new Transformation(
+        // chain if there are multiple ops for same type
+        typedMappers.updated(clazz, typedMappers.get(clazz).map(f => f.andThen(transformF)).getOrElse(transformF)),
+        untypedMappers)
+    }
+
+    private def copyEnvelope(original: EventEnvelope[Any])(
         offset: Offset = original.offset,
         persistenceId: String = original.persistenceId,
         sequenceNr: Long = original.sequenceNr,
@@ -128,11 +145,11 @@ object EventProducerPushDestination {
 
   def grpcServiceHandler(eventConsumer: EventProducerPushDestination)(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
-    EventConsumerServicePowerApiHandler(new EventConsumerServiceImpl(Set(eventConsumer)))
+    EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(Set(eventConsumer)))
 
   def grpcServiceHandler(eventConsumer: Set[EventProducerPushDestination])(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
-    EventConsumerServicePowerApiHandler(new EventConsumerServiceImpl(eventConsumer))
+    EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(eventConsumer))
 
 }
 

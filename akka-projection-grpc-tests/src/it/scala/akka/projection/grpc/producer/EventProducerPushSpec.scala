@@ -159,7 +159,8 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
             else throw new GrpcServiceException(Status.PERMISSION_DENIED))
           .withTransformationForOrigin { (originId, _) =>
             EventProducerPushDestination.Transformation.empty
-              .registerPersistenceIdMapper[String](envelope => envelope.persistenceId.replace("p-", s"$originId-"))
+            // since filters touch different aspects of the events, they can be chained for the same type
+              .registerPersistenceIdMapper(envelope => envelope.persistenceId.replace("p-", s"$originId-"))
               .registerTagMapper[String](_ => Set("added-tag"))
               .registerPayloadMapper[String, String](env => env.eventOption.map(_.toUpperCase))
           }
