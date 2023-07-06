@@ -53,6 +53,7 @@ final class EventProducerPush[Event](
   def handler()(implicit system: ActorSystem[_])
       : FlowWithContext[EventEnvelope[Event], ProjectionContext, Done, ProjectionContext, NotUsed] = {
     // FIXME gprc client config - use stream id to look up block? Use host to lookup port (normal gRPC client config)? Something else?
+    // users doing it themselves may be fine?
     val eventConsumerClient = EventConsumerServiceClient(grpcClientSettings)
     EventPusher(originId, eventConsumerClient, eventProducerSource, connectionMetadata.getOrElse(MetadataBuilder.empty))
   }

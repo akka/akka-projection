@@ -43,7 +43,7 @@ import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.Duration
 
 /**
  * INTERNAL API
@@ -62,15 +62,13 @@ private[akka] object EventPusher {
       : FlowWithContext[EventEnvelope[Event], ProjectionContext, Done, ProjectionContext, NotUsed] = {
     import akka.projection.grpc.internal.ProtobufProtocolConversions.transformAndEncodeEvent
 
-    val keepAliveTimeout = 5.seconds // FIXME config
-
     implicit val ec: ExecutionContext = system.executionContext
     val protoAnySerialization = new ProtoAnySerialization(system)
 
-    def filterAndTransformFlow(topicFiltersFuture: Future[immutable.Seq[proto.FilterCriteria]])
+    def filterAndTransformFlow(filters: Future[immutable.Seq[proto.FilterCriteria]])
         : Flow[(EventEnvelope[Event], ProjectionContext), (ConsumeEventIn, ProjectionContext), NotUsed] =
       Flow
-        .futureFlow(topicFiltersFuture.map { filterCriteria =>
+        .futureFlow(filters.map { filterCriteria =>
           val consumerFilter =
             updateFilterFromProto(
               Filter.empty(eps.settings.topicTagPrefix),
@@ -126,7 +124,12 @@ private[akka] object EventPusher {
 
             Flow[(EventEnvelope[Event], ProjectionContext)]
               .via(filterAndTransformFlow(topicFiltersPromise.future))
-              .via(Flow[(proto.ConsumeEventIn, ProjectionContext)].keepAlive(keepAliveTimeout, () => KeepAliveTuple))
+              .via(
+                if (eps.settings.keepAliveInterval != Duration.Zero)
+                  Flow[(proto.ConsumeEventIn, ProjectionContext)]
+                    .keepAlive(eps.settings.keepAliveInterval, () => KeepAliveTuple)
+                else
+                  Flow[(proto.ConsumeEventIn, ProjectionContext)])
               .via(Flow.fromGraph(
                 new EventPusherStage(originId, eps, client, additionalRequestMetadata, topicFiltersPromise)))
 

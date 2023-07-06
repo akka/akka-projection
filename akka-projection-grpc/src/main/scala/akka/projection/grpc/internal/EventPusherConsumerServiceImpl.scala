@@ -23,13 +23,11 @@ import akka.projection.grpc.internal.proto.ConsumerEventAck
 import akka.projection.grpc.internal.proto.ConsumerEventStart
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
 import akka.stream.scaladsl.Source
-import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
-import scala.concurrent.duration.DurationInt
 import scala.util.control.NonFatal
 
 /**
@@ -55,8 +53,6 @@ private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinatio
   }.toMap
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
-  private val parallelism = 1000 // FIXME config
-  private implicit val timeout: Timeout = 5.seconds // FIXME from config or can we get rid of it
   private val perPartitionParallelism =
     system.settings.config.getInt("akka.persistence.event-writer.max-batch-size") / 2
 
@@ -69,15 +65,15 @@ private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinatio
   override def consumeEvent(
       in: Source[ConsumeEventIn, NotUsed],
       metadata: Metadata): Source[ConsumeEventOut, NotUsed] = {
-    @volatile var destinationAndTransformerForStream: (Destination, EventProducerPushDestination.Transformation) = null
-    val startEvent = Promise[ConsumeEventOut]()
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(ConsumeEventIn(ConsumeEventIn.Message.Init(init), _)), tail) =>
+          val startEvent = Promise[ConsumeEventOut]()
           destinationPerStreamId.get(init.streamId) match {
             case Some(destination) =>
-              startEvent.success(ConsumeEventOut(ConsumeEventOut.Message.Start(
-                ConsumerEventStart(toProtoFilterCriteria(destination.eventProducerPushDestination.filters)))))
+              startEvent.success(
+                ConsumeEventOut(ConsumeEventOut.Message.Start(
+                  ConsumerEventStart(toProtoFilterCriteria(destination.eventProducerPushDestination.filters)))))
 
               val eventsAndFiltered = tail.collect {
                 case c if c.message.isEvent || c.message.isFilteredEvent => c
@@ -86,11 +82,8 @@ private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinatio
               val transformer =
                 destination.eventProducerPushDestination.transformationForOrigin(init.originId, metadata)
 
-              // needed further down the stream
-              destinationAndTransformerForStream = (destination, transformer)
-
               // allow interceptor to block request based on metadata
-              destination.eventProducerPushDestination.interceptor match {
+              val interceptedTail = destination.eventProducerPushDestination.interceptor match {
                 case Some(interceptor) =>
                   Source.futureSource(interceptor.intercept(init.streamId, metadata).map { _ =>
                     logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
@@ -101,60 +94,64 @@ private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinatio
                   eventsAndFiltered
               }
 
+              interceptedTail
+                .map { consumeEventIn =>
+                  if (consumeEventIn.message.isEvent)
+                    ProtobufProtocolConversions.eventToEnvelope[Any](consumeEventIn.getEvent, protoAnySerialization)
+                  else if (consumeEventIn.message.isFilteredEvent) {
+                    ProtobufProtocolConversions.filteredEventToEnvelope[Any](consumeEventIn.getFilteredEvent)
+                  } else {
+                    throw new GrpcServiceException(Status.INVALID_ARGUMENT
+                      .withDescription(s"Unexpected type of ConsumeEventIn: ${consumeEventIn.message.getClass}"))
+                  }
+                }
+                .mapAsyncPartitioned(
+                  destination.eventProducerPushDestination.settings.parallelism,
+                  perPartitionParallelism)(_.persistenceId) { (originalEnvelope, _) =>
+                  val transformedEventEnvelope = transformer(originalEnvelope)
+
+                  if (logger.isTraceEnabled)
+                    logger.traceN(
+                      "Saw event [{}] for pid [{}]{}",
+                      transformedEventEnvelope.sequenceNr,
+                      transformedEventEnvelope.persistenceId,
+                      if (transformedEventEnvelope.filtered) " filtered" else "")
+
+                  destination.eventWriter
+                    .askWithStatus[EventWriter.WriteAck](EventWriter.Write(
+                      transformedEventEnvelope.persistenceId,
+                      transformedEventEnvelope.sequenceNr,
+                      transformedEventEnvelope.eventOption.getOrElse(FilteredPayload),
+                      transformedEventEnvelope.eventMetadata,
+                      transformedEventEnvelope.tags,
+                      _))(destination.eventProducerPushDestination.settings.journalWriteTimeout, system.scheduler)
+                    .map(_ =>
+                      // ack using the original pid in case it was transformed
+                      ConsumeEventOut(ConsumeEventOut.Message.Ack(
+                        ConsumerEventAck(originalEnvelope.persistenceId, originalEnvelope.sequenceNr))))(
+                      ExecutionContexts.parasitic)
+                    .recover {
+                      case NonFatal(ex) =>
+                        logger.warn(s"Failing event stream because of event writer error", ex)
+                        throw ex;
+                    }(system.executionContext)
+                }
+                .prepend(Source.future(startEvent.future))
+
             case None =>
               logger.debug2(
                 "Event producer [{}] wanted to push events for stream id [{}] but that is not among the accepted stream ids",
                 init.originId,
                 init.streamId)
-              throw new GrpcServiceException(Status.PERMISSION_DENIED.withDescription(
-                s"Events for stream id [${init.streamId}] not accepted by this consumer"))
+              throw new GrpcServiceException(
+                Status.PERMISSION_DENIED.withDescription(
+                  s"Events for stream id [${init.streamId}] not accepted by this consumer"))
           }
 
         case (_, _) =>
-          throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
-            "Consumer stream in must start with Init event followed by events but got something else"))
+          throw new GrpcServiceException(
+            Status.INVALID_ARGUMENT.withDescription(
+              "Consumer stream in must start with Init event followed by events but got something else"))
       }
-      .map { consumeEventIn =>
-        if (consumeEventIn.message.isEvent)
-          ProtobufProtocolConversions.eventToEnvelope[Any](consumeEventIn.getEvent, protoAnySerialization)
-        else if (consumeEventIn.message.isFilteredEvent) {
-          ProtobufProtocolConversions.filteredEventToEnvelope[Any](consumeEventIn.getFilteredEvent)
-        } else {
-          throw new GrpcServiceException(Status.INVALID_ARGUMENT
-            .withDescription(s"Unexpected type of ConsumeEventIn: ${consumeEventIn.message.getClass}"))
-        }
-      }
-      .mapAsyncPartitioned(parallelism, perPartitionParallelism)(_.persistenceId) { (originalEnvelope, _) =>
-        val (destination, transformer) = destinationAndTransformerForStream
-        val transformedEventEnvelope = transformer(originalEnvelope)
-
-        if (logger.isTraceEnabled)
-          logger.traceN(
-            "Saw event [{}] for pid [{}]{}",
-            transformedEventEnvelope.sequenceNr,
-            transformedEventEnvelope.persistenceId,
-            if (transformedEventEnvelope.filtered) " filtered" else "")
-
-        destination.eventWriter
-          .askWithStatus[EventWriter.WriteAck](EventWriter.Write(
-            transformedEventEnvelope.persistenceId,
-            transformedEventEnvelope.sequenceNr,
-            transformedEventEnvelope.eventOption.getOrElse(FilteredPayload),
-            transformedEventEnvelope.eventMetadata,
-            transformedEventEnvelope.tags,
-            _))
-          .map(_ =>
-            // ack using the original pid in case it was transformed
-            ConsumeEventOut(ConsumeEventOut.Message.Ack(
-              ConsumerEventAck(originalEnvelope.persistenceId, originalEnvelope.sequenceNr))))(
-            ExecutionContexts.parasitic)
-          .recover {
-            case NonFatal(ex) =>
-              logger.warn(s"Failing event stream because of event writer error", ex)
-              throw ex;
-          }(system.executionContext)
-      }
-      .prepend(Source.future(startEvent.future))
   }
-
 }

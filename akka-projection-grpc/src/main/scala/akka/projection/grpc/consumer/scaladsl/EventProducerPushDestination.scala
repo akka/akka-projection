@@ -13,6 +13,7 @@ import akka.persistence.FilteredPayload
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
+import akka.projection.grpc.consumer.EventProducerPushDestinationSettings
 import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 
@@ -38,8 +39,14 @@ object EventProducerPushDestination {
   /**
    * @param acceptedStreamId Only accept this stream ids, deny others
    */
-  def apply(acceptedStreamId: String): EventProducerPushDestination =
-    new EventProducerPushDestination(None, acceptedStreamId, (_, _) => Transformation.empty, None, immutable.Seq.empty)
+  def apply(acceptedStreamId: String)(implicit system: ActorSystem[_]): EventProducerPushDestination =
+    new EventProducerPushDestination(
+      None,
+      acceptedStreamId,
+      (_, _) => Transformation.empty,
+      None,
+      immutable.Seq.empty,
+      EventProducerPushDestinationSettings(system))
 
   @ApiMayChange
   object Transformation {
@@ -158,7 +165,8 @@ final class EventProducerPushDestination private (
     val acceptedStreamId: String,
     val transformationForOrigin: (String, Metadata) => EventProducerPushDestination.Transformation,
     val interceptor: Option[EventConsumerInterceptor],
-    val filters: immutable.Seq[FilterCriteria]) {
+    val filters: immutable.Seq[FilterCriteria],
+    val settings: EventProducerPushDestinationSettings) {
   import EventProducerPushDestination._
 
   def withInterceptor(interceptor: EventConsumerInterceptor): EventProducerPushDestination =
@@ -166,6 +174,9 @@ final class EventProducerPushDestination private (
 
   def withJournalPluginId(journalPluginId: String): EventProducerPushDestination =
     copy(journalPluginId = Some(journalPluginId))
+
+  def withSettings(settings: EventProducerPushDestinationSettings): EventProducerPushDestination =
+    copy(settings = settings)
 
   /**
    * @param transformation A transformation to use for all events.
@@ -194,6 +205,13 @@ final class EventProducerPushDestination private (
       acceptedStreamId: String = acceptedStreamId,
       transformationForOrigin: (String, Metadata) => Transformation = transformationForOrigin,
       interceptor: Option[EventConsumerInterceptor] = interceptor,
-      filters: immutable.Seq[FilterCriteria] = filters): EventProducerPushDestination =
-    new EventProducerPushDestination(journalPluginId, acceptedStreamId, transformationForOrigin, interceptor, filters)
+      filters: immutable.Seq[FilterCriteria] = filters,
+      settings: EventProducerPushDestinationSettings = settings): EventProducerPushDestination =
+    new EventProducerPushDestination(
+      journalPluginId,
+      acceptedStreamId,
+      transformationForOrigin,
+      interceptor,
+      filters,
+      settings)
 }
