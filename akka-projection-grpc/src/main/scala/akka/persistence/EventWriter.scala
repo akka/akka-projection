@@ -82,7 +82,9 @@ private[akka] object EventWriter {
     Behaviors
       .supervise(Behaviors
         .setup[AnyRef] { context =>
-          val maxBatchSize = 20 // FIXME from config
+          // FIXME do we need to allow configuring per journal?
+          val maxBatchSize =
+            context.system.settings.config.getInt("akka.persistence.event-writer.max-batch-size")
           val actorInstanceId = instanceCounter.getAndIncrement()
           val writerUuid = UUID.randomUUID().toString
           val journal = Persistence(context.system).journalFor(journalPluginId)

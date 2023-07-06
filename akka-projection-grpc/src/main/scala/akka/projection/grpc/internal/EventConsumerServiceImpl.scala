@@ -15,9 +15,7 @@ import akka.grpc.scaladsl.Metadata
 import akka.persistence.EventWriter
 import akka.persistence.EventWriterExtension
 import akka.persistence.FilteredPayload
-import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import akka.projection.grpc.consumer.scaladsl.EventConsumer
-import akka.projection.grpc.consumer.scaladsl.EventConsumerInterceptor
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventAck
@@ -28,7 +26,6 @@ import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 
-import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
 import scala.concurrent.duration.DurationInt
@@ -40,22 +37,29 @@ import scala.util.control.NonFatal
  * gRPC push protocol service for the consuming side
  */
 @InternalApi
-private[akka] final class EventConsumerServiceImpl(
-    journalPluginId: Option[String],
-    acceptedStreamIds: Set[String],
-    eventTransformerFactory: (String, Metadata) => EventConsumer.Transformation,
-    interceptor: Option[EventConsumerInterceptor],
-    filters: immutable.Seq[FilterCriteria])(implicit system: ActorSystem[_])
+private[akka] final class EventConsumerServiceImpl(eventProducerDestination: EventConsumer.EventConsumerDestination)(
+    implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
   import ProtobufProtocolConversions._
 
   private val logger = LoggerFactory.getLogger(classOf[EventConsumerServiceImpl])
-  val eventWriter = EventWriterExtension(system).writerForJournal(journalPluginId)
+
+  private def journalPluginId = eventProducerDestination.journalPluginId
+  private val eventWriter = EventWriterExtension(system).writerForJournal(journalPluginId)
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
-  private implicit val ec: ExecutionContext = system.executionContext
+  private val parallelism = 1000 // FIXME config
   private implicit val timeout: Timeout = 5.seconds // FIXME from config or can we get rid of it
+  private val perPartitionParallelism =
+    system.settings.config.getInt("akka.persistence.event-writer.max-batch-size") / 2
+
+  private implicit val ec: ExecutionContext = system.executionContext
+
+  logger.info2(
+    "Passive event consumer service created, accepting stream ids [{}], will write to journal [{}]",
+    eventProducerDestination.acceptedStreamIds.mkString(", "),
+    journalPluginId.getOrElse("default journal"))
 
   override def consumeEvent(
       in: Source[ConsumeEventIn, NotUsed],
@@ -65,7 +69,7 @@ private[akka] final class EventConsumerServiceImpl(
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(ConsumeEventIn(ConsumeEventIn.Message.Init(init), _)), tail) =>
-          if (!acceptedStreamIds(init.streamId)) {
+          if (!eventProducerDestination.acceptedStreamIds(init.streamId)) {
             logger.debug2(
               "Event producer [{}] wanted to push events for stream id [{}] but that is not among the accepted stream ids",
               init.originId,
@@ -74,17 +78,17 @@ private[akka] final class EventConsumerServiceImpl(
               s"Events for stream id [${init.streamId}] not accepted by this consumer"))
           }
 
-          startEvent.success(
-            ConsumeEventOut(ConsumeEventOut.Message.Start(ConsumerEventStart(toProtoFilterCriteria(filters)))))
+          startEvent.success(ConsumeEventOut(
+            ConsumeEventOut.Message.Start(ConsumerEventStart(toProtoFilterCriteria(eventProducerDestination.filters)))))
 
           val eventsAndFiltered = tail.collect {
             case c if c.message.isEvent || c.message.isFilteredEvent => c
             // keepalive consumed and dropped here
           }
-          transformer = eventTransformerFactory(init.originId, metadata)
+          transformer = eventProducerDestination.transformationForOrigin(init.originId, metadata)
 
           // allow interceptor to block request based on metadata
-          interceptor match {
+          eventProducerDestination.interceptor match {
             case Some(interceptor) =>
               Source.futureSource(interceptor.intercept(init.streamId, metadata).map { _ =>
                 logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
@@ -110,7 +114,9 @@ private[akka] final class EventConsumerServiceImpl(
         }
       }
       // FIXME config for parallelism, and perPartition (aligned with event writer batch config)
-      .mapAsyncPartitioned(1000, 20)(_.persistenceId) { (originalEnvelope, _) =>
+      // Note that perPartition must be something like half the siez of the event writer max buffer as the previous
+      // in flight batch will complete one by one
+      .mapAsyncPartitioned(parallelism, perPartitionParallelism)(_.persistenceId) { (originalEnvelope, _) =>
         val transformedEventEnvelope = transformer(originalEnvelope)
         if (logger.isTraceEnabled)
           logger.traceN(

@@ -189,13 +189,7 @@ object EventConsumer {
 
   def grpcServiceHandler(eventConsumer: EventConsumerDestination)(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
-    EventConsumerServicePowerApiHandler(
-      new EventConsumerServiceImpl(
-        journalPluginId = eventConsumer.journalPluginId,
-        eventTransformerFactory = eventConsumer.transformationForOrigin,
-        acceptedStreamIds = eventConsumer.acceptedStreamIds,
-        interceptor = eventConsumer.interceptor,
-        filters = eventConsumer.filters))
+    EventConsumerServicePowerApiHandler(new EventConsumerServiceImpl(eventConsumer))
 
   // FIXME do we need a handler taking a set of EventConsumerDestinations like for EventProducerSource?
 

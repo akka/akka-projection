@@ -13,9 +13,11 @@ import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApi
@@ -39,9 +41,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
-
-import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
-import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 
 /**
  * INTERNAL API

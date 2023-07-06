@@ -63,6 +63,8 @@ object ProducerPushSpec {
 
     test.consumer.projection = $${akka.projection.r2dbc}
     test.consumer.projection.use-connection-factory = "test.consumer.r2dbc.connection-factory"
+
+    akka.persistence.event-writer.max-batch-size=40
    """)
       .withFallback(ConfigFactory.load("application-h2.conf"))
       .withFallback(ConfigFactory.load())
