@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
+ */
+
 package akka.persistence.typed
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
