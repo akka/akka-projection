@@ -32,7 +32,6 @@ import scala.reflect.ClassTag
  *
  * Producers are started using the [[akka.projection.grpc.producer.scaladsl.EventProducerPush]] API.
  */
-// FIXME Java API
 @ApiMayChange
 object EventProducerPushDestination {
 
@@ -54,12 +53,16 @@ object EventProducerPushDestination {
   }
 
   /**
-   * Transformation of events from the producer type to the internal representation stored in the journal
-   * and seen by local projections.
+   * Transformation of incoming pushed events from the producer to the internal representation stored in the journal
+   * and seen by local projections. Start from [[Transformation.empty]] when defining transformations.
    */
   final class Transformation private (
       private[akka] val typedMappers: Map[Class[_], EventEnvelope[Any] => EventEnvelope[Any]],
       untypedMappers: EventEnvelope[Any] => EventEnvelope[Any]) {
+
+    /**
+     * Add or replace tags for incoming events
+     */
     def registerTagMapper[A: ClassTag](f: EventEnvelope[A] => Set[String]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       val mapTags = { (eventEnvelope: EventEnvelope[Any]) =>
@@ -70,6 +73,11 @@ object EventProducerPushDestination {
       appendMapper(clazz, mapTags)
     }
 
+    /**
+     * Transform incoming persistence ids, care must be taken to produce a valid persistence id and to always map the
+     * same incoming persistence id to the same stored persistence id to not introduce gaps in the sequence numbers
+     * and break consuming projections.
+     */
     def registerPersistenceIdMapper(f: EventEnvelope[Any] => String): Transformation = {
       val mapId = { (eventEnvelope: EventEnvelope[Any]) =>
         val newPid = f(eventEnvelope)
@@ -81,7 +89,7 @@ object EventProducerPushDestination {
     }
 
     /**
-     * Events can be excluded by mapping them to `None`.
+     * Events can be excluded by mapping the payload to `None`.
      */
     def registerPayloadMapper[A: ClassTag, B](f: EventEnvelope[A] => Option[B]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
@@ -96,6 +104,9 @@ object EventProducerPushDestination {
       appendMapper(clazz, mapPayload)
     }
 
+    /**
+     * Events can be excluded by mapping the payload to `None`.
+     */
     def registerOrElsePayloadMapper(f: EventEnvelope[Any] => Option[Any]): Transformation = {
       val anyPayloadMapper = { (eventEnvelope: EventEnvelope[Any]) =>
         if (eventEnvelope.filtered) eventEnvelope
@@ -160,16 +171,17 @@ object EventProducerPushDestination {
 
 }
 
-final class EventProducerPushDestination private (
+@ApiMayChange
+final class EventProducerPushDestination private[akka] (
     val journalPluginId: Option[String],
     val acceptedStreamId: String,
     val transformationForOrigin: (String, Metadata) => EventProducerPushDestination.Transformation,
-    val interceptor: Option[EventConsumerInterceptor],
+    val interceptor: Option[EventDestinationInterceptor],
     val filters: immutable.Seq[FilterCriteria],
     val settings: EventProducerPushDestinationSettings) {
   import EventProducerPushDestination._
 
-  def withInterceptor(interceptor: EventConsumerInterceptor): EventProducerPushDestination =
+  def withInterceptor(interceptor: EventDestinationInterceptor): EventProducerPushDestination =
     copy(interceptor = Some(interceptor))
 
   def withJournalPluginId(journalPluginId: String): EventProducerPushDestination =
@@ -195,7 +207,7 @@ final class EventProducerPushDestination private (
     copy(transformationForOrigin = transformationForOrigin)
 
   /**
-   * FIXME we may want to remove this and make the consumer filters dynamic just like for "normal consumers"
+   * Filter incoming streams, at producer side, with these filters
    */
   def withConsumerFilters(filters: immutable.Seq[FilterCriteria]): EventProducerPushDestination =
     copy(filters = filters)
@@ -204,7 +216,7 @@ final class EventProducerPushDestination private (
       journalPluginId: Option[String] = journalPluginId,
       acceptedStreamId: String = acceptedStreamId,
       transformationForOrigin: (String, Metadata) => Transformation = transformationForOrigin,
-      interceptor: Option[EventConsumerInterceptor] = interceptor,
+      interceptor: Option[EventDestinationInterceptor] = interceptor,
       filters: immutable.Seq[FilterCriteria] = filters,
       settings: EventProducerPushDestinationSettings = settings): EventProducerPushDestination =
     new EventProducerPushDestination(

@@ -11,12 +11,11 @@ import akka.grpc.scaladsl.Metadata
 import scala.concurrent.Future
 
 /**
- * Interceptor allowing for example authentication/authorization of incoming requests to consume a specific stream.
+ * Interceptor allowing for example authentication/authorization of incoming connections to a [[EventProducerPushDestination]]
  */
-// FIXME Java API
 @ApiMayChange
 @FunctionalInterface
-trait EventConsumerInterceptor {
+trait EventDestinationInterceptor {
 
   /**
    * Let's requests through if method returns, can fail request by throwing a [[akka.grpc.GrpcServiceException]]

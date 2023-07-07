@@ -9,20 +9,47 @@ import akka.util.JavaDurationConverters.JavaDurationOps
 import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
+import java.time.{ Duration => JDuration }
 
 object EventProducerPushDestinationSettings {
+
+  /**
+   * Scala API
+   */
   def apply(system: ActorSystem[_]): EventProducerPushDestinationSettings = {
     apply(system.settings.config.getConfig("akka.projection.grpc.consumer.push-destination"))
   }
 
+  /**
+   * Scala API
+   */
   def apply(config: Config): EventProducerPushDestinationSettings = {
     new EventProducerPushDestinationSettings(
       parallelism = config.getInt("parallelism"),
       journalWriteTimeout = config.getDuration("journal-write-timeout").asScala)
   }
 
+  /**
+   * Scala API
+   */
   def apply(parallelism: Int, journalWriteTimeout: FiniteDuration): EventProducerPushDestinationSettings =
     new EventProducerPushDestinationSettings(parallelism, journalWriteTimeout)
+
+  /**
+   * Java API
+   */
+  def create(system: ActorSystem[_]): EventProducerPushDestinationSettings = apply(system)
+
+  /**
+   * Java API
+   */
+  def create(config: Config): EventProducerPushDestinationSettings = apply(config)
+
+  /**
+   * Java API
+   */
+  def create(parallelism: Int, journalWriteTimeout: JDuration): EventProducerPushDestinationSettings =
+    apply(parallelism, journalWriteTimeout.asScala)
 }
 
 final class EventProducerPushDestinationSettings private (val parallelism: Int, val journalWriteTimeout: FiniteDuration)
