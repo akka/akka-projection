@@ -244,6 +244,8 @@ object Dependencies {
         Compile.akkaPersistenceR2dbc,
         Compile.h2, // provided
         Compile.r2dbcH2, // provided
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped,
         Test.akkaStreamTestkit,
         Test.akkaTypedTestkit,
         Test.akkaClusterShardingTyped,
