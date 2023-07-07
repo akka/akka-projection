@@ -20,6 +20,8 @@ object Dependencies {
   val AkkaProjectionVersionInDocs = "1.4.0"
 
   object Versions {
+    // FIXME Akka patch release with event writer (weird override is to trigger auto-snapshot repo plugin)
+    sys.props += "build.akka.version" -> "2.8.3+3-8b29c560-SNAPSHOT"
     val akka = sys.props.getOrElse("build.akka.version", "2.8.3")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
@@ -38,6 +40,7 @@ object Dependencies {
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
     val akkaPersistence = "com.typesafe.akka" %% "akka-persistence" % Versions.akka
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
+    val akkaStreamTyped = "com.typesafe.akka" %% "akka-stream-typed" % Versions.akka
     val akkaProtobufV3 = "com.typesafe.akka" %% "akka-protobuf-v3" % Versions.akka
     val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
@@ -224,6 +227,8 @@ object Dependencies {
         Test.postgresDriver,
         Test.h2Driver,
         Compile.r2dbcH2,
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped,
         Test.akkaShardingTyped,
         Test.akkaStreamTestkit,
         Test.akkaSerializationJackson,

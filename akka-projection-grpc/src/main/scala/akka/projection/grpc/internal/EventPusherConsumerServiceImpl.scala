@@ -14,8 +14,8 @@ import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
 import akka.persistence.FilteredPayload
-import akka.persistence.typed.EventWriter
-import akka.persistence.typed.EventWriterExtension
+import akka.persistence.typed.internal.EventWriter
+import akka.persistence.typed.internal.EventWriterExtension
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
