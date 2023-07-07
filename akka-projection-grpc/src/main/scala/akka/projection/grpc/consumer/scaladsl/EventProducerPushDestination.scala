@@ -25,7 +25,7 @@ import scala.reflect.ClassTag
  * A passive consumer service for event producer push that can be bound as a gRPC endpoint accepting active producers
  * pushing events, for example to run a projection piercing firewalls or NAT. Events are pushed directly into the
  * configured journal and can then be consumed through a local projection. A producer can push events for multiple
- * entities but no two producer are allowed to push events for the same entity.
+ * entities but no two producer are allowed to push events for the same entity, at the same time.
  *
  * The event consumer service is not needed for normal projections over gRPC where the consuming side can access and
  * initiate connections to the producing side.
