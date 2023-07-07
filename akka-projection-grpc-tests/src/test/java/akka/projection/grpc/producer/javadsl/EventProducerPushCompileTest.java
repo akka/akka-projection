@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.producer.javadsl;
@@ -11,12 +11,11 @@ import akka.grpc.GrpcClientSettings;
 import akka.persistence.query.Offset;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.persistence.r2dbc.query.javadsl.R2dbcReadJournal;
+import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
-import akka.projection.ProjectionBehavior;
 import akka.projection.grpc.producer.EventProducerSettings;
 import akka.projection.javadsl.SourceProvider;
-import akka.projection.r2dbc.R2dbcProjectionSettings;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
