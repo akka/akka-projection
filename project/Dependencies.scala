@@ -229,6 +229,7 @@ object Dependencies {
         Compile.r2dbcH2,
         Compile.akkaPersistenceTyped,
         Compile.akkaStreamTyped,
+        Compile.akkaPersistenceQuery,
         Test.akkaShardingTyped,
         Test.akkaStreamTestkit,
         Test.akkaSerializationJackson,
