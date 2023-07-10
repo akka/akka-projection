@@ -5,6 +5,7 @@
 package akka.projection.grpc.producer.javadsl;
 
 import akka.actor.typed.ActorSystem;
+import akka.actor.typed.Behavior;
 import akka.actor.typed.Props;
 import akka.actor.typed.SpawnProtocol;
 import akka.grpc.GrpcClientSettings;
@@ -29,6 +30,7 @@ public class EventProducerPushCompileTest {
 
 
   public static void initProducer(ActorSystem<SpawnProtocol.Command> system) {
+    // #producerSetup
     EventProducerPush<String> eventProducer = EventProducerPush.create(
         "producer-id",
         new EventProducerSource("entityTypeKeyName", "stream-id", Transformation.empty(), EventProducerSettings.create(system)),
@@ -40,19 +42,20 @@ public class EventProducerPushCompileTest {
         eventProducer.eventProducerSource().entityType(),
         0,
         1023);
+    Behavior<ProjectionBehavior.Command> projectionBehavior = ProjectionBehavior.create(
+        R2dbcProjection.atLeastOnceFlow(
+            ProjectionId.of("producer", "0-1023"),
+            Optional.empty(),
+            eventSourcedProvider,
+            eventProducer.handler(system),
+            system));
+    // #producerSetup
 
-
-    system.tell(new SpawnProtocol.Spawn<>(ProjectionBehavior.create(
-            R2dbcProjection.atLeastOnceFlow(
-              ProjectionId.of("producer", "0-1023"),
-              Optional.empty(),
-              eventSourcedProvider,
-              eventProducer.handler(system),
-              system)),
-          "producer-projection",
-          Props.empty(),
-          system.ignoreRef().narrow()
-        ));
+    system.tell(new SpawnProtocol.Spawn<>(
+        projectionBehavior,
+        "producer-projection",
+        Props.empty(),
+        system.ignoreRef().narrow()));
 
   }
 }

@@ -26,9 +26,9 @@ import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
+import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducerPush
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
-import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import com.typesafe.config.ConfigFactory
@@ -99,23 +99,6 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
 
   val grpcPort = 9588
 
-  // this projection runs in the producer and pushes events over grpc to the consumer
-  def spawnProducerReplicationProjection(
-      eventProducer: EventProducerPush[String]): ActorRef[ProjectionBehavior.Command] =
-    spawn(
-      ProjectionBehavior(
-        R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[String]](
-          producerProjectionId,
-          settings = None,
-          sourceProvider = EventSourcedProvider.eventsBySlices[String](
-            system,
-            // FIXME: could we use eventProducer.eventProducerSource.settings.queryPluginId (user would have to configure)
-            R2dbcReadJournal.Identifier,
-            eventProducer.eventProducerSource.entityType,
-            0,
-            1023),
-          handler = eventProducer.handler())))
-
   // this projection runs in the consumer and just consumes the already projected events
   def spawnConsumerProjection(probe: ActorRef[EventEnvelope[String]]) =
     spawn(
@@ -153,8 +136,10 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
       val consumerFilterExcludedPid = nextPid(entityType)
 
       // consumer runs gRPC server accepting pushed events from producers
+      // #consumerSetup
       val destination =
         EventProducerPushDestination(streamId)
+        // #consumerSetup
           .withJournalPluginId("test.consumer.r2dbc.journal")
           .withInterceptor((_, metadata) =>
             if (metadata.getText("secret").contains("password")) Future.successful(Done)
@@ -167,28 +152,28 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
               .registerPayloadMapper[String, String](env => env.eventOption.map(_.toUpperCase))
           }
           .withConsumerFilters(Vector(ConsumerFilter.ExcludeEntityIds(Set(consumerFilterExcludedPid.id))))
-
+      // #consumerSetup
       val bound = Http(system)
         .newServerAt("127.0.0.1", grpcPort)
-        .bind(
-          // events are written directly into the journal on the consumer side, pushing over gRPC is only
-          // allowed if no two pushing systems push events for the same persistence id
-          EventProducerPushDestination.grpcServiceHandler(destination))
+        .bind(EventProducerPushDestination.grpcServiceHandler(destination))
+      // #consumerSetup
       bound.futureValue
 
       val veggies = Set("cucumber")
       val authMetadata = (new MetadataBuilder).addText("secret", "password").build()
+      // #producerSetup
       val eventProducer = EventProducerPush[String](
         originId = producerOriginId,
         eventProducerSource = EventProducerSource[String](
           entityType,
           streamId,
-          Transformation.identity,
+          EventProducer.Transformation.identity,
           EventProducerSettings(system),
           // no veggies allowed
           producerFilter = envelope => !veggies(envelope.event)),
         connectionMetadata = authMetadata,
         GrpcClientSettings.connectToServiceAt("localhost", grpcPort).withTls(false))
+      // #producerSetup
       spawnProducerReplicationProjection(eventProducer)
 
       // local "regular" projections consume the projected events
@@ -224,6 +209,51 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
       }
       consumerProbe.receiveMessages(300, 20.seconds).foreach(envelope => envelope.event should include("PEACH"))
     }
+  }
+
+  // this projection runs in the producer and pushes events over grpc to the consumer
+  def spawnProducerReplicationProjection(
+      eventProducer: EventProducerPush[String]): ActorRef[ProjectionBehavior.Command] =
+    spawn(
+      // #producerSetup
+      ProjectionBehavior(
+        R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[String]](
+          producerProjectionId,
+          settings = None,
+          sourceProvider = EventSourcedProvider.eventsBySlices[String](
+            system,
+            R2dbcReadJournal.Identifier,
+            eventProducer.eventProducerSource.entityType,
+            0,
+            1023),
+          handler = eventProducer.handler()))
+      // #producerSetup
+    )
+
+  def docSamples(): Unit = {
+    {
+      // #consumerFilters
+      val destination = EventProducerPushDestination(streamId)
+        .withConsumerFilters(Seq(ConsumerFilter.IncludeTopics(Set("myhome/groundfloor/+/temperature"))))
+      // #consumerFilters
+    }
+
+    {
+      // #consumerTransformation
+      val destination = EventProducerPushDestination(streamId)
+        .withTransformationForOrigin { (originId, metadata) =>
+          EventProducerPushDestination.Transformation.empty
+            .registerPersistenceIdMapper { envelope =>
+              val pid = envelope.persistenceId
+              pid.replace("originalPrefix", "newPrefix")
+            }
+            .registerTagMapper[String](envelope => envelope.tags + s"origin-$originId")
+
+        }
+      // #consumerTransformation
+
+    }
+
   }
 
 }
