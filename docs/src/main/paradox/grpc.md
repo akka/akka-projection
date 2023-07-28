@@ -28,6 +28,14 @@ messages or stored data.
 
 ## Dependencies
 
+The Akka dependencies are available from Akka's library repository. To access them there, you need to configure the URL for this repository.
+
+@@repository [sbt,Maven,Gradle] {
+id="akka-repository"
+name="Akka library repository"
+url="https://repo.akka.io/maven"
+}
+
 To use the gRPC module of Akka Projections add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {

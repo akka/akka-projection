@@ -4,6 +4,14 @@ Once you have decided how you want to build your projection, the next step is to
 
 ## Dependencies
 
+The Akka dependencies are available from Akka's library repository. To access them there, you need to configure the URL for this repository.
+
+@@repository [sbt,Maven,Gradle] {
+id="akka-repository"
+name="Akka library repository"
+url="https://repo.akka.io/maven"
+}
+
 To distribute the projection over the cluster we recommend the use of [ShardedDaemonProcess](https://doc.akka.io/docs/akka/current/typed/cluster-sharded-daemon-process.html). Add the following dependency in your project if not yet using Akka Cluster Sharding:
 
 @@dependency [sbt,Maven,Gradle] {
