@@ -17,7 +17,7 @@ jobs:
     # the release environment provides access to secrets required in the release process
     # https://github.com/akka/akka-projection/settings/environments
     environment: release
-    runs-on: ubuntu-23.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
@@ -57,7 +57,7 @@ jobs:
     # the release environment provides access to secrets required in the release process
     # https://github.com/akka/akka-projection/settings/environments
     environment: release
-    runs-on: ubuntu-23.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
