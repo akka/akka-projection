@@ -80,7 +80,7 @@ object Dependencies {
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % allTestConfig
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
-    val h2Driver = "com.h2database" % "h2" % "2.1.214" % allTestConfig
+    val h2Driver = "com.h2database" % "h2" % "2.2.220" % allTestConfig
     val postgresDriver = "org.postgresql" % "postgresql" % "42.6.0" % allTestConfig
     val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.33" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
