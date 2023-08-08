@@ -193,7 +193,7 @@ your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that need
 1. Start a local PostgresSQL server on default port 5432. The `docker-compose.yml` included in the shopping-cart project starts everything required for running locally.
 
     ```shell
-    docker-compose up --wait
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
@@ -250,7 +250,7 @@ your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that need
 1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally.
 
     ```shell
-    docker-compose up --wait
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
@@ -315,7 +315,7 @@ your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that need
 1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally. Note that for convenience this service and the shopping cart service is sharing the same database, in an actual service consuming events the consuming services are expected to have their own separate databases.
 
     ```shell
-    docker-compose up --wait
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
@@ -341,7 +341,7 @@ your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that need
 1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally. Note that for convenience this service and the shopping cart service is sharing the same database, in an actual service consuming events the consuming services are expected to have their own separate databases.
 
     ```shell
-    docker-compose up --wait
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
