@@ -3,7 +3,7 @@
 1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally.
 
     ```shell
-    docker-compose up -d
+    docker-compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
