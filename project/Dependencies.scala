@@ -82,7 +82,7 @@ object Dependencies {
 
     val h2Driver = "com.h2database" % "h2" % "2.2.220" % allTestConfig
     val postgresDriver = "org.postgresql" % "postgresql" % "42.6.0" % allTestConfig
-    val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.33" % allTestConfig
+    val mysqlDriver = "com.mysql" % "mysql-connector-j" % "8.1.0" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
 
