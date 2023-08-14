@@ -106,7 +106,7 @@ jobs:
           jvm: temurin:1.11
 
       - name: Create all API docs for artifacts/website and all reference docs
-        run: sbt "unidoc; docs/paradox; akka-distributed-cluster-docs/paradox"
+        run: sbt "unidoc; docs/paradox; akka-distributed-cluster-docs/paradox; akka-edge-docs/paradox"
 
   check-samples:
     name: Check Sample Projects
