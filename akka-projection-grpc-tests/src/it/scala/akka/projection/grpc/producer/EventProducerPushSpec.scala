@@ -36,6 +36,7 @@ import io.grpc.Status
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
+import scala.annotation.nowarn
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -230,6 +231,7 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
       // #producerSetup
     )
 
+  @nowarn("msg=never used") // doc samples
   def docSamples(): Unit = {
     {
       // #consumerFilters
@@ -251,7 +253,6 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
 
         }
       // #consumerTransformation
-
     }
 
   }
