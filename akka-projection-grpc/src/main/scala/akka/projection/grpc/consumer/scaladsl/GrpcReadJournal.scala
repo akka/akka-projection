@@ -4,13 +4,6 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -33,38 +26,22 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
-import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
 import akka.projection.grpc.internal.ProtoAnySerialization
+import akka.projection.grpc.internal.ProtobufProtocolConversions
 import akka.projection.grpc.internal.proto
-import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.Event
 import akka.projection.grpc.internal.proto.EventProducerServiceClient
 import akka.projection.grpc.internal.proto.EventTimestampRequest
-import akka.projection.grpc.internal.proto.ExcludeEntityIds
-import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
-import akka.projection.grpc.internal.proto.ExcludeTags
-import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.FilteredEvent
-import akka.projection.grpc.internal.proto.IncludeEntityIds
-import akka.projection.grpc.internal.proto.IncludeRegexEntityIds
-import akka.projection.grpc.internal.proto.IncludeTopics
-import akka.projection.grpc.internal.proto.IncludeTags
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
-import akka.projection.grpc.internal.proto.RemoveExcludeEntityIds
-import akka.projection.grpc.internal.proto.RemoveExcludeRegexEntityIds
-import akka.projection.grpc.internal.proto.RemoveExcludeTags
-import akka.projection.grpc.internal.proto.RemoveIncludeEntityIds
-import akka.projection.grpc.internal.proto.RemoveIncludeRegexEntityIds
-import akka.projection.grpc.internal.proto.RemoveIncludeTags
-import akka.projection.grpc.internal.proto.RemoveIncludeTopics
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
@@ -78,6 +55,12 @@ import com.typesafe.config.Config
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 @ApiMayChange
 object GrpcReadJournal {
@@ -160,6 +143,7 @@ final class GrpcReadJournal private (
     with LoadEventQuery
     with CanTriggerReplay {
   import GrpcReadJournal.log
+  import ProtobufProtocolConversions._
 
   // When created as delegate in javadsl from `GrpcReadJournalProvider`.
   private[akka] def this(
@@ -323,6 +307,7 @@ final class GrpcReadJournal private (
 
     val initFilter = {
       import akka.actor.typed.scaladsl.AskPattern._
+
       import scala.concurrent.duration._
       implicit val askTimeout: Timeout = 10.seconds
       consumerFilter.ref.ask[ConsumerFilter.CurrentFilter](ConsumerFilter.GetFilter(streamId, _))
@@ -382,67 +367,13 @@ final class GrpcReadJournal private (
     }
   }
 
-  private def toProtoFilterCriteria(criteria: immutable.Seq[ConsumerFilter.FilterCriteria]): Seq[FilterCriteria] = {
-    criteria.map {
-      case ConsumerFilter.ExcludeTags(tags) =>
-        FilterCriteria(FilterCriteria.Message.ExcludeTags(ExcludeTags(tags.toVector)))
-      case ConsumerFilter.RemoveExcludeTags(tags) =>
-        FilterCriteria(FilterCriteria.Message.RemoveExcludeTags(RemoveExcludeTags(tags.toVector)))
-      case ConsumerFilter.IncludeTags(tags) =>
-        FilterCriteria(FilterCriteria.Message.IncludeTags(IncludeTags(tags.toVector)))
-      case ConsumerFilter.RemoveIncludeTags(tags) =>
-        FilterCriteria(FilterCriteria.Message.RemoveIncludeTags(RemoveIncludeTags(tags.toVector)))
-      case ConsumerFilter.IncludeTopics(expressions) =>
-        FilterCriteria(FilterCriteria.Message.IncludeTopics(IncludeTopics(expressions.toVector)))
-      case ConsumerFilter.RemoveIncludeTopics(expressions) =>
-        FilterCriteria(FilterCriteria.Message.RemoveIncludeTopics(RemoveIncludeTopics(expressions.toVector)))
-      case ConsumerFilter.IncludeEntityIds(entityOffsets) =>
-        FilterCriteria(FilterCriteria.Message.IncludeEntityIds(IncludeEntityIds(entityOffsets.map {
-          case ConsumerFilter.EntityIdOffset(entityId, seqNr) => EntityIdOffset(entityId, seqNr)
-        }.toVector)))
-      case ConsumerFilter.RemoveIncludeEntityIds(entityIds) =>
-        FilterCriteria(FilterCriteria.Message.RemoveIncludeEntityIds(RemoveIncludeEntityIds(entityIds.toVector)))
-      case ConsumerFilter.ExcludeEntityIds(entityIds) =>
-        FilterCriteria(FilterCriteria.Message.ExcludeEntityIds(ExcludeEntityIds(entityIds.toVector)))
-      case ConsumerFilter.RemoveExcludeEntityIds(entityIds) =>
-        FilterCriteria(FilterCriteria.Message.RemoveExcludeEntityIds(RemoveExcludeEntityIds(entityIds.toVector)))
-      case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
-        FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(matching.toVector)))
-      case ConsumerFilter.IncludeRegexEntityIds(matching) =>
-        FilterCriteria(FilterCriteria.Message.IncludeMatchingEntityIds(IncludeRegexEntityIds(matching.toVector)))
-      case ConsumerFilter.RemoveExcludeRegexEntityIds(matching) =>
-        FilterCriteria(
-          FilterCriteria.Message.RemoveExcludeMatchingEntityIds(RemoveExcludeRegexEntityIds(matching.toVector)))
-      case ConsumerFilter.RemoveIncludeRegexEntityIds(matching) =>
-        FilterCriteria(
-          FilterCriteria.Message.RemoveIncludeMatchingEntityIds(RemoveIncludeRegexEntityIds(matching.toVector)))
-    }
-  }
-
   private def eventToEnvelope[Evt](
       event: Event,
       // note that this is actually the producer side defined stream_id
       // not the normal entity type which is internal to the producing side
       streamId: String): EventEnvelope[Evt] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    val eventOffset = timestampOffset(event.offset.get)
-    val evt =
-      event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
-
-    val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
-
-    new EventEnvelope(
-      eventOffset,
-      event.persistenceId,
-      event.seqNr,
-      evt,
-      eventOffset.timestamp.toEpochMilli,
-      eventMetadata = metadata,
-      PersistenceId.extractEntityType(event.persistenceId),
-      event.slice,
-      filtered = false,
-      source = event.source,
-      tags = event.tags.toSet)
+    ProtobufProtocolConversions.eventToEnvelope(event, protoAnySerialization)
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {

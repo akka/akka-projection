@@ -157,6 +157,7 @@ import org.slf4j.LoggerFactory
     topicTagPrefix: String,
     replayParallelism: Int)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
+  import ProtobufProtocolConversions._
 
   private val log = LoggerFactory.getLogger(classOf[FilterStage])
 
@@ -238,45 +239,7 @@ import org.slf4j.LoggerFactory
       private var filter = Filter.empty(topicTagPrefix)
 
       private def updateFilter(criteria: Iterable[FilterCriteria]): Unit = {
-        filter = criteria.foldLeft(filter) {
-          case (acc, criteria) =>
-            criteria.message match {
-              case FilterCriteria.Message.IncludeTags(include) =>
-                acc.addIncludeTags(include.tags)
-              case FilterCriteria.Message.RemoveIncludeTags(include) =>
-                acc.removeIncludeTags(include.tags)
-              case FilterCriteria.Message.ExcludeTags(exclude) =>
-                acc.addExcludeTags(exclude.tags)
-              case FilterCriteria.Message.RemoveExcludeTags(exclude) =>
-                acc.removeExcludeTags(exclude.tags)
-              case FilterCriteria.Message.IncludeTopics(include) =>
-                acc.addIncludeTopics(include.expression)
-              case FilterCriteria.Message.RemoveIncludeTopics(include) =>
-                acc.removeIncludeTopics(include.expression)
-              case FilterCriteria.Message.IncludeEntityIds(include) =>
-                val pids = mapEntityIdToPidHandledByThisStream(include.entityIdOffset.map(_.entityId))
-                acc.addIncludePersistenceIds(pids)
-              case FilterCriteria.Message.RemoveIncludeEntityIds(include) =>
-                val pids = mapEntityIdToPidHandledByThisStream(include.entityIds)
-                acc.removeIncludePersistenceIds(pids)
-              case FilterCriteria.Message.ExcludeEntityIds(exclude) =>
-                val pids = mapEntityIdToPidHandledByThisStream(exclude.entityIds)
-                acc.addExcludePersistenceIds(pids)
-              case FilterCriteria.Message.RemoveExcludeEntityIds(exclude) =>
-                val pids = mapEntityIdToPidHandledByThisStream(exclude.entityIds)
-                acc.removeExcludePersistenceIds(pids)
-              case FilterCriteria.Message.ExcludeMatchingEntityIds(excludeRegex) =>
-                acc.addExcludeRegexEntityIds(excludeRegex.matching)
-              case FilterCriteria.Message.IncludeMatchingEntityIds(includeRegex) =>
-                acc.addIncludeRegexEntityIds(includeRegex.matching)
-              case FilterCriteria.Message.RemoveExcludeMatchingEntityIds(excludeRegex) =>
-                acc.removeExcludeRegexEntityIds(excludeRegex.matching)
-              case FilterCriteria.Message.RemoveIncludeMatchingEntityIds(includeRegex) =>
-                acc.removeIncludeRegexEntityIds(includeRegex.matching)
-              case FilterCriteria.Message.Empty =>
-                acc
-            }
-        }
+        filter = updateFilterFromProto(filter, criteria, mapEntityIdToPidHandledByThisStream)
         log.trace2("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
       }
 

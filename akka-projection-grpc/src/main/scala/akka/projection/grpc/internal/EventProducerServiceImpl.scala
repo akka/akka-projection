@@ -11,15 +11,15 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
-import akka.persistence.query.NoOffset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.typed.PersistenceId
-import akka.projection.grpc.internal.proto.Event
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApi
 import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.EventTimestampResponse
@@ -27,12 +27,9 @@ import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.LoadEventResponse
-import akka.projection.grpc.internal.proto.Offset
-import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.scaladsl.EventProducer
-import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
 import akka.stream.scaladsl.BidiFlow
 import akka.stream.scaladsl.Flow
@@ -42,13 +39,8 @@ import com.google.protobuf.timestamp.Timestamp
 import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.time.Instant
 
 import scala.concurrent.Future
-import scala.util.Success
-
-import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
-import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 
 /**
  * INTERNAL API
@@ -74,6 +66,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
     interceptor: Option[EventProducerInterceptor])
     extends EventProducerServicePowerApi {
   import EventProducerServiceImpl._
+  import akka.projection.grpc.internal.ProtobufProtocolConversions._
   import system.executionContext
 
   require(
@@ -132,17 +125,7 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
     val futureFlow = intercept(init.streamId, metadata).map { _ =>
       val producerSource = eventProducerSourceFor(init.streamId)
 
-      val offset = init.offset match {
-        case None => NoOffset
-        case Some(o) =>
-          val timestamp =
-            o.timestamp.map(_.asJavaInstant).getOrElse(Instant.EPOCH)
-          val seen = o.seen.map {
-            case PersistenceIdSeqNr(pid, seqNr, _) =>
-              pid -> seqNr
-          }.toMap
-          TimestampOffset(timestamp, seen)
-      }
+      val offset = protocolOffsetToOffset(init.offset)
 
       log.debugN(
         "Starting eventsBySlices stream [{}], [{}], slices [{} - {}], offset [{}]",
@@ -214,85 +197,36 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =
         eventsFlow.mapAsync(producerSource.settings.transformationParallelism) { env =>
           import system.executionContext
-          transformAndEncodeEvent(producerSource.transformation, env).map {
-            case Some(event) =>
-              log.traceN(
-                "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
-                env.persistenceId,
-                env.sequenceNr,
-                env.offset,
-                event.source)
-              StreamOut(StreamOut.Message.Event(event))
-            case None =>
-              log.traceN(
-                "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
-                env.persistenceId,
-                env.sequenceNr,
-                env.offset,
-                env.source)
-              StreamOut(
-                StreamOut.Message.FilteredEvent(
-                  FilteredEvent(env.persistenceId, env.sequenceNr, env.slice, Some(protoOffset(env)))))
-          }
+          transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+            .map {
+              case Some(event) =>
+                log.traceN(
+                  "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
+                  env.persistenceId,
+                  env.sequenceNr,
+                  env.offset,
+                  event.source)
+                StreamOut(StreamOut.Message.Event(event))
+              case None =>
+                log.traceN(
+                  "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
+                  env.persistenceId,
+                  env.sequenceNr,
+                  env.offset,
+                  env.source)
+                StreamOut(
+                  StreamOut.Message.FilteredEvent(
+                    FilteredEvent(
+                      env.persistenceId,
+                      env.sequenceNr,
+                      env.slice,
+                      ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
+            }
         }
 
       eventsStreamOut
     }
     Flow.futureFlow(futureFlow).mapMaterializedValue(_ => NotUsed)
-  }
-
-  private def protoOffset(env: EventEnvelope[_]): Offset = {
-    env.offset match {
-      case TimestampOffset(timestamp, _, seen) =>
-        val protoTimestamp = Timestamp(timestamp)
-        val protoSeen = seen.iterator.map {
-          case (pid, seqNr) =>
-            PersistenceIdSeqNr(pid, seqNr)
-        }.toSeq
-        Offset(Some(protoTimestamp), protoSeen)
-      case other =>
-        throw new IllegalArgumentException(s"Unexpected offset type [$other]")
-    }
-  }
-
-  private def transformAndEncodeEvent(transformation: Transformation, env: EventEnvelope[_]): Future[Option[Event]] = {
-    env.eventOption match {
-      case Some(_) =>
-        import system.executionContext
-        val mappedFuture: Future[Option[Any]] = transformation(env.asInstanceOf[EventEnvelope[Any]])
-        def toEvent(transformedEvent: Any): Event = {
-          val protoEvent = protoAnySerialization.serialize(transformedEvent)
-          val metadata = env.eventMetadata.map(protoAnySerialization.serialize)
-          Event(
-            persistenceId = env.persistenceId,
-            seqNr = env.sequenceNr,
-            slice = env.slice,
-            offset = Some(protoOffset(env)),
-            payload = Some(protoEvent),
-            metadata = metadata,
-            source = env.source,
-            tags = env.tags.toSeq)
-        }
-        mappedFuture.value match {
-          case Some(Success(Some(transformedEvent))) => Future.successful(Some(toEvent(transformedEvent)))
-          case Some(Success(None))                   => Future.successful(None)
-          case _                                     => mappedFuture.map(_.map(toEvent))
-        }
-
-      case None =>
-        // Events from backtracking are lazily loaded via `loadEvent` if needed.
-        // Transformation and filter is done via `loadEvent` in that case.
-        Future.successful(
-          Some(
-            Event(
-              persistenceId = env.persistenceId,
-              seqNr = env.sequenceNr,
-              slice = env.slice,
-              offset = Some(protoOffset(env)),
-              payload = None,
-              source = env.source,
-              tags = env.tags.toSeq)))
-    }
   }
 
   override def eventTimestamp(req: EventTimestampRequest, metadata: Metadata): Future[EventTimestampResponse] = {
@@ -331,29 +265,28 @@ import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQ
           import system.executionContext
           q.loadEnvelope[Any](req.persistenceId, req.seqNr)
             .flatMap { env =>
-              transformAndEncodeEvent(producerSource.transformation, env).map {
-                case Some(event) =>
-                  log.traceN(
-                    "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                    env.persistenceId,
-                    env.sequenceNr,
-                    env.offset)
-                  LoadEventResponse(LoadEventResponse.Message.Event(event))
-                case None =>
-                  log.traceN(
-                    "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                    env.persistenceId,
-                    env.sequenceNr,
-                    env.offset)
-                  LoadEventResponse(
-                    LoadEventResponse.Message.FilteredEvent(
-                      FilteredEvent(
-                        persistenceId = env.persistenceId,
-                        seqNr = env.sequenceNr,
-                        slice = env.slice,
-                        offset = Some(protoOffset(env)),
-                        source = env.source)))
-              }
+              transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+                .map {
+                  case Some(event) =>
+                    log.traceN(
+                      "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                      env.persistenceId,
+                      env.sequenceNr,
+                      env.offset)
+                    LoadEventResponse(LoadEventResponse.Message.Event(event))
+                  case None =>
+                    log.traceN(
+                      "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                      env.persistenceId,
+                      env.sequenceNr,
+                      env.offset)
+                    LoadEventResponse(LoadEventResponse.Message.FilteredEvent(FilteredEvent(
+                      persistenceId = env.persistenceId,
+                      seqNr = env.sequenceNr,
+                      slice = env.slice,
+                      offset = ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
+                      source = env.source)))
+                }
             }
             .recoverWith {
               case e: NoSuchElementException =>

@@ -20,10 +20,10 @@ object Dependencies {
   val AkkaProjectionVersionInDocs = "1.4.0"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.8.3")
+    val akka = sys.props.getOrElse("build.akka.version", "2.8.4")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
-    val akkaPersistenceR2dbc = "1.2.0-M2"
+    val akkaPersistenceR2dbc = "1.2.0-M3"
     val alpakka = "6.0.1"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.2")
     val slick = "3.4.1"
@@ -38,6 +38,7 @@ object Dependencies {
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
     val akkaPersistence = "com.typesafe.akka" %% "akka-persistence" % Versions.akka
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
+    val akkaStreamTyped = "com.typesafe.akka" %% "akka-stream-typed" % Versions.akka
     val akkaProtobufV3 = "com.typesafe.akka" %% "akka-protobuf-v3" % Versions.akka
     val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
@@ -222,6 +223,11 @@ object Dependencies {
 
   val grpcTest = deps ++= Seq(
         Test.postgresDriver,
+        Test.h2Driver,
+        Compile.r2dbcH2,
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped,
+        Compile.akkaPersistenceQuery,
         Test.akkaShardingTyped,
         Test.akkaStreamTestkit,
         Test.akkaSerializationJackson,
@@ -236,6 +242,8 @@ object Dependencies {
         Compile.akkaPersistenceR2dbc,
         Compile.h2, // provided
         Compile.r2dbcH2, // provided
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped,
         Test.akkaStreamTestkit,
         Test.akkaTypedTestkit,
         Test.akkaClusterShardingTyped,

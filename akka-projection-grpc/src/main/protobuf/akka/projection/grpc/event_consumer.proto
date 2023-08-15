@@ -1,0 +1,63 @@
+// Copyright 2022 Lightbend Inc.
+
+syntax = "proto3";
+
+package akka.projection.grpc;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "akka/projection/grpc/event_producer.proto";
+import "akka/projection/grpc/consumer.proto";
+
+option java_package = "akka.projection.grpc.internal.proto";
+
+// EventConsumerService runs on the consumer side and allows a producer
+// to initiate/push events to the consumer.
+//
+// 1. Events are stored in the event journal on the producer side.
+// 2. Producer side starts an Akka Projection which locally tracks its offset
+//    and as projection handler pushes events to a consuming EventConsumerService
+// 3. Consumer stores events directly into a journal
+// 4. Consumer side projections can run against the local journal
+service EventConsumerService {
+  rpc ConsumeEvent(stream ConsumeEventIn) returns (stream ConsumeEventOut);
+}
+
+message ConsumeEventOut {
+  oneof message {
+    ConsumerEventStart start = 1;
+    ConsumerEventAck ack = 2;
+  }
+}
+
+message ConsumerEventAck {
+  string persistence_id = 1;
+  int64 seq_nr = 2;
+}
+
+message ConsumeEventIn {
+  oneof message {
+    // always sent first
+    ConsumerEventInit init = 1;
+    Event event = 2;
+    FilteredEvent filtered_event = 3;
+    KeepAlive keep_alive = 4;
+  }
+}
+
+// must be the first event from the connecting producer,
+// the producer must then not start emitting events until
+// it sees a ConsumerEventStart
+message ConsumerEventInit {
+  // unique producer identifier showing where the events came from/was produced
+  string origin_id = 1;
+  // the stream id of the type of entity the producer wants to push
+  string stream_id = 2;
+}
+
+message ConsumerEventStart {
+  repeated FilterCriteria filter = 1;
+}
+
+message KeepAlive { }
