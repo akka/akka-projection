@@ -17,7 +17,6 @@
     <logger name="akka.projection.r2dbc" level="DEBUG" />
     <logger name="akka.persistence.r2dbc" level="DEBUG" />
     <logger name="akka.persistence.typed" level="TRACE" />
-    <logger name="akka.persistence.EventWriter$" level="TRACE" />
 
     <!-- Silence some other stuff -->
     <logger name="akka.actor.typed.pubsub" level="INFO" />

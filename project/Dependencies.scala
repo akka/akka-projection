@@ -20,9 +20,7 @@ object Dependencies {
   val AkkaProjectionVersionInDocs = "1.4.0"
 
   object Versions {
-    // FIXME Akka patch release with event writer (weird override is to trigger auto-snapshot repo plugin)
-    sys.props += "build.akka.version" -> "2.8.3+3-8b29c560-SNAPSHOT"
-    val akka = sys.props.getOrElse("build.akka.version", "2.8.3")
+    val akka = sys.props.getOrElse("build.akka.version", "2.8.4")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
     val akkaPersistenceR2dbc = "1.2.0-M3"
