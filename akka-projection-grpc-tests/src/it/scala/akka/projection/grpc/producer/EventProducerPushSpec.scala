@@ -236,7 +236,7 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
     {
       // #consumerFilters
       val destination = EventProducerPushDestination(streamId)
-        .withConsumerFilters(Seq(ConsumerFilter.IncludeTopics(Set("myhome/groundfloor/+/temperature"))))
+        .withConsumerFilters(Vector(ConsumerFilter.IncludeTopics(Set("myhome/groundfloor/+/temperature"))))
       // #consumerFilters
     }
 
