@@ -64,14 +64,12 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.3.6",
   "org.scalatest" %% "scalatest" % "3.1.2" % Test,
-  // 2. Using gRPC and/or protobuf
-  "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
-  // 3. Using Akka Persistence
+  // 2. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
-  // 4. Querying and publishing data from Akka Persistence
+  // 3. Querying and publishing data from Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
   "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-grpc" % AkkaProjectionVersion,
