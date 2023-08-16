@@ -39,7 +39,7 @@ case the consumer can't keep up or in failure scenarios.
 
 @@@ note
 Currently, the event replication mechanism requires Event Sourced entities as the source on the producer side.
-Something similar could be implemented for Akka's Durable State entities, but that is currently not supported. 
+Replication of Akka's Durable State entities is currently not supported. 
 @@@
 
 ## Dynamic filters
