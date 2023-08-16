@@ -52,7 +52,7 @@ with a different file system all previous events will be delivered to the consum
 H2 database should not be used when the service is an Akka Cluster with more than 1 node.
 @@@
 
-To reduce the amount of events you can use @extref[snapshots as starting points](akka-projection:grpc.html#starting-from-snapshots).
+To reduce the amount of events sent over the network you can use @extref[snapshots as starting points](akka-projection:grpc.html#starting-from-snapshots).
 You can also @extref[start from custom offset](akka-projection:grpc.html#start-from-custom-offset), e.g. an offset
 a few hours back in time.
 
