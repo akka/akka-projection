@@ -17,12 +17,6 @@ import akka.persistence.typed.scaladsl.ReplyEffect
 
 import scala.collection.immutable.Queue
 
-/**
- * Decimal degree coordinates
- */
-final case class Location(latitude: Double, longitude: Double)
-final case class Position(coordinate: Location, altitudeMeters: Double)
-
 object Drone {
   sealed trait Command
 
@@ -31,10 +25,17 @@ object Drone {
 
   sealed trait Event
   final case class PositionUpdated(position: Position) extends Event
+  final case class CoarseGrainedLocationChanged(
+      coordinates: CoarseGrainedCoordinates)
+      extends Event
 
   final case class State(
       currentPosition: Option[Position],
-      historicalPositions: Queue[Position])
+      historicalPositions: Queue[Position]) {
+    def coarseGrainedCoordinates: Option[CoarseGrainedCoordinates] =
+      currentPosition.map(p =>
+        CoarseGrainedCoordinates.fromCoordinates(p.coordinates))
+  }
   private val emptyState = State(None, Queue.empty)
 
   val EntityKey: EntityTypeKey[Command] =
@@ -61,8 +62,23 @@ object Drone {
       if (state.currentPosition.contains(position))
         // already seen
         Effect.none.thenReply(replyTo)(_ => Done)
-      else
-        Effect.persist(PositionUpdated(position)).thenReply(replyTo)(_ => Done)
+      else {
+        val newCoarseGrainedLocation =
+          CoarseGrainedCoordinates.fromCoordinates(position.coordinates)
+        if (state.coarseGrainedCoordinates.contains(newCoarseGrainedLocation)) {
+          // same grid location as before
+          Effect
+            .persist(PositionUpdated(position))
+            .thenReply(replyTo)(_ => Done)
+        } else {
+          // new grid location
+          Effect
+            .persist(
+              PositionUpdated(position),
+              CoarseGrainedLocationChanged(newCoarseGrainedLocation))
+            .thenReply(replyTo)(_ => Done)
+        }
+      }
   }
 
   private def handleEvent(state: State, event: Event): State = event match {
@@ -78,6 +94,10 @@ object Drone {
       state.copy(
         currentPosition = Some(newPosition),
         historicalPositions = newHistoricalPositions)
+    case _: CoarseGrainedLocationChanged =>
+      // can be derived from position, so not really updating state,
+      // persisted as events for aggregation
+      state
 
   }
 

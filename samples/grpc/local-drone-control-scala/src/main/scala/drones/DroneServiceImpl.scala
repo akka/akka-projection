@@ -40,7 +40,7 @@ class DroneServiceImpl(system: ActorSystem[_]) extends proto.DroneService {
     val entityRef = sharding.entityRefFor(Drone.EntityKey, in.droneId)
     val reply: Future[Done] = entityRef.ask(
       Drone.ReportPosition(
-        Position(Location(in.latitude, in.longitude), in.altitude),
+        Position(Coordinates(in.latitude, in.longitude), in.altitude),
         _))
     val response = reply.map(_ => Empty.defaultInstance)
     convertError(response)
