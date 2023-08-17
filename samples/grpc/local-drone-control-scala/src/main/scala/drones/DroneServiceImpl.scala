@@ -11,7 +11,7 @@ import akka.util.Timeout
 import com.google.protobuf.empty.Empty
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-import drone.proto
+import drones.proto
 
 import scala.concurrent.Future
 import scala.concurrent.TimeoutException

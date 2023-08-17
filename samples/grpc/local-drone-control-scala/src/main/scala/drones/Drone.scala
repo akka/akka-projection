@@ -15,8 +15,6 @@ import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplyEffect
 
-import scala.collection.immutable.Queue
-
 object Drone {
   sealed trait Command
 

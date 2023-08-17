@@ -9,7 +9,7 @@ import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
-import drone.proto
+import drones.proto
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future

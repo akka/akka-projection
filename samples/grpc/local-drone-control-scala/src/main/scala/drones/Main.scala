@@ -18,7 +18,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.{EventProducer, EventProducerPush}
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import org.slf4j.LoggerFactory
-import drone.proto
+import drones.proto
 
 import scala.concurrent.Future
 import scala.util.control.NonFatal

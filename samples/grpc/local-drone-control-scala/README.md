@@ -15,4 +15,12 @@ restaurant-drone-deliveries-service sample, in the following ways:
    only when they change location at a coarse grained grid
  * FIXME get restaurant to home delivery orders in the geographical area of the local drone control 
 
+## Running the sample
+
+Start one instance with:
+
+```
+sbt run
+```
+
 FIXME more stuff
