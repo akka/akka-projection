@@ -2,18 +2,11 @@ name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(
-  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 scalaVersion := "2.13.11"
 
-Compile / scalacOptions ++= Seq(
-  "-target:11",
-  "-deprecation",
-  "-feature",
-  "-unchecked",
-  "-Xlog-reflective-calls",
-  "-Xlint")
+Compile / scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlog-reflective-calls", "-Xlint")
 Compile / javacOptions ++= Seq("-Xlint:unchecked", "-Xlint:deprecation")
 
 Test / parallelExecution := false
@@ -30,10 +23,10 @@ Global / cancelable := false // ctrl-c
 val AkkaVersion = "2.8.4"
 val AkkaHttpVersion = "10.5.2"
 val AkkaManagementVersion = "1.4.0"
-val AkkaPersistenceR2dbcVersion = "1.1.0"
+val AkkaPersistenceR2dbcVersion = "1.2.0-M3"
 val AkkaProjectionVersion =
   sys.props
-    .getOrElse("akka-projection.version", "1.5.0-M1") // FIXME we'll need a M2
+    .getOrElse("akka-projection.version", "1.5.0-M2")
 val AkkaDiagnosticsVersion = "2.0.0"
 
 enablePlugins(AkkaGrpcPlugin)
@@ -64,6 +57,10 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
+  // FIXME should we use a "real" db?
+  // local single-node lightweight database with h2
+  "com.h2database" % "h2" % "2.1.210",
+  "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE",
   // 3. Querying or projecting data from Akka Persistence
   "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion,
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,

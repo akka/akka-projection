@@ -31,12 +31,12 @@ object Drone {
 
   final case class State(
       currentPosition: Option[Position],
-      historicalPositions: Queue[Position]) {
+      historicalPositions: Vector[Position]) {
     def coarseGrainedCoordinates: Option[CoarseGrainedCoordinates] =
       currentPosition.map(p =>
         CoarseGrainedCoordinates.fromCoordinates(p.coordinates))
   }
-  private val emptyState = State(None, Queue.empty)
+  private val emptyState = State(None, Vector.empty)
 
   val EntityKey: EntityTypeKey[Command] =
     EntityTypeKey[Command]("Drone")
@@ -61,7 +61,7 @@ object Drone {
     case ReportPosition(position, replyTo) =>
       if (state.currentPosition.contains(position))
         // already seen
-        Effect.none.thenReply(replyTo)(_ => Done)
+        Effect.reply(replyTo)(Done)
       else {
         val newCoarseGrainedLocation =
           CoarseGrainedCoordinates.fromCoordinates(position.coordinates)
@@ -85,9 +85,9 @@ object Drone {
     case PositionUpdated(newPosition) =>
       val newHistoricalPositions = state.currentPosition match {
         case Some(position) =>
-          val withPreviousPosition = state.historicalPositions.enqueue(position)
+          val withPreviousPosition = state.historicalPositions :+ position
           if (withPreviousPosition.size > LocationHistoryLimit)
-            withPreviousPosition.drop(1)
+            withPreviousPosition.tail
           else withPreviousPosition
         case None => state.historicalPositions
       }
