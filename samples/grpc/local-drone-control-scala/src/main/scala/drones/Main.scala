@@ -18,7 +18,9 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.{EventProducer, EventProducerPush}
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import org.slf4j.LoggerFactory
+import drone.proto
 
+import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 object Main {
@@ -59,12 +61,19 @@ object Main {
   def initEventToCloudPush(implicit system: ActorSystem[_]): Unit = {
     val producerOriginId = system.settings.config.getString("local-drone-control.service-id")
     val streamId = "drone-events"
+
+    // turn events into a public protocol (protobuf) type before publishing
+    val eventTransformation = EventProducer.Transformation.empty.registerAsyncEnvelopeMapper[Drone.CoarseGrainedLocationChanged, proto.CoarseDroneLocation] { envelope =>
+      val event = envelope.event
+      Future.successful(Some(proto.CoarseDroneLocation(envelope.persistenceId, event.coordinates.latitude, event.coordinates.longitude)))
+    }
+
     val eventProducer = EventProducerPush[Drone.Event](
       originId = producerOriginId,
       eventProducerSource = EventProducerSource[Drone.Event](
         Drone.EntityKey.name,
         streamId,
-        EventProducer.Transformation.identity,
+        eventTransformation,
         EventProducerSettings(system),
         // only push coarse grained coordinate changes
         producerFilter = envelope => envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged]),
