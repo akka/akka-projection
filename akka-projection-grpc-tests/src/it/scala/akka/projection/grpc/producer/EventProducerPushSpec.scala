@@ -31,6 +31,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducerPush
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
+import com.google.protobuf.Descriptors
 import com.google.protobuf.wrappers.StringValue
 import com.typesafe.config.ConfigFactory
 import io.grpc.Status
@@ -38,6 +39,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.annotation.nowarn
+import scala.collection.immutable
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -140,14 +142,13 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
       // consumer runs gRPC server accepting pushed events from producers
       // #consumerSetup
       val destination =
-        EventProducerPushDestination(streamId)
+        // FIXME why not just StringValue.scalaDescriptor for scala API?
+        EventProducerPushDestination(streamId, StringValue.javaDescriptor.getFile :: Nil)
         // #consumerSetup
           .withJournalPluginId("test.consumer.r2dbc.journal")
           .withInterceptor((_, metadata) =>
             if (metadata.getText("secret").contains("password")) Future.successful(Done)
             else throw new GrpcServiceException(Status.PERMISSION_DENIED))
-          // FIXME why not just StringValue.scalaDescriptor for scala API?
-          .withProtobufDescriptors(StringValue.javaDescriptor.getFile :: Nil)
           .withTransformationForOrigin { (originId, _) =>
             EventProducerPushDestination.Transformation.empty
             // since filters touch different aspects of the events, they can be chained for the same type
@@ -239,22 +240,25 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
   @nowarn("msg=never used") // doc samples
   def docSamples(): Unit = {
     {
+      val protoDescriptors: immutable.Seq[Descriptors.FileDescriptor] = Nil
       // #consumerFilters
-      val destination = EventProducerPushDestination(streamId)
+      val destination = EventProducerPushDestination(streamId, protoDescriptors)
         .withConsumerFilters(Vector(ConsumerFilter.IncludeTopics(Set("myhome/groundfloor/+/temperature"))))
       // #consumerFilters
     }
 
     {
+      trait SomeProtobufEvent
+      val protoDescriptors: immutable.Seq[Descriptors.FileDescriptor] = Nil
       // #consumerTransformation
-      val destination = EventProducerPushDestination(streamId)
+      val destination = EventProducerPushDestination(streamId, protoDescriptors)
         .withTransformationForOrigin { (originId, metadata) =>
           EventProducerPushDestination.Transformation.empty
             .registerPersistenceIdMapper { envelope =>
               val pid = envelope.persistenceId
               pid.replace("originalPrefix", "newPrefix")
             }
-            .registerTagMapper[String](envelope => envelope.tags + s"origin-$originId")
+            .registerTagMapper[SomeProtobufEvent](envelope => envelope.tags + s"origin-$originId")
 
         }
       // #consumerTransformation

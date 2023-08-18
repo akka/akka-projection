@@ -1,3 +1,7 @@
 # constructors are internal api
 ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.consumer.javadsl.EventProducerPushDestination.this")
 ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination.this")
+
+# new/chagned API require, protobuf descriptors
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.consumer.javadsl.EventProducerPushDestination.create")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination.apply")

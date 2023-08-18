@@ -39,15 +39,19 @@ object EventProducerPushDestination {
 
   /**
    * @param acceptedStreamId Only accept this stream ids, deny others
+   * @param protobufDescriptors When using protobuf as event wire format, rather than direct Akka Serialization,
+   *                            all message descriptors needs to be listed up front when creating the destination.
+   *                            If not using protobuf encoded events, use an empty list.
    */
-  def apply(acceptedStreamId: String)(implicit system: ActorSystem[_]): EventProducerPushDestination =
+  def apply(acceptedStreamId: String, protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
+      implicit system: ActorSystem[_]): EventProducerPushDestination =
     new EventProducerPushDestination(
       None,
       acceptedStreamId,
       (_, _) => Transformation.empty,
       None,
       immutable.Seq.empty,
-      immutable.Seq.empty,
+      protobufDescriptors,
       EventProducerPushDestinationSettings(system))
 
   @ApiMayChange
@@ -193,14 +197,6 @@ final class EventProducerPushDestination private[akka] (
 
   def withSettings(settings: EventProducerPushDestinationSettings): EventProducerPushDestination =
     copy(settings = settings)
-
-  /**
-   * When using protobuf encoded events, rather than direct Akka Serialization of events sent over the wire from the
-   * producer, all message descriptors needs to be listed up front when creating the destination.
-   */
-  def withProtobufDescriptors(
-      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor]): EventProducerPushDestination =
-    copy(protobufDescriptors = protobufDescriptors)
 
   /**
    * @param transformation A transformation to use for all events.

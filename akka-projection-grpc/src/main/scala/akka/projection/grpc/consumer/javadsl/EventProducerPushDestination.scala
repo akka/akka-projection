@@ -44,14 +44,23 @@ import scala.compat.java8.OptionConverters.RichOptionalGeneric
 @ApiMayChange
 object EventProducerPushDestination {
 
-  def create(acceptedStreamId: String, system: ActorSystem[_]): EventProducerPushDestination =
+  /**
+   * @param acceptedStreamId The stream id that the producers must use for this destination
+   * @param protobufDescriptors When using protobuf as event wire format, rather than direct Akka Serialization,
+   *                            all message descriptors needs to be listed up front when creating the destination.
+   *                            If not using protobuf encoded events, use an empty list.
+   */
+  def create(
+      acceptedStreamId: String,
+      protobufDescriptors: JList[Descriptors.FileDescriptor],
+      system: ActorSystem[_]): EventProducerPushDestination =
     new EventProducerPushDestination(
       Optional.empty(),
       acceptedStreamId,
       (_, _) => Transformation.empty,
       Optional.empty(),
       Collections.emptyList(),
-      Collections.emptyList(),
+      protobufDescriptors,
       EventProducerPushDestinationSettings.create(system))
 
   def grpcServiceHandler(
@@ -110,13 +119,6 @@ final class EventProducerPushDestination private (
   def withTransformationForOrigin(
       transformationForOrigin: BiFunction[String, Metadata, Transformation]): EventProducerPushDestination =
     copy(transformationForOrigin = transformationForOrigin)
-
-  /**
-   * When using protobuf encoded events, rather than direct Akka Serialization of events sent over the wire from the
-   * producer, all message descriptors needs to be listed up front when creating the destination.
-   */
-  def withProtobufDescriptors(protobufDescriptors: JList[Descriptors.FileDescriptor]): EventProducerPushDestination =
-    copy(protobufDescriptors = protobufDescriptors)
 
   /**
    * Filter incoming streams, at producer side, with these filters
