@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS durable_state (
   state_payload BYTEA NOT NULL,
   tags TEXT ARRAY,
 
+  -- additional column
+  location VARCHAR(255),
+
   PRIMARY KEY(persistence_id, revision)
 );
 
