@@ -25,9 +25,12 @@ import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
 import akka.stream.scaladsl.Source
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
+
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.EventEnvelope.SerializedEvent
+import akka.serialization.SerializationExtension
 
 /**
  * INTERNAL API
@@ -58,6 +61,8 @@ private[akka] final class EventPusherConsumerServiceImpl(
     system.settings.config.getInt("akka.persistence.typed.event-writer.max-batch-size") / 2
 
   private implicit val ec: ExecutionContext = system.executionContext
+
+  private val serialization = SerializationExtension(system)
 
   logger.info(
     "Passive event consumer service created, accepting stream ids [{}]",
@@ -98,7 +103,10 @@ private[akka] final class EventPusherConsumerServiceImpl(
               interceptedTail
                 .map { consumeEventIn =>
                   if (consumeEventIn.message.isEvent)
-                    ProtobufProtocolConversions.eventToEnvelope[Any](consumeEventIn.getEvent, protoAnySerialization)
+                    ProtobufProtocolConversions.eventToEnvelope[Any](
+                      consumeEventIn.getEvent,
+                      protoAnySerialization,
+                      transformer.needDeserializedEvent)
                   else if (consumeEventIn.message.isFilteredEvent) {
                     ProtobufProtocolConversions.filteredEventToEnvelope[Any](consumeEventIn.getFilteredEvent)
                   } else {
@@ -109,7 +117,12 @@ private[akka] final class EventPusherConsumerServiceImpl(
                 .mapAsyncPartitioned(
                   destination.eventProducerPushDestination.settings.parallelism,
                   perPartitionParallelism)(_.persistenceId) { (originalEnvelope, _) =>
-                  val transformedEventEnvelope = transformer(originalEnvelope)
+                  val deserializedEnvelope =
+                    if (transformer.needDeserializedEvent && !originalEnvelope.isEventDeserialized)
+                      deserializeEvent(originalEnvelope)
+                    else
+                      originalEnvelope
+                  val transformedEventEnvelope = transformer(deserializedEnvelope)
 
                   if (logger.isTraceEnabled)
                     logger.traceN(
@@ -118,11 +131,17 @@ private[akka] final class EventPusherConsumerServiceImpl(
                       transformedEventEnvelope.persistenceId,
                       if (transformedEventEnvelope.filtered) " filtered" else "")
 
+                  val writeEvent =
+                    if (transformedEventEnvelope.isEventDeserialized)
+                      transformedEventEnvelope.eventOption.getOrElse(FilteredPayload)
+                    else
+                      transformedEventEnvelope.serializedEvent.get
+
                   destination.eventWriter
                     .askWithStatus[EventWriter.WriteAck](EventWriter.Write(
                       transformedEventEnvelope.persistenceId,
                       transformedEventEnvelope.sequenceNr,
-                      transformedEventEnvelope.eventOption.getOrElse(FilteredPayload),
+                      writeEvent,
                       transformedEventEnvelope.eventMetadata,
                       transformedEventEnvelope.tags,
                       _))(destination.eventProducerPushDestination.settings.journalWriteTimeout, system.scheduler)
@@ -154,5 +173,15 @@ private[akka] final class EventPusherConsumerServiceImpl(
             Status.INVALID_ARGUMENT.withDescription(
               "Consumer stream in must start with Init event followed by events but got something else"))
       }
+  }
+
+  private def deserializeEvent(env: EventEnvelope[Any]): EventEnvelope[Any] = {
+    env.serializedEvent match {
+      case Some(SerializedEvent(bytes, serId, manifest)) =>
+        val event = serialization.deserialize(bytes, serId, manifest).get
+        env.withEvent(event)
+      case None =>
+        env
+    }
   }
 }

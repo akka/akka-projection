@@ -373,7 +373,11 @@ final class GrpcReadJournal private (
       // not the normal entity type which is internal to the producing side
       streamId: String): EventEnvelope[Evt] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    ProtobufProtocolConversions.eventToEnvelope(event, protoAnySerialization)
+    ProtobufProtocolConversions.eventToEnvelope(
+      event,
+      protoAnySerialization,
+      deserializeEvent = true
+    ) // FIXME SerializedEvent
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {

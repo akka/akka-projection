@@ -10,7 +10,6 @@ import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.FilteredPayload
-import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import akka.projection.grpc.consumer.EventProducerPushDestinationSettings
@@ -22,6 +21,8 @@ import com.google.protobuf.Descriptors
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+
+import akka.annotation.InternalApi
 
 /**
  * A passive consumer service for event producer push that can be bound as a gRPC endpoint accepting active producers
@@ -56,7 +57,7 @@ object EventProducerPushDestination {
 
   @ApiMayChange
   object Transformation {
-    val empty: Transformation = new Transformation(Map.empty, Predef.identity)
+    val empty: Transformation = new Transformation(Map.empty, Predef.identity, false)
   }
 
   /**
@@ -64,8 +65,11 @@ object EventProducerPushDestination {
    * and seen by local projections. Start from [[Transformation.empty]] when defining transformations.
    */
   final class Transformation private (
-      private[akka] val typedMappers: Map[Class[_], EventEnvelope[Any] => EventEnvelope[Any]],
-      untypedMappers: EventEnvelope[Any] => EventEnvelope[Any]) {
+      /** INTERNAL API */
+      @InternalApi private[akka] val typedMappers: Map[Class[_], EventEnvelope[Any] => EventEnvelope[Any]],
+      untypedMappers: EventEnvelope[Any] => EventEnvelope[Any],
+      /** INTERNAL API */
+      @InternalApi private[akka] val needDeserializedEvent: Boolean) {
 
     /**
      * Add or replace tags for incoming events
@@ -75,9 +79,9 @@ object EventProducerPushDestination {
       val mapTags = { (eventEnvelope: EventEnvelope[Any]) =>
         val newTags = f(eventEnvelope.asInstanceOf[EventEnvelope[A]])
         if (newTags eq eventEnvelope.tags) eventEnvelope
-        else copyEnvelope(eventEnvelope)(tags = newTags)
+        else eventEnvelope.withTags(newTags)
       }
-      appendMapper(clazz, mapTags)
+      appendMapper(clazz, mapTags, payloadMapper = false)
     }
 
     /**
@@ -89,10 +93,10 @@ object EventProducerPushDestination {
       val mapId = { (eventEnvelope: EventEnvelope[Any]) =>
         val newPid = f(eventEnvelope)
         if (newPid eq eventEnvelope.persistenceId) eventEnvelope
-        else copyEnvelope(eventEnvelope)(persistenceId = newPid)
+        else eventEnvelope.withPersistenceId(newPid)
       }
       // needs to be untyped since not mapping filtered events the same way will cause gaps in seqnrs
-      new Transformation(typedMappers, untypedMappers.andThen(mapId))
+      new Transformation(typedMappers, untypedMappers.andThen(mapId), needDeserializedEvent)
     }
 
     /**
@@ -105,10 +109,10 @@ object EventProducerPushDestination {
         else {
           val newMaybePayload = f(eventEnvelope.asInstanceOf[EventEnvelope[A]])
           if (newMaybePayload eq eventEnvelope.eventOption) eventEnvelope
-          else copyEnvelope(eventEnvelope)(eventOption = newMaybePayload)
+          else eventEnvelope.withEventOption(newMaybePayload)
         }
       }
-      appendMapper(clazz, mapPayload)
+      appendMapper(clazz, mapPayload, payloadMapper = true)
     }
 
     /**
@@ -120,13 +124,16 @@ object EventProducerPushDestination {
         else {
           val newMaybePayload = f(eventEnvelope)
           if (newMaybePayload eq eventEnvelope.eventOption) eventEnvelope
-          else copyEnvelope(eventEnvelope)(eventOption = newMaybePayload)
+          else eventEnvelope.withEventOption(newMaybePayload)
         }
       }
-      new Transformation(typedMappers, untypedMappers.andThen(anyPayloadMapper))
+      new Transformation(typedMappers, untypedMappers.andThen(anyPayloadMapper), needDeserializedEvent = true)
     }
 
-    private[akka] def apply(envelope: EventEnvelope[Any]): EventEnvelope[Any] = {
+    /**
+     * INTERNAL API
+     */
+    @InternalApi private[akka] def apply(envelope: EventEnvelope[Any]): EventEnvelope[Any] = {
       val payloadClass = envelope.eventOption.map(_.getClass).getOrElse(FilteredPayload.getClass)
       val typedMapResult = typedMappers.get(payloadClass) match {
         case Some(mapper) => mapper(envelope)
@@ -135,37 +142,17 @@ object EventProducerPushDestination {
       untypedMappers(typedMapResult)
     }
 
-    private def appendMapper(clazz: Class[_], transformF: EventEnvelope[Any] => EventEnvelope[Any]): Transformation = {
+    private def appendMapper(
+        clazz: Class[_],
+        transformF: EventEnvelope[Any] => EventEnvelope[Any],
+        payloadMapper: Boolean): Transformation = {
       new Transformation(
         // chain if there are multiple ops for same type
         typedMappers.updated(clazz, typedMappers.get(clazz).map(f => f.andThen(transformF)).getOrElse(transformF)),
-        untypedMappers)
+        untypedMappers,
+        needDeserializedEvent || payloadMapper)
     }
 
-    private def copyEnvelope(original: EventEnvelope[Any])(
-        offset: Offset = original.offset,
-        persistenceId: String = original.persistenceId,
-        sequenceNr: Long = original.sequenceNr,
-        eventOption: Option[Any] = original.eventOption,
-        timestamp: Long = original.timestamp,
-        eventMetadata: Option[Any] = original.eventMetadata,
-        entityType: String = original.entityType,
-        slice: Int = original.slice,
-        filtered: Boolean = original.filtered,
-        source: String = original.source,
-        tags: Set[String] = original.tags): EventEnvelope[Any] =
-      new EventEnvelope[Any](
-        offset,
-        persistenceId,
-        sequenceNr,
-        eventOption,
-        timestamp,
-        eventMetadata,
-        entityType,
-        slice,
-        filtered,
-        source,
-        tags)
   }
 
   def grpcServiceHandler(eventConsumer: EventProducerPushDestination)(

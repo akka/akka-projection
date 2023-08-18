@@ -121,25 +121,42 @@ private[akka] object ProtobufProtocolConversions {
     }
   }
 
-  def eventToEnvelope[Evt](event: Event, protoAnySerialization: ProtoAnySerialization): EventEnvelope[Evt] = {
+  def eventToEnvelope[Evt](
+      event: Event,
+      protoAnySerialization: ProtoAnySerialization,
+      deserializeEvent: Boolean): EventEnvelope[Evt] = {
     val eventOffset = protocolOffsetToOffset(event.offset).asInstanceOf[TimestampOffset]
-    val evt =
-      event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
-
     val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
 
-    new EventEnvelope(
-      eventOffset,
-      event.persistenceId,
-      event.seqNr,
-      evt,
-      eventOffset.timestamp.toEpochMilli,
-      eventMetadata = metadata,
-      PersistenceId.extractEntityType(event.persistenceId),
-      event.slice,
-      filtered = false,
-      source = event.source,
-      tags = event.tags.toSet)
+    if (deserializeEvent || event.payload.isEmpty) {
+      val evt = event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
+      new EventEnvelope(
+        eventOffset,
+        event.persistenceId,
+        event.seqNr,
+        evt,
+        eventOffset.timestamp.toEpochMilli,
+        eventMetadata = metadata,
+        PersistenceId.extractEntityType(event.persistenceId),
+        event.slice,
+        filtered = false,
+        source = event.source,
+        tags = event.tags.toSet)
+    } else {
+      val serializedEvent = protoAnySerialization.toSerializedEvent(event.payload.get)
+      EventEnvelope(
+        eventOffset,
+        event.persistenceId,
+        event.seqNr,
+        serializedEvent,
+        eventOffset.timestamp.toEpochMilli,
+        eventMetadata = metadata,
+        PersistenceId.extractEntityType(event.persistenceId),
+        event.slice,
+        filtered = false,
+        source = event.source,
+        tags = event.tags.toSet)
+    }
   }
 
   def filteredEventToEnvelope[Evt](filtered: FilteredEvent): EventEnvelope[Evt] = {
