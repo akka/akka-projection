@@ -78,7 +78,7 @@ object EventProducerPushDestination {
 }
 
 @ApiMayChange
-final class EventProducerPushDestination private[akka] (
+final class EventProducerPushDestination private (
     val journalPluginId: Optional[String],
     val acceptedStreamId: String,
     val transformationForOrigin: BiFunction[String, Metadata, Transformation],

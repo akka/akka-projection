@@ -1,0 +1,3 @@
+# constructors are internal api
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.consumer.javadsl.EventProducerPushDestination.this")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination.this")
