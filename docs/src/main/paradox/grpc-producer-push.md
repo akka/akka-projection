@@ -120,3 +120,17 @@ of configured consumer filters. The filters are defined using `withProducerFilte
 It is possible to define additional connection metadata that is passed to the consumer on connection when constructing the
 @apidoc[EventProducerPush]. This can be used for authenticating a producer in the consumer interceptor, or providing 
 additional details to use when transforming events in the consumer.
+
+### Serialization
+
+By default, the producer will use Akka Serialization to serialize each event for pushing to the consumer, this is convenient
+but can tightly couple the producer and consumer so that they must be upgraded lock step, even though they are two separate
+systems. To avoid problems and keeping the lifecycles of the producer and consumer systems separate it is better to use
+an explicit protobuf message protocol for the events pushed.
+
+This can be done in isolation for the producer push by transforming each type of outgoing messages with the `EventProducer.Transformation`
+passed to the `EventProducerSource` on construction.
+
+On the consuming side the protobuf messages can be turned from wire protocol protobuf messages back to some application domain
+specific representation before storing in the journal with the `EventProducerPushDestination.Transformation` for the `EventProducerPushDestination`
+on construction using `withTransformation` or `withTransformationForOrigin`.
