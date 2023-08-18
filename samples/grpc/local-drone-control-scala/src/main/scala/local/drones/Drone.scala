@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
  */
-package drones
+package local.drones
 
 import akka.Done
 import akka.actor.typed.ActorRef

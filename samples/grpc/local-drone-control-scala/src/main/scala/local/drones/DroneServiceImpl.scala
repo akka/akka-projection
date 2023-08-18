@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
  */
-package drones
+package local.drones
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -11,7 +11,7 @@ import akka.util.Timeout
 import com.google.protobuf.empty.Empty
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-import drones.proto
+import local.drones.proto
 
 import scala.concurrent.Future
 import scala.concurrent.TimeoutException

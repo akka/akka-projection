@@ -1,11 +1,11 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "drones.proto";
+option java_package = "local.drones.proto";
 
 import "google/protobuf/empty.proto";
 
-package drones;
+package local.drones;
 
 // gRPC definition for DroneService
 
@@ -16,7 +16,10 @@ service DroneService {
 
 message ReportLocationRequest {
     string drone_id = 1;
+    // longitude in decimal degree coordinates
     double longitude = 2;
+    // latitude in decimal degree coordinates
     double latitude = 3;
+    // altitude in meters
     double altitude = 4;
 }

@@ -1,4 +1,4 @@
-package drones
+package local.drones
 
 /**
  * Marker trait for serialization with Jackson CBOR.

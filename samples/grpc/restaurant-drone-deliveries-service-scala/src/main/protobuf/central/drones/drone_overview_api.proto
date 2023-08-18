@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "central.drones.proto";
+
+package central.drones;
+
+service DroneOverviewService {
+  rpc GetCoarseDroneLocations(CoarseDroneLocationsRequest) returns (CoarseDroneLocationsResponse) {}
+}
+
+message CoarseDroneLocationsRequest {
+  // name of the location
+  string location = 1;
+}
+
+message CoarseDroneLocationsResponse {
+  repeated CoarseDroneLocations coarse_locations = 1;
+}
+
+message CoarseDroneLocations {
+  double coarse_latitude = 1;
+  double coarse_longitude = 2;
+  repeated string drones = 3;
+}

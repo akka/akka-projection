@@ -1,10 +1,11 @@
-package deliveries
+package central.deliveries
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
+import akka.projection.grpc.consumer.EventProducerPushDestinationSettings
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import org.slf4j.LoggerFactory
 
@@ -38,6 +39,8 @@ object Main {
 
     // consumer runs gRPC server accepting pushed events from producers
     val streamId = "drone-events"
+    // FIXME we need to be able to pass protobuf descriptors for the gRPC journal via destination or as param to grpcServiceHandler here
+    //       right now failing on deserialization, also probably missing some docs on wire format for producer push
     val destination = EventProducerPushDestination(streamId)
     val bound = Http(system)
       .newServerAt(interface, port)

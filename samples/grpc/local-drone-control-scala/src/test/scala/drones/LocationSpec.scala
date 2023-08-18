@@ -3,6 +3,7 @@
  */
 package drones
 
+import local.drones.{CoarseGrainedCoordinates, Coordinates}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
