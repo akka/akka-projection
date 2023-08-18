@@ -31,6 +31,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducerPush
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
+import com.google.protobuf.wrappers.StringValue
 import com.typesafe.config.ConfigFactory
 import io.grpc.Status
 import org.scalatest.BeforeAndAfterAll
@@ -145,12 +146,15 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
           .withInterceptor((_, metadata) =>
             if (metadata.getText("secret").contains("password")) Future.successful(Done)
             else throw new GrpcServiceException(Status.PERMISSION_DENIED))
+          // FIXME why not just StringValue.scalaDescriptor for scala API?
+          .withProtobufDescriptors(StringValue.javaDescriptor.getFile :: Nil)
           .withTransformationForOrigin { (originId, _) =>
             EventProducerPushDestination.Transformation.empty
             // since filters touch different aspects of the events, they can be chained for the same type
               .registerPersistenceIdMapper(envelope => envelope.persistenceId.replace("p-", s"$originId-"))
-              .registerTagMapper[String](_ => Set("added-tag"))
-              .registerPayloadMapper[String, String](env => env.eventOption.map(_.toUpperCase))
+              .registerTagMapper[StringValue](_ => Set("added-tag"))
+              // uppercase and turn into String instead of wire-protocol protobuf message
+              .registerPayloadMapper[StringValue, String](env => env.eventOption.map(name => name.value.toUpperCase))
           }
           .withConsumerFilters(Vector(ConsumerFilter.ExcludeEntityIds(Set(consumerFilterExcludedPid.id))))
       // #consumerSetup
@@ -168,7 +172,8 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
         eventProducerSource = EventProducerSource[String](
           entityType,
           streamId,
-          EventProducer.Transformation.identity,
+          // wire protocol is protobuf StringValue messages rather than Akka serialization format for String
+          EventProducer.Transformation.empty.registerMapper[String, StringValue](s => Some(StringValue(s))),
           EventProducerSettings(system),
           // no veggies allowed
           producerFilter = envelope => !veggies(envelope.event)),
@@ -199,7 +204,7 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
 
       val consumerExcludedEntity = spawn(TestEntity(consumerFilterExcludedPid))
       // Note: consumer filtered guarana ends up in the consumer journal, but does not show up in projection
-      consumerExcludedEntity ! TestEntity.Persist(s"cumquat")
+      consumerExcludedEntity ! TestEntity.Persist("cumquat")
 
       val entity2 = spawn(TestEntity(nextPid(entityType)))
       val entity3 = spawn(TestEntity(nextPid(entityType)))

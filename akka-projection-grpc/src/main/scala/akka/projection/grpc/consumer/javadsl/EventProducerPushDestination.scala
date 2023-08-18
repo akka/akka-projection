@@ -18,6 +18,8 @@ import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 import akka.projection.grpc.consumer.scaladsl
 import akka.util.ccompat.JavaConverters._
 import akka.japi.function.{ Function => JapiFunction }
+import akka.projection.grpc.internal.ProtoAnySerialization.Prefer
+import com.google.protobuf.Descriptors
 
 import java.util.Collections
 import java.util.Optional
@@ -49,6 +51,7 @@ object EventProducerPushDestination {
       (_, _) => Transformation.empty,
       Optional.empty(),
       Collections.emptyList(),
+      Collections.emptyList(),
       EventProducerPushDestinationSettings.create(system))
 
   def grpcServiceHandler(
@@ -62,7 +65,8 @@ object EventProducerPushDestination {
 
     val scalaConsumers = eventConsumers.asScala.map(_.asScala).toSet
     val handler =
-      EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(scalaConsumers)(system))(system)
+      EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(
+        system)
     new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
       override def apply(request: HttpRequest): CompletionStage[HttpResponse] =
         handler(request.asInstanceOf[akka.http.scaladsl.model.HttpRequest])
@@ -80,6 +84,7 @@ final class EventProducerPushDestination private[akka] (
     val transformationForOrigin: BiFunction[String, Metadata, Transformation],
     val interceptor: Optional[EventDestinationInterceptor],
     val filters: java.util.List[FilterCriteria],
+    val protobufDescriptors: JList[Descriptors.FileDescriptor],
     val settings: EventProducerPushDestinationSettings) {
   def withInterceptor(interceptor: EventDestinationInterceptor): EventProducerPushDestination =
     copy(interceptor = Optional.of(interceptor))
@@ -107,6 +112,13 @@ final class EventProducerPushDestination private[akka] (
     copy(transformationForOrigin = transformationForOrigin)
 
   /**
+   * When using protobuf encoded events, rather than direct Akka Serialization of events sent over the wire from the
+   * producer, all message descriptors needs to be listed up front when creating the destination.
+   */
+  def withProtobufDescriptors(protobufDescriptors: JList[Descriptors.FileDescriptor]): EventProducerPushDestination =
+    copy(protobufDescriptors = protobufDescriptors)
+
+  /**
    * Filter incoming streams, at producer side, with these filters
    */
   def withConsumerFilters(filters: JList[FilterCriteria]): EventProducerPushDestination =
@@ -118,6 +130,7 @@ final class EventProducerPushDestination private[akka] (
       transformationForOrigin: BiFunction[String, Metadata, Transformation] = transformationForOrigin,
       interceptor: Optional[EventDestinationInterceptor] = interceptor,
       filters: JList[FilterCriteria] = filters,
+      protobufDescriptors: JList[Descriptors.FileDescriptor] = protobufDescriptors,
       settings: EventProducerPushDestinationSettings = settings): EventProducerPushDestination =
     new EventProducerPushDestination(
       journalPluginId,
@@ -125,6 +138,7 @@ final class EventProducerPushDestination private[akka] (
       transformationForOrigin,
       interceptor,
       filters,
+      protobufDescriptors,
       settings)
 
   /**
@@ -139,5 +153,6 @@ final class EventProducerPushDestination private[akka] (
       interceptor.asScala.map(javaInterceptor =>
         (streamId, meta) => javaInterceptor.intercept(streamId, meta.asInstanceOf[akka.grpc.javadsl.Metadata]).toScala),
       filters.asScala.toVector,
+      protobufDescriptors.asScala.toVector,
       settings)
 }
