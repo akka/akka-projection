@@ -1,42 +1,27 @@
 # Architectural Overview
 
-Akka Cluster is great for building stateful distributed systems, such as Microservices. Akka Distributed Cluster 
-is a set of features in Akka that will help you with:
+Akka is great for building stateful distributed systems, that can also be stretched to geographically distributed locations
+at the edge of the cloud.
 
-* stretching an Akka Cluster over geographically distributed locations for higher availability and lower latency
-* brokerless asynchronous communication between different Akka Microservices 
+Each geographical location can be a separate, fully autonomous, Akka Cluster or a standalone Akka node, and be connected
+to the other Akka Clusters with the communication mechanisms provided by Akka Edge. These services are typically running
+in the cloud and at the edge of the cloud. The services at the edge may run anywhere where you have resources to run
+Akka in a JVM (or Java native image) and have network access from the edge to the more central services.
 
-## One Akka Cluster or many connected clusters?
+FIXME diagram
 
-When stretching an Akka Cluster over geographically distributed locations it can be difficult or impossible to
-make it work as one single Akka Cluster. Those locations are typically also different Kubernetes clusters. There can be
-many problems that must be overcome:
-
-* security considerations of opening up for the peer-to-peer communication between nodes that is required for Akka Cluster
-* address translation and connectivity of separate Kubernetes clusters
-* reliable Akka Cluster bootstrap mechanism across different Kubernetes clusters
-* failure detection and stability of an Akka Cluster with mixed low and high latency
-
-Instead, each geographical location can be a separate, fully autonomous, Akka Cluster and be connected to the other
-Akka Clusters with the communication mechanisms provided by Akka Distributed Cluster.
-
-![Diagram showing four interconnected Akka services in three cloud regions](images/connected-clusters.svg)
-
-The communication transport between the Akka Clusters is then using reliable event replication over gRPC, which
+The communication transport between the Akka Edge application and other Akka Clusters is using reliable event replication over gRPC, which
 gives characteristics such as:
 
 * security with TLS and mutual authentication (mTLS)
-* network friendly across different Kubernetes clusters using ordinary ingress and load balancers
+* network friendly across different Kubernetes clusters, firewalls or NATs
 * exactly-once processing or at-least-once processing
 * asynchronous and brokerless communication without need of additional products
 
-For Microservices there are additional reasons for keeping the services isolated in separate Akka Clusters as
-described in @extref[Choosing Akka Cluster - Microservices](akka:typed/choosing-cluster.html).
-
 ## Event Replication
 
-Event replication is at the core of Akka Distributed Cluster. The event journal of the Event Sourced Entities
-is the source of truth and also used as source for publishing events to other services or replicas. By streaming
+Event replication is at the core of Akka Edge. The event journal of the Event Sourced Entities
+is the source of truth and also used as source for publishing events to other services. By streaming
 the events from the journal directly to consumers with full backpressure based on demand from the consumer we
 have a solution for asynchronous communication without requiring an intermediate message broker product.
 

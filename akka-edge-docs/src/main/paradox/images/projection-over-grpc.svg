@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 27.5.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 695 422.6" style="enable-background:new 0 0 695 422.6;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#EEEEEE;}
+	.st1{fill:none;stroke:#333333;stroke-miterlimit:10;stroke-dasharray:4,2;}
+	.st2{fill:#11A9CE;stroke:#FFFFFF;stroke-miterlimit:10;}
+	.st3{fill:#FFFFFF;}
+	.st4{font-family:'Roboto-Medium';}
+	.st5{font-size:12px;}
+	.st6{fill:#231F20;}
+	.st7{fill:#F04B55;stroke:#FFFFFF;stroke-miterlimit:10;}
+	.st8{fill:#F58320;stroke:#FFFFFF;stroke-miterlimit:10;}
+</style>
+<g>
+	<path class="st0" d="M370.5,346.7H63.6c-7.3,0-13.2-5.9-13.2-13.2V89.5c0-7.3,5.9-13.2,13.2-13.2h306.9c7.3,0,13.2,5.9,13.2,13.2
+		v244.1C383.7,340.8,377.8,346.7,370.5,346.7z"/>
+	<path class="st0" d="M631.4,204H520.9c-7.3,0-13.2-5.9-13.2-13.2v-148c0-7.3,5.9-13.2,13.2-13.2h110.6c7.3,0,13.2,5.9,13.2,13.2
+		v148C644.6,198.1,638.7,204,631.4,204z"/>
+	<path class="st0" d="M631.4,392.9H520.9c-7.3,0-13.2-5.9-13.2-13.2v-148c0-7.3,5.9-13.2,13.2-13.2h110.6c7.3,0,13.2,5.9,13.2,13.2
+		v148C644.6,387,638.7,392.9,631.4,392.9z"/>
+	<path class="st1" d="M327.5,153.1c0,0,60,84.9,217.5,84.9"/>
+	<path class="st1" d="M327.5,159.3c0,0,60,102.4,217.5,102.4"/>
+	<path class="st1" d="M588.9,145.8c0,0,30.2-13.4,18.7-59.1"/>
+	<path class="st1" d="M327.5,153.1c0,0,60-104,217.5-104"/>
+	<path class="st1" d="M327.5,159.3c0,0,60-86.6,217.5-86.6"/>
+	<path class="st1" d="M306.4,157c0,59.3-40,107.3-89.3,107.3s-89.3-48-89.3-107.3"/>
+	<path class="st1" d="M175.9,165.4c0,0,38.8,43.6,96.2,0"/>
+	<g>
+		<ellipse class="st2" cx="133" cy="136.2" rx="42.9" ry="18.5"/>
+		<text transform="matrix(1 0 0 1 112.2746 139.722)" class="st3 st4 st5">entity C</text>
+		<ellipse class="st2" cx="152.8" cy="156" rx="42.9" ry="18.5"/>
+		<text transform="matrix(1 0 0 1 132.0756 159.523)" class="st3 st4 st5">entity B</text>
+		<g>
+			<ellipse class="st2" cx="133" cy="177.7" rx="42.9" ry="18.5"/>
+			<text transform="matrix(1 0 0 1 112.2746 181.2547)" class="st3 st4 st5">entity A</text>
+		</g>
+	</g>
+	<g>
+		<ellipse class="st2" cx="217" cy="285.8" rx="31" ry="7.9"/>
+		<ellipse class="st2" cx="217" cy="281.3" rx="31" ry="7.9"/>
+		<ellipse class="st2" cx="217" cy="276.7" rx="31" ry="7.9"/>
+		<ellipse class="st2" cx="217" cy="272.2" rx="31" ry="7.9"/>
+		<ellipse class="st2" cx="217" cy="267.6" rx="31" ry="7.9"/>
+		<ellipse class="st2" cx="217" cy="263.1" rx="31" ry="7.9"/>
+		<ellipse class="st2" cx="217" cy="258.6" rx="31" ry="7.9"/>
+		<ellipse class="st2" cx="217" cy="254" rx="31" ry="7.9"/>
+	</g>
+	<text transform="matrix(1 0 0 1 182.0061 307.7114)" class="st6 st4 st5">event journal</text>
+	<path class="st2" d="M340.2,170.8H262c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+		C345.8,168.3,343.3,170.8,340.2,170.8z"/>
+	<text transform="matrix(1 0 0 1 277.0371 160.4884)" class="st3 st4 st5">producer</text>
+	<g>
+		<g>
+			<path class="st7" d="M610.6,92.9h-78.3c-3.1,0-5.5-2.5-5.5-5.5V70.9c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+				C616.1,90.5,613.6,92.9,610.6,92.9z"/>
+			<text transform="matrix(1 0 0 1 544.5128 82.6487)" class="st3 st4 st5">consumer</text>
+		</g>
+		<g>
+			<path class="st7" d="M619.9,68.6h-78.3c-3.1,0-5.5-2.5-5.5-5.5V46.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5V63
+				C625.5,66.1,623,68.6,619.9,68.6z"/>
+			<text transform="matrix(1 0 0 1 553.8838 58.2905)" class="st3 st4 st5">consumer</text>
+		</g>
+	</g>
+	<g>
+		<g>
+			<g>
+				<path class="st7" d="M594.5,135.7v30.2c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6v-30.2"/>
+				<ellipse class="st7" cx="576.1" cy="135.7" rx="18.4" ry="6"/>
+				<path class="st7" d="M594.5,145.8c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+				<path class="st7" d="M594.5,155.8c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+			</g>
+		</g>
+		<path class="st7" d="M594.5,145.8c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+	</g>
+	<text transform="matrix(1 0 0 1 551.1642 185.042)" class="st6 st4 st5">database</text>
+	<path class="st1" d="M588.9,334.7c0,0,30.2-13.4,18.7-59.1"/>
+	<g>
+		<g>
+			<path class="st8" d="M610.6,281.9h-78.3c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5v16.5
+				C616.1,279.4,613.6,281.9,610.6,281.9z"/>
+			<text transform="matrix(1 0 0 1 544.5128 271.6078)" class="st3 st4 st5">consumer</text>
+		</g>
+		<g>
+			<path class="st8" d="M619.9,257.5h-78.3c-3.1,0-5.5-2.5-5.5-5.5v-16.5c0-3.1,2.5-5.5,5.5-5.5h78.3c3.1,0,5.5,2.5,5.5,5.5V252
+				C625.5,255.1,623,257.5,619.9,257.5z"/>
+			<text transform="matrix(1 0 0 1 553.8838 247.2496)" class="st3 st4 st5">consumer</text>
+		</g>
+	</g>
+	<g>
+		<g>
+			<g>
+				<path class="st8" d="M594.5,324.7v30.2c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6v-30.2"/>
+				<ellipse class="st8" cx="576.1" cy="324.7" rx="18.4" ry="6"/>
+				<path class="st8" d="M594.5,334.7c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+				<path class="st8" d="M594.5,344.8c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+			</g>
+		</g>
+		<path class="st8" d="M594.5,334.7c0,3.3-8.8,6-18.4,6c-9.6,0-18.4-2.7-18.4-6"/>
+	</g>
+	<text transform="matrix(1 0 0 1 551.1642 374.001)" class="st6 st4 st5">database</text>
+</g>
+</svg>
