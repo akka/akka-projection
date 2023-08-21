@@ -163,11 +163,11 @@ object EventProducerPushDestination {
 
   def grpcServiceHandler(eventConsumer: EventProducerPushDestination)(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
-    EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(Set(eventConsumer)))
+    grpcServiceHandler(Set(eventConsumer))
 
   def grpcServiceHandler(eventConsumer: Set[EventProducerPushDestination])(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
-    EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(eventConsumer))
+    EventConsumerServicePowerApiHandler.partial(new EventPusherConsumerServiceImpl(eventConsumer))
 
 }
 
