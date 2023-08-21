@@ -35,8 +35,9 @@ import scala.concurrent.Promise
  * gRPC push protocol service for the consuming side
  */
 @InternalApi
-private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinations: Set[EventProducerPushDestination])(
-    implicit system: ActorSystem[_])
+private[akka] final class EventPusherConsumerServiceImpl(
+    eventProducerDestinations: Set[EventProducerPushDestination],
+    preferProtobuf: ProtoAnySerialization.Prefer)(implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
   import ProtobufProtocolConversions._
@@ -51,7 +52,8 @@ private[akka] final class EventPusherConsumerServiceImpl(eventProducerDestinatio
     d.acceptedStreamId -> Destination(d, EventWriterExtension(system).writerForJournal(d.journalPluginId))
   }.toMap
 
-  private val protoAnySerialization = new ProtoAnySerialization(system)
+  private val protoAnySerialization =
+    new ProtoAnySerialization(system, eventProducerDestinations.flatMap(_.protobufDescriptors).toVector, preferProtobuf)
   private val perPartitionParallelism =
     system.settings.config.getInt("akka.persistence.typed.event-writer.max-batch-size") / 2
 

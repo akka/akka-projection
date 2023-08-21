@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 
-// FIXME pull out to real sample for docs etc
+// FIXME drop once sample projects are done
 object ProducerPushSampleCommon {
   val streamId = "fruit_stream_id"
   val entityTypeKey = EntityTypeKey[TestEntity.Command]("Fruit")
@@ -175,7 +175,10 @@ object ProducerPushSampleConsumer {
       system.ignoreRef)
 
     // consumer runs gRPC server accepting pushed events from producers
-    val destination = EventProducerPushDestination(streamId)
+    val destination = EventProducerPushDestination(
+      streamId,
+      // note: we use akka serialization for the payloads here, so no proto descriptors
+      Nil)
     val bound = Http(system)
       .newServerAt("127.0.0.1", grpcPort)
       .bind(EventProducerPushDestination.grpcServiceHandler(destination))
