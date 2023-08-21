@@ -15,7 +15,9 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import akka.projection.grpc.consumer.EventProducerPushDestinationSettings
 import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
+import akka.projection.grpc.internal.ProtoAnySerialization.Prefer
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
+import com.google.protobuf.Descriptors
 
 import scala.collection.immutable
 import scala.concurrent.Future
@@ -37,14 +39,19 @@ object EventProducerPushDestination {
 
   /**
    * @param acceptedStreamId Only accept this stream ids, deny others
+   * @param protobufDescriptors When using protobuf as event wire format, rather than direct Akka Serialization,
+   *                            all message descriptors needs to be listed up front when creating the destination.
+   *                            If not using protobuf encoded events, use an empty list.
    */
-  def apply(acceptedStreamId: String)(implicit system: ActorSystem[_]): EventProducerPushDestination =
+  def apply(acceptedStreamId: String, protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
+      implicit system: ActorSystem[_]): EventProducerPushDestination =
     new EventProducerPushDestination(
       None,
       acceptedStreamId,
       (_, _) => Transformation.empty,
       None,
       immutable.Seq.empty,
+      protobufDescriptors,
       EventProducerPushDestinationSettings(system))
 
   @ApiMayChange
@@ -163,11 +170,11 @@ object EventProducerPushDestination {
 
   def grpcServiceHandler(eventConsumer: EventProducerPushDestination)(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
-    EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(Set(eventConsumer)))
+    grpcServiceHandler(Set(eventConsumer))
 
   def grpcServiceHandler(eventConsumer: Set[EventProducerPushDestination])(
       implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
-    EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(eventConsumer))
+    EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(eventConsumer, Prefer.Scala))
 
 }
 
@@ -178,6 +185,7 @@ final class EventProducerPushDestination private[akka] (
     val transformationForOrigin: (String, Metadata) => EventProducerPushDestination.Transformation,
     val interceptor: Option[EventDestinationInterceptor],
     val filters: immutable.Seq[FilterCriteria],
+    val protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
     val settings: EventProducerPushDestinationSettings) {
   import EventProducerPushDestination._
 
@@ -218,6 +226,7 @@ final class EventProducerPushDestination private[akka] (
       transformationForOrigin: (String, Metadata) => Transformation = transformationForOrigin,
       interceptor: Option[EventDestinationInterceptor] = interceptor,
       filters: immutable.Seq[FilterCriteria] = filters,
+      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor] = protobufDescriptors,
       settings: EventProducerPushDestinationSettings = settings): EventProducerPushDestination =
     new EventProducerPushDestination(
       journalPluginId,
@@ -225,5 +234,6 @@ final class EventProducerPushDestination private[akka] (
       transformationForOrigin,
       interceptor,
       filters,
+      protobufDescriptors,
       settings)
 }

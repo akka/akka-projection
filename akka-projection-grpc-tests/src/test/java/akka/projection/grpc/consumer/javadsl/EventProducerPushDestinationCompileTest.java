@@ -21,6 +21,7 @@ import akka.projection.grpc.consumer.ConsumerFilter;
 import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
+import com.google.protobuf.Descriptors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,9 @@ import java.util.concurrent.CompletionStage;
 public class EventProducerPushDestinationCompileTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EventProducerPushDestinationCompileTest.class);
+
+  // just an empty dummy list for documentation
+  private static List<Descriptors.FileDescriptor> protoDescriptors = Collections.emptyList();
 
   public static void initConsumer(ActorSystem<SpawnProtocol.Command> system) {
 
@@ -65,7 +69,7 @@ public class EventProducerPushDestinationCompileTest {
 
     // this is the API, consumer runs gRPC server accepting pushed events from producers
     // #consumerSetup
-    EventProducerPushDestination destination = EventProducerPushDestination.create("stream-id", system);
+    EventProducerPushDestination destination = EventProducerPushDestination.create("stream-id", protoDescriptors, system);
     CompletionStage<ServerBinding> bound = Http.get(system)
         .newServerAt("127.0.0.1", 8080)
         .bind(EventProducerPushDestination.grpcServiceHandler(destination, system));
@@ -77,7 +81,7 @@ public class EventProducerPushDestinationCompileTest {
   public static void withFilters(ActorSystem<?> system) {
     // #consumerFilters
     EventProducerPushDestination destination =
-        EventProducerPushDestination.create("stream-id", system)
+        EventProducerPushDestination.create("stream-id", protoDescriptors, system)
             .withConsumerFilters(
                 Arrays.asList(new ConsumerFilter.IncludeTopics(Collections.singleton("myhome/groundfloor/+/temperature")))
             );
@@ -87,7 +91,7 @@ public class EventProducerPushDestinationCompileTest {
   public static void withTransformations(ActorSystem<?> system) {
     // #consumerTransformation
     EventProducerPushDestination destination =
-      EventProducerPushDestination.create("stream-id", system)
+      EventProducerPushDestination.create("stream-id", protoDescriptors, system)
         .withTransformationForOrigin((String originId, Metadata metadata) ->
             Transformation.empty()
               .registerPersistenceIdMapper(envelope -> envelope.persistenceId().replace("originalPrefix", "newPrefix"))
