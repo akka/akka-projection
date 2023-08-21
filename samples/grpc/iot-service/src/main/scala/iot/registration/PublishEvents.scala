@@ -20,8 +20,8 @@ object PublishEvents {
         envelope => Future.successful(Some(transformRegistered(envelope))))
 
     val eventProducerSource = EventProducer.EventProducerSource(
-      "Regsistration",
-      "sensor",
+      Registration.EntityKey.name,
+      "registration-events",
       transformation,
       EventProducerSettings(system))
 

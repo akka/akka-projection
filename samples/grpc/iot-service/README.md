@@ -42,3 +42,9 @@
     ```
 
     or same `grpcurl` commands to port 8102 to reach node 2.
+
+7. Consume events from edge:
+
+    ```shell
+    sbt "Test/runMain iot.registration.EdgeApp"
+   ```
