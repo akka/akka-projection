@@ -13,6 +13,7 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.query.typed.EventEnvelope.SerializedEvent
 import akka.serialization.SerializationExtension
+import akka.serialization.SerializerWithStringManifest
 import akka.serialization.Serializers
 import akka.util.ccompat.JavaConverters._
 import com.google.common.base.CaseFormat
@@ -52,18 +53,18 @@ import scalapb.options.Scalapb
      */
     def parseFrom(bytes: ByteString): T
 
-    def messageClassName: String
+    def messageClass: Class[_]
 
   }
 
-  private final class JavaPbResolvedType[T <: Message](parser: Parser[T], override val messageClassName: String)
+  private final class JavaPbResolvedType[T <: Message](parser: Parser[T], override val messageClass: Class[_])
       extends ResolvedType[T] {
     override def parseFrom(bytes: ByteString): T = parser.parseFrom(bytes)
   }
 
   private final class ScalaPbResolvedType[T <: scalapb.GeneratedMessage](
       companion: scalapb.GeneratedMessageCompanion[_],
-      override val messageClassName: String)
+      override val messageClass: Class[_])
       extends ResolvedType[T] {
     override def parseFrom(bytes: ByteString): T = companion.parseFrom(bytes.newCodedInput()).asInstanceOf[T]
   }
@@ -118,10 +119,6 @@ import scalapb.options.Scalapb
   } yield messageType.getFullName -> messageType).toMap
 
   private val reflectionCache = TrieMap.empty[String, Try[ResolvedType[Any]]]
-
-  // FIXME SerializedEvent handle if Serializer not found
-  private lazy val akkaProtobufSerializerSerializerId: Int =
-    serialization.serializerFor(classOf[com.google.protobuf.GeneratedMessageV3]).identifier
 
   /**
    * If only used for encoding messages and not decoding messages.
@@ -192,17 +189,33 @@ import scalapb.options.Scalapb
     }
   }
 
-  def toSerializedEvent(scalaPbAny: ScalaPbAny): SerializedEvent = {
+  def toSerializedEvent(scalaPbAny: ScalaPbAny): Option[SerializedEvent] = {
+    // see corresponding typeUrl cases in `deserialize`
+
+    def pbAnyToSerializedEvent(): SerializedEvent = {
+      val pbAny =
+        if (prefer == Prefer.Scala) scalaPbAny
+        else ScalaPbAny.toJavaProto(scalaPbAny)
+      val serializer = serialization.findSerializerFor(pbAny)
+      val manifest = Serializers.manifestFor(serializer, pbAny)
+      SerializedEvent(scalaPbAny.toByteArray, serializer.identifier, manifest)
+    }
+
     val typeUrl = scalaPbAny.typeUrl
     if (typeUrl == ProtoAnyTypeUrl) {
-      // FIXME not sure this is correct
-      val manifest =
-        if (prefer == Prefer.Scala) classOf[ScalaPbAny].getName
-        else classOf[JavaPbAny].getName
-      SerializedEvent(scalaPbAny.toByteArray, akkaProtobufSerializerSerializerId, manifest)
+      Some(pbAnyToSerializedEvent())
     } else if (typeUrl.startsWith(GoogleTypeUrlPrefix)) {
-      val manifest = resolveTypeUrl(typeUrl).messageClassName
-      SerializedEvent(scalaPbAny.toByteArray, akkaProtobufSerializerSerializerId, manifest)
+      val messageClass = resolveTypeUrl(typeUrl).messageClass
+      serialization.serializerFor(messageClass) match {
+        case _: SerializerWithStringManifest =>
+          // we can't find the manifest without creating an instance, i.e. Serializers.manifestFor can't be used here
+          None
+        case serializer =>
+          // this is the case for akka.remote.serialization.ProtobufSerializer, which is configured by default
+          // for protobuf messages
+          val manifest = if (serializer.includeManifest) messageClass.getName else ""
+          Some(SerializedEvent(scalaPbAny.toByteArray, serializer.identifier, manifest))
+      }
     } else if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
       val idAndManifest =
         typeUrl.substring(AkkaSerializationTypeUrlPrefix.length)
@@ -212,15 +225,9 @@ import scalapb.options.Scalapb
           idAndManifest.toInt -> ""
         else
           idAndManifest.substring(0, i).toInt -> idAndManifest.substring(i + 1)
-
-      SerializedEvent(scalaPbAny.value.toByteArray, id, manifest)
+      Some(SerializedEvent(scalaPbAny.value.toByteArray, id, manifest))
     } else {
-      // when custom typeUrl
-      // FIXME not sure this is correct
-      val manifest =
-        if (prefer == Prefer.Scala) classOf[ScalaPbAny].getName
-        else classOf[JavaPbAny].getName
-      SerializedEvent(scalaPbAny.toByteArray, akkaProtobufSerializerSerializerId, manifest)
+      Some(pbAnyToSerializedEvent())
     }
   }
 
@@ -262,7 +269,7 @@ import scalapb.options.Scalapb
         .getMethod("parser")
         .invoke(null)
         .asInstanceOf[Parser[com.google.protobuf.Message]]
-      Some(new JavaPbResolvedType(parser, className))
+      Some(new JavaPbResolvedType(parser, clazz))
 
     } catch {
       case cnfe: ClassNotFoundException =>
@@ -318,7 +325,8 @@ import scalapb.options.Scalapb
         log.debug("Attempting to load scalapb.GeneratedMessageCompanion object {}", className)
         val companionObject =
           system.dynamicAccess.getObjectFor[GeneratedMessageCompanion[GeneratedMessage]](className).get
-        Some(new ScalaPbResolvedType(companionObject, className))
+        val clazz = system.dynamicAccess.getClassFor[Any](className).get
+        Some(new ScalaPbResolvedType(companionObject, clazz))
       } catch {
         case cnfe: ClassNotFoundException =>
           log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)

@@ -128,7 +128,7 @@ private[akka] object ProtobufProtocolConversions {
     val eventOffset = protocolOffsetToOffset(event.offset).asInstanceOf[TimestampOffset]
     val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
 
-    if (deserializeEvent || event.payload.isEmpty) {
+    def envelopeWithDeserializedEvent: EventEnvelope[Evt] = {
       val evt = event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
       new EventEnvelope(
         eventOffset,
@@ -142,20 +142,29 @@ private[akka] object ProtobufProtocolConversions {
         filtered = false,
         source = event.source,
         tags = event.tags.toSet)
+    }
+
+    if (deserializeEvent || event.payload.isEmpty) {
+      envelopeWithDeserializedEvent
     } else {
-      val serializedEvent = protoAnySerialization.toSerializedEvent(event.payload.get)
-      EventEnvelope(
-        eventOffset,
-        event.persistenceId,
-        event.seqNr,
-        serializedEvent,
-        eventOffset.timestamp.toEpochMilli,
-        eventMetadata = metadata,
-        PersistenceId.extractEntityType(event.persistenceId),
-        event.slice,
-        filtered = false,
-        source = event.source,
-        tags = event.tags.toSet)
+      protoAnySerialization.toSerializedEvent(event.payload.get) match {
+        case Some(serializedEvent) =>
+          EventEnvelope(
+            eventOffset,
+            event.persistenceId,
+            event.seqNr,
+            serializedEvent,
+            eventOffset.timestamp.toEpochMilli,
+            eventMetadata = metadata,
+            PersistenceId.extractEntityType(event.persistenceId),
+            event.slice,
+            filtered = false,
+            source = event.source,
+            tags = event.tags.toSet)
+        case None =>
+          // couldn't create SerializedEvent without deserialization, fallback to deserializeEvent = true
+          envelopeWithDeserializedEvent
+      }
     }
   }
 
