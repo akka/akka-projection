@@ -1,4 +1,4 @@
-name := "drone-device"
+name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
@@ -51,6 +51,9 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
+  "com.typesafe.akka" %% "akka-cluster-typed" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-cluster-sharding-typed" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
   "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,

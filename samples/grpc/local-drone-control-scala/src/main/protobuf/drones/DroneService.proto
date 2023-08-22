@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "drone.proto";
+
+import "google/protobuf/empty.proto";
+
+package drones;
+
+// gRPC definition for ShoppingCartService
+
+service DroneService {
+    rpc ReportLocation (ReportLocationRequest) returns (google.protobuf.Empty) {}
+}
+
+
+message ReportLocationRequest {
+    string drone_id = 1;
+    double longitude = 2;
+    double latitude = 3;
+    double altitude = 4;
+}
