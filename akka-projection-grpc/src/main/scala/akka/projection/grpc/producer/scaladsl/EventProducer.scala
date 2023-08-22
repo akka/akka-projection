@@ -126,13 +126,19 @@ object EventProducer {
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
       orElse = envelope =>
-        Future.failed(new IllegalArgumentException(s"Missing transformation for event [${envelope.event.getClass}]")))
+        Future.failed(new IllegalArgumentException(s"Missing transformation for event [${envelope.event.getClass}]")),
+      needDeserializedEvent = false)
 
     /**
      * No transformation. Pass through each event as is.
      */
-    val identity: Transformation =
-      new Transformation(mappers = Map.empty, orElse = envelope => Future.successful(envelope.eventOption))
+    val identity: Transformation = {
+      // FIXME SerializedEvent how can we avoid needDeserializedEvent = true here?
+      new Transformation(
+        mappers = Map.empty,
+        orElse = envelope => Future.successful(envelope.eventOption),
+        needDeserializedEvent = true)
+    }
   }
 
   /**
@@ -142,21 +148,26 @@ object EventProducer {
   @ApiMayChange
   final class Transformation private (
       private[akka] val mappers: Map[Class[_], EventEnvelope[Any] => Future[Option[Any]]],
-      private[akka] val orElse: EventEnvelope[Any] => Future[Option[Any]]) {
+      private[akka] val orElse: EventEnvelope[Any] => Future[Option[Any]],
+      private[akka] val needDeserializedEvent: Boolean) {
 
     /**
      * @param f A function that is fed each event, and the possible additional metadata
      */
     def registerAsyncEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
-      new Transformation(mappers.updated(clazz, f.asInstanceOf[EventEnvelope[Any] => Future[Option[Any]]]), orElse)
+      new Transformation(
+        mappers.updated(clazz, f.asInstanceOf[EventEnvelope[Any] => Future[Option[Any]]]),
+        orElse,
+        needDeserializedEvent = true)
     }
 
     def registerAsyncMapper[A: ClassTag, B](f: A => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       new Transformation(
         mappers.updated(clazz, (envelope: EventEnvelope[Any]) => f(envelope.event.asInstanceOf[A])),
-        orElse)
+        orElse,
+        needDeserializedEvent = true)
     }
 
     def registerMapper[A: ClassTag, B](f: A => Option[B]): Transformation = {
@@ -164,7 +175,7 @@ object EventProducer {
     }
 
     def registerAsyncOrElseMapper(f: Any => Future[Option[Any]]): Transformation = {
-      new Transformation(mappers, (envelope: EventEnvelope[Any]) => f(envelope.event))
+      new Transformation(mappers, (envelope: EventEnvelope[Any]) => f(envelope.event), needDeserializedEvent = true)
     }
 
     def registerOrElseMapper(f: Any => Option[Any]): Transformation = {
@@ -172,7 +183,7 @@ object EventProducer {
     }
 
     def registerAsyncEnvelopeOrElseMapper(m: EventEnvelope[Any] => Future[Option[Any]]): Transformation = {
-      new Transformation(mappers, m)
+      new Transformation(mappers, m, needDeserializedEvent = true)
     }
 
     /**

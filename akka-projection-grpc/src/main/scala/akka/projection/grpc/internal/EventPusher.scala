@@ -37,13 +37,16 @@ import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
 import akka.stream.stage.OutHandler
 import org.slf4j.LoggerFactory
-
 import java.util
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
+
+import akka.persistence.query.typed.EventEnvelope.SerializedEvent
+import akka.serialization.SerializationExtension
 
 /**
  * INTERNAL API
@@ -65,6 +68,17 @@ private[akka] object EventPusher {
 
     implicit val ec: ExecutionContext = system.executionContext
     val protoAnySerialization = new ProtoAnySerialization(system)
+    val akkaSerialization = SerializationExtension(system)
+
+    def deserializeEvent(env: EventEnvelope[Event]): EventEnvelope[Event] = {
+      env.serializedEvent match {
+        case Some(SerializedEvent(bytes, serId, manifest)) =>
+          val event = akkaSerialization.deserialize(bytes, serId, manifest).get.asInstanceOf[Event]
+          env.withEvent(event)
+        case None =>
+          env
+      }
+    }
 
     def filterAndTransformFlow(filters: Future[immutable.Seq[proto.FilterCriteria]])
         : Flow[(EventEnvelope[Event], ProjectionContext), (ConsumeEventIn, ProjectionContext), NotUsed] =
@@ -80,9 +94,15 @@ private[akka] object EventPusher {
           Flow[(EventEnvelope[Event], ProjectionContext)]
             .mapAsync(eps.settings.transformationParallelism) {
               case (envelope, projectionContext) =>
-                // FIXME SerializedEvent, deserialize if producerFilter needs it
+                // producerFilter or transformation may need deserialized event
+                val deserializedEnvelope =
+                  if ((eps.producerFilter.needDeserializedEvent || eps.transformation.needDeserializedEvent) && !envelope.isEventDeserialized)
+                    deserializeEvent(envelope)
+                  else
+                    envelope
+
                 val filteredTransformed =
-                  if (eps.producerFilter.filter(envelope.asInstanceOf[EventEnvelope[Any]]) &&
+                  if (eps.producerFilter.filter(deserializedEnvelope.asInstanceOf[EventEnvelope[Any]]) &&
                       consumerFilter.matches(envelope)) {
                     if (logger.isTraceEnabled())
                       logger.trace(
@@ -90,7 +110,7 @@ private[akka] object EventPusher {
                         envelope.persistenceId,
                         envelope.sequenceNr)
 
-                    transformAndEncodeEvent(eps.transformation, envelope, protoAnySerialization)
+                    transformAndEncodeEvent(eps.transformation, deserializedEnvelope, protoAnySerialization)
                   } else {
                     if (logger.isTraceEnabled())
                       logger.trace(

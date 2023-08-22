@@ -39,8 +39,10 @@ import com.google.protobuf.timestamp.Timestamp
 import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import scala.concurrent.Future
+
+import akka.persistence.query.typed.EventEnvelope.SerializedEvent
+import akka.serialization.SerializationExtension
 
 /**
  * INTERNAL API
@@ -81,6 +83,7 @@ import scala.concurrent.Future
   }
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
+  private val akkaSerialization = SerializationExtension(system)
 
   private val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
     sources.map(s => s.streamId -> s).toMap
@@ -197,7 +200,15 @@ import scala.concurrent.Future
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =
         eventsFlow.mapAsync(producerSource.settings.transformationParallelism) { env =>
           import system.executionContext
-          transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+
+          // transformation may need deserialized event
+          val deserializedEnvelope =
+            if (producerSource.transformation.needDeserializedEvent && !env.isEventDeserialized)
+              deserializeEvent(env)
+            else
+              env
+
+          transformAndEncodeEvent(producerSource.transformation, deserializedEnvelope, protoAnySerialization)
             .map {
               case Some(event) =>
                 log.traceN(
@@ -265,7 +276,14 @@ import scala.concurrent.Future
           import system.executionContext
           q.loadEnvelope[Any](req.persistenceId, req.seqNr)
             .flatMap { env =>
-              transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+              // transformation may need deserialized event
+              val deserializedEnvelope =
+                if (producerSource.transformation.needDeserializedEvent && !env.isEventDeserialized)
+                  deserializeEvent(env)
+                else
+                  env
+
+              transformAndEncodeEvent(producerSource.transformation, deserializedEnvelope, protoAnySerialization)
                 .map {
                   case Some(event) =>
                     log.traceN(
@@ -296,6 +314,16 @@ import scala.concurrent.Future
         case other =>
           Future.failed(new UnsupportedOperationException(s"loadEvent not supported by [${other.getClass.getName}]"))
       }
+    }
+  }
+
+  private def deserializeEvent(env: EventEnvelope[Any]): EventEnvelope[Any] = {
+    env.serializedEvent match {
+      case Some(SerializedEvent(bytes, serId, manifest)) =>
+        val event = akkaSerialization.deserialize(bytes, serId, manifest).get
+        env.withEvent(event)
+      case None =>
+        env
     }
   }
 }
