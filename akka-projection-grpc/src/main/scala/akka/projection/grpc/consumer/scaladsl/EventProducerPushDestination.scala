@@ -20,7 +20,6 @@ import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 import com.google.protobuf.Descriptors
 
 import scala.collection.immutable
-import scala.concurrent.Future
 import scala.reflect.ClassTag
 
 /**
