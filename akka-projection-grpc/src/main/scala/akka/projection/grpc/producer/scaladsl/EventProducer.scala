@@ -38,7 +38,13 @@ object EventProducer {
         streamId: String,
         transformation: Transformation,
         settings: EventProducerSettings): EventProducerSource =
-      new EventProducerSource(entityType, streamId, transformation, settings, _ => true, transformSnapshot = None)
+      new EventProducerSource(
+        entityType,
+        streamId,
+        transformation,
+        settings,
+        ProducerFilter(_ => true, needDeserializedEvent = false),
+        transformSnapshot = None)
 
     def apply[Event](
         entityType: String,
@@ -51,9 +57,15 @@ object EventProducer {
         streamId,
         transformation,
         settings,
-        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean],
+        ProducerFilter(producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean], needDeserializedEvent = true),
         transformSnapshot = None)
 
+    /**
+     * INTERNAL API
+     */
+    @InternalApi private[akka] final case class ProducerFilter(
+        filter: EventEnvelope[Any] => Boolean,
+        needDeserializedEvent: Boolean)
   }
 
   /**
@@ -63,29 +75,35 @@ object EventProducer {
    * @param settings       The event producer settings used (can be shared for multiple sources)
    */
   @ApiMayChange
-  final class EventProducerSource private (
+  final class EventProducerSource private[akka] (
       val entityType: String,
       val streamId: String,
       val transformation: Transformation,
       val settings: EventProducerSettings,
-      val producerFilter: EventEnvelope[Any] => Boolean,
+      val producerFilter: EventProducerSource.ProducerFilter,
       val transformSnapshot: Option[Any => Any]) {
+    import EventProducerSource.ProducerFilter
+
     require(entityType.nonEmpty, "Stream id must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
     /**
      * Filter events matching the predicate, for example based on tags.
+     * This overrides any previously defined producer filter.
      */
     def withProducerFilter[Event](producerFilter: EventEnvelope[Event] => Boolean): EventProducerSource =
-      copy(producerFilter = producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+      copy(producerFilter =
+        ProducerFilter(producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean], needDeserializedEvent = true))
 
     /**
      * Filter events matching the topic expression according to MQTT specification, including wildcards.
      * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
+     * This overrides any previously defined producer filter.
      */
     def withTopicProducerFilter(topicExpression: String): EventProducerSource = {
       val topicMatcher = TopicMatcher(topicExpression)
-      withProducerFilter[Any](topicMatcher.matches(_, settings.topicTagPrefix))
+      copy(producerFilter =
+        ProducerFilter(topicMatcher.matches(_, settings.topicTagPrefix), needDeserializedEvent = false))
     }
 
     def withStartingFromSnapshots[Snapshot, Event](transformSnapshot: Snapshot => Event): EventProducerSource =
@@ -96,7 +114,7 @@ object EventProducer {
         streamId: String = streamId,
         transformation: Transformation = transformation,
         settings: EventProducerSettings = settings,
-        producerFilter: EventEnvelope[Any] => Boolean = producerFilter,
+        producerFilter: ProducerFilter = producerFilter,
         transformSnapshot: Option[Any => Any] = transformSnapshot): EventProducerSource =
       new EventProducerSource(entityType, streamId, transformation, settings, producerFilter, transformSnapshot)
 

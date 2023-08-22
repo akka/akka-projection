@@ -80,8 +80,9 @@ private[akka] object EventPusher {
           Flow[(EventEnvelope[Event], ProjectionContext)]
             .mapAsync(eps.settings.transformationParallelism) {
               case (envelope, projectionContext) =>
+                // FIXME SerializedEvent, deserialize if producerFilter needs it
                 val filteredTransformed =
-                  if (eps.producerFilter(envelope.asInstanceOf[EventEnvelope[Any]]) &&
+                  if (eps.producerFilter.filter(envelope.asInstanceOf[EventEnvelope[Any]]) &&
                       consumerFilter.matches(envelope)) {
                     if (logger.isTraceEnabled())
                       logger.trace(

@@ -15,6 +15,7 @@ import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.EventEnvelope.SerializedEvent
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
@@ -22,6 +23,9 @@ import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.StreamIn
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource.ProducerFilter
+import akka.serialization.Serialization
+import akka.serialization.SerializationExtension
 import akka.stream.Attributes
 import akka.stream.BidiShape
 import akka.stream.Inlet
@@ -153,7 +157,7 @@ import org.slf4j.LoggerFactory
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceId: (String, Long) => Source[EventEnvelope[Any], NotUsed],
-    val producerFilter: EventEnvelope[Any] => Boolean,
+    val producerFilter: ProducerFilter,
     topicTagPrefix: String,
     replayParallelism: Int)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
@@ -172,6 +176,7 @@ import org.slf4j.LoggerFactory
     new GraphStageLogic(shape) {
 
       private var persistence: Persistence = _
+      private var serialization: Serialization = _
 
       // only one pull replay stream -> async callback at a time
       private var replayHasBeenPulled = false
@@ -189,6 +194,7 @@ import org.slf4j.LoggerFactory
 
       override def preStart(): Unit = {
         persistence = Persistence(materializer.system)
+        serialization = SerializationExtension(materializer.system)
         updateFilter(initFilter)
         replayFromFilterCriteria(initFilter)
         initFilter = Nil // for GC
@@ -353,6 +359,16 @@ import org.slf4j.LoggerFactory
         }
       }
 
+      private def deserializeEvent(env: EventEnvelope[Any]): EventEnvelope[Any] = {
+        env.serializedEvent match {
+          case Some(SerializedEvent(bytes, serId, manifest)) =>
+            val event = serialization.deserialize(bytes, serId, manifest).get
+            env.withEvent(event)
+          case None =>
+            env
+        }
+      }
+
       setHandler(
         inReq,
         new InHandler {
@@ -393,10 +409,19 @@ import org.slf4j.LoggerFactory
             if (replicaId.isEmpty && ReplicationId.isReplicationId(pid))
               replicaId = Some(ReplicationId.fromString(pid).replicaId)
 
+            // producerFilter may need deserialized event
+            val deserializedEnvelope =
+              if (producerFilter.needDeserializedEvent && !env.isEventDeserialized)
+                deserializeEvent(env)
+              else
+                env
+
             // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
             // can never include them
-            if (producerFilter(env) && filter.matches(env)) {
+            if (producerFilter.filter(deserializedEnvelope) && filter.matches(env)) {
               log.traceN("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+              // push original envelope, which may contain SerializedEvent (already serialized bytes) and we don't
+              // need the deserialized event any more
               push(outEnv, env)
             } else {
               log.debugN("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)

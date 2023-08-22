@@ -32,6 +32,7 @@ import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.producer.EventProducerSettings
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource.ProducerFilter
 import akka.stream.scaladsl.BidiFlow
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Keep
@@ -81,7 +82,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
     def initFilter: Iterable[FilterCriteria] = Nil
 
-    def initProducerFilter: EventEnvelope[Any] => Boolean = _ => true
+    def initProducerFilter: ProducerFilter = ProducerFilter(_ => true, needDeserializedEvent = false)
 
     def envelopesFor(entityId: String): Vector[EventEnvelope[Any]] =
       allEnvelopes.filter(_.persistenceId == PersistenceId(entityType, entityId).id)
@@ -171,10 +172,11 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
     "apply producer filter before consumer filters" in new Setup {
 
       val envFilterProbe = createTestProbe[Offset]()
-      override def initProducerFilter = { envelope =>
-        envFilterProbe.ref ! envelope.offset
-        envelope.tags.contains("replicate-it")
-      }
+      override def initProducerFilter: ProducerFilter =
+        ProducerFilter({ envelope =>
+          envFilterProbe.ref ! envelope.offset
+          envelope.tags.contains("replicate-it")
+        }, needDeserializedEvent = true)
 
       val envelopes = Vector(
         createEnvelope(PersistenceId(entityType, "a"), 1, "a1"),

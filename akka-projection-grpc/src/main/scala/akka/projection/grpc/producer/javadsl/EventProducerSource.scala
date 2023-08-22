@@ -10,6 +10,7 @@ import akka.annotation.ApiMayChange
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.producer.EventProducerSettings
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource.ProducerFilter
 
 /**
  * @param entityType The internal entity type name
@@ -18,13 +19,28 @@ import akka.projection.grpc.producer.EventProducerSettings
  * @param settings The event producer settings used (can be shared for multiple sources)
  */
 @ApiMayChange
-final class EventProducerSource(
+final class EventProducerSource private[akka] (
     val entityType: String,
     val streamId: String,
     val transformation: Transformation,
     val settings: EventProducerSettings,
-    val producerFilter: java.util.function.Predicate[EventEnvelope[Any]],
+    producerFilter: ProducerFilter,
     val transformSnapshot: Optional[java.util.function.Function[Any, Any]]) {
+
+  def this(
+      entityType: String,
+      streamId: String,
+      transformation: Transformation,
+      settings: EventProducerSettings,
+      producerFilter: java.util.function.Predicate[EventEnvelope[Any]],
+      transformSnapshot: Optional[java.util.function.Function[Any, Any]]) =
+    this(
+      entityType,
+      streamId,
+      transformation,
+      settings,
+      ProducerFilter(producerFilter.test, needDeserializedEvent = true),
+      transformSnapshot)
 
   def this(entityType: String, streamId: String, transformation: Transformation, settings: EventProducerSettings) =
     this(
@@ -32,7 +48,7 @@ final class EventProducerSource(
       streamId,
       transformation,
       settings,
-      producerFilter = _ => true,
+      ProducerFilter(_ => true, needDeserializedEvent = false),
       Optional.empty[java.util.function.Function[Any, Any]]())
 
   def this(
@@ -45,6 +61,7 @@ final class EventProducerSource(
 
   /**
    * Filter events matching the predicate, for example based on tags.
+   * This overrides any previously defined producer filter.
    */
   def withProducerFilter[Event](
       producerFilter: java.util.function.Predicate[EventEnvelope[Event]]): EventProducerSource =
@@ -53,16 +70,26 @@ final class EventProducerSource(
       streamId,
       transformation,
       settings,
-      producerFilter.asInstanceOf[java.util.function.Predicate[EventEnvelope[Any]]],
+      ProducerFilter(
+        producerFilter.asInstanceOf[java.util.function.Predicate[EventEnvelope[Any]]].test,
+        needDeserializedEvent = true),
       Optional.empty())
 
   /**
    * Filter events matching the topic expression according to MQTT specification, including wildcards.
    * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
+   * This overrides any previously defined producer filter.
    */
   def withTopicProducerFilter(topicExpression: String): EventProducerSource = {
     val topicMatcher = TopicMatcher(topicExpression)
     withProducerFilter[Any](topicMatcher.matches(_, settings.topicTagPrefix))
+    new EventProducerSource(
+      entityType,
+      streamId,
+      transformation,
+      settings,
+      ProducerFilter(topicMatcher.matches(_, settings.topicTagPrefix), needDeserializedEvent = false),
+      Optional.empty())
   }
 
   def withStartingFromSnapshots[Snapshot, Event](transformSnapshot: java.util.function.Function[Snapshot, Event]) =
@@ -76,8 +103,13 @@ final class EventProducerSource(
 
   def asScala: akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource = {
     val scalaEventProducer =
-      akka.projection.grpc.producer.scaladsl.EventProducer
-        .EventProducerSource(entityType, streamId, transformation.delegate, settings, producerFilter.test)
+      new akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource(
+        entityType,
+        streamId,
+        transformation.delegate,
+        settings,
+        producerFilter,
+        None)
     if (transformSnapshot.isPresent) scalaEventProducer.withStartingFromSnapshots(transformSnapshot.get.apply(_))
     else scalaEventProducer
 
