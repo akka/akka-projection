@@ -78,6 +78,12 @@ class ProtoAnySerializationSpec
         .get
       deserializedEvent2.getClass shouldBe classOf[com.google.protobuf.Timestamp]
       deserializedEvent2 shouldBe event
+
+      val pbAny2 = serializationJava.serialize(serializedEvent)
+      pbAny2.typeUrl shouldBe "type.googleapis.com/google.protobuf.Timestamp"
+      val deserializedEvent3 = serializationJava.deserialize(pbAny2)
+      deserializedEvent3.getClass shouldBe classOf[com.google.protobuf.Timestamp]
+      deserializedEvent3 shouldBe event
     }
 
     "encode and decode ScalaPb proto message" in {
@@ -94,6 +100,11 @@ class ProtoAnySerializationSpec
         .deserialize(serializedEvent.bytes, serializedEvent.serializerId, serializedEvent.serializerManifest)
         .get
       deserializedEvent2 shouldBe event
+
+      val pbAny2 = serializationScala.serialize(serializedEvent)
+      pbAny2.typeUrl shouldBe "type.googleapis.com/akka.projection.grpc.internal.TestEvent"
+      val deserializedEvent3 = serializationScala.deserialize(pbAny2)
+      deserializedEvent3 shouldBe event
     }
 
     "pass through Java proto Any" in {
@@ -111,15 +122,7 @@ class ProtoAnySerializationSpec
       deserializedEvent.getTypeUrl shouldBe typeUrl
       deserializedEvent.getValue.toString(StandardCharsets.UTF_8) shouldBe value
 
-      val serializedEvent = serializationJava.toSerializedEvent(pbAny).get
-      serializedEvent.serializerId shouldBe akkaProtobufSerializer.identifier
-      serializedEvent.serializerManifest shouldBe event.getClass.getName
-      val deserializedEvent2 = akkaSerialization
-        .deserialize(serializedEvent.bytes, serializedEvent.serializerId, serializedEvent.serializerManifest)
-        .get
-        .asInstanceOf[PbAny]
-      deserializedEvent2.getTypeUrl shouldBe typeUrl
-      deserializedEvent2.getValue.toStringUtf8 shouldBe value
+      serializationJava.toSerializedEvent(pbAny) shouldBe None
     }
 
     "pass through ScalaPb Any and decode it as preferred Any" in {
@@ -140,31 +143,8 @@ class ProtoAnySerializationSpec
       deserializedEventJava.getTypeUrl shouldBe typeUrl
       deserializedEventJava.getValue.toString(StandardCharsets.UTF_8) shouldBe value
 
-      val serializedEventScala = serializationScala.toSerializedEvent(pbAny).get
-      serializedEventScala.serializerId shouldBe akkaProtobufSerializer.identifier
-      serializedEventScala.serializerManifest shouldBe classOf[ScalaPbAny].getName
-      val deserializedEventScala2 = akkaSerialization
-        .deserialize(
-          serializedEventScala.bytes,
-          serializedEventScala.serializerId,
-          serializedEventScala.serializerManifest)
-        .get
-        .asInstanceOf[ScalaPbAny]
-      deserializedEventScala2.typeUrl shouldBe typeUrl
-      deserializedEventScala2.value.toStringUtf8 shouldBe value
-
-      val serializedEventJava = serializationJava.toSerializedEvent(pbAny).get
-      serializedEventJava.serializerId shouldBe akkaProtobufSerializer.identifier
-      serializedEventJava.serializerManifest shouldBe classOf[PbAny].getName
-      val deserializedEventJava2 = akkaSerialization
-        .deserialize(
-          serializedEventJava.bytes,
-          serializedEventJava.serializerId,
-          serializedEventJava.serializerManifest)
-        .get
-        .asInstanceOf[PbAny]
-      deserializedEventJava2.getTypeUrl shouldBe typeUrl
-      deserializedEventJava2.getValue.toStringUtf8 shouldBe value
+      serializationScala.toSerializedEvent(pbAny) shouldBe None
+      serializationJava.toSerializedEvent(pbAny) shouldBe None
     }
 
     "pass through Java proto Any with Google typeUrl" in {
@@ -187,17 +167,7 @@ class ProtoAnySerializationSpec
       deserializedEvent.getTypeUrl shouldBe typeUrl
       com.google.protobuf.Timestamp.parseFrom(deserializedEvent.getValue) shouldBe value
 
-      val serializedEvent = serializationJava.toSerializedEvent(pbAny).get
-      serializedEvent.serializerId shouldBe akkaProtobufSerializer.identifier
-      serializedEvent.serializerManifest shouldBe event.getClass.getName
-      val pbAny2 = akkaSerialization
-        .deserialize(serializedEvent.bytes, serializedEvent.serializerId, serializedEvent.serializerManifest)
-        .get
-        .asInstanceOf[PbAny]
-      pbAny2.getTypeUrl shouldBe "type.googleapis.com/google.protobuf.Any" // wrapped
-      val deserializedEvent2 = serializationJava.deserialize(pbAny).asInstanceOf[PbAny]
-      deserializedEvent2.getTypeUrl shouldBe typeUrl
-      com.google.protobuf.Timestamp.parseFrom(deserializedEvent2.getValue) shouldBe value
+      serializationJava.toSerializedEvent(pbAny) shouldBe None
     }
 
     "pass through ScalaPb Any with Google typeUrl" in {
@@ -213,26 +183,15 @@ class ProtoAnySerializationSpec
       deserializedEvent.typeUrl shouldBe typeUrl
       TestEvent.parseFrom(deserializedEvent.value.toByteArray) shouldBe value
 
-      val serializedEvent = serializationScala.toSerializedEvent(pbAny).get
-      serializedEvent.serializerId shouldBe akkaProtobufSerializer.identifier
-      serializedEvent.serializerManifest shouldBe event.getClass.getName
-      val pbAny2 = akkaSerialization
-        .deserialize(serializedEvent.bytes, serializedEvent.serializerId, serializedEvent.serializerManifest)
-        .get
-        .asInstanceOf[ScalaPbAny]
-      pbAny2.typeUrl shouldBe "type.googleapis.com/google.protobuf.Any" // wrapped
-      val deserializedEvent2 = serializationScala.deserialize(pbAny).asInstanceOf[ScalaPbAny]
-      deserializedEvent2.typeUrl shouldBe typeUrl
-      TestEvent.parseFrom(deserializedEvent2.value.toByteArray) shouldBe value
+      serializationScala.toSerializedEvent(pbAny) shouldBe None
     }
 
     "encode and decode with Akka serialization with string manifest" in {
       val event = Address("akka", system.name, "localhost", 2552)
       val pbAny = serializationJava.serialize(event)
       val serializer = akkaSerialization.findSerializerFor(event)
-      // no manifest for String serializer
-      pbAny.typeUrl shouldBe s"ser.akka.io/${serializer.identifier}:${Serializers
-        .manifestFor(serializer, event)}"
+      val expectedTypeUrl = s"ser.akka.io/${serializer.identifier}:${Serializers.manifestFor(serializer, event)}"
+      pbAny.typeUrl shouldBe expectedTypeUrl
 
       val deserializedEvent = serializationJava.deserialize(pbAny)
       deserializedEvent shouldBe event
@@ -242,6 +201,11 @@ class ProtoAnySerializationSpec
         .deserialize(serializedEvent.bytes, serializedEvent.serializerId, serializedEvent.serializerManifest)
         .get
       deserializedEvent2 shouldBe event
+
+      val pbAny2 = serializationJava.serialize(serializedEvent)
+      pbAny2.typeUrl shouldBe expectedTypeUrl
+      val deserializedEvent3 = serializationJava.deserialize(pbAny2)
+      deserializedEvent3 shouldBe event
     }
 
     "encode and decode with Akka serialization without string manifest" in {
@@ -249,7 +213,8 @@ class ProtoAnySerializationSpec
       val pbAny = serializationJava.serialize(event)
       val serializer = akkaSerialization.findSerializerFor(event)
       // no manifest for String serializer
-      pbAny.typeUrl shouldBe s"ser.akka.io/${serializer.identifier}"
+      val expectedTypeUrl = s"ser.akka.io/${serializer.identifier}"
+      pbAny.typeUrl shouldBe expectedTypeUrl
 
       val deserializedEvent = serializationJava.deserialize(pbAny)
       deserializedEvent shouldBe event
@@ -259,6 +224,11 @@ class ProtoAnySerializationSpec
         .deserialize(serializedEvent.bytes, serializedEvent.serializerId, serializedEvent.serializerManifest)
         .get
       deserializedEvent2 shouldBe event
+
+      val pbAny2 = serializationJava.serialize(serializedEvent)
+      pbAny2.typeUrl shouldBe expectedTypeUrl
+      val deserializedEvent3 = serializationJava.deserialize(pbAny2)
+      deserializedEvent3 shouldBe event
     }
 
     "support se/deserializing java protobufs" in {
