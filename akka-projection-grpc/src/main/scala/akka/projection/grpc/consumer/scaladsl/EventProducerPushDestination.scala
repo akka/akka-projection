@@ -23,6 +23,8 @@ import scala.concurrent.Future
 import scala.reflect.ClassTag
 
 import akka.annotation.InternalApi
+import akka.persistence.Persistence
+import akka.persistence.typed.PersistenceId
 
 /**
  * A passive consumer service for event producer push that can be bound as a gRPC endpoint accepting active producers
@@ -89,11 +91,17 @@ object EventProducerPushDestination {
      * same incoming persistence id to the same stored persistence id to not introduce gaps in the sequence numbers
      * and break consuming projections.
      */
-    def registerPersistenceIdMapper(f: EventEnvelope[Any] => String): Transformation = {
+    def registerPersistenceIdMapper(f: EventEnvelope[Any] => String)(
+        implicit system: ActorSystem[_]): Transformation = {
       val mapId = { (eventEnvelope: EventEnvelope[Any]) =>
         val newPid = f(eventEnvelope)
-        if (newPid eq eventEnvelope.persistenceId) eventEnvelope
-        else eventEnvelope.withPersistenceId(newPid)
+        if (newPid eq eventEnvelope.persistenceId)
+          eventEnvelope
+        else {
+          val entityType = PersistenceId.extractEntityType(newPid)
+          val slice = Persistence(system).sliceForPersistenceId(newPid)
+          eventEnvelope.withPersistenceId(newPid, entityType, slice)
+        }
       }
       // needs to be untyped since not mapping filtered events the same way will cause gaps in seqnrs
       new Transformation(typedMappers, untypedMappers.andThen(mapId), needDeserializedEvent)

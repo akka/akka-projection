@@ -6,14 +6,16 @@ package akka.projection.grpc.consumer.javadsl
 
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.scaladsl
-
 import java.util.{ Set => JSet }
-import akka.util.ccompat.JavaConverters._
 
+import akka.util.ccompat.JavaConverters._
 import java.util.Optional
 import java.util.function.{ Function => JFunction }
+
 import scala.compat.java8.OptionConverters._
 import scala.reflect.ClassTag
+
+import akka.actor.typed.ActorSystem
 
 object Transformation {
   val empty = new Transformation(scaladsl.EventProducerPushDestination.Transformation.empty)
@@ -38,8 +40,8 @@ final class Transformation private (val delegate: scaladsl.EventProducerPushDest
    * same incoming persistence id to the same stored persistence id to not introduce gaps in the sequence numbers
    * and break consuming projections.
    */
-  def registerPersistenceIdMapper(f: JFunction[EventEnvelope[Any], String]): Transformation = {
-    new Transformation(delegate.registerPersistenceIdMapper(f.apply))
+  def registerPersistenceIdMapper(system: ActorSystem[_], f: JFunction[EventEnvelope[Any], String]): Transformation = {
+    new Transformation(delegate.registerPersistenceIdMapper(f.apply)(system))
   }
 
   /**
