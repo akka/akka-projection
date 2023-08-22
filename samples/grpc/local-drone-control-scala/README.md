@@ -26,5 +26,5 @@ sbt run
 Posting updated location for a drone:
 
 ```
-grpcurl -d '{"drone_id":"drone1", "longitude": 18.07125, "latitude": 59.31834}' -plaintext 127.0.0.1:8101 drones.DroneService.ReportLocation
+grpcurl -d '{"drone_id":"drone1", "longitude": 18.07125, "latitude": 59.31834}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
 ```

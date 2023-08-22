@@ -86,7 +86,7 @@ object LocalDroneEvents {
             "Saw projected event: {}-{}: {}",
             envelope.persistenceId,
             envelope.sequenceNr,
-            envelope.eventOption.getOrElse("filtered"))
+            envelope.eventOption)
 
           // Drone id without producer entity key
           val droneId =
