@@ -169,11 +169,11 @@ object EventProducerPushDestination {
   }
 
   def grpcServiceHandler(eventConsumer: EventProducerPushDestination)(
-      implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
+      implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] =
     grpcServiceHandler(Set(eventConsumer))
 
   def grpcServiceHandler(eventConsumer: Set[EventProducerPushDestination])(
-      implicit system: ActorSystem[_]): HttpRequest => Future[HttpResponse] =
+      implicit system: ActorSystem[_]): PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]] =
     EventConsumerServicePowerApiHandler.partial(new EventPusherConsumerServiceImpl(eventConsumer, Prefer.Scala))
 
 }
