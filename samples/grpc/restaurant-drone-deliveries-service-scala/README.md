@@ -46,8 +46,14 @@ curl http://localhost:9101/ready
 
 Query a location for drone coordinates
 
-```
+```shell
 grpcurl -d '{"location":"kungsholmen"}' -plaintext localhost:8101 central.drones.DroneOverviewService/GetCoarseDroneLocations
+```
+
+Query the state for a specific drone
+
+```shell
+grpcurl -d '{"drone_id":"drone1"}' -plaintext localhost:8101 central.drones.DroneOverviewService.GetDroneOverview
 ```
 
 FIXME more stuff

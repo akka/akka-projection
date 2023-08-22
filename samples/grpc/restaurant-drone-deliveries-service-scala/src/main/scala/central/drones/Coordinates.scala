@@ -1,17 +1,15 @@
 /*
  * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
  */
-package local.drones
+package central.drones
 
-// FIXME needs to be here because using cbor serialization, when switched to proto as wire these can be wherever
-//       (even though module with shared datatypes can make sense in an actual app)
+// common location representations, could be a shared library between local control and restaurant
+// but to keep project structure simple we duplicate
 
 /**
  * Decimal degree coordinates
  */
 final case class Coordinates(latitude: Double, longitude: Double)
-
-final case class Position(coordinates: Coordinates, altitudeMeters: Double)
 
 object CoarseGrainedCoordinates {
 

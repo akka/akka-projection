@@ -57,9 +57,6 @@ CREATE TABLE IF NOT EXISTS durable_state (
   PRIMARY KEY(persistence_id, revision)
 );
 
--- `durable_state_slice_idx` is only needed if the slice based queries are used
-CREATE INDEX IF NOT EXISTS durable_state_slice_idx ON durable_state(slice, entity_type, db_timestamp, revision);
-
 -- to query drones by location
 CREATE INDEX IF NOT EXISTS durable_state_drone_location_idx ON durable_state(location);
 

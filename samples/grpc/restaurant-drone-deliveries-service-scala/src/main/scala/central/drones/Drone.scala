@@ -14,10 +14,13 @@ import akka.persistence.r2dbc.state.scaladsl.AdditionalColumn
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.state.scaladsl.{ DurableStateBehavior, Effect }
 import central.CborSerializable
-import local.drones.CoarseGrainedCoordinates
 
 import java.time.Instant
 
+/**
+ * Durable state entity keeping an overview state of where the drone is and its state, but not the full detail,
+ * that stays in the local control service.
+ */
 object Drone {
 
   sealed trait Command
@@ -27,6 +30,8 @@ object Drone {
       coarseGrainedCoordinates: CoarseGrainedCoordinates,
       replyTo: ActorRef[StatusReply[Done]])
       extends Command
+
+  final case class GetState(replyTo: ActorRef[State]) extends Command
 
   val EntityKey = EntityTypeKey[Command]("CentralDrone")
 
@@ -67,6 +72,9 @@ object Drone {
               locationName = locationName,
               currentLocation = Some(coordinates)))
           .thenReply(replyTo)(_ => StatusReply.ack())
+
+        case GetState(replyTo) =>
+          Effect.reply(replyTo)(state)
     }
 
 }

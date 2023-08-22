@@ -18,6 +18,8 @@ import akka.projection.grpc.producer.scaladsl.EventProducerPush
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.Future
+
 object DroneEvents {
 
   val logger = LoggerFactory.getLogger("local.drones.DroneEvents")
@@ -32,16 +34,11 @@ object DroneEvents {
       "Pushing events to central cloud, origin id [{}]",
       producerOriginId)
 
-    // ship as is for now (using cbor serialization)
-    val eventTransformation = EventProducer.Transformation.identity
-    /*
-     FIXME turn events into a public protocol (protobuf) type before publishing
-           does not work yet because consumer needs to be able to list descriptors
-     empty.registerAsyncEnvelopeMapper[Drone.CoarseGrainedLocationChanged, proto.CoarseDroneLocation] { envelope =>
+    // turn events into a public protocol (protobuf) type before publishing
+    val eventTransformation = EventProducer.Transformation.empty.registerAsyncEnvelopeMapper[Drone.CoarseGrainedLocationChanged, proto.CoarseDroneLocation] { envelope =>
        val event = envelope.event
        Future.successful(Some(proto.CoarseDroneLocation(envelope.persistenceId, event.coordinates.latitude, event.coordinates.longitude)))
      }
-     */
 
     val eventProducer = EventProducerPush[Drone.Event](
       originId = producerOriginId,
@@ -55,9 +52,9 @@ object DroneEvents {
           envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged]),
       GrpcClientSettings.fromConfig("central-drone-control"))
 
-    // For scaling out the local service this could be split up in slices
+    // For scaling out the local service this would be split up in slices
     // and run across a cluster with sharded daemon process, now it is instead
-    // a single projection actor pushing all events
+    // a single projection actor pushing all event slices
     val behavior = ProjectionBehavior(
       R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
         ProjectionId("drone-event-push", "0-1023"),

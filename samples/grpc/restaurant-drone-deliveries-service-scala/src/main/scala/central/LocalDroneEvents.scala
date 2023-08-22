@@ -3,60 +3,56 @@
  */
 package central
 
-import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.Props
-import akka.actor.typed.SpawnProtocol
-import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
-import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import akka.http.scaladsl.model.HttpRequest
-import akka.http.scaladsl.model.HttpResponse
+import akka.cluster.sharding.typed.scaladsl.{
+  ClusterSharding,
+  ShardedDaemonProcess
+}
+import akka.http.scaladsl.model.{ HttpRequest, HttpResponse }
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
-import akka.projection.Projection
-import akka.projection.ProjectionBehavior
-import akka.projection.ProjectionId
+import akka.projection.{ Projection, ProjectionBehavior, ProjectionId }
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
-import akka.projection.scaladsl.Handler
-import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.{ Handler, SourceProvider }
 import akka.util.Timeout
 import central.Main.logger
-import central.drones.Drone
+import central.drones.{CoarseGrainedCoordinates, Drone}
 
 import scala.concurrent.Future
 import scala.jdk.DurationConverters.JavaDurationOps
 
+/**
+ * Handle drone events pushed by the local drone control systems.
+ */
 object LocalDroneEvents {
 
   val DroneEventStreamId = "drone-events"
 
+  // FIXME The type key on the producer side. Make sure we have documented it.
+  private val ProducerEntityType = "Drone"
+
   def pushedEventsGrpcHandler(implicit system: ActorSystem[_])
       : PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    // FIXME we need to be able to pass protobuf descriptors for the gRPC journal via destination or as param to grpcServiceHandler here
-    //       right now failing on deserialization, also probably missing some docs on wire format for producer push
-    val destination = EventProducerPushDestination(DroneEventStreamId)
+    val destination = EventProducerPushDestination(
+      DroneEventStreamId,
+      local.drones.proto.DroneEventsProto.javaDescriptor.getFile :: Nil)
       .withTransformationForOrigin((origin, _) =>
         EventProducerPushDestination.Transformation.empty
-          .registerTagMapper[local.drones.Drone.CoarseGrainedLocationChanged] {
-            _ =>
-              // FIXME dodgy scheme, something better? Pass it in the events?
-              // tag all events with origin
-              Set("location:" + origin)
-          })
+          // tag all events with the location name of the local control it came from)
+          .registerTagMapper[local.drones.proto.CoarseDroneLocation](_ =>
+            Set("location:" + origin)))
 
-    // FIXME actual partial push destination for easier combine
-    { case req: HttpRequest =>
-      EventProducerPushDestination.grpcServiceHandler(destination)(system)(req)
-    }
+    // FIXME partial return type still isn't quite right
+    EventProducerPushDestination
+      .grpcServiceHandler(destination)(system)
+      .asInstanceOf[PartialFunction[HttpRequest, Future[HttpResponse]]]
   }
 
   def initPushedEventsConsumer(implicit system: ActorSystem[_]): Unit = {
-    // FIXME The type key on the producer side. Make sure we have documented it.
-    val EntityType = "Drone"
 
     implicit val askTimeout: Timeout = system.settings.config
       .getDuration("restaurant-drone-deliveries-service.drone-ask-timeout")
@@ -64,24 +60,27 @@ object LocalDroneEvents {
 
     val sharding = ClusterSharding(system)
 
-    def sourceProvider(sliceRange: Range)
-        : SourceProvider[Offset, EventEnvelope[local.drones.Drone.Event]] =
-      EventSourcedProvider.eventsBySlices[local.drones.Drone.Event](
-        system,
-        readJournalPluginId = R2dbcReadJournal.Identifier,
-        EntityType,
-        sliceRange.min,
-        sliceRange.max)
+    def sourceProvider(sliceRange: Range): SourceProvider[
+      Offset,
+      EventEnvelope[local.drones.proto.CoarseDroneLocation]] =
+      EventSourcedProvider
+        .eventsBySlices[local.drones.proto.CoarseDroneLocation](
+          system,
+          readJournalPluginId = R2dbcReadJournal.Identifier,
+          ProducerEntityType,
+          sliceRange.min,
+          sliceRange.max)
 
     def projection(sliceRange: Range)
-        : Projection[EventEnvelope[local.drones.Drone.Event]] = {
+        : Projection[EventEnvelope[local.drones.proto.CoarseDroneLocation]] = {
       val minSlice = sliceRange.min
       val maxSlice = sliceRange.max
       val projectionId =
         ProjectionId("DroneEvents", s"drone-$minSlice-$maxSlice")
 
-      val handler: Handler[EventEnvelope[local.drones.Drone.Event]] = {
-        (envelope: EventEnvelope[local.drones.Drone.Event]) =>
+      val handler
+          : Handler[EventEnvelope[local.drones.proto.CoarseDroneLocation]] = {
+        (envelope: EventEnvelope[local.drones.proto.CoarseDroneLocation]) =>
           logger.info(
             "Saw projected event: {}-{}: {}",
             envelope.persistenceId,
@@ -96,13 +95,17 @@ object LocalDroneEvents {
           //  java.lang.ClassCastException: class akka.persistence.FilteredPayload$ cannot be cast to class local.drones.Drone$Event (akka.persistence.FilteredPayload$ and local.drones.Drone$Event are in unnamed module of loader 'app')
           //  here
           envelope.event match {
-            case local.drones.Drone.CoarseGrainedLocationChanged(location) =>
+            case local.drones.proto
+                  .CoarseDroneLocation(droneId, latitude, longitude, _) =>
               val originName = envelope.tags
                 .find(_.startsWith("location:"))
                 .get
                 .drop("location:".length)
               entityRef.askWithStatus(
-                Drone.UpdateLocation(originName, location, _))
+                Drone.UpdateLocation(
+                  originName,
+                  CoarseGrainedCoordinates(latitude, longitude),
+                  _))
             case unknown =>
               throw new RuntimeException(
                 s"Unknown event type: ${unknown.getClass}")
