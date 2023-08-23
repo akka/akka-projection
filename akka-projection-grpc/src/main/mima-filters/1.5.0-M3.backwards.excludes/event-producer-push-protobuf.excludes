@@ -1,0 +1,2 @@
+# fixed Scala partial handler return type
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination.grpcServiceHandler")
