@@ -1,6 +1,3 @@
-/*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
- */
 package central
 
 import akka.actor.typed.ActorSystem
@@ -20,7 +17,7 @@ import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.{ Handler, SourceProvider }
 import akka.util.Timeout
 import central.Main.logger
-import central.drones.{CoarseGrainedCoordinates, Drone}
+import central.drones.{ CoarseGrainedCoordinates, Drone }
 
 import scala.concurrent.Future
 import scala.jdk.DurationConverters.JavaDurationOps

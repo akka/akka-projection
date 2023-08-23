@@ -1,6 +1,3 @@
-/*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
- */
 package central.drones
 
 // common location representations, could be a shared library between local control and restaurant

@@ -1,9 +1,6 @@
-/*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
- */
 package drones
 
-import local.drones.{CoarseGrainedCoordinates, Coordinates}
+import local.drones.{ CoarseGrainedCoordinates, Coordinates }
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 

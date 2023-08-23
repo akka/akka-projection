@@ -1,10 +1,6 @@
-/*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
- */
 package local.drones
 
 import akka.actor.typed.{ ActorSystem, Props, SpawnProtocol }
-import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import org.slf4j.LoggerFactory

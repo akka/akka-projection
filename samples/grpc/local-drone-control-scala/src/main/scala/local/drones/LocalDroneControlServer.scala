@@ -1,6 +1,3 @@
-/*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
- */
 package local.drones
 
 import akka.actor.typed.ActorSystem
@@ -9,7 +6,6 @@ import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
-import local.drones.proto
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -20,10 +16,10 @@ import scala.util.Success
 object LocalDroneControlServer {
 
   def start(
-             interface: String,
-             port: Int,
-             system: ActorSystem[_],
-             droneGrpcService: proto.DroneService): Unit = {
+      interface: String,
+      port: Int,
+      system: ActorSystem[_],
+      droneGrpcService: proto.DroneService): Unit = {
     implicit val sys: ActorSystem[_] = system
     implicit val ec: ExecutionContext =
       system.executionContext
