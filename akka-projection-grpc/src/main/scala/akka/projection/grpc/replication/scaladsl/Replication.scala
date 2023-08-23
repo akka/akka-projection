@@ -22,6 +22,7 @@ import scala.concurrent.Future
 
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.internal.TopicMatcher
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource.ProducerFilter
 
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
@@ -87,20 +88,12 @@ object Replication {
       replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
       implicit system: ActorSystem[_]): Replication[Command] = {
 
-    val replicatedEntity =
-      ReplicatedEntity(
-        settings.selfReplicaId,
-        settings.configureEntity.apply(Entity(settings.entityTypeKey) { entityContext =>
-          val replicationId =
-            ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
-          replicatedBehaviorFactory { factory =>
-            ReplicatedEventSourcing.externalReplication(
-              replicationId,
-              settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(factory)
-          }
-        }))
+    val replicatedEntity = createReplicatedEntity(settings, replicatedBehaviorFactory)
 
-    ReplicationImpl.grpcReplication[Command, Event, State](settings, producerFilter, replicatedEntity)
+    ReplicationImpl.grpcReplication[Command, Event, State](
+      settings,
+      ProducerFilter(producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean], needDeserializedEvent = true),
+      replicatedEntity)
   }
 
   /**
@@ -115,10 +108,30 @@ object Replication {
       replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
       implicit system: ActorSystem[_]): Replication[Command] = {
     val topicMatcher = TopicMatcher(topicExpression)
-    grpcReplication(
+    val replicatedEntity = createReplicatedEntity(settings, replicatedBehaviorFactory)
+
+    ReplicationImpl.grpcReplication[Command, Event, State](
       settings,
-      (env: EventEnvelope[Event]) =>
-        topicMatcher.matches(env, settings.eventProducerSettings.topicTagPrefix))(replicatedBehaviorFactory)
+      ProducerFilter(
+        topicMatcher.matches(_, settings.eventProducerSettings.topicTagPrefix),
+        needDeserializedEvent = false),
+      replicatedEntity)
+  }
+
+  private def createReplicatedEntity[State, Event, Command](
+      settings: ReplicationSettings[Command],
+      replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command]) = {
+    ReplicatedEntity(
+      settings.selfReplicaId,
+      settings.configureEntity.apply(Entity(settings.entityTypeKey) { entityContext =>
+        val replicationId =
+          ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
+        replicatedBehaviorFactory { factory =>
+          ReplicatedEventSourcing.externalReplication(
+            replicationId,
+            settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(factory)
+        }
+      }))
   }
 
 }

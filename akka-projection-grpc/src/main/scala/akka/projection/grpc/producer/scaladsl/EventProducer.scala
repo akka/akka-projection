@@ -195,6 +195,12 @@ object EventProducer {
       mapper.apply(envelope)
     }
 
+    /**
+     * INTERNAL API: For internal use where we know that the mapper doesn't need the deserialized event.
+     */
+    @InternalApi private[akka] def withNeedDeserializedEvent(value: Boolean): Transformation =
+      new Transformation(mappers, orElse, needDeserializedEvent = value)
+
     private[akka] def toJava: JTransformation =
       new JTransformation(this)
   }

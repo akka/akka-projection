@@ -45,6 +45,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.cluster.sharding.typed.ClusterShardingSettings
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource.ProducerFilter
 
 /**
  * INTERNAL API
@@ -76,28 +77,31 @@ private[akka] object ReplicationImpl {
    */
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
-      producerFilter: EventEnvelope[Event] => Boolean,
+      producerFilter: ProducerFilter,
       replicatedEntity: ReplicatedEntity[Command])(implicit system: ActorSystem[_]): ReplicationImpl[Command] = {
     require(
       system.classicSystem.asInstanceOf[ExtendedActorSystem].provider.isInstanceOf[ClusterActorRefProvider],
       "Replicated Event Sourcing over gRPC only possible together with Akka cluster (akka.actor.provider = cluster)")
 
     // set up a publisher
-    val onlyLocalOriginTransformer = Transformation.empty.registerAsyncEnvelopeOrElseMapper(envelope =>
-      envelope.eventMetadata match {
-        case Some(meta: ReplicatedEventMetadata) =>
-          if (meta.originReplica == settings.selfReplicaId) Future.successful(envelope.eventOption)
-          else filteredEvent // Optimization: was replicated to this DC, don't pass the payload across the wire
-        case _ =>
-          throw new IllegalArgumentException(
-            s"Got an event without replication metadata, not supported (pid: ${envelope.persistenceId}, seq_nr: ${envelope.sequenceNr})")
-      })
-    val eps = EventProducerSource(
+    val onlyLocalOriginTransformer = Transformation.empty
+      .registerAsyncEnvelopeOrElseMapper(envelope =>
+        envelope.eventMetadata match {
+          case Some(meta: ReplicatedEventMetadata) =>
+            if (meta.originReplica == settings.selfReplicaId) Future.successful(envelope.eventOption)
+            else filteredEvent // Optimization: was replicated to this DC, don't pass the payload across the wire
+          case _ =>
+            throw new IllegalArgumentException(
+              s"Got an event without replication metadata, not supported (pid: ${envelope.persistenceId}, seq_nr: ${envelope.sequenceNr})")
+        })
+      .withNeedDeserializedEvent(false)
+    val eps = new EventProducerSource(
       settings.entityTypeKey.name,
       settings.streamId,
       onlyLocalOriginTransformer,
       settings.eventProducerSettings,
-      producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+      producerFilter,
+      transformSnapshot = None)
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
@@ -132,6 +136,7 @@ private[akka] object ReplicationImpl {
       val s = GrpcQuerySettings(settings.streamId)
       remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
     }
+    // FIXME SerializedEvent will this work for protobuf events? No Descriptors?
     val eventsBySlicesQuery = GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, Nil)
     log.infoN(
       "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",

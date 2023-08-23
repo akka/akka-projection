@@ -28,6 +28,7 @@ import java.util.function.Predicate
 
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.internal.TopicMatcher
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource.ProducerFilter
 
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
@@ -97,6 +98,43 @@ object Replication {
       producerFilter: Predicate[EventEnvelope[Event]],
       replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
       system: ActorSystem[_]): Replication[Command] = {
+    val scalaProducerFilter: EventEnvelope[Event] => Boolean = producerFilter.test
+    createReplication(
+      settings,
+      ProducerFilter(scalaProducerFilter.asInstanceOf[EventEnvelope[Any] => Boolean], needDeserializedEvent = true),
+      replicatedBehaviorFactory,
+      system)
+  }
+
+  /**
+   * Called to bootstrap the entity on each cluster node in each of the replicas.
+   *
+   * Filter events matching the topic expression according to MQTT specification, including wildcards.
+   * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
+   *
+   * Important: Note that this does not publish the endpoint, additional steps are needed!
+   */
+  def grpcReplication[Command, Event, State](
+      settings: ReplicationSettings[Command],
+      topicExpression: String,
+      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
+      system: ActorSystem[_]): Replication[Command] = {
+    val topicMatcher = TopicMatcher(topicExpression)
+    createReplication(
+      settings,
+      ProducerFilter(
+        topicMatcher.matches(_, settings.eventProducerSettings.topicTagPrefix),
+        needDeserializedEvent = false),
+      replicatedBehaviorFactory,
+      system)
+
+  }
+
+  private def createReplication[Command, Event, State](
+      settings: ReplicationSettings[Command],
+      producerFilter: ProducerFilter,
+      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
+      system: ActorSystem[_]): Replication[Command] = {
 
     val scalaReplicationSettings = settings.toScala
 
@@ -123,12 +161,10 @@ object Replication {
               }))
           .toScala)
 
-    val scalaProducerFilter: EventEnvelope[Event] => Boolean = producerFilter.test
-
     val scalaRESOG =
       ReplicationImpl.grpcReplication[Command, Event, State](
         scalaReplicationSettings,
-        scalaProducerFilter,
+        producerFilter,
         replicatedEntity)(system)
     val jEventProducerSource = new EventProducerSource(
       scalaRESOG.eventProducerService.entityType,
@@ -150,28 +186,6 @@ object Replication {
 
       override def toString: String = scalaRESOG.toString
     }
-  }
-
-  /**
-   * Called to bootstrap the entity on each cluster node in each of the replicas.
-   *
-   * Filter events matching the topic expression according to MQTT specification, including wildcards.
-   * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
-   *
-   * Important: Note that this does not publish the endpoint, additional steps are needed!
-   */
-  def grpcReplication[Command, Event, State](
-      settings: ReplicationSettings[Command],
-      topicExpression: String,
-      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
-      system: ActorSystem[_]): Replication[Command] = {
-    val topicMatcher = TopicMatcher(topicExpression)
-    grpcReplication(
-      settings,
-      (env: EventEnvelope[Event]) => topicMatcher.matches(env, settings.eventProducerSettings.topicTagPrefix),
-      replicatedBehaviorFactory,
-      system)
-
   }
 
 }
