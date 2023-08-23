@@ -16,7 +16,7 @@ import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplyEffect
 
 object Drone {
-  sealed trait Command
+  sealed trait Command extends CborSerializable
 
   final case class ReportPosition(position: Position, replyTo: ActorRef[Done])
       extends Command
@@ -29,7 +29,8 @@ object Drone {
 
   final case class State(
       currentPosition: Option[Position],
-      historicalPositions: Vector[Position]) extends CborSerializable {
+      historicalPositions: Vector[Position])
+      extends CborSerializable {
     def coarseGrainedCoordinates: Option[CoarseGrainedCoordinates] =
       currentPosition.map(p =>
         CoarseGrainedCoordinates.fromCoordinates(p.coordinates))

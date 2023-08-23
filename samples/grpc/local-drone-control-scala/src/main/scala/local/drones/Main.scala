@@ -3,7 +3,7 @@
  */
 package local.drones
 
-import akka.actor.typed.ActorSystem
+import akka.actor.typed.{ ActorSystem, Props, SpawnProtocol }
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
@@ -17,7 +17,7 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     val system =
-      ActorSystem[Nothing](Behaviors.empty, "local-drone-control")
+      ActorSystem[SpawnProtocol.Command](SpawnProtocol(), "local-drone-control")
     try {
       init(system)
     } catch {
@@ -28,14 +28,17 @@ object Main {
 
   }
 
-  def init(system: ActorSystem[_]): Unit = {
-    // FIXME duplicate full cluster management setup like other samples?
-    // A single node cluster, to be able to run sharding
+  def init(system: ActorSystem[SpawnProtocol.Command]): Unit = {
+    // A single node, but still a cluster, to be able to run sharding for the entities
     val cluster = Cluster(system)
     cluster.manager ! Join(cluster.selfMember.address)
 
     Drone.init(system)
-    DroneEvents.initEventToCloudPush(system)
+    system ! SpawnProtocol.Spawn(
+      DroneEvents.eventToCloudPushBehavior(system),
+      "DroneEventsProjection",
+      Props.empty,
+      system.ignoreRef)
 
     val grpcInterface =
       system.settings.config.getString("local-drone-control.grpc.interface")

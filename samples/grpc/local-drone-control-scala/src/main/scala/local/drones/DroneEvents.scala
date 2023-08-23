@@ -3,8 +3,9 @@
  */
 package local.drones
 
-import akka.actor.typed.ActorSystem
+import akka.actor.typed.{ ActorSystem, Behavior }
 import akka.grpc.GrpcClientSettings
+import akka.persistence.Persistence
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
@@ -26,7 +27,8 @@ object DroneEvents {
 
   val StreamId = "drone-events"
 
-  def initEventToCloudPush(implicit system: ActorSystem[_]): Unit = {
+  def eventToCloudPushBehavior(
+      implicit system: ActorSystem[_]): Behavior[ProjectionBehavior.Command] = {
     val producerOriginId =
       system.settings.config.getString("local-drone-control.service-id")
 
@@ -35,10 +37,18 @@ object DroneEvents {
       producerOriginId)
 
     // turn events into a public protocol (protobuf) type before publishing
-    val eventTransformation = EventProducer.Transformation.empty.registerAsyncEnvelopeMapper[Drone.CoarseGrainedLocationChanged, proto.CoarseDroneLocation] { envelope =>
-       val event = envelope.event
-       Future.successful(Some(proto.CoarseDroneLocation(envelope.persistenceId, event.coordinates.latitude, event.coordinates.longitude)))
-     }
+    val eventTransformation =
+      EventProducer.Transformation.empty.registerAsyncEnvelopeMapper[
+        Drone.CoarseGrainedLocationChanged,
+        proto.CoarseDroneLocation] { envelope =>
+        val event = envelope.event
+        Future.successful(
+          Some(
+            proto.CoarseDroneLocation(
+              envelope.persistenceId,
+              event.coordinates.latitude,
+              event.coordinates.longitude)))
+      }
 
     val eventProducer = EventProducerPush[Drone.Event](
       originId = producerOriginId,
@@ -55,19 +65,18 @@ object DroneEvents {
     // For scaling out the local service this would be split up in slices
     // and run across a cluster with sharded daemon process, now it is instead
     // a single projection actor pushing all event slices
-    val behavior = ProjectionBehavior(
+    val maxSlice = Persistence(system).numberOfSlices - 1
+    ProjectionBehavior(
       R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
-        ProjectionId("drone-event-push", "0-1023"),
+        ProjectionId("drone-event-push", s"0-$maxSlice"),
         settings = None,
         sourceProvider = EventSourcedProvider.eventsBySlices[Drone.Event](
           system,
           R2dbcReadJournal.Identifier,
           eventProducer.eventProducerSource.entityType,
           0,
-          1023),
+          maxSlice),
         handler = eventProducer.handler()))
-
-    system.systemActorOf(behavior, "DroneEventPusher")
   }
 
 }
