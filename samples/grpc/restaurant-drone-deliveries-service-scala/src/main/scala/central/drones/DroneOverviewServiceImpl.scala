@@ -7,7 +7,11 @@ import akka.persistence.r2dbc.session.scaladsl.R2dbcSession
 import akka.persistence.typed.PersistenceId
 import akka.serialization.SerializationExtension
 import akka.util.Timeout
-import central.drones.proto.{DroneOverviewService, GetDroneOverviewRequest, GetDroneOverviewResponse}
+import central.drones.proto.{
+  DroneOverviewService,
+  GetDroneOverviewRequest,
+  GetDroneOverviewResponse
+}
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 
@@ -21,7 +25,9 @@ class DroneOverviewServiceImpl(system: ActorSystem[_])
   private val logger = LoggerFactory.getLogger(getClass)
 
   private implicit val ec: ExecutionContext = system.executionContext
-  private implicit val timeout: Timeout = system.settings.config.getDuration("restaurant-drone-deliveries-service.drone-ask-timeout").toScala
+  private implicit val timeout: Timeout = system.settings.config
+    .getDuration("restaurant-drone-deliveries-service.drone-ask-timeout")
+    .toScala
   private val serialization = SerializationExtension(system)
   private val sharding = ClusterSharding(system)
 
@@ -39,15 +45,18 @@ class DroneOverviewServiceImpl(system: ActorSystem[_])
         .select(
           session.createStatement(findByLocationSql).bind(0, in.location)) {
           row =>
-            val serializerId = row.get("state_ser_id", classOf[java.lang.Integer])
-            val serializerManifest = row.get("state_ser_manifest", classOf[String])
+            val serializerId =
+              row.get("state_ser_id", classOf[java.lang.Integer])
+            val serializerManifest =
+              row.get("state_ser_manifest", classOf[String])
             val payload = row.get("state_payload", classOf[Array[Byte]])
             val state =
               serialization
                 .deserialize(payload, serializerId, serializerManifest)
                 .get
                 .asInstanceOf[Drone.State]
-            val droneId = PersistenceId.extractEntityId(row.get("persistence_id", classOf[String]))
+            val droneId = PersistenceId.extractEntityId(
+              row.get("persistence_id", classOf[String]))
             state.currentLocation.map(coordinates => (droneId, coordinates))
         }
         .map { maybeLocations =>
@@ -56,19 +65,24 @@ class DroneOverviewServiceImpl(system: ActorSystem[_])
           if (locations.isEmpty)
             throw new GrpcServiceException(Status.NOT_FOUND)
           else {
-            val byLocation = locations.groupMap { case (_, coarse) => coarse } { case (droneId, _) => droneId }
+            val byLocation = locations.groupMap { case (_, coarse) => coarse } {
+              case (droneId, _) => droneId
+            }
 
-            proto.CoarseDroneLocationsResponse(
-              byLocation.map { case (location, entries) =>
-                proto
-                  .CoarseDroneLocations(location.latitude, location.longitude, entries)
-              }.toVector)
+            proto.CoarseDroneLocationsResponse(byLocation.map {
+              case (location, entries) =>
+                proto.CoarseDroneLocations(
+                  Some(central.proto
+                    .Coordinates(location.latitude, location.longitude)),
+                  entries)
+            }.toVector)
           }
         }
     }
   }
 
-  override def getDroneOverview(in: GetDroneOverviewRequest): Future[GetDroneOverviewResponse] = {
+  override def getDroneOverview(
+      in: GetDroneOverviewRequest): Future[GetDroneOverviewResponse] = {
     // query against additional columns for drone
     logger.info("Get drone overview for drone {}", in.droneId)
 
@@ -80,7 +94,7 @@ class DroneOverviewServiceImpl(system: ActorSystem[_])
       GetDroneOverviewResponse(
         locationName = state.locationName,
         coarseLatitude = state.currentLocation.map(_.latitude).getOrElse(0.0),
-        coarseLongitude = state.currentLocation.map(_.longitude).getOrElse(0.0),
-    ))
+        coarseLongitude =
+          state.currentLocation.map(_.longitude).getOrElse(0.0)))
   }
 }

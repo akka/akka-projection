@@ -3,6 +3,8 @@ syntax = "proto3";
 option java_multiple_files = true;
 option java_package = "central.drones.proto";
 
+import "central/common.proto";
+
 package central.drones;
 
 service DroneOverviewService {
@@ -20,9 +22,8 @@ message CoarseDroneLocationsResponse {
 }
 
 message CoarseDroneLocations {
-  double coarse_latitude = 1;
-  double coarse_longitude = 2;
-  repeated string drones = 3;
+  Coordinates coordinates = 1;
+  repeated string drones = 2;
 }
 
 message GetDroneOverviewRequest {

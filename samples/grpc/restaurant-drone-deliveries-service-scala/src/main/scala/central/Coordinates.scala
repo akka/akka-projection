@@ -1,4 +1,4 @@
-package central.drones
+package central
 
 // common location representations, could be a shared library between local control and restaurant
 // but to keep project structure simple we duplicate

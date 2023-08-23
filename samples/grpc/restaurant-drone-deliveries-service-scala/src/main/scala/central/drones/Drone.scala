@@ -3,17 +3,14 @@ package central.drones
 import akka.Done
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
-import akka.cluster.sharding.typed.scaladsl.{
-  ClusterSharding,
-  Entity,
-  EntityTypeKey
-}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
 import akka.pattern.StatusReply
 import akka.persistence.r2dbc.state.scaladsl.AdditionalColumn
 import akka.persistence.typed.PersistenceId
-import akka.persistence.typed.state.scaladsl.{ DurableStateBehavior, Effect }
+import akka.persistence.typed.state.scaladsl.{DurableStateBehavior, Effect}
 import central.CborSerializable
+import central.CoarseGrainedCoordinates
 
 import java.time.Instant
 

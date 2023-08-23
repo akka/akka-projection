@@ -56,4 +56,16 @@ Query the state for a specific drone
 grpcurl -d '{"drone_id":"drone1"}' -plaintext localhost:8101 central.drones.DroneOverviewService.GetDroneOverview
 ```
 
+Set up a restaurant
+
+```shell
+grpcurl -d '{"restaurant_id":"restaurant1","coordinates":{"longitude": 59.33252, "latitude": 18.04142}}' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.SetUpRestaurant
+```
+
+Register a delivery for the restaurant
+
+```shell
+grpcurl -d '{"restaurant_id":"restaurant1","delivery_id": "order1","coordinates":{"longitude": 59.13212, "latitude": 18.12442}}' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.RegisterDelivery
+```
+
 FIXME more stuff

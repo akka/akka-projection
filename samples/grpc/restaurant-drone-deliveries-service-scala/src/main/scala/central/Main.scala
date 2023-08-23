@@ -4,6 +4,8 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.SpawnProtocol
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
+import central.deliveries.RestaurantDeliveries
+import central.deliveries.RestaurantDeliveriesServiceImpl
 import central.drones.Drone
 import central.drones.DroneOverviewServiceImpl
 import org.slf4j.LoggerFactory
@@ -32,6 +34,7 @@ object Main {
 
     Drone.init(system)
     LocalDroneEvents.initPushedEventsConsumer(system)
+    RestaurantDeliveries.init(system)
 
     val interface = system.settings.config
       .getString("restaurant-drone-deliveries-service.grpc.interface")
@@ -41,11 +44,14 @@ object Main {
     val pushedDroneEventsHandler =
       LocalDroneEvents.pushedEventsGrpcHandler(system)
     val droneOverviewService = new DroneOverviewServiceImpl(system)
+    val restaurantDeliveriesService = new RestaurantDeliveriesServiceImpl(
+      system)
 
     DroneDeliveriesServer.start(
       interface,
       port,
       droneOverviewService,
+      restaurantDeliveriesService,
       pushedDroneEventsHandler)
 
   }

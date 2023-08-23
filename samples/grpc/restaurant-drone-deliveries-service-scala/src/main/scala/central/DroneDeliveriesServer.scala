@@ -7,6 +7,8 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import central.Main.logger
+import central.deliveries.proto.RestaurantDeliveriesService
+import central.deliveries.proto.RestaurantDeliveriesServiceHandler
 import central.drones.proto.DroneOverviewService
 import central.drones.proto.DroneOverviewServiceHandler
 
@@ -20,6 +22,7 @@ object DroneDeliveriesServer {
       interface: String,
       port: Int,
       droneOverviewService: central.drones.proto.DroneOverviewService,
+      restaurantDeliveriesService: central.deliveries.proto.RestaurantDeliveriesService,
       pushedDroneEventsHandler: PartialFunction[
         HttpRequest,
         Future[HttpResponse]])(implicit system: ActorSystem[_]): Unit = {
@@ -27,7 +30,9 @@ object DroneDeliveriesServer {
 
     val service = ServiceHandler.concatOrNotFound(
       DroneOverviewServiceHandler.partial(droneOverviewService),
-      ServerReflection.partial(List(DroneOverviewService)),
+      RestaurantDeliveriesServiceHandler.partial(restaurantDeliveriesService),
+      ServerReflection.partial(
+        List(DroneOverviewService, RestaurantDeliveriesService)),
       // FIXME not last once actually partial
       pushedDroneEventsHandler)
 

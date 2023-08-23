@@ -17,7 +17,7 @@ import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.{ Handler, SourceProvider }
 import akka.util.Timeout
 import central.Main.logger
-import central.drones.{ CoarseGrainedCoordinates, Drone }
+import central.drones.Drone
 
 import scala.concurrent.Future
 import scala.jdk.DurationConverters.JavaDurationOps
