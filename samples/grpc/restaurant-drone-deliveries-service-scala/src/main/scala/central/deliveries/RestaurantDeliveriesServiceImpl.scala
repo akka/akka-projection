@@ -75,7 +75,7 @@ class RestaurantDeliveriesServiceImpl(system: ActorSystem[_])
   private def toCoordinates(
       protoCoordinates: Option[central.proto.Coordinates]): Coordinates =
     protoCoordinates match {
-      case Some(pc) => Coordinates(pc.latitude, pc.longitude)
+      case Some(pc) => Coordinates.fromProto(pc)
       case None =>
         throw new GrpcServiceException(
           Status.INVALID_ARGUMENT.withDescription("Missing coordinates"))

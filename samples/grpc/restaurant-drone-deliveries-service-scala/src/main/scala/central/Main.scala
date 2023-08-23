@@ -4,6 +4,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.SpawnProtocol
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
+import central.deliveries.DeliveryEvents
 import central.deliveries.RestaurantDeliveries
 import central.deliveries.RestaurantDeliveriesServiceImpl
 import central.drones.Drone
@@ -43,6 +44,7 @@ object Main {
 
     val pushedDroneEventsHandler =
       LocalDroneEvents.pushedEventsGrpcHandler(system)
+    val deliveryEventsProducerService = DeliveryEvents.eventProducerService(system)
     val droneOverviewService = new DroneOverviewServiceImpl(system)
     val restaurantDeliveriesService = new RestaurantDeliveriesServiceImpl(
       system)
@@ -52,6 +54,7 @@ object Main {
       port,
       droneOverviewService,
       restaurantDeliveriesService,
+      deliveryEventsProducerService,
       pushedDroneEventsHandler)
 
   }

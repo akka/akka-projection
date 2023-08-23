@@ -6,7 +6,15 @@ package central
 /**
  * Decimal degree coordinates
  */
-final case class Coordinates(latitude: Double, longitude: Double)
+final case class Coordinates(latitude: Double, longitude: Double) {
+  def toProto = proto.Coordinates(latitude, longitude)
+}
+
+object Coordinates {
+  def fromProto(pc: proto.Coordinates): Coordinates =
+    Coordinates(pc.latitude, pc.longitude)
+
+}
 
 object CoarseGrainedCoordinates {
 

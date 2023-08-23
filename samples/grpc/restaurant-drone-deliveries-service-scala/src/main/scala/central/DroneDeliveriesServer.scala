@@ -23,6 +23,9 @@ object DroneDeliveriesServer {
       port: Int,
       droneOverviewService: central.drones.proto.DroneOverviewService,
       restaurantDeliveriesService: central.deliveries.proto.RestaurantDeliveriesService,
+      deliveryEventsProducerService: PartialFunction[
+        HttpRequest,
+        Future[HttpResponse]],
       pushedDroneEventsHandler: PartialFunction[
         HttpRequest,
         Future[HttpResponse]])(implicit system: ActorSystem[_]): Unit = {
@@ -33,6 +36,7 @@ object DroneDeliveriesServer {
       RestaurantDeliveriesServiceHandler.partial(restaurantDeliveriesService),
       ServerReflection.partial(
         List(DroneOverviewService, RestaurantDeliveriesService)),
+      deliveryEventsProducerService,
       // FIXME not last once actually partial
       pushedDroneEventsHandler)
 
