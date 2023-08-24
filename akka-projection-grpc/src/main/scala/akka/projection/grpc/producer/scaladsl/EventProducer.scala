@@ -125,22 +125,23 @@ object EventProducer {
   @ApiMayChange
   object Transformation {
 
-    val empty: Transformation = new Transformation(
-      mappers = Map.empty,
-      orElse = envelope =>
-        Future.failed(new IllegalArgumentException(s"Missing transformation for event [${envelope.event.getClass}]")),
-      needDeserializedEvent = false)
+    val empty: Transformation = new Transformation(mappers = Map.empty, orElse = { envelope =>
+      val eventDescription =
+        if (envelope.isEventDeserialized)
+          envelope.event.getClass
+        else
+          s"${envelope.persistenceId} ${envelope.sequenceNr}"
+      Future.failed(new IllegalArgumentException(s"Missing transformation for event [$eventDescription]"))
+    }, needDeserializedEvent = false)
 
     /**
      * No transformation. Pass through each event as is.
      */
-    val identity: Transformation = {
-      // FIXME SerializedEvent how can we avoid needDeserializedEvent = true here?
+    val identity: Transformation =
       new Transformation(
         mappers = Map.empty,
         orElse = envelope => Future.successful(envelope.eventOption),
-        needDeserializedEvent = true)
-    }
+        needDeserializedEvent = false)
   }
 
   /**
@@ -193,7 +194,11 @@ object EventProducer {
      */
     @InternalApi
     private[akka] def apply(envelope: EventEnvelope[Any]): Future[Option[Any]] = {
-      val mapper = mappers.getOrElse(envelope.event.getClass, orElse)
+      val mapper =
+        if (mappers.isEmpty)
+          orElse // don't access envelope.event (may not be deserialized)
+        else
+          mappers.getOrElse(envelope.event.getClass, orElse)
       mapper.apply(envelope)
     }
 

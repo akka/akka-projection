@@ -59,7 +59,7 @@ object EventProducerPushDestination {
 
   @ApiMayChange
   object Transformation {
-    val empty: Transformation = new Transformation(Map.empty, Predef.identity, false)
+    val empty: Transformation = new Transformation(Map.empty, Predef.identity, needDeserializedEvent = false)
   }
 
   /**
@@ -83,7 +83,7 @@ object EventProducerPushDestination {
         if (newTags eq eventEnvelope.tags) eventEnvelope
         else eventEnvelope.withTags(newTags)
       }
-      appendMapper(clazz, mapTags, payloadMapper = false)
+      appendMapper(clazz, mapTags)
     }
 
     /**
@@ -104,7 +104,7 @@ object EventProducerPushDestination {
         }
       }
       // needs to be untyped since not mapping filtered events the same way will cause gaps in seqnrs
-      new Transformation(typedMappers, untypedMappers.andThen(mapId), needDeserializedEvent)
+      new Transformation(typedMappers, untypedMappers.andThen(mapId), needDeserializedEvent = true)
     }
 
     /**
@@ -120,7 +120,7 @@ object EventProducerPushDestination {
           else eventEnvelope.withEventOption(newMaybePayload)
         }
       }
-      appendMapper(clazz, mapPayload, payloadMapper = true)
+      appendMapper(clazz, mapPayload)
     }
 
     /**
@@ -142,23 +142,25 @@ object EventProducerPushDestination {
      * INTERNAL API
      */
     @InternalApi private[akka] def apply(envelope: EventEnvelope[Any]): EventEnvelope[Any] = {
-      val payloadClass = envelope.eventOption.map(_.getClass).getOrElse(FilteredPayload.getClass)
-      val typedMapResult = typedMappers.get(payloadClass) match {
-        case Some(mapper) => mapper(envelope)
-        case None         => envelope
-      }
+      val typedMapResult =
+        if (typedMappers.isEmpty)
+          envelope // don't access envelope.event (may not be deserialized)
+        else {
+          val payloadClass = envelope.eventOption.map(_.getClass).getOrElse(FilteredPayload.getClass)
+          typedMappers.get(payloadClass) match {
+            case Some(mapper) => mapper(envelope)
+            case None         => envelope
+          }
+        }
       untypedMappers(typedMapResult)
     }
 
-    private def appendMapper(
-        clazz: Class[_],
-        transformF: EventEnvelope[Any] => EventEnvelope[Any],
-        payloadMapper: Boolean): Transformation = {
+    private def appendMapper(clazz: Class[_], transformF: EventEnvelope[Any] => EventEnvelope[Any]): Transformation = {
       new Transformation(
         // chain if there are multiple ops for same type
         typedMappers.updated(clazz, typedMappers.get(clazz).map(f => f.andThen(transformF)).getOrElse(transformF)),
         untypedMappers,
-        needDeserializedEvent || payloadMapper)
+        needDeserializedEvent = true)
     }
 
   }

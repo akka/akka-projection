@@ -81,43 +81,47 @@ private[akka] object ProtobufProtocolConversions {
       env: EventEnvelope[_],
       protoAnySerialization: ProtoAnySerialization)(
       implicit executionContext: ExecutionContext): Future[Option[Event]] = {
-    env.eventOption match {
-      case Some(_) =>
-        val mappedFuture: Future[Option[Any]] = transformation(env.asInstanceOf[EventEnvelope[Any]])
+    if (env.isEventDefined) {
+      val mappedFuture: Future[Option[Any]] = {
+        if (transformation == Transformation.identity && env.serializedEvent.isDefined)
+          Future.successful(env.serializedEvent)
+        else
+          transformation(env.asInstanceOf[EventEnvelope[Any]])
+      }
 
-        def toEvent(transformedEvent: Any): Event = {
-          val protoEvent = protoAnySerialization.serialize(transformedEvent)
-          val metadata = env.eventMetadata.map(protoAnySerialization.serialize)
+      def toEvent(transformedEvent: Any): Event = {
+        val protoEvent = protoAnySerialization.serialize(transformedEvent)
+        val metadata = env.eventMetadata.map(protoAnySerialization.serialize)
+        Event(
+          persistenceId = env.persistenceId,
+          seqNr = env.sequenceNr,
+          slice = env.slice,
+          offset = ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
+          payload = Some(protoEvent),
+          metadata = metadata,
+          source = env.source,
+          tags = env.tags.toSeq)
+      }
+
+      mappedFuture.value match {
+        case Some(Success(Some(transformedEvent))) => Future.successful(Some(toEvent(transformedEvent)))
+        case Some(Success(None))                   => Future.successful(None)
+        case _                                     => mappedFuture.map(_.map(toEvent))
+      }
+
+    } else {
+      // Events from backtracking are lazily loaded via `loadEvent` if needed.
+      // Transformation and filter is done via `loadEvent` in that case.
+      Future.successful(
+        Some(
           Event(
             persistenceId = env.persistenceId,
             seqNr = env.sequenceNr,
             slice = env.slice,
             offset = ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
-            payload = Some(protoEvent),
-            metadata = metadata,
+            payload = None,
             source = env.source,
-            tags = env.tags.toSeq)
-        }
-
-        mappedFuture.value match {
-          case Some(Success(Some(transformedEvent))) => Future.successful(Some(toEvent(transformedEvent)))
-          case Some(Success(None))                   => Future.successful(None)
-          case _                                     => mappedFuture.map(_.map(toEvent))
-        }
-
-      case None =>
-        // Events from backtracking are lazily loaded via `loadEvent` if needed.
-        // Transformation and filter is done via `loadEvent` in that case.
-        Future.successful(
-          Some(
-            Event(
-              persistenceId = env.persistenceId,
-              seqNr = env.sequenceNr,
-              slice = env.slice,
-              offset = ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
-              payload = None,
-              source = env.source,
-              tags = env.tags.toSeq)))
+            tags = env.tags.toSeq)))
     }
   }
 
