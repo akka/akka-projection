@@ -64,7 +64,6 @@ import akka.projection.scaladsl.SourceProvider
 import akka.stream.RestartSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
-import io.r2dbc.spi.ConnectionFactory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -84,9 +83,7 @@ private[projection] object R2dbcProjectionImpl {
       projectionId: ProjectionId,
       sourceProvider: Option[BySlicesSourceProvider],
       settings: R2dbcProjectionSettings,
-      connectionFactory: ConnectionFactory)(implicit system: ActorSystem[_]) = {
-    val r2dbcExecutor =
-      new R2dbcExecutor(connectionFactory, log, settings.logDbCallsExceeding)(system.executionContext, system)
+      r2dbcExecutor: R2dbcExecutor)(implicit system: ActorSystem[_]) = {
     new R2dbcOffsetStore(projectionId, sourceProvider, system, settings, r2dbcExecutor)
   }
 

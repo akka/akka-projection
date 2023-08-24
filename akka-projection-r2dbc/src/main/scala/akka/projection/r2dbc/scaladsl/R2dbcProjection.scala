@@ -5,6 +5,7 @@
 package akka.projection.r2dbc.scaladsl
 
 import scala.collection.immutable
+import scala.concurrent.duration.FiniteDuration
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -51,15 +52,17 @@ object R2dbcProjection {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
     val connFactory = connectionFactory(system, r2dbcSettings)
+    val closeExceeding = closeCallsExceeding(system, r2dbcSettings)
+    val r2dbcExecutor =
+      new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
+        system.executionContext,
+        system)
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
-        connFactory)
-    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding)(
-      system.executionContext,
-      system)
+        r2dbcExecutor)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForExactlyOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
@@ -102,15 +105,17 @@ object R2dbcProjection {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
     val connFactory = connectionFactory(system, r2dbcSettings)
+    val closeExceeding = closeCallsExceeding(system, r2dbcSettings)
+    val r2dbcExecutor =
+      new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
+        system.executionContext,
+        system)
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
-        connFactory)
-    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding)(
-      system.executionContext,
-      system)
+        r2dbcExecutor)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
@@ -151,12 +156,17 @@ object R2dbcProjection {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
     val connFactory = connectionFactory(system, r2dbcSettings)
+    val closeExceeding = closeCallsExceeding(system, r2dbcSettings)
+    val r2dbcExecutor =
+      new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
+        system.executionContext,
+        system)
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
-        connFactory)
+        r2dbcExecutor)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForAtLeastOnceAsync(sourceProvider, handler, offsetStore)(
@@ -194,15 +204,17 @@ object R2dbcProjection {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
     val connFactory = connectionFactory(system, r2dbcSettings)
+    val closeExceeding = closeCallsExceeding(system, r2dbcSettings)
+    val r2dbcExecutor =
+      new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
+        system.executionContext,
+        system)
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
-        connFactory)
-    val r2dbcExecutor = new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding)(
-      system.executionContext,
-      system)
+        r2dbcExecutor)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForGrouped(sourceProvider, handler, offsetStore, r2dbcExecutor)(
@@ -244,12 +256,17 @@ object R2dbcProjection {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
     val connFactory = connectionFactory(system, r2dbcSettings)
+    val closeExceeding = closeCallsExceeding(system, r2dbcSettings)
+    val r2dbcExecutor =
+      new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
+        system.executionContext,
+        system)
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
-        connFactory)
+        r2dbcExecutor)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForGroupedAsync(sourceProvider, handler, offsetStore)(
@@ -299,12 +316,17 @@ object R2dbcProjection {
 
     val r2dbcSettings = settings.getOrElse(R2dbcProjectionSettings(system))
     val connFactory = connectionFactory(system, r2dbcSettings)
+    val closeExceeding = closeCallsExceeding(system, r2dbcSettings)
+    val r2dbcExecutor =
+      new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
+        system.executionContext,
+        system)
     val offsetStore =
       R2dbcProjectionImpl.createOffsetStore(
         projectionId,
         timestampOffsetBySlicesSourceProvider(sourceProvider),
         r2dbcSettings,
-        connFactory)
+        r2dbcExecutor)
 
     val adaptedHandler =
       R2dbcProjectionImpl.adaptedHandlerForFlow(sourceProvider, handler, offsetStore, r2dbcSettings)(system)
@@ -323,6 +345,12 @@ object R2dbcProjection {
 
   private def connectionFactory(system: ActorSystem[_], r2dbcSettings: R2dbcProjectionSettings): ConnectionFactory = {
     ConnectionFactoryProvider(system).connectionFactoryFor(r2dbcSettings.useConnectionFactory)
+  }
+
+  private def closeCallsExceeding(
+      system: ActorSystem[_],
+      r2dbcSettings: R2dbcProjectionSettings): Option[FiniteDuration] = {
+    ConnectionFactoryProvider(system).connectionPoolSettingsFor(r2dbcSettings.useConnectionFactory).closeCallsExceeding
   }
 
   private def timestampOffsetBySlicesSourceProvider(
