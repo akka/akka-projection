@@ -12,6 +12,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.query.typed.EventEnvelope.SerializedEvent
+import akka.serialization.DisabledJavaSerializer
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializer
 import akka.serialization.SerializerWithStringManifest
@@ -309,6 +310,18 @@ import scalapb.options.Scalapb
         .invoke(null)
         .asInstanceOf[Parser[com.google.protobuf.Message]]
       val akkaSerializer = Try(serialization.serializerFor(clazz)).toOption
+        .flatMap {
+          case _: DisabledJavaSerializer =>
+            // There will be a warning log from Akka "Using the Java serializer", which need additional clarification
+            // in this context.
+            log.warn(
+              "Missing Akka serializer for protobuf message class [{}]. Consider defining it in " +
+              "`akka.actor.serialization-bindings`. It was bound to disabled Java serializer, which " +
+              "is not what you want.",
+              clazz.getName)
+            None
+          case other => Some(other)
+        }
       Some(new JavaPbResolvedType(parser, clazz, akkaSerializer))
 
     } catch {

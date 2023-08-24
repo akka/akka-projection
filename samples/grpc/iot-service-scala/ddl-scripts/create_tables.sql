@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS event_journal(
   PRIMARY KEY(persistence_id, seq_nr)
 );
 
--- `event_journal_slice_idx` is only needed if the slice based queries are used
 CREATE INDEX IF NOT EXISTS event_journal_slice_idx ON event_journal(slice, entity_type, db_timestamp, seq_nr);
 
 CREATE TABLE IF NOT EXISTS snapshot(
