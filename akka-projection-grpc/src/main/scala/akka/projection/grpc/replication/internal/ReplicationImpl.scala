@@ -4,6 +4,9 @@
 
 package akka.projection.grpc.replication.internal
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.ExtendedActorSystem
@@ -11,6 +14,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.cluster.ClusterActorRefProvider
+import akka.cluster.sharding.typed.ClusterShardingSettings
 import akka.cluster.sharding.typed.ReplicatedEntity
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
@@ -34,6 +38,7 @@ import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
+import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource.ProducerFilter
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.Replication
@@ -41,11 +46,6 @@ import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
-import akka.cluster.sharding.typed.ClusterShardingSettings
-import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource.ProducerFilter
 
 /**
  * INTERNAL API
@@ -138,6 +138,7 @@ private[akka] object ReplicationImpl {
     }
     // FIXME SerializedEvent will this work for protobuf events? No Descriptors?
     val eventsBySlicesQuery = GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, Nil)
+      .withSerializedEvent()
     log.infoN(
       "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",
       remoteReplica.numberOfConsumers,
@@ -191,6 +192,7 @@ private[akka] object ReplicationImpl {
                         envelope.sequenceNr,
                         replicatedEventMetadata.version)
                     }
+                    // FIXME SerializedEvent
                     val askResult = entityRef.ask[Done](replyTo =>
                       PublishedEventImpl(
                         replicationId.persistenceId,

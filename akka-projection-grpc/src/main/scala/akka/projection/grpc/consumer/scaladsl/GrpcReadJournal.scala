@@ -55,12 +55,14 @@ import com.typesafe.config.Config
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.persistence.query.typed.internal.WithSerializedEvent
 
 @ApiMayChange
 object GrpcReadJournal {
@@ -116,7 +118,8 @@ object GrpcReadJournal {
       system.classicSystem.asInstanceOf[ExtendedActorSystem],
       settings,
       withChannelBuilderOverrides(clientSettings),
-      protoAnySerialization)
+      protoAnySerialization,
+      _useSerializedEvent = false)
   }
 
   private def withChannelBuilderOverrides(clientSettings: GrpcClientSettings): GrpcClientSettings = {
@@ -136,12 +139,14 @@ final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,
     clientSettings: GrpcClientSettings,
-    protoAnySerialization: ProtoAnySerialization)
+    protoAnySerialization: ProtoAnySerialization,
+    _useSerializedEvent: Boolean)
     extends ReadJournal
     with EventsBySliceQuery
     with EventTimestampQuery
     with LoadEventQuery
-    with CanTriggerReplay {
+    with CanTriggerReplay
+    with WithSerializedEvent[GrpcReadJournal] {
   import GrpcReadJournal.log
   import ProtobufProtocolConversions._
 
@@ -155,7 +160,8 @@ final class GrpcReadJournal private (
       system,
       GrpcQuerySettings(config),
       withChannelBuilderOverrides(GrpcClientSettings.fromConfig(config.getConfig("client"))(system)),
-      new ProtoAnySerialization(system.toTyped, descriptors = Nil, protoAnyPrefer))
+      new ProtoAnySerialization(system.toTyped, descriptors = Nil, protoAnyPrefer),
+      _useSerializedEvent = false)
 
   // When created from `GrpcReadJournalProvider`.
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
@@ -166,7 +172,7 @@ final class GrpcReadJournal private (
 
   lazy val consumerFilter = ConsumerFilter(typedSystem)
 
-  private val client = EventProducerServiceClient(clientSettings)
+  private lazy val client = EventProducerServiceClient(clientSettings)
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
     case Some(meta) => meta.asList
     case None       => Seq.empty
@@ -438,5 +444,19 @@ final class GrpcReadJournal private (
    */
   def close(): Future[Done] =
     client.close()
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] override def useSerializedEvent: Boolean =
+    _useSerializedEvent
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] override def withSerializedEvent(): GrpcReadJournal =
+    new GrpcReadJournal(system, settings, clientSettings, protoAnySerialization, _useSerializedEvent = true)
 
 }

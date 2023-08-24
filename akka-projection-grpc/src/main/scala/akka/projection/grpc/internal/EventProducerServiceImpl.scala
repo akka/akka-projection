@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.Future
 
 import akka.persistence.query.typed.EventEnvelope.SerializedEvent
+import akka.persistence.query.typed.internal.WithSerializedEvent
 import akka.serialization.SerializationExtension
 
 /**
@@ -58,8 +59,8 @@ import akka.serialization.SerializationExtension
  */
 @InternalApi private[akka] class EventProducerServiceImpl(
     system: ActorSystem[_],
-    eventsBySlicesPerStreamId: Map[String, EventsBySliceQuery],
-    eventsBySlicesStartingFromSnapshotsPerStreamId: Map[String, EventsBySliceStartingFromSnapshotsQuery],
+    _eventsBySlicesPerStreamId: Map[String, EventsBySliceQuery],
+    _eventsBySlicesStartingFromSnapshotsPerStreamId: Map[String, EventsBySliceStartingFromSnapshotsQuery],
     currentEventsByPersistenceIdPerStreamId: Map[String, CurrentEventsByPersistenceIdTypedQuery],
     currentEventsByPersistenceIdStartingFromSnapshotPerStreamId: Map[
       String,
@@ -77,10 +78,23 @@ import akka.serialization.SerializationExtension
   sources.foreach { s =>
     require(s.streamId.nonEmpty, s"EventProducerSource for [${s.entityType}] contains empty stream id, not allowed")
     require(
-      eventsBySlicesPerStreamId.contains(s.streamId) ||
-      eventsBySlicesStartingFromSnapshotsPerStreamId.contains(s.streamId),
+      _eventsBySlicesPerStreamId.contains(s.streamId) ||
+      _eventsBySlicesStartingFromSnapshotsPerStreamId.contains(s.streamId),
       s"No events by slices query defined for stream id [${s.streamId}]")
   }
+
+  private val eventsBySlicesPerStreamId: Map[String, EventsBySliceQuery] =
+    _eventsBySlicesPerStreamId.map {
+      case (streamId, w: WithSerializedEvent[EventsBySliceQuery] @unchecked) => streamId -> w.withSerializedEvent()
+      case (streamId, q)                                                     => streamId -> q
+    }
+
+  private val eventsBySlicesStartingFromSnapshotsPerStreamId: Map[String, EventsBySliceStartingFromSnapshotsQuery] =
+    _eventsBySlicesStartingFromSnapshotsPerStreamId.map {
+      case (streamId, w: WithSerializedEvent[EventsBySliceStartingFromSnapshotsQuery] @unchecked) =>
+        streamId -> w.withSerializedEvent()
+      case (streamId, q) => streamId -> q
+    }
 
   private val protoAnySerialization = new ProtoAnySerialization(system)
   private val akkaSerialization = SerializationExtension(system)

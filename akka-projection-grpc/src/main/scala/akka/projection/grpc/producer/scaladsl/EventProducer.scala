@@ -6,6 +6,7 @@ package akka.projection.grpc.producer.scaladsl
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -16,6 +17,7 @@ import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.internal.WithSerializedEvent
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
@@ -322,7 +324,10 @@ object EventProducer {
       case (queryPluginId, sourcesUsingIt) =>
         val eventsBySlicesQuery =
           PersistenceQuery(system)
-            .readJournalFor[ReadJournal](queryPluginId)
+            .readJournalFor[ReadJournal](queryPluginId) match {
+            case w: WithSerializedEvent[ReadJournal] @unchecked => w.withSerializedEvent()
+            case other                                          => other
+          }
 
         sourcesUsingIt.map(eps => eps.streamId -> eventsBySlicesQuery)
     }
