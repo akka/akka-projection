@@ -17,11 +17,11 @@ object PublishEvents {
 
   def eventProducerService(system: ActorSystem[_])
       : PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val transformation = Transformation.empty
-      .registerAsyncEnvelopeMapper[ShoppingCart.ItemUpdated, proto.ItemQuantityAdjusted](envelope =>
-        Future.successful(Some(transformItemUpdated(envelope))))
-      .registerAsyncEnvelopeMapper[ShoppingCart.CheckedOut, proto.CheckedOut](envelope =>
-        Future.successful(Some(transformCheckedOut(envelope))))
+    val transformation = Transformation.identity
+//      .registerAsyncEnvelopeMapper[ShoppingCart.ItemUpdated, proto.ItemQuantityAdjusted](envelope =>
+//        Future.successful(Some(transformItemUpdated(envelope))))
+//      .registerAsyncEnvelopeMapper[ShoppingCart.CheckedOut, proto.CheckedOut](envelope =>
+//        Future.successful(Some(transformCheckedOut(envelope))))
 
     //#withProducerFilter
     val eventProducerSource = EventProducer
@@ -44,18 +44,18 @@ object PublishEvents {
   //#eventProducerService
 
   //#transformItemUpdated
-  def transformItemUpdated(
-      envelope: EventEnvelope[ShoppingCart.ItemUpdated]): proto.ItemQuantityAdjusted = {
-    val event = envelope.event
-    proto.ItemQuantityAdjusted(
-      cartId = PersistenceId.extractEntityId(envelope.persistenceId),
-      itemId = event.itemId,
-      quantity = event.quantity)
-  }
-  //#transformItemUpdated
-
-  def transformCheckedOut(envelope: typed.EventEnvelope[ShoppingCart.CheckedOut]): proto.CheckedOut =
-    proto.CheckedOut(PersistenceId.extractEntityId(envelope.persistenceId))
+//  def transformItemUpdated(
+//      envelope: EventEnvelope[ShoppingCart.ItemUpdated]): proto.ItemQuantityAdjusted = {
+//    val event = envelope.event
+//    proto.ItemQuantityAdjusted(
+//      cartId = PersistenceId.extractEntityId(envelope.persistenceId),
+//      itemId = event.itemId,
+//      quantity = event.quantity)
+//  }
+//  //#transformItemUpdated
+//
+//  def transformCheckedOut(envelope: typed.EventEnvelope[ShoppingCart.CheckedOut]): proto.CheckedOut =
+//    proto.CheckedOut(PersistenceId.extractEntityId(envelope.persistenceId))
 
   //#eventProducerService
 }

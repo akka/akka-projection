@@ -17,6 +17,8 @@ import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplyEffect
 import akka.persistence.typed.scaladsl.RetentionCriteria
+import scalapb.GeneratedMessage
+import shopping.cart.proto.ItemQuantityAdjusted
 
 /**
  * This is an event sourced actor (`EventSourcedBehavior`). An entity managed by Cluster Sharding.
@@ -42,9 +44,7 @@ object ShoppingCart {
    */
   //#state
   //#tags
-  final case class State(
-      items: Map[String, Int],
-      checkoutDate: Option[Instant])
+  final case class State(items: Map[String, Int], checkoutDate: Option[Instant])
       extends CborSerializable {
 
     //#tags
@@ -90,9 +90,7 @@ object ShoppingCart {
 
   object State {
     val empty: State =
-      State(
-        items = Map.empty,
-        checkoutDate = None)
+      State(items = Map.empty, checkoutDate = None)
   }
 
   //#commands
@@ -136,9 +134,7 @@ object ShoppingCart {
   /**
    * Summary of the shopping cart state, used in reply messages.
    */
-  final case class Summary(
-      items: Map[String, Int],
-      checkedOut: Boolean)
+  final case class Summary(items: Map[String, Int], checkedOut: Boolean)
       extends CborSerializable
   //#commands
 
@@ -146,12 +142,14 @@ object ShoppingCart {
   /**
    * This interface defines all the events that the ShoppingCart supports.
    */
-  sealed trait Event extends CborSerializable
-
-  final case class ItemUpdated(itemId: String, quantity: Int) extends Event
-
-  final case class CheckedOut(eventTime: Instant) extends Event
+//  sealed trait Event extends CborSerializable
+//
+//  final case class ItemUpdated(itemId: String, quantity: Int) extends Event
+//
+//  final case class CheckedOut(eventTime: Instant) extends Event
   //#events
+
+  type Event = GeneratedMessage
 
   val EntityKey: EntityTypeKey[Command] =
     EntityTypeKey[Command]("ShoppingCart")
@@ -178,7 +176,7 @@ object ShoppingCart {
         persistenceId = PersistenceId(EntityKey.name, cartId),
         emptyState = State.empty,
         commandHandler =
-          (state, command) => handleCommand(state, command),
+          (state, command) => handleCommand(cartId, state, command),
         eventHandler = (state, event) => handleEvent(state, event))
       .withTaggerForState { case (state, _) =>
         state.tags
@@ -190,6 +188,7 @@ object ShoppingCart {
   //#tags
   //#init
   private def handleCommand(
+      cartId: String,
       state: State,
       command: Command): ReplyEffect[Event, State] = {
     // The shopping cart behavior changes if it's checked out or not.
@@ -197,21 +196,22 @@ object ShoppingCart {
     if (state.isCheckedOut)
       checkedOutShoppingCart(state, command)
     else
-      openShoppingCart(state, command)
+      openShoppingCart(cartId, state, command)
   }
 
   //#commandHandler
   private def openShoppingCart(
+      cartId: String,
       state: State,
       command: Command): ReplyEffect[Event, State] = {
     command match {
       case AddItem(itemId, quantity, replyTo) =>
-       if (quantity <= 0)
+        if (quantity <= 0)
           Effect.reply(replyTo)(
             StatusReply.Error("Quantity must be greater than zero"))
         else
           Effect
-            .persist(ItemUpdated(itemId, quantity))
+            .persist(ItemQuantityAdjusted(cartId, itemId, quantity))
             .thenReply(replyTo) { updatedCart =>
               StatusReply.Success(updatedCart.toSummary)
             }
@@ -222,20 +222,12 @@ object ShoppingCart {
             StatusReply.Error("Quantity must be greater than zero"))
         else
           Effect
-            .persist(ItemUpdated(itemId, -quantity))
+            .persist(ItemQuantityAdjusted(cartId, itemId, -quantity))
             .thenReply(replyTo)(updatedCart =>
               StatusReply.Success(updatedCart.toSummary))
-
 
       case Checkout(replyTo) =>
-        if (state.isEmpty)
-          Effect.reply(replyTo)(
-            StatusReply.Error("Cannot checkout an empty shopping cart"))
-        else
-          Effect
-            .persist(CheckedOut(Instant.now()))
-            .thenReply(replyTo)(updatedCart =>
-              StatusReply.Success(updatedCart.toSummary))
+        Effect.reply(replyTo)(StatusReply.Success(state.toSummary))
 
       case Get(replyTo) =>
         Effect.reply(replyTo)(state.toSummary)
@@ -266,10 +258,10 @@ object ShoppingCart {
   //#eventHandler
   private def handleEvent(state: State, event: Event): State = {
     event match {
-      case ItemUpdated(itemId, quantity) =>
+      case ItemQuantityAdjusted(_, itemId, quantity, _) =>
         state.updateItem(itemId, quantity)
-      case CheckedOut(eventTime) =>
-        state.checkout(eventTime)
+//      case CheckedOut(eventTime) =>
+//        state.checkout(eventTime)
     }
   }
   //#eventHandler
