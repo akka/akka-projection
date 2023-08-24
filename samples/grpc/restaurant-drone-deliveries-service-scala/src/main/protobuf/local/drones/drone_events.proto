@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "local.drones.proto";
+
+package local.drones;
+
+// events published by the drones
+message CoarseDroneLocation {
+  string drone_id = 1;
+  double latitude = 2;
+  double longitude = 3;
+}
+
