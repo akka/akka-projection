@@ -5,7 +5,7 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.grpc.GrpcServiceException
 import akka.pattern.StatusReply
 import akka.util.Timeout
-import central.Coordinates
+import central.{ Coordinates, DeliveriesSettings }
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 
@@ -13,7 +13,9 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.jdk.DurationConverters.JavaDurationOps
 
-class RestaurantDeliveriesServiceImpl(system: ActorSystem[_])
+class RestaurantDeliveriesServiceImpl(
+    system: ActorSystem[_],
+    settings: DeliveriesSettings)
     extends proto.RestaurantDeliveriesService {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -28,15 +30,24 @@ class RestaurantDeliveriesServiceImpl(system: ActorSystem[_])
   override def setUpRestaurant(in: proto.SetUpRestaurantRequest)
       : Future[proto.RegisterRestaurantResponse] = {
     logger.info(
-      "Set up restaurant {}, location {}",
+      "Set up restaurant {}, coordinates {}, location [{}]",
       in.restaurantId,
-      in.coordinates)
+      in.coordinates,
+      in.localControlLocationId)
+
+    if (!settings.locationIds.contains(in.localControlLocationId)) {
+      throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
+        s"The local control location id ${in.localControlLocationId} is not known to the service"))
+    }
+
     val entityRef =
       sharding.entityRefFor(RestaurantDeliveries.EntityKey, in.restaurantId)
 
     val coordinates = toCoordinates(in.coordinates)
     val reply =
-      entityRef.ask(RestaurantDeliveries.SetUpRestaurant(coordinates, _))
+      entityRef.ask(
+        RestaurantDeliveries
+          .SetUpRestaurant(in.localControlLocationId, coordinates, _))
 
     reply.map {
       case StatusReply.Error(error) =>
@@ -73,7 +84,7 @@ class RestaurantDeliveriesServiceImpl(system: ActorSystem[_])
   }
 
   private def toCoordinates(
-      protoCoordinates: Option[central.proto.Coordinates]): Coordinates =
+      protoCoordinates: Option[common.proto.Coordinates]): Coordinates =
     protoCoordinates match {
       case Some(pc) => Coordinates.fromProto(pc)
       case None =>

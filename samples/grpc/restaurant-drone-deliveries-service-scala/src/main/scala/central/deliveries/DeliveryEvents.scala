@@ -22,12 +22,12 @@ object DeliveryEvents {
         RestaurantDeliveries.DeliveryRegistered,
         proto.DeliveryRegistered](envelope =>
         Future.successful(Some(transformDeliveryRegistration(envelope))))
-      // skip all other types of events
+      // filter all other types of events for the RestaurantDeliveries
       .registerOrElseMapper(_ => None)
 
-    // FIXME how do we replicate only to the closest local drone control?
     val eventProducerSource = EventProducer.EventProducerSource(
       RestaurantDeliveries.EntityKey.name,
+      // Note: stream id used in consumer to consume this specific stream
       "delivery-events",
       transformation,
       EventProducerSettings(system))

@@ -5,10 +5,12 @@ option java_package = "local.drones.proto";
 
 package local.drones;
 
+import "common/coordinates.proto";
+
+// copy of the descriptor from local-drone-control who owns/publishes it
+
 // events published by the drones
 message CoarseDroneLocation {
-  string drone_id = 1;
-  double latitude = 2;
-  double longitude = 3;
+  common.Coordinates coordinates = 1;
 }
 

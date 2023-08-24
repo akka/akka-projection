@@ -1,4 +1,4 @@
-package central
+package central.drones
 
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.{
@@ -10,20 +10,20 @@ import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
-import akka.projection.{ Projection, ProjectionBehavior, ProjectionId }
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.{ Handler, SourceProvider }
+import akka.projection.{ Projection, ProjectionBehavior, ProjectionId }
 import akka.util.Timeout
+import central.CoarseGrainedCoordinates
 import central.Main.logger
-import central.drones.Drone
 
 import scala.concurrent.Future
 import scala.jdk.DurationConverters.JavaDurationOps
 
 /**
- * Handle drone events pushed by the local drone control systems.
+ * Handle aggregate drone events pushed by the local drone control systems.
  */
 object LocalDroneEvents {
 
@@ -87,13 +87,14 @@ object LocalDroneEvents {
           // Drone id without producer entity key
           val droneId =
             PersistenceId.extractEntityId(envelope.persistenceId)
+
+          // same drone but different entity type (our Drone representation)
           val entityRef = sharding.entityRefFor(Drone.EntityKey, droneId)
-          // FIXME we are getting
-          //  java.lang.ClassCastException: class akka.persistence.FilteredPayload$ cannot be cast to class local.drones.Drone$Event (akka.persistence.FilteredPayload$ and local.drones.Drone$Event are in unnamed module of loader 'app')
-          //  here
+
           envelope.event match {
-            case local.drones.proto
-                  .CoarseDroneLocation(droneId, latitude, longitude, _) =>
+            case local.drones.proto.CoarseDroneLocation(coordinates, _) =>
+              // we have encoded origin in a tag, extract it
+              // FIXME could there be a more automatic place where origin is available (envelope.source?)
               val originName = envelope.tags
                 .find(_.startsWith("location:"))
                 .get
@@ -101,7 +102,7 @@ object LocalDroneEvents {
               entityRef.askWithStatus(
                 Drone.UpdateLocation(
                   originName,
-                  CoarseGrainedCoordinates(latitude, longitude),
+                  CoarseGrainedCoordinates.fromProto(coordinates.get),
                   _))
             case unknown =>
               throw new RuntimeException(

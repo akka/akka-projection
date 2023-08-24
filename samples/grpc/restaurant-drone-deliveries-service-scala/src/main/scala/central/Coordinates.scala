@@ -7,11 +7,12 @@ package central
  * Decimal degree coordinates
  */
 final case class Coordinates(latitude: Double, longitude: Double) {
-  def toProto = proto.Coordinates(latitude, longitude)
+  def toProto: common.proto.Coordinates =
+    common.proto.Coordinates(latitude, longitude)
 }
 
 object Coordinates {
-  def fromProto(pc: proto.Coordinates): Coordinates =
+  def fromProto(pc: common.proto.Coordinates): Coordinates =
     Coordinates(pc.latitude, pc.longitude)
 
 }
@@ -25,6 +26,9 @@ object CoarseGrainedCoordinates {
       Math.floor(location.latitude * 100 + 0.5d) / 100,
       Math.floor(location.longitude * 100 + 0.5d) / 100)
   }
+
+  def fromProto(pc: common.proto.Coordinates): CoarseGrainedCoordinates =
+    CoarseGrainedCoordinates(pc.latitude, pc.longitude)
 
 }
 

@@ -7,8 +7,7 @@ import akka.management.scaladsl.AkkaManagement
 import central.deliveries.DeliveryEvents
 import central.deliveries.RestaurantDeliveries
 import central.deliveries.RestaurantDeliveriesServiceImpl
-import central.drones.Drone
-import central.drones.DroneOverviewServiceImpl
+import central.drones.{Drone, DroneOverviewServiceImpl, LocalDroneEvents}
 import org.slf4j.LoggerFactory
 
 import scala.util.control.NonFatal
@@ -30,6 +29,7 @@ object Main {
   }
 
   def init(implicit system: ActorSystem[SpawnProtocol.Command]): Unit = {
+    val settings = DeliveriesSettings(system)
     AkkaManagement(system).start()
     ClusterBootstrap(system).start()
 
@@ -44,10 +44,11 @@ object Main {
 
     val pushedDroneEventsHandler =
       LocalDroneEvents.pushedEventsGrpcHandler(system)
-    val deliveryEventsProducerService = DeliveryEvents.eventProducerService(system)
+    val deliveryEventsProducerService =
+      DeliveryEvents.eventProducerService(system)
     val droneOverviewService = new DroneOverviewServiceImpl(system)
-    val restaurantDeliveriesService = new RestaurantDeliveriesServiceImpl(
-      system)
+    val restaurantDeliveriesService =
+      new RestaurantDeliveriesServiceImpl(system, settings)
 
     DroneDeliveriesServer.start(
       interface,

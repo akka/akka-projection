@@ -30,6 +30,7 @@ object RestaurantDeliveries {
       extends Command
 
   final case class SetUpRestaurant(
+      localControlLocationId: String,
       restaurantLocation: Coordinates,
       replyTo: ActorRef[StatusReply[Done]])
       extends Command
@@ -40,14 +41,20 @@ object RestaurantDeliveries {
   sealed trait Event extends CborSerializable
 
   final case class DeliveryRegistered(delivery: Delivery) extends Event
-  final case class RestaurantLocationSet(location: Coordinates) extends Event
+  final case class RestaurantLocationSet(
+      localControlLocationId: String,
+      coordinates: Coordinates)
+      extends Event
 
   private final case class State(
+      localControlLocationId: String,
       restaurantLocation: Coordinates,
       currentDeliveries: Vector[Delivery])
   final case class Delivery(
       deliveryId: String,
-      // FIXME always the same for the same restaurant, annoying, but how else would we see them downstream?
+      // FIXME next two fields always the same for the same restaurant, annoying,
+      //       but how else would we see them in downstream projection?
+      localControlLocationId: String,
       origin: Coordinates,
       destination: Coordinates,
       timestamp: Instant)
@@ -64,7 +71,13 @@ object RestaurantDeliveries {
       PersistenceId(EntityKey.name, restaurantId),
       None,
       onCommand,
-      onEvent)
+      onEvent).withTaggerForState {
+      case (Some(state), _) =>
+        // tag events with location id as topic, grpc projection filters makes sure only that location
+        // picks them up for drone delivery
+        Set("t:" + state.localControlLocationId)
+      case _ => Set.empty
+    }
 
   private def onCommand(
       state: Option[State],
@@ -82,9 +95,9 @@ object RestaurantDeliveries {
             "Restaurant not yet initialized, cannot accept registrations"))
       case ListCurrentDeliveries(replyTo) =>
         Effect.reply(replyTo)(Vector.empty)
-      case SetUpRestaurant(location, replyTo) =>
+      case SetUpRestaurant(locationId, coordinates, replyTo) =>
         Effect
-          .persist(RestaurantLocationSet(location))
+          .persist(RestaurantLocationSet(locationId, coordinates))
           .thenReply(replyTo)(_ => StatusReply.Ack)
     }
 
@@ -106,6 +119,7 @@ object RestaurantDeliveries {
                 DeliveryRegistered(
                   Delivery(
                     deliveryId,
+                    state.localControlLocationId,
                     state.restaurantLocation,
                     destination,
                     Instant.now())))
@@ -113,8 +127,8 @@ object RestaurantDeliveries {
         }
       case ListCurrentDeliveries(replyTo) =>
         Effect.reply(replyTo)(state.currentDeliveries)
-      case SetUpRestaurant(_, replyTo) =>
-        Effect.reply(replyTo)(
+      case setup: SetUpRestaurant =>
+        Effect.reply(setup.replyTo)(
           StatusReply.Error("Changing restaurant location not supported"))
     }
   }
@@ -124,9 +138,13 @@ object RestaurantDeliveries {
       case (Some(state), DeliveryRegistered(delivery)) =>
         Some(
           state.copy(currentDeliveries = state.currentDeliveries :+ delivery))
-      case (None, RestaurantLocationSet(location)) =>
+      case (None, RestaurantLocationSet(localControlLocationId, location)) =>
         // initial setup of location
-        Some(State(restaurantLocation = location, Vector.empty))
+        Some(
+          State(
+            restaurantLocation = location,
+            localControlLocationId = localControlLocationId,
+            currentDeliveries = Vector.empty))
       case _ =>
         throw new RuntimeException("Unexpected event/state combination")
     }

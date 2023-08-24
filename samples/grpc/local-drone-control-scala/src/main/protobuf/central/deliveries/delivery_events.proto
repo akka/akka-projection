@@ -5,6 +5,8 @@ option java_package = "central.deliveries.proto";
 
 package central.deliveries;
 
+// copy of the descriptor from restaurant-drone-deliveries who owns/publishes the events
+
 import "common/coordinates.proto";
 
 message DeliveryRegistered {

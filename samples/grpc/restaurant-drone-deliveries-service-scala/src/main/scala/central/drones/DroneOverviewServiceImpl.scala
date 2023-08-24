@@ -72,7 +72,7 @@ class DroneOverviewServiceImpl(system: ActorSystem[_])
             proto.CoarseDroneLocationsResponse(byLocation.map {
               case (location, entries) =>
                 proto.CoarseDroneLocations(
-                  Some(central.proto
+                  Some(common.proto
                     .Coordinates(location.latitude, location.longitude)),
                   entries)
             }.toVector)

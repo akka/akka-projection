@@ -24,14 +24,11 @@ object DroneEvents {
 
   val StreamId = "drone-events"
 
-  def eventToCloudPushBehavior(
+  def eventToCloudPushBehavior(settings: Settings)(
       implicit system: ActorSystem[_]): Behavior[ProjectionBehavior.Command] = {
-    val producerOriginId =
-      system.settings.config.getString("local-drone-control.service-id")
-
     logger.info(
       "Pushing events to central cloud, origin id [{}]",
-      producerOriginId)
+      settings.locationId)
 
     // turn events into a public protocol (protobuf) type before publishing
     val eventTransformation =
@@ -40,15 +37,12 @@ object DroneEvents {
         proto.CoarseDroneLocation] { envelope =>
         val event = envelope.event
         Future.successful(
-          Some(
-            proto.CoarseDroneLocation(
-              envelope.persistenceId,
-              event.coordinates.latitude,
-              event.coordinates.longitude)))
+          Some(proto.CoarseDroneLocation(Some(event.coordinates.toProto))))
       }
 
     val eventProducer = EventProducerPush[Drone.Event](
-      originId = producerOriginId,
+      // location id is unique and informative, so use it as producer origin id as well
+      originId = settings.locationId,
       eventProducerSource = EventProducerSource[Drone.Event](
         Drone.EntityKey.name,
         StreamId,

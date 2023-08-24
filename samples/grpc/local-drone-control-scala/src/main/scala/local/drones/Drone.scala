@@ -7,6 +7,7 @@ import akka.actor.typed.Behavior
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
+import akka.pattern.StatusReply
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
@@ -16,6 +17,9 @@ object Drone {
   sealed trait Command extends CborSerializable
 
   final case class ReportPosition(position: Position, replyTo: ActorRef[Done])
+      extends Command
+
+  final case class GetCurrentPosition(replyTo: ActorRef[StatusReply[Position]])
       extends Command
 
   sealed trait Event extends CborSerializable
@@ -68,7 +72,7 @@ object Drone {
             .persist(PositionUpdated(position))
             .thenReply(replyTo)(_ => Done)
         } else {
-          // new grid location
+          // no previous location known or new grid location
           Effect
             .persist(
               PositionUpdated(position),
@@ -76,6 +80,16 @@ object Drone {
             .thenReply(replyTo)(_ => Done)
         }
       }
+
+    case GetCurrentPosition(replyTo) =>
+      state.currentPosition match {
+        case Some(position) =>
+          Effect.reply(replyTo)(StatusReply.Success(position))
+        case None =>
+          Effect.reply(replyTo)(
+            StatusReply.Error("Position of drone is unknown"))
+      }
+
   }
 
   private def handleEvent(state: State, event: Event): State = event match {
