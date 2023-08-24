@@ -132,13 +132,13 @@ import scalapb.options.Scalapb
 
   private val reflectionCache = TrieMap.empty[String, Try[ResolvedType[Any]]]
 
-  // Class name -> proto type name
-  private lazy val allReverseTypes: Map[String, String] = (for {
+  // Class name -> typeUrl
+  private lazy val allReverseTypeUrls: Map[String, String] = (for {
     descriptor <- allDescriptors.values
     messageType <- descriptor.getMessageTypes.asScala
   } yield {
     val resolvedType = resolveTypeDescriptor(messageType)
-    resolvedType.messageClass.getName -> messageType.getFullName
+    resolvedType.messageClass.getName -> (GoogleTypeUrlPrefix + messageType.getFullName)
   }).toMap
 
   /**
@@ -162,9 +162,8 @@ import scalapb.options.Scalapb
       case SerializedEvent(bytes, id, manifest) =>
         if (id == akkaProtobufSerializer.identifier && isDefaultAkkaProtobufSerializer) {
           // see corresponding typeUrl cases in `toSerializedEvent`
-          allReverseTypes.get(manifest) match {
-            case Some(typeName) =>
-              val typeUrl = GoogleTypeUrlPrefix + typeName
+          allReverseTypeUrls.get(manifest) match {
+            case Some(typeUrl) =>
               ScalaPbAny(typeUrl, ByteString.copyFrom(bytes))
             case None =>
               val errMsg =
