@@ -108,7 +108,10 @@ object EventProducer {
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
       orElse = envelope =>
-        Future.failed(new IllegalArgumentException(s"Missing transformation for event [${envelope.event.getClass}]")))
+        Future.failed(
+          new IllegalArgumentException(
+            s"Missing transformation for event [${envelope.event.getClass}]. " +
+            "Use Transformation.identity to pass through each event as is.")))
 
     /**
      * No transformation. Pass through each event as is.
