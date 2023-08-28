@@ -306,7 +306,15 @@ The exclude criteria can be a combination of:
 * `IncludeRegexEntityIds` - include events for entities with entity ids matching the given regular expressions
 * `IncludeEntityIds` - include events for entities with the given entity ids
 
-The filter is updated with the @apidoc[ConsumerFilter] extension.
+#### Static consumer filters
+
+For a static filter that never changes during the life of the consumer, an initial filter can be set by configuring it
+with @apidoc[GrpcQuerySettings.withInitialConsumerFilter](GrpcQuerySettings) on the `GrpcQuerySettings` that the 
+`GrpcReadJournal` is constructed with.
+
+#### Dynamic consumer filters
+
+For dynamic filters, that changes during the life of the consumer, the filter is updated with the @apidoc[ConsumerFilter] extension:
 
 Scala
 :  @@snip [ShoppingCartEventConsumer.scala](/samples/grpc/shopping-analytics-service-scala/src/main/scala/shopping/analytics/ShoppingCartEventConsumer.scala) { #update-filter }
