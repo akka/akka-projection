@@ -11,7 +11,11 @@ import scala.util.Try
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.persistence.SerializedEvent
+import akka.serialization.DisabledJavaSerializer
 import akka.serialization.SerializationExtension
+import akka.serialization.Serializer
+import akka.serialization.SerializerWithStringManifest
 import akka.serialization.Serializers
 import akka.util.ccompat.JavaConverters._
 import com.google.common.base.CaseFormat
@@ -51,14 +55,24 @@ import scalapb.options.Scalapb
      */
     def parseFrom(bytes: ByteString): T
 
+    def messageClass: Class[_]
+
+    def akkaSerializer: Option[Serializer]
+
   }
 
-  private final class JavaPbResolvedType[T <: Message](parser: Parser[T]) extends ResolvedType[T] {
+  private final class JavaPbResolvedType[T <: Message](
+      parser: Parser[T],
+      override val messageClass: Class[_],
+      override val akkaSerializer: Option[Serializer])
+      extends ResolvedType[T] {
     override def parseFrom(bytes: ByteString): T = parser.parseFrom(bytes)
   }
 
   private final class ScalaPbResolvedType[T <: scalapb.GeneratedMessage](
-      companion: scalapb.GeneratedMessageCompanion[_])
+      companion: scalapb.GeneratedMessageCompanion[_],
+      override val messageClass: Class[_],
+      override val akkaSerializer: Option[Serializer])
       extends ResolvedType[T] {
     override def parseFrom(bytes: ByteString): T = companion.parseFrom(bytes.newCodedInput()).asInstanceOf[T]
   }
@@ -104,10 +118,21 @@ import scalapb.options.Scalapb
   import ProtoAnySerialization._
 
   private val serialization = SerializationExtension(system.classicSystem)
+  private lazy val akkaProtobufSerializer: Serializer =
+    serialization.serializerFor(classOf[com.google.protobuf.GeneratedMessageV3])
+  private lazy val isDefaultAkkaProtobufSerializer = {
+    val yes = akkaProtobufSerializer.getClass == classOf[akka.remote.serialization.ProtobufSerializer]
+    if (yes && akkaProtobufSerializer.isInstanceOf[SerializerWithStringManifest]) {
+      // just in case it is changed in the future
+      throw new IllegalStateException("ProtobufSerializer was expected to not be a SerializerWithStringManifest")
+    }
+    yes
+  }
 
   private val allDescriptors = flattenDescriptors(descriptors)
 
-  private val allTypes = (for {
+  // proto type name -> Descriptor
+  private val allTypes: Map[String, Descriptors.Descriptor] = (for {
     descriptor <- allDescriptors.values
     messageType <- descriptor.getMessageTypes.asScala
   } yield messageType.getFullName -> messageType).toMap
@@ -139,12 +164,7 @@ import scalapb.options.Scalapb
         val serializer = serialization.findSerializerFor(otherAnyRef)
         val manifest = Serializers.manifestFor(serializer, otherAnyRef)
         val id = serializer.identifier
-        val typeUrl =
-          if (manifest.isEmpty) s"$AkkaSerializationTypeUrlPrefix$id"
-          else
-            s"$AkkaSerializationTypeUrlPrefix$id$AkkaTypeUrlManifestSeparator$manifest"
-
-        ScalaPbAny(typeUrl, ByteString.copyFrom(bytes))
+        ScalaPbAny(akkaSerializationTypeUrl(id, manifest), ByteString.copyFrom(bytes))
     }
   }
 
@@ -158,15 +178,7 @@ import scalapb.options.Scalapb
     } else if (typeUrl.startsWith(GoogleTypeUrlPrefix)) {
       decodeMessage(scalaPbAny)
     } else if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
-      val idAndManifest =
-        typeUrl.substring(AkkaSerializationTypeUrlPrefix.length)
-      val i = idAndManifest.indexOf(AkkaTypeUrlManifestSeparator)
-      val (id, manifest) =
-        if (i == -1)
-          idAndManifest.toInt -> ""
-        else
-          idAndManifest.substring(0, i).toInt -> idAndManifest.substring(i + 1)
-
+      val (id, manifest) = akkaSerializerIdAndManifestFromTypeUrl(typeUrl)
       serialization.deserialize(scalaPbAny.value.toByteArray, id, manifest).get
     } else if (prefer == Prefer.Scala) {
       // when custom typeUrl
@@ -175,6 +187,57 @@ import scalapb.options.Scalapb
       // when custom typeUrl
       ScalaPbAny.toJavaProto(scalaPbAny)
     }
+  }
+
+  def toSerializedEvent(scalaPbAny: ScalaPbAny): Option[SerializedEvent] = {
+    // see corresponding typeUrl cases in `deserialize`
+
+    val typeUrl = scalaPbAny.typeUrl
+    if (typeUrl == ProtoAnyTypeUrl) {
+      // We don't try to optimize this case. One level of indirection too much, and probably not a common case.
+      None
+    } else if (typeUrl.startsWith(GoogleTypeUrlPrefix)) {
+      val resolvedType = resolveTypeUrl(typeUrl)
+      resolvedType.akkaSerializer match {
+        case Some(serializer) =>
+          if (serializer.identifier == akkaProtobufSerializer.identifier && isDefaultAkkaProtobufSerializer) {
+            // this is the case for akka.remote.serialization.ProtobufSerializer, which is configured by default
+            // for protobuf messages
+            val manifest = if (serializer.includeManifest) resolvedType.messageClass.getName else ""
+            Some(new SerializedEvent(scalaPbAny.value.toByteArray, serializer.identifier, manifest))
+          } else {
+            // we don't know how what a custom serializer would do
+            None
+          }
+        case None =>
+          log.debug(
+            "No Akka Serializer for Protobuf message class [{}]. Consider defining it in `akka.actor.serialization-bindings`.",
+            resolvedType.messageClass.getName)
+          None
+      }
+    } else if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
+      val (id, manifest) = akkaSerializerIdAndManifestFromTypeUrl(typeUrl)
+      Some(new SerializedEvent(scalaPbAny.value.toByteArray, id, manifest))
+    } else {
+      // We don't try to optimize this case. One level of indirection too much, and probably not a common case.
+      None
+    }
+  }
+
+  private def akkaSerializationTypeUrl(serializerId: Int, manifest: String): String = {
+    if (manifest.isEmpty) s"$AkkaSerializationTypeUrlPrefix$serializerId"
+    else
+      s"$AkkaSerializationTypeUrlPrefix$serializerId$AkkaTypeUrlManifestSeparator$manifest"
+  }
+
+  private def akkaSerializerIdAndManifestFromTypeUrl(typeUrl: String): (Int, String) = {
+    val idAndManifest =
+      typeUrl.substring(AkkaSerializationTypeUrlPrefix.length)
+    val i = idAndManifest.indexOf(AkkaTypeUrlManifestSeparator)
+    if (i == -1)
+      idAndManifest.toInt -> ""
+    else
+      idAndManifest.substring(0, i).toInt -> idAndManifest.substring(i + 1)
   }
 
   private def strippedFileName(fileName: String) =
@@ -215,7 +278,20 @@ import scalapb.options.Scalapb
         .getMethod("parser")
         .invoke(null)
         .asInstanceOf[Parser[com.google.protobuf.Message]]
-      Some(new JavaPbResolvedType(parser))
+      val akkaSerializer = Try(serialization.serializerFor(clazz)).toOption
+        .flatMap {
+          case _: DisabledJavaSerializer =>
+            // There will be a warning log from Akka "Using the Java serializer", which need additional clarification
+            // in this context.
+            log.warn(
+              "Missing Akka serializer for protobuf message class [{}]. Consider defining it in " +
+              "`akka.actor.serialization-bindings`. It was bound to disabled Java serializer, which " +
+              "is not what you want.",
+              clazz.getName)
+            None
+          case other => Some(other)
+        }
+      Some(new JavaPbResolvedType(parser, clazz, akkaSerializer))
 
     } catch {
       case cnfe: ClassNotFoundException =>
@@ -271,7 +347,9 @@ import scalapb.options.Scalapb
         log.debug("Attempting to load scalapb.GeneratedMessageCompanion object {}", className)
         val companionObject =
           system.dynamicAccess.getObjectFor[GeneratedMessageCompanion[GeneratedMessage]](className).get
-        Some(new ScalaPbResolvedType(companionObject))
+        val clazz = system.dynamicAccess.getClassFor[Any](className).get
+        val akkaSerializer = Try(serialization.serializerFor(clazz)).toOption
+        Some(new ScalaPbResolvedType(companionObject, clazz, akkaSerializer))
       } catch {
         case cnfe: ClassNotFoundException =>
           log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
@@ -304,8 +382,26 @@ import scalapb.options.Scalapb
         })
       .get
 
-  private def resolveTypeUrl(typeName: String): Option[ResolvedType[_]] =
+  private def tryResolveTypeUrl(typeUrl: String): Option[ResolvedType[_]] = {
+    val typeName = typeNameFromTypeUrl(typeUrl)
     allTypes.get(typeName).map(resolveTypeDescriptor)
+  }
+
+  private def resolveTypeUrl(typeUrl: String): ResolvedType[_] =
+    tryResolveTypeUrl(typeUrl) match {
+      case Some(parser) =>
+        parser
+      case None =>
+        val errMsg =
+          if (allDescriptors.isEmpty)
+            s"Unable to find Protobuf descriptor for type: [$typeUrl]. " +
+            "No descriptors defined when creating GrpcReadJournal. Note that GrpcReadJournal should be created " +
+            "with the GrpcReadJournal apply/create factory method and not from configuration via GrpcReadJournalProvider " +
+            "when using Protobuf serialization."
+          else
+            s"Unable to find Protobuf descriptor for type: [$typeUrl]."
+        throw SerializationException(errMsg)
+    }
 
   def encode(value: Any): ScalaPbAny =
     value match {
@@ -338,18 +434,8 @@ import scalapb.options.Scalapb
     if (!typeUrl.startsWith(GoogleTypeUrlPrefix)) {
       log.warn2("Message type [{}] does not match type url prefix [{}]", typeUrl, GoogleTypeUrlPrefix)
     }
-    val typeName = typeUrl.split("/", 2) match {
-      case Array(_, typeName) =>
-        typeName
-      case _ =>
-        log.warn2(
-          "Message type [{}] does not have a url prefix, it should have one that matchers the type url prefix [{}]",
-          typeUrl,
-          GoogleTypeUrlPrefix)
-        typeUrl
-    }
 
-    resolveTypeUrl(typeName) match {
+    tryResolveTypeUrl(typeUrl) match {
       case Some(parser) =>
         parser.parseFrom(any.value)
       case None =>
@@ -362,6 +448,19 @@ import scalapb.options.Scalapb
           else
             s"Unable to find Protobuf descriptor for type: [$typeUrl]."
         throw SerializationException(errMsg)
+    }
+  }
+
+  private def typeNameFromTypeUrl(typeUrl: String): String = {
+    typeUrl.split("/", 2) match {
+      case Array(_, typeName) =>
+        typeName
+      case _ =>
+        log.warn2(
+          "Message type [{}] does not have a url prefix, it should have one that matchers the type url prefix [{}]",
+          typeUrl,
+          GoogleTypeUrlPrefix)
+        typeUrl
     }
   }
 
