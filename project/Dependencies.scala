@@ -20,10 +20,10 @@ object Dependencies {
   val AkkaProjectionVersionInDocs = "1.4.0"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.8.4")
+    val akka = sys.props.getOrElse("build.akka.version", "2.8.4+12-84502854-SNAPSHOT")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
-    val akkaPersistenceR2dbc = "1.2.0-M3"
+    val akkaPersistenceR2dbc = "1.2.0-M3+16-167afc25-SNAPSHOT"
     val alpakka = "6.0.1"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.2")
     val slick = "3.4.1"
