@@ -174,7 +174,7 @@ Filters can be used when a consumer is only interested in a subset of the entiti
 on both the producer side and on the consumer side, and they can be changed at runtime.
 
 By default, all events are emitted, and filters selectively choose what events to filter out. For some of the filters
-it is useful to first define a @apidoc[ConsumerFilter.filterAll](ConsumerFilter) filter and then selectively include events. 
+it is useful to first define a @apidoc[ConsumerFilter.excludeAll](ConsumerFilter$) filter and then selectively include events. 
 For example to only include events from topics matching topic filters.
 
 @@@ note
