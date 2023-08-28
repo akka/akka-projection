@@ -121,25 +121,54 @@ private[akka] object ProtobufProtocolConversions {
     }
   }
 
-  def eventToEnvelope[Evt](event: Event, protoAnySerialization: ProtoAnySerialization): EventEnvelope[Evt] = {
-    val eventOffset = protocolOffsetToOffset(event.offset).asInstanceOf[TimestampOffset]
-    val evt =
-      event.payload.map(protoAnySerialization.deserialize(_).asInstanceOf[Evt])
+  def eventToEnvelope[Evt](event: Event, protoAnySerialization: ProtoAnySerialization): EventEnvelope[Evt] =
+    eventToEnvelope(event, protoAnySerialization, deserializeEvent = true).asInstanceOf[EventEnvelope[Evt]]
 
+  def eventToEnvelope(
+      event: Event,
+      protoAnySerialization: ProtoAnySerialization,
+      deserializeEvent: Boolean): EventEnvelope[Any] = {
+    val eventOffset = protocolOffsetToOffset(event.offset).asInstanceOf[TimestampOffset]
     val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
 
-    new EventEnvelope(
-      eventOffset,
-      event.persistenceId,
-      event.seqNr,
-      evt,
-      eventOffset.timestamp.toEpochMilli,
-      eventMetadata = metadata,
-      PersistenceId.extractEntityType(event.persistenceId),
-      event.slice,
-      filtered = false,
-      source = event.source,
-      tags = event.tags.toSet)
+    def envelopeWithDeserializedEvent: EventEnvelope[Any] = {
+      val evt = event.payload.map(protoAnySerialization.deserialize)
+      new EventEnvelope(
+        eventOffset,
+        event.persistenceId,
+        event.seqNr,
+        evt,
+        eventOffset.timestamp.toEpochMilli,
+        eventMetadata = metadata,
+        PersistenceId.extractEntityType(event.persistenceId),
+        event.slice,
+        filtered = false,
+        source = event.source,
+        tags = event.tags.toSet)
+    }
+
+    if (deserializeEvent || event.payload.isEmpty) {
+      envelopeWithDeserializedEvent
+    } else {
+      protoAnySerialization.toSerializedEvent(event.payload.get) match {
+        case Some(serializedEvent) =>
+          new EventEnvelope(
+            eventOffset,
+            event.persistenceId,
+            event.seqNr,
+            eventOption = Some(serializedEvent),
+            eventOffset.timestamp.toEpochMilli,
+            eventMetadata = metadata,
+            PersistenceId.extractEntityType(event.persistenceId),
+            event.slice,
+            filtered = false,
+            source = event.source,
+            tags = event.tags.toSet)
+        case None =>
+          // couldn't create SerializedEvent without deserialization, fallback to deserializeEvent = true
+          envelopeWithDeserializedEvent
+      }
+    }
   }
 
   def filteredEventToEnvelope[Evt](filtered: FilteredEvent): EventEnvelope[Evt] = {

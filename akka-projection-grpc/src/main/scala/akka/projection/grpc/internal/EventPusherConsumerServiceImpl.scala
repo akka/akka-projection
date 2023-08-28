@@ -100,9 +100,14 @@ private[akka] final class EventPusherConsumerServiceImpl(
 
               interceptedTail
                 .map { consumeEventIn =>
-                  if (consumeEventIn.message.isEvent)
-                    ProtobufProtocolConversions.eventToEnvelope[Any](consumeEventIn.getEvent, protoAnySerialization)
-                  else if (consumeEventIn.message.isFilteredEvent) {
+                  if (consumeEventIn.message.isEvent) {
+                    // When no transformation we don't need to deserialize the event and can use SerializedEvent
+                    val deserializeEvent = transformer ne EventProducerPushDestination.Transformation.empty
+                    ProtobufProtocolConversions.eventToEnvelope(
+                      consumeEventIn.getEvent,
+                      protoAnySerialization,
+                      deserializeEvent)
+                  } else if (consumeEventIn.message.isFilteredEvent) {
                     ProtobufProtocolConversions.filteredEventToEnvelope[Any](consumeEventIn.getFilteredEvent)
                   } else {
                     throw new GrpcServiceException(Status.INVALID_ARGUMENT
@@ -120,6 +125,9 @@ private[akka] final class EventPusherConsumerServiceImpl(
                       transformedEventEnvelope.sequenceNr,
                       transformedEventEnvelope.persistenceId,
                       if (transformedEventEnvelope.filtered) " filtered" else "")
+
+                  // Note that when there is no Transformation the event is SerializedEvent, which will be passed
+                  // through the EventWriter and the journal can write that without additional serialization.
 
                   destination.eventWriter
                     .askWithStatus[EventWriter.WriteAck](EventWriter.Write(
