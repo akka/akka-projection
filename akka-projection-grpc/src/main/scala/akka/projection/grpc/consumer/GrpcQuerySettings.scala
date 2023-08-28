@@ -11,9 +11,8 @@ import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import com.typesafe.config.Config
 
+import akka.util.ccompat.JavaConverters._
 import scala.collection.immutable
-import scala.jdk.CollectionConverters.CollectionHasAsScala
-
 @ApiMayChange
 object GrpcQuerySettings {
 
