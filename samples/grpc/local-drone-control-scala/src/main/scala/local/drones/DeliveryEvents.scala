@@ -31,7 +31,9 @@ object DeliveryEvents {
       // FIXME stream-id duplicated in config
       "delivery-events",
       // location id already is in the format of a topic filter expression
-      Vector(ConsumerFilter.IncludeTopics(Set(settings.locationId))))
+      Vector(
+        ConsumerFilter.ExcludeRegexEntityIds(Set(".*")),
+        ConsumerFilter.IncludeTopics(Set(settings.locationId))))
 
     val eventsBySlicesQuery =
       GrpcReadJournal(
