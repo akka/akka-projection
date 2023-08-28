@@ -98,14 +98,16 @@ final class GrpcQuerySettings private (
     copy(additionalRequestMetadata = Some(metadata))
 
   /**
-   * Scala API: Set the initial consumer filter to use for events
+   * Scala API: Set the initial consumer filter to use for events. Should only be used for static, up front consumer filters.
+   * Combining this with updating consumer filters directly means that the filters may be reset to these filters on GrpcReadJournal creation.
    */
   def withInitialConsumerFilter(
       initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria]): GrpcQuerySettings =
     copy(initialConsumerFilter = initialConsumerFilter)
 
   /**
-   * Java API: Set the initial consumer filter to use for events
+   * Java API: Set the initial consumer filter to use for events. Should only be used for static, up front consumer filters.
+   * Combining this with updating consumer filters directly means that the filters may be reset to these filters on GrpcReadJournal creation.
    */
   def withInitialConsumerFilter(
       initialConsumerFilter: java.util.List[ConsumerFilter.FilterCriteria]): GrpcQuerySettings =
