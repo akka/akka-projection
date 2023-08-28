@@ -112,6 +112,12 @@ object GrpcReadJournal {
     val protoAnySerialization =
       new ProtoAnySerialization(system.classicSystem.toTyped, protobufDescriptors, protobufPrefer)
 
+    if (settings.initialConsumerFilter.nonEmpty) {
+      ConsumerFilter(system.classicSystem.toTyped).ref ! ConsumerFilter.UpdateFilter(
+        settings.streamId,
+        settings.initialConsumerFilter)
+    }
+
     new scaladsl.GrpcReadJournal(
       system.classicSystem.asInstanceOf[ExtendedActorSystem],
       settings,
