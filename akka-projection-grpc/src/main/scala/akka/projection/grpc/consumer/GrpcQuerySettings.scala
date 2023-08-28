@@ -11,6 +11,8 @@ import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import com.typesafe.config.Config
 
+import akka.util.ccompat.JavaConverters._
+import scala.collection.immutable
 @ApiMayChange
 object GrpcQuerySettings {
 
@@ -45,7 +47,7 @@ object GrpcQuerySettings {
             .build())
     }
 
-    new GrpcQuerySettings(streamId, additionalHeaders)
+    new GrpcQuerySettings(streamId, additionalHeaders, Vector.empty)
   }
 
   /**
@@ -66,7 +68,7 @@ object GrpcQuerySettings {
    * @param streamId The stream id to consume. It is exposed by the producing side.
    */
   def apply(streamId: String): GrpcQuerySettings = {
-    new GrpcQuerySettings(streamId, additionalRequestMetadata = None)
+    new GrpcQuerySettings(streamId, additionalRequestMetadata = None, initialConsumerFilter = Vector.empty)
   }
 
   /**
@@ -75,12 +77,15 @@ object GrpcQuerySettings {
    * @param streamId The stream id to consume. It is exposed by the producing side.
    */
   def create(streamId: String): GrpcQuerySettings = {
-    new GrpcQuerySettings(streamId, additionalRequestMetadata = None)
+    new GrpcQuerySettings(streamId, additionalRequestMetadata = None, initialConsumerFilter = Vector.empty)
   }
 }
 
 @ApiMayChange
-final class GrpcQuerySettings private (val streamId: String, val additionalRequestMetadata: Option[Metadata]) {
+final class GrpcQuerySettings private (
+    val streamId: String,
+    val additionalRequestMetadata: Option[Metadata],
+    val initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria]) {
   require(
     streamId != "",
     "streamId must be an id exposed by the producing side but was undefined on the consuming side.")
@@ -89,6 +94,28 @@ final class GrpcQuerySettings private (val streamId: String, val additionalReque
    * Additional request metadata, for authentication/authorization of the request on the remote side.
    */
   def withAdditionalRequestMetadata(metadata: Metadata): GrpcQuerySettings =
-    new GrpcQuerySettings(streamId, Option(metadata))
+    copy(additionalRequestMetadata = Some(metadata))
+
+  /**
+   * Scala API: Set the initial consumer filter to use for events. Should only be used for static, up front consumer filters.
+   * Combining this with updating consumer filters directly means that the filters may be reset to these filters on GrpcReadJournal creation.
+   */
+  def withInitialConsumerFilter(
+      initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria]): GrpcQuerySettings =
+    copy(initialConsumerFilter = initialConsumerFilter)
+
+  /**
+   * Java API: Set the initial consumer filter to use for events. Should only be used for static, up front consumer filters.
+   * Combining this with updating consumer filters directly means that the filters may be reset to these filters on GrpcReadJournal creation.
+   */
+  def withInitialConsumerFilter(
+      initialConsumerFilter: java.util.List[ConsumerFilter.FilterCriteria]): GrpcQuerySettings =
+    copy(initialConsumerFilter = initialConsumerFilter.asScala.toVector)
+
+  private def copy(
+      streamId: String = streamId,
+      additionalRequestMetadata: Option[Metadata] = additionalRequestMetadata,
+      initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria] = initialConsumerFilter): GrpcQuerySettings =
+    new GrpcQuerySettings(streamId, additionalRequestMetadata, initialConsumerFilter)
 
 }
