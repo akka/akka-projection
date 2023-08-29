@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "central.deliveries.proto";
+
+package central.deliveries;
+
+// copy of the descriptor from restaurant-drone-deliveries who owns/publishes the events
+
+import "common/coordinates.proto";
+
+message DeliveryRegistered {
+  string delivery_id = 1;
+  common.Coordinates origin = 2;
+  common.Coordinates destination = 3;
+}

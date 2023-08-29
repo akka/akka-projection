@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "local.drones.proto";
+
+package local.drones;
+
+import "common/coordinates.proto";
+
+// events published by the drone entity, for consumption/push to the cloud
+
+message CoarseDroneLocation {
+  // coordinates but truncated to a coarse grained location
+  common.Coordinates coordinates = 1;
+}
+
