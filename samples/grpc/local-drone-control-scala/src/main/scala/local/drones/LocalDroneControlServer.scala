@@ -19,16 +19,19 @@ object LocalDroneControlServer {
       interface: String,
       port: Int,
       system: ActorSystem[_],
-      droneGrpcService: proto.DroneService): Unit = {
+      droneService: proto.DroneService,
+      deliveriesQueueService: proto.DeliveriesQueueService): Unit = {
     implicit val sys: ActorSystem[_] = system
     implicit val ec: ExecutionContext =
       system.executionContext
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
-        proto.DroneServiceHandler.partial(droneGrpcService),
+        proto.DroneServiceHandler.partial(droneService),
+        proto.DeliveriesQueueServiceHandler.partial(deliveriesQueueService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters
-        ServerReflection.partial(List(proto.DroneService)))
+        ServerReflection.partial(
+          List(proto.DroneService, proto.DeliveriesQueueService)))
 
     val bound =
       Http()

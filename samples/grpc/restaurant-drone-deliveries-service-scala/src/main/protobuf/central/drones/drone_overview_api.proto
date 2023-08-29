@@ -5,6 +5,8 @@ option java_package = "central.drones.proto";
 
 package central.drones;
 
+import "common/coordinates.proto";
+
 service DroneOverviewService {
   rpc GetDroneOverview(GetDroneOverviewRequest) returns (GetDroneOverviewResponse) {}
   rpc GetCoarseDroneLocations(CoarseDroneLocationsRequest) returns (CoarseDroneLocationsResponse) {}
@@ -20,9 +22,8 @@ message CoarseDroneLocationsResponse {
 }
 
 message CoarseDroneLocations {
-  double coarse_latitude = 1;
-  double coarse_longitude = 2;
-  repeated string drones = 3;
+  common.Coordinates coordinates = 1;
+  repeated string drones = 2;
 }
 
 message GetDroneOverviewRequest {

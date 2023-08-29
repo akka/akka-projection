@@ -1,4 +1,4 @@
-package central.drones
+package central
 
 // common location representations, could be a shared library between local control and restaurant
 // but to keep project structure simple we duplicate
@@ -6,7 +6,16 @@ package central.drones
 /**
  * Decimal degree coordinates
  */
-final case class Coordinates(latitude: Double, longitude: Double)
+final case class Coordinates(latitude: Double, longitude: Double) {
+  def toProto: common.proto.Coordinates =
+    common.proto.Coordinates(latitude, longitude)
+}
+
+object Coordinates {
+  def fromProto(pc: common.proto.Coordinates): Coordinates =
+    Coordinates(pc.latitude, pc.longitude)
+
+}
 
 object CoarseGrainedCoordinates {
 
@@ -17,6 +26,9 @@ object CoarseGrainedCoordinates {
       Math.floor(location.latitude * 100 + 0.5d) / 100,
       Math.floor(location.longitude * 100 + 0.5d) / 100)
   }
+
+  def fromProto(pc: common.proto.Coordinates): CoarseGrainedCoordinates =
+    CoarseGrainedCoordinates(pc.latitude, pc.longitude)
 
 }
 
