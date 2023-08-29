@@ -34,10 +34,9 @@
     curl http://localhost:9101/ready
     ```
 
-6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl).
+6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl). Register a sensor:
 
     ```shell
-    # register
     grpcurl -d '{"sensor_id":"temp-1", "secret":"foo"}' -plaintext 127.0.0.1:8101 iot.registration.RegistrationService.Register
     ```
 
@@ -46,5 +45,12 @@
 7. Consume events from edge:
 
     ```shell
-    sbt "Test/runMain iot.registration.EdgeApp"
+    sbt "Test/runMain iot.EdgeApp"
    ```
+
+8. After registration of a sensor the EdgeApp will simulate temperature readings, which will be consumed by the iot-service. Read current temperature, which should be updated with a random value: 
+
+9. ```shell
+    grpcurl -d '{"sensor_id":"temp-1"}' -plaintext 127.0.0.1:8101 iot.temperature.SensorTwinService.GetTemperature
+    ```
+

@@ -1,24 +1,19 @@
-package iot.registration
+package iot.temperature
 
 import java.util.concurrent.TimeoutException
 
 import scala.concurrent.Future
 
-import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.grpc.GrpcServiceException
 import akka.util.Timeout
-import com.google.protobuf.empty.Empty
 import io.grpc.Status
-import org.slf4j.LoggerFactory
+import iot.temperature.proto.SensorTwinService
 
-class RegistrationServiceImpl(system: ActorSystem[_])
-    extends proto.RegistrationService {
+class SensorTwinServiceImpl(system: ActorSystem[_]) extends SensorTwinService {
 
   import system.executionContext
-
-  private val logger = LoggerFactory.getLogger(getClass)
 
   implicit private val timeout: Timeout =
     Timeout.create(
@@ -26,13 +21,14 @@ class RegistrationServiceImpl(system: ActorSystem[_])
 
   private val sharding = ClusterSharding(system)
 
-  override def register(in: proto.RegisterRequest): Future[Empty] = {
-    logger.info("register sensor {}", in.sensorId)
-    val entityRef = sharding.entityRefFor(Registration.EntityKey, in.sensorId)
-    val reply: Future[Done] =
-      entityRef.askWithStatus(
-        Registration.Register(Registration.SecretDataValue(in.secret), _))
-    val response = reply.map(_ => Empty.defaultInstance)
+  override def getTemperature(
+      in: proto.GetTemperatureRequest): Future[proto.CurrentTemperature] = {
+    val entityRef = sharding.entityRefFor(SensorTwin.EntityKey, in.sensorId)
+    val reply: Future[Int] =
+      entityRef.askWithStatus(SensorTwin.GetTemperature(_))
+    val response =
+      reply.map(temperature =>
+        proto.CurrentTemperature(in.sensorId, temperature))
     convertError(response)
   }
 
@@ -48,5 +44,4 @@ class RegistrationServiceImpl(system: ActorSystem[_])
             Status.INVALID_ARGUMENT.withDescription(exc.getMessage)))
     }
   }
-
 }

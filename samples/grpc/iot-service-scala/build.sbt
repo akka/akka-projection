@@ -7,7 +7,7 @@ licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")
 scalaVersion := "2.13.11"
 
 Compile / scalacOptions ++= Seq(
-  "-target:11",
+  "-release:11",
   "-deprecation",
   "-feature",
   "-unchecked",
@@ -31,7 +31,7 @@ val AkkaHttpVersion = "10.5.2"
 val AkkaManagementVersion = "1.4.1"
 val AkkaPersistenceR2dbcVersion = "1.2.0-M3"
 val AkkaProjectionVersion =
-  sys.props.getOrElse("akka-projection.version", "1.5.0-M2")
+  sys.props.getOrElse("akka-projection.version", "1.5.0-M3")
 val AkkaDiagnosticsVersion = "2.0.1"
 
 enablePlugins(AkkaGrpcPlugin)
@@ -67,6 +67,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
+  "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Test,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
   // 3. Querying and publishing data from Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
