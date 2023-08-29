@@ -66,6 +66,11 @@
             <version>${akka.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-discovery_${scala.binary.version}</artifactId>
+            <version>${akka.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-persistence-r2dbc_${scala.binary.version}</artifactId>
             <version>${akka-persistence-r2dbc.version}</version>
@@ -86,21 +91,6 @@
             <version>${akka-projection.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.lightbend.akka.management</groupId>
-            <artifactId>akka-management-cluster-http_${scala.binary.version}</artifactId>
-            <version>${akka-management.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.lightbend.akka.management</groupId>
-            <artifactId>akka-management-cluster-bootstrap_${scala.binary.version}</artifactId>
-            <version>${akka-management.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.lightbend.akka.discovery</groupId>
-            <artifactId>akka-discovery-kubernetes-api_${scala.binary.version}</artifactId>
-            <version>${akka-management.version}</version>
-        </dependency>
-        <dependency>
             <groupId>com.lightbend.akka.grpc</groupId>
             <artifactId>akka-grpc-runtime_${scala.binary.version}</artifactId>
             <version>${akka-grpc.version}</version>
@@ -109,6 +99,18 @@
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-diagnostics_${scala.binary.version}</artifactId>
             <version>${akka-diagnostics.version}</version>
+        </dependency>
+
+        <!-- local single-node lightweight database with h2 -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.1.214</version>
+        </dependency>
+        <dependency>
+            <groupId>io.r2dbc</groupId>
+            <artifactId>r2dbc-h2</artifactId>
+            <version>1.0.0.RELEASE</version>
         </dependency>
 
         <dependency>
@@ -178,7 +180,7 @@
                         <argument>-Dconfig.resource=${APP_CONFIG}</argument>
                         <argument>-classpath</argument>
                         <classpath />
-                        <argument>shopping.analytics.Main</argument>
+                        <argument>local.drones.Main</argument>
                     </arguments>
                 </configuration>
             </plugin>
@@ -249,7 +251,7 @@
                                         <arg>java</arg>
                                         <arg>-cp</arg>
                                         <arg>/maven/*</arg>
-                                        <arg>shopping.analytics.Main</arg>
+                                        <arg>local.drones.Main</arg>
                                     </exec>
                                 </entryPoint>
                                 <assembly>

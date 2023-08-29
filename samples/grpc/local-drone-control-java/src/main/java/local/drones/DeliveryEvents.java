@@ -26,7 +26,7 @@ import static akka.actor.typed.javadsl.AskPattern.*;
  */
 public class DeliveryEvents {
 
-    Behavior<ProjectionBehavior.Command> projectionBehavior(
+    public static Behavior<ProjectionBehavior.Command> projectionBehavior(
             ActorSystem<?> system,
             ActorRef<DeliveriesQueue.Command> queueActor,
             Settings settings) {

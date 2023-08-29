@@ -26,8 +26,8 @@ public class DroneEvents {
 
     public static final String StreamId = "drone-events";
 
-    public static Behavior<ProjectionBehavior.Command> eventToCloudPushBehavior(Settings settings,
-                                                                                ActorSystem<?> system) {
+    public static Behavior<ProjectionBehavior.Command> eventToCloudPushBehavior(ActorSystem<?> system,
+                                                                                Settings settings) {
         logger.info(
                 "Pushing events to central cloud, origin id [{}]",
                 settings.locationId);
