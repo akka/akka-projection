@@ -94,7 +94,7 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
    * Exclude events from all entity ids, convenience for combining with for example a topic filter
    * to include only events matching the topic filter.
    */
-  val excludeAll = ExcludeRegexEntityIds(Set(".*"))
+  val excludeAll: FilterCriteria = ExcludeRegexEntityIds(Set(".*"))
 
   /**
    * Exclude events with any of the given tags,
