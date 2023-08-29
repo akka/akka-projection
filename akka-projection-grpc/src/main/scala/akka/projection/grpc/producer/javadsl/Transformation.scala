@@ -25,6 +25,11 @@ trait Mapper[A, B] {
 
 @ApiMayChange
 object Transformation {
+
+  /**
+   * Starting point for building `Transformation`. Registrations of actual transformations must
+   * be added. Use [[Transformation.identity]] to pass through each event as is.
+   */
   val empty: Transformation = new Transformation(scaladsl.EventProducer.Transformation.empty)
 
   /**

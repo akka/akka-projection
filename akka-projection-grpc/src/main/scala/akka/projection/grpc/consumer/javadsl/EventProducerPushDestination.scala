@@ -107,8 +107,12 @@ final class EventProducerPushDestination private (
   /**
    * @param transformation A transformation to use for all events.
    */
-  def withTransformation(transformation: Transformation): EventProducerPushDestination =
+  def withTransformation(transformation: Transformation): EventProducerPushDestination = {
+    require(
+      transformation ne Transformation.empty,
+      s"Transformation must not be empty. Use Transformation.identity to pass through each event as is.")
     copy(transformationForOrigin = (_, _) => transformation)
+  }
 
   /**
    * @param transformation A function to create a transformation from the origin id and request metadata
