@@ -64,7 +64,9 @@ object DeliveriesQueue {
     command match {
       case AddDelivery(delivery, replyTo) =>
         context.log.info("Adding delivery [{}] to queue", delivery.deliveryId)
-        if (state.waitingDeliveries.contains(delivery))
+        if (state.waitingDeliveries.contains(
+            delivery) || state.deliveriesInProgress.exists(
+            _.deliveryId == delivery.deliveryId))
           Effect.reply(replyTo)(Done)
         else
           Effect
@@ -102,9 +104,8 @@ object DeliveriesQueue {
             StatusReply.Error(s"Unknown delivery id: ${deliveryId}"))
         } else {
           Effect
-            .persist(
-              state.copy(deliveriesInProgress =
-                state.deliveriesInProgress.filter(_.deliveryId == deliveryId)))
+            .persist(state.copy(deliveriesInProgress =
+              state.deliveriesInProgress.filterNot(_.deliveryId == deliveryId)))
             .thenReply(replyTo)(_ => StatusReply.Success(Done))
         }
 
