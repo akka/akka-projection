@@ -12,6 +12,7 @@ import akka.persistence.typed.PersistenceId;
 import akka.persistence.typed.state.javadsl.CommandHandler;
 import akka.persistence.typed.state.javadsl.DurableStateBehavior;
 import akka.persistence.typed.state.javadsl.Effect;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.google.rpc.context.AttributeContext;
 
 import java.time.Instant;
@@ -60,6 +61,7 @@ public final class DeliveriesQueue extends DurableStateBehavior<DeliveriesQueue.
     public static final class GetCurrentState implements Command {
         public final ActorRef<State> replyTo;
 
+        @JsonCreator
         public GetCurrentState(ActorRef<State> replyTo) {
             this.replyTo = replyTo;
         }
@@ -68,7 +70,7 @@ public final class DeliveriesQueue extends DurableStateBehavior<DeliveriesQueue.
 
 
 
-    final class State {
+    public static final class State implements CborSerializable {
         public final List<WaitingDelivery> waitingDeliveries;
         public final List<DeliveryInProgress> deliveriesInProgress;
 

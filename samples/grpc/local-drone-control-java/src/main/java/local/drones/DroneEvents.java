@@ -37,7 +37,7 @@ public class DroneEvents {
                 Transformation.empty().registerAsyncEnvelopeMapper(Drone.CoarseGrainedLocationChanged.class, (EventEnvelope<Drone.CoarseGrainedLocationChanged> envelope) -> {
             var event = envelope.event();
             return CompletableFuture.completedFuture(
-                    Optional.of(local.drones.proto.CoarseDroneLocation.newBuilder().setCoordinates(event.coordinates.toProto())));
+                    Optional.of(local.drones.proto.CoarseDroneLocation.newBuilder().setCoordinates(event.coordinates.toProto()).build()));
         });
 
         var eventProducer = EventProducerPush.create(

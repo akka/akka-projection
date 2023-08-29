@@ -13,6 +13,7 @@ import akka.persistence.typed.javadsl.CommandHandler;
 import akka.persistence.typed.javadsl.Effect;
 import akka.persistence.typed.javadsl.EventHandler;
 import akka.persistence.typed.javadsl.EventSourcedBehavior;
+import com.fasterxml.jackson.annotation.JsonCreator;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +50,7 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
     public static final class PositionUpdated implements Event {
         public final Position position;
 
+        @JsonCreator
         public PositionUpdated(Position position) {
             this.position = position;
         }
@@ -57,6 +59,7 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
     public static final class CoarseGrainedLocationChanged implements Event {
             public final CoarseGrainedCoordinates coordinates;
 
+        @JsonCreator
         public CoarseGrainedLocationChanged(CoarseGrainedCoordinates coordinates) {
             this.coordinates = coordinates;
         }

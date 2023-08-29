@@ -10,7 +10,7 @@ Drones interact with the closest control service in the following ways:
  * Mark a delivery as completed
 
 The control service interacts with the global cloud service, represented by the separate 
-restaurant-drone-deliveries-service sample, in the following ways:
+restaurant-drone-deliveries-service-java sample, in the following ways:
 
  * Replicates a coarse grained location of each drone to the cloud, at a lower frequency, 
    only when they change location at a coarse grained grid

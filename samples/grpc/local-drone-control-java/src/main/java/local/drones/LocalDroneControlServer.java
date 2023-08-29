@@ -14,11 +14,11 @@ import java.util.Arrays;
 
 public class LocalDroneControlServer {
 
-  public static void start(    String host,
-                            int port,
-                          ActorSystem<?> system,
-                          DroneService droneService,
-                          DeliveriesQueueService deliveriesQueueService) {
+  public static void start(String host,
+                           int port,
+                           ActorSystem<?> system,
+                           DroneService droneService,
+                           DeliveriesQueueService deliveriesQueueService) {
     var service =
         ServiceHandler.concatOrNotFound(
             DroneServiceHandlerFactory.create(droneService, system),
@@ -30,7 +30,7 @@ public class LocalDroneControlServer {
     var bound =
         Http.get(system)
             .newServerAt(host, port)
-        .bind(service);
+            .bind(service);
 
     bound.whenComplete((binding, error) -> {
       if (error == null) {
