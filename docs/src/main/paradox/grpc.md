@@ -173,6 +173,10 @@ events are still transferred to the consumer, to ensure sequence number validati
 Filters can be used when a consumer is only interested in a subset of the entities. The filters can be defined
 on both the producer side and on the consumer side, and they can be changed at runtime.
 
+By default, all events are emitted, and filters selectively choose what events to filter out. For some of the filters
+it is useful to first define a @apidoc[ConsumerFilter.excludeAll](ConsumerFilter$) filter and then selectively include events. 
+For example to only include events from topics matching topic filters.
+
 @@@ note
 
 The purpose of filters is to toggle if all events for the entity are to be emitted or not.
