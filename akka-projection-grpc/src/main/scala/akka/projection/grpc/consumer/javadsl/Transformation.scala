@@ -16,7 +16,18 @@ import scala.compat.java8.OptionConverters._
 import scala.reflect.ClassTag
 
 object Transformation {
-  val empty = new Transformation(scaladsl.EventProducerPushDestination.Transformation.empty)
+
+  /**
+   * Starting point for building `Transformation`. Registrations of actual transformations must
+   * be added. Use [[Transformation.identity]] to pass through each event as is.
+   */
+  val empty: Transformation = new Transformation(scaladsl.EventProducerPushDestination.Transformation.empty)
+
+  /**
+   * No transformation. Pass through each event as is.
+   */
+  val identity: Transformation =
+    new Transformation(scaladsl.EventProducerPushDestination.Transformation.identity)
 }
 
 /**

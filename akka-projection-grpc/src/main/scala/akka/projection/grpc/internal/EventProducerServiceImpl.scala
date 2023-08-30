@@ -39,8 +39,9 @@ import com.google.protobuf.timestamp.Timestamp
 import io.grpc.Status
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import scala.concurrent.Future
+
+import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 
 /**
  * INTERNAL API
@@ -78,6 +79,10 @@ import scala.concurrent.Future
       eventsBySlicesPerStreamId.contains(s.streamId) ||
       eventsBySlicesStartingFromSnapshotsPerStreamId.contains(s.streamId),
       s"No events by slices query defined for stream id [${s.streamId}]")
+    require(
+      s.transformation ne Transformation.empty,
+      s"Transformation is not defined for stream id [${s.streamId}]. " +
+      "Use Transformation.identity to pass through each event as is.")
   }
 
   private val protoAnySerialization = new ProtoAnySerialization(system)

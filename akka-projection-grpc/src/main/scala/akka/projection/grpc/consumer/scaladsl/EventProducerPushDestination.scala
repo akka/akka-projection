@@ -47,7 +47,7 @@ object EventProducerPushDestination {
     new EventProducerPushDestination(
       None,
       acceptedStreamId,
-      (_, _) => Transformation.empty,
+      (_, _) => Transformation.identity,
       None,
       immutable.Seq.empty,
       protobufDescriptors,
@@ -55,7 +55,19 @@ object EventProducerPushDestination {
 
   @ApiMayChange
   object Transformation {
-    val empty: Transformation = new Transformation(Map.empty, Predef.identity)
+
+    /**
+     * Starting point for building `Transformation`. Registrations of actual transformations must
+     * be added. Use [[Transformation.identity]] to pass through each event as is.
+     */
+    val empty: Transformation =
+      new Transformation(Map.empty, Predef.identity)
+
+    /**
+     * No transformation. Pass through each event as is.
+     */
+    val identity: Transformation =
+      new Transformation(Map.empty, Predef.identity)
   }
 
   /**
@@ -200,8 +212,12 @@ final class EventProducerPushDestination private[akka] (
   /**
    * @param transformation A transformation to use for all events.
    */
-  def withTransformation(transformation: Transformation): EventProducerPushDestination =
+  def withTransformation(transformation: Transformation): EventProducerPushDestination = {
+    require(
+      transformation ne Transformation.empty,
+      s"Transformation must not be empty. Use Transformation.identity to pass through each event as is.")
     copy(transformationForOrigin = (_, _) => transformation)
+  }
 
   /**
    * @param transformation A function to create a transformation from the origin id and request metadata

@@ -82,6 +82,9 @@ private[akka] final class EventPusherConsumerServiceImpl(
               }
               val transformer =
                 destination.eventProducerPushDestination.transformationForOrigin(init.originId, metadata)
+              if (transformer eq EventProducerPushDestination.Transformation.empty)
+                throw new IllegalArgumentException(
+                  s"Transformation must not be empty. Use Transformation.identity to pass through each event as is.")
 
               // allow interceptor to block request based on metadata
               val interceptedTail = destination.eventProducerPushDestination.interceptor match {

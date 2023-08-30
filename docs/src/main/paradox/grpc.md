@@ -145,6 +145,8 @@ Java
 
 To omit an event the transformation function can return @scala[`None`]@java[`Optional.empty()`].
 
+Use  @scala[`Transformation.identity`]@java[`Transformation.identity()`] to pass through each event as is.
+
 That `EventProducer` service is started in an Akka gRPC server like this:
 
 Scala

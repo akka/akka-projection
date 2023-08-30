@@ -80,6 +80,8 @@ defines a single transformation to use for all producers, while @apidoc[EventPro
 is invoked with an origin id for the producer and additional metadata specified when setting up the producer and can provide
 transformations based on those.
 
+Use  @scala[`Transformation.identity`]@java[`Transformation.identity()`] to pass through each event as is.
+
 The payload transformation also allows for arbitrary filtering logic, returning a @scala[None]@java[Optional.empty()] marks
 the event as filtered and avoids storing the payload in the consumer journal.
 
