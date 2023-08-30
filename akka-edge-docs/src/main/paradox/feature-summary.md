@@ -77,6 +77,20 @@ it may not be an option.
 H2 database should not be used when the service is an Akka Cluster with more than 1 node.
 @@@
 
+## Replicated Event Sourcing is not for Edge
+
+@extref[Replicated Event Sourcing over gRPC](akka-distributed-cluster:feature-summary.html#replicated-event-sSourcing-over-grpc)
+is a useful feature in Akka Distributed Cluster, but it is not recommended for edge use cases. The reasons why it is currently
+not supported for Akka Edge are:
+
+* It requires gRPC connectivity in both directions between the replicas.
+* The overhead of CRDT metadata may become to large when there are many 100s of replicas, or if the replicas dynamically change over time.
+
+That said, if you can overcome these restrictions it can be a good fit also for edge use cases. You might have 
+a network topology that allow establishing connections in both directions (e.g. VPN solution) and you might not have
+that many edge services. The latter can also be mitigated by strict filters so that not all entities are replicated
+everywhere.
+
 Learn more:
 
 * FIXME link to guide
