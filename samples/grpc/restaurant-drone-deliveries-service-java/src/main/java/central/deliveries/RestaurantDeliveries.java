@@ -229,6 +229,15 @@ public final class RestaurantDeliveries
 
   @Override
   public EventHandler<State, Event> eventHandler() {
-    return newEventHandlerBuilder().build();
+    return newEventHandlerBuilder()
+        .forAnyState()
+        .onEvent(RestaurantLocationSet.class, (event) ->
+          new State(event.localControlLocationId, event.coordinates, new ArrayList<>())
+        )
+        .onEvent(DeliveryRegistered.class, (state, event) -> {
+          state.currentDeliveries.add(event.delivery);
+          return state;
+        })
+        .build();
   }
 }

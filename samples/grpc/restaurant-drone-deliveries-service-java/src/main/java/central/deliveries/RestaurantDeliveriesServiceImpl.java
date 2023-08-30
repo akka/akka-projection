@@ -37,9 +37,10 @@ public final class RestaurantDeliveriesServiceImpl implements RestaurantDeliveri
   @Override
   public CompletionStage<RegisterRestaurantResponse> setUpRestaurant(SetUpRestaurantRequest in) {
     logger.info(
-        "Set up restaurant {}, coordinates {}, location [{}]",
+        "Set up restaurant {}, coordinates {}-{}, location [{}]",
         in.getRestaurantId(),
-        in.getCoordinates(),
+        in.getCoordinates().getLatitude(),
+        in.getCoordinates().getLongitude(),
         in.getLocalControlLocationId());
 
     if (!settings.locationIds.contains(in.getLocalControlLocationId())) {
@@ -74,10 +75,11 @@ public final class RestaurantDeliveriesServiceImpl implements RestaurantDeliveri
   @Override
   public CompletionStage<RegisterDeliveryResponse> registerDelivery(RegisterDeliveryRequest in) {
     logger.info(
-        "Register delivery for restaurant {}, delivery id {}, destination {}",
+        "Register delivery for restaurant {}, delivery id {}, destination {},{}",
         in.getRestaurantId(),
         in.getDeliveryId(),
-        in.getCoordinates());
+        in.getCoordinates().getLatitude(),
+        in.getCoordinates().getLongitude());
 
     var entityRef = sharding.entityRefFor(RestaurantDeliveries.ENTITY_KEY, in.getRestaurantId());
 
