@@ -11,7 +11,7 @@ import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 
-object PublishEvents {
+object RegistrationEvents {
 
   def eventProducerService(system: ActorSystem[_])
       : PartialFunction[HttpRequest, Future[HttpResponse]] = {

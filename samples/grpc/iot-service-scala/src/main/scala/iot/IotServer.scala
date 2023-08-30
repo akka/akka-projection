@@ -1,4 +1,4 @@
-package iot.registration
+package iot
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -13,25 +13,36 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 
-object RegistrationServer {
+object IotServer {
 
   def start(
       interface: String,
       port: Int,
       system: ActorSystem[_],
-      grpcService: proto.RegistrationService,
-      eventProducerService: PartialFunction[HttpRequest, Future[HttpResponse]])
-      : Unit = {
+      registrationService: registration.proto.RegistrationService,
+      registrationEventProducerService: PartialFunction[
+        HttpRequest,
+        Future[HttpResponse]],
+      pushedTemperatureEventsHandler: PartialFunction[
+        HttpRequest,
+        Future[HttpResponse]],
+      sensorTwinService: temperature.proto.SensorTwinService): Unit = {
     implicit val sys: ActorSystem[_] = system
     implicit val ec: ExecutionContext =
       system.executionContext
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
-        eventProducerService,
-        proto.RegistrationServiceHandler.partial(grpcService),
+        registrationEventProducerService,
+        registration.proto.RegistrationServiceHandler
+          .partial(registrationService),
+        pushedTemperatureEventsHandler,
+        temperature.proto.SensorTwinServiceHandler.partial(sensorTwinService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters
-        ServerReflection.partial(List(proto.RegistrationService)))
+        ServerReflection.partial(
+          List(
+            registration.proto.RegistrationService,
+            temperature.proto.SensorTwinService)))
 
     val bound =
       Http()
@@ -43,7 +54,7 @@ object RegistrationServer {
       case Success(binding) =>
         val address = binding.localAddress
         system.log.info(
-          "Registration online at gRPC server {}:{}",
+          "IoT Service online at gRPC server {}:{}",
           address.getHostString,
           address.getPort)
       case Failure(ex) =>
