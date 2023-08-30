@@ -8,7 +8,6 @@ import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 import "akka/projection/grpc/event_producer.proto";
-import "akka/projection/grpc/consumer.proto";
 
 option java_package = "akka.projection.grpc.internal.proto";
 
