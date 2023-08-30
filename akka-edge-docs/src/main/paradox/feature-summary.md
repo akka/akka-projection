@@ -39,7 +39,7 @@ database of the producer.
 
 ### Edge is consumer
 
-This case describe when the edge service is the consumer of events.
+This case describes when the edge service is the consumer of events.
 
 The edge consumer service connects to the producer service to initiate the event stream flowing from the producer.
 
@@ -62,7 +62,7 @@ share the stream of events from the database and fan out to connected consumer s
 
 ### Edge is producer
 
-This case describe when the edge service is the producer of events.
+This cases describe when the edge service is the producer of events.
 
 The edge producer service connects to the consumer service to initiate the event stream flowing from the producer.
 For this you need to setup @extref[Akka Projection gRPC with producer push](akka-projection:grpc-producer-push.html).

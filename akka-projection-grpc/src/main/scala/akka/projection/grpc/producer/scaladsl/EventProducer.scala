@@ -70,7 +70,7 @@ object EventProducer {
       val settings: EventProducerSettings,
       val producerFilter: EventEnvelope[Any] => Boolean,
       val transformSnapshot: Option[Any => Any]) {
-    require(entityType.nonEmpty, "Stream id must not be empty")
+    require(entityType.nonEmpty, "Entity type must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
     /**

@@ -8,7 +8,9 @@ to the other Akka Clusters with the communication mechanisms provided by Akka Ed
 in the cloud and at the edge of the cloud. The services at the edge may run anywhere where you have resources to run
 Akka in a JVM (or Java native image) and have network access from the edge to the more central services.
 
-FIXME diagram
+![Diagram showing an overview of Akka Edge](images/overview.svg)
+
+## Communication transport
 
 The communication transport between the Akka Edge application and other Akka Clusters is using reliable event replication over gRPC, which
 gives characteristics such as:
@@ -17,6 +19,17 @@ gives characteristics such as:
 * network friendly across different Kubernetes clusters, firewalls or NATs
 * exactly-once processing or at-least-once processing
 * asynchronous and brokerless communication without need of additional products
+
+All gRPC connections are established from the Edge service, independent of if the Edge service is producing or
+consuming events.
+
+The topology is typically that the edge services connect to services in a cloud region, like a star topology.
+There is no technical limitations other than network connectivity to use other topologies, such as one edge service
+interacting directly with another edge service.
+
+The edge service can be fully autonomous and continue working when there are network disruptions, or if the
+edge service choose to not always be connected. It will catch up on pending events when the communication is
+established again.
 
 ## Event Replication
 
@@ -45,8 +58,8 @@ Replication of Akka's Durable State entities is currently not supported.
 ## Dynamic filters
 
 Events from all entities might not be needed at all locations. Therefore, it is possible to define filters that
-select which entities to replicate where. These filters are typically defined by tagging the events, but can
-also select individual entity identifiers.
+select which entities to replicate where. These filters are typically defined by tagging the events with topics or
+other custom tags, but filters can also select individual entity identifiers.
 
 The filters can be defined on both the producer side and on the consumer side, and they can be changed at runtime.
 The ability to dynamically change the filters without tearing down the event stream opens up for building
