@@ -2,8 +2,7 @@ name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(
-  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 scalaVersion := "2.13.11"
 
@@ -30,7 +29,7 @@ Global / cancelable := false // ctrl-c
 val AkkaVersion = "2.8.4"
 val AkkaHttpVersion = "10.5.2"
 val AkkaManagementVersion = "1.4.0"
-val AkkaPersistenceR2dbcVersion = "1.2.0-M3"
+val AkkaPersistenceR2dbcVersion = "1.2.0-M4"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.5.0-M3")
 val AkkaDiagnosticsVersion = "2.0.1"
