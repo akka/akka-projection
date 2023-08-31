@@ -62,7 +62,7 @@ share the stream of events from the database and fan out to connected consumer s
 
 ### Edge is producer
 
-This cases describe when the edge service is the producer of events.
+This case describes when the edge service is the producer of events.
 
 The edge producer service connects to the consumer service to initiate the event stream flowing from the producer.
 For this you need to setup @extref[Akka Projection gRPC with producer push](akka-projection:grpc-producer-push.html).
@@ -84,10 +84,10 @@ is a useful feature in Akka Distributed Cluster, but it is not recommended for e
 not supported for Akka Edge are:
 
 * It requires gRPC connectivity in both directions between the replicas.
-* The overhead of CRDT metadata may become to large when there are many 100s of replicas, or if the replicas dynamically change over time.
+* The overhead of CRDT metadata may become too large when there are many 100s of replicas, or if the replicas dynamically change over time.
 
 That said, if you can overcome these restrictions it can be a good fit also for edge use cases. You might have 
-a network topology that allow establishing connections in both directions (e.g. VPN solution) and you might not have
+a network topology that allows establishing connections in both directions (e.g. VPN solution) and you might not have
 that many edge services. The latter can also be mitigated by strict filters so that not all entities are replicated
 everywhere.
 

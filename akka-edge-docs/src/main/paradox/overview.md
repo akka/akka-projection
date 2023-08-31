@@ -20,7 +20,7 @@ gives characteristics such as:
 * exactly-once processing or at-least-once processing
 * asynchronous and brokerless communication without need of additional products
 
-All gRPC connections are established from the Edge service, independent of if the Edge service is producing or
+All gRPC connections are established from the Edge service, independent of whether the Edge service is producing or
 consuming events.
 
 The topology is typically that the edge services connect to services in a cloud region, like a star topology.
@@ -28,7 +28,7 @@ There are no technical limitations other than network connectivity to use other 
 interacting directly with another edge service.
 
 The edge service can be fully autonomous and continue working when there are network disruptions, or if the
-edge service choose to not always be connected. It will catch up on pending events when the communication is
+edge service chooses to not always be connected. It will catch up on pending events when the communication is
 established again.
 
 ## Event Replication
