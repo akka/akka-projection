@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "local.drones.proto";
+
+import "common/coordinates.proto";
+
+package local.drones;
+
+// gRPC definition for DroneService, for drones to interact with
+
+service DeliveriesQueueService {
+  rpc GetCurrentQueue (GetCurrentQueueRequest) returns (GetCurrentQueueResponse) {}
+}
+
+message GetCurrentQueueRequest {
+}
+
+message GetCurrentQueueResponse {
+  repeated WaitingDelivery waitingDeliveries = 1;
+  repeated DeliveryInProgress deliveriesInProgress = 2;
+}
+
+message WaitingDelivery {
+  string delivery_id = 1;
+  common.Coordinates from = 2;
+  common.Coordinates to = 3;
+}
+
+message DeliveryInProgress {
+  string delivery_id = 1;
+  string drone_id = 2;
+}
