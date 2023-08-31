@@ -10,7 +10,6 @@ import akka.persistence.r2dbc.ConnectionFactoryProvider
 import akka.persistence.r2dbc.R2dbcSettings
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
 import org.slf4j.LoggerFactory
