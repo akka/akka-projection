@@ -10,6 +10,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.producer.scaladsl
 
 import java.util.Optional
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.function.{ Function => JFunction }
 import scala.compat.java8.FutureConverters._
@@ -60,6 +61,12 @@ final class Transformation private[akka] (private[akka] val delegate: scaladsl.E
   def registerMapper[A, B](inputEventClass: Class[A], f: JFunction[A, Optional[B]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
     new Transformation(delegate.registerMapper[A, B](event => f.apply(event).asScala))
+  }
+
+  def registerEnvelopeMapper[A, B](
+      inputEventClass: Class[A],
+      f: JFunction[EventEnvelope[A], Optional[B]]): Transformation = {
+    registerAsyncEnvelopeMapper[A, B](inputEventClass, envelope => CompletableFuture.completedFuture(f(envelope)))
   }
 
   def registerAsyncEnvelopeMapper[A, B](

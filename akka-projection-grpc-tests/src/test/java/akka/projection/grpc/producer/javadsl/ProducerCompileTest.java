@@ -36,6 +36,7 @@ public class ProducerCompileTest {
         Transformation.empty()
             .registerMapper(
                 Integer.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
+            .registerEnvelopeMapper(Long.class, envelope -> Optional.of(envelope.event() + 1L))
             .registerOrElseMapper(event -> Optional.of(event.toString()));
     Transformation lowLevel = Transformation.empty().registerAsyncEnvelopeMapper(
         Integer.class, envelope -> CompletableFuture.completedFuture(envelope.getOptionalEvent())

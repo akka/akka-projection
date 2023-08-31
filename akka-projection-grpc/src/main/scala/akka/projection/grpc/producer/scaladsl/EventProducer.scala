@@ -152,6 +152,10 @@ object EventProducer {
       registerAsyncMapper[A, B](event => Future.successful(f(event)))
     }
 
+    def registerEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Option[B]): Transformation = {
+      registerAsyncEnvelopeMapper[A, B](event => Future.successful(f(event)))
+    }
+
     def registerAsyncOrElseMapper(f: Any => Future[Option[Any]]): Transformation = {
       new Transformation(mappers, (envelope: EventEnvelope[Any]) => f(envelope.event))
     }
