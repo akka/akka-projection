@@ -30,6 +30,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
+import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.ProtobufProtocolConversions
 import akka.projection.grpc.internal.proto
@@ -52,6 +53,7 @@ import akka.util.Timeout
 import com.google.protobuf.Descriptors
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
+import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -61,7 +63,6 @@ import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 @ApiMayChange
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
@@ -339,6 +340,13 @@ final class GrpcReadJournal private (
       addRequestHeaders(client.eventsBySlices())
         .invoke(streamIn)
         .recover {
+          case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
+            // this means we couldn't connect, will be retried, relatively common, so make it less noisy
+            throw new ConnectionException(
+              clientSettings.serviceName,
+              clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString),
+              streamId)
+
           case th: Throwable =>
             throw new RuntimeException(s"Failure to consume gRPC event stream for [${streamId}]", th)
         }
