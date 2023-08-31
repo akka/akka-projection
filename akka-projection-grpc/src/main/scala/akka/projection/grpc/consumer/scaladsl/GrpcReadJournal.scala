@@ -30,6 +30,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
+import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.ProtobufProtocolConversions
 import akka.projection.grpc.internal.proto
@@ -62,16 +63,6 @@ import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.util.control.NoStackTrace
-
-/**
- * INTERNAL API
- */
-@InternalApi
-private[akka] final class ConnectionException(host: String, port: String, streamId: String)
-    extends RuntimeException(s"Connection to $host:$port for stream id $streamId failed or lost")
-    with NoStackTrace
-
 @ApiMayChange
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
