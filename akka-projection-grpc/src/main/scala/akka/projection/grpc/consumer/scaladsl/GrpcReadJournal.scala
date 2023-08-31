@@ -52,6 +52,7 @@ import akka.util.Timeout
 import com.google.protobuf.Descriptors
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
+import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -61,6 +62,7 @@ import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.util.control.NoStackTrace
 
 @ApiMayChange
 object GrpcReadJournal {
@@ -339,6 +341,12 @@ final class GrpcReadJournal private (
       addRequestHeaders(client.eventsBySlices())
         .invoke(streamIn)
         .recover {
+          case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
+            // this means we couldn't connect, will be retried, so make it less noisy
+            throw new RuntimeException(
+              s"Connection to ${clientSettings.serviceName}:${clientSettings.servicePortName.getOrElse(clientSettings.defaultPort)} failed or lost")
+              with NoStackTrace
+
           case th: Throwable =>
             throw new RuntimeException(s"Failure to consume gRPC event stream for [${streamId}]", th)
         }
