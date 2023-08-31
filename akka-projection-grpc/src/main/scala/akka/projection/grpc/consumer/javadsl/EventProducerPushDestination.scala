@@ -8,6 +8,7 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
+import akka.grpc.internal.JavaMetadataImpl
 import akka.grpc.javadsl.Metadata
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
@@ -155,9 +156,9 @@ final class EventProducerPushDestination private (
     new scaladsl.EventProducerPushDestination(
       journalPluginId.asScala,
       acceptedStreamId,
-      (origin, meta) => transformationForOrigin.apply(origin, meta.asInstanceOf[akka.grpc.javadsl.Metadata]).delegate,
+      (origin, meta) => transformationForOrigin.apply(origin, new JavaMetadataImpl(meta)).delegate,
       interceptor.asScala.map(javaInterceptor =>
-        (streamId, meta) => javaInterceptor.intercept(streamId, meta.asInstanceOf[akka.grpc.javadsl.Metadata]).toScala),
+        (streamId, meta) => javaInterceptor.intercept(streamId, new JavaMetadataImpl(meta)).toScala),
       filters.asScala.toVector,
       protobufDescriptors.asScala.toVector,
       settings)
