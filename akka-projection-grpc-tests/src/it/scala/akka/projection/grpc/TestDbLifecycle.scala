@@ -10,6 +10,7 @@ import akka.persistence.r2dbc.ConnectionFactoryProvider
 import akka.persistence.r2dbc.R2dbcSettings
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.r2dbc.R2dbcProjectionSettings
+import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
 import org.slf4j.LoggerFactory
@@ -26,12 +27,14 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
   lazy val r2dbcProjectionSettings: R2dbcProjectionSettings =
     R2dbcProjectionSettings(typedSystem.settings.config.getConfig(testConfigPath))
 
-  lazy val r2dbcExecutor: R2dbcExecutor = {
+  lazy val r2dbcExecutor: R2dbcExecutor =
     new R2dbcExecutor(
       ConnectionFactoryProvider(typedSystem).connectionFactoryFor(r2dbcProjectionSettings.useConnectionFactory),
       LoggerFactory.getLogger(getClass),
-      r2dbcProjectionSettings.logDbCallsExceeding)(typedSystem.executionContext, typedSystem)
-  }
+      r2dbcProjectionSettings.logDbCallsExceeding,
+      ConnectionFactoryProvider(typedSystem)
+        .connectionPoolSettingsFor(r2dbcProjectionSettings.useConnectionFactory)
+        .closeCallsExceeding)(typedSystem.executionContext, typedSystem)
 
   lazy val persistenceExt: Persistence = Persistence(typedSystem)
 
