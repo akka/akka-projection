@@ -39,7 +39,7 @@ database of the producer.
 
 ### Edge is consumer
 
-This case describe when the edge service is the consumer of events.
+This case describes when the edge service is the consumer of events.
 
 The edge consumer service connects to the producer service to initiate the event stream flowing from the producer.
 
@@ -62,7 +62,7 @@ share the stream of events from the database and fan out to connected consumer s
 
 ### Edge is producer
 
-This case describe when the edge service is the producer of events.
+This case describes when the edge service is the producer of events.
 
 The edge producer service connects to the consumer service to initiate the event stream flowing from the producer.
 For this you need to setup @extref[Akka Projection gRPC with producer push](akka-projection:grpc-producer-push.html).
@@ -76,6 +76,20 @@ it may not be an option.
 @@@ Warning
 H2 database should not be used when the service is an Akka Cluster with more than 1 node.
 @@@
+
+## Replicated Event Sourcing is not for Edge
+
+@extref[Replicated Event Sourcing over gRPC](akka-distributed-cluster:feature-summary.html#replicated-event-sSourcing-over-grpc)
+is a useful feature in Akka Distributed Cluster, but it is not recommended for edge use cases. The reasons why it is currently
+not supported for Akka Edge are:
+
+* It requires gRPC connectivity in both directions between the replicas.
+* The overhead of CRDT metadata may become too large when there are many 100s of replicas, or if the replicas dynamically change over time.
+
+That said, if you can overcome these restrictions it can be a good fit also for edge use cases. You might have 
+a network topology that allows establishing connections in both directions (e.g. VPN solution) and you might not have
+that many edge services. The latter can also be mitigated by strict filters so that not all entities are replicated
+everywhere.
 
 Learn more:
 

@@ -3,7 +3,7 @@
 Akka Edge is a set of features in Akka that will help you with using Akka at the edge of the cloud for higher
 availability and lower latency.
 
-FIXME diagram
+![Diagram showing an overview of Akka Edge](images/overview.svg)
 
 Akka Edge is similar to @extref[Akka Distributed Cluster](akka-distributed-cluster:) and they share features and
 implementation, but Akka Edge is intended for use cases with even more geographically distributed services and
