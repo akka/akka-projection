@@ -42,7 +42,7 @@ producer. The offsets on the consumer side are stored in a database, but that is
 database of the producer.
 @@@
 
-Learn more:
+### Learn more
 
 * @ref[Part 2 of the Guide: Service to Service eventing](guide/2-service-to-service.md)
 * @extref[Reference documentation of Akka Projection gRPC](akka-projection:grpc.html)
@@ -76,7 +76,7 @@ the database of another replica, which means different databases, and even diffe
 be used for the replicas.
 @@@
 
-Learn more:
+### Learn more
 
 * @ref[Part 3 of the Guide: Active-active](guide/3-active-active.md)
 * @extref[Reference documentation of Akka Replicated Event Sourcing](akka:typed/replicated-eventsourcing.html)
