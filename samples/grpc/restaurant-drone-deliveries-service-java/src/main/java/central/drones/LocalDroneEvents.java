@@ -32,6 +32,8 @@ import org.slf4j.LoggerFactory;
 public final class LocalDroneEvents {
 
   private static final Logger logger = LoggerFactory.getLogger(LocalDroneEvents.class);
+
+  // Note: stream id used in producer for the drone events
   public static final String DRONE_EVENT_STREAM_ID = "drone-events";
 
   // FIXME The type key on the producer side. Make sure we have documented it.

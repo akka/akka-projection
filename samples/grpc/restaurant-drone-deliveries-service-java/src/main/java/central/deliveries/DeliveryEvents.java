@@ -16,6 +16,9 @@ import java.util.concurrent.CompletionStage;
 
 public final class DeliveryEvents {
 
+  // Note: stream id used in consumer to consume this specific stream
+  public static final String STREAM_ID = "delivery-events";
+
   public static Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService(
       ActorSystem<?> system) {
     var transformation =
@@ -29,8 +32,7 @@ public final class DeliveryEvents {
     var eventProducerSource =
         new EventProducerSource(
             RestaurantDeliveries.ENTITY_KEY.name(),
-            // Note: stream id used in consumer to consume this specific stream
-            "delivery-events",
+            STREAM_ID,
             transformation,
             EventProducerSettings.create(system));
 
