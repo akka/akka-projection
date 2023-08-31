@@ -21,8 +21,7 @@ restaurant-drone-deliveries-service-java sample, in the following ways:
 Start an instance with:
 
 ```shell
-mvn compile
-mvn exec:exec
+mvn compile exec:exec
 ```
 
 Posting updated location for a drone:
