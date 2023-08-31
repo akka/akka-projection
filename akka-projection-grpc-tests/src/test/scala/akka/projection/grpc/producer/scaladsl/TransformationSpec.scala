@@ -66,6 +66,11 @@ class TransformationSpec extends AnyWordSpec with Matchers with ScalaFutures {
         Future.successful(env.eventMetadata))
       transformer(envelope("whatever", Some("meta"))).futureValue should ===(Some("meta"))
     }
+
+    "transform envelope" in {
+      val transformer = Transformation.empty.registerEnvelopeMapper((env: EventEnvelope[String]) => Some(env.event))
+      transformer(envelope("whatever", None)).futureValue should ===(Some("whatever"))
+    }
   }
 
 }

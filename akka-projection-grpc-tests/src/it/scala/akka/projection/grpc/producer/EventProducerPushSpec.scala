@@ -155,7 +155,7 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
               .registerPersistenceIdMapper(envelope => envelope.persistenceId.replace("p-", s"$originId-"))
               .registerTagMapper[StringValue](_ => Set("added-tag"))
               // uppercase and turn into String instead of wire-protocol protobuf message
-              .registerPayloadMapper[StringValue, String](env => env.eventOption.map(name => name.value.toUpperCase))
+              .registerEnvelopeMapper[StringValue, String](env => env.eventOption.map(name => name.value.toUpperCase))
           }
           .withConsumerFilters(Vector(ConsumerFilter.ExcludeEntityIds(Set(consumerFilterExcludedPid.id))))
       // #consumerSetup

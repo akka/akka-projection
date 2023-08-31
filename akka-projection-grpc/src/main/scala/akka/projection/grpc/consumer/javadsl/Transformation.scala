@@ -54,13 +54,25 @@ final class Transformation private (val delegate: scaladsl.EventProducerPushDest
   }
 
   /**
+   * Transform incoming event payloads.
+   *
+   * Events can be excluded by mapping the payload to `Optional.empty`.
+   */
+  def registerMapper[A, B](inputEventClass: Class[A], f: JFunction[A, Optional[B]]): Transformation = {
+    implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
+    new Transformation(delegate.registerEnvelopeMapper[A, B](envelope => f(envelope.event).asScala))
+  }
+
+  /**
+   * Transform incoming event payloads, with access to the entire envelope for additional metadata.
+   *
    * Events can be excluded by mapping the payload `Optional.empty`.
    */
-  def registerPayloadMapper[A, B](
+  def registerEnvelopeMapper[A, B](
       inputEventClass: Class[A],
       f: JFunction[EventEnvelope[A], Optional[B]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
-    new Transformation(delegate.registerPayloadMapper[A, B](envelope => f(envelope).asScala))
+    new Transformation(delegate.registerEnvelopeMapper[A, B](envelope => f(envelope).asScala))
   }
 
   /**

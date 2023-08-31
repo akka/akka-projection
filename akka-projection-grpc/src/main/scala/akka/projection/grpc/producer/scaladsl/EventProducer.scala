@@ -134,13 +134,18 @@ object EventProducer {
       private[akka] val orElse: EventEnvelope[Any] => Future[Option[Any]]) {
 
     /**
-     * @param f A function that is fed each event, and the possible additional metadata
+     * @param f A function that is fed each event envelope where the payload is of type `A` and returns an
+     *          async payload to emit, or `None` to filter the event from being produced.
      */
     def registerAsyncEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       new Transformation(mappers.updated(clazz, f.asInstanceOf[EventEnvelope[Any] => Future[Option[Any]]]), orElse)
     }
 
+    /**
+     * @param f A function that is fed each event payload of type `A` and returns an
+     *          async payload to emit, or `None` to filter the event from being produced.
+     */
     def registerAsyncMapper[A: ClassTag, B](f: A => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       new Transformation(
@@ -148,18 +153,45 @@ object EventProducer {
         orElse)
     }
 
+    /**
+     * @param f A function that is fed each event payload of type `A` and returns a
+     *          payload to emit, or `None` to filter the event from being produced.
+     */
     def registerMapper[A: ClassTag, B](f: A => Option[B]): Transformation = {
       registerAsyncMapper[A, B](event => Future.successful(f(event)))
     }
 
+    /**
+     * @param f A function that is fed each event envelope where the payload is of type `A` and returns a
+     *          payload to emit, or `None` to filter the event from being produced.
+     */
+    def registerEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Option[B]): Transformation = {
+      registerAsyncEnvelopeMapper[A, B](event => Future.successful(f(event)))
+    }
+
+    /**
+     * @param f A function that is fed each event payload, that did not match any other registered mappers, returns an
+     *          async payload to emit, or `None` to filter the event from being produced. Replaces any previous "orElse"
+     *          mapper defined.
+     */
     def registerAsyncOrElseMapper(f: Any => Future[Option[Any]]): Transformation = {
       new Transformation(mappers, (envelope: EventEnvelope[Any]) => f(envelope.event))
     }
 
+    /**
+     * @param f A function that is fed each event payload, that did not match any other registered mappers, returns a
+     *          payload to emit, or `None` to filter the event from being produced. Replaces any previous "orElse"
+     *          mapper defined.
+     */
     def registerOrElseMapper(f: Any => Option[Any]): Transformation = {
       registerAsyncOrElseMapper(event => Future.successful(f(event)))
     }
 
+    /**
+     * @param m A function that is fed each event envelope, that did not match any other registered mappers, returns a
+     *          payload to emit, or `None` to filter the event from being produced. Replaces any previous "orElse"
+     *          mapper defined.
+     */
     def registerAsyncEnvelopeOrElseMapper(m: EventEnvelope[Any] => Future[Option[Any]]): Transformation = {
       new Transformation(mappers, m)
     }

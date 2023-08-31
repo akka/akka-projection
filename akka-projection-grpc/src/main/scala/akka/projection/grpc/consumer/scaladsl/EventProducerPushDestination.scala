@@ -107,9 +107,19 @@ object EventProducerPushDestination {
     }
 
     /**
+     * Transform incoming event payloads.
+     *
      * Events can be excluded by mapping the payload to `None`.
      */
-    def registerPayloadMapper[A: ClassTag, B](f: EventEnvelope[A] => Option[B]): Transformation = {
+    def registerMapper[A: ClassTag, B](f: A => Option[B]): Transformation =
+      registerEnvelopeMapper[A, B](envelope => f(envelope.event))
+
+    /**
+     * Transform incoming event payloads, with access to the entire envelope for additional metadata.
+     *
+     * Events can be excluded by mapping the payload to `None`.
+     */
+    def registerEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Option[B]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       val mapPayload = { (eventEnvelope: EventEnvelope[Any]) =>
         if (eventEnvelope.filtered) eventEnvelope
