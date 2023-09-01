@@ -33,9 +33,9 @@ object SensorTwin {
       SensorTwin(entityContext.entityId)))
   }
 
-  def apply(sensorId: String): Behavior[Command] =
+  def apply(entityId: String): Behavior[Command] =
     DurableStateBehavior[Command, State](
-      PersistenceId(EntityKey.name, sensorId),
+      PersistenceId(EntityKey.name, entityId),
       State(0),
       (state, cmd) =>
         cmd match {

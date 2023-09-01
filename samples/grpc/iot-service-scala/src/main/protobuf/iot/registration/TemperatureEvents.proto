@@ -8,6 +8,5 @@ package iot.temperature;
 // Events consumed from external services
 
 message TemperatureRead {
-    string sensor_id = 1;
-    int32 temperature = 2;
+    int32 temperature = 1;
 }
