@@ -62,7 +62,6 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
-  // FIXME should we use a "real" db?
   // local single-node lightweight database with h2
   "com.h2database" % "h2" % "2.1.210",
   "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE",
