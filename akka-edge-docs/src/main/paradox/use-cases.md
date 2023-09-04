@@ -9,7 +9,7 @@ as traffic lights, information signs, distribution points, either in a single ge
 * Support self-driving vehicles with AI decisions
 * Fleet tracking, coordination and communication
 
-The communication between the vehicles and local devices would not be point-to-point, but via a local PoP. Akka Edge
+The communication between the vehicles and local devices would not be point-to-point, but via a local PoP (point of presence). Akka Edge
 would be great for implementing this PoP service. It can not only manage the communication between the devices in the
 area, but also aggregate or filter information of importance and send that to more central cloud services. It can
 receive information from cloud services and propagate relevant information to the devices.
