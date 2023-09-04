@@ -27,6 +27,7 @@ import scala.jdk.DurationConverters.JavaDurationOps
  */
 object LocalDroneEvents {
 
+  // #eventConsumer
   val DroneEventStreamId = "drone-events"
 
   // FIXME The type key on the producer side. Make sure we have documented it.
@@ -48,7 +49,10 @@ object LocalDroneEvents {
       .grpcServiceHandler(destination)(system)
       .asInstanceOf[PartialFunction[HttpRequest, Future[HttpResponse]]]
   }
+  // #eventConsumer
 
+
+  // #eventProjection
   def initPushedEventsConsumer(implicit system: ActorSystem[_]): Unit = {
 
     implicit val askTimeout: Timeout = system.settings.config
@@ -130,7 +134,6 @@ object LocalDroneEvents {
       numberOfInstances = sliceRanges.size,
       behaviorFactory = i => ProjectionBehavior(projection(sliceRanges(i))),
       stopMessage = ProjectionBehavior.Stop)
-
   }
-
+  // #eventProjection
 }

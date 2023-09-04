@@ -21,6 +21,7 @@ import java.util.Optional;
 
 public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State> {
 
+  // #commands
   interface Command extends CborSerializable {}
 
   public static final class UpdateLocation implements Command {
@@ -46,7 +47,9 @@ public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State
       this.replyTo = replyTo;
     }
   }
+  // #commands
 
+  // #state
   public static final class State implements CborSerializable {
     public String locationName;
     public Optional<CoarseGrainedCoordinates> currentLocation;
@@ -61,6 +64,7 @@ public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State
       this.lastChange = lastChange;
     }
   }
+  // #state
 
   public static final EntityTypeKey<Command> ENTITY_KEY =
       EntityTypeKey.create(Command.class, "CentralDrone");
@@ -81,11 +85,14 @@ public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State
     this.context = context;
   }
 
+  // #emptyState
   @Override
   public State emptyState() {
     return new State("unknown", Optional.empty(), Instant.EPOCH);
   }
+  // #emptyState
 
+  // #commandHandler
   @Override
   public CommandHandler<Command, State> commandHandler() {
     return newCommandHandlerBuilder()
@@ -114,4 +121,5 @@ public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State
     state.lastChange = Instant.now();
     return Effect().persist(state).thenReply(command.replyTo, updatedState -> StatusReply.ack());
   }
+  // #commandHandler
 }

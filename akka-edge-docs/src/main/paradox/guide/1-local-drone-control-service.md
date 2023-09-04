@@ -11,7 +11,7 @@ The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-e
 
 ## Implementing a Drone digital twin
 
-### Commands
+### Commands and events
 
 Commands are the public API of an entity that other parts of the system use to interact with it. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, and different events might be generated depending on the current state of the entity. A command can also be rejected if it has invalid input or can’t be handled by the current state of the entity.
 
@@ -150,10 +150,10 @@ Java
 Finally, we need to start the HTTP server, making service implementation available for calls from drones:
 
 Scala
-:  @@snip [DroneServiceImpl.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/LocalDroneControlServer.scala) { #bind }
+:  @@snip [LocalDroneControlServer.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/LocalDroneControlServer.scala) { #bind }
 
 Java
-:  @@snip [DroneServiceImpl.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/LocalDroneControlServer.java) { #bind }
+:  @@snip [LocalDroneControlServer.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/LocalDroneControlServer.java) { #bind }
 
 The Akka HTTP server must be running with HTTP/2 to serve gRPC, this is done through config:
 
@@ -183,10 +183,10 @@ The actual pushing of events is implemented as a single actor behavior, if parti
 by letting multiple actors handle partitions of the entire stream of events from local drones.
 
 Scala
-:  @@snip [DroneServiceImpl.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/DroneEvents.scala) { }
+:  @@snip [DroneEvents.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/DroneEvents.scala) { }
 
 Java
-:  @@snip [DroneServiceImpl.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/DroneEvents.java) { }
+:  @@snip [DroneEvents.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/DroneEvents.java) { }
 
 Two important things to note:
 
@@ -194,11 +194,13 @@ Two important things to note:
 2. The internal domain representation of `CoarseGrainedLocationChanged` is transformed into an explicit public protocol
    protobuf message `local.drones.proto.CoarseDroneLocation` message, for loose coupling between consumer and producer and
    easier evolution over time without breaking wire compatibility.
+3. The service defines a "location name" which is a unique identifier of the PoP in the format `country/city/part-of-city`,
+   it is used as `originId` for the producer push stream, identifying where the stream of events come from.
 
 
 ## Running the sample
 
-The complete sample can be downloaded from github, but note that it also includes the next step of the guide:
+The complete sample can be downloaded from github, but note that it also includes the next steps of the guide:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-service-scala

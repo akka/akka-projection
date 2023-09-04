@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS snapshot(
   PRIMARY KEY(persistence_id)
 );
 
+-- // #queryableColumn
 CREATE TABLE IF NOT EXISTS durable_state (
   slice INT NOT NULL,
   entity_type VARCHAR(255) NOT NULL,
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS durable_state (
 
   PRIMARY KEY(persistence_id, revision)
 );
+-- // #queryableColumn
 
 -- to query drones by location
 CREATE INDEX IF NOT EXISTS durable_state_drone_location_idx ON durable_state(location);

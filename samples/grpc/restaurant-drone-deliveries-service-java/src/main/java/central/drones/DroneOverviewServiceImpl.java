@@ -45,6 +45,7 @@ public final class DroneOverviewServiceImpl implements DroneOverviewService {
 
   @Override
   public CompletionStage<GetDroneOverviewResponse> getDroneOverview(GetDroneOverviewRequest in) {
+    // FIXME missing impl
     return null;
   }
 
