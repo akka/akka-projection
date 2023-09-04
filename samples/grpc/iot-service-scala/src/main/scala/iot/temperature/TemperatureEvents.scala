@@ -10,6 +10,7 @@ import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
+import akka.persistence.typed.PersistenceId
 import akka.projection.Projection
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
@@ -76,9 +77,11 @@ object TemperatureEvents {
             envelope.eventOption)
 
           envelope.event match {
-            case proto.TemperatureRead(sensorId, temperature, _) =>
+            case proto.TemperatureRead(temperature, _) =>
+              val entityId =
+                PersistenceId.extractEntityId(envelope.persistenceId)
               val entityRef =
-                sharding.entityRefFor(SensorTwin.EntityKey, sensorId)
+                sharding.entityRefFor(SensorTwin.EntityKey, entityId)
               entityRef.askWithStatus(
                 SensorTwin.UpdateTemperature(temperature, _))
             case unknown =>
@@ -95,8 +98,8 @@ object TemperatureEvents {
     }
 
     // Split the slices into N ranges
-    val numberOfSliceRanges: Int = system.settings.config.getInt(
-      "iot-service.temperature.projections-slice-count")
+    val numberOfSliceRanges: Int = system.settings.config
+      .getInt("iot-service.temperature.projections-slice-count")
     val sliceRanges = EventSourcedProvider.sliceRanges(
       system,
       R2dbcReadJournal.Identifier,

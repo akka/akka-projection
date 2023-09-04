@@ -31,9 +31,7 @@ object RegistrationEvents {
   private def transformRegistered(
       envelope: EventEnvelope[Registration.Registered]): proto.Registered = {
     val event = envelope.event
-    proto.Registered(
-      sensorId = PersistenceId.extractEntityId(envelope.persistenceId),
-      secret = Some(proto.SecretDataValue(event.secret.value)))
+    proto.Registered(secret = Some(proto.SecretDataValue(event.secret.value)))
   }
 
 }

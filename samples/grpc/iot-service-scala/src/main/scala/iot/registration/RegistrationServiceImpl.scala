@@ -27,8 +27,8 @@ class RegistrationServiceImpl(system: ActorSystem[_])
   private val sharding = ClusterSharding(system)
 
   override def register(in: proto.RegisterRequest): Future[Empty] = {
-    logger.info("register sensor {}", in.sensorId)
-    val entityRef = sharding.entityRefFor(Registration.EntityKey, in.sensorId)
+    logger.info("register sensor {}", in.sensorEntityId)
+    val entityRef = sharding.entityRefFor(Registration.EntityKey, in.sensorEntityId)
     val reply: Future[Done] =
       entityRef.askWithStatus(
         Registration.Register(Registration.SecretDataValue(in.secret), _))

@@ -72,10 +72,10 @@ object Registration {
       Registration(entityContext.entityId)))
   }
 
-  def apply(sensorId: String): Behavior[Command] = {
+  def apply(entityId: String): Behavior[Command] = {
     EventSourcedBehavior
       .withEnforcedReplies[Command, Event, State](
-        persistenceId = PersistenceId(EntityKey.name, sensorId),
+        persistenceId = PersistenceId(EntityKey.name, entityId),
         emptyState = State.empty,
         commandHandler =
           (state, command) => handleCommand(state, command),

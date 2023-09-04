@@ -45,12 +45,13 @@ object EdgeApp {
 
     override def process(envelope: EventEnvelope[AnyRef]): Future[Done] = {
       envelope.event match {
-        case registration.proto.Registered(sensorId, secret, _) =>
+        case registration.proto.Registered(secret, _) =>
+          val entityId = PersistenceId.extractEntityId(envelope.persistenceId)
           log.info(
             "Consumed registered sensor {} in projection {}",
-            sensorId,
+            entityId,
             projectionId.id)
-          spawner ! Root.StartSensorSimulator(sensorId)
+          spawner ! Root.StartSensorSimulator(entityId)
           Future.successful(Done)
         case other =>
           throw new IllegalArgumentException(
@@ -61,7 +62,7 @@ object EdgeApp {
 
   object Root {
     sealed trait Command
-    final case class StartSensorSimulator(sensorId: String) extends Command
+    final case class StartSensorSimulator(entityId: String) extends Command
 
     def apply(): Behavior[Command] =
       Behaviors.setup[Command] { context =>
@@ -108,10 +109,8 @@ object EdgeApp {
               SensorSimulator.TemperatureRead,
               temperature.proto.TemperatureRead] { envelope =>
               val event = envelope.event
-              val sensorId =
-                PersistenceId.extractEntityId(envelope.persistenceId)
               Future.successful(Some(
-                temperature.proto.TemperatureRead(sensorId, event.temperature)))
+                temperature.proto.TemperatureRead(event.temperature)))
             }
 
           val eventProducer = EventProducerPush[SensorSimulator.Event](
@@ -144,9 +143,9 @@ object EdgeApp {
         initRegistrationProjection()
         initTemperaturePush()
 
-        Behaviors.receiveMessage { case StartSensorSimulator(sensorId) =>
-          if (context.child(sensorId).isEmpty)
-            context.spawn(SensorSimulator(sensorId), sensorId)
+        Behaviors.receiveMessage { case StartSensorSimulator(entityId) =>
+          if (context.child(entityId).isEmpty)
+            context.spawn(SensorSimulator(entityId), entityId)
           Behaviors.same
         }
       }
@@ -165,14 +164,14 @@ object EdgeApp {
 
     final case class TemperatureRead(temperature: Int) extends Event
 
-    def apply(sensorId: String): Behavior[Command] = {
+    def apply(entityId: String): Behavior[Command] = {
       Behaviors.setup { context =>
-        context.log.info("Starting sensor simulation [{}]", sensorId)
+        context.log.info("Starting sensor simulation [{}]", entityId)
         Behaviors.withTimers { timers =>
           timers.startTimerWithFixedDelay(Tick, 3.seconds)
 
           EventSourcedBehavior[Command, Event, State.type](
-            PersistenceId(EntityTypeName, sensorId),
+            PersistenceId(EntityTypeName, entityId),
             State,
             (_, cmd) =>
               cmd match {

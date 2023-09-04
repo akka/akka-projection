@@ -15,6 +15,6 @@ service RegistrationService {
 
 
 message RegisterRequest {
-    string sensor_id = 1;
+    string sensor_entity_id = 1;
     string secret = 2;
 }
