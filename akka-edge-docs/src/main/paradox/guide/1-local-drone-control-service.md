@@ -113,14 +113,24 @@ Scala
 Java
 :  @@snip [persistence.conf](/samples/grpc/local-drone-control-java/src/main/resources/persistence.conf) { }
 
+In addition to the configuration, the following additional dependencies are needed in the project build:
 
+@@dependency [sbt,Maven,Gradle] {
+group=com.h2database
+artifact=h2
+version=$h2.version$
+group2=io.r2dbc
+artifact2=r2dbc-h2
+version2=$r2dbc-h2.version$
+}
 
 ### gRPC Service API for the drone communication
 
 To allow drones to actually use the service we need a public API reachable over the network. For this we will use @extref[Akka gRPC](akka-grpc:)
 giving us a type safe, efficient protocol that allows clients to be written in many languages.
 
-The service descriptor for the API is defined in protobuf and mirrors the set of commands the entity accepts:
+The service descriptor for the API is defined in protobuf, it implements the report command that entity accepts but not
+one matching the get location command:
 
 Scala
 :  @@snip [local.drones.drone_api.proto](/samples/grpc/local-drone-control-scala/src/main/protobuf/local/drones/drone_api.proto) { }
@@ -185,3 +195,42 @@ Two important things to note:
    protobuf message `local.drones.proto.CoarseDroneLocation` message, for loose coupling between consumer and producer and
    easier evolution over time without breaking wire compatibility.
 
+
+## Running the sample
+
+The complete sample can be downloaded from github, but note that it also includes the next step of the guide:
+
+* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-service-java
+* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-service-scala
+
+Note that since we have not implemented the consumer for the coarse grained location updates yet, the event push will
+keep trying to connect to an upstream service, fail and report that in the logs.
+
+@@@ div { .group-scala }
+
+To start the sample:
+
+```shell
+sbt run
+```
+
+@@@
+
+@@@ div { .group-java }
+
+```shell
+mvn compile exec:exec
+```
+
+@@@
+
+Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
+
+```shell
+# report the location for a drone with id drone1 
+grpgrpcurl -d '{"drone_id":"drone1", "coordinates": {"longitude": 18.07125, "latitude": 59.31834}, "altitude": 5}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
+```
+
+## What's next?
+
+* Consuming the published coarse grained drone locations in a cloud service 

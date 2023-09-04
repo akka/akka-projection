@@ -289,6 +289,8 @@ lazy val `akka-edge-docs` = project
         "github.base_url" -> "https://github.com/akka/akka-projection",
         "akka.version" -> Dependencies.Versions.akka,
         "akka.r2dbc.version" -> Dependencies.Versions.akkaPersistenceR2dbc,
+        "h2.version" -> Dependencies.Compile.h2.revision,
+        "r2dbc-h2.version" -> Dependencies.Compile.r2dbcH2.revision,
         "extref.akka-projection.base_url" -> s"https://doc.akka.io/docs/akka-projection/${Dependencies.AkkaProjectionVersionInDocs}/%s",
         "scaladoc.akka.projection.base_url" -> s"https://doc.akka.io/api/akka-projection/${Dependencies.AkkaProjectionVersionInDocs}/",
         "extref.akka-distributed-cluster.base_url" -> s"https://doc.akka.io/docs/akka-distributed-cluster/${Dependencies.AkkaProjectionVersionInDocs}/%s"),
