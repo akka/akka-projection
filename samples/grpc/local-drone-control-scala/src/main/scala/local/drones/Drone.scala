@@ -14,20 +14,47 @@ import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplyEffect
 
 object Drone {
+
+  // #commands
+
+  /**
+   * This interface defines all the commands (messages) that the Drone actor supports.
+   */
   sealed trait Command extends CborSerializable
 
+  /**
+   * A command to report the current position (coordinates and altitude) of the drone.
+   *
+   * It replies with `Done`, which is sent back to the caller when
+   * all the events emitted by this command are successfully persisted.
+   */
   final case class ReportPosition(position: Position, replyTo: ActorRef[Done])
       extends Command
 
+  /**
+   * A command to query the current position (coordinates and altitude) of the drone.
+   *
+   * It replies with a `StatusReply[Position]`, which is sent back to the caller as a success if the
+   * coordinates are known. If not an error is sent back.
+   */
   final case class GetCurrentPosition(replyTo: ActorRef[StatusReply[Position]])
       extends Command
 
+  // #commands
+
+  // #events
+
+  /**
+   * This interface defines all the events that the Drone supports.
+   */
   sealed trait Event extends CborSerializable
   final case class PositionUpdated(position: Position) extends Event
   final case class CoarseGrainedLocationChanged(
       coordinates: CoarseGrainedCoordinates)
       extends Event
+  // #events
 
+  // #state
   final case class State(
       currentPosition: Option[Position],
       historicalPositions: Vector[Position])
@@ -36,6 +63,7 @@ object Drone {
       currentPosition.map(p =>
         CoarseGrainedCoordinates.fromCoordinates(p.coordinates))
   }
+  // #state
 
   private val emptyState = State(None, Vector.empty)
 
@@ -56,6 +84,7 @@ object Drone {
       handleCommand,
       handleEvent)
 
+  // #commandHandler
   private def handleCommand(
       state: State,
       command: Command): ReplyEffect[Event, State] = command match {
@@ -92,6 +121,9 @@ object Drone {
 
   }
 
+  // #commandHandler
+
+  // #eventHandler
   private def handleEvent(state: State, event: Event): State = event match {
     case PositionUpdated(newPosition) =>
       val newHistoricalPositions = state.currentPosition match {
@@ -111,5 +143,6 @@ object Drone {
       state
 
   }
+  // #eventHandler
 
 }

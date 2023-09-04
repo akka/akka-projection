@@ -14,6 +14,7 @@ import java.util.Arrays;
 
 public class LocalDroneControlServer {
 
+  // #bind
   public static void start(String host,
                            int port,
                            ActorSystem<?> system,
@@ -46,4 +47,5 @@ public class LocalDroneControlServer {
       }
     });
   }
+  // #bind
 }

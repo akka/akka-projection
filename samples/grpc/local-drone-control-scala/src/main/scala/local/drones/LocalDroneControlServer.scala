@@ -14,7 +14,7 @@ import scala.util.Failure
 import scala.util.Success
 
 object LocalDroneControlServer {
-
+  // #bind
   def start(
       interface: String,
       port: Int,
@@ -51,5 +51,6 @@ object LocalDroneControlServer {
         system.terminate()
     }
   }
+  // #bind
 
 }

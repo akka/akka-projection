@@ -3,11 +3,11 @@
 As a hands-on guide we will step by step implement a drone restaurant to customer delivery service where orders for deliveries
 between restaurants and customers are created in a service in the cloud.
 
-The drones continuously inform their local control center about their exact location. An approximate
+The drones continuously inform their PoP (point of presence) local control center about their exact location. An approximate
 location of the drones are replicated to the cloud service at a much lower frequency, only when the drones change 
 location on a coarse grained GPS coordinate grid.
 
-The cloud service accepts restaurant orders and replicate them to the right local control center. Drones interact with
+The cloud service accepts restaurant orders and replicate them to the right control center. Drones interact with
 the local center to pick up available orders closest to their location.
 
 @@toc { depth=2 }

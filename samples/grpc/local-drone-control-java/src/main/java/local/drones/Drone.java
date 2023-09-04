@@ -24,8 +24,18 @@ import static akka.Done.done;
 
 public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Drone.State> {
 
+    // #commands
+    /**
+     * This interface defines all the commands (messages) that the Drone actor supports.
+     */
     interface Command extends CborSerializable {}
 
+    /**
+     * A command to report the current position (coordinates and altitude) of the drone.
+     *
+     * It replies with `Done`, which is sent back to the caller when
+     * all the events emitted by this command are successfully persisted.
+     */
     public static final class ReportPosition implements Command {
         public final Position position;
         public final ActorRef<Done> replyTo;
@@ -36,6 +46,12 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
         }
     }
 
+    /**
+     * A command to query the current position (coordinates and altitude) of the drone.
+     *
+     * It replies with a `StatusReply&lt;Position>`, which is sent back to the caller as a success if the
+     * coordinates are known. If not an error is sent back.
+     */
     public static final class GetCurrentPosition implements Command {
         public final ActorRef<StatusReply<Position>> replyTo;
 
@@ -44,7 +60,12 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
         }
     }
 
+    // #commands
 
+    // #events
+    /**
+     * This interface defines all the events that the Drone supports.
+     */
     interface Event extends CborSerializable {}
 
     public static final class PositionUpdated implements Event {
@@ -64,9 +85,9 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
             this.coordinates = coordinates;
         }
     }
+    // #events
 
-
-
+    // #state
     class State implements CborSerializable {
         Optional<Position> currentPosition;
         final List<Position> historicalPositions;
@@ -82,6 +103,7 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
         }
 
     }
+    // #state
 
     public static final EntityTypeKey<Command> ENTITY_KEY = EntityTypeKey.create(Command.class, "Drone");
 
@@ -105,6 +127,7 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
         return new State();
     }
 
+    // #commandHandler
     @Override
     public CommandHandler<Command, Event, State> commandHandler() {
         return newCommandHandlerBuilder().forAnyState()
@@ -113,8 +136,10 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
                 .build();
     }
 
+    // #commandHandler
 
 
+    // #eventHandler
     @Override
     public EventHandler<State, Event> eventHandler() {
         return newEventHandlerBuilder()
@@ -136,7 +161,10 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
                         state)
                 .build();
     }
+    // #eventHandler
 
+
+    // #commandHandler
     private Effect<Event, State> onReportPosition(State state, ReportPosition command) {
         if (state.currentPosition.equals(Optional.of(command.position))) {
             // already seen
@@ -165,6 +193,7 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
                 .orElse(Effect().reply(command.replyTo, StatusReply.error("Position of drone is unknown"))
         );
     }
+    // #commandHandler
 
 
 }
