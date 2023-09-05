@@ -10,6 +10,30 @@ Akka in a JVM (or Java native image) and have network access from the edge to th
 
 ![Diagram showing an overview of Akka Edge](images/overview.svg)
 
+## Topology
+
+The topology of cloud services, edge services and edge devices may look like this, but there are no technical
+limitations other than network connectivity to use other topologies, such as one edge service interacting directly
+with another edge service. In the end it is an application concern to define the topology and setup the connections
+at startup or dynamically when the system is running.
+
+![Diagram showing Akka Edge topology](images/edge-topology.svg)
+
+The topology is typically that the edge services connect to services in a cloud region, like a star topology.
+
+Each cloud service is typically an Akka Cluster. Several of these clusters may be deployed to different Kubernetes
+clusters in different cloud regions for redundancy and geographical distribution. The cloud services may use
+active-active entities or one-way event replication as provided by @extref[Akka Distributed Cluster](akka-distributed-cluster:).
+
+The edge services connect to the cloud services and can use event replication in both directions to communicate with
+cloud services. An edge service can be a single node or form a small Akka Cluster.
+
+The edge service can be fully autonomous and continue working when there are network disruptions, or if the
+edge service chooses to not always be connected. It will catch up on pending events when the communication is
+established again.
+
+Devices connect to the closest edge service with HTTP, MQTT, or any other suitable external protocol. 
+
 ## Communication transport
 
 The communication transport between the Akka Edge application and other Akka Clusters is using reliable event replication over gRPC, which
@@ -20,16 +44,8 @@ gives characteristics such as:
 * exactly-once processing or at-least-once processing
 * asynchronous and brokerless communication without need of additional products
 
-All gRPC connections are established from the Edge service, independent of whether the Edge service is producing or
+All gRPC connections are established from the edge service, independent of whether the edge service is producing or
 consuming events.
-
-The topology is typically that the edge services connect to services in a cloud region, like a star topology.
-There are no technical limitations other than network connectivity to use other topologies, such as one edge service
-interacting directly with another edge service.
-
-The edge service can be fully autonomous and continue working when there are network disruptions, or if the
-edge service chooses to not always be connected. It will catch up on pending events when the communication is
-established again.
 
 ## Event Replication
 
