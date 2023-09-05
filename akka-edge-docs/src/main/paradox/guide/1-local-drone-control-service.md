@@ -146,10 +146,10 @@ Scala
 Java
 :  @@snip [DroneServiceImpl.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/DroneServiceImpl.java) { }
 
-Finally, we need to start the HTTP server, making service implementation available for calls from drones:
+Finally, we need to start the gRPC server, making service implementation available for calls from drones:
 
 Scala
-:  @@snip [LocalDroneControlServer.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/LocalDroneControlServer.scala) { #bindNoProjections }
+:  @@snip [LocalDroneControlServer.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/LocalDroneControlServer.scala) { #bind }
 
 Java
 :  @@snip [LocalDroneControlServer.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/LocalDroneControlServer.java) { #bind }

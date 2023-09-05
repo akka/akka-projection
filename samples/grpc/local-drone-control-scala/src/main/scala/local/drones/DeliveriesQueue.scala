@@ -12,6 +12,7 @@ import java.time.Instant
 
 object DeliveriesQueue {
 
+  // #commands
   sealed trait Command extends CborSerializable
 
   final case class AddDelivery(
@@ -32,6 +33,9 @@ object DeliveriesQueue {
 
   final case class GetCurrentState(replyTo: ActorRef[State]) extends Command
 
+  // #commands
+
+  // #state
   final case class WaitingDelivery(
       deliveryId: String,
       from: Coordinates,
@@ -45,6 +49,7 @@ object DeliveriesQueue {
       waitingDeliveries: Vector[WaitingDelivery],
       deliveriesInProgress: Vector[DeliveryInProgress])
       extends CborSerializable
+  // #state
 
   // Not really an entity, we just have one
   val EntityKey = EntityTypeKey("RestaurantDeliveries")
@@ -58,6 +63,7 @@ object DeliveriesQueue {
     }
   }
 
+  // #commandHandler
   private def onCommand(context: ActorContext[Command])(
       state: State,
       command: Command): Effect[State] =
@@ -112,5 +118,6 @@ object DeliveriesQueue {
       case GetCurrentState(replyTo) =>
         Effect.reply(replyTo)(state)
     }
+  // #commandHandler
 
 }

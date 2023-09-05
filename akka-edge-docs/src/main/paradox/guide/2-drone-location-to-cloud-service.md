@@ -4,9 +4,12 @@ In the previous step of the guide we implemented the PoP local control service k
 
 We also want to publish coarse grained location updates at a low frequency from the edge to a central cloud service. 
 
-In this step we will cover publishing and consuming those events by passing to an overview-version of the drone digital twin.
+In this step we will cover publishing and consuming those events, passing them to a stateful overview-version of the 
+drone digital twin. We will use @extref[Akka Projection gRPC](akka-projection:grpc.html) to do service-to-service events passing with an
+effectively once delivery guarantee, this without requiring a message broker in between services. The cloud and the many
+PoP services each has their own lifecycle and are deployed separately in different places.
 
-We will then implement a service querying the coarse grained location of the global set of drones. 
+We will then implement a service querying the coarse grained location of the global set of drones in the cloud service. 
 
 ## Coarse grained location aggregation and publishing
 
@@ -179,7 +182,7 @@ Java
 :  @@snip [persistence.conf](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/resources/persistence.conf) { #locationColumn }
 
 
-## gRPC service for 
+## gRPC service
 
 To make it possible for users of our service to query the drone overviews we define a gRPC service:
 
@@ -189,7 +192,9 @@ Scala
 Java
 :  @@snip [drone_overview_api.proto](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/protobuf/central/drones/drone_overview_api.proto) { }
 
-And implement it. The `getDroneOverview` method asks the drone entity directly about its current state. 
+And implement the service interface Akka gRPC generates for it.
+
+The `getDroneOverview` method asks the drone entity directly about its current state. 
 
 The `getCoarseDroneLocations` is a bit more involved, querying using the `locations` column, and then using 
 the Akka Serialization infrastructure to deserialize the found drone `State` instances. Grouping the drones
@@ -236,11 +241,22 @@ mvn compile exec:exec
 
 @@@
 
-Then start the drone-restaurant-deliveries-service
+Then start the drone-restaurant-deliveries-service.
+
+As the service needs a PostgreSQL instance running, start that up in a docker container and create the database
+schema:
+
+```shell
+ docker compose up --wait
+
+ # creates the tables needed for Akka Persistence
+ # as well as the offset store table for Akka Projection
+ docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+ ```
+
+Then start the service:
 
 @@@ div { .group-scala }
-
-To start the sample:
 
 ```shell
 sbt -Dconfig.resource=local1.conf run
@@ -275,35 +291,28 @@ mvn compile exec:exec -DAPP_CONFIG=local3.conf
 
 Now update one or more drones a few times with [grpcurl](https://github.com/fullstorydev/grpcurl) against the local-drone-control:
 
-```shell
-# report the location for a drone with id drone1 
+```shell 
 grpcurl -d '{"drone_id":"drone1", "coordinates": {"longitude": 18.07125, "latitude": 59.31834}, "altitude": 5}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
-
-# report a new location for a drone with id drone1 
+ 
 grpcurl -d '{"drone_id":"drone1", "coordinates": {"longitude": 18.08125, "latitude": 59.41834}, "altitude": 10}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
 
-# report a new location for a drone with id drone2
 grpcurl -d '{"drone_id":"drone2", "coordinates": {"longitude": 18.07125, "latitude": 59.41834}, "altitude": 8 }' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
 
-# report a new location for a drone with id drone2
 grpcurl -d '{"drone_id":"drone2", "coordinates": {"longitude": 18.07125, "latitude": 59.41834}, "altitude": 8 }' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
 
-# report a new location for a drone with id drone2
 grpcurl -d '{"drone_id":"drone2", "coordinates": {"longitude": 18.08114, "latitude": 59.42122}, "altitude": 8 }' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
 ```
 
 Then query the cloud service:
 ```shell
-# the overview by location
 grpcurl -d '{"location":"sweden/stockholm/kungsholmen"}' -plaintext localhost:8101 central.drones.DroneOverviewService/GetCoarseDroneLocations
 ```
 
-You should see the two drones listed at the same coarse grained coordinates.
+If you posted the drone location updates above you should see the two drones listed at the same coarse grained coordinates.
 
 You can also query the individual drones for their specific coarse grained location:
 
 ```shell
-# specific location for a drone
 grpcurl -d '{"drone_id":"drone1"}' -plaintext localhost:8101 central.drones.DroneOverviewService.GetDroneOverview
 ```
 

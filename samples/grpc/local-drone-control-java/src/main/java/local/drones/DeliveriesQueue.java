@@ -23,6 +23,7 @@ import static akka.Done.done;
 
 public final class DeliveriesQueue extends DurableStateBehavior<DeliveriesQueue.Command, DeliveriesQueue.State> {
 
+    // #commands
     public interface Command extends CborSerializable {
     }
 
@@ -67,9 +68,10 @@ public final class DeliveriesQueue extends DurableStateBehavior<DeliveriesQueue.
         }
     }
 
+    // #commands
 
 
-
+    // #state
     public static final class State implements CborSerializable {
         public final List<WaitingDelivery> waitingDeliveries;
         public final List<DeliveryInProgress> deliveriesInProgress;
@@ -137,6 +139,7 @@ public final class DeliveriesQueue extends DurableStateBehavior<DeliveriesQueue.
             this.pickupTime = pickupTime;
         }
     }
+    // #state
 
     // Not really an entity, we just have a single instance
     static public final EntityTypeKey<Command> EntityKey = EntityTypeKey.create(Command.class, "RestaurantDeliveries");
@@ -159,6 +162,7 @@ public final class DeliveriesQueue extends DurableStateBehavior<DeliveriesQueue.
         return new State();
     }
 
+    // #commandHandler
     @Override
     public CommandHandler<Command, State> commandHandler() {
         return newCommandHandlerBuilder()
@@ -221,4 +225,5 @@ public final class DeliveriesQueue extends DurableStateBehavior<DeliveriesQueue.
         var stateToShare = new State(new ArrayList<>(state.waitingDeliveries), new ArrayList<>(state.deliveriesInProgress));
         return Effect().reply(command.replyTo, stateToShare);
     }
+    // #commandHandler
 }

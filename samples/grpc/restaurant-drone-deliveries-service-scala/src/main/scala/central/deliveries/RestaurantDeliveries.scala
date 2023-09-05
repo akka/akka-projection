@@ -21,6 +21,7 @@ import java.time.Instant
  */
 object RestaurantDeliveries {
 
+  // #commands
   sealed trait Command extends CborSerializable
 
   final case class RegisterDelivery(
@@ -37,7 +38,9 @@ object RestaurantDeliveries {
 
   final case class ListCurrentDeliveries(replyTo: ActorRef[Seq[Delivery]])
       extends Command
+  // #commands
 
+  // #events
   sealed trait Event extends CborSerializable
 
   final case class DeliveryRegistered(delivery: Delivery) extends Event
@@ -46,18 +49,22 @@ object RestaurantDeliveries {
       coordinates: Coordinates)
       extends Event
 
+  final case class Delivery(
+     deliveryId: String,
+     // FIXME next two fields always the same for the same restaurant, annoying,
+     //       but how else would we see them in downstream projection?
+     localControlLocationId: String,
+     origin: Coordinates,
+     destination: Coordinates,
+     timestamp: Instant)
+  // #events
+
+  // #state
   private final case class State(
       localControlLocationId: String,
       restaurantLocation: Coordinates,
       currentDeliveries: Vector[Delivery])
-  final case class Delivery(
-      deliveryId: String,
-      // FIXME next two fields always the same for the same restaurant, annoying,
-      //       but how else would we see them in downstream projection?
-      localControlLocationId: String,
-      origin: Coordinates,
-      destination: Coordinates,
-      timestamp: Instant)
+  // #state
 
   val EntityKey = EntityTypeKey[Command]("RestaurantDeliveries")
 
@@ -79,6 +86,7 @@ object RestaurantDeliveries {
       case _ => Set.empty
     }
 
+  // #commandHandler
   private def onCommand(
       state: Option[State],
       command: Command): Effect[Event, Option[State]] =
@@ -132,6 +140,7 @@ object RestaurantDeliveries {
           StatusReply.Error("Changing restaurant location not supported"))
     }
   }
+  // #commandHandler
 
   private def onEvent(state: Option[State], event: Event): Option[State] =
     (state, event) match {

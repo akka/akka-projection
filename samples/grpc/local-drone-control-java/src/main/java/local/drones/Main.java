@@ -9,6 +9,7 @@ import akka.cluster.typed.Join;
 
 public class Main {
 
+  // #main
   public static void main(String[] args) {
     ActorSystem.create(rootBehavior(), "local-drone-control");
   }
@@ -55,4 +56,5 @@ public class Main {
       return Behaviors.empty();
     });
   }
+  // #main
 }
