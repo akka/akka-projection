@@ -21,15 +21,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import com.google.protobuf.any.{ Any => ScalaPbAny }
 import com.google.protobuf.{ Any => PbAny }
 
-class ProtoAnySerializationSpec
-    extends ScalaTestWithActorTestKit("""
-    akka.actor.serialization-bindings {
-      # // FIXME important to document this for the SerializedEvent optimization to work
-      "scalapb.GeneratedMessage" = proto
-    }
-    """)
-    with AnyWordSpecLike
-    with LogCapturing {
+class ProtoAnySerializationSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike with LogCapturing {
 
   private val serializationJava =
     new ProtoAnySerialization(
