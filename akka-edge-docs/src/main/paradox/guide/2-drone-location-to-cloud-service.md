@@ -112,7 +112,7 @@ Java
 ## Storing query representation for easier querying
 
 The Akka R2DBC plugin contains a feature for @extref[writing durable state query representation](akka-persistence-r2dbc:durable-state-store.html#storing-query-representation) in the same transaction as the state update. We'll use that to write the `locationName` to 
-a queriable column in the PostgreSQL database.
+a queryable column in the PostgreSQL database.
 
 First step is to add a `location` column to the durable state table schema:
 
@@ -171,7 +171,7 @@ Java
 
 ## Running the sample
 
-The complete sample can be downloaded from github, but note that it also includes the next steps of the guide:
+The complete sample can be downloaded from GitHub, but note that it also includes the next steps of the guide:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-scala
