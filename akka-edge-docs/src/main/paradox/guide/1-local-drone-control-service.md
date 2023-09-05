@@ -17,9 +17,8 @@ Commands are the public API of an entity that other parts of the system use to i
 
 The Drone only accepts two commands: `ReportLocation` and `GetLocation`. When the reported location changes it always persists
 a `PositionUpdated` event, but additionally, whenever the position means it changed place on a more coarse grained grid,
-it also emits a `CoarseGrainedLocationChanged` event. 
-
-We will revisit the reason for the coarse grained event later in this guide. 
+it also emits a `CoarseGrainedLocationChanged` event. We will revisit the reason for the coarse grained event in the next 
+step in this guide. 
 
 The definition of the commands and events look like this:
 
@@ -150,7 +149,7 @@ Java
 Finally, we need to start the HTTP server, making service implementation available for calls from drones:
 
 Scala
-:  @@snip [LocalDroneControlServer.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/LocalDroneControlServer.scala) { #bind }
+:  @@snip [LocalDroneControlServer.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/LocalDroneControlServer.scala) { #bindNoProjections }
 
 Java
 :  @@snip [LocalDroneControlServer.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/LocalDroneControlServer.java) { #bind }
@@ -163,50 +162,26 @@ Scala
 Java
 :  @@snip [grpc.conf](/samples/grpc/local-drone-control-java/src/main/resources/grpc.conf) { #http2 }
 
+### Wiring it all up
 
-// FIXME maybe this is enough and the next should be a separate page?
+The main of this service starts up an actor system with a root behavior which is responsible for bootstrapping all
+parts of the application. 
 
-## Coarse grained location aggregation and publishing
-
-We have already seen the additional `CoarseGrainedLocationChanged` event a few times, we will also publish these aggregate
-events upstream to a cloud service that can keep a rough overview of where all drones are without needing to handle the
-global load of detailed and frequent updates from all drones.
-
-Normally for Akka gRPC projections the consumer initiates the connection, but in edge scenarios it might be problematic
-because of firewalls not allowing the cloud to connect to each PoP. The normal consumer initiated connections also means
-that all producers must be known up front by the consumer. 
-
-To solve this the local control center push events to the cloud using @extref[Akka gRPC projection with producer push](akka-projection:grpc-producer-push.html)
-which means the control center will initiate the connection.
-
-The actual pushing of events is implemented as a single actor behavior, if partitioning is needed for scaling that is also possible
-by letting multiple actors handle partitions of the entire stream of events from local drones.
+Note that the bootstrap contains some parts not yet described, the `DroneEvents` and the `DeliveriesQueue`.
+They will be covered in the following sections of this guide and can be ignored for now. 
 
 Scala
-:  @@snip [DroneEvents.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/DroneEvents.scala) { }
+:  @@snip [Main.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/Main.scala) { #main }
 
 Java
-:  @@snip [DroneEvents.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/DroneEvents.java) { }
-
-Two important things to note:
-
-1. A producer filter is applied to only push `CoarseGrainedLocationChanged` and not the fine-grained `PositionUpdated` events.
-2. The internal domain representation of `CoarseGrainedLocationChanged` is transformed into an explicit public protocol
-   protobuf message `local.drones.proto.CoarseDroneLocation` message, for loose coupling between consumer and producer and
-   easier evolution over time without breaking wire compatibility.
-3. The service defines a "location name" which is a unique identifier of the PoP in the format `country/city/part-of-city`,
-   it is used as `originId` for the producer push stream, identifying where the stream of events come from.
-
+:  @@snip [Main.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/Main.java) { #main }
 
 ## Running the sample
 
-The complete sample can be downloaded from github, but note that it also includes the next steps of the guide:
+The complete sample can be downloaded from GitHub, but note that it also includes the next steps of the guide:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-service-scala
-
-Note that since we have not implemented the consumer for the coarse grained location updates yet, the event push will
-keep trying to connect to an upstream service, fail and report that in the logs.
 
 @@@ div { .group-scala }
 
