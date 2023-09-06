@@ -1,23 +1,27 @@
 # Local Drone Control Service
 
 As the other features of Akka Edge are build on top of Event Sourcing, let us start by implementing a digital twin
-to drones using the @extref[Akka Event Sourced Behavior API](akka:typed/persistence.html). When this first step is completed, the drones
-will be able to report their location and users inspect the current location of a drone connected to the local 
-control center PoP.
+for drones using the @extref[Akka Event Sourced Behavior API](akka:typed/persistence.html). 
 
 ![Diagram showing 2 drone entities in a Local Drone Control Service](../images/guide-section-1.svg)
 
-We will build the drone as an Event Sourced entity, if you are unfamiliar with Event Sourcing, refer to the
+We will represent drone as an Event Sourced entity, if you are unfamiliar with Event Sourcing, refer to the
 @extref[Event Sourcing section in the Akka guide](akka-guide:concepts/event-sourcing.html) for an explanation.
 The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-event-sourcing-video) is also a good starting point for learning Event Sourcing.
 
 For drones to communicate their location to the digital twin we will create a gRPC API.
 
+When this first step is completed, the drones will be able to report their location and users inspect the current
+location of a drone connected to the local control center PoP.
+
 ## Implementing a Drone digital twin
 
 ### Commands and events
 
-Commands are the public API of an entity that other parts of the system use to interact with it. Entity state can only be changed by commands. The results of commands are emitted as events. A command can request state changes, and different events might be generated depending on the current state of the entity. A command can also be rejected if it has invalid input or can’t be handled by the current state of the entity.
+Commands are the public API of an entity that other parts of the system use to interact with it. Entity state can only
+be changed by commands. The results of commands are emitted as events. A command can request state changes, and different
+events might be generated depending on the current state of the entity. A command can also be rejected if it has invalid 
+input or can’t be handled by the current state of the entity.
 
 The Drone only accepts two commands: `ReportLocation` and `GetLocation`. When the reported location changes it always persists
 a `PositionUpdated` event, but additionally, whenever the position means it changed place on a more coarse grained grid,
@@ -127,7 +131,7 @@ artifact2=r2dbc-h2
 version2=$r2dbc-h2.version$
 }
 
-### gRPC Service API for the drone communication
+## gRPC Service API for the drone communication
 
 To allow drones to actually use the service we need a public API reachable over the network. For this we will use @extref[Akka gRPC](akka-grpc:)
 giving us a type safe, efficient protocol that allows clients to be written in many languages.
@@ -166,7 +170,7 @@ Scala
 Java
 :  @@snip [grpc.conf](/samples/grpc/local-drone-control-java/src/main/resources/grpc.conf) { #http2 }
 
-### Wiring it all up
+## Wiring it all up
 
 The main of this service starts up an actor system with a root behavior which is responsible for bootstrapping all
 parts of the application. 
@@ -207,8 +211,7 @@ mvn compile exec:exec
 
 Try it with [grpcurl](https://github.com/fullstorydev/grpcurl):
 
-```shell
-# report the location for a drone with id drone1 
+```shell 
 grpgrpcurl -d '{"drone_id":"drone1", "coordinates": {"longitude": 18.07125, "latitude": 59.31834}, "altitude": 5}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
 ```
 

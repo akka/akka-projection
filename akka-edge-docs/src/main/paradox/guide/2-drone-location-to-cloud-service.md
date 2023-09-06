@@ -227,8 +227,6 @@ As this service consumes events from the service built in the previous step, sta
 
 @@@ div { .group-scala }
 
-To start the local-drone-control-service:
-
 ```shell
 sbt run
 ```
@@ -249,12 +247,9 @@ As the service needs a PostgreSQL instance running, start that up in a docker co
 schema:
 
 ```shell
- docker compose up --wait
-
- # creates the tables needed for Akka Persistence
- # as well as the offset store table for Akka Projection
- docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
- ```
+docker compose up --wait
+docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+```
 
 Then start the service:
 

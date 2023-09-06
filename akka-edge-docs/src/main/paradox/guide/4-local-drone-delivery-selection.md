@@ -148,7 +148,125 @@ Java
 
 ## Running the sample
 
-FIXME start both services, add restaurant, add delveries, report drone locations, request delivery for drone (all is in README already)
+The complete sample can be downloaded from GitHub, but note that it also includes the next steps of the guide:
+
+* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-java
+* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-scala
+
+As this service consumes events from the service built in the previous step, start the local-drone-control service first:
+
+@@@ div { .group-scala }
+
+To start the local-drone-control-service:
+
+```shell
+sbt run
+```
+
+@@@
+
+@@@ div { .group-java }
+
+```shell
+mvn compile exec:exec
+```
+
+@@@
+
+Then start the drone-restaurant-deliveries-service.
+
+As the service needs a PostgreSQL instance running, start that up in a docker container and create the database
+schema if you did not do that in a previous step of the guide:
+
+```shell
+docker compose up --wait
+docker exec -i postgres_db psql -U postgres -t < ddl-scripts/create_tables.sql
+```
+
+Then start the service:
+
+@@@ div { .group-scala }
+
+```shell
+sbt -Dconfig.resource=local1.conf run
+```
+
+And optionally one or two more Akka cluster nodes, but note that the local drone controls
+are statically configured to the gRPC port of the first and will only publish events to that node.
+
+```shell
+sbt -Dconfig.resource=local2.conf run
+sbt -Dconfig.resource=local3.conf run
+```
+
+@@@
+
+@@@ div { .group-java }
+
+```shell
+mvn compile exec:exec -DAPP_CONFIG=local1.conf
+```
+
+And optionally one or two more Akka cluster nodes, but note that the local drone controls
+are statically configured to the gRPC port of the first and will only publish events to that node.
+
+```shell
+mvn compile exec:exec -DAPP_CONFIG=local2.conf
+mvn compile exec:exec -DAPP_CONFIG=local3.conf
+```
+
+@@@
+
+Create a restaurant with [grpcurl](https://github.com/fullstorydev/grpcurl):
+
+```shell
+grpcurl -d '{"restaurant_id":"restaurant1","coordinates":{"latitude": 59.330324, "longitude": 18.039568}, "local_control_location_id": "sweden/stockholm/kungsholmen" }' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.SetUpRestaurant
+```
+
+Set up another restaurant, closest to a different local drone control
+
+```shell
+grpcurl -d '{"restaurant_id":"restaurant2","coordinates":{"latitude": 59.342046, "longitude": 18.059095}, "local_control_location_id": "sweden/stockholm/norrmalm" }' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.SetUpRestaurant
+```
+
+Register a delivery for the first restaurant
+
+```shell
+grpcurl -d '{"restaurant_id":"restaurant1","delivery_id": "order1","coordinates":{"latitude": 59.330841, "longitude": 18.038885}}' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.RegisterDelivery
+```
+
+Register a delivery for the second restaurant
+
+```shell
+grpcurl -d '{"restaurant_id":"restaurant2","delivery_id": "order2","coordinates":{"latitude": 59.340128, "longitude": 18.056303}}' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.RegisterDelivery
+```
+
+Now update one or more drones a few times with [grpcurl](https://github.com/fullstorydev/grpcurl) against the local-drone-control:
+
+```shell 
+grpcurl -d '{"drone_id":"drone1", "coordinates": {"longitude": 18.07125, "latitude": 59.31834}, "altitude": 5}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
+ 
+grpcurl -d '{"drone_id":"drone1", "coordinates": {"longitude": 18.08125, "latitude": 59.41834}, "altitude": 10}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
+
+grpcurl -d '{"drone_id":"drone2", "coordinates": {"longitude": 18.08114, "latitude": 59.42122}, "altitude": 8 }' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
+```
+
+Request a delivery for drone1
+
+```shell
+grpcurl -d '{"drone_id":"drone1"}' -plaintext 127.0.0.1:8080 local.drones.DroneService.RequestNextDelivery
+```
+
+Mark the delivery as completed
+```shell
+grpcurl -d '{"delivery_id":"order1"}' -plaintext 127.0.0.1:8080 local.drones.DroneService.CompleteDelivery
+```
+
+Inspect the current state of the local delivery queue
+
+```shell
+grpcurl -plaintext 127.0.0.1:8080 local.drones.DeliveriesQueueService.GetCurrentQueue
+```
 
 ## What's next?
 
