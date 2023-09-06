@@ -12,7 +12,6 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.SerializedEvent
-import akka.serialization.DisabledJavaSerializer
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializer
 import akka.serialization.SerializerWithStringManifest
@@ -57,22 +56,16 @@ import scalapb.options.Scalapb
 
     def messageClass: Class[_]
 
-    def akkaSerializer: Option[Serializer]
-
   }
 
-  private final class JavaPbResolvedType[T <: Message](
-      parser: Parser[T],
-      override val messageClass: Class[_],
-      override val akkaSerializer: Option[Serializer])
+  private final class JavaPbResolvedType[T <: Message](parser: Parser[T], override val messageClass: Class[_])
       extends ResolvedType[T] {
     override def parseFrom(bytes: ByteString): T = parser.parseFrom(bytes)
   }
 
   private final class ScalaPbResolvedType[T <: scalapb.GeneratedMessage](
       companion: scalapb.GeneratedMessageCompanion[_],
-      override val messageClass: Class[_],
-      override val akkaSerializer: Option[Serializer])
+      override val messageClass: Class[_])
       extends ResolvedType[T] {
     override def parseFrom(bytes: ByteString): T = companion.parseFrom(bytes.newCodedInput()).asInstanceOf[T]
   }
@@ -198,22 +191,9 @@ import scalapb.options.Scalapb
       None
     } else if (typeUrl.startsWith(GoogleTypeUrlPrefix)) {
       val resolvedType = resolveTypeUrl(typeUrl)
-      resolvedType.akkaSerializer match {
-        case Some(serializer) =>
-          if (serializer.identifier == akkaProtobufSerializer.identifier && isDefaultAkkaProtobufSerializer) {
-            // this is the case for akka.remote.serialization.ProtobufSerializer, which is configured by default
-            // for protobuf messages
-            val manifest = if (serializer.includeManifest) resolvedType.messageClass.getName else ""
-            Some(new SerializedEvent(scalaPbAny.value.toByteArray, serializer.identifier, manifest))
-          } else {
-            // we don't know how what a custom serializer would do
-            None
-          }
-        case None =>
-          log.debug(
-            "No Akka Serializer for Protobuf message class [{}]. Consider defining it in `akka.actor.serialization-bindings`.",
-            resolvedType.messageClass.getName)
-          None
+      akkaSerializerForSerializedEvent(resolvedType.messageClass).map { serializer =>
+        val manifest = if (serializer.includeManifest) resolvedType.messageClass.getName else ""
+        new SerializedEvent(scalaPbAny.value.toByteArray, serializer.identifier, manifest)
       }
     } else if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
       val (id, manifest) = akkaSerializerIdAndManifestFromTypeUrl(typeUrl)
@@ -221,6 +201,26 @@ import scalapb.options.Scalapb
     } else {
       // We don't try to optimize this case. One level of indirection too much, and probably not a common case.
       None
+    }
+  }
+
+  private def akkaSerializerForSerializedEvent(messageClass: Class[_]): Option[Serializer] = {
+    val akkaSerializer = Try(serialization.serializerFor(messageClass)).toOption
+    akkaSerializer match {
+      case s @ Some(serializer) =>
+        if (serializer.identifier == akkaProtobufSerializer.identifier && isDefaultAkkaProtobufSerializer) {
+          // this is the case for akka.remote.serialization.ProtobufSerializer, which is configured by default
+          // for protobuf messages
+          s
+        } else {
+          // we don't know how what a custom serializer would do
+          None
+        }
+      case None =>
+        log.debug(
+          "No Akka Serializer for Protobuf message class [{}]. Consider defining it in `akka.actor.serialization-bindings`.",
+          messageClass.getName)
+        None
     }
   }
 
@@ -278,20 +278,7 @@ import scalapb.options.Scalapb
         .getMethod("parser")
         .invoke(null)
         .asInstanceOf[Parser[com.google.protobuf.Message]]
-      val akkaSerializer = Try(serialization.serializerFor(clazz)).toOption
-        .flatMap {
-          case _: DisabledJavaSerializer =>
-            // There will be a warning log from Akka "Using the Java serializer", which need additional clarification
-            // in this context.
-            log.warn(
-              "Missing Akka serializer for protobuf message class [{}]. Consider defining it in " +
-              "`akka.actor.serialization-bindings`. It was bound to disabled Java serializer, which " +
-              "is not what you want.",
-              clazz.getName)
-            None
-          case other => Some(other)
-        }
-      Some(new JavaPbResolvedType(parser, clazz, akkaSerializer))
+      Some(new JavaPbResolvedType(parser, clazz))
 
     } catch {
       case cnfe: ClassNotFoundException =>
@@ -348,8 +335,7 @@ import scalapb.options.Scalapb
         val companionObject =
           system.dynamicAccess.getObjectFor[GeneratedMessageCompanion[GeneratedMessage]](className).get
         val clazz = system.dynamicAccess.getClassFor[Any](className).get
-        val akkaSerializer = Try(serialization.serializerFor(clazz)).toOption
-        Some(new ScalaPbResolvedType(companionObject, clazz, akkaSerializer))
+        Some(new ScalaPbResolvedType(companionObject, clazz))
       } catch {
         case cnfe: ClassNotFoundException =>
           log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
