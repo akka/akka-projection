@@ -4,12 +4,14 @@ In the previous step of the guide we implemented the PoP local control service k
 
 We also want to publish coarse grained location updates at a low frequency from the edge to a central cloud service. 
 
+![Diagram showing local drone entities replication to cloud service](../images/guide-section-2.svg)
+
 In this step we will cover publishing and consuming those events, passing them to a stateful overview-version of the 
 drone digital twin. We will use @extref[Akka Projection gRPC](akka-projection:grpc.html) to do service-to-service events passing with an
 effectively once delivery guarantee, this without requiring a message broker in between services. The cloud and the many
 PoP services each has their own lifecycle and are deployed separately in different places.
 
-We will then implement a service querying the coarse grained location of the global set of drones in the cloud service. 
+We will then implement a gRPC service for querying the coarse grained location of the global set of drones in the cloud service.
 
 ## Coarse grained location aggregation and publishing
 

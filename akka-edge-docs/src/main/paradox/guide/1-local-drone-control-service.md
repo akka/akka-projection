@@ -5,9 +5,13 @@ to drones using the @extref[Akka Event Sourced Behavior API](akka:typed/persiste
 will be able to report their location and users inspect the current location of a drone connected to the local 
 control center PoP.
 
+![Diagram showing 2 drone entities in a Local Drone Control Service](../images/guide-section-1.svg)
+
 We will build the drone as an Event Sourced entity, if you are unfamiliar with Event Sourcing, refer to the
 @extref[Event Sourcing section in the Akka guide](akka-guide:concepts/event-sourcing.html) for an explanation.
 The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-event-sourcing-video) is also a good starting point for learning Event Sourcing.
+
+For drones to communicate their location to the digital twin we will create a gRPC API.
 
 ## Implementing a Drone digital twin
 

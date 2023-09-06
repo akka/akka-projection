@@ -3,6 +3,8 @@
 In the previous step of the guide we implemented the means for the cloud service to keep track of restaurant and the
 queue of registered deliveries for each.
 
+![Diagram showing delivery replication to the local drone control services](../images/guide-section-4.svg)
+
 We want to replicate the registered events to each local-drone-control PoP so that the drones close to it can pick up
 orders and perform the deliveries.
 

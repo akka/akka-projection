@@ -2,11 +2,10 @@
 
 In this section we will update the restaurant-drone-deliveries-service to accept and store restaurant delivery orders.
 
-Just like for the drones in the first step of the guide we will represent each restaurant and its list of orders as
-an @extref[Event Sourced Entity](akka:typed/persistence.html). 
+![Diagram showing restaurant entities keeping track of deliveries in the cloud](../images/guide-section-3.svg)
 
-We will then use @extref[Akka Projection gRPC](akka-projection:grpc.html) to stream events to the PoP closest to the restaurant where the 
-delivery comes from, without the need for a message broker in between.
+Just like for the drones in the first step of the guide we will represent each restaurant and its list of orders as
+an @extref[Event Sourced Entity](akka:typed/persistence.html).
 
 ## Implementing the restaurant entity
 
