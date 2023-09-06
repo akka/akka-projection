@@ -4,6 +4,9 @@
 
 package akka.projection.grpc.replication.internal
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.ExtendedActorSystem
@@ -11,6 +14,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.cluster.ClusterActorRefProvider
+import akka.cluster.sharding.typed.ClusterShardingSettings
 import akka.cluster.sharding.typed.ReplicatedEntity
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
@@ -41,10 +45,6 @@ import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
-import akka.cluster.sharding.typed.ClusterShardingSettings
 
 /**
  * INTERNAL API
@@ -157,77 +157,79 @@ private[akka] object ReplicationImpl {
         case Some(role) => defaultWithShardingSettings.withRole(role)
       }
     }
-    ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, { idx =>
-      val sliceRange = sliceRanges(idx)
-      val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
-      val projectionId = ProjectionId(projectionName, projectionKey)
+    ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, {
+      idx =>
+        val sliceRange = sliceRanges(idx)
+        val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
+        val projectionId = ProjectionId(projectionName, projectionKey)
 
-      val replicationFlow: FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed] =
-        FlowWithContext[EventEnvelope[AnyRef], ProjectionContext]
-          .via(new ParallelUpdatesFlow[AnyRef](settings.parallelUpdates)({
-            envelope =>
+        val replicationFlow
+            : FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed] =
+          FlowWithContext[EventEnvelope[AnyRef], ProjectionContext]
+            .mapAsyncPartitioned(parallelism = settings.parallelUpdates, perPartition = 1)(envelope =>
+              envelope.persistenceId) {
+              case (envelope, _) =>
+                if (!envelope.filtered) {
+                  envelope.eventMetadata match {
+                    case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
+                      // skipping events originating from other replicas is handled by filtering but for good measure
+                      require(replicatedEventMetadata.originReplica == remoteReplica.replicaId)
 
-              if (!envelope.filtered) {
-                envelope.eventMetadata match {
-                  case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
-                    // skipping events originating from other replicas is handled by filtering but for good measure
-                    require(replicatedEventMetadata.originReplica == remoteReplica.replicaId)
-
-                    val replicationId = ReplicationId.fromString(envelope.persistenceId)
-                    val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
-                    val entityRef =
-                      entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
-                    if (log.isTraceEnabled) {
-                      log.traceN(
-                        "[{}] forwarding event originating on dc [{}] to [{}] (origin seq_nr [{}]): [{}]",
-                        projectionKey,
-                        replicatedEventMetadata.originReplica,
-                        destinationReplicaId.persistenceId.id,
-                        envelope.sequenceNr,
-                        replicatedEventMetadata.version)
-                    }
-                    val askResult = entityRef.ask[Done](replyTo =>
-                      PublishedEventImpl(
-                        replicationId.persistenceId,
-                        replicatedEventMetadata.originSequenceNr,
-                        envelope.event,
-                        envelope.timestamp,
-                        Some(new ReplicatedPublishedEventMetaData(
+                      val replicationId = ReplicationId.fromString(envelope.persistenceId)
+                      val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
+                      val entityRef =
+                        entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
+                      if (log.isTraceEnabled) {
+                        log.traceN(
+                          "[{}] forwarding event originating on dc [{}] to [{}] (origin seq_nr [{}]): [{}]",
+                          projectionKey,
                           replicatedEventMetadata.originReplica,
-                          replicatedEventMetadata.version)),
-                        Some(replyTo)))
-                    askResult.failed.foreach(error =>
-                      log.warn(
-                        s"Failing replication stream [$projectionName/$projectionKey] from [${remoteReplica.replicaId.id}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
-                        error))
-                    askResult
+                          destinationReplicaId.persistenceId.id,
+                          envelope.sequenceNr,
+                          replicatedEventMetadata.version)
+                      }
+                      val askResult = entityRef.ask[Done](replyTo =>
+                        PublishedEventImpl(
+                          replicationId.persistenceId,
+                          replicatedEventMetadata.originSequenceNr,
+                          envelope.event,
+                          envelope.timestamp,
+                          Some(new ReplicatedPublishedEventMetaData(
+                            replicatedEventMetadata.originReplica,
+                            replicatedEventMetadata.version)),
+                          Some(replyTo)))
+                      askResult.failed.foreach(error =>
+                        log.warn(
+                          s"Failing replication stream [$projectionName/$projectionKey] from [${remoteReplica.replicaId.id}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
+                          error))
+                      askResult
 
-                  case unexpected =>
-                    throw new IllegalArgumentException(
-                      s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
-                      ", is the remote entity really a Replicated Event Sourced Entity?")
+                    case unexpected =>
+                      throw new IllegalArgumentException(
+                        s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
+                        ", is the remote entity really a Replicated Event Sourced Entity?")
+                  }
+                } else {
+                  // Events not originating on sending side already are filtered/have no payload and end up here
+                  if (log.isTraceEnabled)
+                    log.traceN(
+                      "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
+                      projectionKey,
+                      remoteReplica.replicaId,
+                      envelope.persistenceId,
+                      envelope.sequenceNr)
+                  Future.successful(Done)
                 }
-              } else {
-                // Events not originating on sending side already are filtered/have no payload and end up here
-                if (log.isTraceEnabled)
-                  log.traceN(
-                    "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
-                    projectionKey,
-                    remoteReplica.replicaId,
-                    envelope.persistenceId,
-                    envelope.sequenceNr)
-                Future.successful(Done)
-              }
-          }))
-          .map(_ => Done)
+            }
+            .map(_ => Done)
 
-      val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
-        system,
-        eventsBySlicesQuery,
-        eventsBySlicesQuery.streamId,
-        sliceRange.min,
-        sliceRange.max)
-      ProjectionBehavior(settings.projectionProvider(projectionId, sourceProvider, replicationFlow, system))
+        val sourceProvider = EventSourcedProvider.eventsBySlices[AnyRef](
+          system,
+          eventsBySlicesQuery,
+          eventsBySlicesQuery.streamId,
+          sliceRange.min,
+          sliceRange.max)
+        ProjectionBehavior(settings.projectionProvider(projectionId, sourceProvider, replicationFlow, system))
     }, shardedDaemonProcessSettings, Some(ProjectionBehavior.Stop))
   }
 
