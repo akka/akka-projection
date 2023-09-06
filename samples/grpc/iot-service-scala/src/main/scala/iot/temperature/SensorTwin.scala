@@ -11,7 +11,7 @@ import akka.pattern.StatusReply
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.state.scaladsl.DurableStateBehavior
 import akka.persistence.typed.state.scaladsl.Effect
-import iot.CborSerializable
+import akka.serialization.jackson.CborSerializable
 
 object SensorTwin {
   val EntityKey = EntityTypeKey[Command]("SensorTwin")

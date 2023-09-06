@@ -12,7 +12,7 @@ import akka.persistence.typed.javadsl.CommandHandler;
 import akka.persistence.typed.javadsl.Effect;
 import akka.persistence.typed.javadsl.EventHandler;
 import akka.persistence.typed.javadsl.EventSourcedBehavior;
-import central.CborSerializable;
+import akka.serialization.jackson.CborSerializable;
 import central.Coordinates;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Instant;

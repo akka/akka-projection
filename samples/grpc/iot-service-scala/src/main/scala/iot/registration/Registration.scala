@@ -16,7 +16,7 @@ import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplyEffect
 import akka.persistence.typed.scaladsl.RetentionCriteria
-import iot.CborSerializable
+import akka.serialization.jackson.CborSerializable
 
 /**
  * This is an event sourced actor (`EventSourcedBehavior`). An entity managed by Cluster Sharding.

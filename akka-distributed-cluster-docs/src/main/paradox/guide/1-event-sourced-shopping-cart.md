@@ -81,21 +81,7 @@ Java
 ## Serialization
 
 The state, commands and events of the entity must be serializable because they are written to the datastore or sent between nodes within the Akka cluster. The sample project includes built-in CBOR serialization using the @extref[Akka Serialization Jackson module](akka:serialization-jackson.html). This section describes how serialization is implemented. You do not need to do anything specific to take advantage of CBOR, but this section explains how it is included.
-The state, commands and events are marked as CborSerializable which is configured to use the built-in CBOR serialization. The sample project includes this marker interface CborSerializable:
-
-Scala
-:  @@snip [CborSerializable.scala](/samples/grpc/shopping-cart-service-scala/src/main/scala/shopping/cart/CborSerializable.scala) { }
-
-Java
-:  @@snip [CborSerializable.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/CborSerializable.java) { }
-
-Configuration in the application configuration to select the serializer:
-
-Scala
-:  @@snip [application.conf](/samples/grpc/shopping-cart-service-scala/src/main/resources/serialization.conf) { }
-
-Java
-:  @@snip [application.conf](/samples/grpc/shopping-cart-service-java/src/main/resources/serialization.conf) { }
+The state, commands and events are marked as `akka.serialization.jackson.CborSerializable` which is configured to use the built-in CBOR serialization.
 
 ## Client access with Akka gRPC
 

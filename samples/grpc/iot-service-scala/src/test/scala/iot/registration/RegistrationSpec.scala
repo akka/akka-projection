@@ -9,13 +9,7 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object RegistrationSpec {
-  val config = ConfigFactory
-    .parseString("""
-      akka.actor.serialization-bindings {
-        "iot.CborSerializable" = jackson-cbor
-      }
-      """)
-    .withFallback(EventSourcedBehaviorTestKit.config)
+  val config = EventSourcedBehaviorTestKit.config
 
 }
 

@@ -4,6 +4,8 @@
 
 package jdocs.state;
 
+import akka.serialization.jackson.CborSerializable;
+
 public class AccountEntity {
 
   /** The state for the {@link ShoppingCart} entity. */

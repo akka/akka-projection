@@ -14,6 +14,7 @@ import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
 import akka.projection.grpc.replication.javadsl.Replication;
 import akka.projection.grpc.replication.javadsl.ReplicationSettings;
 import akka.projection.r2dbc.javadsl.R2dbcReplication;
+import akka.serialization.jackson.CborSerializable;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Duration;
 import java.time.Instant;

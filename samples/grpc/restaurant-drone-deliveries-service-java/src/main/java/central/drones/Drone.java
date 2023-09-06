@@ -13,7 +13,7 @@ import akka.persistence.typed.PersistenceId;
 import akka.persistence.typed.state.javadsl.CommandHandler;
 import akka.persistence.typed.state.javadsl.DurableStateBehavior;
 import akka.persistence.typed.state.javadsl.Effect;
-import central.CborSerializable;
+import akka.serialization.jackson.CborSerializable;
 import central.CoarseGrainedCoordinates;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Instant;

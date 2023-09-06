@@ -7,6 +7,7 @@ import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.pattern.StatusReply
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.state.scaladsl.{ DurableStateBehavior, Effect }
+import akka.serialization.jackson.CborSerializable
 
 import java.time.Instant
 
