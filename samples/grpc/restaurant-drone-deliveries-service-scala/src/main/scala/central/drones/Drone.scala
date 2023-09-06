@@ -20,6 +20,7 @@ import java.time.Instant
  */
 object Drone {
 
+  // #commands
   sealed trait Command
 
   final case class UpdateLocation(
@@ -29,16 +30,21 @@ object Drone {
       extends Command
 
   final case class GetState(replyTo: ActorRef[State]) extends Command
+  // #commands
 
   val EntityKey = EntityTypeKey[Command]("CentralDrone")
 
+  // #state
   final case class State(
       locationName: String,
       currentLocation: Option[CoarseGrainedCoordinates],
       lastChange: Instant)
       extends CborSerializable
+  // #state
 
+  // #emptyState
   private val emptyState = State("unknown", None, Instant.EPOCH)
+  // #emptyState
 
   def init(system: ActorSystem[_]): Unit = {
     ClusterSharding(system).init(Entity(EntityKey)(entityContext =>
@@ -54,6 +60,7 @@ object Drone {
     }
   }
 
+  // #commandHandler
   private def onCommand(context: ActorContext[Command])(
       state: State,
       command: Command): Effect[State] =
@@ -73,9 +80,11 @@ object Drone {
         case GetState(replyTo) =>
           Effect.reply(replyTo)(state)
     }
+  // #commandHandler
 
 }
 
+// #locationColumn
 /**
  * Write local drone control location name column for querying drone locations per control location
  */
@@ -88,3 +97,4 @@ final class LocationColumn extends AdditionalColumn[Drone.State, String] {
     AdditionalColumn.BindValue(upsert.value.locationName)
 
 }
+// #locationColumn

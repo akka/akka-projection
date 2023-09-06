@@ -138,7 +138,7 @@ Java
 
 ## Running the sample
 
-The complete sample can be downloaded from github, but note that it also includes the next step of the guide:
+The complete sample can be downloaded from GitHub, but note that it also includes the next step of the guide:
 
   * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
   * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala

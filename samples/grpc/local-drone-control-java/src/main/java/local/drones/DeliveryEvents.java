@@ -32,22 +32,22 @@ public class DeliveryEvents {
             Settings settings) {
         var projectionName = "delivery-events";
 
+        var eventsBySlicesQuery =
+            GrpcReadJournal.create(
+                system,
+                Arrays.asList(central.deliveries.proto.DeliveryEvents.getDescriptor()));
+
+
         // initial consumer topic filter for location id
-        // FIXME no docs of setting up initial consumer filter, am I missing some API?
-        //       Async setup is a race condition but maybe ok? Does not seem to quite work, all or the wrong events are delivered
+        // FIXME replace with initial consumer filter once 1.5.0-M4 is out
         ConsumerFilter.get(system).ref().tell(new ConsumerFilter.UpdateFilter(
-                // FIXME stream-id duplicated in config
-                "delivery-events",
+                eventsBySlicesQuery.streamId(),
                 // location id already is in the format of a topic filter expression
                 Arrays.asList(
                         new ConsumerFilter.ExcludeRegexEntityIds(Collections.singleton(".*")),
                         new ConsumerFilter.IncludeTopics(Collections.singleton(settings.locationId)))
         ));
 
-        var eventsBySlicesQuery =
-                GrpcReadJournal.create(
-                        system,
-                        Arrays.asList(central.deliveries.proto.DeliveryEvents.getDescriptor()));
 
         // single projection handling all slices
         var sliceRanges =

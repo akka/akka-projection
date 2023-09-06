@@ -31,6 +31,7 @@ object DroneDeliveriesServer {
         Future[HttpResponse]])(implicit system: ActorSystem[_]): Unit = {
     import system.executionContext
 
+    // #composeAndBind
     val service = ServiceHandler.concatOrNotFound(
       DroneOverviewServiceHandler.partial(droneOverviewService),
       RestaurantDeliveriesServiceHandler.partial(restaurantDeliveriesService),
@@ -41,6 +42,7 @@ object DroneDeliveriesServer {
       pushedDroneEventsHandler)
 
     val bound = Http(system).newServerAt(interface, port).bind(service)
+    // #composeAndBind
     bound.foreach(binding =>
       logger.info(
         "Drone event consumer listening at: {}:{}",

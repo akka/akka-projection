@@ -30,6 +30,7 @@ public final class DroneDeliveriesServer {
       Function<HttpRequest, CompletionStage<HttpResponse>> deliveryEventsProducerService,
       Function<HttpRequest, CompletionStage<HttpResponse>> pushedDroneEventsHandler) {
 
+    // #composeAndBind
     @SuppressWarnings("unchecked")
     var service =
         ServiceHandler.concatOrNotFound(
@@ -44,6 +45,8 @@ public final class DroneDeliveriesServer {
             pushedDroneEventsHandler);
 
     var bound = Http.get(system).newServerAt(host, port).bind(service);
+    // #composeAndBind
+
     bound.whenComplete(
         (binding, error) -> {
           if (error == null) {

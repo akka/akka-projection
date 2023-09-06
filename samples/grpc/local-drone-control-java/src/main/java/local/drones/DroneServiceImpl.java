@@ -57,6 +57,7 @@ public class DroneServiceImpl implements DroneService {
     return convertError(response);
   }
 
+  // #requestNextDelivery
   @Override
   public CompletionStage<RequestNextDeliveryResponse> requestNextDelivery(RequestNextDeliveryRequest in) {
     logger.info("Drone {} requesting next delivery", in.getDroneId());
@@ -86,7 +87,7 @@ public class DroneServiceImpl implements DroneService {
 
     return convertError(response);
   }
-
+  // #requestNextDelivery
   @Override
   public CompletionStage<CompleteDeliveryResponse> completeDelivery(CompleteDeliveryRequest in) {
     logger.info("Delivery {} completed", in.getDeliveryId());

@@ -5,7 +5,7 @@ The sample show-cases a service for drones doing restaurant deliveries.
 It is intended to be used together with the local-drone-control sample.
 
 * Keeps track of a coarse grained location of each drone to the cloud
-* FIXME Accepts restaurant delivery requests which are then fed to the right local drone control
+* Accepts restaurant delivery requests which are then fed to the right local drone control
 
 ## Running the sample code
 

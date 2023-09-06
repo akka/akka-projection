@@ -4,12 +4,11 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorSystem, Behavior }
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
-import org.slf4j.LoggerFactory
 
 object Main {
 
-  val logger = LoggerFactory.getLogger("drones.Main")
 
+  // #main
   def main(args: Array[String]): Unit = {
     ActorSystem[Nothing](rootBehavior(), "local-drone-control")
   }
@@ -55,4 +54,6 @@ object Main {
 
       Behaviors.empty
   }
+  // #main
+
 }

@@ -49,6 +49,7 @@ class DroneServiceImpl(
     convertError(response)
   }
 
+  // #requestNextDelivery
   override def requestNextDelivery(in: proto.RequestNextDeliveryRequest)
       : Future[proto.RequestNextDeliveryResponse] = {
     logger.info("Drone {} requesting next delivery", in.droneId)
@@ -71,7 +72,7 @@ class DroneServiceImpl(
 
     convertError(response)
   }
-
+  // #requestNextDelivery
   override def completeDelivery(
       in: proto.CompleteDeliveryRequest): Future[Empty] = {
     logger.info("Delivery {} completed", in.deliveryId)

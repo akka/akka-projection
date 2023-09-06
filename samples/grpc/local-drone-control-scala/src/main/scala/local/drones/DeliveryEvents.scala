@@ -24,20 +24,18 @@ object DeliveryEvents {
 
     implicit val timeout: Timeout = settings.askTimeout
 
+    val eventsBySlicesQuery =
+      GrpcReadJournal(
+        List(central.deliveries.proto.DeliveryEventsProto.javaDescriptor))
+
     // initial consumer topic filter for location id
-    // FIXME no docs of setting up initial consumer filter, am I missing some API?
-    //       Async setup is a race condition but maybe ok? Does not seem to quite work, all or the wrong events are delivered
+    // FIXME replace with initial consumer filter once 1.5.0-M4 is out
     ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(
-      // FIXME stream-id duplicated in config
-      "delivery-events",
+      eventsBySlicesQuery.streamId,
       // location id already is in the format of a topic filter expression
       Vector(
         ConsumerFilter.ExcludeRegexEntityIds(Set(".*")),
         ConsumerFilter.IncludeTopics(Set(settings.locationId))))
-
-    val eventsBySlicesQuery =
-      GrpcReadJournal(
-        List(central.deliveries.proto.DeliveryEventsProto.javaDescriptor))
 
     // single projection handling all slices
     val sliceRanges =

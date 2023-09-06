@@ -33,6 +33,7 @@ public final class LocalDroneEvents {
 
   private static final Logger logger = LoggerFactory.getLogger(LocalDroneEvents.class);
 
+  // #eventConsumer
   // Note: stream id used in producer for the drone events
   public static final String DRONE_EVENT_STREAM_ID = "drone-events";
 
@@ -56,7 +57,9 @@ public final class LocalDroneEvents {
 
     return EventProducerPushDestination.grpcServiceHandler(destination, system);
   }
+  // #eventConsumer
 
+  // #eventProjection
   private static class LocationHandler extends Handler<EventEnvelope<CoarseDroneLocation>> {
 
     private final ClusterSharding sharding;
@@ -143,4 +146,5 @@ public final class LocalDroneEvents {
     return R2dbcProjection.atLeastOnceAsync(
         projectionId, Optional.empty(), sourceProvider, () -> new LocationHandler(system), system);
   }
+  // #eventProjection
 }

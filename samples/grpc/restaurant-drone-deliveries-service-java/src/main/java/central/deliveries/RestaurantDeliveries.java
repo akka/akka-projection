@@ -24,6 +24,8 @@ import java.util.Set;
 public final class RestaurantDeliveries
     extends EventSourcedBehavior<
         RestaurantDeliveries.Command, RestaurantDeliveries.Event, RestaurantDeliveries.State> {
+
+  // #commands
   public interface Command extends CborSerializable {}
 
   public static final class SetUpRestaurant implements Command {
@@ -62,7 +64,9 @@ public final class RestaurantDeliveries
       this.replyTo = replyTo;
     }
   }
+  // #commands
 
+  // #events
   public interface Event extends CborSerializable {}
 
   public static final class RestaurantLocationSet implements Event {
@@ -81,21 +85,6 @@ public final class RestaurantDeliveries
     @JsonCreator
     public DeliveryRegistered(Delivery delivery) {
       this.delivery = delivery;
-    }
-  }
-
-  public static final class State implements CborSerializable {
-    public final String localControlLocationId;
-    public final Coordinates restaurantLocation;
-    public final List<Delivery> currentDeliveries;
-
-    public State(
-        String localControlLocationId,
-        Coordinates restaurantLocation,
-        List<Delivery> currentDeliveries) {
-      this.localControlLocationId = localControlLocationId;
-      this.restaurantLocation = restaurantLocation;
-      this.currentDeliveries = currentDeliveries;
     }
   }
 
@@ -121,6 +110,24 @@ public final class RestaurantDeliveries
       this.timestamp = timestamp;
     }
   }
+  // #events
+
+  // #state
+  public static final class State implements CborSerializable {
+    public final String localControlLocationId;
+    public final Coordinates restaurantLocation;
+    public final List<Delivery> currentDeliveries;
+
+    public State(
+        String localControlLocationId,
+        Coordinates restaurantLocation,
+        List<Delivery> currentDeliveries) {
+      this.localControlLocationId = localControlLocationId;
+      this.restaurantLocation = restaurantLocation;
+      this.currentDeliveries = currentDeliveries;
+    }
+  }
+  // #state
 
   public static final EntityTypeKey<Command> ENTITY_KEY =
       EntityTypeKey.create(Command.class, "RestaurantDeliveries");
@@ -153,6 +160,7 @@ public final class RestaurantDeliveries
     return null;
   }
 
+  // #commandHandler
   @Override
   public CommandHandler<Command, Event, State> commandHandler() {
     var noStateHandler =
@@ -226,6 +234,7 @@ public final class RestaurantDeliveries
             new RestaurantLocationSet(command.localControlLocationId, command.restaurantLocation))
         .thenReply(command.replyTo, updatedState -> StatusReply.ack());
   }
+  // #commandHandler
 
   @Override
   public EventHandler<State, Event> eventHandler() {
