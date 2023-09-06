@@ -50,7 +50,7 @@ Two important things to note:
 The producer push destination is a gRPC service where producers push events, the events are persisted in a local journal
 as is, or after a transformation to an internal representation. For more details see @extref[Akka gRPC projection with producer push documentation](akka-projection:grpc-producer-push.html).
 
-We'll implement the producer push destination in a new service separate service, intended to run as a clustered deployment in the cloud, where all the 
+We'll implement the producer push destination in a new separate service, intended to run as a clustered deployment in the cloud, where all the 
 local control services will push their aggregate events, the "Restaurant Drone Deliveries Service". 
 
 In addition to accepting the events, we pick the local control center location (which is in the format `country/city/part-of-city`) passed as

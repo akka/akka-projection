@@ -102,7 +102,7 @@ Java
 
 ### Journal storage
 
-In this sample we use Akka Persistence R2DBC with the H2 in-process database, with a file backe storage. H2 requires no
+In this sample we use Akka Persistence R2DBC with the H2 in-process database, with a file backed storage. H2 requires no
 additional external database service so can be convenient for both development and production usage where only a single
 node interacts with the journal and overhead needs to be kept low. 
 
