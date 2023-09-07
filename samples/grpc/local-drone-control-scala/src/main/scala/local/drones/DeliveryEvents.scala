@@ -32,7 +32,9 @@ object DeliveryEvents {
           Vector(
             ConsumerFilter.ExcludeRegexEntityIds(Set(".*")),
             ConsumerFilter.IncludeTopics(Set(settings.locationId)))),
-        GrpcClientSettings.fromConfig("akka.projection.grpc.consumer.client"),
+        GrpcClientSettings.fromConfig(
+          system.settings.config
+            .getConfig("akka.projection.grpc.consumer.client")),
         List(central.deliveries.proto.DeliveryEventsProto.javaDescriptor))
 
     // single projection handling all slices

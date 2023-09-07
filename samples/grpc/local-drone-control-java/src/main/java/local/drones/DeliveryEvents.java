@@ -39,7 +39,9 @@ public class DeliveryEvents {
                         new ConsumerFilter.ExcludeRegexEntityIds(Collections.singleton(".*")),
                         new ConsumerFilter.IncludeTopics(
                             Collections.singleton(settings.locationId)))),
-            GrpcClientSettings.fromConfig("akka.projection.grpc.consumer.client", system),
+            GrpcClientSettings.fromConfig(
+                system.settings().config().getConfig("akka.projection.grpc.consumer.client"),
+                system),
             Arrays.asList(central.deliveries.proto.DeliveryEvents.getDescriptor()));
 
     // single projection handling all slices
