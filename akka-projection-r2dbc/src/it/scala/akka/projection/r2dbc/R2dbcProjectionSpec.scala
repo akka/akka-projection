@@ -103,6 +103,7 @@ object R2dbcProjectionSpec {
       val savedStrOpt = findById(id)
 
       savedStrOpt.flatMap { strOpt =>
+        logger.debug("Find by id [{}] found [{}]", id, strOpt)
         val newConcatStr = strOpt
           .map {
             _.concat(payload)
@@ -148,7 +149,13 @@ object R2dbcProjectionSpec {
 
       R2dbcExecutor
         .updateOneInTx(stmt)
-        .map(_ => Done)
+        .map { updated =>
+          if (updated != 1L) {
+            throw new RuntimeException(
+              s"Update '$stmtSql' of $concatStr didn't see the expected 1 updated rows (was $updated)")
+          } else logger.debug(s"Successfully updated [{}] to [{}]", concatStr.id, concatStr.text)
+          Done
+        }
     }
 
     def findById(id: String): Future[Option[ConcatStr]] = {
