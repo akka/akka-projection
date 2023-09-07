@@ -9,7 +9,7 @@ import akka.pattern.StatusReply
 import akka.persistence.r2dbc.state.scaladsl.AdditionalColumn
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.state.scaladsl.{DurableStateBehavior, Effect}
-import central.CborSerializable
+import akka.serialization.jackson.CborSerializable
 import central.CoarseGrainedCoordinates
 
 import java.time.Instant

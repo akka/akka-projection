@@ -12,6 +12,7 @@ import akka.persistence.typed.PersistenceId;
 import akka.persistence.typed.state.javadsl.CommandHandler;
 import akka.persistence.typed.state.javadsl.DurableStateBehavior;
 import akka.persistence.typed.state.javadsl.Effect;
+import akka.serialization.jackson.CborSerializable;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.google.rpc.context.AttributeContext;
 

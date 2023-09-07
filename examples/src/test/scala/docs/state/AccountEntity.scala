@@ -4,6 +4,8 @@
 
 package docs.state
 
+import akka.serialization.jackson.CborSerializable
+
 object AccountEntity {
   final case class Account() extends CborSerializable
 }

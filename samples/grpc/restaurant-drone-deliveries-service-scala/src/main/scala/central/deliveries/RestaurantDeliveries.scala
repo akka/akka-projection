@@ -11,7 +11,7 @@ import akka.pattern.StatusReply
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
-import central.CborSerializable
+import akka.serialization.jackson.CborSerializable
 import central.Coordinates
 
 import java.time.Instant

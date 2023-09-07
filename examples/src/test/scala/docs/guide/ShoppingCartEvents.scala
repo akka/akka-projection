@@ -5,6 +5,8 @@
 // #guideEvents
 package docs.guide
 
+import akka.serialization.jackson.CborSerializable
+
 import java.time.Instant
 
 object ShoppingCartEvents {

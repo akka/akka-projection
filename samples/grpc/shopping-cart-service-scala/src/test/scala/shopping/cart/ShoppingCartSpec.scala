@@ -8,13 +8,7 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object ShoppingCartSpec {
-  val config = ConfigFactory
-    .parseString("""
-      akka.actor.serialization-bindings {
-        "shopping.cart.CborSerializable" = jackson-cbor
-      }
-      """)
-    .withFallback(EventSourcedBehaviorTestKit.config)
+  val config = EventSourcedBehaviorTestKit.config
 
   def summary(items: Map[String, Int], checkedOut: Boolean) = ShoppingCart.Summary(items, checkedOut)
 }

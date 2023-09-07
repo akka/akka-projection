@@ -13,8 +13,7 @@ import akka.persistence.query.Offset;
 import akka.persistence.r2dbc.query.javadsl.R2dbcReadJournal;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
 import akka.projection.javadsl.SourceProvider;
-
-import docs.home.CborSerializable;
+import akka.serialization.jackson.CborSerializable;
 
 import java.time.Duration;
 import java.time.Instant;

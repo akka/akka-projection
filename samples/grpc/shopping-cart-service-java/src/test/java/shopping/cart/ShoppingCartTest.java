@@ -17,12 +17,7 @@ public class ShoppingCartTest {
 
   @ClassRule
   public static final TestKitJunitResource testKit =
-      new TestKitJunitResource(
-          ConfigFactory.parseString(
-                  "akka.actor.serialization-bindings {\n"
-                      + "  \"shopping.cart.CborSerializable\" = jackson-cbor\n"
-                      + "}")
-              .withFallback(EventSourcedBehaviorTestKit.config()));
+      new TestKitJunitResource(EventSourcedBehaviorTestKit.config());
 
   private EventSourcedBehaviorTestKit<ShoppingCart.Command, ShoppingCart.Event, ShoppingCart.State>
       eventSourcedTestKit =

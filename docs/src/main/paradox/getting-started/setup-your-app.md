@@ -29,23 +29,8 @@ Java
 :  @@snip [ShoppingCartEvents.java](/examples/src/test/java/jdocs/guide/ShoppingCartEvents.java) { #guideEvents }
 
 To enable serialization and deserialization of events with Akka Persistence it's necessary to define a base type for your event type hierarchy.
-In this guide we are using [Jackson Serialization](https://doc.akka.io/docs/akka/current/serialization-jackson.html).
-Add the `CborSerializable` base type to your project:
-
-Scala
-:  @@snip [CborSerializable.scala](/examples/src/test/scala/docs/guide/CborSerializable.scala) { #guideCbor }
-
-Java
-:  @@snip [CborSerializable.java](/examples/src/test/java/jdocs/guide/CborSerializable.java) { #guideCbor }
-
-Configure the `CborSerializable` type to use `jackson-cbor` configuration in your `application.conf`.
-We will add this configuration when Akka Persistence configuration is setup in the @ref:[Choosing a SourceProvider](source-provider.md) section of the guide.
-
-Scala
-:  @@snip [guide-shopping-cart-app.conf](/examples/src/test/resources/guide-shopping-cart-app.conf) { #guideSerializationBindingsScala }
-
-Java
-:  @@snip [guide-shopping-cart-app.conf](/examples/src/test/resources/guide-shopping-cart-app.conf) { #guideSerializationBindingsJava }
+In this guide we are using `akka.serialization.jackson.CborSerializable` that has a built-in binding to
+[Jackson Serialization](https://doc.akka.io/docs/akka/current/serialization-jackson.html).
 
 @@@ note
 
