@@ -83,7 +83,7 @@ public class EventProducerPushDestinationCompileTest {
     EventProducerPushDestination destination =
         EventProducerPushDestination.create("stream-id", protoDescriptors, system)
             .withConsumerFilters(
-                Arrays.asList(new ConsumerFilter.IncludeTopics(Collections.singleton("myhome/groundfloor/+/temperature")))
+                Collections.singletonList(new ConsumerFilter.IncludeTopics(Collections.singleton("myhome/groundfloor/+/temperature")))
             );
       // #consumerFilters
   }
@@ -94,7 +94,8 @@ public class EventProducerPushDestinationCompileTest {
       EventProducerPushDestination.create("stream-id", protoDescriptors, system)
         .withTransformationForOrigin((String originId, Metadata metadata) ->
             Transformation.empty()
-              .registerPersistenceIdMapper(envelope -> envelope.persistenceId().replace("originalPrefix", "newPrefix"))
+              .registerPersistenceIdMapper(system, envelope ->
+                  envelope.persistenceId().replace("originalPrefix", "newPrefix"))
               .registerTagMapper(String.class, envelope -> {
                   Set<String> newTags = new HashSet<>();
                   newTags.addAll(envelope.getTags());
