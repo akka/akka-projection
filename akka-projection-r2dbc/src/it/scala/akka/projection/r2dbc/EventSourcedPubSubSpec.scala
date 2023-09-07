@@ -35,7 +35,6 @@ object EventSourcedPubSubSpec {
   val config: Config = ConfigFactory
     .parseString("""
     akka.persistence.r2dbc {
-      journal.publish-events = on
       query {
         refresh-interval = 3 seconds
         # simulate lost messages by overflowing the buffer
