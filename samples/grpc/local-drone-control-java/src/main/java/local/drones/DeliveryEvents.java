@@ -4,12 +4,14 @@ import akka.Done;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Behavior;
+import akka.grpc.GrpcClientSettings;
 import akka.persistence.Persistence;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
 import akka.projection.grpc.consumer.ConsumerFilter;
+import akka.projection.grpc.consumer.GrpcQuerySettings;
 import akka.projection.grpc.consumer.javadsl.GrpcReadJournal;
 import akka.projection.javadsl.Handler;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
@@ -35,18 +37,13 @@ public class DeliveryEvents {
         var eventsBySlicesQuery =
             GrpcReadJournal.create(
                 system,
+                GrpcQuerySettings.create(system).withInitialConsumerFilter(
+                    // location id already is in the format of a topic filter expression
+                    Arrays.asList(
+                            new ConsumerFilter.ExcludeRegexEntityIds(Collections.singleton(".*")),
+                            new ConsumerFilter.IncludeTopics(Collections.singleton(settings.locationId)))),
+                    GrpcClientSettings.fromConfig("akka.projection.grpc.consumer.client", system),
                 Arrays.asList(central.deliveries.proto.DeliveryEvents.getDescriptor()));
-
-
-        // initial consumer topic filter for location id
-        // FIXME replace with initial consumer filter once 1.5.0-M4 is out
-        ConsumerFilter.get(system).ref().tell(new ConsumerFilter.UpdateFilter(
-                eventsBySlicesQuery.streamId(),
-                // location id already is in the format of a topic filter expression
-                Arrays.asList(
-                        new ConsumerFilter.ExcludeRegexEntityIds(Collections.singleton(".*")),
-                        new ConsumerFilter.IncludeTopics(Collections.singleton(settings.locationId)))
-        ));
 
 
         // single projection handling all slices

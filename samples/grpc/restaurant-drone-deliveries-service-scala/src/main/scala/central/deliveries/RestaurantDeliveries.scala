@@ -50,13 +50,13 @@ object RestaurantDeliveries {
       extends Event
 
   final case class Delivery(
-     deliveryId: String,
-     // FIXME next two fields always the same for the same restaurant, annoying,
-     //       but how else would we see them in downstream projection?
-     localControlLocationId: String,
-     origin: Coordinates,
-     destination: Coordinates,
-     timestamp: Instant)
+      deliveryId: String,
+      // The following two fields always the same for the same restaurant, so that they can be seen in
+      // the downstream projection.
+      localControlLocationId: String,
+      origin: Coordinates,
+      destination: Coordinates,
+      timestamp: Instant)
   // #events
 
   // #state

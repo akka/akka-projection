@@ -7,6 +7,7 @@ import akka.persistence.r2dbc.session.scaladsl.R2dbcSession
 import akka.persistence.typed.PersistenceId
 import akka.serialization.SerializationExtension
 import akka.util.Timeout
+import central.DeliveriesSettings
 import central.drones.proto.{
   DroneOverviewService,
   GetDroneOverviewRequest,
@@ -19,15 +20,15 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.jdk.DurationConverters.JavaDurationOps
 
-class DroneOverviewServiceImpl(system: ActorSystem[_])
+class DroneOverviewServiceImpl(
+    system: ActorSystem[_],
+    settings: DeliveriesSettings)
     extends DroneOverviewService {
 
   private val logger = LoggerFactory.getLogger(getClass)
 
   private implicit val ec: ExecutionContext = system.executionContext
-  private implicit val timeout: Timeout = system.settings.config
-    .getDuration("restaurant-drone-deliveries-service.drone-ask-timeout")
-    .toScala
+  private implicit val timeout: Timeout = settings.droneAskTimeout
   private val serialization = SerializationExtension(system)
   private val sharding = ClusterSharding(system)
 

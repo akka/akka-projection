@@ -9,21 +9,23 @@ import akka.persistence.typed.PersistenceId;
 import akka.serialization.Serialization;
 import akka.serialization.SerializationExtension;
 import central.CoarseGrainedCoordinates;
+import central.DeliveriesSettings;
 import central.drones.proto.*;
 import io.grpc.Status;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class DroneOverviewServiceImpl implements DroneOverviewService {
 
   private Logger logger = LoggerFactory.getLogger(DroneOverviewServiceImpl.class);
 
   private final ActorSystem<?> system;
-  private final Duration timeout;
+  private final DeliveriesSettings settings;
   private final Serialization serialization;
   private final ClusterSharding sharding;
 
@@ -32,21 +34,29 @@ public final class DroneOverviewServiceImpl implements DroneOverviewService {
           + "FROM durable_state "
           + "WHERE location = $1";
 
-  public DroneOverviewServiceImpl(ActorSystem<?> system) {
+  public DroneOverviewServiceImpl(ActorSystem<?> system, DeliveriesSettings settings) {
     this.system = system;
-    this.timeout =
-        system
-            .settings()
-            .config()
-            .getDuration("restaurant-drone-deliveries-service.drone-ask-timeout");
+    this.settings = settings;
     this.serialization = SerializationExtension.get(system);
     this.sharding = ClusterSharding.get(system);
   }
 
   @Override
   public CompletionStage<GetDroneOverviewResponse> getDroneOverview(GetDroneOverviewRequest in) {
-    // FIXME missing impl
-    return null;
+    logger.info("Get drone overview for drone {}", in.getDroneId());
+    var entityRef = sharding.entityRefFor(Drone.ENTITY_KEY, in.getDroneId());
+    CompletionStage<Drone.State> response = entityRef.ask(Drone.GetState::new, settings.droneAskTimeout);
+
+    return response.thenApply(state -> {
+        if (state.currentLocation.isPresent())
+            return GetDroneOverviewResponse.newBuilder()
+                    .setLocationName(state.locationName)
+                    .setCoarseLatitude(state.currentLocation.get().latitude)
+                    .setCoarseLongitude(state.currentLocation.get().longitude)
+                    .build();
+        else
+            throw new GrpcServiceException(Status.NOT_FOUND.withDescription("No location known for " + in.getDroneId()));
+    });
   }
 
   @Override

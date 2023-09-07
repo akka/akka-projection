@@ -35,11 +35,10 @@ object DroneDeliveriesServer {
     val service = ServiceHandler.concatOrNotFound(
       DroneOverviewServiceHandler.partial(droneOverviewService),
       RestaurantDeliveriesServiceHandler.partial(restaurantDeliveriesService),
-      ServerReflection.partial(
-        List(DroneOverviewService, RestaurantDeliveriesService)),
       deliveryEventsProducerService,
-      // FIXME not last once actually partial
-      pushedDroneEventsHandler)
+      pushedDroneEventsHandler,
+      ServerReflection.partial(
+        List(DroneOverviewService, RestaurantDeliveriesService)))
 
     val bound = Http(system).newServerAt(interface, port).bind(service)
     // #composeAndBind
