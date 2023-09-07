@@ -20,6 +20,7 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.HandlerRecoveryStrategy
@@ -103,7 +104,7 @@ object R2dbcProjectionSpec {
       val savedStrOpt = findById(id)
 
       savedStrOpt.flatMap { strOpt =>
-        logger.debug("Find by id [{}] found [{}]", id, strOpt)
+        logger.debug2("Find by id [{}] found [{}]", id, strOpt)
         val newConcatStr = strOpt
           .map {
             _.concat(payload)
@@ -153,7 +154,7 @@ object R2dbcProjectionSpec {
           if (updated != 1L) {
             throw new RuntimeException(
               s"Update '$stmtSql' of $concatStr didn't see the expected 1 updated rows (was $updated)")
-          } else logger.debug(s"Successfully updated [{}] to [{}]", concatStr.id, concatStr.text)
+          } else logger.debug2(s"Successfully updated [{}] to [{}]", concatStr.id, concatStr.text)
           Done
         }
     }
