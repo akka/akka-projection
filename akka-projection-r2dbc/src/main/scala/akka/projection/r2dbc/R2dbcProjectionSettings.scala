@@ -51,7 +51,9 @@ object R2dbcProjectionSettings {
       deleteInterval = config.getDuration("offset-store.delete-interval"),
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
-      offsetBatchSize = config.getInt("offset-store.offset-batch-size"))
+      offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
+      backtrackingEnabled = config.getBoolean("offset-store.backtracking.enabled"),
+      backtrackingWindow = config.getDuration("offset-store.backtracking.window"))
   }
 
   /**
@@ -74,7 +76,9 @@ final class R2dbcProjectionSettings private (
     val deleteInterval: JDuration,
     val logDbCallsExceeding: FiniteDuration,
     val warnAboutFilteredEventsInFlow: Boolean,
-    val offsetBatchSize: Int) {
+    val offsetBatchSize: Int,
+    val backtrackingEnabled: Boolean,
+    val backtrackingWindow: JDuration) {
 
   val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
@@ -153,7 +157,10 @@ final class R2dbcProjectionSettings private (
       deleteInterval,
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow,
-      offsetBatchSize)
+      offsetBatchSize,
+      backtrackingEnabled, // no copy, only from config
+      backtrackingWindow // no copy, only from config
+    )
 
   override def toString =
     s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $keepNumberOfEntries, $evictInterval, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"

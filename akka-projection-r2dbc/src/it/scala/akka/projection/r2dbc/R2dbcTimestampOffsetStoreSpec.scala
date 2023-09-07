@@ -1112,5 +1112,49 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.savePaused(paused = false).futureValue
       offsetStore.readManagementState().futureValue shouldBe Some(ManagementState(paused = false))
     }
+
+    "take backtracking window into account for start offset" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore1 = new R2dbcOffsetStore(
+        projectionId,
+        Some(new TestTimestampSourceProvider(512, 767, clock)),
+        system,
+        settings,
+        r2dbcExecutor)
+      val offsetStore2 = new R2dbcOffsetStore(
+        projectionId,
+        Some(new TestTimestampSourceProvider(768, 1023, clock)),
+        system,
+        settings,
+        r2dbcExecutor)
+
+      val p1 = "p500" // slice 645
+      val p2 = "p92" // slice 905
+
+      val time1 = TestClock.nowMicros().instant()
+      val time2 = time1.plus(settings.backtrackingWindow).plus(JDuration.ofMillis(1))
+
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time1, Map(p1 -> 1L)), p1, 1L)).futureValue
+      offsetStore2
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(time2, Map(p2 -> 1L)), p2, 1L))
+        .futureValue
+
+      // after downscaling
+      val offsetStore = new R2dbcOffsetStore(
+        projectionId,
+        Some(new TestTimestampSourceProvider(512, 1023, clock)),
+        system,
+        settings,
+        r2dbcExecutor)
+
+      val offset = TimestampOffset.toTimestampOffset(offsetStore.readOffset().futureValue.get) // this will load from database
+      offsetStore.getState().size shouldBe 2
+
+      offset.timestamp shouldBe time1.plus(settings.backtrackingWindow)
+      offset.seen shouldBe Map.empty
+
+      // getOffset is used by management api, and that should not be adjusted
+      TimestampOffset.toTimestampOffset(offsetStore.getOffset().futureValue.get).timestamp shouldBe time2
+    }
   }
 }

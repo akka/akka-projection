@@ -385,7 +385,23 @@ private[projection] class R2dbcOffsetStore(
       if (newState == State.empty) {
         None
       } else {
-        newState.latestOffset
+        newState.latestOffset.map { latest =>
+          if (settings.backtrackingEnabled) {
+            // When downscaling projection instances (changing slice distribution) there
+            // is a possibility that one of the previous projection instances was further behind than the backtracking
+            // window, which would cause missed events if we started from latest. In that case we adjust the
+            // start offset.
+            val latestBySlice = newState.latestBySlice
+            val earliest = latestBySlice.minBy(_.timestamp).timestamp
+            val betweenEarliestAndLatest = JDuration.between(earliest, latest.timestamp)
+            if (betweenEarliestAndLatest.compareTo(settings.backtrackingWindow) > 0)
+              TimestampOffset(earliest.plus(settings.backtrackingWindow), Map.empty)
+            else
+              latest
+          } else {
+            latest
+          }
+        }
       }
     }
   }
