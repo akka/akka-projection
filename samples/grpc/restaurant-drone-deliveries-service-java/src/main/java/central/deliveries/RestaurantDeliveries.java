@@ -64,6 +64,7 @@ public final class RestaurantDeliveries
       this.replyTo = replyTo;
     }
   }
+
   // #commands
 
   // #events
@@ -110,6 +111,7 @@ public final class RestaurantDeliveries
       this.timestamp = timestamp;
     }
   }
+
   // #events
 
   // #state
@@ -127,6 +129,7 @@ public final class RestaurantDeliveries
       this.currentDeliveries = currentDeliveries;
     }
   }
+
   // #state
 
   public static final EntityTypeKey<Command> ENTITY_KEY =
@@ -234,19 +237,23 @@ public final class RestaurantDeliveries
             new RestaurantLocationSet(command.localControlLocationId, command.restaurantLocation))
         .thenReply(command.replyTo, updatedState -> StatusReply.ack());
   }
+
   // #commandHandler
 
   @Override
   public EventHandler<State, Event> eventHandler() {
     return newEventHandlerBuilder()
         .forAnyState()
-        .onEvent(RestaurantLocationSet.class, (event) ->
-          new State(event.localControlLocationId, event.coordinates, new ArrayList<>())
-        )
-        .onEvent(DeliveryRegistered.class, (state, event) -> {
-          state.currentDeliveries.add(event.delivery);
-          return state;
-        })
+        .onEvent(
+            RestaurantLocationSet.class,
+            (event) ->
+                new State(event.localControlLocationId, event.coordinates, new ArrayList<>()))
+        .onEvent(
+            DeliveryRegistered.class,
+            (state, event) -> {
+              state.currentDeliveries.add(event.delivery);
+              return state;
+            })
         .build();
   }
 }

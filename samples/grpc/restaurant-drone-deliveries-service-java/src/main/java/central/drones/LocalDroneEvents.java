@@ -58,6 +58,7 @@ public final class LocalDroneEvents {
 
     return EventProducerPushDestination.grpcServiceHandler(destination, system);
   }
+
   // #eventConsumer
 
   // #eventProjection

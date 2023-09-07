@@ -47,6 +47,7 @@ public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State
       this.replyTo = replyTo;
     }
   }
+
   // #commands
 
   // #state
@@ -64,6 +65,7 @@ public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State
       this.lastChange = lastChange;
     }
   }
+
   // #state
 
   public static final EntityTypeKey<Command> ENTITY_KEY =
@@ -90,6 +92,7 @@ public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State
   public State emptyState() {
     return new State("unknown", Optional.empty(), Instant.EPOCH);
   }
+
   // #emptyState
 
   // #commandHandler

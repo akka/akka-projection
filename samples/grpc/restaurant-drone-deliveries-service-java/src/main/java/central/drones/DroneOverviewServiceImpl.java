@@ -12,13 +12,11 @@ import central.CoarseGrainedCoordinates;
 import central.DeliveriesSettings;
 import central.drones.proto.*;
 import io.grpc.Status;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class DroneOverviewServiceImpl implements DroneOverviewService {
 
@@ -45,18 +43,21 @@ public final class DroneOverviewServiceImpl implements DroneOverviewService {
   public CompletionStage<GetDroneOverviewResponse> getDroneOverview(GetDroneOverviewRequest in) {
     logger.info("Get drone overview for drone {}", in.getDroneId());
     var entityRef = sharding.entityRefFor(Drone.ENTITY_KEY, in.getDroneId());
-    CompletionStage<Drone.State> response = entityRef.ask(Drone.GetState::new, settings.droneAskTimeout);
+    CompletionStage<Drone.State> response =
+        entityRef.ask(Drone.GetState::new, settings.droneAskTimeout);
 
-    return response.thenApply(state -> {
-        if (state.currentLocation.isPresent())
+    return response.thenApply(
+        state -> {
+          if (state.currentLocation.isPresent())
             return GetDroneOverviewResponse.newBuilder()
-                    .setLocationName(state.locationName)
-                    .setCoarseLatitude(state.currentLocation.get().latitude)
-                    .setCoarseLongitude(state.currentLocation.get().longitude)
-                    .build();
-        else
-            throw new GrpcServiceException(Status.NOT_FOUND.withDescription("No location known for " + in.getDroneId()));
-    });
+                .setLocationName(state.locationName)
+                .setCoarseLatitude(state.currentLocation.get().latitude)
+                .setCoarseLongitude(state.currentLocation.get().longitude)
+                .build();
+          else
+            throw new GrpcServiceException(
+                Status.NOT_FOUND.withDescription("No location known for " + in.getDroneId()));
+        });
   }
 
   @Override

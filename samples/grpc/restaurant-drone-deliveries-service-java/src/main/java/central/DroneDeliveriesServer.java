@@ -41,8 +41,7 @@ public final class DroneDeliveriesServer {
             ServerReflection.create(
                 Arrays.asList(
                     DroneOverviewService.description, RestaurantDeliveriesService.description),
-                system)
-            );
+                system));
 
     var bound = Http.get(system).newServerAt(host, port).bind(service);
     // #composeAndBind

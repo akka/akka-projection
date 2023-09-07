@@ -1,7 +1,6 @@
 package central;
 
 import akka.actor.typed.ActorSystem;
-
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
@@ -11,8 +10,8 @@ public final class DeliveriesSettings {
   public final Duration droneAskTimeout;
   public final Duration restaurantDeliveriesAskTimeout;
 
-
-  public DeliveriesSettings(Set<String> locationIds, Duration droneAskTimeout, Duration restaurantDeliveriesAskTimeout) {
+  public DeliveriesSettings(
+      Set<String> locationIds, Duration droneAskTimeout, Duration restaurantDeliveriesAskTimeout) {
     this.locationIds = locationIds;
     this.droneAskTimeout = droneAskTimeout;
     this.restaurantDeliveriesAskTimeout = restaurantDeliveriesAskTimeout;
