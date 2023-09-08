@@ -191,8 +191,10 @@ message RemoveIncludeTopics {
 
 message Offset {
   google.protobuf.Timestamp timestamp = 1;
-  // events with these sequence numbers for this timestamp have already been
-  // processed and doesn't have to be emitted again
+  // Events with these sequence numbers for this timestamp have already been
+  // processed and doesn't have to be emitted again.
+  // If empty it is assumed to be the persistence_id -> seq_nr of enclosing Event
+  // or FilteredEvent.
   repeated PersistenceIdSeqNr seen = 2;
 }
 
