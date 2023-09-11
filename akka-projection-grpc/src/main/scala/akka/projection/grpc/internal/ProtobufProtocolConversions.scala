@@ -128,7 +128,11 @@ private[akka] object ProtobufProtocolConversions {
       event: Event,
       protoAnySerialization: ProtoAnySerialization,
       deserializeEvent: Boolean): EventEnvelope[Any] = {
-    val eventOffset = protocolOffsetToOffset(event.offset).asInstanceOf[TimestampOffset]
+    val eventOffset = populateSeenIfNeeded(
+      TimestampOffset.toTimestampOffset(protocolOffsetToOffset(event.offset)),
+      event.persistenceId,
+      event.seqNr)
+
     val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
 
     def envelopeWithDeserializedEvent: EventEnvelope[Any] = {
@@ -172,7 +176,10 @@ private[akka] object ProtobufProtocolConversions {
   }
 
   def filteredEventToEnvelope[Evt](filtered: FilteredEvent): EventEnvelope[Evt] = {
-    val eventOffset = protocolOffsetToOffset(filtered.offset).asInstanceOf[TimestampOffset]
+    val eventOffset = populateSeenIfNeeded(
+      TimestampOffset.toTimestampOffset(protocolOffsetToOffset(filtered.offset)),
+      filtered.persistenceId,
+      filtered.seqNr)
 
     new EventEnvelope(
       eventOffset,
@@ -186,6 +193,13 @@ private[akka] object ProtobufProtocolConversions {
       filtered = true,
       source = filtered.source,
       tags = Set.empty)
+  }
+
+  private def populateSeenIfNeeded(offset: TimestampOffset, persistenceId: String, seqNr: Long): TimestampOffset = {
+    if (offset.seen.isEmpty)
+      TimestampOffset(offset.timestamp, offset.readTimestamp, seen = Map(persistenceId -> seqNr))
+    else
+      offset
   }
 
   def toProtoFilterCriteria(criteria: immutable.Seq[ConsumerFilter.FilterCriteria]): Seq[FilterCriteria] = {
