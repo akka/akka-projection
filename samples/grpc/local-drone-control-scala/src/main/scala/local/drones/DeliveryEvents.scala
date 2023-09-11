@@ -30,7 +30,7 @@ object DeliveryEvents {
         GrpcQuerySettings(system).withInitialConsumerFilter(
           // location id already is in the format of a topic filter expression
           Vector(
-            ConsumerFilter.ExcludeRegexEntityIds(Set(".*")),
+            ConsumerFilter.excludeAll,
             ConsumerFilter.IncludeTopics(Set(settings.locationId)))),
         GrpcClientSettings.fromConfig(
           system.settings.config
