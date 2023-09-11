@@ -36,13 +36,12 @@ public final class DroneDeliveriesServer {
         ServiceHandler.concatOrNotFound(
             DroneOverviewServiceHandlerFactory.create(droneOverviewService, system),
             RestaurantDeliveriesServiceHandlerFactory.create(restaurantDeliveriesService, system),
+            deliveryEventsProducerService,
+            pushedDroneEventsHandler,
             ServerReflection.create(
                 Arrays.asList(
                     DroneOverviewService.description, RestaurantDeliveriesService.description),
-                system),
-            deliveryEventsProducerService,
-            // FIXME not last once actually partial
-            pushedDroneEventsHandler);
+                system));
 
     var bound = Http.get(system).newServerAt(host, port).bind(service);
     // #composeAndBind

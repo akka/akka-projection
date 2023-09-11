@@ -42,7 +42,7 @@ public class Main {
 
     var pushedDroneEventsHandler = LocalDroneEvents.pushedEventsGrpcHandler(system);
     var deliveryEventsProducerService = DeliveryEvents.eventProducerService(system);
-    var droneOverviewService = new DroneOverviewServiceImpl(system);
+    var droneOverviewService = new DroneOverviewServiceImpl(system, settings);
     var restaurantDeliveriesService = new RestaurantDeliveriesServiceImpl(system, settings);
 
     DroneDeliveriesServer.start(

@@ -7,7 +7,7 @@ import akka.management.scaladsl.AkkaManagement
 import central.deliveries.DeliveryEvents
 import central.deliveries.RestaurantDeliveries
 import central.deliveries.RestaurantDeliveriesServiceImpl
-import central.drones.{Drone, DroneOverviewServiceImpl, LocalDroneEvents}
+import central.drones.{ Drone, DroneOverviewServiceImpl, LocalDroneEvents }
 import org.slf4j.LoggerFactory
 
 import scala.util.control.NonFatal
@@ -46,7 +46,7 @@ object Main {
       LocalDroneEvents.pushedEventsGrpcHandler(system)
     val deliveryEventsProducerService =
       DeliveryEvents.eventProducerService(system)
-    val droneOverviewService = new DroneOverviewServiceImpl(system)
+    val droneOverviewService = new DroneOverviewServiceImpl(system, settings)
     val restaurantDeliveriesService =
       new RestaurantDeliveriesServiceImpl(system, settings)
 

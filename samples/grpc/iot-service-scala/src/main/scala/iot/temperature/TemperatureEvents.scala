@@ -39,10 +39,8 @@ object TemperatureEvents {
       TemperatureEventsStreamId,
       proto.TemperatureEventsProto.javaDescriptor.getFile :: Nil)
 
-    // FIXME partial return type still isn't quite right
     EventProducerPushDestination
       .grpcServiceHandler(destination)(system)
-      .asInstanceOf[PartialFunction[HttpRequest, Future[HttpResponse]]]
   }
 
   def initPushedEventsConsumer(implicit system: ActorSystem[_]): Unit = {

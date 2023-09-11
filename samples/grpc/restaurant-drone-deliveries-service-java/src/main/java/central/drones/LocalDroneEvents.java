@@ -37,7 +37,8 @@ public final class LocalDroneEvents {
   // Note: stream id used in producer for the drone events
   public static final String DRONE_EVENT_STREAM_ID = "drone-events";
 
-  // FIXME The type key on the producer side. Make sure we have documented it.
+  // The type key used on the producer side is written directly into our journal so we
+  // use it here as well when we consume the events
   private static final String PRODUCER_ENTITY_TYPE = "Drone";
 
   public static Function<HttpRequest, CompletionStage<HttpResponse>> pushedEventsGrpcHandler(
@@ -57,6 +58,7 @@ public final class LocalDroneEvents {
 
     return EventProducerPushDestination.grpcServiceHandler(destination, system);
   }
+
   // #eventConsumer
 
   // #eventProjection
@@ -89,7 +91,6 @@ public final class LocalDroneEvents {
       var entityRef = sharding.entityRefFor(Drone.ENTITY_KEY, droneId);
 
       // we have encoded origin in a tag, extract it
-      // FIXME could there be a more automatic place where origin is available (envelope.source?)
       var originName =
           envelope.getTags().stream()
               .filter(tag -> tag.startsWith("location:"))

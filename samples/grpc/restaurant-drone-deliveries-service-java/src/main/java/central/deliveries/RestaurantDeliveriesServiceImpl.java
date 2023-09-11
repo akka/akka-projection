@@ -8,7 +8,6 @@ import central.Coordinates;
 import central.DeliveriesSettings;
 import central.deliveries.proto.*;
 import io.grpc.Status;
-import java.time.Duration;
 import java.util.concurrent.CompletionStage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,17 +20,10 @@ public final class RestaurantDeliveriesServiceImpl implements RestaurantDeliveri
   private final DeliveriesSettings settings;
   private final ClusterSharding sharding;
 
-  private final Duration askTimeout;
-
   public RestaurantDeliveriesServiceImpl(ActorSystem<?> system, DeliveriesSettings settings) {
     this.system = system;
     this.settings = settings;
     this.sharding = ClusterSharding.get(system);
-    this.askTimeout =
-        system
-            .settings()
-            .config()
-            .getDuration("restaurant-drone-deliveries-service.restaurant-deliveries-ask-timeout");
   }
 
   @Override
@@ -59,7 +51,7 @@ public final class RestaurantDeliveriesServiceImpl implements RestaurantDeliveri
             replyTo ->
                 new RestaurantDeliveries.SetUpRestaurant(
                     in.getLocalControlLocationId(), coordinates, replyTo),
-            askTimeout);
+            settings.restaurantDeliveriesAskTimeout);
 
     return reply.handle(
         (done, error) -> {
@@ -89,7 +81,7 @@ public final class RestaurantDeliveriesServiceImpl implements RestaurantDeliveri
         entityRef.askWithStatus(
             replyTo ->
                 new RestaurantDeliveries.RegisterDelivery(in.getDeliveryId(), destination, replyTo),
-            askTimeout);
+            settings.restaurantDeliveriesAskTimeout);
 
     return reply.handle(
         (done, error) -> {

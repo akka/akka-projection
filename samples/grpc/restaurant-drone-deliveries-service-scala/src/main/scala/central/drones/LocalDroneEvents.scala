@@ -30,7 +30,8 @@ object LocalDroneEvents {
   // #eventConsumer
   val DroneEventStreamId = "drone-events"
 
-  // FIXME The type key on the producer side. Make sure we have documented it.
+  // The type key used on the producer side is written directly into our journal so we
+  // use it here as well when we consume the events
   private val ProducerEntityType = "Drone"
 
   def pushedEventsGrpcHandler(implicit system: ActorSystem[_])
@@ -44,13 +45,9 @@ object LocalDroneEvents {
           .registerTagMapper[local.drones.proto.CoarseDroneLocation](_ =>
             Set("location:" + origin)))
 
-    // FIXME partial return type still isn't quite right
-    EventProducerPushDestination
-      .grpcServiceHandler(destination)(system)
-      .asInstanceOf[PartialFunction[HttpRequest, Future[HttpResponse]]]
+    EventProducerPushDestination.grpcServiceHandler(destination)(system)
   }
   // #eventConsumer
-
 
   // #eventProjection
   def initPushedEventsConsumer(implicit system: ActorSystem[_]): Unit = {
@@ -98,7 +95,6 @@ object LocalDroneEvents {
           envelope.event match {
             case local.drones.proto.CoarseDroneLocation(coordinates, _) =>
               // we have encoded origin in a tag, extract it
-              // FIXME could there be a more automatic place where origin is available (envelope.source?)
               val originName = envelope.tags
                 .find(_.startsWith("location:"))
                 .get

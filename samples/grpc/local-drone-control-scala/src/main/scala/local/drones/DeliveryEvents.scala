@@ -1,10 +1,11 @@
 package local.drones
 
 import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
+import akka.grpc.GrpcClientSettings
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
-import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.consumer.{ ConsumerFilter, GrpcQuerySettings }
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
@@ -26,16 +27,15 @@ object DeliveryEvents {
 
     val eventsBySlicesQuery =
       GrpcReadJournal(
+        GrpcQuerySettings(system).withInitialConsumerFilter(
+          // location id already is in the format of a topic filter expression
+          Vector(
+            ConsumerFilter.ExcludeRegexEntityIds(Set(".*")),
+            ConsumerFilter.IncludeTopics(Set(settings.locationId)))),
+        GrpcClientSettings.fromConfig(
+          system.settings.config
+            .getConfig("akka.projection.grpc.consumer.client")),
         List(central.deliveries.proto.DeliveryEventsProto.javaDescriptor))
-
-    // initial consumer topic filter for location id
-    // FIXME replace with initial consumer filter once 1.5.0-M4 is out
-    ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(
-      eventsBySlicesQuery.streamId,
-      // location id already is in the format of a topic filter expression
-      Vector(
-        ConsumerFilter.ExcludeRegexEntityIds(Set(".*")),
-        ConsumerFilter.IncludeTopics(Set(settings.locationId))))
 
     // single projection handling all slices
     val sliceRanges =

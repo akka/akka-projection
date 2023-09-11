@@ -9,9 +9,7 @@ import central.{ Coordinates, DeliveriesSettings }
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.jdk.DurationConverters.JavaDurationOps
+import scala.concurrent.{ ExecutionContext, Future }
 
 class RestaurantDeliveriesServiceImpl(
     system: ActorSystem[_],
@@ -22,10 +20,8 @@ class RestaurantDeliveriesServiceImpl(
   private val sharding = ClusterSharding(system)
 
   private implicit val ec: ExecutionContext = system.executionContext
-  private implicit val timeout: Timeout = system.settings.config
-    .getDuration(
-      "restaurant-drone-deliveries-service.restaurant-deliveries-ask-timeout")
-    .toScala
+  private implicit val timeout: Timeout =
+    settings.restaurantDeliveriesAskTimeout
 
   override def setUpRestaurant(in: proto.SetUpRestaurantRequest)
       : Future[proto.RegisterRestaurantResponse] = {
