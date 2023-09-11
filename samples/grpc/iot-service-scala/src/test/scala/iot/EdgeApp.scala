@@ -29,6 +29,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducerPush
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.scaladsl.Handler
+import akka.serialization.jackson.CborSerializable
 import com.typesafe.config.ConfigFactory
 import org.slf4j.LoggerFactory
 
