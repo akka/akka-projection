@@ -195,3 +195,8 @@ jobs:
         run: |-
           cd samples/grpc/restaurant-drone-deliveries-service-java
           mvn compile -nsu -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Scala Projection gRPC IoT service sample
+        run: |-
+          cd samples/grpc/iot-service-scala
+          sbt test -Dakka-projection.version=`cat ~/.version`

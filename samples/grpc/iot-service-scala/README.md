@@ -37,7 +37,7 @@
 6. Try it with [grpcurl](https://github.com/fullstorydev/grpcurl). Register a sensor:
 
     ```shell
-    grpcurl -d '{"sensor_entity_id":"temp-1", "secret":"foo"}' -plaintext 127.0.0.1:8101 iot.registration.RegistrationService.Register
+    grpcurl -d '{"sensor_entity_id":"1", "secret":"foo"}' -plaintext 127.0.0.1:8101 iot.registration.RegistrationService.Register
     ```
 
     or same `grpcurl` commands to port 8102 to reach node 2.
@@ -51,6 +51,6 @@
 8. After registration of a sensor the EdgeApp will simulate temperature readings, which will be consumed by the iot-service. Read current temperature, which should be updated with a random value: 
 
 9. ```shell
-    grpcurl -d '{"sensor_entity_id":"temp-1"}' -plaintext 127.0.0.1:8101 iot.temperature.SensorTwinService.GetTemperature
+    grpcurl -d '{"sensor_entity_id":"1"}' -plaintext 127.0.0.1:8101 iot.temperature.SensorTwinService.GetTemperature
     ```
 
