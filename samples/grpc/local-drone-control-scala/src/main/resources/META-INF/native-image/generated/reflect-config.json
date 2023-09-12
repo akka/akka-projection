@@ -4078,6 +4078,14 @@
     ],
     "methods": [
       {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "java.lang.String",
+          "java.time.Instant"
+        ]
+      },
+      {
         "name": "deliveryId",
         "parameterTypes": []
       },
