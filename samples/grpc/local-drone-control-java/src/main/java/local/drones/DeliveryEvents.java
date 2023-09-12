@@ -36,7 +36,7 @@ public class DeliveryEvents {
                 .withInitialConsumerFilter(
                     // location id already is in the format of a topic filter expression
                     Arrays.asList(
-                        new ConsumerFilter.ExcludeRegexEntityIds(Collections.singleton(".*")),
+                        ConsumerFilter.excludeAll(),
                         new ConsumerFilter.IncludeTopics(
                             Collections.singleton(settings.locationId)))),
             GrpcClientSettings.fromConfig(
