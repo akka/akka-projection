@@ -55,6 +55,7 @@ private[projection] object R2dbcOffsetStore {
       strictSeqNr: Boolean,
       fromBacktracking: Boolean,
       fromPubSub: Boolean)
+  final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
     val empty: State =
@@ -298,8 +299,8 @@ private[projection] class R2dbcOffsetStore(
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
     idle.set(false)
     val oldState = state.get()
-    dao.readTimestampOffset().map { records =>
-      val newState = State(records)
+    dao.readTimestampOffset().map { recordsWithKey =>
+      val newState = State(recordsWithKey.map(_.record))
       logger.debugN(
         "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
         newState.byPid.size,
@@ -310,6 +311,22 @@ private[projection] class R2dbcOffsetStore(
       clearInflight()
       if (newState == State.empty) {
         None
+      } else if (recordsWithKey.head.projectionKey != projectionId.key ||
+                 recordsWithKey.iterator
+                   .map(_.projectionKey)
+                   .toSet
+                   .size > 1) { // FIXME more efficient way to find mix of keys
+        // When downscaling projection instances (changing slice distribution) there
+        // is a possibility that one of the previous projection instances was further behind than the backtracking
+        // window, which would cause missed events if we started from latest. In that case we use the latest
+        // offset of the earliest slice
+
+        // FIXME would not be needed if scaling up. To know that we would have to use a convention of keys encoded as
+        // slice range min-max
+
+        val latestBySlice = newState.latestBySlice
+        val earliest = latestBySlice.minBy(_.timestamp).timestamp
+        Some(TimestampOffset(earliest, Map.empty))
       } else {
         newState.latestOffset
       }

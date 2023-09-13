@@ -20,7 +20,7 @@ import scala.concurrent.Future
 @InternalApi
 private[projection] trait OffsetStoreDao {
 
-  def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.Record]]
+  def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]]
 
   def readLatestTimestampFromOtherSlices(): Future[Map[Int, Instant]]
 
