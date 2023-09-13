@@ -172,6 +172,20 @@ private[projection] object R2dbcProjectionImpl {
     }
   }
 
+  private def delaySaveOffsetIfNeeded(offsetStore: R2dbcOffsetStore, offsets: immutable.IndexedSeq[OffsetPidSeqNr])(
+      implicit
+      ec: ExecutionContext,
+      system: ActorSystem[_]): Future[Done] = {
+    offsetStore.isTooFarAhead(offsets).flatMap { tooFar =>
+      import scala.concurrent.duration._
+      if (tooFar) {
+        log.debug("Too far ahead of slowest projection instance, slowing down")
+        akka.pattern.after(100.millis)(FutureDone)
+      } else
+        FutureDone
+    }
+  }
+
   private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => R2dbcHandler[Envelope],
@@ -188,18 +202,22 @@ private[projection] object R2dbcProjectionImpl {
               case Accepted =>
                 if (isFilteredEvent(envelope)) {
                   val offset = extractOffsetPidSeqNr(sourceProvider, envelope)
-                  offsetStore.saveOffset(offset)
+                  delaySaveOffsetIfNeeded(offsetStore, Vector(offset)).flatMap { _ =>
+                    offsetStore.saveOffset(offset)
+                  }
                 } else {
                   loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
                     val offset = extractOffsetPidSeqNr(sourceProvider, loadedEnvelope)
-                    r2dbcExecutor.withConnection("exactly-once handler") { conn =>
-                      // run users handler
-                      val session = new R2dbcSession(conn)
-                      delegate
-                        .process(session, loadedEnvelope)
-                        .flatMap { _ =>
-                          offsetStore.saveOffsetInTx(conn, offset)
-                        }
+                    delaySaveOffsetIfNeeded(offsetStore, Vector(offset)).flatMap { _ =>
+                      r2dbcExecutor.withConnection("exactly-once handler") { conn =>
+                        // run users handler
+                        val session = new R2dbcSession(conn)
+                        delegate
+                          .process(session, loadedEnvelope)
+                          .flatMap { _ =>
+                            offsetStore.saveOffsetInTx(conn, offset)
+                          }
+                      }
                     }
                   }
                 }

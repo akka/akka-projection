@@ -57,7 +57,8 @@ private[projection] object R2dbcOffsetStore {
       fromPubSub: Boolean)
 
   object State {
-    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, 0)
+    val empty: State =
+      State(Map.empty, Vector.empty, Instant.EPOCH, 0, LatestTimestampBySlice(Instant.EPOCH, Map.empty))
 
     def apply(records: immutable.IndexedSeq[Record]): State = {
       if (records.isEmpty) empty
@@ -69,7 +70,8 @@ private[projection] object R2dbcOffsetStore {
       byPid: Map[Pid, Record],
       latest: immutable.IndexedSeq[Record],
       oldestTimestamp: Instant,
-      sizeAfterEvict: Int) {
+      sizeAfterEvict: Int,
+      latestTimestampBySlice: LatestTimestampBySlice) {
 
     def size: Int = byPid.size
 
@@ -162,6 +164,12 @@ private[projection] object R2dbcOffsetStore {
 
   }
 
+  final case class LatestTimestampBySlice(readTimestamp: Instant, timestampsBySlice: Map[Int, Instant]) {
+    def earliest: Option[Instant] =
+      if (timestampsBySlice.isEmpty) None
+      else Some(timestampsBySlice.minBy { case (_, t) => t }._2)
+  }
+
   final class RejectedEnvelope(message: String) extends IllegalStateException(message)
 
   sealed trait Validation
@@ -179,6 +187,7 @@ private[projection] object R2dbcOffsetStore {
   }
 
   val FutureDone: Future[Done] = Future.successful(Done)
+  val FutureFalse: Future[Boolean] = Future.successful(false)
 }
 
 /**
@@ -377,7 +386,7 @@ private[projection] class R2dbcOffsetStore(
           throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
         case _ =>
           throw new IllegalArgumentException(
-            "Mix of TimestampOffset and other offset type in same transaction isnot supported")
+            "Mix of TimestampOffset and other offset type in same transaction is not supported")
       }
       saveTimestampOffsetInTx(conn, records)
     } else {
@@ -437,6 +446,56 @@ private[projection] class R2dbcOffsetStore(
       }
     }
   }
+
+  def isTooFarAhead(offsets: immutable.IndexedSeq[OffsetPidSeqNr]): Future[Boolean] = {
+    if (offsets.isEmpty || !offsets.head.offset.isInstanceOf[TimestampOffset])
+      FutureFalse
+    else {
+      val latestTimestampInOffsets = offsets.iterator.map {
+        case OffsetPidSeqNr(t: TimestampOffset, _) => t.timestamp
+        case _ =>
+          throw new IllegalArgumentException(
+            "Mix of TimestampOffset and other offset type in same transaction is not supported")
+      }.max
+
+      val oldState = state.get()
+
+      // FIXME config, related to backtracking window
+      // temporary value of 10s to match ChangeSliceRangesSpec
+      val acceptedDifference = JDuration.ofSeconds(10)
+
+      val stateWithUpdatedLatestTimestampBySlice =
+        if (JDuration
+              .between(oldState.latestTimestampBySlice.readTimestamp, latestTimestampInOffsets)
+              .compareTo(JDuration.ofSeconds(1)) > 0) { // FIXME config, related to acceptedDifference
+          dao.readLatestTimestampFromOtherSlices().map { timestampsFromOtherSlices =>
+            val timestampsFromMySlices = oldState.latestBySlice.iterator.map(r => r.slice -> r.timestamp).toMap
+            val newLatestTimestampBySlice =
+              LatestTimestampBySlice(latestTimestampInOffsets, timestampsFromOtherSlices ++ timestampsFromMySlices)
+            logger.debug("{}", newLatestTimestampBySlice) // FIXME remove
+            oldState.copy(latestTimestampBySlice = newLatestTimestampBySlice)
+          }
+        } else {
+          Future.successful(oldState)
+        }
+
+      stateWithUpdatedLatestTimestampBySlice.map { newState =>
+        if (!state.compareAndSet(oldState, newState))
+          throw new IllegalStateException("Unexpected concurrent modification of state from isTooFarAhead.")
+        newState.latestTimestampBySlice.earliest match {
+          case None           => false
+          case Some(earliest) =>
+            // FIXME config instead of half timeWindow?
+            val betweenEarliestAndLatest = JDuration.between(earliest, latestTimestampInOffsets)
+            logger.debug("Difference to earliest [{} ms]", betweenEarliestAndLatest.toMillis) // FIXME remove
+//            if (betweenEarliestAndLatest.compareTo(acceptedDifference) > 0)
+//              throw new RuntimeException("Too far ahead") // FIXME real exception
+            betweenEarliestAndLatest.compareTo(acceptedDifference.dividedBy(2)) > 0
+        }
+      }
+    }
+  }
+
   @tailrec private def cleanupInflight(newState: State): Unit = {
     val currentInflight = getInflight()
     val newInflight =

@@ -57,6 +57,13 @@ private[projection] class PostgresOffsetStoreDao(
     SELECT slice, persistence_id, seq_nr, timestamp_offset
     FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
 
+  private val selectLatestTimestampFromOtherSlicesSql: String =
+    sql"""
+    SELECT slice, MAX(timestamp_offset) AS timestamp_offset
+    FROM $timestampOffsetTable WHERE slice NOT BETWEEN ? AND ? AND projection_name = ?
+    GROUP BY slice
+    """
+
   private val insertTimestampOffsetSql: String =
     sql"""
     INSERT INTO $timestampOffsetTable
@@ -154,6 +161,38 @@ private[projection] class PostgresOffsetStoreDao(
         val timestamp = row.get("timestamp_offset", classOf[Instant])
         R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
       })
+  }
+
+  override def readLatestTimestampFromOtherSlices(): Future[Map[Int, Instant]] = {
+    sourceProvider match {
+      case Some(provider) =>
+        val minSlice = provider.minSlice
+        val maxSlice = provider.maxSlice
+
+        if (minSlice == 0 && maxSlice == persistenceExt.numberOfSlices - 1) {
+          Future.successful(Map.empty[Int, Instant])
+        } else {
+          r2dbcExecutor
+            .select("read timestamps from other slices")(
+              conn => {
+                logger.trace("reading timestamps from other slices [{}]", projectionId)
+                conn
+                  .createStatement(selectLatestTimestampFromOtherSlicesSql)
+                  .bind(0, minSlice)
+                  .bind(1, maxSlice)
+                  .bind(2, projectionId.name)
+              },
+              row => {
+                val slice = row.get("slice", classOf[java.lang.Integer])
+                val timestamp = row.get("timestamp_offset", classOf[Instant])
+                slice.toInt -> timestamp
+              })
+            .map(_.toMap)
+        }
+
+      case None =>
+        Future.successful(Map.empty[Int, Instant])
+    }
   }
 
   override def readPrimitiveOffset(): Future[immutable.IndexedSeq[OffsetSerialization.SingleOffset]] =
