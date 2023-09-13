@@ -1,0 +1,4581 @@
+[
+  {
+    "name": "[B"
+  },
+  {
+    "name": "[C"
+  },
+  {
+    "name": "[D"
+  },
+  {
+    "name": "[F"
+  },
+  {
+    "name": "[I"
+  },
+  {
+    "name": "[J"
+  },
+  {
+    "name": "[Lakka.actor.ActorRef;"
+  },
+  {
+    "name": "[Lakka.actor.InternalActorRef;"
+  },
+  {
+    "name": "[Lakka.actor.LightArrayRevolverScheduler$TaskQueue;"
+  },
+  {
+    "name": "[Lakka.cluster.ddata.ORMultiMapKey;"
+  },
+  {
+    "name": "[Lakka.persistence.typed.javadsl.CommandHandlerBuilderByState$CommandHandlerCase;"
+  },
+  {
+    "name": "[Lakka.persistence.typed.javadsl.EventHandlerBuilderByState$EventHandlerCase;"
+  },
+  {
+    "name": "[Lakka.persistence.typed.state.javadsl.CommandHandlerBuilderByState$CommandHandlerCase;"
+  },
+  {
+    "name": "[Lakka.remote.artery.Association;"
+  },
+  {
+    "name": "[Lakka.stream.stage.GraphStageLogic;"
+  },
+  {
+    "name": "[Lcom.fasterxml.jackson.databind.deser.Deserializers;"
+  },
+  {
+    "name": "[Lcom.fasterxml.jackson.databind.deser.KeyDeserializers;"
+  },
+  {
+    "name": "[Lcom.fasterxml.jackson.databind.deser.ValueInstantiators;"
+  },
+  {
+    "name": "[Lcom.fasterxml.jackson.databind.ser.Serializers;"
+  },
+  {
+    "name": "[Lcom.fasterxml.jackson.databind.type.TypeModifier;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.Descriptors$FileDescriptor;"
+  },
+  {
+    "name": "[Ljava.lang.Class;"
+  },
+  {
+    "name": "[Ljava.lang.String;"
+  },
+  {
+    "name": "[Ljavax.management.openmbean.CompositeData;"
+  },
+  {
+    "name": "[Lscala.Tuple2;"
+  },
+  {
+    "name": "[S"
+  },
+  {
+    "name": "[Z"
+  },
+  {
+    "name": "[[I"
+  },
+  {
+    "name": "akka.Done"
+  },
+  {
+    "name": "akka.NotUsed"
+  },
+  {
+    "name": "akka.actor.ActorCell",
+    "fields": [
+      {
+        "name": "akka$actor$dungeon$Children$$_childrenRefsDoNotCallMeDirectly"
+      },
+      {
+        "name": "akka$actor$dungeon$Children$$_functionRefsDoNotCallMeDirectly"
+      },
+      {
+        "name": "akka$actor$dungeon$Children$$_nextNameDoNotCallMeDirectly"
+      },
+      {
+        "name": "akka$actor$dungeon$Dispatch$$_mailboxDoNotCallMeDirectly"
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.ActorIdentity"
+  },
+  {
+    "name": "akka.actor.ActorInitializationException"
+  },
+  {
+    "name": "akka.actor.ActorKilledException"
+  },
+  {
+    "name": "akka.actor.ActorRef"
+  },
+  {
+    "name": "akka.actor.ActorSelectionMessage"
+  },
+  {
+    "name": "akka.actor.Address"
+  },
+  {
+    "name": "akka.actor.Identify"
+  },
+  {
+    "name": "akka.actor.IllegalActorStateException"
+  },
+  {
+    "name": "akka.actor.InvalidActorNameException"
+  },
+  {
+    "name": "akka.actor.InvalidMessageException"
+  },
+  {
+    "name": "akka.actor.Kill$"
+  },
+  {
+    "name": "akka.actor.LightArrayRevolverScheduler",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "com.typesafe.config.Config",
+          "akka.event.LoggingAdapter",
+          "java.util.concurrent.ThreadFactory"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.LightArrayRevolverScheduler$TaskHolder",
+    "fields": [
+      {
+        "name": "task"
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.LocalActorRefProvider$Guardian",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.SupervisorStrategy"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.LocalActorRefProvider$SystemGuardian",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.SupervisorStrategy",
+          "akka.actor.ActorRef"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.LocalScope$"
+  },
+  {
+    "name": "akka.actor.PoisonPill$"
+  },
+  {
+    "name": "akka.actor.Props$EmptyActor",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.RepointableActorRef",
+    "fields": [
+      {
+        "name": "_cellDoNotCallMeDirectly"
+      },
+      {
+        "name": "_lookupDoNotCallMeDirectly"
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.Status$Failure"
+  },
+  {
+    "name": "akka.actor.Status$Success"
+  },
+  {
+    "name": "akka.actor.typed.ActorRef"
+  },
+  {
+    "name": "akka.actor.typed.delivery.internal.DeliverySerializable"
+  },
+  {
+    "name": "akka.actor.typed.internal.MiscMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.typed.internal.adapter.ActorRefAdapter"
+  },
+  {
+    "name": "akka.actor.typed.internal.adapter.ActorSystemAdapter$LoadTypedExtensions$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.typed.internal.pubsub.TopicImpl$MessagePublished"
+  },
+  {
+    "name": "akka.actor.typed.internal.receptionist.DefaultServiceKey"
+  },
+  {
+    "name": "akka.actor.typed.internal.receptionist.ServiceKeySerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.actor.typed.receptionist.Receptionist$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ClusterActorRefProvider",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "akka.actor.ActorSystem$Settings",
+          "akka.event.EventStream",
+          "akka.actor.DynamicAccess"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ClusterCoreDaemon",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorRef",
+          "akka.cluster.JoinConfigCompatChecker"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ClusterCoreSupervisor",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.cluster.JoinConfigCompatChecker"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ClusterDaemon",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.cluster.JoinConfigCompatChecker"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ClusterDomainEventPublisher",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ClusterJmx$$anon$1",
+    "queryAllPublicConstructors": true,
+    "methods": [
+      {
+        "name": "cacheMBeanInfo",
+        "parameterTypes": [
+          "javax.management.MBeanInfo"
+        ]
+      },
+      {
+        "name": "getCachedMBeanInfo",
+        "parameterTypes": []
+      },
+      {
+        "name": "getMBeanInfo",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ClusterMessage"
+  },
+  {
+    "name": "akka.cluster.ClusterNodeMBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.cluster.CoordinatedShutdownLeave",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.JoinConfigCompatCheckCluster",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.NoDowning",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.OnMemberStatusChangedListener",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Runnable",
+          "akka.cluster.MemberStatus"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ddata.ReplicatedDataSerialization"
+  },
+  {
+    "name": "akka.cluster.ddata.Replicator$ReplicatorMessage"
+  },
+  {
+    "name": "akka.cluster.ddata.protobuf.ReplicatedDataSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ddata.protobuf.ReplicatorMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+  },
+  {
+    "name": "akka.cluster.protobuf.ClusterMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.pubsub.DistributedPubSubMediator$Internal$SendToOneSubscriber"
+  },
+  {
+    "name": "akka.cluster.pubsub.DistributedPubSubMessage"
+  },
+  {
+    "name": "akka.cluster.pubsub.protobuf.DistributedPubSubMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.routing.ClusterRouterPool"
+  },
+  {
+    "name": "akka.cluster.sharding.ClusterShardingGuardian",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.sharding.ClusterShardingSerializable"
+  },
+  {
+    "name": "akka.cluster.sharding.JoinConfigCompatCheckSharding",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.sharding.internal.jfr.JFRShardingFlightRecorder",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.sharding.protobuf.ClusterShardingMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.sharding.typed.internal.ClusterShardingTypedSerializable"
+  },
+  {
+    "name": "akka.cluster.sharding.typed.internal.JoinConfigCompatCheckerClusterSharding",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.sharding.typed.internal.ShardingSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.singleton.ClusterSingletonManager$Internal$OldestChangedBuffer",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "scala.Option"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.singleton.ClusterSingletonMessage"
+  },
+  {
+    "name": "akka.cluster.singleton.protobuf.ClusterSingletonMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.typed.internal.AkkaClusterTypedSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.typed.internal.delivery.ReliableDeliverySerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.typed.internal.receptionist.ClusterReceptionist$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.typed.internal.receptionist.ClusterReceptionist$Entry"
+  },
+  {
+    "name": "akka.cluster.typed.internal.receptionist.ClusterReceptionistConfigCompatChecker",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.diagnostics.DiagnosticsExtension$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.AbstractNodeQueue",
+    "fields": [
+      {
+        "name": "_tailDoNotCallMeDirectly"
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.AbstractNodeQueue$Node",
+    "fields": [
+      {
+        "name": "_nextDoNotCallMeDirectly"
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.BoundedControlAwareMessageQueueSemantics"
+  },
+  {
+    "name": "akka.dispatch.BoundedDequeBasedMessageQueueSemantics"
+  },
+  {
+    "name": "akka.dispatch.BoundedMessageQueueSemantics"
+  },
+  {
+    "name": "akka.dispatch.ControlAwareMessageQueueSemantics"
+  },
+  {
+    "name": "akka.dispatch.DequeBasedMessageQueueSemantics"
+  },
+  {
+    "name": "akka.dispatch.Dispatcher",
+    "fields": [
+      {
+        "name": "executorServiceDelegate"
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.Mailbox",
+    "fields": [
+      {
+        "name": "_statusDoNotCallMeDirectly"
+      },
+      {
+        "name": "_systemQueueDoNotCallMeDirectly"
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.MessageDispatcher",
+    "fields": [
+      {
+        "name": "_inhabitantsDoNotCallMeDirectly"
+      },
+      {
+        "name": "_shutdownScheduleDoNotCallMeDirectly"
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.MultipleConsumerSemantics"
+  },
+  {
+    "name": "akka.dispatch.SingleConsumerOnlyUnboundedMailbox",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem$Settings",
+          "com.typesafe.config.Config"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.UnboundedControlAwareMessageQueueSemantics"
+  },
+  {
+    "name": "akka.dispatch.UnboundedDequeBasedMailbox",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem$Settings",
+          "com.typesafe.config.Config"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.UnboundedDequeBasedMessageQueueSemantics"
+  },
+  {
+    "name": "akka.dispatch.UnboundedMailbox",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem$Settings",
+          "com.typesafe.config.Config"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.dispatch.UnboundedMessageQueueSemantics"
+  },
+  {
+    "name": "akka.dispatch.sysmsg.SystemMessage"
+  },
+  {
+    "name": "akka.event.DeadLetterListener",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.event.EventStreamUnsubscriber",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.event.EventStream",
+          "boolean"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.event.LoggerMailboxType",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem$Settings",
+          "com.typesafe.config.Config"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.event.LoggerMessageQueueSemantics"
+  },
+  {
+    "name": "akka.event.slf4j.Slf4jLogger",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.event.slf4j.Slf4jLoggingFilter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem$Settings",
+          "akka.event.EventStream"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.http.impl.engine.client.PoolMasterActor",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.io.SelectionHandler",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.io.SelectionHandlerSettings"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.io.TcpIncomingConnection",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.io.TcpExt",
+          "java.nio.channels.SocketChannel",
+          "akka.io.ChannelRegistry",
+          "akka.actor.ActorRef",
+          "scala.collection.immutable.Iterable",
+          "boolean"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.io.TcpListener",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorRef",
+          "akka.io.TcpExt",
+          "akka.io.ChannelRegistry",
+          "akka.actor.ActorRef",
+          "akka.io.Tcp$Bind"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.io.TcpManager",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.io.TcpExt"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.pattern.CircuitBreaker",
+    "fields": [
+      {
+        "name": "_currentResetTimeoutDoNotCallMeDirectly"
+      },
+      {
+        "name": "_currentStateDoNotCallMeDirectly"
+      }
+    ]
+  },
+  {
+    "name": "akka.pattern.PromiseActorRef",
+    "fields": [
+      {
+        "name": "_stateDoNotCallMeDirectly"
+      },
+      {
+        "name": "_watchedByDoNotCallMeDirectly"
+      }
+    ]
+  },
+  {
+    "name": "akka.pattern.StatusReply"
+  },
+  {
+    "name": "akka.persistence.FilteredPayload$"
+  },
+  {
+    "name": "akka.persistence.SerializedEvent"
+  },
+  {
+    "name": "akka.persistence.journal.AsyncWriteJournal$Resequencer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.query.Offset"
+  },
+  {
+    "name": "akka.persistence.query.internal.QuerySerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.query.typed.EventEnvelope"
+  },
+  {
+    "name": "akka.persistence.r2dbc.journal.R2dbcJournal",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "com.typesafe.config.Config",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.r2dbc.query.R2dbcReadJournalProvider",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem",
+          "com.typesafe.config.Config",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.r2dbc.snapshot.R2dbcSnapshotStore",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "com.typesafe.config.Config",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.r2dbc.state.R2dbcDurableStateStoreProvider",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem",
+          "com.typesafe.config.Config",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.serialization.Message"
+  },
+  {
+    "name": "akka.persistence.serialization.MessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.serialization.PayloadSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.serialization.Snapshot"
+  },
+  {
+    "name": "akka.persistence.serialization.SnapshotSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.persistence.typed.crdt.Counter"
+  },
+  {
+    "name": "akka.persistence.typed.crdt.Counter$Updated"
+  },
+  {
+    "name": "akka.persistence.typed.crdt.ORSet"
+  },
+  {
+    "name": "akka.persistence.typed.crdt.ORSet$DeltaOp"
+  },
+  {
+    "name": "akka.persistence.typed.internal.PublishedEventImpl"
+  },
+  {
+    "name": "akka.persistence.typed.internal.ReplicatedEventMetadata"
+  },
+  {
+    "name": "akka.persistence.typed.internal.ReplicatedSnapshotMetadata"
+  },
+  {
+    "name": "akka.persistence.typed.internal.VersionVector"
+  },
+  {
+    "name": "akka.persistence.typed.serialization.ReplicatedEventSourcingSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.projection.ProjectionBehavior$Internal$CurrentOffset"
+  },
+  {
+    "name": "akka.projection.ProjectionBehavior$Internal$ProjectionManagementCommand"
+  },
+  {
+    "name": "akka.projection.grpc.internal.ConsumerSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.projection.grpc.internal.DdataConsumerFilterStore$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "apply",
+        "parameterTypes": [
+          "akka.projection.grpc.consumer.ConsumerFilter$ConsumerFilterSettings",
+          "java.lang.String",
+          "akka.actor.typed.ActorRef"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.projection.grpc.internal.DdataConsumerFilterStore$ConsumerFilterKey"
+  },
+  {
+    "name": "akka.projection.grpc.internal.DdataConsumerFilterStore$State"
+  },
+  {
+    "name": "akka.projection.internal.ProjectionSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.protobufv3.internal.ExtensionRegistry",
+    "methods": [
+      {
+        "name": "getEmptyRegistry",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.protobufv3.internal.GeneratedMessageV3"
+  },
+  {
+    "name": "akka.remote.DaemonMsgCreate"
+  },
+  {
+    "name": "akka.remote.RemoteActorRefProvider$RemotingTerminator",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorRef"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.RemoteDeploymentWatcher",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.RemoteScope"
+  },
+  {
+    "name": "akka.remote.RemoteWatcher$Heartbeat$"
+  },
+  {
+    "name": "akka.remote.RemoteWatcher$HeartbeatRsp"
+  },
+  {
+    "name": "akka.remote.UniqueAddress"
+  },
+  {
+    "name": "akka.remote.artery.ArteryMessage"
+  },
+  {
+    "name": "akka.remote.artery.jfr.JFRRemotingFlightRecorder",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.routing.RemoteRouterConfig"
+  },
+  {
+    "name": "akka.remote.serialization.ArteryMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.serialization.DaemonMsgCreateSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.serialization.MessageContainerSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.serialization.MiscMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.serialization.ProtobufSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.serialization.SystemMessageSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.remote.serialization.ThrowableNotSerializableException"
+  },
+  {
+    "name": "akka.routing.BalancingPool"
+  },
+  {
+    "name": "akka.routing.BroadcastGroup"
+  },
+  {
+    "name": "akka.routing.BroadcastPool"
+  },
+  {
+    "name": "akka.routing.ConsistentHashingPool",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "com.typesafe.config.Config"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.routing.DefaultResizer"
+  },
+  {
+    "name": "akka.routing.FromConfig"
+  },
+  {
+    "name": "akka.routing.RandomGroup"
+  },
+  {
+    "name": "akka.routing.RandomPool"
+  },
+  {
+    "name": "akka.routing.RoundRobinGroup"
+  },
+  {
+    "name": "akka.routing.RoundRobinPool",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "com.typesafe.config.Config"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.routing.RoutedActorCell$RouterActorCreator",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.routing.RouterConfig"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.routing.ScatterGatherFirstCompletedGroup"
+  },
+  {
+    "name": "akka.routing.ScatterGatherFirstCompletedPool"
+  },
+  {
+    "name": "akka.routing.SmallestMailboxPool"
+  },
+  {
+    "name": "akka.routing.TailChoppingGroup"
+  },
+  {
+    "name": "akka.routing.TailChoppingPool"
+  },
+  {
+    "name": "akka.serialization.BooleanSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.ByteArraySerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.ByteStringSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.DisabledJavaSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.IntSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.LongSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.SerializationExtension$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.StringSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.jackson.AkkaJacksonModule",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.jackson.AkkaStreamJacksonModule",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.jackson.AkkaTypedJacksonModule",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.jackson.CborSerializable",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "akka.serialization.jackson.JacksonCborSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem"
+        ]
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ClassicActorSystemProvider"
+        ]
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.jackson.JacksonJsonSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem"
+        ]
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ClassicActorSystemProvider"
+        ]
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.serialization.jackson.JsonSerializable"
+  },
+  {
+    "name": "akka.stream.Graph"
+  },
+  {
+    "name": "akka.stream.SinkRef"
+  },
+  {
+    "name": "akka.stream.SourceRef"
+  },
+  {
+    "name": "akka.stream.SystemMaterializer$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.stream.impl.streamref.StreamRefsProtocol"
+  },
+  {
+    "name": "akka.stream.serialization.StreamRefSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.util.ByteString$ByteString1"
+  },
+  {
+    "name": "akka.util.ByteString$ByteString1C"
+  },
+  {
+    "name": "akka.util.ByteString$ByteStrings"
+  },
+  {
+    "name": "android.app.Application"
+  },
+  {
+    "name": "apple.security.AppleProvider",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "central.deliveries.proto.DeliveryRegistered",
+    "methods": [
+      {
+        "name": "parser",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.AsyncAppender",
+    "queryAllPublicMethods": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.encoder.PatternLayoutEncoder",
+    "queryAllPublicMethods": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.pattern.DateConverter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.pattern.LevelConverter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.pattern.LineSeparatorConverter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.pattern.LoggerConverter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.pattern.MDCConverter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.pattern.MarkerConverter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.pattern.MessageConverter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.classic.pattern.ThreadConverter",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.core.AsyncAppenderBase",
+    "methods": [
+      {
+        "name": "setNeverBlock",
+        "parameterTypes": [
+          "boolean"
+        ]
+      },
+      {
+        "name": "setQueueSize",
+        "parameterTypes": [
+          "int"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.core.ConsoleAppender",
+    "queryAllPublicMethods": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.core.OutputStreamAppender",
+    "methods": [
+      {
+        "name": "setEncoder",
+        "parameterTypes": [
+          "ch.qos.logback.core.encoder.Encoder"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.core.encoder.Encoder",
+    "methods": [
+      {
+        "name": "valueOf",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.core.encoder.LayoutWrappingEncoder",
+    "methods": [
+      {
+        "name": "setParent",
+        "parameterTypes": [
+          "ch.qos.logback.core.spi.ContextAware"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.core.pattern.PatternLayoutEncoderBase",
+    "methods": [
+      {
+        "name": "setPattern",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ch.qos.logback.core.spi.ContextAware",
+    "methods": [
+      {
+        "name": "valueOf",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "com.fasterxml.jackson.databind.ext.Java7HandlersImpl",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.fasterxml.jackson.databind.ext.Java7SupportImpl",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.fasterxml.jackson.datatype.jdk8.Jdk8Module",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.fasterxml.jackson.datatype.jsr310.JavaTimeModule",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.fasterxml.jackson.module.paramnames.ParameterNamesModule",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.fasterxml.jackson.module.scala.DefaultScalaModule",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.google.protobuf.ExtensionRegistry",
+    "methods": [
+      {
+        "name": "getEmptyRegistry",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.google.protobuf.GeneratedMessage"
+  },
+  {
+    "name": "com.google.protobuf.GeneratedMessageV3"
+  },
+  {
+    "name": "com.ibm.icu.text.Collator"
+  },
+  {
+    "name": "com.sun.crypto.provider.AESCipher$General",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.ARCFOURCipher",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.ChaCha20Cipher$ChaCha20Poly1305",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.DESCipher",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.DESedeCipher",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.DHParameters",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.GaloisCounterMode$AESGCM",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.TlsMasterSecretGenerator",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.management.GarbageCollectorMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "com.sun.management.GcInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "com.sun.management.HotSpotDiagnosticMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "com.sun.management.ThreadMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "com.sun.management.UnixOperatingSystemMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "com.sun.management.VMOption",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "com.sun.management.internal.GarbageCollectorExtImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "com.sun.management.internal.HotSpotDiagnostic",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "com.sun.management.internal.HotSpotThreadImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "com.sun.management.internal.OperatingSystemImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "com.sun.org.apache.xerces.internal.jaxp.SAXParserFactoryImpl",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.typesafe.config.Config"
+  },
+  {
+    "name": "com.typesafe.config.impl.SimpleConfig"
+  },
+  {
+    "name": "common.proto.Coordinates",
+    "methods": [
+      {
+        "name": "newBuilder",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "double",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.grpc.census.InternalCensusStatsAccessor"
+  },
+  {
+    "name": "io.grpc.census.InternalCensusTracingAccessor"
+  },
+  {
+    "name": "io.grpc.internal.DnsNameResolverProvider"
+  },
+  {
+    "name": "io.grpc.internal.PickFirstLoadBalancerProvider"
+  },
+  {
+    "name": "io.grpc.internal.SerializingExecutor",
+    "fields": [
+      {
+        "name": "runState"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.grpc.netty.AbstractNettyHandler",
+    "methods": [
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.grpc.netty.NettyClientHandler",
+    "methods": [
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "close",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "write",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.grpc.netty.ProtocolNegotiators$GrpcNegotiationHandler",
+    "methods": [
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.grpc.netty.ProtocolNegotiators$ProtocolNegotiationHandler",
+    "methods": [
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.grpc.netty.ProtocolNegotiators$WaitUntilActiveHandler",
+    "methods": [
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.grpc.netty.WriteBufferingAndExceptionHandler",
+    "methods": [
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "close",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "connect",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "java.net.SocketAddress",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      },
+      {
+        "name": "flush",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "write",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.buffer.AbstractByteBufAllocator",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.buffer.AbstractReferenceCountedByteBuf",
+    "fields": [
+      {
+        "name": "refCnt"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.AbstractChannelHandlerContext",
+    "fields": [
+      {
+        "name": "handlerState"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.ChannelDuplexHandler",
+    "methods": [
+      {
+        "name": "bind",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "close",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "connect",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "java.net.SocketAddress",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "deregister",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "disconnect",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "flush",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "read",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "write",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.ChannelInboundHandlerAdapter",
+    "methods": [
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "channelReadComplete",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRegistered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelUnregistered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelWritabilityChanged",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.ChannelOutboundBuffer",
+    "fields": [
+      {
+        "name": "totalPendingSize"
+      },
+      {
+        "name": "unwritable"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.DefaultChannelConfig",
+    "fields": [
+      {
+        "name": "autoRead"
+      },
+      {
+        "name": "writeBufferWaterMark"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.DefaultChannelPipeline",
+    "fields": [
+      {
+        "name": "estimatorHandle"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.DefaultChannelPipeline$HeadContext",
+    "methods": [
+      {
+        "name": "bind",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "channelReadComplete",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRegistered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelUnregistered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelWritabilityChanged",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "close",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "connect",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "java.net.SocketAddress",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "deregister",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "disconnect",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      },
+      {
+        "name": "flush",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "read",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "write",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.DefaultChannelPipeline$TailContext",
+    "methods": [
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "channelReadComplete",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRegistered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelUnregistered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelWritabilityChanged",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.DefaultFileRegion"
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.epoll.Epoll",
+    "methods": [
+      {
+        "name": "isAvailable",
+        "parameterTypes": []
+      },
+      {
+        "name": "unavailabilityCause",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.epoll.NativeDatagramPacketArray$NativeDatagramPacket"
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.unix.PeerCredentials"
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.handler.codec.ByteToMessageDecoder",
+    "methods": [
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2ConnectionHandler",
+    "methods": [
+      {
+        "name": "bind",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "channelReadComplete",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelWritabilityChanged",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "connect",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "java.net.SocketAddress",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "deregister",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "disconnect",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext",
+          "io.grpc.netty.shaded.io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "flush",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "read",
+        "parameterTypes": [
+          "io.grpc.netty.shaded.io.netty.channel.ChannelHandlerContext"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.AbstractReferenceCounted",
+    "fields": [
+      {
+        "name": "refCnt"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.DefaultAttributeMap",
+    "fields": [
+      {
+        "name": "attributes"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.Recycler$DefaultHandle",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.ReferenceCountUtil",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.concurrent.DefaultPromise",
+    "fields": [
+      {
+        "name": "result"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor",
+    "fields": [
+      {
+        "name": "state"
+      },
+      {
+        "name": "threadProperties"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueColdProducerFields",
+    "fields": [
+      {
+        "name": "producerLimit"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueConsumerFields",
+    "fields": [
+      {
+        "name": "consumerIndex"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueProducerFields",
+    "fields": [
+      {
+        "name": "producerIndex"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueConsumerIndexField",
+    "fields": [
+      {
+        "name": "consumerIndex"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueProducerIndexField",
+    "fields": [
+      {
+        "name": "producerIndex"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueProducerLimitField",
+    "fields": [
+      {
+        "name": "producerLimit"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.override.ContextStorageOverride"
+  },
+  {
+    "name": "io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider"
+  },
+  {
+    "name": "io.perfmark.impl.SecretPerfMarkImpl$PerfMarkImpl"
+  },
+  {
+    "name": "java.io.FileDescriptor"
+  },
+  {
+    "name": "java.io.FilePermission"
+  },
+  {
+    "name": "java.io.Serializable"
+  },
+  {
+    "name": "java.lang.Boolean",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Byte",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Character",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Class",
+    "methods": [
+      {
+        "name": "getModule",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.ClassValue"
+  },
+  {
+    "name": "java.lang.Deprecated",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.Double",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Float",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Integer",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Long",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Module",
+    "methods": [
+      {
+        "name": "getDescriptor",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.ProcessHandle",
+    "methods": [
+      {
+        "name": "current",
+        "parameterTypes": []
+      },
+      {
+        "name": "pid",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Runtime$Version"
+  },
+  {
+    "name": "java.lang.RuntimePermission"
+  },
+  {
+    "name": "java.lang.Short",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.StackTraceElement",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.String",
+    "fields": [
+      {
+        "name": "TYPE"
+      },
+      {
+        "name": "value"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Thread",
+    "fields": [
+      {
+        "name": "threadLocalRandomProbe"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Throwable"
+  },
+  {
+    "name": "java.lang.Void",
+    "fields": [
+      {
+        "name": "TYPE"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.invoke.VarHandle",
+    "methods": [
+      {
+        "name": "releaseFence",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.management.BufferPoolMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.ClassLoadingMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.CompilationMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.LockInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.ManagementFactory",
+    "methods": [
+      {
+        "name": "getRuntimeMXBean",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.management.ManagementPermission",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.lang.management.MemoryMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.MemoryManagerMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.MemoryPoolMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.MemoryUsage",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.MonitorInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.lang.management.PlatformLoggingMXBean",
+    "queryAllPublicMethods": true,
+    "methods": [
+      {
+        "name": "getLoggerLevel",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "getLoggerNames",
+        "parameterTypes": []
+      },
+      {
+        "name": "getParentLoggerName",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "setLoggerLevel",
+        "parameterTypes": [
+          "java.lang.String",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.lang.management.RuntimeMXBean",
+    "queryAllPublicMethods": true,
+    "methods": [
+      {
+        "name": "getInputArguments",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.management.ThreadInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.math.BigDecimal"
+  },
+  {
+    "name": "java.math.BigInteger"
+  },
+  {
+    "name": "java.net.NetPermission"
+  },
+  {
+    "name": "java.net.SocketPermission"
+  },
+  {
+    "name": "java.net.URLPermission",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.nio.Bits",
+    "methods": [
+      {
+        "name": "unaligned",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.nio.Buffer",
+    "fields": [
+      {
+        "name": "address"
+      }
+    ]
+  },
+  {
+    "name": "java.nio.ByteBuffer",
+    "methods": [
+      {
+        "name": "alignedSlice",
+        "parameterTypes": [
+          "int"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.nio.DirectByteBuffer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "long",
+          "int"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.nio.channels.FileChannel"
+  },
+  {
+    "name": "java.nio.channels.spi.SelectorProvider",
+    "methods": [
+      {
+        "name": "openSocketChannel",
+        "parameterTypes": [
+          "java.net.ProtocolFamily"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.security.AlgorithmParametersSpi"
+  },
+  {
+    "name": "java.security.AllPermission"
+  },
+  {
+    "name": "java.security.KeyStoreSpi"
+  },
+  {
+    "name": "java.security.SecureRandomParameters"
+  },
+  {
+    "name": "java.security.SecurityPermission"
+  },
+  {
+    "name": "java.util.ArrayList",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "java.util.Date"
+  },
+  {
+    "name": "java.util.Optional"
+  },
+  {
+    "name": "java.util.PropertyPermission",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "java.lang.String"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.ForkJoinTask",
+    "fields": [
+      {
+        "name": "aux"
+      },
+      {
+        "name": "status"
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.TimeoutException"
+  },
+  {
+    "name": "java.util.concurrent.atomic.AtomicBoolean",
+    "fields": [
+      {
+        "name": "value"
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.atomic.AtomicReference",
+    "fields": [
+      {
+        "name": "value"
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.atomic.LongAdder",
+    "queryAllPublicConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "add",
+        "parameterTypes": [
+          "long"
+        ]
+      },
+      {
+        "name": "sum",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.atomic.Striped64",
+    "fields": [
+      {
+        "name": "base"
+      },
+      {
+        "name": "cellsBusy"
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.atomic.Striped64$Cell",
+    "fields": [
+      {
+        "name": "value"
+      }
+    ]
+  },
+  {
+    "name": "java.util.logging.LogManager",
+    "methods": [
+      {
+        "name": "getLoggingMXBean",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.util.logging.LoggingMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "javax.management.MBeanOperationInfo",
+    "queryAllPublicMethods": true,
+    "methods": [
+      {
+        "name": "getSignature",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "javax.management.MBeanServerBuilder",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "javax.management.ObjectName"
+  },
+  {
+    "name": "javax.management.StandardEmitterMBean",
+    "methods": [
+      {
+        "name": "cacheMBeanInfo",
+        "parameterTypes": [
+          "javax.management.MBeanInfo"
+        ]
+      },
+      {
+        "name": "getCachedMBeanInfo",
+        "parameterTypes": []
+      },
+      {
+        "name": "getMBeanInfo",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "javax.management.openmbean.CompositeData"
+  },
+  {
+    "name": "javax.management.openmbean.OpenMBeanOperationInfoSupport"
+  },
+  {
+    "name": "javax.management.openmbean.TabularData"
+  },
+  {
+    "name": "javax.security.auth.x500.X500Principal",
+    "fields": [
+      {
+        "name": "thisX500Name"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "sun.security.x509.X500Name"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "javax.smartcardio.CardPermission"
+  },
+  {
+    "name": "jdk.internal.misc.Unsafe",
+    "methods": [
+      {
+        "name": "getUnsafe",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "jdk.management.jfr.ConfigurationInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "jdk.management.jfr.EventTypeInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "jdk.management.jfr.FlightRecorderMXBean",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "jdk.management.jfr.FlightRecorderMXBeanImpl",
+    "queryAllPublicConstructors": true,
+    "methods": [
+      {
+        "name": "cacheMBeanInfo",
+        "parameterTypes": [
+          "javax.management.MBeanInfo"
+        ]
+      },
+      {
+        "name": "getCachedMBeanInfo",
+        "parameterTypes": []
+      },
+      {
+        "name": "getMBeanInfo",
+        "parameterTypes": []
+      },
+      {
+        "name": "getNotificationInfo",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "jdk.management.jfr.RecordingInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "jdk.management.jfr.SettingDescriptorInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "libcore.io.Memory"
+  },
+  {
+    "name": "local.drones.CoarseGrainedCoordinates",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "double",
+          "double"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.Coordinates",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "double",
+          "double"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$DeliveryInProgress",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "java.lang.String",
+          "java.time.Instant"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$State",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$WaitingDelivery",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "local.drones.Coordinates",
+          "local.drones.Coordinates"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.Drone$CoarseGrainedLocationChanged",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "local.drones.CoarseGrainedCoordinates"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.Drone$Event",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "local.drones.Drone$PositionUpdated",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "local.drones.Position"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.Position",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "local.drones.Coordinates",
+          "double"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.proto.CoarseDroneLocation",
+    "methods": [
+      {
+        "name": "getCoordinates",
+        "parameterTypes": []
+      },
+      {
+        "name": "hasCoordinates",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "local.drones.proto.CoarseDroneLocation$Builder",
+    "methods": [
+      {
+        "name": "clearCoordinates",
+        "parameterTypes": []
+      },
+      {
+        "name": "getCoordinates",
+        "parameterTypes": []
+      },
+      {
+        "name": "getCoordinatesBuilder",
+        "parameterTypes": []
+      },
+      {
+        "name": "hasCoordinates",
+        "parameterTypes": []
+      },
+      {
+        "name": "setCoordinates",
+        "parameterTypes": [
+          "common.proto.Coordinates"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "org.agrona.concurrent.AbstractConcurrentArrayQueueConsumer",
+    "fields": [
+      {
+        "name": "head"
+      }
+    ]
+  },
+  {
+    "name": "org.agrona.concurrent.AbstractConcurrentArrayQueueProducer",
+    "fields": [
+      {
+        "name": "sharedHeadCache"
+      },
+      {
+        "name": "tail"
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.MVStore$TxCounter",
+    "fields": [
+      {
+        "name": "counter"
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.Page",
+    "fields": [
+      {
+        "name": "pos"
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.db.LobStorageMap$BlobMeta$Type",
+    "fields": [
+      {
+        "name": "INSTANCE"
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.db.LobStorageMap$BlobReference$Type",
+    "fields": [
+      {
+        "name": "INSTANCE"
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.db.NullValueDataType",
+    "fields": [
+      {
+        "name": "INSTANCE"
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.db.RowDataType$Factory",
+    "fields": [
+      {
+        "name": "INSTANCE"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.tx.VersionedValueType$Factory",
+    "fields": [
+      {
+        "name": "INSTANCE"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.type.ByteArrayDataType",
+    "fields": [
+      {
+        "name": "INSTANCE"
+      }
+    ]
+  },
+  {
+    "name": "org.h2.mvstore.type.LongDataType",
+    "fields": [
+      {
+        "name": "INSTANCE"
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.async.FilePathAsync",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.disk.FilePathDisk",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.mem.FilePathMem",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.mem.FilePathMemLZF",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.niomapped.FilePathNioMapped",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.niomem.FilePathNioMem",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.niomem.FilePathNioMemLZF",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.retry.FilePathRetryOnInterrupt",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.split.FilePathSplit",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.h2.store.fs.zip.FilePathZip",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "org.robolectric.Robolectric"
+  },
+  {
+    "name": "reactor.core.publisher.FlatMapTracker",
+    "fields": [
+      {
+        "name": "size"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxArray$ArraySubscription",
+    "fields": [
+      {
+        "name": "requested"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxConcatArray$ConcatArraySubscriber",
+    "fields": [
+      {
+        "name": "requested"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxConcatMapNoPrefetch$FluxConcatMapNoPrefetchSubscriber",
+    "fields": [
+      {
+        "name": "error"
+      },
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxDefaultIfEmpty$DefaultIfEmptySubscriber",
+    "fields": [
+      {
+        "name": "fallbackValue"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxDoFinally$DoFinallySubscriber",
+    "fields": [
+      {
+        "name": "once"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxFlatMap$FlatMapInner",
+    "fields": [
+      {
+        "name": "s"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxFlatMap$FlatMapMain",
+    "fields": [
+      {
+        "name": "error"
+      },
+      {
+        "name": "requested"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxIterable$IterableSubscription",
+    "fields": [
+      {
+        "name": "requested"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxOnErrorReturn$ReturnSubscriber",
+    "fields": [
+      {
+        "name": "requested"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxRetry$RetrySubscriber",
+    "fields": [
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxTimeout$TimeoutMainSubscriber",
+    "fields": [
+      {
+        "name": "index"
+      },
+      {
+        "name": "timeout"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxTimeout$TimeoutTimeoutSubscriber",
+    "fields": [
+      {
+        "name": "s"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoCallable$MonoCallableSubscription",
+    "fields": [
+      {
+        "name": "requestedOnce"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoDelay$MonoDelayRunnable",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoFlatMap$FlatMapMain",
+    "fields": [
+      {
+        "name": "second"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoIgnoreThen$ThenIgnoreMain",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoNext$NextSubscriber",
+    "fields": [
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoSubscribeOn$SubscribeOnSubscriber",
+    "fields": [
+      {
+        "name": "requested"
+      },
+      {
+        "name": "s"
+      },
+      {
+        "name": "thread"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoSupplier$MonoSupplierSubscription",
+    "fields": [
+      {
+        "name": "requestedOnce"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoWhen$WhenCoordinator",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoWhen$WhenInner",
+    "fields": [
+      {
+        "name": "s"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.Operators$BaseFluxToMonoOperator",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.Operators$MultiSubscriptionSubscriber",
+    "fields": [
+      {
+        "name": "missedProduced"
+      },
+      {
+        "name": "missedRequested"
+      },
+      {
+        "name": "missedSubscription"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.Operators$ScalarSubscription",
+    "fields": [
+      {
+        "name": "once"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.scheduler.ParallelScheduler",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.scheduler.SchedulerTask",
+    "fields": [
+      {
+        "name": "future"
+      },
+      {
+        "name": "parent"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.scheduler.SingleScheduler",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.scheduler.WorkerTask",
+    "fields": [
+      {
+        "name": "future"
+      },
+      {
+        "name": "parent"
+      },
+      {
+        "name": "thread"
+      }
+    ]
+  },
+  {
+    "name": "reactor.pool.AbstractPool$AbstractPooledRef",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.pool.AllocationStrategies$SizeBasedAllocationStrategy",
+    "fields": [
+      {
+        "name": "permits"
+      }
+    ]
+  },
+  {
+    "name": "reactor.pool.SimpleDequePool",
+    "fields": [
+      {
+        "name": "acquired"
+      },
+      {
+        "name": "idleResources"
+      },
+      {
+        "name": "idleSize"
+      },
+      {
+        "name": "pending"
+      },
+      {
+        "name": "pendingSize"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.pool.SimpleDequePool$QueuePoolRecyclerInner",
+    "fields": [
+      {
+        "name": "once"
+      }
+    ]
+  },
+  {
+    "name": "scala.Boolean"
+  },
+  {
+    "name": "scala.Int"
+  },
+  {
+    "name": "scala.Long"
+  },
+  {
+    "name": "scala.None$"
+  },
+  {
+    "name": "scala.Some"
+  },
+  {
+    "name": "scala.collection.concurrent.CNodeBase",
+    "fields": [
+      {
+        "name": "csize"
+      }
+    ]
+  },
+  {
+    "name": "scala.collection.concurrent.INodeBase",
+    "fields": [
+      {
+        "name": "mainnode"
+      }
+    ]
+  },
+  {
+    "name": "scala.collection.concurrent.MainNode",
+    "fields": [
+      {
+        "name": "prev"
+      }
+    ]
+  },
+  {
+    "name": "scala.collection.concurrent.TrieMap",
+    "fields": [
+      {
+        "name": "root"
+      }
+    ]
+  },
+  {
+    "name": "scala.reflect.ScalaSignature",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "scalapb.GeneratedMessage"
+  },
+  {
+    "name": "sun.management.ClassLoadingImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "sun.management.CompilationImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "sun.management.ManagementFactoryHelper$1",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "sun.management.ManagementFactoryHelper$PlatformLoggingImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "sun.management.MemoryImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "sun.management.MemoryManagerImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "sun.management.MemoryPoolImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "sun.management.RuntimeImpl",
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "sun.misc.Unsafe",
+    "allDeclaredFields": true,
+    "methods": [
+      {
+        "name": "arrayBaseOffset",
+        "parameterTypes": [
+          "java.lang.Class"
+        ]
+      },
+      {
+        "name": "arrayIndexScale",
+        "parameterTypes": [
+          "java.lang.Class"
+        ]
+      },
+      {
+        "name": "copyMemory",
+        "parameterTypes": [
+          "long",
+          "long",
+          "long"
+        ]
+      },
+      {
+        "name": "copyMemory",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "java.lang.Object",
+          "long",
+          "long"
+        ]
+      },
+      {
+        "name": "getAndAddLong",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "long"
+        ]
+      },
+      {
+        "name": "getAndSetObject",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "getBoolean",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long"
+        ]
+      },
+      {
+        "name": "getByte",
+        "parameterTypes": [
+          "long"
+        ]
+      },
+      {
+        "name": "getByte",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long"
+        ]
+      },
+      {
+        "name": "getDouble",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long"
+        ]
+      },
+      {
+        "name": "getFloat",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long"
+        ]
+      },
+      {
+        "name": "getInt",
+        "parameterTypes": [
+          "long"
+        ]
+      },
+      {
+        "name": "getInt",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long"
+        ]
+      },
+      {
+        "name": "getLong",
+        "parameterTypes": [
+          "long"
+        ]
+      },
+      {
+        "name": "getLong",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long"
+        ]
+      },
+      {
+        "name": "getObject",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long"
+        ]
+      },
+      {
+        "name": "invokeCleaner",
+        "parameterTypes": [
+          "java.nio.ByteBuffer"
+        ]
+      },
+      {
+        "name": "objectFieldOffset",
+        "parameterTypes": [
+          "java.lang.reflect.Field"
+        ]
+      },
+      {
+        "name": "putBoolean",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "boolean"
+        ]
+      },
+      {
+        "name": "putByte",
+        "parameterTypes": [
+          "long",
+          "byte"
+        ]
+      },
+      {
+        "name": "putByte",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "byte"
+        ]
+      },
+      {
+        "name": "putDouble",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "double"
+        ]
+      },
+      {
+        "name": "putFloat",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "float"
+        ]
+      },
+      {
+        "name": "putInt",
+        "parameterTypes": [
+          "long",
+          "int"
+        ]
+      },
+      {
+        "name": "putInt",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "int"
+        ]
+      },
+      {
+        "name": "putLong",
+        "parameterTypes": [
+          "long",
+          "long"
+        ]
+      },
+      {
+        "name": "putLong",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "long"
+        ]
+      },
+      {
+        "name": "putObject",
+        "parameterTypes": [
+          "java.lang.Object",
+          "long",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "storeFence",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.misc.VM"
+  },
+  {
+    "name": "sun.nio.ch.SelectorImpl",
+    "fields": [
+      {
+        "name": "publicSelectedKeys"
+      },
+      {
+        "name": "selectedKeys"
+      }
+    ]
+  },
+  {
+    "name": "sun.reflect.Reflection"
+  },
+  {
+    "name": "sun.security.pkcs12.PKCS12KeyStore",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.pkcs12.PKCS12KeyStore$DualFormatPKCS12",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.DSA$SHA224withDSA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.DSA$SHA256withDSA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.JavaKeyStore$JKS",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.MD5",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.NativePRNG",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.security.SecureRandomParameters"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA2$SHA224",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA2$SHA256",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA5$SHA384",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA5$SHA512",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.X509Factory",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.PSSParameters",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.RSAKeyFactory$Legacy",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.RSAPSSSignature",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.RSASignature$SHA224withRSA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.ssl.KeyManagerFactoryImpl$SunX509",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.ssl.SSLContextImpl$DefaultSSLContext",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.ssl.TrustManagerFactoryImpl$PKIXFactory",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.AuthorityInfoAccessExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.AuthorityKeyIdentifierExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.BasicConstraintsExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.CRLDistributionPointsExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.CertificatePoliciesExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.ExtendedKeyUsageExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.IssuerAlternativeNameExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.KeyUsageExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.NetscapeCertTypeExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.PrivateKeyUsageExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.SubjectAlternativeNameExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.SubjectKeyIdentifierExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  }
+]
