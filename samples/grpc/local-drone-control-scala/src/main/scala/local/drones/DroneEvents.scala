@@ -1,6 +1,7 @@
 package local.drones
 
 import akka.actor.typed.{ ActorSystem, Behavior }
+import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.grpc.GrpcClientSettings
 import akka.persistence.Persistence
 import akka.persistence.query.Offset
@@ -68,6 +69,65 @@ object DroneEvents {
           0,
           maxSlice),
         handler = eventProducer.handler()))
+  }
+
+  def initEventToCloudDaemonProcess(settings: Settings)(
+      implicit system: ActorSystem[_]): Unit = {
+    logger.info(
+      "Pushing events to central cloud, origin id [{}]",
+      settings.locationId)
+
+    val nrOfEventProducers =
+      system.settings.config.getInt("local-drone-control.nr-of-event-producers")
+    val sliceRanges = Persistence(system).sliceRanges(nrOfEventProducers)
+
+    // turn events into a public protocol (protobuf) type before publishing
+    val eventTransformation =
+      EventProducer.Transformation.empty.registerAsyncEnvelopeMapper[
+        Drone.CoarseGrainedLocationChanged,
+        proto.CoarseDroneLocation] { envelope =>
+        val event = envelope.event
+        Future.successful(
+          Some(proto.CoarseDroneLocation(Some(event.coordinates.toProto))))
+      }
+
+    val eventProducer = EventProducerPush[Drone.Event](
+      // location id is unique and informative, so use it as producer origin id as well
+      originId = settings.locationId,
+      eventProducerSource = EventProducerSource[Drone.Event](
+        Drone.EntityKey.name,
+        StreamId,
+        eventTransformation,
+        EventProducerSettings(system),
+        // only push coarse grained coordinate changes
+        producerFilter = envelope =>
+          envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged]),
+      GrpcClientSettings.fromConfig("central-drone-control"))
+
+    def projectionForPartition(partition: Int): Behavior[ProjectionBehavior.Command] = {
+      val sliceRange = sliceRanges(partition)
+      val minSlice = sliceRange.min
+      val maxSlice = sliceRange.max
+
+      ProjectionBehavior(
+        R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
+          ProjectionId("drone-event-push", s"$minSlice-$maxSlice"),
+          settings = None,
+          sourceProvider = EventSourcedProvider.eventsBySlices[Drone.Event](
+            system,
+            R2dbcReadJournal.Identifier,
+            eventProducer.eventProducerSource.entityType,
+            minSlice,
+            maxSlice),
+          handler = eventProducer.handler()))
+
+    }
+
+    ShardedDaemonProcess(system).init(
+      "drone-event-push",
+      nrOfEventProducers,
+      projectionForPartition)
+
   }
 
 }
