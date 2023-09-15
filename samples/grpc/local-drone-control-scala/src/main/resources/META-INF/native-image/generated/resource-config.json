@@ -1,0 +1,82 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "\\QMETA-INF/MANIFEST.MF\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/services/io.grpc.LoadBalancerProvider\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/services/io.grpc.NameResolverProvider\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/services/org.slf4j.spi.SLF4JServiceProvider\\E"
+      },
+      {
+        "pattern": "\\Qakka-http-version.conf\\E"
+      },
+      {
+        "pattern": "\\Qapplication.conf\\E"
+      },
+      {
+        "pattern": "\\Qcluster.conf\\E"
+      },
+      {
+        "pattern": "\\Qcom/fasterxml/jackson/module/scala/build.properties\\E"
+      },
+      {
+        "pattern": "\\Qgrpc.conf\\E"
+      },
+      {
+        "pattern": "\\Qh2-default-projection-schema.conf\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/CoarseGrainedCoordinates.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/Coordinates.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/DeliveriesQueue$DeliveryInProgress.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/DeliveriesQueue$State.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/DeliveriesQueue$WaitingDelivery.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/Drone$CoarseGrainedLocationChanged.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/Drone$PositionUpdated.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/Position.class\\E"
+      },
+      {
+        "pattern": "\\Qlogback.xml\\E"
+      },
+      {
+        "pattern": "\\Qpersistence.conf\\E"
+      },
+      {
+        "pattern": "\\Qreference.conf\\E"
+      },
+      {
+        "pattern": "\\Qversion.conf\\E"
+      },
+      {
+        "pattern": "java.base:\\Qjdk/internal/icu/impl/data/icudt67b/nfc.nrm\\E"
+      },
+      {
+        "pattern": "java.base:\\Qsun/net/www/content-types.properties\\E"
+      },
+      {
+        "pattern": "jdk.jfr:\\Qjdk/jfr/internal/types/metadata.bin\\E"
+      }
+    ]
+  },
+  "bundles": []
+}

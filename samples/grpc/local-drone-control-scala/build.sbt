@@ -5,7 +5,7 @@ organizationHomepage := Some(url("https://akka.io"))
 licenses := Seq(
   ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
-scalaVersion := "2.13.11"
+scalaVersion := "2.13.12"
 
 Compile / scalacOptions ++= Seq(
   "-release:11",
@@ -66,7 +66,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.3.6",
+  "ch.qos.logback" % "logback-classic" % "1.3.11",
   "org.scalatest" %% "scalatest" % "3.1.2" % Test,
   // 2. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
@@ -82,3 +82,20 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-projection-grpc" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-testkit" % AkkaProjectionVersion % Test)
+
+// GraalVM native image build
+
+enablePlugins(NativeImagePlugin)
+nativeImageJvm := "graalvm"
+nativeImageVersion := "17.0.8"
+nativeImageOptions := Seq(
+  "--no-fallback",
+  "--verbose",
+  "--enable-http",
+  "--enable-https",
+  "--install-exit-handlers",
+  "-Dlogback.configurationFile=logback-native-image.xml" // configured at build time
+)
+
+// silence warnings for these keys (used in dynamic task)
+Global / excludeLintKeys ++= Set(nativeImageJvm, nativeImageVersion)
