@@ -132,7 +132,7 @@ public final class DeliveriesQueue
     }
   }
 
-  final class DeliveryInProgress {
+  public static final class DeliveryInProgress {
     public final String deliveryId;
     public final String droneId;
     public final Instant pickupTime;

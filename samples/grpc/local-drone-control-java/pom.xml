@@ -24,9 +24,11 @@
         <akka-diagnostics.version>2.0.1</akka-diagnostics.version>
         <akka-grpc.version>2.3.4</akka-grpc.version>
         <akka-grpc-maven-plugin.version>2.3.4</akka-grpc-maven-plugin.version>
-        <logback.version>1.3.6</logback.version>
+        <logback.version>1.3.11</logback.version>
         <junit.version>4.13.1</junit.version>
         <scala.binary.version>2.13</scala.binary.version>
+        <native.maven.plugin.version>0.9.26</native.maven.plugin.version>
+        <mainClass>local.drones.Main</mainClass>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
         <!-- Version of the Docker image is derived from git commit.
@@ -180,7 +182,7 @@
                         <argument>-Dconfig.resource=${APP_CONFIG}</argument>
                         <argument>-classpath</argument>
                         <classpath />
-                        <argument>local.drones.Main</argument>
+                        <argument>${mainClass}</argument>
                     </arguments>
                 </configuration>
             </plugin>
@@ -273,7 +275,7 @@
                 <executions>
                     <execution>
                         <id>build-docker-image</id>
-                        <phase>package</phase>
+                        <phase>install</phase>
                         <goals>
                             <goal>build</goal>
                         </goals>
@@ -282,4 +284,61 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${native.maven.plugin.version}</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <buildArgs>
+                                <buildArg>--no-fallback</buildArg>
+                                <buildArg>--verbose</buildArg>
+                                <buildArg>--enable-http</buildArg>
+                                <buildArg>--enable-https</buildArg>
+                                <buildArg>--install-exit-handlers</buildArg>
+                                <buildArg>-Dlogback.configurationFile=logback-native-image.xml</buildArg>
+                            </buildArgs>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.0.0</version>
+                        <executions>
+                            <execution>
+                                <id>java-agent</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>java</executable>
+                                    <workingDirectory>${project.build.directory}</workingDirectory>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>${mainClass}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
