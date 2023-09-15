@@ -59,7 +59,6 @@ docker exec -i local_drone_control_db psql -U postgres -t < ddl-scripts/create_t
 
 Start 3 nodes, in separate terminals:
 
-FIXME choose the right main
 ```shell
 mvn compile exec:exec -DAPP_CONFIG=local1.conf -Pclustered
 mvn compile exec:exec -DAPP_CONFIG=local2.conf -Pclustered
