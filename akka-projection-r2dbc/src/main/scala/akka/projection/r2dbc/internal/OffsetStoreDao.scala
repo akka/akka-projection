@@ -33,6 +33,10 @@ private[projection] trait OffsetStoreDao {
       timestamp: Instant,
       storageRepresentation: OffsetSerialization.StorageRepresentation): Future[Done]
 
+  def readBacktrackingOffset(): Future[Option[Instant]]
+
+  def updateBacktrackingOffset(timestamp: Instant): Future[Done]
+
   def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[String]): Future[Long]
 
   def deleteNewTimestampOffsetsInTx(connection: Connection, timestamp: Instant): Future[Long]

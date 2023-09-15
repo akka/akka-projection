@@ -50,6 +50,12 @@ private[projection] class PostgresOffsetStoreDao(
   private val offsetTable = settings.offsetTableWithSchema
   private val managementTable = settings.managementTableWithSchema
 
+  private val sliceRange =
+    sourceProvider match {
+      case Some(provider) => provider.minSlice to provider.maxSlice
+      case None           => 0 until persistenceExt.numberOfSlices
+    }
+
   private implicit val ec: ExecutionContext = system.executionContext
 
   private val selectTimestampOffsetSql: String =
@@ -102,6 +108,28 @@ private[projection] class PostgresOffsetStoreDao(
 
   private val upsertOffsetSql: String = createUpsertOffsetSql()
 
+  private val selectBacktrackingOffsetSql: String =
+    // FIXME setting for akka_projection_backtracking_offset_store table
+    sql"""
+    SELECT MIN(timestamp_offset) AS timestamp_offset
+    FROM akka_projection_backtracking_offset_store
+    WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
+
+  protected def createUpsertBacktrackingOffsetSql(): String = {
+    // FIXME setting for akka_projection_backtracking_offset_store table
+    sql"""
+    INSERT INTO akka_projection_backtracking_offset_store
+    (projection_name, projection_key, slice, timestamp_offset)
+    VALUES (?,?,?,?)
+    ON CONFLICT (slice, projection_name)
+    DO UPDATE SET
+    projection_key = excluded.projection_key,
+    slice = excluded.slice,
+    timestamp_offset = excluded.timestamp_offset"""
+  }
+
+  private val upsertBacktrackingOffsetSql: String = createUpsertBacktrackingOffsetSql()
+
   private val clearOffsetSql: String =
     sql"DELETE FROM $offsetTable WHERE projection_name = ? AND projection_key = ?"
 
@@ -132,19 +160,13 @@ private[projection] class PostgresOffsetStoreDao(
     }
 
   override def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.Record]] = {
-    val (minSlice, maxSlice) = {
-      sourceProvider match {
-        case Some(provider) => (provider.minSlice, provider.maxSlice)
-        case None           => (0, persistenceExt.numberOfSlices - 1)
-      }
-    }
     r2dbcExecutor.select("read timestamp offset")(
       conn => {
         logger.trace("reading timestamp offset for [{}]", projectionId)
         conn
           .createStatement(selectTimestampOffsetSql)
-          .bind(0, minSlice)
-          .bind(1, maxSlice)
+          .bind(0, sliceRange.min)
+          .bind(1, sliceRange.max)
           .bind(2, projectionId.name)
       },
       row => {
@@ -238,6 +260,35 @@ private[projection] class PostgresOffsetStoreDao(
           Future.successful(batchResultCount)
       }
     }
+  }
+
+  override def readBacktrackingOffset(): Future[Option[Instant]] = {
+    r2dbcExecutor
+      .selectOne("select backtracking")(
+        connection => connection.createStatement(selectBacktrackingOffsetSql),
+        row => Option(row.get("timestamp_offset", classOf[Instant])))
+      .map(_.flatten)
+  }
+
+  override def updateBacktrackingOffset(timestamp: Instant): Future[Done] = {
+    def bind(stmt: Statement, slice: Int): Statement = {
+      stmt
+        .bind(0, projectionId.name)
+        .bind(1, projectionId.key)
+        .bind(2, slice)
+        .bind(3, timestamp)
+    }
+
+    r2dbcExecutor
+      .updateInBatch("upsert backtracking") { connection =>
+        val statement = connection.createStatement(upsertBacktrackingOffsetSql)
+        sliceRange.foreach { slice =>
+          statement.add()
+          bind(statement, slice)
+        }
+        statement
+      }
+      .map(_ => Done)
   }
 
   override def updatePrimitiveOffsetInTx(

@@ -236,11 +236,16 @@ private[projection] class R2dbcOffsetStore(
   // To avoid delete requests when no new offsets have been stored since previous delete
   private val idle = new AtomicBoolean(false)
 
+  private val backtrackingOffset = new AtomicReference[Instant](Instant.EPOCH)
+
   system.scheduler.scheduleWithFixedDelay(
     settings.deleteInterval,
     settings.deleteInterval,
     () => deleteOldTimestampOffsets(),
     system.executionContext)
+
+  import scala.concurrent.duration._
+  system.scheduler.scheduleWithFixedDelay(1.second, 1.second)(() => saveBacktrackingProgress())
 
   private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     sourceProvider match {
@@ -302,6 +307,13 @@ private[projection] class R2dbcOffsetStore(
       if (newState == State.empty) {
         None
       } else {
+        // FIXME how would we then pass the backtracking offset to the query?
+        // - Another offset type that is defined in akka-persistence-rdbc? Not good because it couples
+        //   the offset store with the specific r2dbc source query.
+        // - The query itself can't store the backtracking offset because it doesn't know when it has been processed.
+        // - Adding it to akka.TimestampOffset isn't great because it's implementation details.
+        // - Adding some kind of general purpose meta-data to TimestampOffset makes serialization more complicated,
+        //   and we only need it for the start offset.
         newState.latestOffset
       }
     }
@@ -727,6 +739,16 @@ private[projection] class R2dbcOffsetStore(
         result
       }
     }
+  }
+
+  def updateBacktrackingProgress(timestamp: Instant): Unit =
+    backtrackingOffset.set(timestamp)
+
+  private def saveBacktrackingProgress(): Unit = {
+    val timestamp = backtrackingOffset.get
+    // FIXME don't save if no change
+    if (timestamp != Instant.EPOCH)
+      dao.updateBacktrackingOffset(backtrackingOffset.get)
   }
 
   /**

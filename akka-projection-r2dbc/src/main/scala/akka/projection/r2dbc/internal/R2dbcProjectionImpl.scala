@@ -21,6 +21,7 @@ import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.persistence.query.DeletedDurableState
 import akka.persistence.query.DurableStateChange
+import akka.persistence.query.TimestampOffset
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
@@ -172,6 +173,19 @@ private[projection] object R2dbcProjectionImpl {
     }
   }
 
+  private def updateBacktrackingProgress[Offset, Envelope](offsetStore: R2dbcOffsetStore, envelope: Envelope): Unit = {
+    envelope match {
+      case env: EventEnvelope[_] =>
+        if (fromBacktracking(env))
+          env.offset match {
+            case t: TimestampOffset =>
+              offsetStore.updateBacktrackingProgress(t.timestamp)
+            case _ =>
+          }
+      case _ =>
+    }
+  }
+
   private[projection] def adaptedHandlerForExactlyOnce[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
       handlerFactory: () => R2dbcHandler[Envelope],
@@ -182,7 +196,7 @@ private[projection] object R2dbcProjectionImpl {
       new AdaptedR2dbcHandler(handlerFactory()) {
         override def process(envelope: Envelope): Future[Done] = {
           import R2dbcOffsetStore.Validation._
-          offsetStore
+          val result = offsetStore
             .validate(envelope)
             .flatMap {
               case Accepted =>
@@ -214,6 +228,11 @@ private[projection] object R2dbcProjectionImpl {
                 else
                   throwRejectedEnvelope(sourceProvider, envelope)
             }
+          result.foreach { _ =>
+            // in background
+            updateBacktrackingProgress(offsetStore, envelope)
+          }
+          result
         }
       }
   }
