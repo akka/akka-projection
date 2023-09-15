@@ -64,7 +64,7 @@ object SlickProjectionSpec {
 
           # TODO: configure connection pool and slick async executor
           db {
-            url = "jdbc:h2:mem:slick-projection-test;DB_CLOSE_DELAY=-1"
+            url = "jdbc:h2:mem:slick-projection-test;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE"
             driver = org.h2.Driver
             connectionPool = disabled
             keepAliveConnection = true

@@ -78,7 +78,7 @@ object JdbcProjectionSpec {
 
     lazy val conn = {
       Class.forName("org.h2.Driver")
-      val c = DriverManager.getConnection("jdbc:h2:mem:jdbc-projection-test;DB_CLOSE_DELAY=-1")
+      val c = DriverManager.getConnection("jdbc:h2:mem:jdbc-projection-test;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE")
       c.setAutoCommit(false)
       c
     }

@@ -78,7 +78,7 @@ public class JdbcProjectionTest extends JUnitSuite {
     public PureJdbcSession() {
       try {
         Class.forName("org.h2.Driver");
-        Connection c = DriverManager.getConnection("jdbc:h2:mem:test-java;DB_CLOSE_DELAY=-1");
+        Connection c = DriverManager.getConnection("jdbc:h2:mem:test-java;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE");
         c.setAutoCommit(false);
         this.connection = c;
       } catch (ClassNotFoundException | SQLException e) {

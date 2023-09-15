@@ -62,7 +62,7 @@ object SlickOffsetStoreSpec {
         akka.projection.slick {
            profile = "slick.jdbc.H2Profile$"
            db {
-             url = "jdbc:h2:mem:offset-store-test-slick;DB_CLOSE_DELAY=-1"
+             url = "jdbc:h2:mem:offset-store-test-slick;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE"
              driver = org.h2.Driver
              connectionPool = disabled
              keepAliveConnection = true
