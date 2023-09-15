@@ -2,7 +2,9 @@ package local.drones;
 
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Behavior;
+import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
 import akka.grpc.GrpcClientSettings;
+import akka.japi.Pair;
 import akka.persistence.Persistence;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.persistence.r2dbc.query.javadsl.R2dbcReadJournal;
@@ -14,6 +16,7 @@ import akka.projection.grpc.producer.javadsl.EventProducerPush;
 import akka.projection.grpc.producer.javadsl.EventProducerSource;
 import akka.projection.grpc.producer.javadsl.Transformation;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -68,6 +71,69 @@ public class DroneEvents {
                 R2dbcReadJournal.Identifier(),
                 eventProducer.eventProducerSource().entityType(),
                 0,
+                maxSlice),
+            eventProducer.handler(system),
+            system));
+  }
+
+  public static void initEventToCloudDaemonProcess(ActorSystem<Void> system, Settings settings) {
+    var nrOfEventProducers =
+        system.settings().config().getInt("local-drone-control.nr-of-event-producers");
+    var sliceRanges = Persistence.get(system).getSliceRanges(nrOfEventProducers);
+
+    // turn events into a public protocol (protobuf) type before publishing
+    var eventTransformation =
+        Transformation.empty()
+            .registerAsyncEnvelopeMapper(
+                Drone.CoarseGrainedLocationChanged.class,
+                (EventEnvelope<Drone.CoarseGrainedLocationChanged> envelope) -> {
+                  var event = envelope.event();
+                  return CompletableFuture.completedFuture(
+                      Optional.of(
+                          local.drones.proto.CoarseDroneLocation.newBuilder()
+                              .setCoordinates(event.coordinates.toProto())
+                              .build()));
+                });
+
+    var eventProducer =
+        EventProducerPush.create(
+            // location id is unique and informative, so use it as producer origin id as well
+            settings.locationId,
+            new EventProducerSource(
+                Drone.ENTITY_KEY.name(),
+                StreamId,
+                eventTransformation,
+                EventProducerSettings.create(system),
+                // only push coarse grained coordinate changes
+                envelope -> envelope.event() instanceof Drone.CoarseGrainedLocationChanged),
+            GrpcClientSettings.fromConfig("central-drone-control", system));
+
+    ShardedDaemonProcess.get(system)
+        .init(
+            ProjectionBehavior.Command.class,
+            "drone-event-push",
+            nrOfEventProducers,
+            idx -> projectionForPartition(system, eventProducer, sliceRanges, idx));
+  }
+
+  private static Behavior<ProjectionBehavior.Command> projectionForPartition(
+      ActorSystem<?> system,
+      EventProducerPush<Object> eventProducer,
+      List<Pair<Integer, Integer>> sliceRanges,
+      int partition) {
+    var sliceRange = sliceRanges.get(partition);
+    var minSlice = sliceRange.first();
+    var maxSlice = sliceRange.second();
+
+    return ProjectionBehavior.create(
+        R2dbcProjection.atLeastOnceFlow(
+            ProjectionId.of("drone-event-push", minSlice + "-" + maxSlice),
+            Optional.empty(),
+            EventSourcedProvider.eventsBySlices(
+                system,
+                R2dbcReadJournal.Identifier(),
+                eventProducer.eventProducerSource().entityType(),
+                minSlice,
                 maxSlice),
             eventProducer.handler(system),
             system));

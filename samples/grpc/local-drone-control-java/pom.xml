@@ -22,6 +22,7 @@
         <akka-persistence-r2dbc.version>1.2.0-M5</akka-persistence-r2dbc.version>
         <akka-management.version>1.4.0</akka-management.version>
         <akka-diagnostics.version>2.0.1</akka-diagnostics.version>
+        <akka-http.version>10.5.1</akka-http.version>
         <akka-grpc.version>2.3.4</akka-grpc.version>
         <akka-grpc-maven-plugin.version>2.3.4</akka-grpc-maven-plugin.version>
         <logback.version>1.3.11</logback.version>
@@ -113,6 +114,34 @@
             <groupId>io.r2dbc</groupId>
             <artifactId>r2dbc-h2</artifactId>
             <version>1.0.0.RELEASE</version>
+        </dependency>
+
+        <!-- Note: only management/bootstrap only needed when running the multi-node version of the service
+             Akka Management powers Health Checks and Akka Cluster Bootstrapping -->
+        <dependency>
+            <groupId>com.lightbend.akka.management</groupId>
+            <artifactId>akka-management-cluster-http_${scala.binary.version}</artifactId>
+            <version>${akka-management.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.lightbend.akka.management</groupId>
+            <artifactId>akka-management-cluster-bootstrap_${scala.binary.version}</artifactId>
+            <version>${akka-management.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.lightbend.akka.discovery</groupId>
+            <artifactId>akka-discovery-kubernetes-api_${scala.binary.version}</artifactId>
+            <version>${akka-management.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-http_${scala.binary.version}</artifactId>
+            <version>${akka-http.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-http-core_${scala.binary.version}</artifactId>
+            <version>${akka-http.version}</version>
         </dependency>
 
         <dependency>
@@ -286,6 +315,28 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>clustered</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.0.0</version>
+                        <configuration>
+                            <executable>java</executable>
+                            <arguments>
+                                <argument>-Djava.library.path=target/lib</argument>
+                                <argument>-Dconfig.resource=${APP_CONFIG}</argument>
+                                <argument>-classpath</argument>
+                                <classpath />
+                                <argument>local.drones.ClusteredMain</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>native</id>
             <build>
