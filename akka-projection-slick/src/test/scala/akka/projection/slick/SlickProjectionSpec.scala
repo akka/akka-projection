@@ -55,7 +55,8 @@ import slick.dbio.DBIOAction
 import slick.jdbc.H2Profile
 
 object SlickProjectionSpec {
-  def config: Config = ConfigFactory.parseString("""
+  def config: Config =
+    ConfigFactory.parseString("""
       akka {
        loglevel = "DEBUG"
        projection.slick {
