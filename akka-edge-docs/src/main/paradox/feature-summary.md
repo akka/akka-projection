@@ -16,7 +16,7 @@ delivery of messages.
 
 Projections over gRPC uses the event journal on the producer side and Akka Projections event processing and offset
 tracking on the consumer side. The transparent data transfer between producers and consumers is implemented with
-Akka gRPC.
+gRPC.
 
 The consumer starts an event stream by asking the producer to stream events from the consumer's last offset.
 Several consumer services can connect to the same producer service, and each consumer can process the events
@@ -30,9 +30,9 @@ Filters can be used when a consumer is only interested in a subset of the entiti
 on both the producer side and on the consumer side, and they can be changed at runtime.
 
 @@@ note
-Events are stored in a database on the producer side. There is no direct database access between consumer and
-producer. The offsets on the consumer side are stored in a database, but that is a different database from the
-database of the producer.
+Events are stored on the producer side. There is no direct storage access between a consumer and
+producer. The offsets on the consumer side are also stored, but that is a different form of storage to that of the
+producer.
 @@@
 
 ### Edge is consumer
@@ -48,10 +48,13 @@ This case describes when the edge service is the consumer of events.
 * New events are emitted from the producer.
 * The stream remains open until either side chooses to close it, or there is an error.
 
-The offsets on the consumer side are stored in a database, but if the environment for the edge service doesn't
-have the capabilities to run a full database it can be a single Akka node with embedded @extref[H2 database](akka-persistence-r2dbc:getting-started.html#using-h2).
-The file mode of H2 is recommended to reduce memory requirements. That means that if the edge service is restarted
+The offsets on the consumer side are stored, but if the environment for the edge service does not
+have the capabilities to run a full database it can be a single Akka node with an embeddable storage such as the @extref[H2 database](akka-persistence-r2dbc:getting-started.html#using-h2).
+
+@@@ note
+When using H2, the file mode is recommended to reduce memory requirements. That means that if the edge service is restarted
 with a different file system all previous events will be delivered to the consumer again.
+@@@
 
 @@@ Warning
 H2 database should not be used when the service is an Akka Cluster with more than 1 node.
@@ -63,7 +66,7 @@ a few hours back in time.
 
 When you have many edge consumer services connected to the same producer service it's recommended to enable the
 feature for @extref[many consumers](akka-projection:grpc.html#many-consumers). The purpose of that feature is to
-share the stream of events from the database and fan out to connected consumer streams.
+share the stream of events from storage and fan out to connected consumer streams.
 
 ### Edge is producer
 
@@ -93,11 +96,14 @@ That is often difficult for the edge, but with a VPN solution it could be possib
 that the cloud service would need to know about all edge services.
 @@@
 
-Events are stored in a database on the producer side, but if the environment for the edge service doesn't
-have the capabilities to run a full database it can be a single Akka node with embedded @extref[H2 database](akka-persistence-r2dbc:getting-started.html#using-h2).
+Events are stored on the producer side, but if the environment for the edge service does not
+have the capabilities to run a full database it can be a single Akka node with embeddable storage such as the @extref[H2 database](akka-persistence-r2dbc:getting-started.html#using-h2).
+
+@@@ note
 The file mode of H2 is recommended to reduce memory requirements. That means that if the edge service is restarted
 with a different file system all stored events are lost. For some edge services that may be totally fine, for others
 it may not be an option.
+@@@
 
 @@@ Warning
 H2 database should not be used when the service is an Akka Cluster with more than 1 node.
