@@ -72,7 +72,7 @@ class JdbcProjectionDocExample {
     public PlainJdbcSession() {
       try {
         Class.forName("org.h2.Driver");
-        this.connection = DriverManager.getConnection("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1");
+        this.connection = DriverManager.getConnection("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE");
         connection.setAutoCommit(false);
       } catch (ClassNotFoundException | SQLException e) {
         throw new RuntimeException(e);

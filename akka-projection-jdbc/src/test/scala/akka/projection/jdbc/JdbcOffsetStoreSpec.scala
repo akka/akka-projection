@@ -90,7 +90,9 @@ object JdbcOffsetStoreSpec {
     def jdbcSessionFactory(): PureJdbcSession =
       new PureJdbcSession(() => {
         Class.forName("org.h2.Driver")
-        val conn = DriverManager.getConnection("jdbc:h2:mem:offset-store-test-jdbc;DB_CLOSE_DELAY=-1")
+        // OPTIMIZE_REUSE_RESULTS=FALSE needed as workaround for H2 bug, see https://github.com/akka/akka-projection/issues/992
+        val conn = DriverManager.getConnection(
+          "jdbc:h2:mem:offset-store-test-jdbc;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE")
         conn.setAutoCommit(false)
         conn
       })
