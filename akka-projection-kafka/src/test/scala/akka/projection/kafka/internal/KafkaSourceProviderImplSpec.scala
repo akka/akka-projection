@@ -6,7 +6,6 @@ package akka.projection.kafka.internal
 
 import scala.concurrent.duration._
 import scala.concurrent.Future
-
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -23,6 +22,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import scala.concurrent.ExecutionContext
 
 object KafkaSourceProviderImplSpec {
   private val TestProjectionId = ProjectionId("test-projection", "00")
@@ -47,7 +48,7 @@ class KafkaSourceProviderImplSpec extends ScalaTestWithActorTestKit with LogCapt
   import KafkaSourceProviderImplSpec._
 
   val projectionTestKit: ProjectionTestKit = ProjectionTestKit(system)
-  implicit val ec = system.classicSystem.dispatcher
+  implicit val ec: ExecutionContext = system.classicSystem.dispatcher
 
   "The KafkaSourceProviderImpl" must {
 
