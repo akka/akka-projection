@@ -28,6 +28,14 @@ messages or stored data.
 
 ## Dependencies
 
+The Akka dependencies are available from Akka's library repository. To access them there, you need to configure the URL for this repository.
+
+@@repository [sbt,Maven,Gradle] {
+id="akka-repository"
+name="Akka library repository"
+url="https://repo.akka.io/maven"
+}
+
 To use the gRPC module of Akka Projections add the following dependency in your project:
 
 @@dependency [sbt,Maven,Gradle] {
@@ -40,8 +48,8 @@ Akka Projections require Akka $akka.version$ or later, see @ref:[Akka version](o
 
 @@project-info{ projectId="akka-projection-grpc" }
 
-It is currently only possible to use @extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:projection.html) as the
-projection storage and journal for this module.
+It is currently only possible to use @ref:[akka-projection-r2dbc](r2dbc.md) ad offset storage and
+@extref:[akka-persistence-r2dbc](akka-persistence-r2dbc:journal.html) as journal for this module.
 
 @@dependency [sbt,Maven,Gradle] {
 group=com.lightbend.akka
@@ -77,12 +85,32 @@ and not from configuration via `GrpcReadJournalProvider` when using Protobuf ser
 
 The gRPC connection to the producer is defined in the [consumer configuration](#consumer-configuration).
 
-The @extref:[R2dbcProjection](akka-persistence-r2dbc:projection.html) has support for storing the offset in a relational database using R2DBC.
+The @ref:[R2dbcProjection](r2dbc.md) has support for storing the offset in a relational database using R2DBC.
 
 The above example is using the @extref:[ShardedDaemonProcess](akka:typed/cluster-sharded-daemon-process.html) to distribute the instances of the Projection across the cluster.
 There are alternative ways of running the `ProjectionBehavior` as described in @ref:[Running a Projection](running.md)
 
-How to implement the `EventHandler` and choose between different processing semantics is described in the @extref:[R2dbcProjection documentation](akka-persistence-r2dbc:projection.html).
+How to implement the `EventHandler` and choose between different processing semantics is described in the @ref:[R2dbcProjection documentation](r2dbc.md).
+
+### Start from custom offset
+
+By default, a `SourceProvider` uses the stored offset when starting the Projection. For some cases, especially
+with Projections over gRPC, it can be useful to adjust the start offset. The consumer might only be interested
+in new events, or only most recent events. 
+
+The start offset can be adjusted by using the `EventSourcedProvider.eventsBySlices` method that takes an
+`adjustStartOffset` function, which is a function from loaded offset (if any) to the adjusted offset that
+will be used to by the `eventsBySlicesQuery`.
+
+This can also be useful in combination with @ref:[Starting from snapshots](#starting-from-snapshots), which
+is enabled on the producer side. In that way the consumer can start without any stored offset and only load
+snapshots for the most recently used entities.
+
+Scala
+:  @@snip [CustomOffset.scala](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/consumer/ConsumerDocSpec.scala) { #adjustStartOffset }
+
+Java
+:  @@snip [CustomOffset.java](/akka-projection-grpc-tests/src/test/java/akka/projection/grpc/consumer/javadsl/ConsumerCompileTest.java) { #adjustStartOffset }
 
 ### gRPC client lifecycle
 
@@ -117,6 +145,8 @@ Java
 
 To omit an event the transformation function can return @scala[`None`]@java[`Optional.empty()`].
 
+Use  @scala[`Transformation.identity`]@java[`Transformation.identity()`] to pass through each event as is.
+
 That `EventProducer` service is started in an Akka gRPC server like this:
 
 Scala
@@ -145,6 +175,18 @@ events are still transferred to the consumer, to ensure sequence number validati
 Filters can be used when a consumer is only interested in a subset of the entities. The filters can be defined
 on both the producer side and on the consumer side, and they can be changed at runtime.
 
+By default, all events are emitted, and filters selectively choose what events to filter out. For some of the filters
+it is useful to first define a @apidoc[ConsumerFilter.excludeAll](ConsumerFilter$) filter and then selectively include events. 
+For example to only include events from topics matching topic filters.
+
+@@@ note
+
+The purpose of filters is to toggle if all events for the entity are to be emitted or not.
+If the purpose is to filter out certain events you should instead use the
+@ref:[transformation function of the producer](#producer).
+
+@@@
+
 ### Tags
 
 Tags are typically used for the filters, so first an example of how to tag events in the entity. Here, the tag is
@@ -157,6 +199,63 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/samples/grpc/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #tags }
 
+### Topics
+
+Topics are typically used in publish-subscribe systems, such as [MQTT Topics](https://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices/).
+Event filters can be defined as topic match expressions, with topic hierarchies and wildcards according to the MQTT specification.
+
+A topic consists of one or more levels separated by a forward slash, for example:
+```
+myhome/groundfloor/livingroom/temperature
+```
+
+The topic of an event is defined by a tag with a `t:` prefix. See @ref:[above example of how to set tags in the entity](#tags).
+You should typically tag all events for a certain entity instance with the same topic tag. The tag prefix can be configured:
+
+```hcon
+akka.projection.grpc.producer.filter.topic-tag-prefix = "t:"
+```
+
+It is not recommended to use:
+
+* `+` or `#` in the topic names
+*  a leading slash in topic names, e.g. `/myhome/groundfloor/livingroom`
+
+#### Single level wildcard: `+`
+
+The single-level wildcard is represented by the plus symbol (`+`) and allows the replacement of a single topic level.
+By subscribing to a topic with a single-level wildcard, any topic that contains an arbitrary string in place of the
+wildcard will be matched.
+
+`myhome/groundfloor/+/temperature` will match these topics:
+
+* `myhome/groundfloor/livingroom/temperature`
+* `myhome/groundfloor/kitchen/temperature`
+
+but it will not match:
+
+* `myhome/groundfloor/kitchen/brightness`
+* `myhome/firstfloor/kitchen/temperature`
+* `myhome/groundfloor/kitchen/fridge/temperature`
+
+#### Multi level wildcard: `#`
+
+The multi-level wildcard covers multiple topic levels. It is represented by the hash symbol (`#`) and must be placed
+as the last character in the topic expression, preceded by a forward slash.
+
+By subscribing to a topic with a multi-level wildcard, you will receive all events of a topic that begins with the
+pattern before the wildcard character, regardless of the length or depth of the topic. If the topic expression is
+specified as `#` alone, all events will be received.
+
+`myhome/groundfloor/#` will match these topics:
+
+* `myhome/groundfloor/livingroom/temperature`
+* `myhome/groundfloor/kitchen/temperature`
+* `myhome/groundfloor/kitchen/brightness`
+
+but it will not match:
+
+* `myhome/firstfloor/kitchen/temperature`
 
 ### Producer defined filter
 
@@ -173,7 +272,9 @@ In this example the decision is based on tags, but the filter function can use a
 on the total quantity of the shopping cart, which requires the full state of the shopping cart and is not known from
 an individual event.
 
-Note that the purpose of the `withProducerFilter` is to toggle if all events for the entity are to be emitted or not.
+@ref:[Topic filters](#topics) can be defined in similar way, using `withTopicProducerFilter`. 
+
+Note that the purpose of `withProducerFilter` and `withTopicProducerFilter` is to toggle if all events for the entity are to be emitted or not.
 If the purpose is to filter out certain events you should instead use the `Transformation`.
 
 The producer filter is evaluated before the transformation function, i.e. the event is the original event and not
@@ -206,11 +307,20 @@ To exclude all events you can use `ExcludeRegexEntityIds` with `.*`.
 
 The exclude criteria can be a combination of:
 
+* `IncludeTopics` - include events with any of the given matching topics
 * `IncludeTags` - include events with any of the given tags
 * `IncludeRegexEntityIds` - include events for entities with entity ids matching the given regular expressions
 * `IncludeEntityIds` - include events for entities with the given entity ids
 
-The filter is updated with the @apidoc[ConsumerFilter] extension.
+#### Static consumer filters
+
+For a static filter that never changes during the life of the consumer, an initial filter can be set by configuring it
+with @apidoc[GrpcQuerySettings.withInitialConsumerFilter](GrpcQuerySettings) on the `GrpcQuerySettings` that the 
+`GrpcReadJournal` is constructed with.
+
+#### Dynamic consumer filters
+
+For dynamic filters, that changes during the life of the consumer, the filter is updated with the @apidoc[ConsumerFilter] extension:
 
 Scala
 :  @@snip [ShoppingCartEventConsumer.scala](/samples/grpc/shopping-analytics-service-scala/src/main/scala/shopping/analytics/ShoppingCartEventConsumer.scala) { #update-filter }
@@ -304,15 +414,28 @@ gRPC request metadata for each incoming request and can return a suitable error 
 See @extref:[Publish events for lower latency of eventsBySlices](akka-persistence-r2dbc:query.html#publish-events-for-lower-latency-of-eventsbyslices)
 for low latency use cases.
 
-### Scalability limitations
+### Many consumers
 
 Each connected consumer will start a `eventsBySlices` query that will periodically poll and read events from the journal.
-That means that the journal database will become a bottleneck, unless it can be scaled out, when number of consumers increase.
-The producer service itself can easily be scaled out to more instances. 
+That means that the journal database will become a bottleneck, unless it can be scaled out, when number of consumers increase. 
 
-For the case of many consumers of the same event stream a future improvement to reduce the
-database load would be to share results of the queries across the different consumers, since most of them are
-probably reading at the tail of the same event stream.
+For the case of many consumers of the same event stream it is recommended to use
+@apidoc[akka.persistence.query.typed.*.EventsBySliceFirehoseQuery]. The purpose is to share the stream of events
+from the database and fan out to connected consumer streams. Thereby fewer queries and loading of events from the
+database.
+
+The producer service itself can easily be scaled out to more instances.
+
+### Starting from snapshots
+
+The producer can use snapshots as starting points and thereby reducing number of events that have to be loaded.
+This can be useful if the consumer start from zero without any previously processed offset or if it has been
+disconnected for a long while and its offset is far behind.
+
+To enable starting from snapshots you need to enable @extref:[eventsBySlicesStartingFromSnapshots in Akka Persistence R2DBC](akka-persistence-r2dbc:query.html#eventsbyslicesstartingfromsnapshots).
+
+Then you need to define the snapshot to event transformation function in `EventProducerSource.withStartingFromSnapshots`
+when registering the @ref:[Producer](#producer).
 
 ## Configuration
 

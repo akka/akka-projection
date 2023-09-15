@@ -96,6 +96,8 @@ message FilterCriteria {
     RemoveExcludeEntityIds remove_exclude_entity_ids = 10;
     IncludeEntityIds include_entity_ids = 11;
     RemoveIncludeEntityIds remove_include_entity_ids = 12;
+    IncludeTopics include_topics = 13;
+    RemoveIncludeTopics remove_include_topics = 14;
   }
 }
 
@@ -175,10 +177,24 @@ message RemoveIncludeRegexEntityIds {
   repeated string matching = 1;
 }
 
+// Include events with any of the given matching topics. A matching include overrides
+// a matching exclude.
+message IncludeTopics {
+  // topic match expression according to MQTT specification, including wildcards
+  repeated string expression = 1;
+}
+
+// Remove a previously added `IncludeTopics`.
+message RemoveIncludeTopics {
+  repeated string expression = 1;
+}
+
 message Offset {
   google.protobuf.Timestamp timestamp = 1;
-  // events with these sequence numbers for this timestamp have already been
-  // processed and doesn't have to be emitted again
+  // Events with these sequence numbers for this timestamp have already been
+  // processed and doesn't have to be emitted again.
+  // If empty it is assumed to be the persistence_id -> seq_nr of enclosing Event
+  // or FilteredEvent.
   repeated PersistenceIdSeqNr seen = 2;
 }
 

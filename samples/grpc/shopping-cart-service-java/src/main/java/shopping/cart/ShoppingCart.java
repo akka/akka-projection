@@ -11,6 +11,7 @@ import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
 import akka.pattern.StatusReply;
 import akka.persistence.typed.PersistenceId;
 import akka.persistence.typed.javadsl.*;
+import akka.serialization.jackson.CborSerializable;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Duration;
 import java.time.Instant;

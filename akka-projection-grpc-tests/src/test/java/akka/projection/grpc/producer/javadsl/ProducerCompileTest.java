@@ -13,7 +13,9 @@ import akka.http.javadsl.model.HttpResponse;
 import akka.japi.function.Function;
 import akka.projection.grpc.producer.EventProducerSettings;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -34,6 +36,7 @@ public class ProducerCompileTest {
         Transformation.empty()
             .registerMapper(
                 Integer.class, event -> Optional.of(Integer.valueOf(event * 2).toString()))
+            .registerEnvelopeMapper(Long.class, envelope -> Optional.of(envelope.event() + 1L))
             .registerOrElseMapper(event -> Optional.of(event.toString()));
     Transformation lowLevel = Transformation.empty().registerAsyncEnvelopeMapper(
         Integer.class, envelope -> CompletableFuture.completedFuture(envelope.getOptionalEvent())
@@ -41,13 +44,19 @@ public class ProducerCompileTest {
 
     EventProducerSource source =
         new EventProducerSource(
-            "ShoppingCart", "cart", transformation, EventProducerSettings.apply(system))
+            "ShoppingCart", "cart", transformation, EventProducerSettings.create(system))
             .withProducerFilter((EventEnvelope<Integer> env) -> env.event().doubleValue() > 0.0);
+
+    EventProducerSource sourceStartingFromSnapshots =
+        new EventProducerSource(
+            "ShoppingCart", "cart-snap", transformation, EventProducerSettings.create(system))
+            .withProducerFilter((EventEnvelope<Integer> env) -> env.event().doubleValue() > 0.0)
+            .withStartingFromSnapshots((String snap) -> Integer.valueOf(snap));
 
     Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService =
         EventProducer.grpcServiceHandler(system, source);
     Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerServiceWithMultiple =
-        EventProducer.grpcServiceHandler(system, Collections.singleton(source));
+        EventProducer.grpcServiceHandler(system, new HashSet<>(Arrays.asList(source, sourceStartingFromSnapshots)));
 
     @SuppressWarnings("unchecked")
     Function<HttpRequest, CompletionStage<HttpResponse>> service =

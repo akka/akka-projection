@@ -11,7 +11,7 @@ import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.persistence.query.Offset
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import docs.home.CborSerializable
+import akka.serialization.jackson.CborSerializable
 import org.slf4j.LoggerFactory
 
 import java.time.Instant

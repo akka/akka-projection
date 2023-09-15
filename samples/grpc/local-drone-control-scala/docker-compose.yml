@@ -1,0 +1,17 @@
+# Only needed if running multi-node clustered version of the app with a separate standalone PostgreSQL server locally
+version: '2.2'
+services:
+  postgres-db:
+    image: postgres:latest
+    container_name: local_drone_control_db
+    ports:
+      - 5433:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ['CMD', 'pg_isready', "-q", "-d", "postgres", "-U", "postgres"]
+      interval: 5s
+      retries: 5
+      start_period: 5s
+      timeout: 5s

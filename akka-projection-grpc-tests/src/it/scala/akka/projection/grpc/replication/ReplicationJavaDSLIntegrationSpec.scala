@@ -212,7 +212,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
       classOf[LWWHelloWorld.Command],
       "hello-world-java",
       selfReplicaId,
-      EventProducerSettings.apply(replicaSystem),
+      EventProducerSettings.create(replicaSystem),
       allReplicas.toSet.asJava: java.util.Set[Replica],
       Duration.ofSeconds(10),
       8,

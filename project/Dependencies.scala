@@ -5,29 +5,30 @@ import sbt._
 
 object Dependencies {
 
-  val Scala213 = "2.13.10"
-  val Scala212 = "2.12.17"
+  val Scala213 = "2.13.11"
+  val Scala212 = "2.12.18"
   val Scala3 = "3.3.1"
+
   val Scala2Versions = Seq(Scala213, Scala212)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
-  val AkkaVersionInDocs = "2.8"
+  val AkkaVersionInDocs = "2.9"
   val AlpakkaVersionInDocs = "5.0"
   val AlpakkaKafkaVersionInDocs = "4.0"
   val AkkaGrpcVersionInDocs = "2.3"
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
-  val AkkaProjectionVersionInDocs = "1.4.0"
+  val AkkaProjectionVersionInDocs = "1.5"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.8.1")
+    val akka = sys.props.getOrElse("build.akka.version", "2.9.0-M1")
     val akkaPersistenceCassandra = "1.1.0"
     val akkaPersistenceJdbc = "5.2.0"
-    val akkaPersistenceR2dbc = "1.2.0-M1"
-    val alpakka = "5.0.0"
+    val akkaPersistenceR2dbc = "1.2.0-M5"
+    val alpakka = "6.0.1"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.2")
     val slick = "3.4.1"
     val scalaTest = "3.2.16"
-    val testContainers = "1.18.0"
+    val testContainers = "1.19.0"
     val junit = "4.13.2"
     val jacksonDatabind = "2.13.5" // this should match the version of jackson used by akka-serialization-jackson
   }
@@ -37,6 +38,7 @@ object Dependencies {
     val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
     val akkaPersistence = "com.typesafe.akka" %% "akka-persistence" % Versions.akka
     val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
+    val akkaStreamTyped = "com.typesafe.akka" %% "akka-stream-typed" % Versions.akka
     val akkaProtobufV3 = "com.typesafe.akka" %% "akka-protobuf-v3" % Versions.akka
     val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
@@ -62,6 +64,9 @@ object Dependencies {
     // must be provided on classpath when using Apache Kafka 2.6.0+
     val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jacksonDatabind
 
+    // FIXME remove when updating to AKka HTTP version without dependency to ssl-config-core
+    val sslConfig = "com.typesafe" %% "ssl-config-core" % "0.6.1"
+
   }
 
   object Test {
@@ -79,9 +84,9 @@ object Dependencies {
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % allTestConfig
     val junit = "junit" % "junit" % Versions.junit % allTestConfig
 
-    val h2Driver = "com.h2database" % "h2" % "2.1.214" % allTestConfig
+    val h2Driver = "com.h2database" % "h2" % "2.2.220" % allTestConfig
     val postgresDriver = "org.postgresql" % "postgresql" % "42.6.0" % allTestConfig
-    val mysqlDriver = "mysql" % "mysql-connector-java" % "8.0.33" % allTestConfig
+    val mysqlDriver = "com.mysql" % "mysql-connector-j" % "8.1.0" % allTestConfig
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
 
@@ -101,6 +106,7 @@ object Dependencies {
 
     val alpakkaKafkaTestkit =
       "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % allTestConfig
+
   }
 
   object Examples {
@@ -217,10 +223,17 @@ object Dependencies {
         Compile.akkaPersistenceQuery,
         // Only needed for Replicated Event Sourcing over gRPC,
         // and ConsumerFilter with Cluster on consumer side
-        Compile.akkaClusterShardingTyped % "provided")
+        Compile.akkaClusterShardingTyped % "provided",
+        // FIXME remove when updating to AKka HTTP version without dependency to ssl-config-core
+        Compile.sslConfig)
 
   val grpcTest = deps ++= Seq(
         Test.postgresDriver,
+        Test.h2Driver,
+        Compile.r2dbcH2,
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped,
+        Compile.akkaPersistenceQuery,
         Test.akkaShardingTyped,
         Test.akkaStreamTestkit,
         Test.akkaSerializationJackson,
@@ -235,6 +248,8 @@ object Dependencies {
         Compile.akkaPersistenceR2dbc,
         Compile.h2, // provided
         Compile.r2dbcH2, // provided
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped,
         Test.akkaStreamTestkit,
         Test.akkaTypedTestkit,
         Test.akkaClusterShardingTyped,

@@ -172,12 +172,14 @@ import org.slf4j.LoggerFactory
  */
 @InternalApi private[akka] object DdataConsumerFilterStore {
   object State {
-    val empty: State = State(ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, SeqNrMap.empty)
+    val empty: State =
+      State(ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, ORSet.empty, SeqNrMap.empty)
 
   }
   final case class State(
       excludeTags: ORSet[String],
       includeTags: ORSet[String],
+      includeTopics: ORSet[String],
       excludeRegexEntityIds: ORSet[String],
       includeRegexEntityIds: ORSet[String],
       excludeEntityIds: ORSet[String],
@@ -190,6 +192,7 @@ import org.slf4j.LoggerFactory
       State(
         excludeTags = excludeTags.merge(that.excludeTags),
         includeTags = includeTags.merge(that.includeTags),
+        includeTopics = includeTopics.merge(that.includeTopics),
         excludeRegexEntityIds = excludeRegexEntityIds.merge(that.excludeRegexEntityIds),
         includeRegexEntityIds = includeRegexEntityIds.merge(that.includeRegexEntityIds),
         excludeEntityIds = excludeEntityIds.merge(that.excludeEntityIds),
@@ -202,6 +205,7 @@ import org.slf4j.LoggerFactory
 
       var newExcludeTags = excludeTags
       var newIncludeTags = includeTags
+      var newIncludeTopics = includeTopics
       var newExcludeRegexEntityIds = excludeRegexEntityIds
       var newIncludeRegexEntityIds = includeRegexEntityIds
       var newExcludeEntityIds = excludeEntityIds
@@ -223,6 +227,14 @@ import org.slf4j.LoggerFactory
         case ConsumerFilter.RemoveIncludeTags(tags) =>
           tags.foreach { t =>
             newIncludeTags = newIncludeTags.remove(t)
+          }
+        case ConsumerFilter.IncludeTopics(expressions) =>
+          expressions.foreach { t =>
+            newIncludeTopics = newIncludeTopics :+ t
+          }
+        case ConsumerFilter.RemoveIncludeTopics(expressions) =>
+          expressions.foreach { t =>
+            newIncludeTopics = newIncludeTopics.remove(t)
           }
         case ConsumerFilter.ExcludeRegexEntityIds(matching) =>
           matching.foreach { r =>
@@ -261,6 +273,7 @@ import org.slf4j.LoggerFactory
       State(
         excludeTags = newExcludeTags,
         includeTags = newIncludeTags,
+        includeTopics = newIncludeTopics,
         excludeRegexEntityIds = newExcludeRegexEntityIds,
         includeRegexEntityIds = newIncludeRegexEntityIds,
         excludeEntityIds = newExcludeEntityIds,
@@ -273,6 +286,8 @@ import org.slf4j.LoggerFactory
         else Some(ConsumerFilter.ExcludeTags(excludeTags.elements)),
         if (includeTags.isEmpty) None
         else Some(ConsumerFilter.IncludeTags(includeTags.elements)),
+        if (includeTopics.isEmpty) None
+        else Some(ConsumerFilter.IncludeTopics(includeTopics.elements)),
         if (excludeRegexEntityIds.isEmpty) None
         else Some(ConsumerFilter.ExcludeRegexEntityIds(excludeRegexEntityIds.elements)),
         if (includeRegexEntityIds.isEmpty) None
@@ -303,6 +318,7 @@ import org.slf4j.LoggerFactory
       State(
         excludeTags.prune(removedNode, collapseInto),
         includeTags.prune(removedNode, collapseInto),
+        includeTopics.prune(removedNode, collapseInto),
         excludeRegexEntityIds.prune(removedNode, collapseInto),
         includeRegexEntityIds.prune(removedNode, collapseInto),
         excludeEntityIds.prune(removedNode, collapseInto),
@@ -312,6 +328,7 @@ import org.slf4j.LoggerFactory
       State(
         excludeTags.pruningCleanup(removedNode),
         includeTags.pruningCleanup(removedNode),
+        includeTopics.pruningCleanup(removedNode),
         excludeRegexEntityIds.pruningCleanup(removedNode),
         includeRegexEntityIds.pruningCleanup(removedNode),
         excludeEntityIds.pruningCleanup(removedNode),

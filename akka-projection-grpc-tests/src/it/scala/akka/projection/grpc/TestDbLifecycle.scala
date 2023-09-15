@@ -26,12 +26,14 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
   lazy val r2dbcProjectionSettings: R2dbcProjectionSettings =
     R2dbcProjectionSettings(typedSystem.settings.config.getConfig(testConfigPath))
 
-  lazy val r2dbcExecutor: R2dbcExecutor = {
+  lazy val r2dbcExecutor: R2dbcExecutor =
     new R2dbcExecutor(
       ConnectionFactoryProvider(typedSystem).connectionFactoryFor(r2dbcProjectionSettings.useConnectionFactory),
       LoggerFactory.getLogger(getClass),
-      r2dbcProjectionSettings.logDbCallsExceeding)(typedSystem.executionContext, typedSystem)
-  }
+      r2dbcProjectionSettings.logDbCallsExceeding,
+      ConnectionFactoryProvider(typedSystem)
+        .connectionPoolSettingsFor(r2dbcProjectionSettings.useConnectionFactory)
+        .closeCallsExceeding)(typedSystem.executionContext, typedSystem)
 
   lazy val persistenceExt: Persistence = Persistence(typedSystem)
 

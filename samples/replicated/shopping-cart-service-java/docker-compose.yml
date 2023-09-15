@@ -8,6 +8,12 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ['CMD', 'pg_isready', "-q", "-d", "postgres", "-U", "postgres"]
+      interval: 5s
+      retries: 5
+      start_period: 5s
+      timeout: 5s
   postgres-db-2:
     image: postgres:latest
     container_name: postgres_db_2
@@ -16,3 +22,9 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ['CMD', 'pg_isready', "-q", "-d", "postgres", "-U", "postgres"]
+      interval: 5s
+      retries: 5
+      start_period: 5s
+      timeout: 5s

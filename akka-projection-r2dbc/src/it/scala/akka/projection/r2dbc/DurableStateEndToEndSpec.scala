@@ -154,7 +154,7 @@ class DurableStateEndToEndSpec
     }.toVector
   }
 
-  "A R2DBC projection with changesBySlices source" must {
+  s"A R2DBC projection with changesBySlices source (dialect ${r2dbcSettings.dialectName})" must {
 
     "handle latest updated state exactlyOnce" in {
       val numberOfEntities = 20

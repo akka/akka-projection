@@ -106,7 +106,7 @@ jobs:
           jvm: temurin:1.11
 
       - name: Create all API docs for artifacts/website and all reference docs
-        run: sbt "unidoc; docs/paradox; akka-distributed-cluster-docs/paradox"
+        run: sbt "unidoc; docs/paradox; akka-distributed-cluster-docs/paradox; akka-edge-docs/paradox"
 
   check-samples:
     name: Check Sample Projects
@@ -175,3 +175,28 @@ jobs:
         run: |-
           cd samples/replicated/shopping-cart-service-java
           mvn compile -nsu -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Scala Projection gRPC Local Drone Control sample
+        run: |-
+          cd samples/grpc/local-drone-control-scala
+          sbt compile -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Scala Projection gRPC Restaurant Drone Deliveries sample
+        run: |-
+          cd samples/grpc/restaurant-drone-deliveries-service-scala
+          sbt compile -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Java Projection gRPC Local Drone Control sample
+        run: |-
+          cd samples/grpc/local-drone-control-java
+          mvn compile -nsu -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Java Projection gRPC Restaurant Drone Deliveries sample
+        run: |-
+          cd samples/grpc/restaurant-drone-deliveries-service-java
+          mvn compile -nsu -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Scala Projection gRPC IoT service sample
+        run: |-
+          cd samples/grpc/iot-service-scala
+          sbt test -Dakka-projection.version=`cat ~/.version`

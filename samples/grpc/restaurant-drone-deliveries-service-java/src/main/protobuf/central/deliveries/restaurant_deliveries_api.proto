@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "central.deliveries.proto";
+
+package central.deliveries;
+
+import "common/coordinates.proto";
+
+service RestaurantDeliveriesService {
+  rpc SetUpRestaurant(SetUpRestaurantRequest) returns (RegisterRestaurantResponse) {};
+  rpc RegisterDelivery(RegisterDeliveryRequest) returns (RegisterDeliveryResponse) {};
+}
+
+message SetUpRestaurantRequest {
+  string restaurant_id = 1;
+  common.Coordinates coordinates = 2;
+  string local_control_location_id = 3;
+}
+
+message RegisterRestaurantResponse {}
+
+message RegisterDeliveryRequest {
+  string delivery_id = 1;
+  string restaurant_id = 2;
+  common.Coordinates coordinates = 3;
+}
+
+message RegisterDeliveryResponse {
+
+}

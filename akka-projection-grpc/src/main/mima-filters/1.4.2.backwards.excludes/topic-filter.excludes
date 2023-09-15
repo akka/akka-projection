@@ -1,0 +1,12 @@
+# internal changes
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.DdataConsumerFilterStore#State.copy")
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.grpc.internal.DdataConsumerFilterStore#State.copy$default$6")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.DdataConsumerFilterStore#State.this")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.DdataConsumerFilterStore#State.apply")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.FilterStage#Filter.copy")
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.grpc.internal.FilterStage#Filter.copy$default$4")
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.grpc.internal.FilterStage#Filter.copy$default$5")
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.grpc.internal.FilterStage#Filter.copy$default$6")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.FilterStage#Filter.this")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.FilterStage#Filter.empty")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.FilterStage#Filter.apply")

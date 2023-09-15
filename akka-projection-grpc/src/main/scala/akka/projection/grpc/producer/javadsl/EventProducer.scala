@@ -57,17 +57,25 @@ object EventProducer {
       sources: java.util.Set[EventProducerSource],
       interceptor: Optional[EventProducerInterceptor]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
     val scalaProducerSources = sources.asScala.map(_.asScala).toSet
-    val eventsBySlicesQueriesPerStreamId =
+    val eventsBySlicesPerStreamId =
       akka.projection.grpc.producer.scaladsl.EventProducer
-        .eventsBySlicesQueriesForStreamIds(scalaProducerSources, system)
-    val currentEventsByPersistenceIdQueriesForStreamIds =
+        .eventsBySlicesForStreamIds(scalaProducerSources, system)
+    val eventsBySlicesStartingFromSnapshotsPerStreamId =
       akka.projection.grpc.producer.scaladsl.EventProducer
-        .currentEventsByPersistenceIdQueriesForStreamIds(scalaProducerSources, system)
+        .eventsBySlicesStartingFromSnapshotsForStreamIds(scalaProducerSources, system)
+    val currentEventsByPersistenceIdForStreamIds =
+      akka.projection.grpc.producer.scaladsl.EventProducer
+        .currentEventsByPersistenceIdForStreamIds(scalaProducerSources, system)
+    val currentEventsByPersistenceIdStartingFromSnapshotForStreamIds =
+      akka.projection.grpc.producer.scaladsl.EventProducer
+        .currentEventsByPersistenceIdStartingFromSnapshotForStreamIds(scalaProducerSources, system)
 
     val eventProducerService = new EventProducerServiceImpl(
       system,
-      eventsBySlicesQueriesPerStreamId,
-      currentEventsByPersistenceIdQueriesForStreamIds,
+      eventsBySlicesPerStreamId,
+      eventsBySlicesStartingFromSnapshotsPerStreamId,
+      currentEventsByPersistenceIdForStreamIds,
+      currentEventsByPersistenceIdStartingFromSnapshotForStreamIds,
       scalaProducerSources,
       interceptor.asScala.map(new EventProducerInterceptorAdapter(_)))
 

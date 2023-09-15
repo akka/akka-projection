@@ -9,9 +9,10 @@ import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
-import scala.compat.java8.FutureConverters._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import java.util.function.{ Function => JFunction }
+
+import scala.annotation.nowarn
+
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -20,8 +21,10 @@ import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.javadsl.EventsByTagQuery
+import akka.persistence.query.javadsl.ReadJournal
 import akka.persistence.query.typed.javadsl.EventTimestampQuery
 import akka.persistence.query.typed.javadsl.EventsBySliceQuery
+import akka.persistence.query.typed.javadsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.persistence.query.typed.javadsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
 import akka.projection.eventsourced.EventEnvelope
@@ -52,21 +55,20 @@ object EventSourcedProvider {
    * INTERNAL API
    */
   @InternalApi
+  @nowarn("msg=never used") // system
   private class EventsByTagSourceProvider[Event](
       system: ActorSystem[_],
       eventsByTagQuery: EventsByTagQuery,
       tag: String)
       extends javadsl.SourceProvider[Offset, EventEnvelope[Event]] {
-    implicit val executionContext: ExecutionContext = system.executionContext
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[EventEnvelope[Event], NotUsed]] = {
-      val source: Future[Source[EventEnvelope[Event], NotUsed]] = offsetAsync.get().toScala.map { offsetOpt =>
+      offsetAsync.get().thenApply { storedOffset =>
         eventsByTagQuery
-          .eventsByTag(tag, offsetOpt.orElse(NoOffset))
+          .eventsByTag(tag, storedOffset.orElse(NoOffset))
           .map(env => EventEnvelope(env))
       }
-      source.toJava
     }
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
@@ -85,23 +87,159 @@ object EventSourcedProvider {
     eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice)
   }
 
+  /**
+   * By default, the `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
+   * by defining the `adjustStartOffset` function, which is a function from loaded offset (if any) to the
+   * adjusted offset that will be used to by the `eventsBySlicesQuery`.
+   */
+  def eventsBySlices[Event](
+      system: ActorSystem[_],
+      readJournalPluginId: String,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      adjustStartOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    val eventsBySlicesQuery =
+      PersistenceQuery(system).getReadJournalFor(classOf[EventsBySliceQuery], readJournalPluginId)
+    eventsBySlices(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, adjustStartOffset)
+  }
+
   def eventsBySlices[Event](
       system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceQuery,
       entityType: String,
       minSlice: Int,
-      maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+      maxSlice: Int): SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] =
+    eventsBySlices(
+      system,
+      eventsBySlicesQuery,
+      entityType,
+      minSlice,
+      maxSlice,
+      (offset: Optional[Offset]) => CompletableFuture.completedFuture(offset))
+
+  /**
+   * By default, the `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
+   * by defining the `adjustStartOffset` function, which is a function from loaded offset (if any) to the
+   * adjusted offset that will be used to by the `eventsBySlicesQuery`.
+   */
+  def eventsBySlices[Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceQuery,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      adjustStartOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
     eventsBySlicesQuery match {
       case query: EventsBySliceQuery with CanTriggerReplay =>
-        new EventsBySlicesSourceProvider[Event](eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
-          with CanTriggerReplay {
+        new EventsBySlicesSourceProvider[Event](
+          system,
+          eventsBySlicesQuery,
+          entityType,
+          minSlice,
+          maxSlice,
+          adjustStartOffset) with CanTriggerReplay {
 
           private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
             query.triggerReplay(persistenceId, fromSeqNr)
 
         }
       case _ =>
-        new EventsBySlicesSourceProvider(eventsBySlicesQuery, entityType, minSlice, maxSlice, system)
+        new EventsBySlicesSourceProvider(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, adjustStartOffset)
+    }
+  }
+
+  def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+      system: ActorSystem[_],
+      readJournalPluginId: String,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      transformSnapshot: java.util.function.Function[Snapshot, Event])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    val eventsBySlicesQuery =
+      PersistenceQuery(system).getReadJournalFor(classOf[EventsBySliceStartingFromSnapshotsQuery], readJournalPluginId)
+    eventsBySlicesStartingFromSnapshots(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, transformSnapshot)
+  }
+
+  /**
+   * By default, the `SourceProvider` uses the stored offset when starting the Projection. This offset can be adjusted
+   * by defining the `adjustStartOffset` function, which is a function from loaded offset (if any) to the
+   * adjusted offset that will be used to by the `eventsBySlicesQuery`.
+   */
+  def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+      system: ActorSystem[_],
+      readJournalPluginId: String,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      transformSnapshot: java.util.function.Function[Snapshot, Event],
+      adjustStartOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    val eventsBySlicesQuery =
+      PersistenceQuery(system).getReadJournalFor(classOf[EventsBySliceStartingFromSnapshotsQuery], readJournalPluginId)
+    eventsBySlicesStartingFromSnapshots(
+      system,
+      eventsBySlicesQuery,
+      entityType,
+      minSlice,
+      maxSlice,
+      transformSnapshot,
+      adjustStartOffset)
+  }
+
+  def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      transformSnapshot: java.util.function.Function[Snapshot, Event])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] =
+    eventsBySlicesStartingFromSnapshots(
+      system,
+      eventsBySlicesQuery,
+      entityType,
+      minSlice,
+      maxSlice,
+      transformSnapshot,
+      (offset: Optional[Offset]) => CompletableFuture.completedFuture(offset))
+
+  def eventsBySlicesStartingFromSnapshots[Snapshot, Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int,
+      transformSnapshot: java.util.function.Function[Snapshot, Event],
+      adjustStartOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]])
+      : SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]] = {
+    eventsBySlicesQuery match {
+      case query: EventsBySliceQuery with CanTriggerReplay =>
+        new EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
+          system,
+          eventsBySlicesQuery,
+          entityType,
+          minSlice,
+          maxSlice,
+          transformSnapshot,
+          adjustStartOffset) with CanTriggerReplay {
+
+          private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
+            query.triggerReplay(persistenceId, fromSeqNr)
+
+        }
+      case _ =>
+        new EventsBySlicesStartingFromSnapshotsSourceProvider(
+          system,
+          eventsBySlicesQuery,
+          entityType,
+          minSlice,
+          maxSlice,
+          transformSnapshot,
+          adjustStartOffset)
     }
   }
 
@@ -122,26 +260,29 @@ object EventSourcedProvider {
    * INTERNAL API
    */
   @InternalApi
+  @nowarn("msg=never used") // system
   private class EventsBySlicesSourceProvider[Event](
+      system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceQuery,
       entityType: String,
       override val minSlice: Int,
       override val maxSlice: Int,
-      system: ActorSystem[_])
+      adjustStartOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]])
       extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
-      with EventTimestampQuery
-      with LoadEventQuery {
-    implicit val executionContext: ExecutionContext = system.executionContext
+      with EventTimestampQuerySourceProvider
+      with LoadEventQuerySourceProvider {
+
+    override def readJournal: ReadJournal = eventsBySlicesQuery
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
-      val source: Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] =
-        offsetAsync.get().toScala.map { offsetOpt =>
+      offsetAsync.get().thenCompose { storedOffset =>
+        adjustStartOffset(storedOffset).thenApply { startOffset =>
           eventsBySlicesQuery
-            .eventsBySlices(entityType, minSlice, maxSlice, offsetOpt.orElse(NoOffset))
+            .eventsBySlices(entityType, minSlice, maxSlice, startOffset.orElse(NoOffset))
         }
-      source.toJava
+      }
     }
 
     override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset
@@ -149,29 +290,88 @@ object EventSourcedProvider {
     override def extractCreationTime(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Long =
       envelope.timestamp
 
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  @nowarn("msg=never used") // system
+  private class EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
+      system: ActorSystem[_],
+      eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
+      entityType: String,
+      override val minSlice: Int,
+      override val maxSlice: Int,
+      transformSnapshot: java.util.function.Function[Snapshot, Event],
+      adjustStartOffset: JFunction[Optional[Offset], CompletionStage[Optional[Offset]]])
+      extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
+      with BySlicesSourceProvider
+      with EventTimestampQuerySourceProvider
+      with LoadEventQuerySourceProvider {
+
+    override def readJournal: ReadJournal = eventsBySlicesQuery
+
+    override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
+        : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      offsetAsync.get().thenCompose { storedOffset =>
+        adjustStartOffset(storedOffset).thenApply { startOffset =>
+          eventsBySlicesQuery
+            .eventsBySlicesStartingFromSnapshots(
+              entityType,
+              minSlice,
+              maxSlice,
+              startOffset.orElse(NoOffset),
+              transformSnapshot)
+        }
+      }
+    }
+
+    override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset
+
+    override def extractCreationTime(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Long =
+      envelope.timestamp
+
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private trait EventTimestampQuerySourceProvider extends EventTimestampQuery {
+    def readJournal: ReadJournal
+
     override def timestampOf(persistenceId: String, sequenceNr: Long): CompletionStage[Optional[Instant]] =
-      eventsBySlicesQuery match {
+      readJournal match {
         case timestampQuery: EventTimestampQuery =>
           timestampQuery.timestampOf(persistenceId, sequenceNr)
         case _ =>
           val failed = new CompletableFuture[Optional[Instant]]
           failed.completeExceptionally(
             new IllegalStateException(
-              s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[EventTimestampQuery].getName}]"))
+              s"[${readJournal.getClass.getName}] must implement [${classOf[EventTimestampQuery].getName}]"))
           failed.toCompletableFuture
       }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private trait LoadEventQuerySourceProvider extends LoadEventQuery {
+    def readJournal: ReadJournal
 
     override def loadEnvelope[Evt](
         persistenceId: String,
         sequenceNr: Long): CompletionStage[akka.persistence.query.typed.EventEnvelope[Evt]] =
-      eventsBySlicesQuery match {
+      readJournal match {
         case laodEventQuery: LoadEventQuery =>
           laodEventQuery.loadEnvelope(persistenceId, sequenceNr)
         case _ =>
           val failed = new CompletableFuture[akka.persistence.query.typed.EventEnvelope[Evt]]
           failed.completeExceptionally(
             new IllegalStateException(
-              s"[${eventsBySlicesQuery.getClass.getName}] must implement [${classOf[LoadEventQuery].getName}]"))
+              s"[${readJournal.getClass.getName}] must implement [${classOf[LoadEventQuery].getName}]"))
           failed.toCompletableFuture
       }
   }

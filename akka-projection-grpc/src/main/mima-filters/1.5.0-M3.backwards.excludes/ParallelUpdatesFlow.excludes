@@ -1,0 +1,4 @@
+# internals
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.grpc.replication.internal.ParallelUpdatesFlow")
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.grpc.replication.internal.ParallelUpdatesFlow$")
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.grpc.replication.internal.ParallelUpdatesFlow$Holder")

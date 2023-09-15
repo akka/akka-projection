@@ -15,7 +15,6 @@ import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
-import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
@@ -29,6 +28,7 @@ import akka.stream.Inlet
 import akka.stream.Outlet
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.SinkQueueWithCancel
+import akka.stream.scaladsl.Source
 import akka.stream.stage.GraphStage
 import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
@@ -42,12 +42,15 @@ import org.slf4j.LoggerFactory
   private val ReplicationIdSeparator = '|'
 
   object Filter {
-    val empty: Filter = Filter(Set.empty, Set.empty, Set.empty, Set.empty, Map.empty, Map.empty)
+    def empty(topicTagPrefix: String): Filter =
+      Filter(Set.empty, Set.empty, Set.empty, topicTagPrefix, Set.empty, Set.empty, Map.empty, Map.empty)
   }
 
   final case class Filter(
       includeTags: Set[String],
       excludeTags: Set[String],
+      includeTopics: Set[String],
+      topicTagPrefix: String,
       includePersistenceIds: Set[String],
       excludePersistenceIds: Set[String],
       includeRegexEntityIds: Map[String, Regex],
@@ -64,6 +67,12 @@ import org.slf4j.LoggerFactory
 
     def removeExcludeTags(tags: Iterable[String]): Filter =
       copy(excludeTags = excludeTags -- tags)
+
+    def addIncludeTopics(expressions: Iterable[String]): Filter =
+      copy(includeTopics = includeTopics ++ expressions)
+
+    def removeIncludeTopics(expressions: Iterable[String]): Filter =
+      copy(includeTopics = includeTopics -- expressions)
 
     def addIncludePersistenceIds(pids: Iterable[String]): Filter =
       copy(includePersistenceIds = includePersistenceIds ++ pids)
@@ -89,6 +98,8 @@ import org.slf4j.LoggerFactory
     def removeIncludeRegexEntityIds(reqexStr: Iterable[String]): Filter =
       copy(includeRegexEntityIds = includeRegexEntityIds -- reqexStr)
 
+    private val topicMatchers = includeTopics.iterator.map(TopicMatcher(_)).toVector
+
     /**
      * Exclude criteria are evaluated first.
      * Returns `true` if no matching exclude criteria.
@@ -111,9 +122,16 @@ import org.slf4j.LoggerFactory
       def matchesIncludeRegexEntityIds: Boolean =
         matchesRegexEntityIds(includeRegexEntityIds.values)
 
-      if (env.tags.intersect(excludeTags).nonEmpty || excludePersistenceIds.contains(pid) ||
+      def matchesTopics: Boolean =
+        topicMatchers.exists(_.matches(env, topicTagPrefix))
+
+      if (env.tags.intersect(excludeTags).nonEmpty ||
+          excludePersistenceIds.contains(pid) ||
           matchesExcludeRegexEntityIds) {
-        env.tags.intersect(includeTags).nonEmpty || includePersistenceIds.contains(pid) || matchesIncludeRegexEntityIds
+        env.tags.intersect(includeTags).nonEmpty ||
+        matchesTopics ||
+        includePersistenceIds.contains(pid) ||
+        matchesIncludeRegexEntityIds
       } else {
         true
       }
@@ -134,10 +152,12 @@ import org.slf4j.LoggerFactory
     entityType: String,
     sliceRange: Range,
     var initFilter: Iterable[FilterCriteria],
-    currentEventsByPersistenceIdQuery: CurrentEventsByPersistenceIdTypedQuery,
+    currentEventsByPersistenceId: (String, Long) => Source[EventEnvelope[Any], NotUsed],
     val producerFilter: EventEnvelope[Any] => Boolean,
+    topicTagPrefix: String,
     replayParallelism: Int)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
+  import ProtobufProtocolConversions._
 
   private val log = LoggerFactory.getLogger(classOf[FilterStage])
 
@@ -216,44 +236,10 @@ import org.slf4j.LoggerFactory
         }
       }
 
-      private var filter = Filter.empty
+      private var filter = Filter.empty(topicTagPrefix)
 
       private def updateFilter(criteria: Iterable[FilterCriteria]): Unit = {
-        filter = criteria.foldLeft(filter) {
-          case (acc, criteria) =>
-            criteria.message match {
-              case FilterCriteria.Message.IncludeTags(include) =>
-                acc.addIncludeTags(include.tags)
-              case FilterCriteria.Message.RemoveIncludeTags(include) =>
-                acc.removeIncludeTags(include.tags)
-              case FilterCriteria.Message.ExcludeTags(exclude) =>
-                acc.addExcludeTags(exclude.tags)
-              case FilterCriteria.Message.RemoveExcludeTags(exclude) =>
-                acc.removeExcludeTags(exclude.tags)
-              case FilterCriteria.Message.IncludeEntityIds(include) =>
-                val pids = mapEntityIdToPidHandledByThisStream(include.entityIdOffset.map(_.entityId))
-                acc.addIncludePersistenceIds(pids)
-              case FilterCriteria.Message.RemoveIncludeEntityIds(include) =>
-                val pids = mapEntityIdToPidHandledByThisStream(include.entityIds)
-                acc.removeIncludePersistenceIds(pids)
-              case FilterCriteria.Message.ExcludeEntityIds(exclude) =>
-                val pids = mapEntityIdToPidHandledByThisStream(exclude.entityIds)
-                acc.addExcludePersistenceIds(pids)
-              case FilterCriteria.Message.RemoveExcludeEntityIds(exclude) =>
-                val pids = mapEntityIdToPidHandledByThisStream(exclude.entityIds)
-                acc.removeExcludePersistenceIds(pids)
-              case FilterCriteria.Message.ExcludeMatchingEntityIds(excludeRegex) =>
-                acc.addExcludeRegexEntityIds(excludeRegex.matching)
-              case FilterCriteria.Message.IncludeMatchingEntityIds(includeRegex) =>
-                acc.addIncludeRegexEntityIds(includeRegex.matching)
-              case FilterCriteria.Message.RemoveExcludeMatchingEntityIds(excludeRegex) =>
-                acc.removeExcludeRegexEntityIds(excludeRegex.matching)
-              case FilterCriteria.Message.RemoveIncludeMatchingEntityIds(includeRegex) =>
-                acc.removeIncludeRegexEntityIds(includeRegex.matching)
-              case FilterCriteria.Message.Empty =>
-                acc
-            }
-        }
+        filter = updateFilterFromProto(filter, criteria, mapEntityIdToPidHandledByThisStream)
         log.trace2("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
       }
 
@@ -341,8 +327,7 @@ import org.slf4j.LoggerFactory
           } else if (replayInProgress.size < replayParallelism) {
             log.debugN("Stream [{}]: Starting replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
             val queue =
-              currentEventsByPersistenceIdQuery
-                .currentEventsByPersistenceIdTyped[Any](pid, fromSeqNr, Long.MaxValue)
+              currentEventsByPersistenceId(pid, fromSeqNr)
                 .runWith(Sink.queue())(materializer)
             replayInProgress = replayInProgress.updated(pid, ReplaySession(fromSeqNr, queue))
             tryPullReplay(pid)

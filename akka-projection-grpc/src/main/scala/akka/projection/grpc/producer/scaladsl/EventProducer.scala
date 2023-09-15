@@ -9,15 +9,19 @@ import scala.reflect.ClassTag
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartingFromSnapshotQuery
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
+import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.projection.grpc.internal.EventProducerServiceImpl
+import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.javadsl.{ Transformation => JTransformation }
@@ -34,7 +38,7 @@ object EventProducer {
         streamId: String,
         transformation: Transformation,
         settings: EventProducerSettings): EventProducerSource =
-      new EventProducerSource(entityType, streamId, transformation, settings, _ => true)
+      new EventProducerSource(entityType, streamId, transformation, settings, _ => true, transformSnapshot = None)
 
     def apply[Event](
         entityType: String,
@@ -47,7 +51,8 @@ object EventProducer {
         streamId,
         transformation,
         settings,
-        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean],
+        transformSnapshot = None)
 
   }
 
@@ -63,27 +68,54 @@ object EventProducer {
       val streamId: String,
       val transformation: Transformation,
       val settings: EventProducerSettings,
-      val producerFilter: EventEnvelope[Any] => Boolean) {
-    require(entityType.nonEmpty, "Stream id must not be empty")
+      val producerFilter: EventEnvelope[Any] => Boolean,
+      val transformSnapshot: Option[Any => Any]) {
+    require(entityType.nonEmpty, "Entity type must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
+    /**
+     * Filter events matching the predicate, for example based on tags.
+     */
     def withProducerFilter[Event](producerFilter: EventEnvelope[Event] => Boolean): EventProducerSource =
-      new EventProducerSource(
-        entityType,
-        streamId,
-        transformation,
-        settings,
-        producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+      copy(producerFilter = producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+
+    /**
+     * Filter events matching the topic expression according to MQTT specification, including wildcards.
+     * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
+     */
+    def withTopicProducerFilter(topicExpression: String): EventProducerSource = {
+      val topicMatcher = TopicMatcher(topicExpression)
+      withProducerFilter[Any](topicMatcher.matches(_, settings.topicTagPrefix))
+    }
+
+    def withStartingFromSnapshots[Snapshot, Event](transformSnapshot: Snapshot => Event): EventProducerSource =
+      copy(transformSnapshot = Some(transformSnapshot.asInstanceOf[Any => Any]))
+
+    def copy(
+        entityType: String = entityType,
+        streamId: String = streamId,
+        transformation: Transformation = transformation,
+        settings: EventProducerSettings = settings,
+        producerFilter: EventEnvelope[Any] => Boolean = producerFilter,
+        transformSnapshot: Option[Any => Any] = transformSnapshot): EventProducerSource =
+      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter, transformSnapshot)
 
   }
 
   @ApiMayChange
   object Transformation {
 
+    /**
+     * Starting point for building `Transformation`. Registrations of actual transformations must
+     * be added. Use [[Transformation.identity]] to pass through each event as is.
+     */
     val empty: Transformation = new Transformation(
       mappers = Map.empty,
       orElse = envelope =>
-        Future.failed(new IllegalArgumentException(s"Missing transformation for event [${envelope.event.getClass}]")))
+        Future.failed(
+          new IllegalArgumentException(
+            s"Missing transformation for event [${envelope.eventOption.map(_.getClass).getOrElse("")}]. " +
+            "Use Transformation.identity to pass through each event as is.")))
 
     /**
      * No transformation. Pass through each event as is.
@@ -102,13 +134,18 @@ object EventProducer {
       private[akka] val orElse: EventEnvelope[Any] => Future[Option[Any]]) {
 
     /**
-     * @param f A function that is fed each event, and the possible additional metadata
+     * @param f A function that is fed each event envelope where the payload is of type `A` and returns an
+     *          async payload to emit, or `None` to filter the event from being produced.
      */
     def registerAsyncEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       new Transformation(mappers.updated(clazz, f.asInstanceOf[EventEnvelope[Any] => Future[Option[Any]]]), orElse)
     }
 
+    /**
+     * @param f A function that is fed each event payload of type `A` and returns an
+     *          async payload to emit, or `None` to filter the event from being produced.
+     */
     def registerAsyncMapper[A: ClassTag, B](f: A => Future[Option[B]]): Transformation = {
       val clazz = implicitly[ClassTag[A]].runtimeClass
       new Transformation(
@@ -116,22 +153,53 @@ object EventProducer {
         orElse)
     }
 
+    /**
+     * @param f A function that is fed each event payload of type `A` and returns a
+     *          payload to emit, or `None` to filter the event from being produced.
+     */
     def registerMapper[A: ClassTag, B](f: A => Option[B]): Transformation = {
       registerAsyncMapper[A, B](event => Future.successful(f(event)))
     }
 
+    /**
+     * @param f A function that is fed each event envelope where the payload is of type `A` and returns a
+     *          payload to emit, or `None` to filter the event from being produced.
+     */
+    def registerEnvelopeMapper[A: ClassTag, B](f: EventEnvelope[A] => Option[B]): Transformation = {
+      registerAsyncEnvelopeMapper[A, B](event => Future.successful(f(event)))
+    }
+
+    /**
+     * @param f A function that is fed each event payload, that did not match any other registered mappers, returns an
+     *          async payload to emit, or `None` to filter the event from being produced. Replaces any previous "orElse"
+     *          mapper defined.
+     */
     def registerAsyncOrElseMapper(f: Any => Future[Option[Any]]): Transformation = {
       new Transformation(mappers, (envelope: EventEnvelope[Any]) => f(envelope.event))
     }
 
+    /**
+     * @param f A function that is fed each event payload, that did not match any other registered mappers, returns a
+     *          payload to emit, or `None` to filter the event from being produced. Replaces any previous "orElse"
+     *          mapper defined.
+     */
     def registerOrElseMapper(f: Any => Option[Any]): Transformation = {
       registerAsyncOrElseMapper(event => Future.successful(f(event)))
     }
 
+    /**
+     * @param m A function that is fed each event envelope, that did not match any other registered mappers, returns a
+     *          payload to emit, or `None` to filter the event from being produced. Replaces any previous "orElse"
+     *          mapper defined.
+     */
     def registerAsyncEnvelopeOrElseMapper(m: EventEnvelope[Any] => Future[Option[Any]]): Transformation = {
       new Transformation(mappers, m)
     }
 
+    /**
+     * INTERNAL API
+     */
+    @InternalApi
     private[akka] def apply(envelope: EventEnvelope[Any]): Future[Option[Any]] = {
       val mapper = mappers.getOrElse(envelope.event.getClass, orElse)
       mapper.apply(envelope)
@@ -171,8 +239,10 @@ object EventProducer {
     EventProducerServicePowerApiHandler.partial(
       new EventProducerServiceImpl(
         system,
-        eventsBySlicesQueriesForStreamIds(sources, system),
-        currentEventsByPersistenceIdQueriesForStreamIds(sources, system),
+        eventsBySlicesForStreamIds(sources, system),
+        eventsBySlicesStartingFromSnapshotsForStreamIds(sources, system),
+        currentEventsByPersistenceIdForStreamIds(sources, system),
+        currentEventsByPersistenceIdStartingFromSnapshotForStreamIds(sources, system),
         sources,
         interceptor))
   }
@@ -180,27 +250,59 @@ object EventProducer {
   /**
    * INTERNAL API
    */
-  private[akka] def eventsBySlicesQueriesForStreamIds(
+  private[akka] def eventsBySlicesForStreamIds(
       sources: Set[EventProducerSource],
       system: ActorSystem[_]): Map[String, EventsBySliceQuery] = {
-    queriesForStreamIds(sources, system).map {
-      case (streamId, q: EventsBySliceQuery) => streamId -> q
-      case (_, other) =>
-        throw new IllegalArgumentException(s"Expected EventsBySliceQuery but was [${other.getClass.getName}]")
+    val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
+      sources.map(s => s.streamId -> s).toMap
+    queriesForStreamIds(sources, system).collect {
+      case (streamId, q: EventsBySliceQuery) if streamIdToSourceMap(streamId).transformSnapshot.isEmpty =>
+        streamId -> q
     }
   }
 
   /**
    * INTERNAL API
    */
-  private[akka] def currentEventsByPersistenceIdQueriesForStreamIds(
+  private[akka] def eventsBySlicesStartingFromSnapshotsForStreamIds(
+      sources: Set[EventProducerSource],
+      system: ActorSystem[_]): Map[String, EventsBySliceStartingFromSnapshotsQuery] = {
+    val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
+      sources.map(s => s.streamId -> s).toMap
+    queriesForStreamIds(sources, system).collect {
+      case (streamId, q: EventsBySliceStartingFromSnapshotsQuery)
+          if streamIdToSourceMap(streamId).transformSnapshot.isDefined =>
+        streamId -> q
+    }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  private[akka] def currentEventsByPersistenceIdForStreamIds(
       sources: Set[EventProducerSource],
       system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdTypedQuery] = {
-    queriesForStreamIds(sources, system).map {
-      case (streamId, q: CurrentEventsByPersistenceIdTypedQuery) => streamId -> q
-      case (_, other) =>
-        throw new IllegalArgumentException(
-          s"Expected CurrentEventsByPersistenceIdQuery but was [${other.getClass.getName}]")
+    val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
+      sources.map(s => s.streamId -> s).toMap
+    queriesForStreamIds(sources, system).collect {
+      case (streamId, q: CurrentEventsByPersistenceIdTypedQuery)
+          if streamIdToSourceMap(streamId).transformSnapshot.isEmpty =>
+        streamId -> q
+    }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  private[akka] def currentEventsByPersistenceIdStartingFromSnapshotForStreamIds(
+      sources: Set[EventProducerSource],
+      system: ActorSystem[_]): Map[String, CurrentEventsByPersistenceIdStartingFromSnapshotQuery] = {
+    val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
+      sources.map(s => s.streamId -> s).toMap
+    queriesForStreamIds(sources, system).collect {
+      case (streamId, q: CurrentEventsByPersistenceIdStartingFromSnapshotQuery)
+          if streamIdToSourceMap(streamId).transformSnapshot.isDefined =>
+        streamId -> q
     }
   }
 

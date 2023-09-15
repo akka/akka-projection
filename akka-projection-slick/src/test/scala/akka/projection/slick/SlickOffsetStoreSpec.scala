@@ -6,11 +6,10 @@ package akka.projection.slick
 
 import java.time.Instant
 import java.util.UUID
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
 import akka.Done
+import akka.actor.Scheduler
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.query.Sequence
@@ -30,6 +29,8 @@ import org.scalatest.Tag
 import org.scalatest.wordspec.AnyWordSpecLike
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
+
+import scala.concurrent.ExecutionContext
 
 object SlickOffsetStoreSpec {
 
@@ -57,17 +58,19 @@ object SlickOffsetStoreSpec {
     val tag = TestTags.InMemoryDb
 
     override def config: Config =
-      ConfigFactory.parseString("""
+      ConfigFactory
+        .parseString("""
         akka.projection.slick {
            profile = "slick.jdbc.H2Profile$"
            db {
-             url = "jdbc:h2:mem:offset-store-test-slick;DB_CLOSE_DELAY=-1"
+             url = "jdbc:h2:mem:offset-store-test-slick;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE"
              driver = org.h2.Driver
              connectionPool = disabled
              keepAliveConnection = true
            }
         }
-        """).withFallback(baseConfig)
+        """)
+        .withFallback(baseConfig)
 
     override def stopContainer(): Unit = ()
   }
@@ -83,8 +86,8 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
   override implicit val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = 10.seconds, interval = 100.millis)
 
-  private implicit val executionContext = system.executionContext
-  private implicit val classicScheduler = system.classicSystem.scheduler
+  private implicit val executionContext: ExecutionContext = system.executionContext
+  private implicit val classicScheduler: Scheduler = system.classicSystem.scheduler
 
   private val slickConfig = specConfig.config.getConfig(SlickSettings.configPath)
   private val dialectLabel = specConfig.name

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "local.drones.proto";
+
+package local.drones;
+
+import "common/coordinates.proto";
+
+// copy of the descriptor from local-drone-control who owns/publishes it
+
+// events published by the drones
+message CoarseDroneLocation {
+  common.Coordinates coordinates = 1;
+}
+

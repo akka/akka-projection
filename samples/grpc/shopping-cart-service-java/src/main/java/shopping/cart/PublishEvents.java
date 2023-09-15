@@ -30,7 +30,7 @@ public class PublishEvents {
         "ShoppingCart",
         "cart",
         transformation,
-        EventProducerSettings.apply(system)
+        EventProducerSettings.create(system)
     //#eventProducerService
     )
     .withProducerFilter(envelope -> {

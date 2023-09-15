@@ -4,7 +4,7 @@ organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
 licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
-scalaVersion := "2.13.10"
+scalaVersion := "2.13.11"
 
 Compile / scalacOptions ++= Seq(
   "-target:11",
@@ -26,12 +26,12 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.8.2"
+val AkkaVersion = "2.9.0-M1"
 val AkkaHttpVersion = "10.5.2"
 val AkkaManagementVersion = "1.4.0"
-val AkkaPersistenceR2dbcVersion = "1.1.0"
+val AkkaPersistenceR2dbcVersion = "1.2.0-M5"
 val AkkaProjectionVersion =
-  sys.props.getOrElse("akka-projection.version", "1.4.2")
+  sys.props.getOrElse("akka-projection.version", "1.5.0-M4")
 val AkkaDiagnosticsVersion = "2.0.0"
 
 enablePlugins(AkkaGrpcPlugin)
@@ -63,14 +63,12 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.3.6",
   "org.scalatest" %% "scalatest" % "3.1.2" % Test,
-  // 2. Using gRPC and/or protobuf
-  "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
-  // 3. Using Akka Persistence
+  // 2. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
-  // 4. Querying or projecting data from Akka Persistence
+  // 3. Querying or projecting data from Akka Persistence
   "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion,
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
   "com.lightbend.akka" %% "akka-projection-grpc" % AkkaProjectionVersion,

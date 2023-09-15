@@ -147,7 +147,7 @@ Java
 
 ## Complete Sample Projects
 
-The complete sample can be downloaded from github, the replicated shopping cart:
+The complete sample can be downloaded from GitHub, the replicated shopping cart:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-scala
@@ -159,7 +159,7 @@ The complete sample can be downloaded from github, the replicated shopping cart:
 1. Start two local PostgresSQL servers, on ports 5101 and 5201. The included `docker-compose.yml` starts everything required for running locally.
 
     ```shell
-    docker-compose up -d
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
@@ -236,7 +236,7 @@ The complete sample can be downloaded from github, the replicated shopping cart:
 1. Start two local PostgresSQL servers, on ports 5101 and 5201. The included `docker-compose.yml` starts everything required for running locally.
 
     ```shell
-    docker-compose up -d
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection

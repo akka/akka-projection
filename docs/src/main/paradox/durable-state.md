@@ -6,10 +6,18 @@ consumed with the [changes query](https://doc.akka.io/docs/akka/current/durable-
 Akka Projections has integration with `changes`, which is described here. 
 
 @@@ note { title=Alternative }
-When using the R2DBC plugin an alternative to using a Projection is to [store the query representation](https://doc.akka.io/docs/akka-persistence-r2dbc/current/durable-state-store.html#storing-query-representation) directly from the write side.
+When using the R2DBC plugin an alternative to using a Projection is to @extref:[store the query representation](akka-persistence-r2dbc:durable-state-store.html#storing-query-representation) directly from the write side.
 @@@
 
 ## Dependencies
+
+The Akka dependencies are available from Akka's library repository. To access them there, you need to configure the URL for this repository.
+
+@@repository [sbt,Maven,Gradle] {
+id="akka-repository"
+name="Akka library repository"
+url="https://repo.akka.io/maven"
+}
 
 To use the Durable State module of Akka Projections, add the following dependency in your project:
 
@@ -60,7 +68,7 @@ Scala
 Java
 :  @@snip [DurableStateStoreDocExample.java](/examples/src/test/java/jdocs/state/DurableStateStoreBySlicesDocExample.java) { #changesBySlicesSourceProvider }
 
-This example is using the [R2DBC plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-r2dbc/current/query.html).
+This example is using the @extref:[R2DBC plugin for Akka Persistence](akka-persistence-r2dbc:query.html).
 You will use the same plugin that you configured for the write side. The one that is used by the `DurableStateBehavior`.
 
 This source is consuming all the changes from the `Account` `DurableStateBehavior` for the given slice range. In a production application, you would need to start as many instances as the number of slice ranges. That way you consume the changes from all entities.

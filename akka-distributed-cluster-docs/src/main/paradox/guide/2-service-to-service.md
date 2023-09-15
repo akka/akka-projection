@@ -83,9 +83,9 @@ It is defined in the ScalaPB generated `Proto` companion object.]
 Note that GrpcReadJournal should be created with the GrpcReadJournal @scala[`apply`]@java[`create`] factory method
 and not from configuration via `GrpcReadJournalProvider` when using Protobuf serialization.
 
-The gRPC connection to the producer is defined in the @extref[consumer configuration](akka-projection:grpc#consumer-configuration).
+The gRPC connection to the producer is defined in the @extref[consumer configuration](akka-projection:grpc.html#consumer-configuration).
 
-The @extref:[R2dbcProjection](akka-persistence-r2dbc:projection.html) has support for storing the offset in a relational database using R2DBC.
+The @extref[R2dbcProjection](akka-projection:r2dbc.html) has support for storing the offset in a relational database using R2DBC.
 
 The event handler for this sample is just logging the events rather than for example actually building its own read side
 in a database for querying:
@@ -122,7 +122,9 @@ In this example the decision is based on tags, but the filter function can use a
 on the total quantity of the shopping cart, which requires the full state of the shopping cart and is not known from
 an individual event.
 
-Note that the purpose of the `withProducerFilter` is to toggle if all events for the entity are to be emitted or not.
+@extref[Topic filters](akka-projection:grpc.html#topics) can be defined in similar way, using `withTopicProducerFilter`.
+
+Note that the purpose of `withProducerFilter` and `withTopicProducerFilter` is to toggle if all events for the entity are to be emitted or not.
 If the purpose is to filter out certain events you should instead use the `Transformation`.
 
 The producer filter is evaluated before the transformation function, i.e. the event is the original event and not
@@ -169,7 +171,7 @@ See @apidoc[akka.projection.grpc.consumer.ConsumerFilter] for full API documenta
 
 ## Complete Sample Projects
 
-The complete sample can be downloaded from github, the shopping cart:
+The complete sample can be downloaded from GitHub, the shopping cart:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
@@ -191,7 +193,7 @@ your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that need
 1. Start a local PostgresSQL server on default port 5432. The `docker-compose.yml` included in the shopping-cart project starts everything required for running locally.
 
     ```shell
-    docker-compose up -d
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
@@ -248,7 +250,7 @@ your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that need
 1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally.
 
     ```shell
-    docker-compose up -d
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
@@ -313,7 +315,7 @@ your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that need
 1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally. Note that for convenience this service and the shopping cart service is sharing the same database, in an actual service consuming events the consuming services are expected to have their own separate databases.
 
     ```shell
-    docker-compose up -d
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection
@@ -339,7 +341,7 @@ your own workstation. Docker, a JDK and @java[maven]@scala[sbt] is all that need
 1. Start a local PostgresSQL server on default port 5432. The included `docker-compose.yml` starts everything required for running locally. Note that for convenience this service and the shopping cart service is sharing the same database, in an actual service consuming events the consuming services are expected to have their own separate databases.
 
     ```shell
-    docker-compose up -d 
+    docker compose up --wait
 
     # creates the tables needed for Akka Persistence
     # as well as the offset store table for Akka Projection

@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "local.drones.proto";
+
+import "google/protobuf/empty.proto";
+import "common/coordinates.proto";
+
+package local.drones;
+
+// gRPC definition for DroneService, for drones to interact with
+
+service DroneService {
+    rpc ReportLocation (ReportLocationRequest) returns (google.protobuf.Empty) {}
+
+    // deliveries
+    rpc RequestNextDelivery (RequestNextDeliveryRequest) returns (RequestNextDeliveryResponse) {}
+    rpc CompleteDelivery (CompleteDeliveryRequest) returns (google.protobuf.Empty) {}
+}
+
+
+message ReportLocationRequest {
+    string drone_id = 1;
+    common.Coordinates coordinates = 2;
+    // altitude in meters
+    double altitude = 4;
+}
+
+message RequestNextDeliveryRequest {
+    string drone_id = 1;
+}
+
+message RequestNextDeliveryResponse {
+    string delivery_id = 1;
+    common.Coordinates from = 2;
+    common.Coordinates to = 3;
+}
+
+message CompleteDeliveryRequest {
+    string delivery_id = 1;
+}

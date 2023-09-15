@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "iot.registration.proto";
+
+package iot.registration;
+
+import "google/protobuf/empty.proto";
+
+// gRPC definition for RegistrationService
+
+service RegistrationService {
+    rpc Register (RegisterRequest) returns (google.protobuf.Empty) {}
+}
+
+
+message RegisterRequest {
+    string sensor_entity_id = 1;
+    string secret = 2;
+}
