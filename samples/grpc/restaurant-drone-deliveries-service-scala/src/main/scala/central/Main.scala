@@ -18,7 +18,7 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     val system =
-      ActorSystem(SpawnProtocol(), "deliveries")
+      ActorSystem(SpawnProtocol(), "restaurant-drone-deliveries")
     try {
       init(system)
     } catch {
