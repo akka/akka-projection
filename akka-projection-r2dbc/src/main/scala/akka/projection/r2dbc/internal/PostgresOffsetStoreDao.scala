@@ -54,7 +54,7 @@ private[projection] class PostgresOffsetStoreDao(
 
   private val selectTimestampOffsetSql: String =
     sql"""
-    SELECT slice, persistence_id, seq_nr, timestamp_offset
+    SELECT projection_key, slice, persistence_id, seq_nr, timestamp_offset
     FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
 
   private val insertTimestampOffsetSql: String =
@@ -131,7 +131,7 @@ private[projection] class PostgresOffsetStoreDao(
           s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
 
-  override def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.Record]] = {
+  override def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]] = {
     val (minSlice, maxSlice) = {
       sourceProvider match {
         case Some(provider) => (provider.minSlice, provider.maxSlice)
@@ -148,11 +148,12 @@ private[projection] class PostgresOffsetStoreDao(
           .bind(2, projectionId.name)
       },
       row => {
+        val projectionKey = row.get("projection_key", classOf[String])
         val slice = row.get("slice", classOf[java.lang.Integer])
         val pid = row.get("persistence_id", classOf[String])
         val seqNr = row.get("seq_nr", classOf[java.lang.Long])
         val timestamp = row.get("timestamp_offset", classOf[Instant])
-        R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
+        R2dbcOffsetStore.RecordWithProjectionKey(R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp), projectionKey)
       })
   }
 

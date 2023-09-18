@@ -55,6 +55,7 @@ private[projection] object R2dbcOffsetStore {
       strictSeqNr: Boolean,
       fromBacktracking: Boolean,
       fromPubSub: Boolean)
+  final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
     val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, 0)
@@ -289,8 +290,8 @@ private[projection] class R2dbcOffsetStore(
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
     idle.set(false)
     val oldState = state.get()
-    dao.readTimestampOffset().map { records =>
-      val newState = State(records)
+    dao.readTimestampOffset().map { recordsWithKey =>
+      val newState = State(recordsWithKey.map(_.record))
       logger.debugN(
         "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
         newState.byPid.size,
@@ -301,10 +302,34 @@ private[projection] class R2dbcOffsetStore(
       clearInflight()
       if (newState == State.empty) {
         None
+      } else if (moreThanOneProjectionKey(recordsWithKey)) {
+        // When downscaling projection instances (changing slice distribution) there
+        // is a possibility that one of the previous projection instances was further behind than the backtracking
+        // window, which would cause missed events if we started from latest. In that case we use the latest
+        // offset of the earliest slice
+        val latestBySlice = newState.latestBySlice
+        val earliest = latestBySlice.minBy(_.timestamp).timestamp
+        Some(TimestampOffset(earliest, Map.empty))
       } else {
         newState.latestOffset
       }
     }
+  }
+
+  private def moreThanOneProjectionKey(recordsWithKey: immutable.IndexedSeq[RecordWithProjectionKey]): Boolean = {
+    @tailrec def loop(key: String, iter: Iterator[RecordWithProjectionKey]): Boolean = {
+      if (iter.hasNext) {
+        val next = iter.next()
+        if (next.projectionKey != key) true
+        else loop(key, iter)
+      } else
+        false
+    }
+
+    if (recordsWithKey.isEmpty)
+      false
+    else
+      loop(recordsWithKey.head.projectionKey, recordsWithKey.iterator)
   }
 
   private def readPrimitiveOffset[Offset](): Future[Option[Offset]] = {
