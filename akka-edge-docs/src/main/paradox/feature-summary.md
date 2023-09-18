@@ -51,10 +51,8 @@ This case describes when the edge service is the consumer of events.
 The offsets on the consumer side are stored, but if the environment for the edge service does not
 have the capabilities to run a full database it can be a single Akka node with an embeddable storage such as the @extref[H2 database](akka-persistence-r2dbc:getting-started.html#using-h2).
 
-@@@ note
-When using H2, the file mode is recommended to reduce memory requirements. That means that if the edge service is restarted
+Note that when using H2, the file mode is recommended to reduce memory requirements. That means that if the edge service is restarted
 with a different file system all previous events will be delivered to the consumer again.
-@@@
 
 @@@ Warning
 H2 database should not be used when the service is an Akka Cluster with more than 1 node.
@@ -99,11 +97,9 @@ that the cloud service would need to know about all edge services.
 Events are stored on the producer side, but if the environment for the edge service does not
 have the capabilities to run a full database it can be a single Akka node with embeddable storage such as the @extref[H2 database](akka-persistence-r2dbc:getting-started.html#using-h2).
 
-@@@ note
-The file mode of H2 is recommended to reduce memory requirements. That means that if the edge service is restarted
+Note that the file mode of H2 is recommended to reduce memory requirements. That means that if the edge service is restarted
 with a different file system all stored events are lost. For some edge services that may be totally fine, for others
 it may not be an option.
-@@@
 
 @@@ Warning
 H2 database should not be used when the service is an Akka Cluster with more than 1 node.
