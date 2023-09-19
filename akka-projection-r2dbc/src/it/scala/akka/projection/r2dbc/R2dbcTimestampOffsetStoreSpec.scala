@@ -1159,7 +1159,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore3.getState().size shouldBe 4
 
       offset.timestamp shouldBe time2
-      offset.seen shouldBe Map.empty
+      offset.seen shouldBe Map(p2 -> 1L)
 
       // getOffset is used by management api, and that should not be adjusted
       TimestampOffset.toTimestampOffset(offsetStore3.getOffset().futureValue.get).timestamp shouldBe time4
