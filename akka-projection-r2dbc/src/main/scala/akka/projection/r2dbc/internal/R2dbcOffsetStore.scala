@@ -317,19 +317,12 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def moreThanOneProjectionKey(recordsWithKey: immutable.IndexedSeq[RecordWithProjectionKey]): Boolean = {
-    @tailrec def loop(key: String, iter: Iterator[RecordWithProjectionKey]): Boolean = {
-      if (iter.hasNext) {
-        val next = iter.next()
-        if (next.projectionKey != key) true
-        else loop(key, iter)
-      } else
-        false
-    }
-
     if (recordsWithKey.isEmpty)
       false
-    else
-      loop(recordsWithKey.head.projectionKey, recordsWithKey.iterator)
+    else {
+      val key = recordsWithKey.head.projectionKey
+      recordsWithKey.exists(_.projectionKey != key)
+    }
   }
 
   private def readPrimitiveOffset[Offset](): Future[Option[Offset]] = {
