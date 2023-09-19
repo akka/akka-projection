@@ -4,6 +4,18 @@
 
 package akka.projection.r2dbc.internal
 
+import java.time.Clock
+import java.time.Instant
+import java.time.{Duration => JDuration}
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+
+import scala.annotation.tailrec
+import scala.collection.immutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
@@ -22,23 +34,14 @@ import akka.persistence.typed.PersistenceId
 import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.internal.EnsembleTelemetry
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
+import akka.projection.internal.Telemetry
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import io.r2dbc.spi.Connection
 import org.slf4j.LoggerFactory
-
-import java.time.Clock
-import java.time.Instant
-import java.time.{ Duration => JDuration }
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
-import scala.annotation.tailrec
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 
 /**
  * INTERNAL API
@@ -236,6 +239,8 @@ private[projection] class R2dbcOffsetStore(
   // To avoid delete requests when no new offsets have been stored since previous delete
   private val idle = new AtomicBoolean(false)
 
+  private var validationObservers: immutable.Seq[R2dbcOffsetValidationObserver] = Nil
+
   system.scheduler.scheduleWithFixedDelay(
     settings.deleteInterval,
     settings.deleteInterval,
@@ -256,6 +261,17 @@ private[projection] class R2dbcOffsetStore(
       case None =>
         throw new IllegalArgumentException(
           s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
+    }
+  }
+
+  def setTelemetry(telemetry: Telemetry): Unit = {
+    validationObservers = telemetry match {
+      case observer: R2dbcOffsetValidationObserver => List(observer)
+      case ens: EnsembleTelemetry =>
+        ens.telemetries.collect {
+          case observer: R2dbcOffsetValidationObserver => observer
+        }
+      case _ => Nil
     }
   }
 
@@ -490,29 +506,38 @@ private[projection] class R2dbcOffsetStore(
 
   def validateAll[Envelope](envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[(Envelope, Validation)]] = {
     import Validation._
-    envelopes
-      .foldLeft(Future.successful((getInflight(), Vector.empty[(Envelope, Validation)]))) { (acc, envelope) =>
-        acc.flatMap {
-          case (inflight, filteredEnvelopes) =>
-            createRecordWithOffset(envelope) match {
-              case Some(recordWithOffset) =>
-                validate(recordWithOffset, inflight).map {
-                  case Accepted =>
-                    (
-                      inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
-                      filteredEnvelopes :+ (envelope -> Accepted))
-                  case rejected =>
-                    (inflight, filteredEnvelopes :+ (envelope -> rejected))
-                }
-              case None =>
-                Future.successful((inflight, filteredEnvelopes :+ (envelope -> Accepted)))
-            }
+    val result =
+      envelopes
+        .foldLeft(Future.successful((getInflight(), Vector.empty[(Envelope, Validation)]))) { (acc, envelope) =>
+          acc.flatMap {
+            case (inflight, filteredEnvelopes) =>
+              createRecordWithOffset(envelope) match {
+                case Some(recordWithOffset) =>
+                  validate(recordWithOffset, inflight).map {
+                    case Accepted =>
+                      (
+                        inflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr),
+                        filteredEnvelopes :+ (envelope -> Accepted))
+                    case rejected =>
+                      (inflight, filteredEnvelopes :+ (envelope -> rejected))
+                  }
+
+                case None =>
+                  Future.successful((inflight, filteredEnvelopes :+ (envelope -> Accepted)))
+              }
+          }
         }
-      }
-      .map {
-        case (_, filteredEnvelopes) =>
-          filteredEnvelopes
-      }
+        .map {
+          case (_, filteredEnvelopes) =>
+            filteredEnvelopes
+        }
+
+    if (validationObservers.nonEmpty)
+      result.foreach(_.foreach {
+        case (env, validation) => notifyValidationObserver(env, validation)
+      })
+
+    result
   }
 
   /**
@@ -521,10 +546,12 @@ private[projection] class R2dbcOffsetStore(
    * should be rejected.
    */
   def validate[Envelope](envelope: Envelope): Future[Validation] = {
-    createRecordWithOffset(envelope) match {
+    val result = createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) => validate(recordWithOffset, getInflight())
       case None                   => Validation.FutureAccepted
     }
+    notifyValidationObserver(envelope, result)
+    result
   }
 
   private def validate(recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Future[Validation] = {
@@ -650,6 +677,25 @@ private[projection] class R2dbcOffsetStore(
         logger.traceN("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
         FutureDuplicate
       }
+    }
+  }
+
+  private def notifyValidationObserver[Envelope](env: Envelope, validation: Future[Validation]): Unit = {
+    if (validationObservers.nonEmpty)
+      validation.foreach(notifyValidationObserver(env, _))
+  }
+
+  private def notifyValidationObserver[Envelope](env: Envelope, validation: Validation): Unit = {
+    import R2dbcOffsetValidationObserver.OffsetValidation
+    if (validationObservers.nonEmpty) {
+      val observerValidation =
+        validation match {
+          case Validation.Accepted                  => OffsetValidation.Accepted
+          case Validation.Duplicate                 => OffsetValidation.Duplicate
+          case Validation.RejectedSeqNr             => OffsetValidation.RejectedSeqNr
+          case Validation.RejectedBacktrackingSeqNr => OffsetValidation.RejectedBacktrackingSeqNr
+        }
+      validationObservers.foreach(_.onOffsetValidated(env, observerValidation))
     }
   }
 
