@@ -308,8 +308,9 @@ private[projection] class R2dbcOffsetStore(
         // window, which would cause missed events if we started from latest. In that case we use the latest
         // offset of the earliest slice
         val latestBySlice = newState.latestBySlice
-        val earliest = latestBySlice.minBy(_.timestamp).timestamp
-        Some(TimestampOffset(earliest, Map.empty))
+        val earliest = latestBySlice.minBy(_.timestamp)
+        // there could be other with same timestamp, but not important to reconstruct exactly the right `seen`
+        Some(TimestampOffset(earliest.timestamp, Map(earliest.pid -> earliest.seqNr)))
       } else {
         newState.latestOffset
       }
