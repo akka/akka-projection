@@ -11,6 +11,12 @@
         "pattern": "\\QMETA-INF/services/io.grpc.NameResolverProvider\\E"
       },
       {
+        "pattern": "\\QMETA-INF/services/io.r2dbc.postgresql.extension.Extension\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/services/io.r2dbc.spi.ConnectionFactoryProvider\\E"
+      },
+      {
         "pattern": "\\QMETA-INF/services/org.slf4j.spi.SLF4JServiceProvider\\E"
       },
       {
@@ -32,13 +38,28 @@
         "pattern": "\\Qh2-default-projection-schema.conf\\E"
       },
       {
+        "pattern": "\\Qlocal-persistence.conf\\E"
+      },
+      {
+        "pattern": "\\Qlocal-shared.conf\\E"
+      },
+      {
         "pattern": "\\Qlocal/drones/CoarseGrainedCoordinates.class\\E"
       },
       {
         "pattern": "\\Qlocal/drones/Coordinates.class\\E"
       },
       {
+        "pattern": "\\Qlocal/drones/DeliveriesQueue$CompleteDelivery.class\\E"
+      },
+      {
         "pattern": "\\Qlocal/drones/DeliveriesQueue$DeliveryInProgress.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/DeliveriesQueue$GetCurrentState.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal/drones/DeliveriesQueue$RequestDelivery.class\\E"
       },
       {
         "pattern": "\\Qlocal/drones/DeliveriesQueue$State.class\\E"
@@ -50,10 +71,25 @@
         "pattern": "\\Qlocal/drones/Drone$CoarseGrainedLocationChanged.class\\E"
       },
       {
+        "pattern": "\\Qlocal/drones/Drone$GetCurrentPosition.class\\E"
+      },
+      {
         "pattern": "\\Qlocal/drones/Drone$PositionUpdated.class\\E"
       },
       {
+        "pattern": "\\Qlocal/drones/Drone$ReportPosition.class\\E"
+      },
+      {
         "pattern": "\\Qlocal/drones/Position.class\\E"
+      },
+      {
+        "pattern": "\\Qlocal1.conf\\E"
+      },
+      {
+        "pattern": "\\Qlocal2.conf\\E"
+      },
+      {
+        "pattern": "\\Qlocal3.conf\\E"
       },
       {
         "pattern": "\\Qlogback.xml\\E"

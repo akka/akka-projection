@@ -30,7 +30,16 @@
     "name": "[Lakka.cluster.ddata.ORMultiMapKey;"
   },
   {
+    "name": "[Lakka.io.dns.RecordType;"
+  },
+  {
     "name": "[Lakka.remote.artery.Association;"
+  },
+  {
+    "name": "[Lakka.remote.artery.AssociationState$QuarantinedTimestamp;"
+  },
+  {
+    "name": "[Lakka.routing.ConsistentRoutee;"
   },
   {
     "name": "[Lakka.stream.stage.GraphStageLogic;"
@@ -60,13 +69,115 @@
     "name": "[Lcom.google.protobuf.Descriptors$FileDescriptor;"
   },
   {
+    "name": "[Lio.r2dbc.postgresql.codec.Box;"
+  },
+  {
+    "name": "[Lio.r2dbc.postgresql.codec.Circle;"
+  },
+  {
+    "name": "[Lio.r2dbc.postgresql.codec.Interval;"
+  },
+  {
+    "name": "[Lio.r2dbc.postgresql.codec.Line;"
+  },
+  {
+    "name": "[Lio.r2dbc.postgresql.codec.Lseg;"
+  },
+  {
+    "name": "[Lio.r2dbc.postgresql.codec.Path;"
+  },
+  {
+    "name": "[Lio.r2dbc.postgresql.codec.Point;"
+  },
+  {
+    "name": "[Lio.r2dbc.postgresql.codec.Polygon;"
+  },
+  {
+    "name": "[Ljava.lang.Boolean;"
+  },
+  {
+    "name": "[Ljava.lang.Byte;"
+  },
+  {
+    "name": "[Ljava.lang.Character;"
+  },
+  {
     "name": "[Ljava.lang.Class;"
+  },
+  {
+    "name": "[Ljava.lang.Double;"
+  },
+  {
+    "name": "[Ljava.lang.Float;"
+  },
+  {
+    "name": "[Ljava.lang.Integer;"
+  },
+  {
+    "name": "[Ljava.lang.Long;"
+  },
+  {
+    "name": "[Ljava.lang.Short;"
   },
   {
     "name": "[Ljava.lang.String;"
   },
   {
     "name": "[Ljava.lang.reflect.Constructor;"
+  },
+  {
+    "name": "[Ljava.lang.reflect.Field;"
+  },
+  {
+    "name": "[Ljava.lang.reflect.Method;"
+  },
+  {
+    "name": "[Ljava.math.BigDecimal;"
+  },
+  {
+    "name": "[Ljava.math.BigInteger;"
+  },
+  {
+    "name": "[Ljava.net.InetAddress;"
+  },
+  {
+    "name": "[Ljava.net.URI;"
+  },
+  {
+    "name": "[Ljava.net.URL;"
+  },
+  {
+    "name": "[Ljava.nio.ByteBuffer;"
+  },
+  {
+    "name": "[Ljava.time.Instant;"
+  },
+  {
+    "name": "[Ljava.time.LocalDate;"
+  },
+  {
+    "name": "[Ljava.time.LocalDateTime;"
+  },
+  {
+    "name": "[Ljava.time.LocalTime;"
+  },
+  {
+    "name": "[Ljava.time.OffsetDateTime;"
+  },
+  {
+    "name": "[Ljava.time.OffsetTime;"
+  },
+  {
+    "name": "[Ljava.time.ZoneId;"
+  },
+  {
+    "name": "[Ljava.time.ZonedDateTime;"
+  },
+  {
+    "name": "[Ljava.util.Date;"
+  },
+  {
+    "name": "[Ljava.util.UUID;"
   },
   {
     "name": "[Ljavax.management.openmbean.CompositeData;"
@@ -85,6 +196,9 @@
   },
   {
     "name": "[Z"
+  },
+  {
+    "name": "[[B"
   },
   {
     "name": "[[I"
@@ -382,6 +496,19 @@
     ]
   },
   {
+    "name": "akka.cluster.JoinSeedNodeProcess",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "scala.collection.immutable.IndexedSeq",
+          "akka.cluster.JoinConfigCompatChecker"
+        ]
+      }
+    ]
+  },
+  {
     "name": "akka.cluster.NoDowning",
     "methods": [
       {
@@ -473,6 +600,17 @@
       {
         "name": "<init>",
         "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.cluster.sharding.ClusterShardingHealthCheck",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem"
+        ]
       }
     ]
   },
@@ -604,6 +742,20 @@
     "fields": [
       {
         "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.discovery.SimpleServiceDiscovery"
+  },
+  {
+    "name": "akka.discovery.config.ConfigServiceDiscovery",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
       }
     ]
   },
@@ -778,11 +930,42 @@
     ]
   },
   {
+    "name": "akka.http.DefaultParsingErrorHandler$",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
     "name": "akka.http.impl.engine.client.PoolMasterActor",
     "methods": [
       {
         "name": "<init>",
         "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.io.InetAddressDnsProvider",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "akka.io.InetAddressDnsResolver",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.io.SimpleDnsCache",
+          "com.typesafe.config.Config"
+        ]
       }
     ]
   },
@@ -794,6 +977,18 @@
         "name": "<init>",
         "parameterTypes": [
           "akka.io.SelectionHandlerSettings"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.io.SimpleDnsManager",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.io.DnsExt"
         ]
       }
     ]
@@ -839,6 +1034,128 @@
         "name": "<init>",
         "parameterTypes": [
           "akka.io.TcpExt"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.io.TcpOutgoingConnection",
+    "queryAllDeclaredConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.io.TcpExt",
+          "akka.io.ChannelRegistry",
+          "akka.actor.ActorRef",
+          "akka.io.Tcp$Connect"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.management.HealthCheckRoutes",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.management.HealthCheckRoutes$"
+  },
+  {
+    "name": "akka.management.cluster.ClusterHttpManagementMessage",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.ClusterHttpManagementRouteProvider$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.management.cluster.ClusterMember",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.ClusterMembers",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.ClusterUnreachableMember",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.ShardDetails",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.ShardEntityTypeKeys",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.ShardRegionInfo",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.bootstrap.ClusterBootstrap$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "akka.management.cluster.bootstrap.LowestAddressJoinDecider",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem",
+          "akka.management.cluster.bootstrap.ClusterBootstrapSettings"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.management.cluster.bootstrap.contactpoint.HttpBootstrapJsonProtocol$ClusterMember",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.bootstrap.contactpoint.HttpBootstrapJsonProtocol$SeedNode",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.bootstrap.contactpoint.HttpBootstrapJsonProtocol$SeedNodes",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.management.cluster.scaladsl.ClusterMembershipCheck",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem"
         ]
       }
     ]
@@ -1094,6 +1411,18 @@
     "name": "akka.remote.DaemonMsgCreate"
   },
   {
+    "name": "akka.remote.PhiAccrualFailureDetector",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "com.typesafe.config.Config",
+          "akka.event.EventStream"
+        ]
+      }
+    ]
+  },
+  {
     "name": "akka.remote.RemoteActorRefProvider$RemotingTerminator",
     "queryAllDeclaredConstructors": true,
     "methods": [
@@ -1128,6 +1457,14 @@
   },
   {
     "name": "akka.remote.artery.ArteryMessage"
+  },
+  {
+    "name": "akka.remote.artery.Association",
+    "fields": [
+      {
+        "name": "_sharedStateDoNotCallMeDirectly"
+      }
+    ]
   },
   {
     "name": "akka.remote.artery.jfr.JFRRemotingFlightRecorder",
@@ -2606,6 +2943,24 @@
     ]
   },
   {
+    "name": "com.sun.crypto.provider.HmacCore$HmacSHA256",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.PBKDF2Core$HmacSHA256",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
     "name": "com.sun.crypto.provider.TlsMasterSecretGenerator",
     "methods": [
       {
@@ -3410,7 +3765,573 @@
     "name": "io.micrometer.context.ContextRegistry"
   },
   {
+    "name": "io.netty.buffer.AbstractByteBufAllocator",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.netty.buffer.AbstractReferenceCountedByteBuf",
+    "fields": [
+      {
+        "name": "refCnt"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.AbstractChannelHandlerContext",
+    "fields": [
+      {
+        "name": "handlerState"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.ChannelDuplexHandler",
+    "methods": [
+      {
+        "name": "bind",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "close",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "connect",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "java.net.SocketAddress",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "deregister",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "disconnect",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "flush",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "read",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "write",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object",
+          "io.netty.channel.ChannelPromise"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.ChannelInboundHandlerAdapter",
+    "methods": [
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "channelReadComplete",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRegistered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelUnregistered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelWritabilityChanged",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.ChannelInitializer",
+    "methods": [
+      {
+        "name": "channelRegistered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.ChannelOutboundBuffer",
+    "fields": [
+      {
+        "name": "totalPendingSize"
+      },
+      {
+        "name": "unwritable"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.DefaultChannelConfig",
+    "fields": [
+      {
+        "name": "autoRead"
+      },
+      {
+        "name": "writeBufferWaterMark"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.DefaultChannelPipeline",
+    "fields": [
+      {
+        "name": "estimatorHandle"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.DefaultChannelPipeline$HeadContext",
+    "methods": [
+      {
+        "name": "bind",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "channelReadComplete",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRegistered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelUnregistered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelWritabilityChanged",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "close",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "connect",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.net.SocketAddress",
+          "java.net.SocketAddress",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "deregister",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "disconnect",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "io.netty.channel.ChannelPromise"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      },
+      {
+        "name": "flush",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "read",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "write",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object",
+          "io.netty.channel.ChannelPromise"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.DefaultChannelPipeline$TailContext",
+    "methods": [
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "channelReadComplete",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRegistered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelUnregistered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelWritabilityChanged",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.netty.channel.DefaultFileRegion"
+  },
+  {
+    "name": "io.netty.channel.epoll.Epoll"
+  },
+  {
+    "name": "io.netty.channel.epoll.NativeDatagramPacketArray$NativeDatagramPacket"
+  },
+  {
+    "name": "io.netty.channel.kqueue.KQueue"
+  },
+  {
+    "name": "io.netty.channel.unix.PeerCredentials"
+  },
+  {
+    "name": "io.netty.handler.codec.ByteToMessageDecoder",
+    "methods": [
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "channelReadComplete",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.netty.handler.codec.LengthFieldBasedFrameDecoder"
+  },
+  {
+    "name": "io.netty.incubator.channel.uring.IOUring"
+  },
+  {
+    "name": "io.netty.util.AbstractReferenceCounted",
+    "fields": [
+      {
+        "name": "refCnt"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.DefaultAttributeMap",
+    "fields": [
+      {
+        "name": "attributes"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.DefaultAttributeMap$DefaultAttribute",
+    "fields": [
+      {
+        "name": "attributeMap"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.Recycler$DefaultHandle",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.ReferenceCountUtil",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.netty.util.ResourceLeakDetector$DefaultResourceLeak",
+    "fields": [
+      {
+        "name": "droppedRecords"
+      },
+      {
+        "name": "head"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.concurrent.DefaultPromise",
+    "fields": [
+      {
+        "name": "result"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.concurrent.SingleThreadEventExecutor",
+    "fields": [
+      {
+        "name": "state"
+      },
+      {
+        "name": "threadProperties"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueColdProducerFields",
+    "fields": [
+      {
+        "name": "producerLimit"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueConsumerFields",
+    "fields": [
+      {
+        "name": "consumerIndex"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueProducerFields",
+    "fields": [
+      {
+        "name": "producerIndex"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueConsumerIndexField",
+    "fields": [
+      {
+        "name": "consumerIndex"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueProducerIndexField",
+    "fields": [
+      {
+        "name": "producerIndex"
+      }
+    ]
+  },
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueProducerLimitField",
+    "fields": [
+      {
+        "name": "producerLimit"
+      }
+    ]
+  },
+  {
     "name": "io.perfmark.impl.SecretPerfMarkImpl$PerfMarkImpl"
+  },
+  {
+    "name": "io.r2dbc.postgresql.client.ReactorNettyClient$Conversation",
+    "fields": [
+      {
+        "name": "demand"
+      }
+    ]
+  },
+  {
+    "name": "io.r2dbc.postgresql.client.ReactorNettyClient$EnsureSubscribersCompleteChannelHandler",
+    "methods": [
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelUnregistered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      }
+    ]
   },
   {
     "name": "java.io.FileDescriptor"
@@ -3550,6 +4471,12 @@
     "fields": [
       {
         "name": "threadLocalRandomProbe"
+      }
+    ],
+    "methods": [
+      {
+        "name": "onSpinWait",
+        "parameterTypes": []
       }
     ]
   },
@@ -3714,6 +4641,14 @@
   },
   {
     "name": "java.nio.ByteBuffer",
+    "fields": [
+      {
+        "name": "hb"
+      },
+      {
+        "name": "offset"
+      }
+    ],
     "methods": [
       {
         "name": "alignedSlice",
@@ -4066,6 +5001,48 @@
     ]
   },
   {
+    "name": "local.drones.DeliveriesQueue$Command",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$CompleteDelivery",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "akka.actor.typed.ActorRef"
+        ]
+      },
+      {
+        "name": "deliveryId",
+        "parameterTypes": []
+      },
+      {
+        "name": "replyTo",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$CompleteDelivery$",
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
     "name": "local.drones.DeliveriesQueue$DeliveryInProgress",
     "allDeclaredFields": true,
     "queryAllDeclaredMethods": true,
@@ -4101,6 +5078,82 @@
   },
   {
     "name": "local.drones.DeliveriesQueue$DeliveryInProgress$",
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$GetCurrentState",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.typed.ActorRef"
+        ]
+      },
+      {
+        "name": "replyTo",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$GetCurrentState$",
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$RequestDelivery",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "local.drones.Coordinates",
+          "akka.actor.typed.ActorRef"
+        ]
+      },
+      {
+        "name": "droneCoordinates",
+        "parameterTypes": []
+      },
+      {
+        "name": "droneId",
+        "parameterTypes": []
+      },
+      {
+        "name": "replyTo",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$RequestDelivery$",
     "queryAllPublicMethods": true,
     "fields": [
       {
@@ -4223,8 +5276,45 @@
     ]
   },
   {
+    "name": "local.drones.Drone$Command",
+    "queryAllDeclaredMethods": true
+  },
+  {
     "name": "local.drones.Drone$Event",
     "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "local.drones.Drone$GetCurrentPosition",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.typed.ActorRef"
+        ]
+      },
+      {
+        "name": "replyTo",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "local.drones.Drone$GetCurrentPosition$",
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
   },
   {
     "name": "local.drones.Drone$PositionUpdated",
@@ -4252,6 +5342,44 @@
   },
   {
     "name": "local.drones.Drone$PositionUpdated$",
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "name": "local.drones.Drone$ReportPosition",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "local.drones.Position",
+          "akka.actor.typed.ActorRef"
+        ]
+      },
+      {
+        "name": "position",
+        "parameterTypes": []
+      },
+      {
+        "name": "replyTo",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "local.drones.Drone$ReportPosition$",
     "queryAllPublicMethods": true,
     "fields": [
       {
@@ -4491,6 +5619,9 @@
     ]
   },
   {
+    "name": "org.locationtech.jts.geom.Geometry"
+  },
+  {
     "name": "org.robolectric.Robolectric"
   },
   {
@@ -4518,6 +5649,14 @@
     ]
   },
   {
+    "name": "reactor.core.publisher.FluxConcatIterable$ConcatIterableSubscriber",
+    "fields": [
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
     "name": "reactor.core.publisher.FluxConcatMapNoPrefetch$FluxConcatMapNoPrefetchSubscriber",
     "fields": [
       {
@@ -4525,6 +5664,39 @@
       },
       {
         "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxCreate$BaseSink",
+    "fields": [
+      {
+        "name": "disposable"
+      },
+      {
+        "name": "requestConsumer"
+      },
+      {
+        "name": "requested"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxCreate$BufferAsyncSink",
+    "fields": [
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxCreate$SerializedFluxSink",
+    "fields": [
+      {
+        "name": "error"
+      },
+      {
+        "name": "wip"
       }
     ]
   },
@@ -4541,6 +5713,14 @@
     "fields": [
       {
         "name": "once"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxFirstWithSignal$RaceCoordinator",
+    "fields": [
+      {
+        "name": "winner"
       }
     ]
   },
@@ -4583,7 +5763,43 @@
     ]
   },
   {
+    "name": "reactor.core.publisher.FluxPublish$PubSubInner",
+    "fields": [
+      {
+        "name": "requested"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxPublish$PublishSubscriber",
+    "fields": [
+      {
+        "name": "connected"
+      },
+      {
+        "name": "error"
+      },
+      {
+        "name": "s"
+      },
+      {
+        "name": "subscribers"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
     "name": "reactor.core.publisher.FluxRetry$RetrySubscriber",
+    "fields": [
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxRetryWhen$RetryWhenMainSubscriber",
     "fields": [
       {
         "name": "wip"
@@ -4610,10 +5826,72 @@
     ]
   },
   {
+    "name": "reactor.core.publisher.FluxWindowPredicate$WindowFlux",
+    "fields": [
+      {
+        "name": "actual"
+      },
+      {
+        "name": "once"
+      },
+      {
+        "name": "parent"
+      },
+      {
+        "name": "requested"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.FluxWindowPredicate$WindowPredicateMain",
+    "fields": [
+      {
+        "name": "cancelled"
+      },
+      {
+        "name": "error"
+      },
+      {
+        "name": "requested"
+      },
+      {
+        "name": "windowCount"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.LambdaMonoSubscriber",
+    "fields": [
+      {
+        "name": "subscription"
+      }
+    ]
+  },
+  {
     "name": "reactor.core.publisher.MonoCallable$MonoCallableSubscription",
     "fields": [
       {
         "name": "requestedOnce"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoCreate$DefaultMonoSink",
+    "fields": [
+      {
+        "name": "disposable"
+      },
+      {
+        "name": "requestConsumer"
+      },
+      {
+        "name": "state"
       }
     ]
   },
@@ -4626,10 +5904,32 @@
     ]
   },
   {
+    "name": "reactor.core.publisher.MonoDelayUntil$DelayUntilCoordinator",
+    "fields": [
+      {
+        "name": "error"
+      },
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
     "name": "reactor.core.publisher.MonoFlatMap$FlatMapMain",
     "fields": [
       {
         "name": "second"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.MonoFlatMapMany$FlatMapManyMain",
+    "fields": [
+      {
+        "name": "inner"
+      },
+      {
+        "name": "requested"
       }
     ]
   },
@@ -4696,6 +5996,22 @@
     ]
   },
   {
+    "name": "reactor.core.publisher.Operators$DeferredSubscription",
+    "fields": [
+      {
+        "name": "requested"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.Operators$MonoInnerProducerBase",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
     "name": "reactor.core.publisher.Operators$MultiSubscriptionSubscriber",
     "fields": [
       {
@@ -4717,6 +6033,97 @@
     "fields": [
       {
         "name": "once"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.SinkEmptyMulticast",
+    "fields": [
+      {
+        "name": "subscribers"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.SinkManyBestEffort",
+    "fields": [
+      {
+        "name": "subscribers"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.SinkManyEmitterProcessor",
+    "fields": [
+      {
+        "name": "error"
+      },
+      {
+        "name": "s"
+      },
+      {
+        "name": "subscribers"
+      },
+      {
+        "name": "upstreamDisposable"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.SinkManyUnicast",
+    "fields": [
+      {
+        "name": "discardGuard"
+      },
+      {
+        "name": "onTerminate"
+      },
+      {
+        "name": "once"
+      },
+      {
+        "name": "requested"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.publisher.SinksSpecs$AbstractSerializedSink",
+    "fields": [
+      {
+        "name": "lockedAt"
+      },
+      {
+        "name": "wip"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.scheduler.BoundedElasticScheduler",
+    "fields": [
+      {
+        "name": "state"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.scheduler.BoundedElasticScheduler$BoundedServices",
+    "fields": [
+      {
+        "name": "busyStates"
+      }
+    ]
+  },
+  {
+    "name": "reactor.core.scheduler.BoundedElasticScheduler$BoundedState",
+    "fields": [
+      {
+        "name": "markCount"
       }
     ]
   },
@@ -4758,6 +6165,71 @@
       },
       {
         "name": "thread"
+      }
+    ]
+  },
+  {
+    "name": "reactor.netty.channel.ChannelOperations",
+    "fields": [
+      {
+        "name": "outboundSubscription"
+      }
+    ]
+  },
+  {
+    "name": "reactor.netty.channel.ChannelOperationsHandler",
+    "methods": [
+      {
+        "name": "channelActive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelInactive",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext"
+        ]
+      },
+      {
+        "name": "channelRead",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "exceptionCaught",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Throwable"
+        ]
+      },
+      {
+        "name": "userEventTriggered",
+        "parameterTypes": [
+          "io.netty.channel.ChannelHandlerContext",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "reactor.netty.channel.FluxReceive",
+    "fields": [
+      {
+        "name": "receiverCancel"
+      }
+    ]
+  },
+  {
+    "name": "reactor.netty.transport.TransportConfig$TransportChannelInitializer"
+  },
+  {
+    "name": "reactor.netty.transport.TransportConnector$MonoChannelPromise",
+    "fields": [
+      {
+        "name": "result"
       }
     ]
   },
@@ -4805,6 +6277,52 @@
     "fields": [
       {
         "name": "once"
+      }
+    ]
+  },
+  {
+    "name": "reactor.util.concurrent.MpscLinkedQueue",
+    "fields": [
+      {
+        "name": "consumerNode"
+      },
+      {
+        "name": "producerNode"
+      }
+    ]
+  },
+  {
+    "name": "reactor.util.concurrent.MpscLinkedQueue$LinkedQueueNode",
+    "fields": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  {
+    "name": "reactor.util.concurrent.SpscArrayQueueConsumer",
+    "fields": [
+      {
+        "name": "consumerIndex"
+      }
+    ]
+  },
+  {
+    "name": "reactor.util.concurrent.SpscArrayQueueProducer",
+    "fields": [
+      {
+        "name": "producerIndex"
+      }
+    ]
+  },
+  {
+    "name": "reactor.util.concurrent.SpscLinkedArrayQueue",
+    "fields": [
+      {
+        "name": "consumerIndex"
+      },
+      {
+        "name": "producerIndex"
       }
     ]
   },
