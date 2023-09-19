@@ -6,7 +6,7 @@ package akka.projection.r2dbc.internal
 
 import java.time.Clock
 import java.time.Instant
-import java.time.{Duration => JDuration}
+import java.time.{ Duration => JDuration }
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -692,8 +692,8 @@ private[projection] class R2dbcOffsetStore(
         validation match {
           case Validation.Accepted                  => OffsetValidation.Accepted
           case Validation.Duplicate                 => OffsetValidation.Duplicate
-          case Validation.RejectedSeqNr             => OffsetValidation.RejectedSeqNr
-          case Validation.RejectedBacktrackingSeqNr => OffsetValidation.RejectedBacktrackingSeqNr
+          case Validation.RejectedSeqNr             => OffsetValidation.Rejected
+          case Validation.RejectedBacktrackingSeqNr => OffsetValidation.Rejected
         }
       validationObservers.foreach(_.onOffsetValidated(env, observerValidation))
     }

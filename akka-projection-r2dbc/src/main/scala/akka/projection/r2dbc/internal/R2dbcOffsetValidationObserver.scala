@@ -12,8 +12,7 @@ object R2dbcOffsetValidationObserver {
   object OffsetValidation {
     case object Accepted extends OffsetValidation
     case object Duplicate extends OffsetValidation
-    case object RejectedSeqNr extends OffsetValidation
-    case object RejectedBacktrackingSeqNr extends OffsetValidation
+    case object Rejected extends OffsetValidation
   }
 }
 
