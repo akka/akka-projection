@@ -2,8 +2,7 @@ name := "restaurant-drone-deliveries-service"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(
-  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 scalaVersion := "2.13.11"
 
