@@ -42,6 +42,12 @@
     "name": "[Lakka.routing.ConsistentRoutee;"
   },
   {
+    "name": "[Lakka.stream.impl.BatchingInputBuffer;"
+  },
+  {
+    "name": "[Lakka.stream.impl.FanOut$FanoutOutputs;"
+  },
+  {
     "name": "[Lakka.stream.stage.GraphStageLogic;"
   },
   {
@@ -190,6 +196,9 @@
   },
   {
     "name": "[Lscala.Tuple4;"
+  },
+  {
+    "name": "[Lsun.security.pkcs.SignerInfo;"
   },
   {
     "name": "[S"
@@ -758,6 +767,63 @@
         ]
       }
     ]
+  },
+  {
+    "name": "akka.discovery.kubernetes.KubernetesApiServiceDiscovery",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem"
+        ]
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.discovery.kubernetes.PodList",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.discovery.kubernetes.PodList$Container",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.discovery.kubernetes.PodList$ContainerPort",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.discovery.kubernetes.PodList$ContainerStatus",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.discovery.kubernetes.PodList$Metadata",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.discovery.kubernetes.PodList$Pod",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.discovery.kubernetes.PodList$PodSpec",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "akka.discovery.kubernetes.PodList$PodStatus",
+    "allDeclaredFields": true,
+    "queryAllPublicMethods": true
   },
   {
     "name": "akka.dispatch.AbstractNodeQueue",
@@ -2961,7 +3027,25 @@
     ]
   },
   {
+    "name": "com.sun.crypto.provider.TlsKeyMaterialGenerator",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
     "name": "com.sun.crypto.provider.TlsMasterSecretGenerator",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.TlsPrfGenerator$V12",
     "methods": [
       {
         "name": "<init>",
@@ -3556,6 +3640,47 @@
     ]
   },
   {
+    "name": "io.grpc.netty.shaded.io.netty.channel.epoll.EpollChannelOption",
+    "fields": [
+      {
+        "name": "TCP_USER_TIMEOUT"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.epoll.EpollDomainSocketChannel"
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.epoll.EpollEventLoopGroup",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "int",
+          "java.util.concurrent.ThreadFactory"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.epoll.EpollServerSocketChannel",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.epoll.EpollSocketChannel",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
     "name": "io.grpc.netty.shaded.io.netty.channel.epoll.NativeDatagramPacketArray$NativeDatagramPacket"
   },
   {
@@ -3564,6 +3689,20 @@
       {
         "name": "<init>",
         "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.unix.DatagramSocketAddress"
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.unix.DomainDatagramSocketAddress"
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.channel.unix.FileDescriptor",
+    "fields": [
+      {
+        "name": "state"
       }
     ]
   },
@@ -3704,6 +3843,18 @@
       },
       {
         "name": "threadProperties"
+      }
+    ]
+  },
+  {
+    "name": "io.grpc.netty.shaded.io.netty.util.internal.NativeLibraryUtil",
+    "methods": [
+      {
+        "name": "loadLibrary",
+        "parameterTypes": [
+          "java.lang.String",
+          "boolean"
+        ]
       }
     ]
   },
@@ -4258,6 +4409,18 @@
     ]
   },
   {
+    "name": "io.netty.util.internal.NativeLibraryUtil",
+    "methods": [
+      {
+        "name": "loadLibrary",
+        "parameterTypes": [
+          "java.lang.String",
+          "boolean"
+        ]
+      }
+    ]
+  },
+  {
     "name": "io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueColdProducerFields",
     "fields": [
       {
@@ -4338,6 +4501,9 @@
   },
   {
     "name": "java.io.FilePermission"
+  },
+  {
+    "name": "java.io.IOException"
   },
   {
     "name": "java.io.Serializable",
@@ -4425,6 +4591,9 @@
     ]
   },
   {
+    "name": "java.lang.OutOfMemoryError"
+  },
+  {
     "name": "java.lang.ProcessHandle",
     "methods": [
       {
@@ -4439,6 +4608,9 @@
   },
   {
     "name": "java.lang.Runtime$Version"
+  },
+  {
+    "name": "java.lang.RuntimeException"
   },
   {
     "name": "java.lang.RuntimePermission"
@@ -4606,7 +4778,13 @@
     "name": "java.math.BigInteger"
   },
   {
+    "name": "java.net.InetSocketAddress"
+  },
+  {
     "name": "java.net.NetPermission"
+  },
+  {
+    "name": "java.net.PortUnreachableException"
   },
   {
     "name": "java.net.SocketPermission"
@@ -4671,6 +4849,9 @@
     ]
   },
   {
+    "name": "java.nio.channels.ClosedChannelException"
+  },
+  {
     "name": "java.nio.channels.FileChannel"
   },
   {
@@ -4698,6 +4879,12 @@
   },
   {
     "name": "java.security.SecurityPermission"
+  },
+  {
+    "name": "java.security.interfaces.ECPrivateKey"
+  },
+  {
+    "name": "java.security.interfaces.ECPublicKey"
   },
   {
     "name": "java.util.Date"
@@ -6686,6 +6873,15 @@
     ]
   },
   {
+    "name": "sun.security.provider.JavaKeyStore$DualFormatJKS",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
     "name": "sun.security.provider.JavaKeyStore$JKS",
     "methods": [
       {
@@ -6773,6 +6969,15 @@
     ]
   },
   {
+    "name": "sun.security.provider.certpath.PKIXCertPathValidator",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
     "name": "sun.security.rsa.PSSParameters",
     "methods": [
       {
@@ -6827,6 +7032,15 @@
     ]
   },
   {
+    "name": "sun.security.ssl.SSLContextImpl$TLS12Context",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
     "name": "sun.security.ssl.TrustManagerFactoryImpl$PKIXFactory",
     "methods": [
       {
@@ -6834,6 +7048,9 @@
         "parameterTypes": []
       }
     ]
+  },
+  {
+    "name": "sun.security.util.ObjectIdentifier"
   },
   {
     "name": "sun.security.x509.AuthorityInfoAccessExtension",
@@ -6882,6 +7099,9 @@
         ]
       }
     ]
+  },
+  {
+    "name": "sun.security.x509.CertificateExtensions"
   },
   {
     "name": "sun.security.x509.CertificatePoliciesExtension",
