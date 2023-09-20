@@ -3,16 +3,19 @@
  */
 package akka.projection.r2dbc.internal
 
+import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
 
 @InternalStableApi
 object R2dbcOffsetValidationObserver {
-  sealed trait OffsetValidation
+  // effectively sealed, but to avoid translation the R2dbcOffsetStore.Validation extend this
+  @DoNotInherit
+  trait OffsetValidation
 
   object OffsetValidation {
-    case object Accepted extends OffsetValidation
-    case object Duplicate extends OffsetValidation
-    case object Rejected extends OffsetValidation
+    @DoNotInherit trait Accepted extends OffsetValidation
+    @DoNotInherit trait Duplicate extends OffsetValidation
+    @DoNotInherit trait Rejected extends OffsetValidation
   }
 }
 

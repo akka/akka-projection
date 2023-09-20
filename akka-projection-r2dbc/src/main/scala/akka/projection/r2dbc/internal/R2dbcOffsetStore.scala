@@ -167,13 +167,15 @@ private[projection] object R2dbcOffsetStore {
 
   final class RejectedEnvelope(message: String) extends IllegalStateException(message)
 
-  sealed trait Validation
+  sealed trait Validation extends R2dbcOffsetValidationObserver.OffsetValidation
 
   object Validation {
-    case object Accepted extends Validation
-    case object Duplicate extends Validation
-    case object RejectedSeqNr extends Validation
-    case object RejectedBacktrackingSeqNr extends Validation
+    import R2dbcOffsetValidationObserver.OffsetValidation
+
+    case object Accepted extends Validation with OffsetValidation.Accepted
+    case object Duplicate extends Validation with OffsetValidation.Duplicate
+    case object RejectedSeqNr extends Validation with OffsetValidation.Rejected
+    case object RejectedBacktrackingSeqNr extends Validation with OffsetValidation.Rejected
 
     val FutureAccepted: Future[Validation] = Future.successful(Accepted)
     val FutureDuplicate: Future[Validation] = Future.successful(Duplicate)
@@ -686,16 +688,8 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def notifyValidationObserver[Envelope](env: Envelope, validation: Validation): Unit = {
-    import R2dbcOffsetValidationObserver.OffsetValidation
     if (validationObservers.nonEmpty) {
-      val observerValidation =
-        validation match {
-          case Validation.Accepted                  => OffsetValidation.Accepted
-          case Validation.Duplicate                 => OffsetValidation.Duplicate
-          case Validation.RejectedSeqNr             => OffsetValidation.Rejected
-          case Validation.RejectedBacktrackingSeqNr => OffsetValidation.Rejected
-        }
-      validationObservers.foreach(_.onOffsetValidated(env, observerValidation))
+      validationObservers.foreach(_.onOffsetValidated(env, validation))
     }
   }
 
