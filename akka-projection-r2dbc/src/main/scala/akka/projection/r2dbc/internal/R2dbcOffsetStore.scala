@@ -15,6 +15,7 @@ import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.util.Success
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -535,11 +536,11 @@ private[projection] class R2dbcOffsetStore(
         }
 
     if (validationObservers.nonEmpty)
-      result.foreach(_.foreach {
-        case (env, validation) => notifyValidationObserver(env, validation)
-      })
-
-    result
+      result.andThen {
+        case Success(xs) => xs.foreach { case (env, v) => notifyValidationObserver(env, v) }
+      }
+    else
+      result
   }
 
   /**
@@ -552,8 +553,12 @@ private[projection] class R2dbcOffsetStore(
       case Some(recordWithOffset) => validate(recordWithOffset, getInflight())
       case None                   => Validation.FutureAccepted
     }
-    notifyValidationObserver(envelope, result)
-    result
+    if (validationObservers.nonEmpty)
+      result.andThen {
+        case Success(v) => notifyValidationObserver(envelope, v)
+      }
+    else
+      result
   }
 
   private def validate(recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Future[Validation] = {
@@ -680,11 +685,6 @@ private[projection] class R2dbcOffsetStore(
         FutureDuplicate
       }
     }
-  }
-
-  private def notifyValidationObserver[Envelope](env: Envelope, validation: Future[Validation]): Unit = {
-    if (validationObservers.nonEmpty)
-      validation.foreach(notifyValidationObserver(env, _))
   }
 
   private def notifyValidationObserver[Envelope](env: Envelope, validation: Validation): Unit = {
