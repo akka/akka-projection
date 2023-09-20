@@ -40,12 +40,13 @@ object DeliveriesQueue {
   final case class WaitingDelivery(
       deliveryId: String,
       from: Coordinates,
-      to: Coordinates)
+      to: Coordinates) extends CborSerializable
 
   final case class DeliveryInProgress(
       deliveryId: String,
       droneId: String,
       pickupTime: Instant)
+
   final case class State(
       waitingDeliveries: Vector[WaitingDelivery],
       deliveriesInProgress: Vector[DeliveryInProgress])

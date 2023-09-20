@@ -97,5 +97,9 @@ nativeImageOptions := Seq(
   "-Dlogback.configurationFile=logback-native-image.xml" // configured at build time
 )
 
+NativeImage / mainClass := sys.props.get("native.mode").collect {
+  case "clustered" => "local.drones.ClusteredMain"
+}.orElse((Compile / run / mainClass).value)
+
 // silence warnings for these keys (used in dynamic task)
 Global / excludeLintKeys ++= Set(nativeImageJvm, nativeImageVersion)

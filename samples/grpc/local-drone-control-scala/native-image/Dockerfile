@@ -3,7 +3,8 @@ RUN apt-get update && apt-get install -y build-essential zlib1g-dev
 USER sbtuser
 WORKDIR /home/sbtuser/build
 COPY --chown=sbtuser:sbtuser . .
-RUN sbt nativeImage
+ARG mode=single
+RUN sbt nativeImage -Dnative.mode=$mode
 
 FROM gcr.io/distroless/java-base-debian11:nonroot
 COPY --from=builder /home/sbtuser/build/target/native-image/local-drone-control /bin/

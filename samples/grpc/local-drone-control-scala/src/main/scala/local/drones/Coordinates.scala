@@ -1,5 +1,7 @@
 package local.drones
 
+import akka.serialization.jackson.CborSerializable
+
 /**
  * Decimal degree coordinates
  */
@@ -35,7 +37,7 @@ object Coordinates {
 
 }
 
-final case class Position(coordinates: Coordinates, altitudeMeters: Double)
+final case class Position(coordinates: Coordinates, altitudeMeters: Double) extends CborSerializable
 
 object CoarseGrainedCoordinates {
 
