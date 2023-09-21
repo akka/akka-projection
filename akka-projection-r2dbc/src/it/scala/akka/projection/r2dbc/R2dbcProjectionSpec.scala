@@ -244,8 +244,7 @@ class R2dbcProjectionSpec
   private val concatHandlerFail4Msg = "fail on fourth envelope"
 
   private def withRepo[R](fun: TestRepository => Future[R]): Future[R] = {
-    r2dbcExecutor.withConnection("test") { conn =>
-      val session = new R2dbcSession(conn)
+    R2dbcSession.withSession(system, r2dbcProjectionSettings.useConnectionFactory) { session =>
       fun(TestRepository(session))
     }
   }

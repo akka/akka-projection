@@ -1,0 +1,3 @@
+# Wrong function type, was ApiMayChange
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.r2dbc.javadsl.R2dbcSession.selectOne")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.r2dbc.javadsl.R2dbcSession.select")
