@@ -29,6 +29,9 @@
         "pattern": "\\Qakka-http-version.conf\\E"
       },
       {
+        "pattern": "\\Qapplication-kubernetes.conf\\E"
+      },
+      {
         "pattern": "\\Qapplication.conf\\E"
       },
       {
@@ -102,9 +105,6 @@
       },
       {
         "pattern": "\\Qpostgres.conf\\E"
-      },
-      {
-        "pattern": "\\Qprod.conf\\E"
       },
       {
         "pattern": "\\Qreference.conf\\E"

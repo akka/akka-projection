@@ -213,6 +213,9 @@
     "name": "[[I"
   },
   {
+    "name": "[[J"
+  },
+  {
     "name": "akka.Done"
   },
   {
@@ -602,6 +605,17 @@
   },
   {
     "name": "akka.cluster.routing.ClusterRouterPool"
+  },
+  {
+    "name": "akka.cluster.sbr.SplitBrainResolverProvider",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ActorSystem"
+        ]
+      }
+    ]
   },
   {
     "name": "akka.cluster.sharding.ClusterShardingGuardian",
