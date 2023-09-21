@@ -5,6 +5,12 @@
         "pattern": "\\QMETA-INF/MANIFEST.MF\\E"
       },
       {
+        "pattern": "\\QMETA-INF/native/libio_grpc_netty_shaded_netty_transport_native_epoll_aarch_64.so\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/native/libio_grpc_netty_shaded_netty_transport_native_epoll_x86_64.so\\E"
+      },
+      {
         "pattern": "\\QMETA-INF/services/io.grpc.LoadBalancerProvider\\E"
       },
       {
@@ -23,6 +29,9 @@
         "pattern": "\\Qakka-http-version.conf\\E"
       },
       {
+        "pattern": "\\Qapplication-kubernetes.conf\\E"
+      },
+      {
         "pattern": "\\Qapplication.conf\\E"
       },
       {
@@ -36,9 +45,6 @@
       },
       {
         "pattern": "\\Qh2-default-projection-schema.conf\\E"
-      },
-      {
-        "pattern": "\\Qlocal-persistence.conf\\E"
       },
       {
         "pattern": "\\Qlocal-shared.conf\\E"
@@ -98,6 +104,9 @@
         "pattern": "\\Qpersistence.conf\\E"
       },
       {
+        "pattern": "\\Qpostgres.conf\\E"
+      },
+      {
         "pattern": "\\Qreference.conf\\E"
       },
       {
@@ -105,6 +114,9 @@
       },
       {
         "pattern": "java.base:\\Qjdk/internal/icu/impl/data/icudt67b/nfc.nrm\\E"
+      },
+      {
+        "pattern": "java.base:\\Qjdk/internal/icu/impl/data/icudt67b/nfkc.nrm\\E"
       },
       {
         "pattern": "java.base:\\Qsun/net/www/content-types.properties\\E"
