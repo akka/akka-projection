@@ -80,7 +80,7 @@ YAML
 Apply the access control with:
 
 ```
-kubectl -f apply kubernetes/rbac.yml
+kubectl apply -f kubernetes/rbac.yml
 ```
 
 ## Database secret
@@ -110,18 +110,16 @@ Paste the DDL statements from the `ddl-scripts/create-tables.sql` to the `psql` 
 SQL
 :  @@snip [create-tables.sql](/samples/grpc/restaurant-drone-deliveries-service-scala/ddl-scripts/create_tables.sql) { }
 
-## Deploy local drone control
+## Deploy the Restaurant Drone Deliveries Service
 
-FIXME
-
-We are going to deploy the `shopping-cart-service` in region `us-east-2`.
+We are now going to deploy the `restaurant-drone-deliveries-service` to the created kubernetes cluster in `us-east-2`.
 
 This step is for deploying:
 
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
 
-Build the image:
+Build and publish the docker image to docker.io:
 
 Scala
 :  ```
@@ -130,18 +128,18 @@ sbt -Ddocker.username=<username> -Ddocker.registry=docker.io docker:publish
 
 Java
 :  ```
-mvn -DskipTests -Ddocker.registry=<username>/shopping-cart-service clean package docker:push
+mvn -DskipTests -Ddocker.registry=<username>/restaurant-drone-deliveries-service clean package docker:push
 ```
 
 The Kubernetes `Deployment` in `deployment.yml` file:
 
 YAML
-:  @@snip [deployment.yml](/samples/grpc/shopping-cart-service-scala/kubernetes/deployment.yml) { }
+:  @@snip [deployment.yml](/samples/grpc/restaurant-drone-deliveries-service-scala/kubernetes/deployment.yml) { }
 
 Update the `image:` in the `deployment.yml` with the specific image version and location you published.
 
 ```
-kubectl -f apply kubernetes/deployment.yml
+kubectl apply -f kubernetes/deployment.yml
 ```
 
 ### Port forward
@@ -152,7 +150,7 @@ YAML
 :  @@snip [deployment.yml](/samples/grpc/shopping-cart-service-scala/kubernetes/service.yml) { }
 
 ```
-kubectl -f apply kubernetes/service.yml
+kubectl apply -f kubernetes/service.yml
 ```
 
 Start port forward with:
@@ -165,12 +163,27 @@ kubectl port-forward svc/restaurant-drone-deliveries-service-svc 8101:8101
 
 Use [grpcurl](https://github.com/fullstorydev/grpcurl) to exercise the service.
 
-FIXME same service calls to set up restaurants etc as when running locally? 
+Set up two restaurants: 
+
+```shell
+grpcurl -d '{"restaurant_id":"restaurant1","coordinates":{"latitude": 59.330324, "longitude": 18.039568}, "local_control_location_id": "sweden/stockholm/kungsholmen" }' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.SetUpRestaurant
+grpcurl -d '{"restaurant_id":"restaurant2","coordinates":{"latitude": 59.342046, "longitude": 18.059095}, "local_control_location_id": "sweden/stockholm/norrmalm" }' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.SetUpRestaurant
+```
+
+Register a delivery for each restaurant:
+
+```shell
+grpcurl -d '{"restaurant_id":"restaurant1","delivery_id": "order1","coordinates":{"latitude": 59.330841, "longitude": 18.038885}}' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.RegisterDelivery
+grpcurl -d '{"restaurant_id":"restaurant2","delivery_id": "order2","coordinates":{"latitude": 59.340128, "longitude": 18.056303}}' -plaintext localhost:8101 central.deliveries.RestaurantDeliveriesService.RegisterDelivery
+```
+
+We have not set up any local drone delivery services yet so there are no drones to actually pick up the orders.
+
 
 ## Load balancer
 
 To access the `restaurant-drone-deliveries-service` from `local-drone-control` services running in other regions or on the edge
-we need an Internet facing load balancer (FIXME or VPC if still in AWS?).
+we need an Internet facing load balancer.
 
 There are many alternatives for secure access with a load balancer. An incomplete list of options:
 
@@ -190,7 +203,7 @@ Follow the instructions of how to [install the AWS Load Balancer Controller add-
 Create a Kubernetes `Service` that is configured for the load balancer:
 
 YAML
-:  @@snip [deployment.yml](/samples/grpc/restaurant-drone-deliveries-service-scala/kubernetes/service-nlb.yml) { }
+:  @@snip [service-nlb.yml](/samples/grpc/restaurant-drone-deliveries-service-scala/kubernetes/service-nlb.yml) { }
 
 The external DNS name is shown by:
 
