@@ -61,7 +61,7 @@ JSON
 Create the namespace with:
 
 ```
-kubectl -f apply kubernetes/namespace.json
+kubectl apply -f kubernetes/namespace.json
 ```
 
 For convenience, you can use this namespace by default:
@@ -220,20 +220,33 @@ This step is for deploying:
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-scala
 
-Create a Kubernetes `Secret` with the gRPC connection details for the load balancers:
+
+### Namespace
+
+Define a Kubernetes namespace with a `namespace.json` file:
+
+JSON
+:  @@snip [namespace.json](/samples/grpc/local-drone-control-scala/kubernetes/namespace.json) { }
+
+Create the namespace with:
 
 ```
-kubectl create secret generic \
-    local-drone-control-secret \
-    --from-literal=CENTRAL_DRONE_CONTROL_HOST=k8s-restaurant-drone-deliveries-19708e1324-24617530ddc6d2cb.elb.us-east-2.amazonaws.com \
-    --from-literal=CENTRAL_DRONE_CONTROL_PORT=80 \
-    --from-literal=LOCATION_ID=sweden/stockholm/kungsholmen
+kubectl apply -f kubernetes/namespace.json
 ```
 
+For convenience, you can use this namespace by default:
 
-FIXME the rest here onwards is half done
+```
+kubectl config set-context --current --namespace=local-drone-control-namespace
+```
 
-This secret is referenced from configuration environment variables from the `deployment.yml`:
+### Deploy the service
+
+In the edge k8 clusters, update the environment variables in deployment.yaml for `LOCATION_ID`, selecting one of the 
+predefined locations known to the restaurant-drone-deliveries service: `sweden/stockholm/kungsholmen`,
+`sweden/stockholm/södermalm`, `sweden/stockholm/norrmalm` or `sweden/stockholm/östermalm`.
+
+Set `CENTRAL_DRONE_CONTROL_HOST` to the public DNS hostname of your load balancer for the `restaurant-drone-deliveries-service`.
 
 YAML
 :  @@snip [deployment.yml](/samples/replicated/local-drone-control-scala/kubernetes/deployment.yml) { }
@@ -243,7 +256,7 @@ Build the image and deploy in the same way as described previously.
 
 Scala
 :  ```
-sbt -Ddocker.username=<username> -Ddocker.registry=docker.io docker:publish
+sbt -Ddocker.username=<username> -Ddocker.registry=docker.io Docker/publish
 ```
 
 Java
@@ -254,7 +267,7 @@ mvn -DskipTests -Ddocker.registry=<username>/shopping-cart-service clean package
 Update the `image:` in the `deployment.yml` with the specific image version and location you published.
 
 ```
-kubectl -f apply kubernetes/debployment.yml
+kubectl apply -f kubernetes/debployment.yml
 ```
 
 ### Port forwards
@@ -271,17 +284,15 @@ kubectl -f apply kubernetes/service.yml
 Start port forward with:
 
 ```
-kubectl port-forward svc/shopping-cart-service-svc 8101:8101
+kubectl port-forward svc/local-drone-control-service-svc 8080:8080
 ```
 
-Switch `kubectl` context to the other region and apply the `service.yml` and start the port forward on another port:
-
-```
-kubectl port-forward svc/shopping-cart-service-svc 8201:8101
-```
-
-### Exercise the local drone control
+### Exercise the local drone control service instance
 
 Use [grpcurl](https://github.com/fullstorydev/grpcurl) to exercise the service.
 
 ```
+grpcurl -d '{"drone_id":"drone3", "coordinates": {"longitude": 19.70125, "latitude": 59.51834}, "altitude": 5}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
+```
+
+FIXME ... add restaurant delivery, pick it up with drone etc... 

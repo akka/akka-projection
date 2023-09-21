@@ -1,0 +1,11 @@
+{
+  "kind": "Namespace",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "local-drone-control-namespace",
+    "labels": {
+      "name": "local-drone-control-namespace"
+    }
+  }
+}
+

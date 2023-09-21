@@ -2,8 +2,7 @@ name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(
-  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 scalaVersion := "2.13.12"
 
@@ -22,7 +21,7 @@ Test / logBuffered := false
 
 run / fork := true
 // use the single node main by default
-Compile / run / mainClass := Some("local.drones.Main")
+Compile / mainClass := Some("local.drones.Main")
 // pass along config selection to forked jvm
 run / javaOptions ++= sys.props
   .get("config.resource")
@@ -43,6 +42,7 @@ enablePlugins(JavaAppPackaging, DockerPlugin)
 dockerBaseImage := "docker.io/library/eclipse-temurin:17.0.8.1_1-jre"
 dockerUsername := sys.props.get("docker.username")
 dockerRepository := sys.props.get("docker.registry")
+dockerBuildxPlatforms := Seq("linux/amd64")
 dockerUpdateLatest := true
 ThisBuild / dynverSeparator := "-"
 
