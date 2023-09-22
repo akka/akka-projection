@@ -1,0 +1,11 @@
+{
+  "kind": "Namespace",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "restaurant-drone-deliveries-namespace",
+    "labels": {
+      "name": "restaurant-drone-deliveries-namespace"
+    }
+  }
+}
+

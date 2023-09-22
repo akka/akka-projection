@@ -74,7 +74,7 @@ JSON
 Create the namespace with:
 
 ```
-kubectl -f apply kubernetes/namespace.json
+kubectl apply -f kubernetes/namespace.json
 ```
 
 For convenience, you can use this namespace by default:
@@ -93,7 +93,7 @@ YAML
 Apply the access control with:
 
 ```
-kubectl -f apply kubernetes/rbac.yml
+kubectl apply -f kubernetes/rbac.yml
 ```
 
 ## Database secret
@@ -156,7 +156,7 @@ YAML
 Update the `image:` in the `deployment.yml` with the specific image version and location you published.
 
 ```
-kubectl -f apply kubernetes/debployment.yml
+kubectl apply -f kubernetes/deployment.yml
 ```
 
 ### Port forward
@@ -167,7 +167,7 @@ YAML
 :  @@snip [deployment.yml](/samples/grpc/shopping-cart-service-scala/kubernetes/service.yml) { }
 
 ```
-kubectl -f apply kubernetes/service.yml
+kubectl apply -f kubernetes/service.yml
 ```
 
 Start port forward with:
@@ -196,7 +196,7 @@ To access the `shopping-cart-service` from `shopping-analytics-service` running 
 
 There are many alternatives for secure access with a load balancer. An incomplete list of options:
 
-* Network load balancer such as [AWS Load Balancer Controller](https://docs.aws.amazon.com/eks/latest/userguide/network-load-balancing.html) with with TLS all the way between the services.
+* Network load balancer such as [AWS Load Balancer Controller](https://docs.aws.amazon.com/eks/latest/userguide/network-load-balancing.html) with TLS all the way between the services.
 * Application load balancer such as [AWS Load Balancer Controller](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/deploy-a-grpc-based-application-on-an-amazon-eks-cluster-and-access-it-with-an-application-load-balancer.html), which terminates TLS.
 * [NGINX Ingress Controller](https://docs.nginx.com/nginx-ingress-controller/)
 * [Contour](https://projectcontour.io)
@@ -261,7 +261,7 @@ the load balancer that you created, for example:
 Run the service:
 
 ```
-kubectl -f apply kubernetes/debployment.yml
+kubectl apply -f kubernetes/debployment.yml
 ```
 
 ### Exercise the shopping-analytics-service
@@ -332,7 +332,7 @@ mvn -DskipTests -Ddocker.registry=<username>/shopping-cart-service clean package
 Update the `image:` in the `deployment.yml` with the specific image version and location you published.
 
 ```
-kubectl -f apply kubernetes/debployment.yml
+kubectl apply -f kubernetes/debployment.yml
 ```
 
 ### Port forwards
@@ -343,7 +343,7 @@ YAML
 :  @@snip [deployment.yml](/samples/replicated/shopping-cart-service-scala/kubernetes/service.yml) { }
 
 ```
-kubectl -f apply kubernetes/service.yml
+kubectl apply -f kubernetes/service.yml
 ```
 
 Start port forward with:

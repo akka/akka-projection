@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>shopping-cart-service</artifactId>
+    <artifactId>restaurant-drone-deliveries-service</artifactId>
     <groupId>com.lightbend.akka.samples</groupId>
     <version>1.0</version>
 
@@ -248,16 +248,19 @@
             <plugin>
                 <groupId>io.fabric8</groupId>
                 <artifactId>docker-maven-plugin</artifactId>
-                <version>0.35.0</version>
+                <version>0.39.1</version>
                 <configuration>
                     <images>
                         <image>
                             <name>%a</name>
                             <build>
-                                <from>docker.io/library/eclipse-temurin:17.0.3_7-jre-jammy</from>
+                                <from>docker.io/library/eclipse-temurin:17.0.8.1_1-jre</from>
                                 <tags>
                                     <tag>${version.number}</tag>
                                 </tags>
+                                <createImageOptions>
+                                    <platform>linux/amd64</platform>
+                                </createImageOptions>
                                 <entryPoint>
                                     <exec>
                                         <arg>java</arg>
