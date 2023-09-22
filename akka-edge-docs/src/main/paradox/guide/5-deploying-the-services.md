@@ -219,8 +219,7 @@ This step is for deploying:
 * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-java
 * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-scala
 
-
-### Namespace
+### Local Drone Control Namespace
 
 Define a Kubernetes namespace with a `namespace.json` file:
 
@@ -248,7 +247,7 @@ predefined locations known to the restaurant-drone-deliveries service: `sweden/s
 Set `CENTRAL_DRONE_CONTROL_HOST` to the public DNS hostname of your load balancer for the `restaurant-drone-deliveries-service`.
 
 YAML
-:  @@snip [deployment.yml](/samples/replicated/local-drone-control-scala/kubernetes/deployment.yml) { }
+:  @@snip [deployment.yml](/samples/grpc/local-drone-control-scala/kubernetes/deployment.yml) { }
 
 
 Build the image and deploy in the same way as described previously.
@@ -274,7 +273,7 @@ kubectl apply -f kubernetes/debployment.yml
 Create a Kubernetes `Service` and port forward to simplify access to the pods from your local machine:
 
 YAML
-:  @@snip [deployment.yml](/samples/replicated/shopping-cart-service-scala/kubernetes/service.yml) { }
+:  @@snip [deployment.yml](/samples/grpc/local-drone-control-scala/kubernetes/service.yml) { }
 
 ```
 kubectl -f apply kubernetes/service.yml
