@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: local-drone-control-service
+  name: local-drone-control-service
+  namespace: local-drone-control-namespace
+spec:
+  # note: the default image cannot scale out as it uses a local database
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-drone-control-service
+  template:
+    metadata:
+      labels:
+        app: local-drone-control-service
+        actorSystemName: local-drone-control-service
+    spec:
+      containers:
+        - name: restaurant-drone-deliveries-service
+          # use specific image version from docker publish
+          image: johanandren/local-drone-control:20230922-090652-37e49e0
+          # these will need to be increased/tuned for production environments!
+          resources:
+            limits:
+              memory: "512Mi"
+            requests:
+              memory: "512Mi"
+              cpu: "1000m"
+          ports:
+            - name: grpc
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75"
+            - name: LOCATION_ID
+              # one of the location ids supported by the restaurant-drone-deliveries service
+              value: "sweden/stockholm/kungsholmen"
+            - name: CENTRAL_DRONE_CONTROL_HOST
+              # update with public endpoint for restaurant-drone-deliveries
+              value: k8s-restaura-restaura-5bd7dc845f-48570e637882db8c.elb.us-east-2.amazonaws.com
+            - name: CENTRAL_DRONE_CONTROL_PORT
+              value: "80"
+            - name: H2_DATABASE_PATH
+              # for state to survive restarts this would need to be a volume
+              # right now a restarted node will replay all orders from central
+              # and only report new drone updates
+              value: /tmp/drone-db
