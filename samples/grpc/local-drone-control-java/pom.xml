@@ -280,7 +280,7 @@
                 <configuration>
                     <images>
                         <image>
-                            <name>johanandren/%a</name>
+                            <name>%a</name>
                             <build>
                                 <from>docker.io/library/eclipse-temurin:17.0.8.1_1-jre</from>
                                 <tags>

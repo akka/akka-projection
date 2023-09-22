@@ -212,7 +212,6 @@ kubectl get services
 ```
 
 
-
 ## Deploy local drone control instances
 
 This step is for deploying:
@@ -295,4 +294,14 @@ Use [grpcurl](https://github.com/fullstorydev/grpcurl) to exercise the service.
 grpcurl -d '{"drone_id":"drone3", "coordinates": {"longitude": 19.70125, "latitude": 59.51834}, "altitude": 5}' -plaintext 127.0.0.1:8080 local.drones.DroneService.ReportLocation
 ```
 
-FIXME ... add restaurant delivery, pick it up with drone etc... 
+Check that the coarse grained location of the drone was propagated to the cloud service:
+
+```
+grpcurl -d '{"drone_id":"drone3"}' -plaintext <public-cloud-service-dns-name>:80 central.drones.DroneOverviewService.GetDroneOverview
+```
+
+List the orders that was propagated to the local control service, you should see an order we added an order when verifying that the restaurant-drone-deliveries service was functional earlier.
+
+```
+grpcurl -plaintext 127.0.0.1:8080 local.drones.DeliveriesQueueService.GetCurrentQueue
+```
