@@ -305,7 +305,7 @@ The exclude criteria can be a combination of:
 
 To exclude all events you can use `ExcludeRegexEntityIds` with `.*`.
 
-The exclude criteria can be a combination of:
+The include criteria can be a combination of:
 
 * `IncludeTopics` - include events with any of the given matching topics
 * `IncludeTags` - include events with any of the given tags
