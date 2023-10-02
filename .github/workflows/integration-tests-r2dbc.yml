@@ -16,7 +16,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - { jdkVersion: "1.8.0",  jvmName: "temurin:1.8.0",  extraOpts: '' }
           # - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
           - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
 
@@ -64,7 +63,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - { jdkVersion: "1.8.0",  jvmName: "temurin:1.8.0",  extraOpts: '' }
           # - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
           - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
 
@@ -114,7 +112,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - { jdkVersion: "1.8.0",  jvmName: "temurin:1.8.0",  extraOpts: '' }
           # - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
           - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
 

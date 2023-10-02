@@ -47,7 +47,8 @@ object Common extends AutoPlugin {
     crossVersion := CrossVersion.binary,
     crossScalaVersions := Dependencies.Scala2Versions,
     scalaVersion := Dependencies.Scala213,
-    javacOptions ++= List("-Xlint:unchecked", "-Xlint:deprecation"),
+    Compile / javacOptions ++= List("-Xlint:unchecked", "-Xlint:deprecation", "--release", "11"),
+    Compile / scalacOptions ++= Seq("-release", "11"),
     Compile / doc / scalacOptions := scalacOptions.value ++ Seq(
         "-doc-title",
         "Akka Projection",
