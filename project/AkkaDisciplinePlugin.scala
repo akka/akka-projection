@@ -37,9 +37,6 @@ object AkkaDisciplinePlugin extends AutoPlugin {
                 "-Ywarn-nullary-unit",
                 "-Ypartial-unification",
                 "-Yno-adapted-args")
-            case Some((2, 12)) =>
-              // no fatal-warnings for 2.12
-              disciplineScalacOptions - "-Xfatal-warnings"
             case _ =>
               Nil
           }).toSeq,
