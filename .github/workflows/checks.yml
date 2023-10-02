@@ -73,7 +73,7 @@ jobs:
         with:
           jvm: temurin:1.11
 
-      - name: Compile all code with fatal warnings for Java 11, Scala 2.12, Scala 2.13 and Scala 3
+      - name: Compile all code with fatal warnings for Java 11, Scala 2.13 and Scala 3
         run: sbt "clean ; +IntegrationTest/compile"
 
   check-docs:

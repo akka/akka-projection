@@ -29,5 +29,5 @@ jobs:
         # v2.1.0
         uses: scalacenter/sbt-dependency-submission@573f2f9ac18dd26794bd0c5b26b71e880467b608
         with:
-          modules-ignore: examples_2.13 examples_2.12
+          modules-ignore: examples_2.13
           configs-ignore: test It scala-tool scala-doc-tool
