@@ -1,9 +1,15 @@
 package central.deliveries
 
+import java.time.Instant
+
+import scala.concurrent.duration._
+
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
+import akka.actor.typed.SupervisorStrategy
+import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
@@ -13,8 +19,6 @@ import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.serialization.jackson.CborSerializable
 import central.Coordinates
-
-import java.time.Instant
 
 /**
  * Keeps track of registered deliveries for per restaurant
@@ -84,7 +88,7 @@ object RestaurantDeliveries {
         // picks them up for drone delivery
         Set("t:" + state.localControlLocationId)
       case _ => Set.empty
-    }
+    }.onPersistFailure(SupervisorStrategy.restartWithBackoff(100.millis, 5.seconds, 0.1))
 
   // #commandHandler
   private def onCommand(

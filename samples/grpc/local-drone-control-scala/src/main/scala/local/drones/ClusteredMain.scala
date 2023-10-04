@@ -9,6 +9,8 @@ import akka.management.scaladsl.AkkaManagement
 /**
  * Main for starting the local-drone-control as a cluster rather than a single self-contained node. Requires
  * a separate database, start with config from local{1,2,3}.conf files for running as cluster locally.
+ *
+ * This should be started with -Dconfig.resource=application-cluster.conf or `-Dconfig.resource=local1.conf`
  */
 object ClusteredMain {
 

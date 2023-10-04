@@ -3,6 +3,7 @@ package central.deliveries;
 import akka.Done;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
+import akka.actor.typed.SupervisorStrategy;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 import akka.cluster.sharding.typed.javadsl.Entity;
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
@@ -15,6 +16,7 @@ import akka.persistence.typed.javadsl.EventSourcedBehavior;
 import akka.serialization.jackson.CborSerializable;
 import central.Coordinates;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -155,7 +157,9 @@ public final class RestaurantDeliveries
   }
 
   public RestaurantDeliveries(String restaurantId) {
-    super(PersistenceId.of(ENTITY_KEY.name(), restaurantId));
+    super(
+        PersistenceId.of(ENTITY_KEY.name(), restaurantId),
+        SupervisorStrategy.restartWithBackoff(Duration.ofMillis(100), Duration.ofSeconds(5), 0.1));
   }
 
   @Override

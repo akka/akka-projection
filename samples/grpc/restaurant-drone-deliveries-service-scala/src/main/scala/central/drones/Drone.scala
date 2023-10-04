@@ -1,18 +1,26 @@
 package central.drones
 
+import java.time.Instant
+
+import scala.concurrent.duration._
+
 import akka.Done
+import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
+import akka.actor.typed.ActorRef
+import akka.actor.typed.ActorSystem
+import akka.actor.typed.Behavior
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.cluster.sharding.typed.scaladsl.Entity
+import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.pattern.StatusReply
 import akka.persistence.r2dbc.state.scaladsl.AdditionalColumn
 import akka.persistence.typed.PersistenceId
-import akka.persistence.typed.state.scaladsl.{DurableStateBehavior, Effect}
+import akka.persistence.typed.state.scaladsl.DurableStateBehavior
+import akka.persistence.typed.state.scaladsl.Effect
 import akka.serialization.jackson.CborSerializable
 import central.CoarseGrainedCoordinates
-
-import java.time.Instant
 
 /**
  * Durable state entity keeping an overview state of where the drone is and its state, but not the full detail,
@@ -21,7 +29,7 @@ import java.time.Instant
 object Drone {
 
   // #commands
-  sealed trait Command
+  sealed trait Command extends CborSerializable
 
   final case class UpdateLocation(
       locationName: String,
@@ -56,7 +64,8 @@ object Drone {
       DurableStateBehavior(
         PersistenceId(EntityKey.name, droneId),
         emptyState,
-        onCommand(context))
+        onCommand(context)).onPersistFailure(
+        SupervisorStrategy.restartWithBackoff(100.millis, 5.seconds, 0.1))
     }
   }
 
@@ -77,8 +86,8 @@ object Drone {
               currentLocation = Some(coordinates)))
           .thenReply(replyTo)(_ => StatusReply.ack())
 
-        case GetState(replyTo) =>
-          Effect.reply(replyTo)(state)
+      case GetState(replyTo) =>
+        Effect.reply(replyTo)(state)
     }
   // #commandHandler
 
