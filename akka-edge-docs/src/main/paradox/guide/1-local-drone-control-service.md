@@ -100,10 +100,10 @@ It is of course also possible to instead use a separate standalone database such
 Config to use H2 looks like this:
 
 Scala
-:  @@snip [persistence.conf](/samples/grpc/local-drone-control-scala/src/main/resources/persistence.conf) { }
+:  @@snip [persistence-h2.conf](/samples/grpc/local-drone-control-scala/src/main/resources/persistence-h2.conf) { }
 
 Java
-:  @@snip [persistence.conf](/samples/grpc/local-drone-control-java/src/main/resources/persistence.conf) { }
+:  @@snip [persistence-h2.conf](/samples/grpc/local-drone-control-java/src/main/resources/persistence-h2.conf) { }
 
 In addition to the configuration, the following additional dependencies are needed in the project build:
 
