@@ -5,6 +5,7 @@ import static akka.Done.done;
 import akka.Done;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
+import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
@@ -15,6 +16,7 @@ import akka.persistence.typed.state.javadsl.DurableStateBehavior;
 import akka.persistence.typed.state.javadsl.Effect;
 import akka.serialization.jackson.CborSerializable;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
@@ -151,15 +153,20 @@ public final class DeliveriesQueue
       EntityTypeKey.create(Command.class, "RestaurantDeliveries");
 
   public static Behavior<Command> create() {
-    return Behaviors.setup(
-        context ->
-            new DeliveriesQueue(context, PersistenceId.of(EntityKey.name(), "DeliveriesQueue")));
+    return Behaviors.<Command>supervise(
+            Behaviors.setup(
+                context ->
+                    new DeliveriesQueue(
+                        context, PersistenceId.of(EntityKey.name(), "DeliveriesQueue"))))
+        .onFailure(SupervisorStrategy.restart());
   }
 
   private final ActorContext<Command> context;
 
   public DeliveriesQueue(ActorContext<Command> context, PersistenceId persistenceId) {
-    super(persistenceId);
+    super(
+        persistenceId,
+        SupervisorStrategy.restartWithBackoff(Duration.ofMillis(100), Duration.ofSeconds(5), 0.1));
     this.context = context;
   }
 

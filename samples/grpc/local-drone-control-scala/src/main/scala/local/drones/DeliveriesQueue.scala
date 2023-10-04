@@ -1,5 +1,6 @@
 package local.drones
 
+import scala.concurrent.duration._
 import akka.Done
 import akka.actor.typed.scaladsl.{ ActorContext, Behaviors }
 import akka.actor.typed.{ ActorRef, Behavior }
@@ -8,8 +9,9 @@ import akka.pattern.StatusReply
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.state.scaladsl.{ DurableStateBehavior, Effect }
 import akka.serialization.jackson.CborSerializable
-
 import java.time.Instant
+
+import akka.actor.typed.SupervisorStrategy
 
 object DeliveriesQueue {
 
@@ -40,7 +42,8 @@ object DeliveriesQueue {
   final case class WaitingDelivery(
       deliveryId: String,
       from: Coordinates,
-      to: Coordinates) extends CborSerializable
+      to: Coordinates)
+      extends CborSerializable
 
   final case class DeliveryInProgress(
       deliveryId: String,
@@ -57,12 +60,17 @@ object DeliveriesQueue {
   val EntityKey = EntityTypeKey("RestaurantDeliveries")
 
   def apply(): Behavior[Command] = {
-    Behaviors.setup { context =>
-      DurableStateBehavior[Command, State](
-        PersistenceId(EntityKey.name, "DeliveriesQueue"),
-        State(Vector.empty, Vector.empty),
-        onCommand(context))
-    }
+    Behaviors
+      .supervise[Command] {
+        Behaviors.setup { context =>
+          DurableStateBehavior[Command, State](
+            PersistenceId(EntityKey.name, "DeliveriesQueue"),
+            State(Vector.empty, Vector.empty),
+            onCommand(context)).onPersistFailure(
+            SupervisorStrategy.restartWithBackoff(100.millis, 5.seconds, 0.1))
+        }
+      }
+      .onFailure(SupervisorStrategy.restart)
   }
 
   // #commandHandler

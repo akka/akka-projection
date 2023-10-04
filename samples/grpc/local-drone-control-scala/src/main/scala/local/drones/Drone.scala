@@ -1,9 +1,12 @@
 package local.drones
 
+import scala.concurrent.duration._
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
+import akka.actor.typed.SupervisorStrategy
+import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
@@ -84,6 +87,7 @@ object Drone {
       emptyState,
       handleCommand,
       handleEvent)
+      .onPersistFailure(SupervisorStrategy.restartWithBackoff(100.millis, 5.seconds, 0.1))
 
   // #commandHandler
   private def handleCommand(

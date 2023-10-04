@@ -3,6 +3,7 @@ package central.drones;
 import akka.Done;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
+import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
@@ -16,6 +17,7 @@ import akka.persistence.typed.state.javadsl.Effect;
 import akka.serialization.jackson.CborSerializable;
 import central.CoarseGrainedCoordinates;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -83,7 +85,9 @@ public final class Drone extends DurableStateBehavior<Drone.Command, Drone.State
   private final ActorContext<Command> context;
 
   private Drone(ActorContext<Command> context, String entityId) {
-    super(PersistenceId.of(ENTITY_KEY.name(), entityId));
+    super(
+        PersistenceId.of(ENTITY_KEY.name(), entityId),
+        SupervisorStrategy.restartWithBackoff(Duration.ofMillis(100), Duration.ofSeconds(5), 0.1));
     this.context = context;
   }
 

@@ -6,6 +6,7 @@ import akka.Done;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Behavior;
+import akka.actor.typed.SupervisorStrategy;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 import akka.cluster.sharding.typed.javadsl.Entity;
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
@@ -17,6 +18,7 @@ import akka.persistence.typed.javadsl.EventHandler;
 import akka.persistence.typed.javadsl.EventSourcedBehavior;
 import akka.serialization.jackson.CborSerializable;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -116,7 +118,9 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
   }
 
   private Drone(String entityId) {
-    super(PersistenceId.of(ENTITY_KEY.name(), entityId));
+    super(
+        PersistenceId.of(ENTITY_KEY.name(), entityId),
+        SupervisorStrategy.restartWithBackoff(Duration.ofMillis(100), Duration.ofSeconds(5), 0.1));
   }
 
   @Override

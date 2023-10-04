@@ -1,5 +1,8 @@
 package central.drones
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.grpc.GrpcServiceException
@@ -8,17 +11,11 @@ import akka.persistence.typed.PersistenceId
 import akka.serialization.SerializationExtension
 import akka.util.Timeout
 import central.DeliveriesSettings
-import central.drones.proto.{
-  DroneOverviewService,
-  GetDroneOverviewRequest,
-  GetDroneOverviewResponse
-}
+import central.drones.proto.DroneOverviewService
+import central.drones.proto.GetDroneOverviewRequest
+import central.drones.proto.GetDroneOverviewResponse
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.jdk.DurationConverters.JavaDurationOps
 
 class DroneOverviewServiceImpl(
     system: ActorSystem[_],
