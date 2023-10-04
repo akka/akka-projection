@@ -28,7 +28,7 @@ import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import javax.persistence.EntityManager
+import jakarta.persistence.EntityManager
 import jdocs.jdbc.HibernateJdbcSession
 import jdocs.jdbc.HibernateSessionFactory
 import org.slf4j.LoggerFactory
