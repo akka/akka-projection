@@ -1112,5 +1112,58 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.savePaused(paused = false).futureValue
       offsetStore.readManagementState().futureValue shouldBe Some(ManagementState(paused = false))
     }
+
+    "start from earliest slice when projection key is changed" in {
+      val projectionId1 = ProjectionId(UUID.randomUUID().toString, "512-767")
+      val projectionId2 = ProjectionId(projectionId1.name, "768-1023")
+      val projectionId3 = ProjectionId(projectionId1.name, "512-1023")
+      val offsetStore1 = new R2dbcOffsetStore(
+        projectionId1,
+        Some(new TestTimestampSourceProvider(512, 767, clock)),
+        system,
+        settings,
+        r2dbcExecutor)
+      val offsetStore2 = new R2dbcOffsetStore(
+        projectionId2,
+        Some(new TestTimestampSourceProvider(768, 1023, clock)),
+        system,
+        settings,
+        r2dbcExecutor)
+
+      val p1 = "p500" // slice 645
+      val p2 = "p863" // slice 645
+      val p3 = "p11" // slice 656
+      val p4 = "p92" // slice 905
+
+      val time1 = TestClock.nowMicros().instant()
+      val time2 = time1.plusSeconds(1)
+      val time3 = time1.plusSeconds(2)
+      val time4 = time1.plusSeconds(3 * 60) // far ahead
+
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time1, Map(p1 -> 1L)), p1, 1L)).futureValue
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time2, Map(p2 -> 1L)), p2, 1L)).futureValue
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time3, Map(p3 -> 1L)), p3, 1L)).futureValue
+      offsetStore2
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(time4, Map(p4 -> 1L)), p4, 1L))
+        .futureValue
+
+      // after downscaling
+      val offsetStore3 = new R2dbcOffsetStore(
+        projectionId3,
+        Some(new TestTimestampSourceProvider(512, 1023, clock)),
+        system,
+        settings,
+        r2dbcExecutor)
+
+      val offset = TimestampOffset.toTimestampOffset(offsetStore3.readOffset().futureValue.get) // this will load from database
+      offsetStore3.getState().size shouldBe 4
+
+      offset.timestamp shouldBe time2
+      offset.seen shouldBe Map(p2 -> 1L)
+
+      // getOffset is used by management api, and that should not be adjusted
+      TimestampOffset.toTimestampOffset(offsetStore3.getOffset().futureValue.get).timestamp shouldBe time4
+    }
+
   }
 }

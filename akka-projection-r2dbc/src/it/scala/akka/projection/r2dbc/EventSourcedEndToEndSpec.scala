@@ -185,11 +185,7 @@ class EventSourcedEndToEndSpec
     }.toVector
   }
 
-  private def mkEvent(n: Int): String = {
-    val template = "0000000"
-    val s = n.toString
-    "e" + (template + s).takeRight(5)
-  }
+  private def mkEvent(n: Int): String = f"e$n%05d"
 
   private def assertEventsProcessed(
       expectedEvents: Vector[String],
@@ -284,62 +280,6 @@ class EventSourcedEndToEndSpec
 
       val expectedEvents = (1 to numberOfEvents).map(mkEvent).toVector
       assertEventsProcessed(expectedEvents, processedProbe, verifyProjectionId = true)
-
-      projections.foreach(_ ! ProjectionBehavior.Stop)
-    }
-
-    "support change of slice distribution" in {
-      val numberOfEntities = 20
-      val numberOfEvents = numberOfEntities * 10
-      val entityType = nextEntityType()
-
-      val entities = (0 until numberOfEntities).map { n =>
-        val persistenceId = PersistenceId(entityType, s"p$n")
-        spawn(Persister(persistenceId), s"$entityType-p$n")
-      }
-
-      val projectionName = UUID.randomUUID().toString
-      val processedProbe = createTestProbe[Processed]()
-      var projections = startProjections(entityType, projectionName, nrOfProjections = 4, processedProbe.ref)
-
-      (1 to numberOfEvents).foreach { n =>
-        val p = n % numberOfEntities
-        entities(p) ! Persister.Persist(mkEvent(n))
-
-        if (n % 10 == 0)
-          Thread.sleep(50)
-        else if (n % 25 == 0)
-          Thread.sleep(1500)
-
-        // stop projections
-        if (n == numberOfEvents / 4) {
-          val probe = createTestProbe()
-          projections.foreach { ref =>
-            ref ! ProjectionBehavior.Stop
-            probe.expectTerminated(ref)
-          }
-        }
-
-        // resume projections again but with more nrOfProjections
-        if (n == (numberOfEvents / 4) + 20)
-          projections = startProjections(entityType, projectionName, nrOfProjections = 8, processedProbe.ref)
-
-        // stop projections
-        if (n == numberOfEvents * 3 / 4) {
-          val probe = createTestProbe()
-          projections.foreach { ref =>
-            ref ! ProjectionBehavior.Stop
-            probe.expectTerminated(ref)
-          }
-        }
-
-        // resume projections again but with less nrOfProjections
-        if (n == (numberOfEvents * 3 / 4) + 20)
-          projections = startProjections(entityType, projectionName, nrOfProjections = 2, processedProbe.ref)
-      }
-
-      val expectedEvents = (1 to numberOfEvents).map(mkEvent).toVector
-      assertEventsProcessed(expectedEvents, processedProbe, verifyProjectionId = false)
 
       projections.foreach(_ ! ProjectionBehavior.Stop)
     }
