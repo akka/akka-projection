@@ -68,6 +68,9 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.3.11",
   "org.scalatest" %% "scalatest" % "3.1.2" % Test,
+  // Prometheus client for custom metrics
+  "io.prometheus" % "simpleclient" % "0.16.0",
+  "io.prometheus" % "simpleclient_httpserver" % "0.16.0",
   // 2. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,

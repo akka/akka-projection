@@ -1,0 +1,8 @@
+apiVersion: v2
+name: autoscaler
+description: Vertical pod autoscaler for drones in local k3s
+version: 0.1.0
+dependencies:
+- name: vertical-pod-autoscaler
+  version: "~9.3.0"
+  repository: "https://cowboysysop.github.io/charts"

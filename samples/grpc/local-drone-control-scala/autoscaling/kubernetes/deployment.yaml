@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-drone-control
+  labels:
+    app: local-drone-control
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: local-drone-control
+  strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+      type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: local-drone-control
+    spec:
+      serviceAccountName: local-drone-control
+      containers:
+      - name: local-drone-control
+        image: local-drone-control:latest
+        imagePullPolicy: Never
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /alive
+            port: management
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: management
+        args:
+        - "-Dconfig.resource=application-cluster.conf"
+        env:
+        - name: LOCATION_ID
+          # one of the location ids supported by the restaurant-drone-deliveries service
+          value: "sweden/stockholm/kungsholmen"
+        - name: GRPC_PORT
+          value: "8080"
+        - name: REMOTE_PORT
+          value: "2552"
+        - name: HTTP_MGMT_PORT
+          value: "8558"
+        - name: PROMETHEUS_PORT
+          value: "9090"
+        - name: REQUIRED_CONTACT_POINT_NR
+          value: "1"
+        - name: CENTRAL_DRONE_CONTROL_HOST
+          valueFrom:
+            secretKeyRef:
+              name: central-drone-control
+              key: host
+        - name: CENTRAL_DRONE_CONTROL_PORT
+          valueFrom:
+            secretKeyRef:
+              name: central-drone-control
+              key: port
+        - name: CENTRAL_DRONE_CONTROL_TLS
+          valueFrom:
+            secretKeyRef:
+              name: central-drone-control
+              key: tls
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: host
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: port
+        - name: DB_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: database
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: password
+        ports:
+        - name: grpc
+          containerPort: 8080
+          protocol: TCP
+        - name: remote
+          containerPort: 2552
+          protocol: TCP
+        - name: management
+          containerPort: 8558
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP

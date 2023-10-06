@@ -29,5 +29,6 @@ class NativeImageAsyncAppender extends AsyncAppender {
   }
 
   // method, so that it's not fixed at build time
-  private def isNativeImageBuild = sys.props.get("org.graalvm.nativeimage.imagecode").contains("buildtime")
+  private def isNativeImageBuild =
+    sys.props.get("org.graalvm.nativeimage.imagecode").contains("buildtime")
 }

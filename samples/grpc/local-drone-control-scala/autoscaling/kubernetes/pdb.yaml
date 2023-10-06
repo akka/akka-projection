@@ -1,0 +1,9 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: local-drone-control
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: local-drone-control

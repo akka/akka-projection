@@ -1,0 +1,15 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%date{ISO8601} %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- uncomment and set to DEBUG to log all failing gRPC requests -->
+    <!-- uncomment and set to TRACE to log all gRPC requests -->
+    <!-- <logger name="com.github.phisgr.gatling.grpc.action.GrpcCallAction" level="DEBUG"/> -->
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

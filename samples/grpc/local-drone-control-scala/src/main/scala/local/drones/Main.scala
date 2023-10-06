@@ -7,7 +7,6 @@ import akka.cluster.typed.Join
 
 object Main {
 
-
   // #main
   def main(args: Array[String]): Unit = {
     ActorSystem[Nothing](rootBehavior(), "local-drone-control")
@@ -36,7 +35,9 @@ object Main {
         DeliveryEvents.projectionBehavior(deliveriesQueue, settings)(
           context.system),
         "DeliveriesProjection")
-      val deliveriesQueueService = new DeliveriesQueueServiceImpl(settings, deliveriesQueue)(context.system)
+      val deliveriesQueueService =
+        new DeliveriesQueueServiceImpl(settings, deliveriesQueue)(
+          context.system)
 
       val grpcInterface =
         context.system.settings.config

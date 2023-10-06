@@ -104,7 +104,8 @@ object DroneEvents {
           envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged]),
       GrpcClientSettings.fromConfig("central-drone-control"))
 
-    def projectionForPartition(partition: Int): Behavior[ProjectionBehavior.Command] = {
+    def projectionForPartition(
+        partition: Int): Behavior[ProjectionBehavior.Command] = {
       val sliceRange = sliceRanges(partition)
       val minSlice = sliceRange.min
       val maxSlice = sliceRange.max

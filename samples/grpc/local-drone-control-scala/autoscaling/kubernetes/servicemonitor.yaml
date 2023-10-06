@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: local-drone-control
+  labels:
+    release: local
+spec:
+  endpoints:
+  - interval: 10s
+    targetPort: metrics
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      app: local-drone-control

@@ -1,0 +1,6 @@
+postgresql:
+  auth:
+    postgresPassword: "postgres"
+  primary:
+    initdb:
+      scriptsConfigMap: "postgresql-initdb"
