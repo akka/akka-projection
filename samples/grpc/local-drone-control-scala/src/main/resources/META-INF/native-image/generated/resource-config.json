@@ -29,7 +29,7 @@
         "pattern": "\\Qakka-http-version.conf\\E"
       },
       {
-        "pattern": "\\Qapplication-kubernetes.conf\\E"
+        "pattern": "\\Qapplication-cluster.conf\\E"
       },
       {
         "pattern": "\\Qapplication.conf\\E"

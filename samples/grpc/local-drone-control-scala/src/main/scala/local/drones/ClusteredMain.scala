@@ -33,6 +33,9 @@ object ClusteredMain {
       Drone.init(context.system)
       DroneEvents.initEventToCloudDaemonProcess(settings)(context.system)
 
+      // start prometheus for custom metrics
+      Telemetry(context.system).start()
+
       // consume delivery events from the cloud service, single queue in cluster singleton
       val deliveriesQueue =
         ClusterSingleton(context.system).init(

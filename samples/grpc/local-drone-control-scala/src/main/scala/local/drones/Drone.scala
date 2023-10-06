@@ -5,6 +5,7 @@ import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
+import akka.actor.typed.PostStop
 import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
@@ -82,12 +83,20 @@ object Drone {
   }
 
   def apply(entityId: String): Behavior[Command] =
-    EventSourcedBehavior[Command, Event, State](
-      PersistenceId(EntityKey.name, entityId),
-      emptyState,
-      handleCommand,
-      handleEvent)
-      .onPersistFailure(SupervisorStrategy.restartWithBackoff(100.millis, 5.seconds, 0.1))
+    Behaviors.setup { context =>
+      val telemetry = Telemetry(context.system)
+      telemetry.droneEntityActivated()
+      EventSourcedBehavior[Command, Event, State](
+        PersistenceId(EntityKey.name, entityId),
+        emptyState,
+        handleCommand,
+        handleEvent)
+        .onPersistFailure(
+          SupervisorStrategy.restartWithBackoff(100.millis, 5.seconds, 0.1))
+        .receiveSignal { case (_, PostStop) =>
+          telemetry.droneEntityPassivated()
+        }
+    }
 
   // #commandHandler
   private def handleCommand(

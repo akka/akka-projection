@@ -37,7 +37,8 @@ object Coordinates {
 
 }
 
-final case class Position(coordinates: Coordinates, altitudeMeters: Double) extends CborSerializable
+final case class Position(coordinates: Coordinates, altitudeMeters: Double)
+    extends CborSerializable
 
 object CoarseGrainedCoordinates {
 

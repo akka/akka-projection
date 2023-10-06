@@ -1,0 +1,13 @@
+vertical-pod-autoscaler:
+  recommender:
+    extraArgs:
+      recommender-name: custom
+      recommender-interval: 10s
+      cpu-histogram-decay-half-life: 30s
+      storage: prometheus
+      prometheus-address: "http://local-monitoring-prometheus.monitoring:9090"
+      v: 4
+  updater:
+    extraArgs:
+      updater-interval: 10s
+      v: 4
