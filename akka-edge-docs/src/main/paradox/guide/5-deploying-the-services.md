@@ -116,8 +116,8 @@ We are now going to deploy the `restaurant-drone-deliveries-service` to the crea
 
 This step is for deploying:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
+* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-java
+* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-scala
 
 Build and publish the docker image to docker.io:
 
@@ -147,7 +147,7 @@ kubectl apply -f kubernetes/deployment.yml
 Create a Kubernetes `Service` and port forward to simplify access to the pods from your local machine:
 
 YAML
-:  @@snip [deployment.yml](/samples/grpc/shopping-cart-service-scala/kubernetes/service.yml) { }
+:  @@snip [deployment.yml](/samples/grpc/restaurant-drone-deliveries-service-scala/kubernetes/service.yml) { }
 
 ```
 kubectl apply -f kubernetes/service.yml
@@ -259,7 +259,7 @@ sbt -Ddocker.username=<username> -Ddocker.registry=docker.io Docker/publish
 
 Java
 :  ```
-mvn -DskipTests -Ddocker.registry=<username>/shopping-cart-service clean package docker:push
+mvn -DskipTests -Ddocker.registry=<username>/local-drone-control clean package docker:push
 ```
 
 Update the `image:` in the `deployment.yml` with the specific image version and location you published.

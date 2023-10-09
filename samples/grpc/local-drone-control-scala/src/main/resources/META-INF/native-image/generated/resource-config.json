@@ -11,6 +11,15 @@
         "pattern": "\\QMETA-INF/native/libio_grpc_netty_shaded_netty_transport_native_epoll_x86_64.so\\E"
       },
       {
+        "pattern": "\\QMETA-INF/native/libnetty_transport_native_epoll_aarch_64.so\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/native/libnetty_transport_native_epoll_x86_64.so\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/services/ch.qos.logback.classic.spi.Configurator\\E"
+      },
+      {
         "pattern": "\\QMETA-INF/services/io.grpc.LoadBalancerProvider\\E"
       },
       {
@@ -101,10 +110,10 @@
         "pattern": "\\Qlogback.xml\\E"
       },
       {
-        "pattern": "\\Qpersistence.conf\\E"
+        "pattern": "\\Qpersistence-h2.conf\\E"
       },
       {
-        "pattern": "\\Qpostgres.conf\\E"
+        "pattern": "\\Qpersistence-postgres.conf\\E"
       },
       {
         "pattern": "\\Qreference.conf\\E"

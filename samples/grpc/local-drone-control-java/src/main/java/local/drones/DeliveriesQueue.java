@@ -89,7 +89,7 @@ public final class DeliveriesQueue
     }
   }
 
-  public static final class WaitingDelivery {
+  public static final class WaitingDelivery implements CborSerializable {
     public final String deliveryId;
     public final Coordinates from;
     public final Coordinates to;

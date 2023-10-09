@@ -1,8 +1,9 @@
 package local.drones;
 
+import akka.serialization.jackson.CborSerializable;
 import java.util.Objects;
 
-public final class Position {
+public final class Position implements CborSerializable {
   public final Coordinates coordinates;
   public final double altitude;
 
