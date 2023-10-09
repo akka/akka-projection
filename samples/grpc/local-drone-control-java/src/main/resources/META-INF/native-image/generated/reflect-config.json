@@ -4435,6 +4435,30 @@
     ]
   },
   {
+    "name": "local.drones.DeliveriesQueue$Command",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$CompleteDelivery",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "akka.actor.typed.ActorRef"
+        ]
+      }
+    ]
+  },
+  {
     "name": "local.drones.DeliveriesQueue$DeliveryInProgress",
     "allDeclaredFields": true,
     "queryAllDeclaredMethods": true,
@@ -4451,6 +4475,46 @@
           "java.lang.String",
           "java.lang.String",
           "java.time.Instant"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$GetCurrentState",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.typed.ActorRef"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "local.drones.DeliveriesQueue$RequestDelivery",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String",
+          "local.drones.Coordinates",
+          "akka.actor.typed.ActorRef"
         ]
       }
     ]
