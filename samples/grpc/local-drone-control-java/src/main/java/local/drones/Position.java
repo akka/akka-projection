@@ -1,11 +1,14 @@
 package local.drones;
 
+import akka.serialization.jackson.CborSerializable;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Objects;
 
-public final class Position {
+public final class Position implements CborSerializable {
   public final Coordinates coordinates;
   public final double altitude;
 
+  @JsonCreator
   public Position(Coordinates coordinates, double altitude) {
     this.coordinates = coordinates;
     this.altitude = altitude;

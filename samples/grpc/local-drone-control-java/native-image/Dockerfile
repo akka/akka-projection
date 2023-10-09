@@ -13,8 +13,9 @@ RUN source "$HOME/.sdkman/bin/sdkman-init.sh" && \
 
 WORKDIR /opt/build
 COPY . .
+ARG profile=native
 RUN source "$HOME/.sdkman/bin/sdkman-init.sh" && \
-    mvn -DskipTests=true -Pnative compile package
+    mvn -DskipTests=true -Pnative -P$profile package
 
 FROM gcr.io/distroless/java-base-debian11:nonroot
 COPY --from=builder /opt/build/target/local-drone-control /bin/

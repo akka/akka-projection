@@ -40,6 +40,7 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
     public final Position position;
     public final ActorRef<Done> replyTo;
 
+    @JsonCreator
     public ReportPosition(Position position, ActorRef<Done> replyTo) {
       this.position = position;
       this.replyTo = replyTo;
@@ -55,6 +56,7 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
   public static final class GetCurrentPosition implements Command {
     public final ActorRef<StatusReply<Position>> replyTo;
 
+    @JsonCreator
     public GetCurrentPosition(ActorRef<StatusReply<Position>> replyTo) {
       this.replyTo = replyTo;
     }

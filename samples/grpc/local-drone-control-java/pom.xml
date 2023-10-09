@@ -337,6 +337,14 @@
                             </arguments>
                         </configuration>
                     </plugin>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${native.maven.plugin.version}</version>
+                        <configuration>
+                            <mainClass>local.drones.ClusteredMain</mainClass>
+                        </configuration>
+                    </plugin>
                 </plugins>
             </build>
         </profile>
@@ -388,6 +396,17 @@
                                         <argument>${mainClass}</argument>
                                     </arguments>
                                 </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>io.fabric8</groupId>
+                        <artifactId>docker-maven-plugin</artifactId>
+                        <version>0.39.1</version>
+                        <executions>
+                            <execution>
+                                <id>build-docker-image</id>
+                                <phase>none</phase>
                             </execution>
                         </executions>
                     </plugin>
