@@ -159,14 +159,14 @@ class R2dbcTimestampOffsetStoreSpec
       val offset1 = TimestampOffset(clock.instant(), Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
       offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
       val readOffset1 = offsetStore.readOffset[TimestampOffset]()
-      val expectedOffset1 = offset1.copy(seen = Map("p1" -> 3L))
+      val expectedOffset1 = TimestampOffset(offset1.timestamp, offset1.readTimestamp, Map("p1" -> 3L))
       readOffset1.futureValue shouldBe Some(expectedOffset1)
 
       tick()
       val offset2 = TimestampOffset(clock.instant(), Map("p1" -> 4L, "p3" -> 6L, "p4" -> 9L))
       offsetStore.saveOffset(OffsetPidSeqNr(offset2, "p3", 6L)).futureValue
       val readOffset2 = offsetStore.readOffset[TimestampOffset]()
-      val expectedOffset2 = offset2.copy(seen = Map("p3" -> 6L))
+      val expectedOffset2 = TimestampOffset(offset2.timestamp, offset2.readTimestamp, Map("p3" -> 6L))
       readOffset2.futureValue shouldBe Some(expectedOffset2)
     }
 

@@ -185,7 +185,12 @@ class R2dbcTimestampOffsetProjectionSpec
 
   private def offsetShouldBe[Offset](expected: Offset)(implicit offsetStore: R2dbcOffsetStore) = {
     val offset = offsetStore.readOffset[TimestampOffset]().futureValue
-    offset shouldBe Some(expected.asInstanceOf[TimestampOffset].copy(readTimestamp = Instant.EPOCH))
+    val expectedTimestampOffset = expected.asInstanceOf[TimestampOffset]
+    offset shouldBe Some(
+      TimestampOffset(
+        expectedTimestampOffset.timestamp,
+        readTimestamp = Instant.EPOCH,
+        seen = expectedTimestampOffset.seen))
   }
 
   private def offsetShouldBeEmpty()(implicit offsetStore: R2dbcOffsetStore) = {
