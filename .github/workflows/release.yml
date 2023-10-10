@@ -44,8 +44,8 @@ jobs:
       - name: Publish artifacts for all Scala versions
         env:
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          PUBLISH_USER: ${{ secrets.PUBLISH_USER }}
+          PUBLISH_PASSWORD: ${{ secrets.PUBLISH_PASSWORD }}
         run: sbt ci-release
 
   documentation:

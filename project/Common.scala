@@ -7,13 +7,12 @@ import sbt.Keys._
 import sbt._
 import sbt.plugins.JvmPlugin
 import com.typesafe.tools.mima.plugin.MimaKeys._
-import xerial.sbt.Sonatype.autoImport.sonatypeProfileName
 
 object Common extends AutoPlugin {
 
   override def trigger = allRequirements
 
-  override def requires = JvmPlugin && CiReleasePlugin
+  override def requires = JvmPlugin
 
   override def globalSettings =
     Seq(
@@ -88,7 +87,6 @@ object Common extends AutoPlugin {
               .getOrElse(throw new Error("Unable to determine previous version")))
 
       }
-    },
-    sonatypeProfileName := "com.lightbend")
+    })
 
 }
