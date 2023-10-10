@@ -26,6 +26,7 @@
         <akka-grpc.version>2.3.4</akka-grpc.version>
         <akka-grpc-maven-plugin.version>2.3.4</akka-grpc-maven-plugin.version>
         <logback.version>1.3.11</logback.version>
+        <prometheus.client.version>0.16.0</prometheus.client.version>
         <junit.version>4.13.1</junit.version>
         <scala.binary.version>2.13</scala.binary.version>
         <native.maven.plugin.version>0.9.26</native.maven.plugin.version>
@@ -148,6 +149,18 @@
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
+        </dependency>
+
+        <!-- Prometheus client for custom metrics -->
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient</artifactId>
+            <version>${prometheus.client.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient_httpserver</artifactId>
+            <version>${prometheus.client.version}</version>
         </dependency>
 
         <dependency>

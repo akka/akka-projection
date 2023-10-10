@@ -1,0 +1,11 @@
+apiVersion: v2
+name: monitoring
+description: Prometheus monitoring for drones in local k3s
+version: 0.1.0
+dependencies:
+- name: kube-prometheus-stack
+  version: "~51.2.0"
+  repository: "https://prometheus-community.github.io/helm-charts"
+- name: prometheus-adapter
+  version: "~4.5.0"
+  repository: "https://prometheus-community.github.io/helm-charts"

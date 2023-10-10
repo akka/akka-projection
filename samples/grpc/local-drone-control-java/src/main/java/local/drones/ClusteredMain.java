@@ -38,6 +38,9 @@ public class ClusteredMain {
           Drone.init(context.getSystem());
           DroneEvents.initEventToCloudDaemonProcess(context.getSystem(), settings);
 
+          // start prometheus for custom metrics
+          Telemetry.Id.get(context.getSystem()).start();
+
           // consume delivery events from the cloud service, single queue in cluster singleton
           var deliveriesQueue =
               ClusterSingleton.get(context.getSystem())

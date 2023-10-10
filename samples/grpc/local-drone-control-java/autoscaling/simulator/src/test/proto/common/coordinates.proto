@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "common.proto";
+
+package common;
+
+// generic messages, shared between local-drone-control and restaurant-drone-deliveries
+
+message Coordinates {
+  // latitude (north-south) in decimal degree coordinates
+  double latitude = 1;
+  // longitude (east west) in decimal degree coordinates
+  double longitude = 2;
+}
