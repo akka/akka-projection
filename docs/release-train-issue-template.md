@@ -22,15 +22,15 @@ Variables to be expanded in this template:
 - [ ] Update the revision in Fossa in the Akka Group for the Akka umbrella version, e.g. `22.10`. Note that the revisions for the release is udpated by Akka Group > Projects > Edit.
 - [ ] Wait until [main build finished](https://github.com/akka/akka-projection/actions) after merging the latest PR
 - [ ] Update the [draft release](https://github.com/akka/akka-projection/releases) with the next tag version `v$VERSION$`, title and release description. Use the `Publish release` button, which will create the tag.
-- [ ] Check that GitHub Actions release build has executed successfully (GitHub Actions will start a [CI build](https://github.com/akka/akka-projection/actions) for the new tag and publish artifacts to Maven central via Sonatype)
+- [ ] Check that GitHub Actions release build has executed successfully (GitHub Actions will start a [CI build](https://github.com/akka/akka-projection/actions) for the new tag and publish artifacts to https://repo.akka.io/maven)
 
 ### Check availability
 
 - [ ] Check [API](https://doc.akka.io/api/akka-projection/$VERSION$/) documentation
 - [ ] Check [reference](https://doc.akka.io/docs/akka-projection/$VERSION$/) documentation. Check that the reference docs were deployed and show a version warning (see section below on how to fix the version warning).
-- [ ] Check the release on [Maven central](https://repo1.maven.org/maven2/com/lightbend/akka/akka-projection-core_2.13/$VERSION$/)
+- [ ] Check the release on https://repo.akka.io/maven/com/lightbend/akka/akka-projection-core_2.13/$VERSION$/akka-projection-core_2.13-$VERSION$.pom
 
-### When everything is on maven central
+### When everything is on https://repo.akka.io/maven
   - [ ] Log into `gustav.akka.io` as `akkarepo` 
     - [ ] If this updates the `current` version, run `./update-akka-projection-current-version.sh $VERSION$`
     - [ ] otherwise check changes and commit the new version to the local git repository

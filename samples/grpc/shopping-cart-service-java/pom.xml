@@ -17,13 +17,13 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <akka.version>2.9.0-M1</akka.version>
+        <akka.version>2.9.0-M3</akka.version>
         <akka-projection.version>1.5.0-M4</akka-projection.version>
-        <akka-persistence-r2dbc.version>1.2.0-M5</akka-persistence-r2dbc.version>
-        <akka-management.version>1.4.0</akka-management.version>
-        <akka-diagnostics.version>2.0.1</akka-diagnostics.version>
-        <akka-grpc.version>2.3.4</akka-grpc.version>
-        <akka-grpc-maven-plugin.version>2.3.4</akka-grpc-maven-plugin.version>
+        <akka-persistence-r2dbc.version>1.2.0-M6</akka-persistence-r2dbc.version>
+        <akka-management.version>1.5.0-M1</akka-management.version>
+        <akka-diagnostics.version>2.1.0-M1</akka-diagnostics.version>
+        <akka-grpc.version>2.4.0-M1</akka-grpc.version>
+        <akka-grpc-maven-plugin.version>2.4.0-M1</akka-grpc-maven-plugin.version>
         <logback.version>1.3.6</logback.version>
         <junit.version>4.13.1</junit.version>
         <scala.binary.version>2.13</scala.binary.version>
@@ -33,6 +33,14 @@
              It can be defined with -Dversion.number=0.1-SNAPSHOT if git is not used -->
         <version.number>${git.commit.time}-${git.commit.id.abbrev}</version.number>
     </properties>
+
+    <repositories>
+        <repository>
+            <id>akka-repository</id>
+            <name>Akka library repository</name>
+            <url>https://repo.akka.io/maven</url>
+        </repository>
+    </repositories>
 
     <dependencies>
         <dependency>

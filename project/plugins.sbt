@@ -1,3 +1,5 @@
+resolvers += "Akka library repository".at("https://repo.akka.io/maven")
+
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.2")
 addSbtPlugin("com.lightbend.sbt" % "sbt-java-formatter" % "0.8.0")
 addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.10.0")
@@ -5,8 +7,7 @@ addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.10.0")
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.5.12")
 
 // remember to bump in samples/grpc/ projects as well if changing
-// FIXME remove dependency to ssl-config-core when updating to AKka grpc/HTTP version without dependency to ssl-config-core
-addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.3.4")
+addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.4.0-M1")
 
 // Documentation
 addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.51")

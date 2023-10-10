@@ -12,19 +12,19 @@ object Dependencies {
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
   val AkkaVersionInDocs = "2.9"
-  val AlpakkaVersionInDocs = "5.0"
-  val AlpakkaKafkaVersionInDocs = "4.0"
-  val AkkaGrpcVersionInDocs = "2.3"
+  val AlpakkaVersionInDocs = "7.0"
+  val AlpakkaKafkaVersionInDocs = "5.0"
+  val AkkaGrpcVersionInDocs = "2.4"
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
   val AkkaProjectionVersionInDocs = "1.5"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.9.0-M1")
-    val akkaPersistenceCassandra = "1.1.0"
-    val akkaPersistenceJdbc = "5.2.0"
-    val akkaPersistenceR2dbc = "1.2.0-M5"
-    val alpakka = "6.0.1"
-    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "4.0.2")
+    val akka = sys.props.getOrElse("build.akka.version", "2.9.0-M3")
+    val akkaPersistenceCassandra = "1.2.0-M1"
+    val akkaPersistenceJdbc = "5.3.0-M1"
+    val akkaPersistenceR2dbc = "1.2.0-M6"
+    val alpakka = "7.0.0-M2"
+    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "5.0.0-M1")
     val slick = "3.4.1"
     val scalaTest = "3.2.17"
     val testContainers = "1.19.1"
@@ -62,9 +62,6 @@ object Dependencies {
 
     // must be provided on classpath when using Apache Kafka 2.6.0+
     val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jacksonDatabind
-
-    // FIXME remove when updating to AKka HTTP version without dependency to ssl-config-core
-    val sslConfig = "com.typesafe" %% "ssl-config-core" % "0.6.1"
 
   }
 
@@ -222,9 +219,7 @@ object Dependencies {
         Compile.akkaPersistenceQuery,
         // Only needed for Replicated Event Sourcing over gRPC,
         // and ConsumerFilter with Cluster on consumer side
-        Compile.akkaClusterShardingTyped % "provided",
-        // FIXME remove when updating to AKka HTTP version without dependency to ssl-config-core
-        Compile.sslConfig)
+        Compile.akkaClusterShardingTyped % "provided")
 
   val grpcTest = deps ++= Seq(
         Test.postgresDriver,

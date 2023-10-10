@@ -2,6 +2,9 @@ import akka.projections.Dependencies
 
 // avoid + in snapshot versions
 ThisBuild / dynverSeparator := "-"
+// append -SNAPSHOT to version when isSnapshot
+ThisBuild / dynverSonatypeSnapshots := true
+ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
@@ -15,12 +18,13 @@ lazy val core =
           "Automatic-Module-Name" -> "akka.projection.core"))
     .settings(Protobuf.settings)
     .settings(Scala3.settings)
+    .disablePlugins(CiReleasePlugin)
 
 lazy val coreTest =
   Project(id = "akka-projection-core-test", base = file("akka-projection-core-test"))
     .configs(IntegrationTest)
     .settings(headerSettings(IntegrationTest))
-    .disablePlugins(MimaPlugin)
+    .disablePlugins(MimaPlugin, CiReleasePlugin)
     .settings(Defaults.itSettings)
     .settings(Dependencies.coreTest)
     .settings(publish / skip := true)
@@ -36,6 +40,7 @@ lazy val testkit =
     .settings(Dependencies.testKit)
     .settings(Scala3.settings)
     .dependsOn(core)
+    .disablePlugins(CiReleasePlugin)
 
 // provides offset storage backed by a JDBC table
 lazy val jdbc =
@@ -48,6 +53,7 @@ lazy val jdbc =
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
+    .disablePlugins(CiReleasePlugin)
 
 // provides offset storage backed by a JDBC (Slick) table
 lazy val slick =
@@ -60,6 +66,7 @@ lazy val slick =
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
+    .disablePlugins(CiReleasePlugin)
 
 // provides offset storage backed by a Cassandra table
 lazy val cassandra =
@@ -75,6 +82,7 @@ lazy val cassandra =
     .dependsOn(coreTest % "test->test;it->test")
     .dependsOn(testkit % "test->compile;it->compile")
     .settings(Scala3.settings)
+    .disablePlugins(CiReleasePlugin)
 
 // provides source providers for akka-persistence-query
 lazy val eventsourced =
@@ -83,6 +91,7 @@ lazy val eventsourced =
     .dependsOn(core)
     .dependsOn(testkit % Test)
     .settings(Scala3.settings)
+    .disablePlugins(CiReleasePlugin)
 
 // provides offset storage backed by Kafka managed offset commits
 lazy val kafka =
@@ -92,6 +101,7 @@ lazy val kafka =
     .settings(Scala3.settings)
     .dependsOn(testkit)
     .dependsOn(core)
+    .disablePlugins(CiReleasePlugin)
 
 // separated for Scala 3 support in Kafka, while it tests use Slick
 lazy val `kafka-tests` =
@@ -104,6 +114,7 @@ lazy val `kafka-tests` =
     .settings(publish / skip := true)
     .dependsOn(kafka, testkit % "test->it")
     .dependsOn(slick % "test->test;it->test")
+    .disablePlugins(CiReleasePlugin)
 
 // provides source providers for durable state changes
 lazy val `durable-state` =
@@ -113,6 +124,7 @@ lazy val `durable-state` =
     .dependsOn(core)
     .dependsOn(testkit % Test)
     .settings(Scala3.settings)
+    .disablePlugins(CiReleasePlugin)
 
 lazy val grpc =
   Project(id = "akka-projection-grpc", base = file("akka-projection-grpc"))
@@ -122,6 +134,7 @@ lazy val grpc =
     .enablePlugins(AkkaGrpcPlugin)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
     .settings(Scala3.settings)
+    .disablePlugins(CiReleasePlugin)
 
 lazy val grpcTests =
   Project(id = "akka-projection-grpc-tests", base = file("akka-projection-grpc-tests"))
@@ -136,6 +149,7 @@ lazy val grpcTests =
     .dependsOn(testkit % Test)
     .dependsOn(r2dbc % IntegrationTest)
     .enablePlugins(AkkaGrpcPlugin)
+    .disablePlugins(CiReleasePlugin)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
     .settings(Test / javaOptions ++= {
       import scala.collection.JavaConverters._
@@ -170,11 +184,12 @@ lazy val r2dbc =
     .settings(Test / fork := true)
     .dependsOn(core, grpc, eventsourced, `durable-state`)
     .dependsOn(testkit % Test)
+    .disablePlugins(CiReleasePlugin)
 
 lazy val examples = project
   .configs(IntegrationTest.extend(Test))
   .settings(headerSettings(IntegrationTest))
-  .disablePlugins(MimaPlugin)
+  .disablePlugins(MimaPlugin, CiReleasePlugin)
   .settings(Defaults.itSettings)
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
@@ -219,7 +234,7 @@ lazy val commonParadoxProperties = Def.settings(
 
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, SitePreviewPlugin, PreprocessPlugin, PublishRsyncPlugin)
-  .disablePlugins(MimaPlugin)
+  .disablePlugins(MimaPlugin, CiReleasePlugin)
   .dependsOn(core, testkit)
   .settings(
     name := "Akka Projections",
@@ -250,7 +265,7 @@ lazy val docs = project
 
 lazy val `akka-distributed-cluster-docs` = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, SitePreviewPlugin, PreprocessPlugin, PublishRsyncPlugin)
-  .disablePlugins(MimaPlugin)
+  .disablePlugins(MimaPlugin, CiReleasePlugin)
   .dependsOn(core, testkit)
   .settings(
     name := "Akka Distributed Cluster",
@@ -275,7 +290,7 @@ lazy val `akka-distributed-cluster-docs` = project
 
 lazy val `akka-edge-docs` = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, SitePreviewPlugin, PreprocessPlugin, PublishRsyncPlugin)
-  .disablePlugins(MimaPlugin)
+  .disablePlugins(MimaPlugin, CiReleasePlugin)
   .dependsOn(core, testkit)
   .settings(
     name := "Akka Edge",
@@ -323,7 +338,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
     `akka-edge-docs`)
   .settings(publish / skip := true)
   .enablePlugins(ScalaUnidocPlugin)
-  .disablePlugins(SitePlugin, MimaPlugin)
+  .disablePlugins(SitePlugin, MimaPlugin, CiReleasePlugin)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {
