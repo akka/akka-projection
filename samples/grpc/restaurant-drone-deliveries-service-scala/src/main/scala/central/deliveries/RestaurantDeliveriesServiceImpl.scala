@@ -31,10 +31,12 @@ class RestaurantDeliveriesServiceImpl(
       in.coordinates,
       in.localControlLocationId)
 
+
+    /* skip this for easier scale out testing
     if (!settings.locationIds.contains(in.localControlLocationId)) {
       throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
         s"The local control location id ${in.localControlLocationId} is not known to the service"))
-    }
+    } */
 
     val entityRef =
       sharding.entityRefFor(RestaurantDeliveries.EntityKey, in.restaurantId)

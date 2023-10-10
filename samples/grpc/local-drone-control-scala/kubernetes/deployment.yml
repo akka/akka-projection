@@ -20,14 +20,14 @@ spec:
       containers:
         - name: local-drone-control-service
           # use specific image version from docker publish
-          image: johanandren/local-drone-control:1.5.0-M4-19-c60e764f-20230921-1639
+          image: johanandren/local-drone-control:native-2310101348
           # these will need to be increased/tuned for production environments!
           resources:
             limits:
-              memory: "512Mi"
+              memory: "64Mi"
             requests:
-              memory: "512Mi"
-              cpu: "1000m"
+              memory: "64Mi"
+              cpu: "50m"
           ports:
             - name: grpc
               containerPort: 8080
@@ -38,13 +38,13 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: JAVA_TOOL_OPTIONS
-              value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75"
+              value: "-XX:InitialRAMPercentage=60 -XX:MaxRAMPercentage=60"
             - name: LOCATION_ID
               # one of the location ids supported by the restaurant-drone-deliveries service
-              value: "sweden/stockholm/kungsholmen"
+              value: "sweden/stockholm/1"
             - name: CENTRAL_DRONE_CONTROL_HOST
               # update with public endpoint for restaurant-drone-deliveries
-              value: k8s-restaura-restaura-5bd7dc845f-48570e637882db8c.elb.us-east-2.amazonaws.com
+              value: k8s-restaura-restaura-7b1be84b8e-04cc949d9f276f68.elb.us-east-2.amazonaws.com
             - name: CENTRAL_DRONE_CONTROL_PORT
               value: "80"
             - name: H2_DATABASE_PATH

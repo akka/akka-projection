@@ -4,12 +4,23 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorSystem, Behavior }
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
+import com.typesafe.config.ConfigFactory
+
+import java.util.UUID
 
 object Main {
 
   // #main
   def main(args: Array[String]): Unit = {
-    ActorSystem[Nothing](rootBehavior(), "local-drone-control")
+    // unique id generated at start for easier scale out testing (requires restaurant control with skipped id verify)
+    val config = ConfigFactory.parseString(
+      s"""local-drone-control.location-id=stockholm/sweden/${UUID
+        .randomUUID()
+        .toString}""")
+    ActorSystem[Nothing](
+      rootBehavior(),
+      "local-drone-control",
+      config.withFallback(ConfigFactory.load()))
   }
 
   private def rootBehavior(): Behavior[Nothing] = Behaviors.setup[Nothing] {
