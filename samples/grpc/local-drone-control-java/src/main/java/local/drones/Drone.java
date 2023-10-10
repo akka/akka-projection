@@ -6,7 +6,9 @@ import akka.Done;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Behavior;
+import akka.actor.typed.PostStop;
 import akka.actor.typed.SupervisorStrategy;
+import akka.actor.typed.javadsl.Behaviors;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 import akka.cluster.sharding.typed.javadsl.Entity;
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
@@ -16,6 +18,7 @@ import akka.persistence.typed.javadsl.CommandHandler;
 import akka.persistence.typed.javadsl.Effect;
 import akka.persistence.typed.javadsl.EventHandler;
 import akka.persistence.typed.javadsl.EventSourcedBehavior;
+import akka.persistence.typed.javadsl.SignalHandler;
 import akka.serialization.jackson.CborSerializable;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Duration;
@@ -111,11 +114,23 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
 
   public static void init(ActorSystem<?> system) {
     ClusterSharding.get(system)
-        .init(Entity.of(ENTITY_KEY, entityContext -> new Drone(entityContext.getEntityId())));
+        .init(Entity.of(ENTITY_KEY, entityContext -> Drone.create(entityContext.getEntityId())));
   }
 
   public static Behavior<Command> create(String entityId) {
-    return new Drone(entityId);
+    return Behaviors.setup(
+        context -> {
+          Telemetry telemetry = Telemetry.Id.get(context.getSystem());
+          telemetry.droneEntityActivated();
+          return new Drone(entityId) {
+            @Override
+            public SignalHandler<State> signalHandler() {
+              return newSignalHandlerBuilder()
+                  .onSignal(PostStop.instance(), state -> telemetry.droneEntityPassivated())
+                  .build();
+            }
+          };
+        });
   }
 
   private Drone(String entityId) {
