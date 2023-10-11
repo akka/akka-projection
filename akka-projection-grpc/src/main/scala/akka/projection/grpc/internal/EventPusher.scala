@@ -121,10 +121,10 @@ private[akka] object EventPusher {
       .fromTuples(
         Flow
           .fromMaterializer { (_, _) =>
-            val topicFiltersPromise = Promise[immutable.Seq[proto.FilterCriteria]]()
+            val consumerFiltersPromise = Promise[immutable.Seq[proto.FilterCriteria]]()
 
             Flow[(EventEnvelope[Event], ProjectionContext)]
-              .via(filterAndTransformFlow(topicFiltersPromise.future))
+              .via(filterAndTransformFlow(consumerFiltersPromise.future))
               .via(
                 if (eps.settings.keepAliveInterval != Duration.Zero)
                   Flow[(proto.ConsumeEventIn, ProjectionContext)]
@@ -132,7 +132,7 @@ private[akka] object EventPusher {
                 else
                   Flow[(proto.ConsumeEventIn, ProjectionContext)])
               .via(Flow.fromGraph(
-                new EventPusherStage(originId, eps, client, additionalRequestMetadata, topicFiltersPromise)))
+                new EventPusherStage(originId, eps, client, additionalRequestMetadata, consumerFiltersPromise)))
 
           }
           .mapMaterializedValue(_ => NotUsed))
@@ -151,7 +151,7 @@ private[akka] class EventPusherStage(
     eps: EventProducerSource,
     client: EventConsumerServiceClient,
     additionalRequestMetadata: Metadata,
-    topicFilterPromise: Promise[immutable.Seq[proto.FilterCriteria]])
+    consumerFilterPromise: Promise[immutable.Seq[proto.FilterCriteria]])
     extends GraphStage[FlowShape[(ConsumeEventIn, ProjectionContext), (Done, ProjectionContext)]] {
   import EventPusher.KeepAliveTuple
 
@@ -192,7 +192,7 @@ private[akka] class EventPusherStage(
             push(out, (Done, context))
           case ConsumeEventOut(ConsumeEventOut.Message.Start(start), _) =>
             waitingForStart = false
-            topicFilterPromise.trySuccess(start.filter.toVector)
+            consumerFilterPromise.trySuccess(start.filter.toVector)
             tryGrabInAndPushToClient()
             fromConsumer.pull()
           case unexpected =>
@@ -250,7 +250,8 @@ private[akka] class EventPusherStage(
     }
 
     override def postStop(): Unit = {
-      topicFilterPromise.tryFailure(new RuntimeException("Stage stopped before getting a start message from consumer"))
+      consumerFilterPromise.tryFailure(
+        new RuntimeException("Stage stopped before getting a start message from consumer"))
     }
   }
 }
