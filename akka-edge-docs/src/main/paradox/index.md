@@ -21,5 +21,6 @@ to be used together.
 * [Example Use Cases](use-cases.md)
 * [Feature Summary](feature-summary.md)
 * [Guide](guide.md)
+* [Lightweight deployments](lightweight-deployments.md)
 
 @@@
