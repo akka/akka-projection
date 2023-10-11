@@ -128,7 +128,7 @@ sbt -Ddocker.username=<username> -Ddocker.registry=docker.io docker:publish
 
 Java
 :  ```
-mvn -DskipTests -Ddocker.registry=<username>/restaurant-drone-deliveries-service clean package docker:push
+mvn -DskipTests -Ddocker.registry=<username> clean package docker:push
 ```
 
 The Kubernetes `Deployment` in `deployment.yml` file:
@@ -259,7 +259,7 @@ sbt -Ddocker.username=<username> -Ddocker.registry=docker.io Docker/publish
 
 Java
 :  ```
-mvn -DskipTests -Ddocker.registry=<username>/local-drone-control clean package docker:push
+mvn -DskipTests -Ddocker.registry=<username> clean package docker:push
 ```
 
 Update the `image:` in the `deployment.yml` with the specific image version and location you published.
