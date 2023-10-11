@@ -6,7 +6,7 @@ metadata:
   name: restaurant-drone-deliveries-service
   namespace: restaurant-drone-deliveries-namespace
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: restaurant-drone-deliveries-service
@@ -19,7 +19,7 @@ spec:
       containers:
         - name: restaurant-drone-deliveries-service
           # use specific image version from docker publish
-          image: johanandren/restaurant-drone-deliveries-service:1.5.0-M4-19-c60e764f-20230921-1525
+          image: johanandren/restaurant-drone-deliveries-service:1.5.0-M4-33-d6892ff0-20231010-1536
           # these will need to be increased/tuned for production environments!
           resources:
             limits:
@@ -57,7 +57,7 @@ spec:
             - name: REQUIRED_CONTACT_POINT_NR
               value: "1"
             - name: JAVA_TOOL_OPTIONS
-              value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75 -Dakka.persistence.r2dbc.connection-facten tyory.ssl.enabled=true -Dakka.persistence.r2dbc.connection-factory.ssl.mode=require"
+              value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75 -Dakka.persistence.r2dbc.connection-factory.ssl.enabled=true -Dakka.persistence.r2dbc.connection-factory.ssl.mode=require"
             - name: DB_HOST
               valueFrom:
                 secretKeyRef:

@@ -7,7 +7,7 @@ metadata:
   namespace: local-drone-control-namespace
 spec:
   # note: the default image cannot scale out as it uses a local database
-  replicas: 1
+  replicas: 1000
   selector:
     matchLabels:
       app: local-drone-control-service
@@ -20,7 +20,7 @@ spec:
       containers:
         - name: local-drone-control-service
           # use specific image version from docker publish
-          image: johanandren/local-drone-control:native-2310101348
+          image: johanandren/local-drone-control:native-2310101415
           # these will need to be increased/tuned for production environments!
           resources:
             limits:
