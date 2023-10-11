@@ -107,13 +107,13 @@ H2 database should not be used when the service is an Akka Cluster with more tha
 
 ### Learn more
 
-* FIXME link to guide
+* @ref[Hands-on guide for implementing an Akka Edge application](guide.md)
 * @extref[Reference documentation of Akka Projection gRPC](akka-projection:grpc.html)
 * @extref[Reference documentation of Akka Projection gRPC with producer push](akka-projection:grpc-producer-push.html)
 
 ## Replicated Event Sourcing is not for Edge
 
-@extref[Replicated Event Sourcing over gRPC](akka-distributed-cluster:feature-summary.html#replicated-event-sSourcing-over-grpc)
+@extref[Replicated Event Sourcing over gRPC](akka-distributed-cluster:feature-summary.html#replicated-event-sourcing-over-grpc)
 is a useful feature in Akka Distributed Cluster, but it is not recommended for edge use cases. The reasons why it is currently
 not supported for Akka Edge are:
 
