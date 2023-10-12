@@ -5,10 +5,10 @@
              version="2.0">
     <persistence-unit name="akka-projection-hibernate">
         <properties>
-            <property name="javax.persistence.jdbc.driver" value="org.h2.Driver"/>
-            <property name="javax.persistence.jdbc.url" value="jdbc:h2:mem:hibernate-test;OPTIMIZE_REUSE_RESULTS=FALSE"/>
-            <property name="javax.persistence.jdbc.user" value="sa"/>
-            <property name="javax.persistence.jdbc.password" value=""/>
+            <property name="jakarta.persistence.jdbc.driver" value="org.h2.Driver"/>
+            <property name="jakarta.persistence.jdbc.url" value="jdbc:h2:mem:hibernate-test;OPTIMIZE_REUSE_RESULTS=FALSE"/>
+            <property name="jakarta.persistence.jdbc.user" value="sa"/>
+            <property name="jakarta.persistence.jdbc.password" value=""/>
             <!-- field access, no setters -->
             <property name="hibernate.default-access" value="field"/>
             <!-- avoid lazy loading -->

@@ -8,8 +8,8 @@ import akka.japi.function.Function;
 import akka.projection.jdbc.JdbcSession;
 // #hibernate-session-imports
 import org.hibernate.Session;
-import javax.persistence.EntityManager;
-import javax.persistence.EntityTransaction;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityTransaction;
 import java.sql.Connection;
 import java.sql.SQLException;
 

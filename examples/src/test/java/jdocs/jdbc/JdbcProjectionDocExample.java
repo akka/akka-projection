@@ -21,7 +21,7 @@ import jdocs.eventsourced.ShoppingCart;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 
 // #jdbc-session-imports
 import akka.projection.jdbc.JdbcSession;

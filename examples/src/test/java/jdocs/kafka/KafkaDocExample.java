@@ -62,7 +62,7 @@ import akka.projection.ProjectionContext;
 
 import jdocs.jdbc.HibernateJdbcSession;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 
 public interface KafkaDocExample {
 
