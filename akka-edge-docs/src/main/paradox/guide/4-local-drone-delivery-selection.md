@@ -49,7 +49,7 @@ The firehose is enabled through the following configuration selecting it as quer
 and then configuring the actual underlying `akka.persistence.r2dbc.query` as query plugin for the firehose:
 
 Config
-:  @@snip [persistence.conf](/samples/grpc/restaurant-drone-deliveries-service-scala/src/main/main/resources/persistence.conf) { #firehose }
+:  @@snip [persistence.conf](/samples/grpc/restaurant-drone-deliveries-service-scala/src/main/resources/persistence.conf) { #firehose }
 
 Java
 :  @@snip [persistence.conf](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/resources/persistence.conf) { #firehose }
