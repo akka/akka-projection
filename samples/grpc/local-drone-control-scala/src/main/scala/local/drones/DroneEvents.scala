@@ -101,15 +101,7 @@ object DroneEvents {
         EventProducerSettings(system),
         // only push coarse grained coordinate changes
         producerFilter = envelope =>
-          envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged])
-        // #startFromSnapshot
-        // start from latest drone snapshot and don't replay history
-        .withStartingFromSnapshots[
-          Drone.State,
-          Drone.CoarseGrainedLocationChanged](state =>
-          Drone.CoarseGrainedLocationChanged(
-            state.coarseGrainedCoordinates.get)),
-      // #startFromSnapshot
+          envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged]),
       GrpcClientSettings.fromConfig("central-drone-control"))
 
     def projectionForPartition(
@@ -122,12 +114,21 @@ object DroneEvents {
         R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
           ProjectionId("drone-event-push", s"$minSlice-$maxSlice"),
           settings = None,
-          sourceProvider = EventSourcedProvider.eventsBySlices[Drone.Event](
-            system,
-            R2dbcReadJournal.Identifier,
-            eventProducer.eventProducerSource.entityType,
-            minSlice,
-            maxSlice),
+          // FIXME EventProducerSettings.EventProducerSource.startingFromSnapshots not used and no public accessor to pick it up from there, confusing.
+          // #startFromSnapshot
+          sourceProvider = EventSourcedProvider
+            .eventsBySlicesStartingFromSnapshots[Drone.State, Drone.Event](
+              system,
+              R2dbcReadJournal.Identifier,
+              eventProducer.eventProducerSource.entityType,
+              minSlice,
+              maxSlice,
+              // start from latest drone snapshot and don't replay history
+              { (state: Drone.State) =>
+                Drone.CoarseGrainedLocationChanged(
+                  state.coarseGrainedCoordinates.get)
+              }),
+          // #startFromSnapshot
           handler = eventProducer.handler()))
 
     }
