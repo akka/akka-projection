@@ -48,7 +48,7 @@ of each consumer executing its queries in parallel, so that less load is applied
 The firehose is enabled through the following configuration selecting it as query-plugin-id for the `akka.projection.grpcproducer`
 and then configuring the actual underlying `akka.persistence.r2dbc.query` as query plugin for the firehose:
 
-Config
+Scala
 :  @@snip [persistence.conf](/samples/grpc/restaurant-drone-deliveries-service-scala/src/main/resources/persistence.conf) { #firehose }
 
 Java
