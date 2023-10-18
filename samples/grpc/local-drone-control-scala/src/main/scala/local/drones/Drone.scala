@@ -96,6 +96,11 @@ object Drone {
         .receiveSignal { case (_, PostStop) =>
           telemetry.droneEntityPassivated()
         }
+        // #startFromSnapshot
+        .snapshotWhen { (_, event, _) =>
+          event.isInstanceOf[CoarseGrainedLocationChanged]
+        }
+    // #startFromSnapshot
     }
 
   // #commandHandler

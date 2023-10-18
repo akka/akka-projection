@@ -101,7 +101,15 @@ object DroneEvents {
         EventProducerSettings(system),
         // only push coarse grained coordinate changes
         producerFilter = envelope =>
-          envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged]),
+          envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged])
+        // #startFromSnapshot
+        // start from latest drone snapshot and don't replay history
+        .withStartingFromSnapshots[
+          Drone.State,
+          Drone.CoarseGrainedLocationChanged](state =>
+          Drone.CoarseGrainedLocationChanged(
+            state.coarseGrainedCoordinates.get)),
+      // #startFromSnapshot
       GrpcClientSettings.fromConfig("central-drone-control"))
 
     def projectionForPartition(
