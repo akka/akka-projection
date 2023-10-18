@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: local-drone-control-service-45
+  name: local-drone-control-service-45
+  namespace: local-drone-control-namespace
+spec:
+  # note: the default image cannot scale out as it uses a local database
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-drone-control-service-45
+  template:
+    metadata:
+      labels:
+        app: local-drone-control-service-45
+        actorSystemName: local-drone-control-service-45
+    spec:
+      containers:
+        - name: restaurant-drone-deliveries-service-45
+          # use specific image version from docker publish
+          image: johanandren/local-drone-control:1.5.0-M4-31-1976d92e-20231009-1730
+          # these will need to be increased/tuned for production environments!
+          resources:
+            limits:
+              memory: "128Mi"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+          ports:
+            - name: grpc
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75"
+            - name: LOCATION_ID
+              # one of the location ids supported by the restaurant-drone-deliveries service
+              value: "sweden/stockholm/45"
+            - name: CENTRAL_DRONE_CONTROL_HOST
+              # update with public endpoint for restaurant-drone-deliveries
+              value: k8s-restaura-restaura-7b1be84b8e-04cc949d9f276f68.elb.us-east-2.amazonaws.com
+            - name: CENTRAL_DRONE_CONTROL_PORT
+              value: "80"
+            - name: H2_DATABASE_PATH
+              # for state to survive restarts this would need to be a volume
+              # right now a restarted node will replay all orders from central
+              # and only report new drone updates
+              value: /tmp/drone-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: local-drone-control-service-45-svc
+spec:
+  selector:
+    app: local-drone-control-service-45
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080

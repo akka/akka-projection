@@ -40,6 +40,19 @@ Scala
 Java
 :  @@snip [DroneDeliveriesServer.java](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/central/DroneDeliveriesServer.java) { #composeAndBind }
 
+Since we expect a high number of local-drone-control edge systems connecting to the restaurant-drone-deliveries-service
+to consume the restaurant orders we configure the @extref[events-by-slice-firehose](akka:persistence-query.html#eventsbyslice-and-currenteventsbyslice)
+for the projection. The firehose tries to share the stream of events across consumers connected to the same node, instead
+of each consumer executing its queries in parallel, so that less load is applied to the database.
+
+The firehose is enabled through the following configuration selecting it as query-plugin-id for the `akka.projection.grpcproducer`
+and then configuring the actual underlying `akka.persistence.r2dbc.query` as query plugin for the firehose:
+
+Scala
+:  @@snip [persistence.conf](/samples/grpc/restaurant-drone-deliveries-service-scala/src/main/resources/persistence.conf) { #firehose }
+
+Java
+:  @@snip [persistence.conf](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/resources/persistence.conf) { #firehose }
 
 ## Delivery queue actor 
 
