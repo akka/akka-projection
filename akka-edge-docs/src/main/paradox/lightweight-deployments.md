@@ -11,6 +11,15 @@ Some approaches to running lightweight deployments for Akka Edge applications in
 * @ref[Building GraalVM Native Image executables](#graalvm-native-image)
 * @ref[Configuring adaptive resource usage with multidimensional autoscaling](#multidimensional-autoscaling)
 
+These approaches are useful when running applications in edge environments that are on-premise or in 5G edge computing
+infrastructure, including cloud provider products such as [AWS Wavelength], [AWS Outposts], [Google Distributed Cloud
+Edge], or [Azure Stack Edge].
+
+[AWS Wavelength]: https://aws.amazon.com/wavelength/
+[AWS Outposts]: https://aws.amazon.com/outposts/
+[Google Distributed Cloud Edge]: https://cloud.google.com/distributed-cloud-edge
+[Azure Stack Edge]: https://azure.microsoft.com/en-us/products/azure-stack/edge/
+
 
 ## Lightweight Kubernetes
 
