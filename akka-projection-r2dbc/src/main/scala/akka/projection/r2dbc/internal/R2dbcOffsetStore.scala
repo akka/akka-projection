@@ -620,7 +620,6 @@ private[projection] class R2dbcOffsetStore(
           FutureDuplicate
         } else if (recordWithOffset.fromSnapshot) {
           // snapshots will mean we are starting from some arbitrary offset after last seen offset
-          // FIXME this is the dangerous scenario, we've seen events, projection stopped and now it started again from a snap
           FutureAccepted
         } else if (!recordWithOffset.fromBacktracking) {
           logUnexpected()
@@ -871,8 +870,7 @@ private[projection] class R2dbcOffsetStore(
             strictSeqNr = true,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(eventEnvelope),
             fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope),
-            // FIXME move constant and check to EnvelopeOrigin
-            fromSnapshot = eventEnvelope.source == "SN"))
+            fromSnapshot = EnvelopeOrigin.fromSnapshot(eventEnvelope)))
       case change: UpdatedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
