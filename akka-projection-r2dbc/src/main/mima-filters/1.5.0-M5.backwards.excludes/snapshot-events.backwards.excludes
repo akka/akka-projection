@@ -1,0 +1,5 @@
+# added flag for events from snapshots
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcOffsetStore#RecordWithOffset.copy")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcOffsetStore#RecordWithOffset.this")
+ProblemFilters.exclude[MissingTypesProblem]("akka.projection.r2dbc.internal.R2dbcOffsetStore$RecordWithOffset$")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcOffsetStore#RecordWithOffset.apply")
