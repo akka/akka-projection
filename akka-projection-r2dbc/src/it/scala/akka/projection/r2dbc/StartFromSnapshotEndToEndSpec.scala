@@ -46,10 +46,6 @@ object StartFromSnapshotEndToEndSpec {
 
         start-from-snapshot.enabled = true
       }
-      connection-factory {
-        protocol = "mem"
-        database = "snappy"
-      }
     }
     """)
     .withFallback(TestConfig.config)
