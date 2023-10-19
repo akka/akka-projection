@@ -54,7 +54,8 @@ private[projection] object R2dbcOffsetStore {
       offset: TimestampOffset,
       strictSeqNr: Boolean,
       fromBacktracking: Boolean,
-      fromPubSub: Boolean)
+      fromPubSub: Boolean,
+      fromSnapshot: Boolean)
   final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
@@ -617,6 +618,9 @@ private[projection] class R2dbcOffsetStore(
           // currentInFlight contains those that have been processed or about to be processed in Flow,
           // but offset not saved yet => ok to handle as duplicate
           FutureDuplicate
+        } else if (recordWithOffset.fromSnapshot) {
+          // snapshots will mean we are starting from some arbitrary offset after last seen offset
+          FutureAccepted
         } else if (!recordWithOffset.fromBacktracking) {
           logUnexpected()
           FutureRejectedSeqNr
@@ -627,6 +631,9 @@ private[projection] class R2dbcOffsetStore(
         }
       } else if (seqNr == 1) {
         // always accept first event if no other event for that pid has been seen
+        FutureAccepted
+      } else if (recordWithOffset.fromSnapshot) {
+        // always accept starting from snapshots when there was no previous event seen
         FutureAccepted
       } else {
         // Haven't see seen this pid within the time window. Since events can be missed
@@ -862,7 +869,8 @@ private[projection] class R2dbcOffsetStore(
             timestampOffset,
             strictSeqNr = true,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(eventEnvelope),
-            fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope)))
+            fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope),
+            fromSnapshot = EnvelopeOrigin.fromSnapshot(eventEnvelope)))
       case change: UpdatedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
@@ -872,7 +880,8 @@ private[projection] class R2dbcOffsetStore(
             timestampOffset,
             strictSeqNr = false,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(change),
-            fromPubSub = false))
+            fromPubSub = false,
+            fromSnapshot = false))
       case change: DeletedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
@@ -882,7 +891,8 @@ private[projection] class R2dbcOffsetStore(
             timestampOffset,
             strictSeqNr = false,
             fromBacktracking = false,
-            fromPubSub = false))
+            fromPubSub = false,
+            fromSnapshot = false))
       case change: DurableStateChange[_] if change.offset.isInstanceOf[TimestampOffset] =>
         // in case additional types are added
         throw new IllegalArgumentException(

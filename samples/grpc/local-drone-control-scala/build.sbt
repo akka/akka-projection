@@ -2,7 +2,8 @@ name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(
+  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
@@ -33,7 +34,7 @@ Global / cancelable := false // ctrl-c
 val AkkaVersion = "2.9.0-M3"
 val AkkaHttpVersion = "10.6.0-M2"
 val AkkaManagementVersion = "1.5.0-M1"
-val AkkaPersistenceR2dbcVersion = "1.2.0-M6"
+val AkkaPersistenceR2dbcVersion = "1.2.0-M7"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.5.0-M5")
 val AkkaDiagnosticsVersion = "2.1.0-M1"
@@ -102,9 +103,12 @@ nativeImageOptions := Seq(
   "-Dlogback.configurationFile=logback-native-image.xml" // configured at build time
 )
 
-NativeImage / mainClass := sys.props.get("native.mode").collect {
-  case "clustered" => "local.drones.ClusteredMain"
-}.orElse((Compile / run / mainClass).value)
+NativeImage / mainClass := sys.props
+  .get("native.mode")
+  .collect { case "clustered" =>
+    "local.drones.ClusteredMain"
+  }
+  .orElse((Compile / run / mainClass).value)
 
 // silence warnings for these keys (used in dynamic task)
 Global / excludeLintKeys ++= Set(nativeImageJvm, nativeImageVersion)
