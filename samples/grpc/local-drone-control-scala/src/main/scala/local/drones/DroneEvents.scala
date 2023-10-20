@@ -62,7 +62,6 @@ object DroneEvents {
       R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
         ProjectionId("drone-event-push", s"0-$maxSlice"),
         settings = None,
-        // FIXME EventProducerSettings.EventProducerSource.startingFromSnapshots not used and no public accessor to pick it up from there, confusing.
         // #startFromSnapshot
         sourceProvider = EventSourcedProvider
           .eventsBySlicesStartingFromSnapshots[Drone.State, Drone.Event](
