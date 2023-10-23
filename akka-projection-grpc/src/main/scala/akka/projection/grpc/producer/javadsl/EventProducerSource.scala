@@ -65,6 +65,19 @@ final class EventProducerSource(
     withProducerFilter[Any](topicMatcher.matches(_, settings.topicTagPrefix))
   }
 
+  /**
+   * Use snapshots as starting points and thereby reducing number of events that have to be loaded.
+   * This can be useful if the consumer start from zero without any previously processed
+   * offset or if it has been disconnected for a long while and its offset is far behind.
+   *
+   * First it loads all snapshots with timestamps greater than or equal to the offset timestamp. There is at most one
+   * snapshot per persistenceId. The snapshots are transformed to events with the given `transformSnapshot` function.
+   *
+   * After emitting the snapshot events the ordinary events with sequence numbers after the snapshots are emitted.
+   *
+   * Important note: This should not be used together with [[EventProducerPush]]. In that case `SourceProvider` with
+   * `eventsBySlicesStartingFromSnapshots` should be used instead.
+   */
   def withStartingFromSnapshots[Snapshot, Event](transformSnapshot: java.util.function.Function[Snapshot, Event]) =
     new EventProducerSource(
       entityType,

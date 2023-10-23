@@ -52,6 +52,11 @@ final class EventProducerPush[Event] private (
     val connectionMetadata: Optional[Metadata],
     val grpcClientSettings: GrpcClientSettings) {
 
+  if (eventProducerSource.transformSnapshot.isPresent)
+    throw new IllegalArgumentException(
+      "`EventProducerSource.withStartingFromSnapshots` should not be used together with `EventProducerPush`. " +
+      "In that case `SourceProvider` with `eventsBySlicesStartingFromSnapshots` should be used instead.")
+
   def handler(system: ActorSystem[_])
       : FlowWithContext[EventEnvelope[Event], ProjectionContext, Done, ProjectionContext, NotUsed] = {
     val eventConsumerClient = EventConsumerServiceClient(grpcClientSettings)(system)
