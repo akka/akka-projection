@@ -45,6 +45,29 @@ Two important things to note:
 3. The service defines a "location name" which is a unique identifier of the PoP in the format `country/city/part-of-city`,
    it is used as `originId` for the producer push stream, identifying where the stream of events come from.
 
+### Snapshots as starting points
+
+One optimization to reduce the amount of events sent over the network if the local control service has been disconnected
+from the central cloud service is to use snapshots as starting points. Only delivering the latest coarse grained
+coordinate is enough, so we create a snapshot for each CoarseGrainedLocationChanged event:
+
+Scala
+:  @@snip [Drone.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/Drone.scala) { #startFromSnapshot }
+
+Java
+:  @@snip [Drone.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/Drone.java) { #startFromSnapshot }
+
+The Projection for pushing the events is using `eventsBySlicesStartingFromSnapshots`:
+
+Scala
+:  @@snip [DroneEvents.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/DroneEvents.scala) { #startFromSnapshot }
+
+Java
+:  @@snip [DroneEvents.java](/samples/grpc/local-drone-control-java/src/main/java/local/drones/DroneEvents.java) { #startFromSnapshot }
+
+Note that the `Drone.State`, i.e. the snapshot, is transformed to an event. This snapshot event should represent a possible
+starting point for the consumer. In this case it represents the latest coarse grained coordinate of the drone. 
+
 ## Producer Push Destination
 
 The producer push destination is a gRPC service where producers push events, the events are persisted in a local journal
@@ -59,10 +82,10 @@ producer `originId` on producer connection, and put it in a tag for the event.
 The setup logic looks like this:
 
 Scala
-:  @@snip [DroneEvents.scala](/samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/central/drones/LocalDroneEvents.scala) { #eventConsumer }
+:  @@snip [LocalDroneEvents.scala](/samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/central/drones/LocalDroneEvents.scala) { #eventConsumer }
 
 Java
-:  @@snip [DroneEvents.java](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/central/drones/LocalDroneEvents.java) { #eventConsumer }
+:  @@snip [LocalDroneEvents.java](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/central/drones/LocalDroneEvents.java) { #eventConsumer }
 
 The returned @scala[PartialFunction]@java[Function] is an Akka HTTP gRPC request handler that can be bound directly in an HTTP server or
 combined with multiple other request handlers and then bound as a single server: 
@@ -84,7 +107,6 @@ Scala
 Java
 :  @@snip [persistence.conf](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/resources/persistence.conf) { }
 
-
 ## Consuming the pushed events
 
 What we have set up only means that the pushed events are written into our local journal, to do something useful with the 
@@ -101,8 +123,6 @@ Scala
 
 Java
 :  @@snip [DroneEvents.java](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/central/drones/LocalDroneEvents.java) { #eventProjection }
-
-FIXME this is a lot in one snippet, split it up in multiple parts?
 
 ## Durable State Drone Overview
 

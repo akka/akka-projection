@@ -62,12 +62,20 @@ object DroneEvents {
       R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
         ProjectionId("drone-event-push", s"0-$maxSlice"),
         settings = None,
-        sourceProvider = EventSourcedProvider.eventsBySlices[Drone.Event](
-          system,
-          R2dbcReadJournal.Identifier,
-          eventProducer.eventProducerSource.entityType,
-          0,
-          maxSlice),
+        // #startFromSnapshot
+        sourceProvider = EventSourcedProvider
+          .eventsBySlicesStartingFromSnapshots[Drone.State, Drone.Event](
+            system,
+            R2dbcReadJournal.Identifier,
+            eventProducer.eventProducerSource.entityType,
+            0,
+            maxSlice,
+            // start from latest drone snapshot and don't replay history
+            { (state: Drone.State) =>
+              Drone.CoarseGrainedLocationChanged(
+                state.coarseGrainedCoordinates.get)
+            }),
+        // #startFromSnapshot
         handler = eventProducer.handler()))
   }
 
@@ -114,12 +122,18 @@ object DroneEvents {
         R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
           ProjectionId("drone-event-push", s"$minSlice-$maxSlice"),
           settings = None,
-          sourceProvider = EventSourcedProvider.eventsBySlices[Drone.Event](
-            system,
-            R2dbcReadJournal.Identifier,
-            eventProducer.eventProducerSource.entityType,
-            minSlice,
-            maxSlice),
+          sourceProvider = EventSourcedProvider
+            .eventsBySlicesStartingFromSnapshots[Drone.State, Drone.Event](
+              system,
+              R2dbcReadJournal.Identifier,
+              eventProducer.eventProducerSource.entityType,
+              minSlice,
+              maxSlice,
+              // start from latest drone snapshot and don't replay history
+              { (state: Drone.State) =>
+                Drone.CoarseGrainedLocationChanged(
+                  state.coarseGrainedCoordinates.get)
+              }),
           handler = eventProducer.handler()))
 
     }

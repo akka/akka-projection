@@ -215,6 +215,13 @@ public class Drone extends EventSourcedBehavior<Drone.Command, Drone.Event, Dron
         .map(position -> Effect().reply(command.replyTo, StatusReply.success(position)))
         .orElse(Effect().reply(command.replyTo, StatusReply.error("Position of drone is unknown")));
   }
+
   // #commandHandler
 
+  // #startFromSnapshot
+  @Override
+  public boolean shouldSnapshot(State state, Event event, long sequenceNr) {
+    return event instanceof CoarseGrainedLocationChanged;
+  }
+  // #startFromSnapshot
 }
