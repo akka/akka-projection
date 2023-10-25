@@ -19,7 +19,7 @@ spec:
       containers:
         - name: restaurant-drone-deliveries-service
           # use specific image version from docker publish
-          image: johanandren/restaurant-drone-deliveries-service:1.5.0-M5-19-c60e764f-20230921-1525
+          image: johanandren/restaurant-drone-deliveries-service:1.5.0-19-c60e764f-20230921-1525
           # these will need to be increased/tuned for production environments!
           resources:
             limits:
