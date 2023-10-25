@@ -17,7 +17,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <akka.version>2.9.0-M3+24-4e2bc5b5-SNAPSHOT</akka.version>
+        <akka.version>2.9.0</akka.version>
         <akka-projection.version>1.5.0-M5</akka-projection.version>
         <akka-persistence-r2dbc.version>1.2.0-M7</akka-persistence-r2dbc.version>
         <akka-management.version>1.5.0-M1</akka-management.version>
