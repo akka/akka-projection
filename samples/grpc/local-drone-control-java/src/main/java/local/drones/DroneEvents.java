@@ -66,12 +66,17 @@ public class DroneEvents {
         R2dbcProjection.atLeastOnceFlow(
             ProjectionId.of("drone-event-push", "0-" + maxSlice),
             Optional.empty(),
-            EventSourcedProvider.eventsBySlices(
+            // #startFromSnapshot
+            EventSourcedProvider.eventsBySlicesStartingFromSnapshots(
                 system,
                 R2dbcReadJournal.Identifier(),
                 eventProducer.eventProducerSource().entityType(),
                 0,
-                maxSlice),
+                maxSlice,
+                // start from latest drone snapshot and don't replay history
+                (Drone.State state) ->
+                    new Drone.CoarseGrainedLocationChanged(state.coarseGrainedCoordinates().get())),
+            // #startFromSnapshot
             eventProducer.handler(system),
             system));
   }
@@ -129,12 +134,14 @@ public class DroneEvents {
         R2dbcProjection.atLeastOnceFlow(
             ProjectionId.of("drone-event-push", minSlice + "-" + maxSlice),
             Optional.empty(),
-            EventSourcedProvider.eventsBySlices(
+            EventSourcedProvider.eventsBySlicesStartingFromSnapshots(
                 system,
                 R2dbcReadJournal.Identifier(),
                 eventProducer.eventProducerSource().entityType(),
                 minSlice,
-                maxSlice),
+                maxSlice,
+                (Drone.State state) ->
+                    new Drone.CoarseGrainedLocationChanged(state.coarseGrainedCoordinates().get())),
             eventProducer.handler(system),
             system));
   }
