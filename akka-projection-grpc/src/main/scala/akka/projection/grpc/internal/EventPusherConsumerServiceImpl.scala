@@ -25,9 +25,22 @@ import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
 import akka.stream.scaladsl.Source
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
+
+import akka.persistence.query.typed.EventEnvelope
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[akka] object EventPusherConsumerServiceImpl {
+  // See akka.persistence.r2dbc.internal.EnvelopeOrigin, but we don't have a dependency
+  // to akka-persistence-r2dbc here
+  def fromSnapshot(env: EventEnvelope[_]): Boolean =
+    env.source == "SN"
+
+}
 
 /**
  * INTERNAL API
@@ -40,6 +53,7 @@ private[akka] final class EventPusherConsumerServiceImpl(
     preferProtobuf: ProtoAnySerialization.Prefer)(implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
+  import EventPusherConsumerServiceImpl.fromSnapshot
   import ProtobufProtocolConversions._
 
   private val logger = LoggerFactory.getLogger(classOf[EventPusherConsumerServiceImpl])
@@ -134,6 +148,7 @@ private[akka] final class EventPusherConsumerServiceImpl(
                       transformedEventEnvelope.persistenceId,
                       transformedEventEnvelope.sequenceNr,
                       transformedEventEnvelope.eventOption.getOrElse(FilteredPayload),
+                      isSnapshotEvent = fromSnapshot(transformedEventEnvelope),
                       transformedEventEnvelope.eventMetadata,
                       transformedEventEnvelope.tags,
                       _))(destination.eventProducerPushDestination.settings.journalWriteTimeout, system.scheduler)
