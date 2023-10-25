@@ -124,8 +124,6 @@ Scala
 Java
 :  @@snip [DroneEvents.java](/samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/central/drones/LocalDroneEvents.java) { #eventProjection }
 
-FIXME this is a lot in one snippet, split it up in multiple parts?
-
 ## Durable State Drone Overview
 
 For the cloud representation of the drones, only containing the rough location, we use @extref[Durable State](akka:typed/durable-state/persistence.html), 
