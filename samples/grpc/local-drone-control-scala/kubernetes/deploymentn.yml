@@ -20,7 +20,7 @@ spec:
       containers:
         - name: restaurant-drone-deliveries-service-45
           # use specific image version from docker publish
-          image: johanandren/local-drone-control:1.5.0-M4-31-1976d92e-20231009-1730
+          image: local-drone-control:latest
           # these will need to be increased/tuned for production environments!
           resources:
             limits:

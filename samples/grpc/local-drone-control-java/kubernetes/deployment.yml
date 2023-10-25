@@ -20,7 +20,7 @@ spec:
       containers:
         - name: local-drone-control-service
           # use specific image version from docker publish
-          image: johanandren/local-drone-control:20230922-090652-37e49e0
+          image: local-drone-control:latest
           # these will need to be increased/tuned for production environments!
           resources:
             limits:
