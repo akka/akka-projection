@@ -14,8 +14,7 @@ object AkkaSnapshotRepositories extends AutoPlugin {
       .get("build.akka.version")
       .orElse(sys.props.get("build.alpakka.kafka.version")) match {
       case Some(_) =>
-        // akka and alpakka-kafka use Sonatype's snapshot repo
-        Resolver.sonatypeOssRepos("snapshots")
+        Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots"))
       case None => Seq.empty
     })
   }
