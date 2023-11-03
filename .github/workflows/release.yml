@@ -49,47 +49,27 @@ jobs:
         run: sbt +publishSigned
 
   documentation:
-    # runs on main repo only
-    if: github.repository == 'akka/akka-projection'
     name: Documentation
-    # the release environment provides access to secrets required in the release process
-    # https://github.com/akka/akka-projection/settings/environments
-    environment: release
     runs-on: ubuntu-22.04
+    if: github.event.repository.fork == false
     steps:
       - name: Checkout
-        # https://github.com/actions/checkout/releases
-        # v3.3.0
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+        uses: actions/checkout@v3.1.0
         with:
           # we don't know what commit the last tag was it's safer to get entire repo so previousStableVersion resolves
           fetch-depth: 0
 
-      - name: Checkout GitHub merge
-        if: github.event.pull_request
-        run: |-
-          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
-          git checkout scratch
-
-      - name: Cache Coursier cache
-        # https://github.com/coursier/cache-action/releases
-        # v6.4.3
-        uses: coursier/cache-action@d1039466d0812d6370649b9afb02bbf5f646bacf
-
       - name: Set up JDK 11
-        # https://github.com/coursier/setup-action/releases
-        # v1.3.0
-        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
+        uses: coursier/setup-action@v1.3.0
         with:
-          jvm: temurin:1.11.0
+          jvm: temurin:1.11
 
-      - name: Publish API and reference documentation
-        env:
-          GUSTAV_KEY: ${{ secrets.GUSTAV_KEY }}
-          GUSTAV_PASSPHRASE: ${{ secrets.GUSTAV_PASSPHRASE }}
-        run: |+
+      - name: Publish
+        run: |-
           eval "$(ssh-agent -s)"
-          echo $GUSTAV_KEY | base64 -di > .github/id_rsa
+          echo $AKKA_RSYNC_GUSTAV | base64 -d > .github/id_rsa
           chmod 600 .github/id_rsa
           ssh-add .github/id_rsa
-          sbt "docs/publishRsync; akka-distributed-cluster-docs/publishRsync; akka-edge-docs/publishRsync"
+          sbt publishRsync
+        env:
+          AKKA_RSYNC_GUSTAV: ${{ secrets.AKKA_RSYNC_GUSTAV }}
