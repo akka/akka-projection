@@ -14,3 +14,7 @@ akka-projection-slick/src/it/resources/container-license-acceptance.txt
 .bsp
 .metals
 .vscode
+
+# attachments created by scripts/prepare-downloads.sh
+akka-distributed-cluster-docs/src/main/paradox/attachments
+akka-edge-docs/src/main/paradox/attachments

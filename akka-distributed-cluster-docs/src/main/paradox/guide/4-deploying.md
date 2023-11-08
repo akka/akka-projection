@@ -131,12 +131,12 @@ If you haven't already, repeat the steps for namespace, rbac, database secret, a
 
 We are going to deploy the `shopping-cart-service` in region `us-east-2`.
 
-This step is for deploying:
+The complete sample can be downloaded:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
+* Java: [shopping-scala.zip](../attachments/shopping-scala.zip)
+* Scala: [shopping-java.zip](../attachments/shopping-java.zip)
 
-Build the image:
+Build the image in `shopping-cart-service` directory:
 
 Scala
 :  ```
@@ -224,12 +224,12 @@ kubectl get services
 
 We are going to deploy the `shopping-analytics-service` in region `eu-central-1`.
 
-This step is for deploying:
+The complete sample can be downloaded:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-scala
+* Java: [shopping-scala.zip](../attachments/shopping-scala.zip)
+* Scala: [shopping-java.zip](../attachments/shopping-java.zip)
 
-Build the image:
+Build the image in `shopping-analytics-service` directory:
 
 Scala
 :  ```
@@ -282,10 +282,12 @@ Projection [cart-events-cart-768-1023] consumed ItemQuantityAdjusted for cart ca
 
 ## Deploy replicated shopping-cart-service
 
-This step is for deploying:
+This step is for deploying `replicated-shopping-cart-service`:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-scala
+The complete sample can be downloaded:
+
+* Java: [replicated-shopping-scala.zip](../attachments/replicated-shopping-scala.zip)
+* Scala: [replicated-shopping-java.zip](../attachments/replicated-shopping-java.zip)
 
 Now there will be connections in both directions, so install the @ref:[load balancer](#load-balancer) in the other region too.
 
@@ -317,7 +319,7 @@ YAML
 :  @@snip [deployment.yml](/samples/replicated/shopping-cart-service-scala/kubernetes/deployment.yml) { }
 
 
-Build the image and deploy in the same way as described previously.
+Build the image in `replicated-shopping-cart-service` directory and deploy in the same way as described previously.
 
 Scala
 :  ```

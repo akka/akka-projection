@@ -147,10 +147,10 @@ Java
 
 ## Complete Sample Projects
 
-The complete sample can be downloaded from GitHub, the replicated shopping cart:
+The complete sample can be downloaded:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-scala
+* Java: [replicated-shopping-scala.zip](../attachments/replicated-shopping-scala.zip)
+* Scala: [replicated-shopping-java.zip](../attachments/replicated-shopping-java.zip)
 
 ## Running the sample code locally
 

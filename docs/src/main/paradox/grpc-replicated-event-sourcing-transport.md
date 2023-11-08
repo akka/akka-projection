@@ -211,10 +211,7 @@ filters on both sides. That is not handled automatically.
 
 ## Sample projects
 
-Source code and build files for complete sample projects can be found in the `akka/akka-projection` GitHub repository.
-
-* [Replicated shopping cart service in Scala](https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-scala)
-* [Replicated shopping cart service in Java](https://github.com/akka/akka-projection/tree/main/samples/replicated/shopping-cart-service-java)
+Source code and build files for complete sample projects can be found in the @extref:[Akka Distributed Cluster Guide](akka-distributed-cluster:guide/3-active-active.html).
 
 ## Security
 

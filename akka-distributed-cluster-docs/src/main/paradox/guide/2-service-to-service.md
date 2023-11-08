@@ -171,15 +171,10 @@ See @apidoc[akka.projection.grpc.consumer.ConsumerFilter] for full API documenta
 
 ## Complete Sample Projects
 
-The complete sample can be downloaded from GitHub, the shopping cart:
+The complete sample can be downloaded:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
-
-And the consuming analytics service:
-
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-scala
+* Java: [shopping-scala.zip](../attachments/shopping-scala.zip)
+* Scala: [shopping-java.zip](../attachments/shopping-java.zip)
 
 ## Running the sample code locally
 
