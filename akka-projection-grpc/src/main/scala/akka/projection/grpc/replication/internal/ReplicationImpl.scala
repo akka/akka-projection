@@ -173,7 +173,11 @@ private[akka] object ReplicationImpl {
                   envelope.eventMetadata match {
                     case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
                       // skipping events originating from other replicas is handled by filtering but for good measure
-                      require(replicatedEventMetadata.originReplica == remoteReplica.replicaId)
+                      if (replicatedEventMetadata.originReplica != remoteReplica.replicaId)
+                        throw new IllegalArgumentException(
+                          "Expected replicated event from replica " +
+                          s"[${remoteReplica.replicaId}] but was [${replicatedEventMetadata.originReplica}]. " +
+                          "Verify your replication configuration, such as self-replica-id.")
 
                       val replicationId = ReplicationId.fromString(envelope.persistenceId)
                       val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
