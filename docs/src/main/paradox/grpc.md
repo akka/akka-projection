@@ -379,17 +379,7 @@ Application level deduplication of idempotency may be needed if the Projection c
 
 ## Sample projects
 
-Source code and build files for complete sample projects can be found in `akka/akka-projection` GitHub repository. 
-
-Java:
-
-* [Producer service: shopping-cart-service-java](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java)
-* [Consumer service: shopping-analytics-service-java](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-java)
-
-Scala:
-
-* [Producer service: shopping-cart-service-scala](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala)
-* [Consumer service: shopping-analytics-service-scala](https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-analytics-service-scala)
+Source code and build files for complete sample projects can be found in the @extref:[Akka Distributed Cluster Guide](akka-distributed-cluster:guide.html) and @extref:[Akka Edge Guide](akka-edge:guide.html).
 
 ## Security
 
@@ -477,3 +467,4 @@ consumer2 {
 ```
 
 The `GrpcReadJournal` plugin id is then `consumer1` and `consumer2` instead of the default `akka.projection.grpc.consumer`.
+

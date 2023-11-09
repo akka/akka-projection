@@ -124,10 +124,10 @@ Java
 
 ## Running the sample
 
-The complete sample can be downloaded from GitHub, but note that it also includes the next step of the guide:
+The complete sample can be downloaded, but note that it also includes the next step of the guide:
 
-  * Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-java
-  * Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/shopping-cart-service-scala
+  * Java: [shopping-scala.zip](../attachments/shopping-scala.zip)
+  * Scala: [shopping-java.zip](../attachments/shopping-java.zip)
 
 Before running the sample locally you will need to run a PostgreSQL instance in docker, it can be started with the included
 `docker-compose.yml`. Run it and create the needed database schema:
