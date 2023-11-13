@@ -338,7 +338,7 @@ public final class ShoppingCart
       return envelope.getTags().contains(VIP_CUSTOMER_TAG);
     };
 
-    return Replication.grpcReplication(replicationSettings, producerFilter,  ShoppingCart::create, system);
+    return Replication.grpcReplication(replicationSettings, producerFilter,  ShoppingCart::createWithProducerFilter, system);
   }
 
   public static Behavior<Command> createWithProducerFilter(
