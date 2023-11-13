@@ -201,7 +201,7 @@ object ShoppingCart {
       envelope.tags.contains(VipCustomerTag)
     }
 
-    Replication.grpcReplication(replicationSettings, producerFilter)(ShoppingCart.apply)
+    Replication.grpcReplication(replicationSettings, producerFilter)(ShoppingCart.applyWithProducerFilter)
   }
 
   def applyWithProducerFilter(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]): Behavior[Command] = {
