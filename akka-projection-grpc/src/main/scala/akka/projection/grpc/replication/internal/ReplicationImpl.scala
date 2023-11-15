@@ -86,8 +86,10 @@ private[akka] object ReplicationImpl {
     val onlyLocalOriginTransformer = Transformation.empty.registerAsyncEnvelopeOrElseMapper(envelope =>
       envelope.eventMetadata match {
         case Some(meta: ReplicatedEventMetadata) =>
-          if (meta.originReplica == settings.selfReplicaId) Future.successful(envelope.eventOption)
-          else filteredEvent // Optimization: was replicated to this DC, don't pass the payload across the wire
+          if (settings.indirectReplication || meta.originReplica == settings.selfReplicaId)
+            Future.successful(envelope.eventOption)
+          else
+            filteredEvent // Optimization: was replicated to this replica, don't pass the payload across the wire
         case _ =>
           throw new IllegalArgumentException(
             s"Got an event without replication metadata, not supported (pid: ${envelope.persistenceId}, seq_nr: ${envelope.sequenceNr})")
@@ -171,14 +173,19 @@ private[akka] object ReplicationImpl {
               case (envelope, _) =>
                 if (!envelope.filtered) {
                   envelope.eventMetadata match {
-                    case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
-                      // skipping events originating from other replicas is handled by filtering but for good measure
-                      if (replicatedEventMetadata.originReplica != remoteReplica.replicaId)
-                        throw new IllegalArgumentException(
-                          "Expected replicated event from replica " +
-                          s"[${remoteReplica.replicaId}] but was [${replicatedEventMetadata.originReplica}]. " +
-                          "Verify your replication configuration, such as self-replica-id.")
+                    case Some(replicatedEventMetadata: ReplicatedEventMetadata)
+                        if replicatedEventMetadata.originReplica == settings.selfReplicaId =>
+                      // skipping events originating from self replica (break cycle)
+                      if (log.isTraceEnabled)
+                        log.traceN(
+                          "[{}] ignoring event from replica [{}] with self origin (pid [{}], seq_nr [{}])",
+                          projectionKey,
+                          remoteReplica.replicaId,
+                          envelope.persistenceId,
+                          envelope.sequenceNr)
+                      Future.successful(Done)
 
+                    case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
                       val replicationId = ReplicationId.fromString(envelope.persistenceId)
                       val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
                       val entityRef =

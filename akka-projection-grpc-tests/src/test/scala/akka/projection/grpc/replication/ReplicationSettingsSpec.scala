@@ -32,24 +32,36 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
            # which of the replicas this node belongs to, should be the same
            # across the nodes of each replica Akka cluster.
            self-replica-id = dca
+
            # Pick it up from an environment variable to re-use the same config
            # without changes across replicas
            self-replica-id = ${?SELF_REPLICA}
+
            # max number of parallel in-flight (sent over sharding) entity updates
            # per consumer/projection
            parallel-updates = 8
+
            # Fail the replication stream (and restart with backoff) if completing
            # the write of a replicated event reaching the cluster takes more time
            # than this.
            entity-event-replication-timeout = 10s
+
+           # When enabled all events will be transferred from all replicas, otherwise
+           # only events from the origin replica will be transferred from the origin
+           # replica. When each replica is connected to each other replica it's most
+           # efficient to disable indirect replication.
+           indirect-replication = on
+
            replicas: [
              {
                # Unique identifier of the replica/datacenter, is stored in the events
                # and cannot be changed after events have been persisted.
                replica-id = "dca"
+
                # Number of replication streams/projections to start to consume events
                # from this replica
                number-of-consumers = 4
+
                # Akka gRPC client config block for how to reach this replica
                # from the other replicas, note that binding the server/publishing
                # endpoint of each replica is done separately, in code.
@@ -94,6 +106,7 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
         settings.otherReplicas.map(_.replicaId.id) should ===(Set("dcb", "dcc"))
         settings.otherReplicas.forall(_.numberOfConsumers === 4) should ===(true)
         settings.parallelUpdates should ===(8)
+        settings.indirectReplication should ===(true)
 
         val replicaB = settings.otherReplicas.find(_.replicaId.id == "dcb").get
         replicaB.grpcClientSettings.defaultPort should ===(8444)
