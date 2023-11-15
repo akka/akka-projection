@@ -81,7 +81,8 @@ object ReplicationSettings {
       parallelUpdates = parallelUpdates,
       projectionProvider = replicationProjectionProvider,
       None,
-      identity)
+      identity,
+      indirectReplication = false)
   }
 
   /**
@@ -97,6 +98,8 @@ object ReplicationSettings {
 
     // Note: any changes here needs to be reflected in Java ReplicationSettings config loading
     val selfReplicaId = ReplicaId(config.getString("self-replica-id"))
+    val indirectReplication =
+      if (config.hasPath("indirect-replication")) config.getBoolean("indirect-replication") else false
     val grpcClientFallBack = system.settings.config.getConfig("""akka.grpc.client."*"""")
     val allReplicas: Set[Replica] = config
       .getConfigList("replicas")
@@ -131,7 +134,8 @@ object ReplicationSettings {
       parallelUpdates = config.getInt("parallel-updates"),
       projectionProvider = replicationProjectionProvider,
       None,
-      identity)
+      identity,
+      indirectReplication)
   }
 
 }
@@ -150,7 +154,8 @@ final class ReplicationSettings[Command] private (
     val parallelUpdates: Int,
     val projectionProvider: ReplicationProjectionProvider,
     val eventProducerInterceptor: Option[EventProducerInterceptor],
-    val configureEntity: Entity[Command, ShardingEnvelope[Command]] => Entity[Command, ShardingEnvelope[Command]]) {
+    val configureEntity: Entity[Command, ShardingEnvelope[Command]] => Entity[Command, ShardingEnvelope[Command]],
+    val indirectReplication: Boolean) {
 
   require(
     !otherReplicas.exists(_.replicaId == selfReplicaId),
@@ -205,6 +210,14 @@ final class ReplicationSettings[Command] private (
       : ReplicationSettings[Command] =
     copy(configureEntity = configure)
 
+  /**
+   * When enabled all events will be transferred from all replicas, otherwise only events from the origin
+   * replica will be transferred from the origin replica.
+   * When each replica is connected to each other replica it's most efficient to disable indirect replication.
+   */
+  def withIndirectReplication(enabled: Boolean): ReplicationSettings[Command] =
+    copy(indirectReplication = enabled)
+
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
       entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
@@ -216,7 +229,8 @@ final class ReplicationSettings[Command] private (
       projectionProvider: ReplicationProjectionProvider = projectionProvider,
       producerInterceptor: Option[EventProducerInterceptor] = eventProducerInterceptor,
       configureEntity: Entity[Command, ShardingEnvelope[Command]] => Entity[Command, ShardingEnvelope[Command]] =
-        configureEntity) =
+        configureEntity,
+      indirectReplication: Boolean = indirectReplication) =
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,
@@ -227,7 +241,8 @@ final class ReplicationSettings[Command] private (
       parallelUpdates,
       projectionProvider,
       producerInterceptor,
-      configureEntity)
+      configureEntity,
+      indirectReplication)
 
   override def toString = s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, $otherReplicas)"
 

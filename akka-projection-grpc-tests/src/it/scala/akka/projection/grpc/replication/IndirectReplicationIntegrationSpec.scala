@@ -4,11 +4,14 @@
 
 package akka.projection.grpc.replication
 
-import akka.Done
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
+
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
@@ -19,14 +22,10 @@ import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
 import akka.http.scaladsl.Http
 import akka.persistence.typed.ReplicaId
-import akka.persistence.typed.crdt.LwwTime
-import akka.persistence.typed.scaladsl.Effect
-import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication.scaladsl.Replica
-import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.projection.r2dbc.R2dbcProjectionSettings
@@ -37,14 +36,8 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
 
-import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
-
-object ReplicationIntegrationSpec {
+object IndirectReplicationIntegrationSpec {
 
   private def config(dc: ReplicaId): Config =
     ConfigFactory.parseString(s"""
@@ -82,83 +75,41 @@ object ReplicationIntegrationSpec {
   private val DCB = ReplicaId("DCB")
   private val DCC = ReplicaId("DCC")
 
-  object LWWHelloWorld {
-
-    val EntityType: EntityTypeKey[Command] = EntityTypeKey[Command]("hello-world")
-
-    sealed trait Command
-
-    case class Get(replyTo: ActorRef[String]) extends Command
-
-    case class SetGreeting(newGreeting: String, replyTo: ActorRef[Done]) extends Command
-
-    sealed trait Event
-
-    case class GreetingChanged(greeting: String, timestamp: LwwTime) extends Event
-
-    object State {
-      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId("")))
-    }
-
-    case class State(greeting: String, timestamp: LwwTime)
-
-    def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) =
-      replicatedBehaviors.setup { replicationContext =>
-        EventSourcedBehavior[Command, Event, State](
-          replicationContext.persistenceId,
-          State.initial, {
-            case (State(greeting, _), Get(replyTo)) =>
-              replyTo ! greeting
-              Effect.none
-            case (state, SetGreeting(greeting, replyTo)) =>
-              Effect
-                .persist(
-                  GreetingChanged(
-                    greeting,
-                    state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
-                .thenRun((_: State) => replyTo ! Done)
-          }, {
-            case (currentState, GreetingChanged(newGreeting, newTimestamp)) =>
-              if (newTimestamp.isAfter(currentState.timestamp))
-                State(newGreeting, newTimestamp)
-              else currentState
-          })
-      }
-  }
 }
 
-class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
+class IndirectReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
       akka.actor
         .ActorSystem(
-          "ReplicationIntegrationSpecA",
-          ReplicationIntegrationSpec
-            .config(ReplicationIntegrationSpec.DCA)
+          "IndirectReplicationIntegrationSpecA",
+          IndirectReplicationIntegrationSpec
+            .config(IndirectReplicationIntegrationSpec.DCA)
             .withFallback(testContainerConf.config))
         .toTyped)
     with AnyWordSpecLike
     with TestDbLifecycle
     with BeforeAndAfterAll
     with LogCapturing {
-  import ReplicationIntegrationSpec._
+  import IndirectReplicationIntegrationSpec._
+  import ReplicationIntegrationSpec.LWWHelloWorld
   implicit val ec: ExecutionContext = system.executionContext
 
   def this() = this(new TestContainerConf)
 
-  private val logger = LoggerFactory.getLogger(classOf[ReplicationIntegrationSpec])
+  private val logger = LoggerFactory.getLogger(classOf[IndirectReplicationIntegrationSpec])
   override def typedSystem: ActorSystem[_] = testKit.system
 
   private val systems = Seq[ActorSystem[_]](
     typedSystem,
     akka.actor
       .ActorSystem(
-        "ReplicationIntegrationSpecB",
-        ReplicationIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
+        "IndirectReplicationIntegrationSpecB",
+        IndirectReplicationIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
       .toTyped,
     akka.actor
       .ActorSystem(
-        "ReplicationIntegrationSpecC",
-        ReplicationIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
+        "IndirectReplicationIntegrationSpecC",
+        IndirectReplicationIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
       .toTyped)
 
   private val grpcPorts = SocketUtil.temporaryServerAddresses(systems.size, "127.0.0.1").map(_.getPort)
@@ -189,15 +140,41 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
   }
 
   def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
+    val otherReplicas = selfReplicaId match {
+      case DCA   => allReplicas.filter(r => r.replicaId == DCB || r.replicaId == DCC)
+      case DCB   => allReplicas.filter(_.replicaId == DCA)
+      case DCC   => allReplicas.filter(_.replicaId == DCA)
+      case other => throw new IllegalArgumentException(other.id)
+    }
+
     val settings = ReplicationSettings[LWWHelloWorld.Command](
       LWWHelloWorld.EntityType.name,
       selfReplicaId,
       EventProducerSettings(replicaSystem),
-      allReplicas,
+      otherReplicas,
       10.seconds,
       8,
       R2dbcReplication())
-    Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
+      .withIndirectReplication(true)
+    Replication.grpcReplication(settings)(LWWHelloWorld.apply)(replicaSystem)
+  }
+
+  def assertGreeting(entityId: String, expected: String): Unit = {
+    testKitsPerDc.values.foreach { testKit =>
+      withClue(s"on ${testKit.system.name}") {
+        val probe = testKit.createTestProbe()
+        withClue(s"for entity id $entityId") {
+          val entityRef = ClusterSharding(testKit.system)
+            .entityRefFor(LWWHelloWorld.EntityType, entityId)
+
+          probe.awaitAssert({
+            entityRef
+              .ask(LWWHelloWorld.Get.apply)
+              .futureValue should ===(expected)
+          }, 10.seconds)
+        }
+      }
+    }
   }
 
   "Replication over gRPC" should {
