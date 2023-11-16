@@ -4,18 +4,28 @@
 
 package akka.projection.grpc.internal
 
+import akka.Done
 import akka.NotUsed
-import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.cluster.sharding.typed.scaladsl.EntityRef
+import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
 import akka.persistence.FilteredPayload
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.typed.PublishedEvent
+import akka.persistence.typed.ReplicaId
+import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.internal.EventWriter
 import akka.persistence.typed.internal.EventWriterExtension
+import akka.persistence.typed.internal.PublishedEventImpl
+import akka.persistence.typed.internal.ReplicatedEventMetadata
+import akka.persistence.typed.internal.ReplicatedPublishedEventMetaData
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.grpc.internal.proto.ConsumeEventIn
 import akka.projection.grpc.internal.proto.ConsumeEventOut
@@ -23,12 +33,14 @@ import akka.projection.grpc.internal.proto.ConsumerEventAck
 import akka.projection.grpc.internal.proto.ConsumerEventStart
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
 import akka.stream.scaladsl.Source
+import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Promise
 
-import akka.persistence.query.typed.EventEnvelope
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration.DurationInt
 
 /**
  * INTERNAL API
@@ -40,6 +52,90 @@ private[akka] object EventPusherConsumerServiceImpl {
   def fromSnapshot(env: EventEnvelope[_]): Boolean =
     env.source == "SN"
 
+  private case class Destination(
+      eventProducerPushDestination: EventProducerPushDestination,
+      sendEvent: (EventEnvelope[_], Boolean) => Future[Any])
+
+  /**
+   * Projection producer push factory, uses the event writer to pass the events
+   */
+  def apply(eventProducerDestinations: Set[EventProducerPushDestination], preferProtobuf: ProtoAnySerialization.Prefer)(
+      implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
+    val eventWriterExtension = EventWriterExtension(system)
+    val destinationPerStreamId = eventProducerDestinations.map { d =>
+      val writerForJournal = eventWriterExtension.writerForJournal(d.journalPluginId)
+
+      val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps) =>
+        writerForJournal.askWithStatus[EventWriter.WriteAck](
+          EventWriter.Write(
+            envelope.persistenceId,
+            envelope.sequenceNr,
+            envelope.eventOption.getOrElse(FilteredPayload),
+            isSnapshotEvent = fromSnapshot(envelope),
+            fillSequenceNumberGaps = fillSequenceNumberGaps,
+            envelope.eventMetadata,
+            envelope.tags,
+            _))(d.settings.journalWriteTimeout, system.scheduler)
+      }
+
+      d.acceptedStreamId -> Destination(d, sendEvent)
+    }.toMap
+
+    new EventPusherConsumerServiceImpl(eventProducerDestinations, preferProtobuf, destinationPerStreamId)
+  }
+
+  /**
+   * Replicated Event Sourcing factory, uses sharding to pass the events to the replicas
+   */
+  // FIXME name/overload
+  def applyForRES(
+      eventProducerDestinations: Set[EventProducerPushDestination],
+      preferProtobuf: ProtoAnySerialization.Prefer)(implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
+    implicit val timeout: Timeout = 3.seconds // FIXME config
+    val sharding = ClusterSharding(system)
+
+    val destinationPerStreamId: Map[String, Destination] = eventProducerDestinations.map { d =>
+      if (d.journalPluginId.isDefined)
+        throw new IllegalArgumentException(
+          s"Replicated event sourcing cannot choose journal through EventProducerPushDestination (for stream id ${d.acceptedStreamId})")
+      // FIXME we'll need to know entity type for each?
+      val entityTypeKey: EntityTypeKey[_] = ???
+      val selfReplicaId: ReplicaId = ???
+      // d.acceptedStreamId -> Destination(d, EventWriterExtension(system).writerForJournal(d.journalPluginId))
+      val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
+
+        envelope.eventMetadata match {
+          case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
+            // send event to entity in this replica
+            val replicationId = ReplicationId.fromString(envelope.persistenceId)
+            val destinationReplicaId = replicationId.withReplica(selfReplicaId)
+            sharding
+              .entityRefFor(entityTypeKey, destinationReplicaId.persistenceId.entityId)
+              .asInstanceOf[EntityRef[PublishedEvent]]
+              .ask[Done](replyTo =>
+                PublishedEventImpl(
+                  replicationId.persistenceId,
+                  replicatedEventMetadata.originSequenceNr,
+                  envelope.event,
+                  envelope.timestamp,
+                  Some(new ReplicatedPublishedEventMetaData(
+                    replicatedEventMetadata.originReplica,
+                    replicatedEventMetadata.version)),
+                  Some(replyTo)))
+
+          case unexpected =>
+            throw new IllegalArgumentException(
+              s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
+              ", is the remote entity really a Replicated Event Sourced Entity?")
+        }
+      }
+
+      d.acceptedStreamId -> Destination(d, sendEvent)
+    }.toMap
+
+    new EventPusherConsumerServiceImpl(eventProducerDestinations, preferProtobuf, destinationPerStreamId)
+  }
+
 }
 
 /**
@@ -48,23 +144,15 @@ private[akka] object EventPusherConsumerServiceImpl {
  * gRPC push protocol service for the consuming side
  */
 @InternalApi
-private[akka] final class EventPusherConsumerServiceImpl(
+private[akka] final class EventPusherConsumerServiceImpl private (
     eventProducerDestinations: Set[EventProducerPushDestination],
-    preferProtobuf: ProtoAnySerialization.Prefer)(implicit system: ActorSystem[_])
+    preferProtobuf: ProtoAnySerialization.Prefer,
+    destinationPerStreamId: Map[String, EventPusherConsumerServiceImpl.Destination])(implicit system: ActorSystem[_])
     extends EventConsumerServicePowerApi {
 
-  import EventPusherConsumerServiceImpl.fromSnapshot
   import ProtobufProtocolConversions._
 
   private val logger = LoggerFactory.getLogger(classOf[EventPusherConsumerServiceImpl])
-
-  private case class Destination(
-      eventProducerPushDestination: EventProducerPushDestination,
-      eventWriter: ActorRef[EventWriter.Command])
-
-  private val destinationPerStreamId = eventProducerDestinations.map { d =>
-    d.acceptedStreamId -> Destination(d, EventWriterExtension(system).writerForJournal(d.journalPluginId))
-  }.toMap
 
   private val protoAnySerialization =
     new ProtoAnySerialization(system, eventProducerDestinations.flatMap(_.protobufDescriptors).toVector, preferProtobuf)
@@ -143,16 +231,8 @@ private[akka] final class EventPusherConsumerServiceImpl(
                   // Note that when there is no Transformation the event is SerializedEvent, which will be passed
                   // through the EventWriter and the journal can write that without additional serialization.
 
-                  destination.eventWriter
-                    .askWithStatus[EventWriter.WriteAck](EventWriter.Write(
-                      transformedEventEnvelope.persistenceId,
-                      transformedEventEnvelope.sequenceNr,
-                      transformedEventEnvelope.eventOption.getOrElse(FilteredPayload),
-                      isSnapshotEvent = fromSnapshot(transformedEventEnvelope),
-                      fillSequenceNumberGaps = init.fillSequenceNumberGaps,
-                      transformedEventEnvelope.eventMetadata,
-                      transformedEventEnvelope.tags,
-                      _))(destination.eventProducerPushDestination.settings.journalWriteTimeout, system.scheduler)
+                  destination
+                    .sendEvent(transformedEventEnvelope, init.fillSequenceNumberGaps)
                     .map(_ =>
                       // ack using the original pid in case it was transformed
                       ConsumeEventOut(ConsumeEventOut.Message.Ack(
