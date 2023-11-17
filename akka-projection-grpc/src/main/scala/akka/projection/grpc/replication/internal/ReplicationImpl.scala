@@ -34,6 +34,7 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.grpc.producer.scaladsl.EventProducer
@@ -76,11 +77,14 @@ private[akka] object ReplicationImpl {
    */
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
-      producerFilter: EventEnvelope[Event] => Boolean,
       replicatedEntity: ReplicatedEntity[Command])(implicit system: ActorSystem[_]): ReplicationImpl[Command] = {
     require(
       system.classicSystem.asInstanceOf[ExtendedActorSystem].provider.isInstanceOf[ClusterActorRefProvider],
       "Replicated Event Sourcing over gRPC only possible together with Akka cluster (akka.actor.provider = cluster)")
+
+    if (settings.initialConsumerFilter.nonEmpty) {
+      ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(settings.streamId, settings.initialConsumerFilter)
+    }
 
     // set up a publisher
     val onlyLocalOriginTransformer = Transformation.empty.registerAsyncEnvelopeOrElseMapper(envelope =>
@@ -99,7 +103,7 @@ private[akka] object ReplicationImpl {
       settings.streamId,
       onlyLocalOriginTransformer,
       settings.eventProducerSettings,
-      producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+      settings.producerFilter)
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
