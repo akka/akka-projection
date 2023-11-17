@@ -23,7 +23,7 @@ function sed_command() {
 ## Remove the tags used by Paradox snippets from the codebase in the current folder
 function removeTags() {
    ## remove tags from code
-   find . -type f -print0 | xargs -0 $(sed_command) -i "s/\/\/ #//g"
+   find . -type f -print0 | xargs -0 $(sed_command) -i "s/\/\/ #.*//g"
 }
 
 
