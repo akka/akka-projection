@@ -67,7 +67,8 @@ object ReplicationSettings {
       parallelUpdates,
       replicationProjectionProvider,
       Optional.empty(),
-      identity)
+      identity,
+      indirectReplication = false)
   }
 
   /**
@@ -117,7 +118,8 @@ object ReplicationSettings {
       parallelUpdates = config.getInt("parallel-updates"),
       replicationProjectionProvider = replicationProjectionProvider,
       Optional.empty(),
-      identity)
+      identity,
+      indirectReplication = false)
   }
 }
 
@@ -138,7 +140,8 @@ final class ReplicationSettings[Command] private (
     val eventProducerInterceptor: Optional[EventProducerInterceptor],
     val configureEntity: java.util.function.Function[
       Entity[Command, ShardingEnvelope[Command]],
-      Entity[Command, ShardingEnvelope[Command]]]) {
+      Entity[Command, ShardingEnvelope[Command]]],
+    val indirectReplication: Boolean) {
 
   def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command] =
     copy(selfReplicaId = selfReplicaId)
@@ -186,6 +189,14 @@ final class ReplicationSettings[Command] private (
         Entity[Command, ShardingEnvelope[Command]]]): ReplicationSettings[Command] =
     copy(configureEntity = configure)
 
+  /**
+   * When enabled all events will be transferred from all replicas, otherwise only events from the origin
+   * replica will be transferred from the origin replica.
+   * When each replica is connected to each other replica it's most efficient to disable indirect replication.
+   */
+  def withIndirectReplication(enabled: Boolean): ReplicationSettings[Command] =
+    copy(indirectReplication = enabled)
+
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
       entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
@@ -198,7 +209,8 @@ final class ReplicationSettings[Command] private (
       eventProducerInterceptor: Optional[EventProducerInterceptor] = eventProducerInterceptor,
       configureEntity: java.util.function.Function[
         Entity[Command, ShardingEnvelope[Command]],
-        Entity[Command, ShardingEnvelope[Command]]] = configureEntity): ReplicationSettings[Command] =
+        Entity[Command, ShardingEnvelope[Command]]] = configureEntity,
+      indirectReplication: Boolean = indirectReplication): ReplicationSettings[Command] =
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,
@@ -209,7 +221,8 @@ final class ReplicationSettings[Command] private (
       parallelUpdates,
       projectionProvider,
       eventProducerInterceptor,
-      configureEntity)
+      configureEntity,
+      indirectReplication)
 
   override def toString =
     s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, ${otherReplicas.asScala.mkString(", ")})"
@@ -227,5 +240,6 @@ final class ReplicationSettings[Command] private (
       entityEventReplicationTimeout = entityEventReplicationTimeout.asScala,
       parallelUpdates = parallelUpdates,
       replicationProjectionProvider = ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))
+      .withIndirectReplication(indirectReplication)
 
 }
