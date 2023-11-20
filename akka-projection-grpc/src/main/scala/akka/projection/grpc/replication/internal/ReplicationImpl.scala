@@ -36,6 +36,7 @@ import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
+import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
@@ -67,8 +68,6 @@ private[akka] object ReplicationImpl {
 
   private val log = LoggerFactory.getLogger(classOf[ReplicationImpl[_]])
 
-  private val filteredEvent = Future.successful(None)
-
   /**
    * Called to bootstrap the entity on each cluster node in each of the replicas.
    *
@@ -83,23 +82,13 @@ private[akka] object ReplicationImpl {
       "Replicated Event Sourcing over gRPC only possible together with Akka cluster (akka.actor.provider = cluster)")
 
     // set up a publisher
-    val onlyLocalOriginTransformer = Transformation.empty.registerAsyncEnvelopeOrElseMapper(envelope =>
-      envelope.eventMetadata match {
-        case Some(meta: ReplicatedEventMetadata) =>
-          if (settings.indirectReplication || meta.originReplica == settings.selfReplicaId)
-            Future.successful(envelope.eventOption)
-          else
-            filteredEvent // Optimization: was replicated to this replica, don't pass the payload across the wire
-        case _ =>
-          throw new IllegalArgumentException(
-            s"Got an event without replication metadata, not supported (pid: ${envelope.persistenceId}, seq_nr: ${envelope.sequenceNr})")
-      })
     val eps = EventProducerSource(
       settings.entityTypeKey.name,
       settings.streamId,
-      onlyLocalOriginTransformer,
+      Transformation.identity,
       settings.eventProducerSettings,
       producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+      .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
@@ -134,7 +123,12 @@ private[akka] object ReplicationImpl {
       val s = GrpcQuerySettings(settings.streamId)
       remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
     }
-    val eventsBySlicesQuery = GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, Nil)
+    val eventsBySlicesQuery = GrpcReadJournal(
+      grpcQuerySettings,
+      remoteReplica.grpcClientSettings,
+      Nil,
+      ProtoAnySerialization.Prefer.Scala,
+      Some(settings))
     log.infoN(
       "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",
       remoteReplica.numberOfConsumers,

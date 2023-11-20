@@ -199,34 +199,56 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
               replayParallelism = producerSource.settings.replayParallelism))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
+      val eventOriginFilter: EventEnvelope[_] => Boolean =
+        producerSource.replicatedEventOriginFilter
+          .map(_.createFilter(init))
+          .getOrElse((_: EventEnvelope[_]) => true)
+
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =
         eventsFlow.mapAsync(producerSource.settings.transformationParallelism) { env =>
-          import system.executionContext
-          transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
-            .map {
-              case Some(event) =>
-                log.traceN(
-                  "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
-                  env.persistenceId,
-                  env.sequenceNr,
-                  env.offset,
-                  event.source)
-                StreamOut(StreamOut.Message.Event(event))
-              case None =>
-                log.traceN(
-                  "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
-                  env.persistenceId,
-                  env.sequenceNr,
-                  env.offset,
-                  env.source)
-                StreamOut(
-                  StreamOut.Message.FilteredEvent(
-                    FilteredEvent(
-                      env.persistenceId,
-                      env.sequenceNr,
-                      env.slice,
-                      ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
-            }
+          if (eventOriginFilter(env)) {
+            import system.executionContext
+            transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+              .map {
+                case Some(event) =>
+                  log.traceN(
+                    "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.offset,
+                    event.source)
+                  StreamOut(StreamOut.Message.Event(event))
+                case None =>
+                  log.traceN(
+                    "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.offset,
+                    env.source)
+                  StreamOut(
+                    StreamOut.Message.FilteredEvent(
+                      FilteredEvent(
+                        env.persistenceId,
+                        env.sequenceNr,
+                        env.slice,
+                        ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
+              }
+          } else {
+            log.traceN(
+              "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
+              env.persistenceId,
+              env.sequenceNr,
+              env.offset,
+              env.source)
+            Future.successful(
+              StreamOut(
+                StreamOut.Message.FilteredEvent(
+                  FilteredEvent(
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.slice,
+                    ProtobufProtocolConversions.offsetToProtoOffset(env.offset)))))
+          }
         }
 
       eventsStreamOut

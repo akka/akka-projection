@@ -46,12 +46,6 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
            # than this.
            entity-event-replication-timeout = 10s
 
-           # When enabled all events will be transferred from all replicas, otherwise
-           # only events from the origin replica will be transferred from the origin
-           # replica. When each replica is connected to each other replica it's most
-           # efficient to disable indirect replication.
-           indirect-replication = on
-
            replicas: [
              {
                # Unique identifier of the replica/datacenter, is stored in the events
@@ -106,7 +100,6 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
         settings.otherReplicas.map(_.replicaId.id) should ===(Set("dcb", "dcc"))
         settings.otherReplicas.forall(_.numberOfConsumers === 4) should ===(true)
         settings.parallelUpdates should ===(8)
-        settings.indirectReplication should ===(true)
 
         val replicaB = settings.otherReplicas.find(_.replicaId.id == "dcb").get
         replicaB.grpcClientSettings.defaultPort should ===(8444)

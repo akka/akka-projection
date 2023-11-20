@@ -65,6 +65,10 @@ message InitReq {
   Offset offset = 4;
   // consumer defined event filters
   repeated FilterCriteria filter = 5;
+  // Used for Replicated Event Sourcing, the replica id of the consumer
+  string replica_id = 6;
+  // Used for Replicated Event Sourcing, other replicas that the consumer is connected to.
+  repeated string other_replica_ids = 7;
 }
 
 // Add filter criteria to exclude and include events for matching entities.

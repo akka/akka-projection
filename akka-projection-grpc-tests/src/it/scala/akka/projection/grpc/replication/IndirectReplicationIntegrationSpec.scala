@@ -155,7 +155,6 @@ class IndirectReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       10.seconds,
       8,
       R2dbcReplication())
-      .withIndirectReplication(true)
     Replication.grpcReplication(settings)(LWWHelloWorld.apply)(replicaSystem)
   }
 

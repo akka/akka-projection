@@ -6,6 +6,7 @@ package akka.projection.grpc.producer.scaladsl
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -25,6 +26,7 @@ import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.javadsl.{ Transformation => JTransformation }
+import akka.projection.grpc.replication.internal.EventOriginFilter
 
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
@@ -38,7 +40,14 @@ object EventProducer {
         streamId: String,
         transformation: Transformation,
         settings: EventProducerSettings): EventProducerSource =
-      new EventProducerSource(entityType, streamId, transformation, settings, _ => true, transformSnapshot = None)
+      new EventProducerSource(
+        entityType,
+        streamId,
+        transformation,
+        settings,
+        _ => true,
+        transformSnapshot = None,
+        replicatedEventOriginFilter = None)
 
     def apply[Event](
         entityType: String,
@@ -52,7 +61,8 @@ object EventProducer {
         transformation,
         settings,
         producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean],
-        transformSnapshot = None)
+        transformSnapshot = None,
+        replicatedEventOriginFilter = None)
 
   }
 
@@ -69,7 +79,9 @@ object EventProducer {
       val transformation: Transformation,
       val settings: EventProducerSettings,
       val producerFilter: EventEnvelope[Any] => Boolean,
-      val transformSnapshot: Option[Any => Any]) {
+      val transformSnapshot: Option[Any => Any],
+      /** INTERNAL API */
+      @InternalApi private[akka] val replicatedEventOriginFilter: Option[EventOriginFilter]) {
     require(entityType.nonEmpty, "Entity type must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
@@ -104,14 +116,25 @@ object EventProducer {
     def withStartingFromSnapshots[Snapshot, Event](transformSnapshot: Snapshot => Event): EventProducerSource =
       copy(transformSnapshot = Some(transformSnapshot.asInstanceOf[Any => Any]))
 
+    def withReplicatedEventOriginFilter(filter: EventOriginFilter): EventProducerSource =
+      copy(replicatedEventOriginFilter = Some(filter))
+
     def copy(
         entityType: String = entityType,
         streamId: String = streamId,
         transformation: Transformation = transformation,
         settings: EventProducerSettings = settings,
         producerFilter: EventEnvelope[Any] => Boolean = producerFilter,
-        transformSnapshot: Option[Any => Any] = transformSnapshot): EventProducerSource =
-      new EventProducerSource(entityType, streamId, transformation, settings, producerFilter, transformSnapshot)
+        transformSnapshot: Option[Any => Any] = transformSnapshot,
+        replicatedEventOriginFilter: Option[EventOriginFilter] = replicatedEventOriginFilter): EventProducerSource =
+      new EventProducerSource(
+        entityType,
+        streamId,
+        transformation,
+        settings,
+        producerFilter,
+        transformSnapshot,
+        replicatedEventOriginFilter)
 
   }
 
