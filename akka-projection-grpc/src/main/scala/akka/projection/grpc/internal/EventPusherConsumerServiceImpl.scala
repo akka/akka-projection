@@ -12,14 +12,12 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.EntityRef
-import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
 import akka.persistence.FilteredPayload
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PublishedEvent
-import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.internal.EventWriter
 import akka.persistence.typed.internal.EventWriterExtension
@@ -32,6 +30,7 @@ import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventAck
 import akka.projection.grpc.internal.proto.ConsumerEventStart
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
+import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import io.grpc.Status
@@ -55,6 +54,10 @@ private[akka] object EventPusherConsumerServiceImpl {
   private case class Destination(
       eventProducerPushDestination: EventProducerPushDestination,
       sendEvent: (EventEnvelope[_], Boolean) => Future[Any])
+
+  // FIXME weird reverse-package-tree-dependency,
+  //       possibly worth pull factories into grpc.consumer.internal and grpc.replication.internal
+  //       where the other specifics for each lives
 
   /**
    * Projection producer push factory, uses the event writer to pass the events
@@ -87,51 +90,52 @@ private[akka] object EventPusherConsumerServiceImpl {
   /**
    * Replicated Event Sourcing factory, uses sharding to pass the events to the replicas
    */
-  // FIXME name/overload
-  def applyForRES(
-      eventProducerDestinations: Set[EventProducerPushDestination],
-      preferProtobuf: ProtoAnySerialization.Prefer)(implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
+  def applyForRES(replicationSettings: Set[ReplicationSettings[_]], preferProtobuf: ProtoAnySerialization.Prefer)(
+      implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
     implicit val timeout: Timeout = 3.seconds // FIXME config
     val sharding = ClusterSharding(system)
 
-    val destinationPerStreamId: Map[String, Destination] = eventProducerDestinations.map { d =>
-      if (d.journalPluginId.isDefined)
-        throw new IllegalArgumentException(
-          s"Replicated event sourcing cannot choose journal through EventProducerPushDestination (for stream id ${d.acceptedStreamId})")
-      // FIXME we'll need to know entity type for each?
-      val entityTypeKey: EntityTypeKey[_] = ???
-      val selfReplicaId: ReplicaId = ???
-      // d.acceptedStreamId -> Destination(d, EventWriterExtension(system).writerForJournal(d.journalPluginId))
-      val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
+    val (
+      eventProducerDestinations: Set[EventProducerPushDestination],
+      destinationPerStreamId: Map[String, Destination]) =
+      replicationSettings.foldLeft((Set.empty[EventProducerPushDestination], Map.empty[String, Destination])) {
+        case ((eventProducerDestinations, destinationPerStreamId), replicationSetting) =>
+          val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
+            envelope.eventMetadata match {
+              case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
+                // send event to entity in this replica
+                val replicationId = ReplicationId.fromString(envelope.persistenceId)
+                val destinationReplicaId = replicationId.withReplica(replicationSetting.selfReplicaId)
+                sharding
+                  .entityRefFor(.entityTypeKey, destinationReplicaId.persistenceId.entityId)
+                  .asInstanceOf[EntityRef[PublishedEvent]]
+                  .ask[Done](replyTo =>
+                    PublishedEventImpl(
+                      replicationId.persistenceId,
+                      replicatedEventMetadata.originSequenceNr,
+                      envelope.event,
+                      envelope.timestamp,
+                      Some(new ReplicatedPublishedEventMetaData(
+                        replicatedEventMetadata.originReplica,
+                        replicatedEventMetadata.version)),
+                      Some(replyTo)))
 
-        envelope.eventMetadata match {
-          case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
-            // send event to entity in this replica
-            val replicationId = ReplicationId.fromString(envelope.persistenceId)
-            val destinationReplicaId = replicationId.withReplica(selfReplicaId)
-            sharding
-              .entityRefFor(entityTypeKey, destinationReplicaId.persistenceId.entityId)
-              .asInstanceOf[EntityRef[PublishedEvent]]
-              .ask[Done](replyTo =>
-                PublishedEventImpl(
-                  replicationId.persistenceId,
-                  replicatedEventMetadata.originSequenceNr,
-                  envelope.event,
-                  envelope.timestamp,
-                  Some(new ReplicatedPublishedEventMetaData(
-                    replicatedEventMetadata.originReplica,
-                    replicatedEventMetadata.version)),
-                  Some(replyTo)))
+              case unexpected =>
+                throw new IllegalArgumentException(
+                  s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
+                  ", is the remote entity really a Replicated Event Sourced Entity?")
+            }
+          }
 
-          case unexpected =>
-            throw new IllegalArgumentException(
-              s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
-              ", is the remote entity really a Replicated Event Sourced Entity?")
-        }
+          val eppd = EventProducerPushDestination(
+            replicationSetting.streamId,
+            // FIXME do we need proto descriptors?
+            protobufDescriptors = Nil)
+
+          (
+            eventProducerDestinations + eppd,
+            destinationPerStreamId.updated(replicationSetting.streamId, Destination(eppd, sendEvent)))
       }
-
-      d.acceptedStreamId -> Destination(d, sendEvent)
-    }.toMap
 
     new EventPusherConsumerServiceImpl(eventProducerDestinations, preferProtobuf, destinationPerStreamId)
   }

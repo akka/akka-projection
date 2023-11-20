@@ -22,6 +22,10 @@ import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
 
+import scala.concurrent.Future
+import akka.persistence.query.typed.EventEnvelope
+import akka.projection.grpc.internal.TopicMatcher
+
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
  * replication stream consumers but not the replication endpoint needed to publish events to other replication places.
@@ -118,4 +122,53 @@ object Replication {
     grpcReplication(settings.withProducerFilterTopicExpression(topicExpression))(replicatedBehaviorFactory)
   }
 
+  /**
+   * Called to bootstrap the entity on each edge cluster node. In edge mode all connections for replication
+   * comes from edge node to cloud. Cloud service needs to be configured with edge replication enabled through
+   * `ReplicationSettings.withEdgeReplication(true)`.
+   *
+   * Important: Note that this does not publish the endpoint, additional steps are needed!
+   */
+  // FIXME factory method name
+  // FIXME filtering is important here, to control what gets replicated to the edge
+  // FIXME a separate settings class because it differs enough?
+  // FIXME maybe not grpcClientSettings directly?
+  // FIXME replica id of the edge node should not be in the otherReplicas of cloud nodes, is documenting that enough?
+  // FIXME replica id should still be unique, is documenting that enough (tricky to do any checks)?
+  def grpcEdgeReplication[Command, Event, State](settings: ReplicationSettings[Command])(
+      replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
+      implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+    // FIXME types to protect against this instead of a runtime check
+    if (settings.otherReplicas.size != 1)
+      throw new IllegalArgumentException(
+        s"ReplicationSettings contains multiple ${settings.otherReplicas.size} replicas, for edge replication those should be exactly one, the replica to connect to")
+    val replicatedEntity =
+      ReplicatedEntity(
+        settings.selfReplicaId,
+        settings.configureEntity.apply(Entity(settings.entityTypeKey) { entityContext =>
+          val replicationId =
+            ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
+          replicatedBehaviorFactory { factory =>
+            ReplicatedEventSourcing.externalReplication(
+              replicationId,
+              settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(factory)
+          }
+        }))
+
+    ReplicationImpl.grpcEdgeReplication(settings.otherReplicas.head, settings, replicatedEntity)
+  }
+
+  trait EdgeReplication[Command] {
+
+    /**
+     * Entity type key for looking up the entities
+     */
+    def entityTypeKey: EntityTypeKey[Command]
+
+    /**
+     * Shortcut for creating EntityRefs for the sharded Replicated Event Sourced entities for
+     * sending commands.
+     */
+    def entityRefFactory: String => EntityRef[Command]
+  }
 }

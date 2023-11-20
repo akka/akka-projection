@@ -84,8 +84,9 @@ object ReplicationSettings {
       entityEventReplicationTimeout = entityEventReplicationTimeout,
       parallelUpdates = parallelUpdates,
       projectionProvider = replicationProjectionProvider,
-      None,
-      identity,
+      eventProducerInterceptor = None,
+      configureEntity = identity,
+      acceptEdgeReplication = false,
       producerFilter = _ => true,
       initialConsumerFilter = Vector.empty)
   }
@@ -136,8 +137,9 @@ object ReplicationSettings {
         .asScala,
       parallelUpdates = config.getInt("parallel-updates"),
       projectionProvider = replicationProjectionProvider,
-      None,
-      identity,
+      eventProducerInterceptor = None,
+      acceptEdgeReplication = false,
+      configureEntity = identity,
       producerFilter = _ => true,
       initialConsumerFilter = Vector.empty)
   }
@@ -158,6 +160,7 @@ final class ReplicationSettings[Command] private (
     val parallelUpdates: Int,
     val projectionProvider: ReplicationProjectionProvider,
     val eventProducerInterceptor: Option[EventProducerInterceptor],
+    val acceptEdgeReplication: Boolean,
     val configureEntity: Entity[Command, ShardingEnvelope[Command]] => Entity[Command, ShardingEnvelope[Command]],
     val producerFilter: EventEnvelope[Any] => Boolean,
     val initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria]) {
@@ -208,6 +211,12 @@ final class ReplicationSettings[Command] private (
     copy(producerInterceptor = Some(interceptor))
 
   /**
+   * Allow edge replicas to connect and replicate updates, default is to not allow.
+   */
+  def withEdgeReplication(edgeReplicationAllowed: Boolean): ReplicationSettings[Command] =
+    copy(edgeReplication = edgeReplicationAllowed)
+
+  /**
    * Allows for changing the settings of the replicated entity, such as stop message, passivation strategy etc.
    */
   def configureEntity(
@@ -248,6 +257,7 @@ final class ReplicationSettings[Command] private (
       entityEventReplicationTimeout: FiniteDuration = entityEventReplicationTimeout,
       parallelUpdates: Int = parallelUpdates,
       projectionProvider: ReplicationProjectionProvider = projectionProvider,
+      edgeReplication: Boolean = acceptEdgeReplication,
       producerInterceptor: Option[EventProducerInterceptor] = eventProducerInterceptor,
       configureEntity: Entity[Command, ShardingEnvelope[Command]] => Entity[Command, ShardingEnvelope[Command]] =
         configureEntity,
@@ -263,6 +273,7 @@ final class ReplicationSettings[Command] private (
       parallelUpdates,
       projectionProvider,
       producerInterceptor,
+      edgeReplication,
       configureEntity,
       producerFilter,
       initialConsumerFilter)

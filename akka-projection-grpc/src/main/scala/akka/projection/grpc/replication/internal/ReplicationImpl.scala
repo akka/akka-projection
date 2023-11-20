@@ -4,9 +4,6 @@
 
 package akka.projection.grpc.replication.internal
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ExtendedActorSystem
@@ -16,6 +13,7 @@ import akka.annotation.InternalApi
 import akka.cluster.ClusterActorRefProvider
 import akka.cluster.sharding.typed.ClusterShardingSettings
 import akka.cluster.sharding.typed.ReplicatedEntity
+import akka.cluster.sharding.typed.ShardedDaemonProcessContext
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.EntityRef
@@ -37,16 +35,23 @@ import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
+import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
 import akka.projection.grpc.internal.ProtoAnySerialization
+import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
+import akka.projection.grpc.producer.scaladsl.EventProducerPush
 import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.Replication
+import akka.projection.grpc.replication.scaladsl.Replication.EdgeReplication
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 /**
  * INTERNAL API
@@ -101,11 +106,19 @@ private[akka] object ReplicationImpl {
     val entityRefFactory: String => EntityRef[Command] = sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
     settings.otherReplicas.foreach(startConsumer(_, settings, entityRefFactory))
 
-    new ReplicationImpl[Command](
-      eventProducerService = eps,
-      createSingleServiceHandler = () => EventProducer.grpcServiceHandler(Set(eps), settings.eventProducerInterceptor),
-      entityTypeKey = replicatedEntity.entity.typeKey,
-      entityRefFactory = entityRefFactory)
+    new ReplicationImpl[Command](eventProducerService = eps, createSingleServiceHandler = () => {
+      val handler = EventProducer.grpcServiceHandler(Set(eps), settings.eventProducerInterceptor)
+      if (settings.acceptEdgeReplication) {
+        // Fold in edge push gRPC consumer service if enabled
+        val pushConsumer = EventConsumerServicePowerApiHandler.partial(
+          EventPusherConsumerServiceImpl.applyForRES(
+            Set(settings),
+            // FIXME prefer depends on caller?
+            ProtoAnySerialization.Prefer.Scala))
+        handler.orElse(pushConsumer)
+      } else handler
+
+    }, entityTypeKey = replicatedEntity.entity.typeKey, entityRefFactory = entityRefFactory)
   }
 
   private def startConsumer[C](
@@ -240,6 +253,93 @@ private[akka] object ReplicationImpl {
           sliceRange.max)
         ProjectionBehavior(settings.projectionProvider(projectionId, sourceProvider, replicationFlow, system))
     }, shardedDaemonProcessSettings, Some(ProjectionBehavior.Stop))
+  }
+
+  /**
+   * Called to bootstrap the entity on each cluster node in each of the replicas.
+   * Does not need to publish any endpoint, both consuming and producing events are
+   * active connections from the edge.
+   */
+  def grpcEdgeReplication[Command, Event](
+      remoteReplica: Replica,
+      settings: ReplicationSettings[Command],
+      replicatedEntity: ReplicatedEntity[Command])(implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+    val projectionName =
+      s"RES_${settings.entityTypeKey.name}_${settings.selfReplicaId.id}__${remoteReplica.replicaId.id}"
+    require(
+      projectionName.size < 255,
+      s"The generated projection name for replication: '$projectionName' is too long to fit " +
+      "in the database column, must be at most 255 characters. See if you can shorten replica or entity type names.")
+    val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
+
+    /* val grpcQuerySettings = {
+      val s = GrpcQuerySettings(settings.streamId)
+      // FIXME additional request metadata for auth and such
+      // remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
+      s
+    } */
+    // FIXME do we need to know ingress replica id or is just being able to connect (host/port) enough?
+
+    val shardedDaemonProcessSettings = {
+      import scala.concurrent.duration._
+      val default = ShardedDaemonProcessSettings(system)
+      val shardingSettings = default.shardingSettings.getOrElse(ClusterShardingSettings(system))
+      // shorter handoff timeout because in some restart backoff it may take a while for the projections to
+      // terminate and we don't want to delay sharding rebalance for too long. 10 seconds actually
+      // means that it will wait 5 seconds before stopping them hard (5 seconds is reduced in sharding).
+      val handOffTimeout = shardingSettings.tuningParameters.handOffTimeout.min(10.seconds)
+      default.withShardingSettings(
+        shardingSettings.withTuningParameters(shardingSettings.tuningParameters.withHandOffTimeout(handOffTimeout)))
+    }
+
+    val sharding = ClusterSharding(system)
+    sharding.init(replicatedEntity.entity)
+
+    // sharded daemon process for consuming event stream from the other dc:s
+    val shardingEntityRefFactory: String => EntityRef[Command] =
+      sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
+
+    startConsumer(remoteReplica, settings, shardingEntityRefFactory)
+
+    // start event pushing
+    val eps = EventProducerSource(
+      settings.entityTypeKey.name,
+      settings.streamId,
+      Transformation.identity,
+      settings.eventProducerSettings)
+    val epp = EventProducerPush(
+      // FIXME streamId vs originId, not the same?
+      settings.selfReplicaId.id,
+      eps,
+      remoteReplica.grpcClientSettings)
+
+    ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
+      s"${settings.selfReplicaId.id}EventProducer",
+      // FIXME separate setting for number of producers?
+      remoteReplica.numberOfConsumers, { context: ShardedDaemonProcessContext =>
+        val sliceRange = sliceRanges(context.processNumber)
+        val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
+        val projectionId = ProjectionId(projectionName, projectionKey)
+
+        val sourceProvider = EventSourcedProvider
+          .eventsBySlices[AnyRef](system, eps.settings.queryPluginId, eps.entityType, sliceRange.min, sliceRange.max)
+        val projection = settings.projectionProvider(
+          projectionId,
+          sourceProvider,
+          epp
+            .handler()
+            .asInstanceOf[FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed]],
+          system)
+
+        ProjectionBehavior(projection)
+      },
+      shardedDaemonProcessSettings,
+      ProjectionBehavior.Stop)
+
+    new EdgeReplication[Command] {
+      override def entityTypeKey: EntityTypeKey[Command] = settings.entityTypeKey
+      override def entityRefFactory: String => EntityRef[Command] = shardingEntityRefFactory
+    }
   }
 
 }
