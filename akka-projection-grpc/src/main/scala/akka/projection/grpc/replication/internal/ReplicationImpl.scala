@@ -110,6 +110,7 @@ private[akka] object ReplicationImpl {
       val handler = EventProducer.grpcServiceHandler(Set(eps), settings.eventProducerInterceptor)
       if (settings.acceptEdgeReplication) {
         // Fold in edge push gRPC consumer service if enabled
+        log.info("Edge replication enabled for Replicated Entity [{}]", settings.entityTypeKey.name)
         val pushConsumer = EventConsumerServicePowerApiHandler.partial(
           EventPusherConsumerServiceImpl.applyForRES(
             Set(settings),
@@ -275,7 +276,7 @@ private[akka] object ReplicationImpl {
     /* val grpcQuerySettings = {
       val s = GrpcQuerySettings(settings.streamId)
       // FIXME additional request metadata for auth and such
-      // remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
+      remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
       s
     } */
     // FIXME do we need to know ingress replica id or is just being able to connect (host/port) enough?

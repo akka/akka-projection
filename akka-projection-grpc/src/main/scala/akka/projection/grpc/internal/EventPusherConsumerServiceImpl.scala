@@ -46,6 +46,9 @@ import scala.concurrent.duration.DurationInt
  */
 @InternalApi
 private[akka] object EventPusherConsumerServiceImpl {
+
+  private val log = LoggerFactory.getLogger(getClass)
+
   // See akka.persistence.r2dbc.internal.EnvelopeOrigin, but we don't have a dependency
   // to akka-persistence-r2dbc here
   def fromSnapshot(env: EventEnvelope[_]): Boolean =
@@ -93,6 +96,7 @@ private[akka] object EventPusherConsumerServiceImpl {
   def applyForRES(replicationSettings: Set[ReplicationSettings[_]], preferProtobuf: ProtoAnySerialization.Prefer)(
       implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
     implicit val timeout: Timeout = 3.seconds // FIXME config
+    implicit val ec: ExecutionContext = system.executionContext
     val sharding = ClusterSharding(system)
 
     val (
@@ -106,8 +110,8 @@ private[akka] object EventPusherConsumerServiceImpl {
                 // send event to entity in this replica
                 val replicationId = ReplicationId.fromString(envelope.persistenceId)
                 val destinationReplicaId = replicationId.withReplica(replicationSetting.selfReplicaId)
-                sharding
-                  .entityRefFor(.entityTypeKey, destinationReplicaId.persistenceId.entityId)
+                val askResult = sharding
+                  .entityRefFor(replicationSetting.entityTypeKey, destinationReplicaId.persistenceId.entityId)
                   .asInstanceOf[EntityRef[PublishedEvent]]
                   .ask[Done](replyTo =>
                     PublishedEventImpl(
@@ -119,6 +123,12 @@ private[akka] object EventPusherConsumerServiceImpl {
                         replicatedEventMetadata.originReplica,
                         replicatedEventMetadata.version)),
                       Some(replyTo)))
+                askResult.failed.foreach(
+                  error =>
+                    log.warn(
+                      s"Failing replication stream from [${replicatedEventMetadata.originReplica.id}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
+                      error))
+                askResult
 
               case unexpected =>
                 throw new IllegalArgumentException(
