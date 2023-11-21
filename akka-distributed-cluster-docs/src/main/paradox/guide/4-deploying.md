@@ -133,8 +133,8 @@ We are going to deploy the `shopping-cart-service` in region `us-east-2`.
 
 The complete sample can be downloaded:
 
-* Java: [shopping-scala.zip](../attachments/shopping-scala.zip)
-* Scala: [shopping-java.zip](../attachments/shopping-java.zip)
+* Scala: [shopping-scala.zip](../attachments/shopping-scala.zip)
+* Java: [shopping-java.zip](../attachments/shopping-java.zip)
 
 Build the image in `shopping-cart-service` directory:
 
@@ -226,8 +226,8 @@ We are going to deploy the `shopping-analytics-service` in region `eu-central-1`
 
 The complete sample can be downloaded:
 
-* Java: [shopping-scala.zip](../attachments/shopping-scala.zip)
-* Scala: [shopping-java.zip](../attachments/shopping-java.zip)
+* Scala: [shopping-scala.zip](../attachments/shopping-scala.zip)
+* Java: [shopping-java.zip](../attachments/shopping-java.zip)
 
 Build the image in `shopping-analytics-service` directory:
 
@@ -286,8 +286,8 @@ This step is for deploying `replicated-shopping-cart-service`:
 
 The complete sample can be downloaded:
 
-* Java: [replicated-shopping-scala.zip](../attachments/replicated-shopping-scala.zip)
-* Scala: [replicated-shopping-java.zip](../attachments/replicated-shopping-java.zip)
+* Scala: [replicated-shopping-scala.zip](../attachments/replicated-shopping-scala.zip)
+* Java: [replicated-shopping-java.zip](../attachments/replicated-shopping-java.zip)
 
 Now there will be connections in both directions, so install the @ref:[load balancer](#load-balancer) in the other region too.
 
