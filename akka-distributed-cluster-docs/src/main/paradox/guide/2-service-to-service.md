@@ -173,8 +173,8 @@ See @apidoc[akka.projection.grpc.consumer.ConsumerFilter] for full API documenta
 
 The complete sample can be downloaded:
 
-* Java: [shopping-scala.zip](../attachments/shopping-scala.zip)
-* Scala: [shopping-java.zip](../attachments/shopping-java.zip)
+* Scala: [shopping-scala.zip](../attachments/shopping-scala.zip)
+* Java: [shopping-java.zip](../attachments/shopping-java.zip)
 
 ## Running the sample code locally
 

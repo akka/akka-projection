@@ -149,8 +149,8 @@ Java
 
 The complete sample can be downloaded:
 
-* Java: [replicated-shopping-scala.zip](../attachments/replicated-shopping-scala.zip)
-* Scala: [replicated-shopping-java.zip](../attachments/replicated-shopping-java.zip)
+* Scala: [replicated-shopping-scala.zip](../attachments/replicated-shopping-scala.zip)
+* Java: [replicated-shopping-java.zip](../attachments/replicated-shopping-java.zip)
 
 ## Running the sample code locally
 
