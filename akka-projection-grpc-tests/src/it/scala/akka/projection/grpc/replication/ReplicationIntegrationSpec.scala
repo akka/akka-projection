@@ -87,27 +87,27 @@ object ReplicationIntegrationSpec {
     val EntityType: EntityTypeKey[Command] = EntityTypeKey[Command]("hello-world")
 
     sealed trait Command
-
-    case class Get(replyTo: ActorRef[String]) extends Command
-
-    case class SetGreeting(newGreeting: String, replyTo: ActorRef[Done]) extends Command
+    final case class Get(replyTo: ActorRef[String]) extends Command
+    final case class SetGreeting(newGreeting: String, replyTo: ActorRef[Done]) extends Command
+    final case class SetTag(tag: String, replyTo: ActorRef[Done]) extends Command
 
     sealed trait Event
-
-    case class GreetingChanged(greeting: String, timestamp: LwwTime) extends Event
+    final case class GreetingChanged(greeting: String, timestamp: LwwTime) extends Event
+    final case class TagChanged(tag: String, timestamp: LwwTime) extends Event
 
     object State {
-      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId("")))
+      val initial =
+        State("Hello world", LwwTime(Long.MinValue, ReplicaId("")), "", LwwTime(Long.MinValue, ReplicaId("")))
     }
 
-    case class State(greeting: String, timestamp: LwwTime)
+    case class State(greeting: String, greetingTimestamp: LwwTime, tag: String, tagTimestamp: LwwTime)
 
     def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) =
       replicatedBehaviors.setup { replicationContext =>
         EventSourcedBehavior[Command, Event, State](
           replicationContext.persistenceId,
           State.initial, {
-            case (State(greeting, _), Get(replyTo)) =>
+            case (State(greeting, _, _, _), Get(replyTo)) =>
               replyTo ! greeting
               Effect.none
             case (state, SetGreeting(greeting, replyTo)) =>
@@ -115,14 +115,30 @@ object ReplicationIntegrationSpec {
                 .persist(
                   GreetingChanged(
                     greeting,
-                    state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+                    state.greetingTimestamp
+                      .increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+                .thenRun((_: State) => replyTo ! Done)
+            case (state, SetTag(tag, replyTo)) =>
+              Effect
+                .persist(
+                  TagChanged(
+                    tag,
+                    state.greetingTimestamp
+                      .increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
                 .thenRun((_: State) => replyTo ! Done)
           }, {
             case (currentState, GreetingChanged(newGreeting, newTimestamp)) =>
-              if (newTimestamp.isAfter(currentState.timestamp))
-                State(newGreeting, newTimestamp)
+              if (newTimestamp.isAfter(currentState.greetingTimestamp))
+                currentState.copy(newGreeting, newTimestamp)
+              else currentState
+            case (currentState, TagChanged(newTag, newTimestamp)) =>
+              if (newTimestamp.isAfter(currentState.tagTimestamp))
+                currentState.copy(tag = newTag, tagTimestamp = newTimestamp)
               else currentState
           })
+          .withTaggerForState {
+            case (state, _) => if (state.tag == "") Set.empty else Set(state.tag)
+          }
       }
   }
 }
