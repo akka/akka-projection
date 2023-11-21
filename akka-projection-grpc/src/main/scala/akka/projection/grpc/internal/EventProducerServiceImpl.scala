@@ -201,7 +201,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 
       val eventOriginFilter: EventEnvelope[_] => Boolean =
         producerSource.replicatedEventOriginFilter
-          .map(_.createFilter(init))
+          .flatMap(f => init.replicaInfo.map(f.createFilter))
           .getOrElse((_: EventEnvelope[_]) => true)
 
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =
@@ -292,28 +292,50 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
           import system.executionContext
           q.loadEnvelope[Any](req.persistenceId, req.seqNr)
             .flatMap { env =>
-              transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
-                .map {
-                  case Some(event) =>
-                    log.traceN(
-                      "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                      env.persistenceId,
-                      env.sequenceNr,
-                      env.offset)
-                    LoadEventResponse(LoadEventResponse.Message.Event(event))
-                  case None =>
-                    log.traceN(
-                      "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
-                      env.persistenceId,
-                      env.sequenceNr,
-                      env.offset)
-                    LoadEventResponse(LoadEventResponse.Message.FilteredEvent(FilteredEvent(
-                      persistenceId = env.persistenceId,
-                      seqNr = env.sequenceNr,
-                      slice = env.slice,
-                      offset = ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
-                      source = env.source)))
-                }
+              val eventOriginFilter: EventEnvelope[_] => Boolean =
+                producerSource.replicatedEventOriginFilter
+                  .flatMap(f => req.replicaInfo.map(f.createFilter))
+                  .getOrElse((_: EventEnvelope[_]) => true)
+              if (eventOriginFilter(env)) {
+                transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+                  .map {
+                    case Some(event) =>
+                      log.traceN(
+                        "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                        env.persistenceId,
+                        env.sequenceNr,
+                        env.offset)
+                      LoadEventResponse(LoadEventResponse.Message.Event(event))
+                    case None =>
+                      log.traceN(
+                        "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
+                        env.persistenceId,
+                        env.sequenceNr,
+                        env.offset)
+                      LoadEventResponse(LoadEventResponse.Message.FilteredEvent(FilteredEvent(
+                        persistenceId = env.persistenceId,
+                        seqNr = env.sequenceNr,
+                        slice = env.slice,
+                        offset = ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
+                        source = env.source)))
+                  }
+              } else {
+                log.traceN(
+                  "Filtered loaded event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
+                  env.persistenceId,
+                  env.sequenceNr,
+                  env.offset,
+                  env.source)
+                Future.successful(
+                  LoadEventResponse(
+                    LoadEventResponse.Message.FilteredEvent(
+                      FilteredEvent(
+                        env.persistenceId,
+                        env.sequenceNr,
+                        env.slice,
+                        ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
+                        source = env.source))))
+              }
             }
             .recoverWith {
               case e: NoSuchElementException =>

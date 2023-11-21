@@ -64,6 +64,7 @@ import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
+import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 @ApiMayChange
 object GrpcReadJournal {
@@ -199,6 +200,9 @@ final class GrpcReadJournal private (
     case Some(meta) => meta.asList
     case None       => Seq.empty
   }
+
+  private val replicaInfo =
+    replicationSettings.map(s => ReplicaInfo(s.selfReplicaId.id, s.otherReplicas.toSeq.map(_.replicaId.id)))
 
   @InternalApi
   private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = {
@@ -347,14 +351,7 @@ final class GrpcReadJournal private (
         .futureSource {
           initFilter.map { filter =>
             val protoCriteria = toProtoFilterCriteria(filter.criteria)
-            val initReq = InitReq(
-              streamId,
-              minSlice,
-              maxSlice,
-              protoOffset,
-              protoCriteria,
-              replicationSettings.map(_.selfReplicaId.id).getOrElse(""),
-              replicationSettings.map(_.otherReplicas.toSeq.map(_.replicaId.id)).getOrElse(Nil))
+            val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset, protoCriteria, replicaInfo)
 
             Source
               .single(StreamIn(StreamIn.Message.Init(initReq)))
@@ -459,7 +456,7 @@ final class GrpcReadJournal private (
       sequenceNr)
     import system.dispatcher
     addRequestHeaders(client.loadEvent())
-      .invoke(LoadEventRequest(settings.streamId, persistenceId, sequenceNr))
+      .invoke(LoadEventRequest(settings.streamId, persistenceId, sequenceNr, replicaInfo))
       .map {
         case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
           eventToEnvelope(event, settings.streamId)

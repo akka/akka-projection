@@ -65,10 +65,7 @@ message InitReq {
   Offset offset = 4;
   // consumer defined event filters
   repeated FilterCriteria filter = 5;
-  // Used for Replicated Event Sourcing, the replica id of the consumer
-  string replica_id = 6;
-  // Used for Replicated Event Sourcing, other replicas that the consumer is connected to.
-  repeated string other_replica_ids = 7;
+  ReplicaInfo replica_info = 6;
 }
 
 // Add filter criteria to exclude and include events for matching entities.
@@ -207,6 +204,23 @@ message PersistenceIdSeqNr {
   int64 seq_nr = 2;
 }
 
+// Used for Replicated Event Sourcing to filter events based on origin.
+// For edge topologies, like star topologies, an edge replica is not connected
+// to all other replicas, but should be able to receive events indirectly via
+// the replica that it is consuming from.
+//
+// Events originating from other replicas that the consumer is connected to are excluded
+// and emitted as FilteredEvent from the producer side, because the consumer will receive
+// them directly from the other replica.
+// Events originating from the consumer replica itself are excluded (break the cycle).
+// Events originating from the producer replica are always included.
+message ReplicaInfo {
+  // The replica id of the consumer
+  string replica_id = 6;
+  // Other replicas that the consumer is connected to.
+  repeated string other_replica_ids = 7;
+}
+
 
 message StreamOut {
   oneof message {
@@ -265,6 +279,7 @@ message LoadEventRequest {
   string stream_id = 1;
   string persistence_id = 2;
   int64 seq_nr = 3;
+  ReplicaInfo replica_info = 4;
 }
 
 // Response to `LoadEventRequest`.
