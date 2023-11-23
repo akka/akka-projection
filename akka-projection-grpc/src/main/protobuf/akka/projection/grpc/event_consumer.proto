@@ -53,6 +53,8 @@ message ConsumerEventInit {
   string origin_id = 1;
   // the stream id of the type of entity the producer wants to push
   string stream_id = 2;
+  // if gaps in sequence numbers may exist and should be filled in
+  bool fill_sequence_number_gaps = 3;
 }
 
 message ConsumerEventStart {
