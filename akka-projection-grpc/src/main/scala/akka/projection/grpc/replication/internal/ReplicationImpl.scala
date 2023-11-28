@@ -330,7 +330,7 @@ private[akka] object ReplicationImpl {
     ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
       s"${settings.selfReplicaId.id}EventProducer",
       // FIXME separate setting for number of producers?
-      remoteReplica.numberOfConsumers, { context: ShardedDaemonProcessContext =>
+      remoteReplica.numberOfConsumers, { (context: ShardedDaemonProcessContext) =>
         val sliceRange = sliceRanges(context.processNumber)
         val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
         val projectionId = ProjectionId(projectionName, projectionKey)
