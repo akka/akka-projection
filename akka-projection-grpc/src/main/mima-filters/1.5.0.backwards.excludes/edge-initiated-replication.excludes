@@ -1,0 +1,8 @@
+# private constructor
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.replication.scaladsl.ReplicationSettings.this")
+# internal changes
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.EventPusherConsumerServiceImpl#Destination.eventWriter")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.grpc.internal.EventPusherConsumerServiceImpl#Destination.copy")
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.grpc.internal.EventPusherConsumerServiceImpl#Destination.copy$default$2")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.EventPusherConsumerServiceImpl#Destination.this")
+ProblemFilters.exclude[IncompatibleMethTypeProblem]("akka.projection.grpc.internal.EventPusherConsumerServiceImpl#Destination.apply")
