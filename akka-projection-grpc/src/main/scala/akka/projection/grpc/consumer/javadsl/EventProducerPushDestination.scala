@@ -58,7 +58,7 @@ object EventProducerPushDestination {
     new EventProducerPushDestination(
       Optional.empty(),
       acceptedStreamId,
-      (_, _) => Transformation.empty,
+      (_, _) => Transformation.identity,
       Optional.empty(),
       Collections.emptyList(),
       protobufDescriptors,
