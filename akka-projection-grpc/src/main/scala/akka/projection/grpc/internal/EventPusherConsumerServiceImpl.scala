@@ -71,17 +71,18 @@ private[akka] object EventPusherConsumerServiceImpl {
     val destinationPerStreamId = eventProducerDestinations.map { d =>
       val writerForJournal = eventWriterExtension.writerForJournal(d.journalPluginId)
 
-      val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps) =>
+      val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
         writerForJournal.askWithStatus[EventWriter.WriteAck](
-          EventWriter.Write(
-            envelope.persistenceId,
-            envelope.sequenceNr,
-            envelope.eventOption.getOrElse(FilteredPayload),
-            isSnapshotEvent = fromSnapshot(envelope),
-            fillSequenceNumberGaps = fillSequenceNumberGaps,
-            envelope.eventMetadata,
-            envelope.tags,
-            _))(d.settings.journalWriteTimeout, system.scheduler)
+          replyTo =>
+            EventWriter.Write(
+              persistenceId = envelope.persistenceId,
+              sequenceNumber = envelope.sequenceNr,
+              event = envelope.eventOption.getOrElse(FilteredPayload),
+              isSnapshotEvent = fromSnapshot(envelope),
+              fillSequenceNumberGaps = fillSequenceNumberGaps,
+              metadata = envelope.eventMetadata,
+              tags = envelope.tags,
+              replyTo = replyTo))(d.settings.journalWriteTimeout, system.scheduler)
       }
 
       d.acceptedStreamId -> Destination(d, sendEvent)

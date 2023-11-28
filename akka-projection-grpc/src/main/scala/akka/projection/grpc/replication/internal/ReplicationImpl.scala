@@ -298,14 +298,6 @@ private[akka] object ReplicationImpl {
       "in the database column, must be at most 255 characters. See if you can shorten replica or entity type names.")
     val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
 
-    /* val grpcQuerySettings = {
-      val s = GrpcQuerySettings(settings.streamId)
-      // FIXME additional request metadata for auth and such
-      remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
-      s
-    } */
-    // FIXME do we need to know ingress replica id or is just being able to connect (host/port) enough?
-
     val shardedDaemonProcessSettings = {
       import scala.concurrent.duration._
       val default = ShardedDaemonProcessSettings(system)
@@ -326,7 +318,14 @@ private[akka] object ReplicationImpl {
       settings.streamId,
       Transformation.identity,
       settings.eventProducerSettings)
-    val epp = EventProducerPush(settings.entityTypeKey.name, eps, remoteReplica.grpcClientSettings)
+
+    val epp =
+      remoteReplica.additionalQueryRequestMetadata match {
+        case None =>
+          EventProducerPush(settings.entityTypeKey.name, eps, remoteReplica.grpcClientSettings)
+        case Some(metadata) =>
+          EventProducerPush(settings.entityTypeKey.name, eps, metadata, remoteReplica.grpcClientSettings)
+      }
 
     ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
       s"${settings.selfReplicaId.id}EventProducer",

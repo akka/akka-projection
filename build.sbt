@@ -5,7 +5,6 @@ ThisBuild / dynverSeparator := "-"
 // append -SNAPSHOT to version when isSnapshot
 ThisBuild / dynverSonatypeSnapshots := true
 ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven")
-ThisBuild / resolvers += "Akka library snapshot repository".at("https://repo.akka.io/snapshots")
 
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
