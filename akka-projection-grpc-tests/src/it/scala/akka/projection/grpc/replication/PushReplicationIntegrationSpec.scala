@@ -306,7 +306,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       }, 10.seconds)
 
       // then indirectly replica B
-      // FIXME not working yet
+      // FIXME not working yet waiting for indirect replication
       pendingUntilFixed {
         val dcBEntityRef = replicationB.entityRefFactory(entityIdOne)
         probe.awaitAssert({
@@ -318,7 +318,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
     }
 
-    // FIXME not working yet
+    // FIXME not working yet, waiting for indirect replication PR
     "replicate writes from one DCB to DCA and then the edge node" in pendingUntilFixed {
       logger.infoN("Updating greeting for [{}] from dc [{}]", entityIdOne, DCB)
       replicationB

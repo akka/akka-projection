@@ -138,10 +138,6 @@ object Replication {
   def grpcEdgeReplication[Command, Event, State](settings: ReplicationSettings[Command])(
       replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
       implicit system: ActorSystem[_]): EdgeReplication[Command] = {
-    // FIXME types to protect against this instead of a runtime check
-    if (settings.otherReplicas.size != 1)
-      throw new IllegalArgumentException(
-        s"ReplicationSettings contains multiple ${settings.otherReplicas.size} replicas, for edge replication those should be exactly one, the replica to connect to")
     val replicatedEntity =
       ReplicatedEntity(
         settings.selfReplicaId,
@@ -155,7 +151,7 @@ object Replication {
           }
         }))
 
-    ReplicationImpl.grpcEdgeReplication(settings.otherReplicas.head, settings, replicatedEntity)
+    ReplicationImpl.grpcEdgeReplication(settings, replicatedEntity)
   }
 
   trait EdgeReplication[Command] {

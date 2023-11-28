@@ -111,7 +111,7 @@ private[akka] object EventPusherConsumerServiceImpl {
                 val replicationId = ReplicationId.fromString(envelope.persistenceId)
                 val destinationReplicaId = replicationId.withReplica(replicationSetting.selfReplicaId)
                 val askResult = sharding
-                  .entityRefFor(replicationSetting.entityTypeKey, destinationReplicaId.persistenceId.entityId)
+                  .entityRefFor(replicationSetting.entityTypeKey, destinationReplicaId.entityId)
                   .asInstanceOf[EntityRef[PublishedEvent]]
                   .ask[Done](replyTo =>
                     PublishedEventImpl(

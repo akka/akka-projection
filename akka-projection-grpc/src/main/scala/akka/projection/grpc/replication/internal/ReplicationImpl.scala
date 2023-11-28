@@ -261,10 +261,35 @@ private[akka] object ReplicationImpl {
    * Does not need to publish any endpoint, both consuming and producing events are
    * active connections from the edge.
    */
-  def grpcEdgeReplication[Command, Event](
+  def grpcEdgeReplication[Command](settings: ReplicationSettings[Command], replicatedEntity: ReplicatedEntity[Command])(
+      implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+
+    val sharding = ClusterSharding(system)
+    sharding.init(replicatedEntity.entity)
+
+    // sharded daemon process for consuming event stream from the other dc:s
+    val shardingEntityRefFactory: String => EntityRef[Command] =
+      sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
+
+    settings.otherReplicas.foreach { remoteReplica =>
+      log.infoN(
+        "Starting replication of [{}] to [{}:{}]",
+        settings.entityTypeKey.name,
+        remoteReplica.grpcClientSettings.serviceName,
+        remoteReplica.grpcClientSettings.defaultPort)
+      startProducerAndConsumer(remoteReplica, settings, shardingEntityRefFactory)
+    }
+
+    new EdgeReplication[Command] {
+      override def entityTypeKey: EntityTypeKey[Command] = settings.entityTypeKey
+      override def entityRefFactory: String => EntityRef[Command] = shardingEntityRefFactory
+    }
+  }
+
+  private def startProducerAndConsumer[Command](
       remoteReplica: Replica,
       settings: ReplicationSettings[Command],
-      replicatedEntity: ReplicatedEntity[Command])(implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+      shardingEntityRefFactory: String => EntityRef[Command])(implicit system: ActorSystem[_]): Unit = {
     val projectionName =
       s"RES_${settings.entityTypeKey.name}_${settings.selfReplicaId.id}__${remoteReplica.replicaId.id}"
     require(
@@ -293,13 +318,6 @@ private[akka] object ReplicationImpl {
         shardingSettings.withTuningParameters(shardingSettings.tuningParameters.withHandOffTimeout(handOffTimeout)))
     }
 
-    val sharding = ClusterSharding(system)
-    sharding.init(replicatedEntity.entity)
-
-    // sharded daemon process for consuming event stream from the other dc:s
-    val shardingEntityRefFactory: String => EntityRef[Command] =
-      sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
-
     startConsumer(remoteReplica, settings, shardingEntityRefFactory)
 
     // start event pushing
@@ -308,11 +326,7 @@ private[akka] object ReplicationImpl {
       settings.streamId,
       Transformation.identity,
       settings.eventProducerSettings)
-    val epp = EventProducerPush(
-      // FIXME streamId vs originId, not the same?
-      settings.selfReplicaId.id,
-      eps,
-      remoteReplica.grpcClientSettings)
+    val epp = EventProducerPush(settings.entityTypeKey.name, eps, remoteReplica.grpcClientSettings)
 
     ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
       s"${settings.selfReplicaId.id}EventProducer",
@@ -337,10 +351,6 @@ private[akka] object ReplicationImpl {
       shardedDaemonProcessSettings,
       ProjectionBehavior.Stop)
 
-    new EdgeReplication[Command] {
-      override def entityTypeKey: EntityTypeKey[Command] = settings.entityTypeKey
-      override def entityRefFactory: String => EntityRef[Command] = shardingEntityRefFactory
-    }
   }
 
 }
