@@ -167,6 +167,12 @@ object Replication {
    * Called to bootstrap the entity on each edge node. In edge mode all connections for replication
    * comes from edge node to cloud. Cloud service needs to be configured for regular grpc replication
    * with edge replication enabled through `ReplicationSettings#withEdgeReplication(true)`.
+   *
+   * Each edge replica must use a unique replica id.
+   *
+   * The cloud replicas does not know about the edge replica ids up front (it should not be in their "other replicas" set).
+   *
+   * An edge replica can connect to more than one cloud replica for redundancy (but only one is required).
    */
   def grpcEdgeReplication[Command, Event, State](settings: ReplicationSettings[Command])(
       replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
