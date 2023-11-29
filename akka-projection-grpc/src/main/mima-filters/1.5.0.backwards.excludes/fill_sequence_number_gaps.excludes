@@ -1,0 +1,2 @@
+# adding fill_sequence_number_gaps to ConsumerEventInit
+ProblemFilters.exclude[Problem]("akka.projection.grpc.internal.proto.*")
