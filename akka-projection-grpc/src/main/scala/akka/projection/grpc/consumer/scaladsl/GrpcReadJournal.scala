@@ -57,12 +57,15 @@ import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.projection.grpc.internal.proto.ReplicaInfo
+import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 @ApiMayChange
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
@@ -110,7 +113,7 @@ object GrpcReadJournal {
       clientSettings: GrpcClientSettings,
       protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
       implicit system: ClassicActorSystemProvider): GrpcReadJournal =
-    apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
+    apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala, replicationSettings = None)
 
   /**
    * INTERNAL API
@@ -119,7 +122,9 @@ object GrpcReadJournal {
       settings: GrpcQuerySettings,
       clientSettings: GrpcClientSettings,
       protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
-      protobufPrefer: ProtoAnySerialization.Prefer)(implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
+      protobufPrefer: ProtoAnySerialization.Prefer,
+      replicationSettings: Option[ReplicationSettings[_]])(
+      implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
 
     // FIXME issue #702 This probably means that one GrpcReadJournal instance is created for each Projection instance,
     // and therefore one grpc client for each. Is that fine or should the client be shared for same clientSettings?
@@ -137,7 +142,8 @@ object GrpcReadJournal {
       system.classicSystem.asInstanceOf[ExtendedActorSystem],
       settings,
       withChannelBuilderOverrides(clientSettings),
-      protoAnySerialization)
+      protoAnySerialization,
+      replicationSettings)
   }
 
   private def withChannelBuilderOverrides(clientSettings: GrpcClientSettings): GrpcClientSettings = {
@@ -157,7 +163,8 @@ final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,
     clientSettings: GrpcClientSettings,
-    protoAnySerialization: ProtoAnySerialization)
+    protoAnySerialization: ProtoAnySerialization,
+    replicationSettings: Option[ReplicationSettings[_]])
     extends ReadJournal
     with EventsBySliceQuery
     with EventTimestampQuery
@@ -176,7 +183,8 @@ final class GrpcReadJournal private (
       system,
       GrpcQuerySettings(config),
       withChannelBuilderOverrides(GrpcClientSettings.fromConfig(config.getConfig("client"))(system)),
-      new ProtoAnySerialization(system.toTyped, descriptors = Nil, protoAnyPrefer))
+      new ProtoAnySerialization(system.toTyped, descriptors = Nil, protoAnyPrefer),
+      replicationSettings = None)
 
   // When created from `GrpcReadJournalProvider`.
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
@@ -192,6 +200,9 @@ final class GrpcReadJournal private (
     case Some(meta) => meta.asList
     case None       => Seq.empty
   }
+
+  private val replicaInfo =
+    replicationSettings.map(s => ReplicaInfo(s.selfReplicaId.id, s.otherReplicas.toSeq.map(_.replicaId.id)))
 
   @InternalApi
   private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = {
@@ -340,7 +351,7 @@ final class GrpcReadJournal private (
         .futureSource {
           initFilter.map { filter =>
             val protoCriteria = toProtoFilterCriteria(filter.criteria)
-            val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset, protoCriteria)
+            val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset, protoCriteria, replicaInfo)
 
             Source
               .single(StreamIn(StreamIn.Message.Init(initReq)))
@@ -445,7 +456,7 @@ final class GrpcReadJournal private (
       sequenceNr)
     import system.dispatcher
     addRequestHeaders(client.loadEvent())
-      .invoke(LoadEventRequest(settings.streamId, persistenceId, sequenceNr))
+      .invoke(LoadEventRequest(settings.streamId, persistenceId, sequenceNr, replicaInfo))
       .map {
         case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
           eventToEnvelope(event, settings.streamId)

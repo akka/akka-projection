@@ -4,6 +4,8 @@
 
 package akka.projection.grpc.replication.scaladsl
 
+import scala.concurrent.Future
+
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.annotation.ApiMayChange
@@ -14,14 +16,11 @@ import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
+import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
-import scala.concurrent.Future
-
-import akka.persistence.query.typed.EventEnvelope
-import akka.projection.grpc.internal.TopicMatcher
 
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
@@ -71,22 +70,7 @@ object Replication {
    */
   def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command])(
       replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
-      implicit system: ActorSystem[_]): Replication[Command] =
-    grpcReplication[Command, Event, State](settings, (_: EventEnvelope[Event]) => true)(replicatedBehaviorFactory)
-
-  /**
-   * Called to bootstrap the entity on each cluster node in each of the replicas.
-   *
-   * Filter events matching the `producerFilter` predicate, for example based on tags.
-   *
-   * Important: Note that this does not publish the endpoint, additional steps are needed!
-   */
-  def grpcReplication[Command, Event, State](
-      settings: ReplicationSettings[Command],
-      producerFilter: EventEnvelope[Event] => Boolean)(
-      replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
       implicit system: ActorSystem[_]): Replication[Command] = {
-
     val replicatedEntity =
       ReplicatedEntity(
         settings.selfReplicaId,
@@ -100,7 +84,23 @@ object Replication {
           }
         }))
 
-    ReplicationImpl.grpcReplication[Command, Event, State](settings, producerFilter, replicatedEntity)
+    ReplicationImpl.grpcReplication[Command, Event, State](settings, replicatedEntity)
+  }
+
+  /**
+   * Called to bootstrap the entity on each cluster node in each of the replicas.
+   *
+   * Filter events matching the `producerFilter` predicate, for example based on tags.
+   *
+   * Important: Note that this does not publish the endpoint, additional steps are needed!
+   */
+  @deprecated("Define producerFilter via settings.withProducerFilter", "1.5.1")
+  def grpcReplication[Command, Event, State](
+      settings: ReplicationSettings[Command],
+      producerFilter: EventEnvelope[Event] => Boolean)(
+      replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
+      implicit system: ActorSystem[_]): Replication[Command] = {
+    grpcReplication(settings.withProducerFilter(producerFilter))(replicatedBehaviorFactory)
   }
 
   /**
@@ -111,14 +111,11 @@ object Replication {
    *
    * Important: Note that this does not publish the endpoint, additional steps are needed!
    */
+  @deprecated("Define topicExpression via settings.withProducerFilterTopicExpression", "1.5.1")
   def grpcReplication[Command, Event, State](settings: ReplicationSettings[Command], topicExpression: String)(
       replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
       implicit system: ActorSystem[_]): Replication[Command] = {
-    val topicMatcher = TopicMatcher(topicExpression)
-    grpcReplication(
-      settings,
-      (env: EventEnvelope[Event]) =>
-        topicMatcher.matches(env, settings.eventProducerSettings.topicTagPrefix))(replicatedBehaviorFactory)
+    grpcReplication(settings.withProducerFilterTopicExpression(topicExpression))(replicatedBehaviorFactory)
   }
 
 }

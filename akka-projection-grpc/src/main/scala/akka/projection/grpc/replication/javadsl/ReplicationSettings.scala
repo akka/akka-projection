@@ -4,6 +4,9 @@
 
 package akka.projection.grpc.replication.javadsl
 
+import java.util.function.{ Function => JFunction }
+import java.util.{ List => JList }
+
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
@@ -19,10 +22,15 @@ import akka.projection.grpc.replication.internal.ReplicaImpl
 import akka.projection.grpc.replication.scaladsl.{ ReplicationSettings => SReplicationSettings }
 import akka.util.JavaDurationConverters.JavaDurationOps
 import com.typesafe.config.Config
-
 import java.time.Duration
+import java.util.Collections
 import java.util.Optional
+import java.util.function.Predicate
 import java.util.{ Set => JSet }
+
+import akka.persistence.query.typed.EventEnvelope
+import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.internal.TopicMatcher
 import akka.util.ccompat.JavaConverters._
 import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
 
@@ -67,7 +75,9 @@ object ReplicationSettings {
       parallelUpdates,
       replicationProjectionProvider,
       Optional.empty(),
-      identity)
+      identity,
+      _ => true,
+      Collections.emptyList)
   }
 
   /**
@@ -117,7 +127,9 @@ object ReplicationSettings {
       parallelUpdates = config.getInt("parallel-updates"),
       replicationProjectionProvider = replicationProjectionProvider,
       Optional.empty(),
-      identity)
+      identity,
+      _ => true,
+      Collections.emptyList)
   }
 }
 
@@ -136,9 +148,11 @@ final class ReplicationSettings[Command] private (
     val parallelUpdates: Int,
     val replicationProjectionProvider: ReplicationProjectionProvider,
     val eventProducerInterceptor: Optional[EventProducerInterceptor],
-    val configureEntity: java.util.function.Function[
+    val configureEntity: JFunction[
       Entity[Command, ShardingEnvelope[Command]],
-      Entity[Command, ShardingEnvelope[Command]]]) {
+      Entity[Command, ShardingEnvelope[Command]]],
+    val producerFilter: Predicate[EventEnvelope[Any]],
+    val initialConsumerFilter: JList[ConsumerFilter.FilterCriteria]) {
 
   def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command] =
     copy(selfReplicaId = selfReplicaId)
@@ -181,10 +195,33 @@ final class ReplicationSettings[Command] private (
    * Allows for changing the settings of the replicated entity, such as stop message, passivation strategy etc.
    */
   def configureEntity(
-      configure: java.util.function.Function[
-        Entity[Command, ShardingEnvelope[Command]],
-        Entity[Command, ShardingEnvelope[Command]]]): ReplicationSettings[Command] =
+      configure: JFunction[Entity[Command, ShardingEnvelope[Command]], Entity[Command, ShardingEnvelope[Command]]])
+      : ReplicationSettings[Command] =
     copy(configureEntity = configure)
+
+  /**
+   * Filter events matching the `producerFilter` predicate, for example based on tags.
+   */
+  def withProducerFilter[Event](producerFilter: Predicate[EventEnvelope[Event]]): ReplicationSettings[Command] =
+    copy(producerFilter = producerFilter.asInstanceOf[Predicate[EventEnvelope[Any]]])
+
+  /**
+   * Filter events matching the topic expression according to MQTT specification, including wildcards.
+   * The topic of an event is defined by a tag with certain prefix, see `topic-tag-prefix` configuration.
+   */
+  def withProducerFilterTopicExpression(topicExpression: String): ReplicationSettings[Command] = {
+    val topicMatcher = TopicMatcher(topicExpression)
+    withProducerFilter[Any](env => topicMatcher.matches(env, eventProducerSettings.topicTagPrefix))
+  }
+
+  /**
+   * Set the initial consumer filter to use for events. Should only be used for static, up front consumer filters.
+   * Combining this with updating consumer filters directly means that the filters may be reset to these
+   * filters.
+   */
+  def withInitialConsumerFilter(
+      initialConsumerFilter: JList[ConsumerFilter.FilterCriteria]): ReplicationSettings[Command] =
+    copy(initialConsumerFilter = initialConsumerFilter)
 
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
@@ -196,9 +233,12 @@ final class ReplicationSettings[Command] private (
       parallelUpdates: Int = parallelUpdates,
       projectionProvider: ReplicationProjectionProvider = replicationProjectionProvider,
       eventProducerInterceptor: Optional[EventProducerInterceptor] = eventProducerInterceptor,
-      configureEntity: java.util.function.Function[
+      configureEntity: JFunction[
         Entity[Command, ShardingEnvelope[Command]],
-        Entity[Command, ShardingEnvelope[Command]]] = configureEntity): ReplicationSettings[Command] =
+        Entity[Command, ShardingEnvelope[Command]]] = configureEntity,
+      producerFilter: Predicate[EventEnvelope[Any]] = producerFilter,
+      initialConsumerFilter: JList[ConsumerFilter.FilterCriteria] = initialConsumerFilter)
+      : ReplicationSettings[Command] =
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,
@@ -209,7 +249,9 @@ final class ReplicationSettings[Command] private (
       parallelUpdates,
       projectionProvider,
       eventProducerInterceptor,
-      configureEntity)
+      configureEntity,
+      producerFilter,
+      initialConsumerFilter)
 
   override def toString =
     s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, ${otherReplicas.asScala.mkString(", ")})"
@@ -227,5 +269,7 @@ final class ReplicationSettings[Command] private (
       entityEventReplicationTimeout = entityEventReplicationTimeout.asScala,
       parallelUpdates = parallelUpdates,
       replicationProjectionProvider = ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))
+      .withProducerFilter(producerFilter.test)
+      .withInitialConsumerFilter(initialConsumerFilter.asScala.toVector)
 
 }

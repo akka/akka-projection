@@ -71,9 +71,14 @@ object GrpcReadJournal {
       clientSettings: GrpcClientSettings,
       protobufDescriptors: java.util.List[Descriptors.FileDescriptor]): GrpcReadJournal = {
     import akka.util.ccompat.JavaConverters._
-    new GrpcReadJournal(scaladsl
-      .GrpcReadJournal(settings, clientSettings, protobufDescriptors.asScala.toList, ProtoAnySerialization.Prefer.Java)(
-        system))
+    new GrpcReadJournal(
+      scaladsl
+        .GrpcReadJournal(
+          settings,
+          clientSettings,
+          protobufDescriptors.asScala.toList,
+          ProtoAnySerialization.Prefer.Java,
+          replicationSettings = None)(system))
   }
 
 }

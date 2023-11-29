@@ -1,0 +1,5 @@
+# indirect replication, internals
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.this")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.producer.scaladsl.EventProducer#EventProducerSource.copy")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.producer.scaladsl.EventProducer#EventProducerSource.this")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.replication.javadsl.ReplicationSettings.this")

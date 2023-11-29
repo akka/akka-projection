@@ -34,8 +34,10 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
+import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
@@ -67,8 +69,6 @@ private[akka] object ReplicationImpl {
 
   private val log = LoggerFactory.getLogger(classOf[ReplicationImpl[_]])
 
-  private val filteredEvent = Future.successful(None)
-
   /**
    * Called to bootstrap the entity on each cluster node in each of the replicas.
    *
@@ -76,28 +76,23 @@ private[akka] object ReplicationImpl {
    */
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
-      producerFilter: EventEnvelope[Event] => Boolean,
       replicatedEntity: ReplicatedEntity[Command])(implicit system: ActorSystem[_]): ReplicationImpl[Command] = {
     require(
       system.classicSystem.asInstanceOf[ExtendedActorSystem].provider.isInstanceOf[ClusterActorRefProvider],
       "Replicated Event Sourcing over gRPC only possible together with Akka cluster (akka.actor.provider = cluster)")
 
+    if (settings.initialConsumerFilter.nonEmpty) {
+      ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(settings.streamId, settings.initialConsumerFilter)
+    }
+
     // set up a publisher
-    val onlyLocalOriginTransformer = Transformation.empty.registerAsyncEnvelopeOrElseMapper(envelope =>
-      envelope.eventMetadata match {
-        case Some(meta: ReplicatedEventMetadata) =>
-          if (meta.originReplica == settings.selfReplicaId) Future.successful(envelope.eventOption)
-          else filteredEvent // Optimization: was replicated to this DC, don't pass the payload across the wire
-        case _ =>
-          throw new IllegalArgumentException(
-            s"Got an event without replication metadata, not supported (pid: ${envelope.persistenceId}, seq_nr: ${envelope.sequenceNr})")
-      })
     val eps = EventProducerSource(
       settings.entityTypeKey.name,
       settings.streamId,
-      onlyLocalOriginTransformer,
+      Transformation.identity,
       settings.eventProducerSettings,
-      producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean])
+      settings.producerFilter)
+      .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
@@ -132,7 +127,12 @@ private[akka] object ReplicationImpl {
       val s = GrpcQuerySettings(settings.streamId)
       remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
     }
-    val eventsBySlicesQuery = GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, Nil)
+    val eventsBySlicesQuery = GrpcReadJournal(
+      grpcQuerySettings,
+      remoteReplica.grpcClientSettings,
+      Nil,
+      ProtoAnySerialization.Prefer.Scala,
+      Some(settings))
     log.infoN(
       "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",
       remoteReplica.numberOfConsumers,
@@ -171,14 +171,19 @@ private[akka] object ReplicationImpl {
               case (envelope, _) =>
                 if (!envelope.filtered) {
                   envelope.eventMetadata match {
-                    case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
-                      // skipping events originating from other replicas is handled by filtering but for good measure
-                      if (replicatedEventMetadata.originReplica != remoteReplica.replicaId)
-                        throw new IllegalArgumentException(
-                          "Expected replicated event from replica " +
-                          s"[${remoteReplica.replicaId}] but was [${replicatedEventMetadata.originReplica}]. " +
-                          "Verify your replication configuration, such as self-replica-id.")
+                    case Some(replicatedEventMetadata: ReplicatedEventMetadata)
+                        if replicatedEventMetadata.originReplica == settings.selfReplicaId =>
+                      // skipping events originating from self replica (break cycle)
+                      if (log.isTraceEnabled)
+                        log.traceN(
+                          "[{}] ignoring event from replica [{}] with self origin (pid [{}], seq_nr [{}])",
+                          projectionKey,
+                          remoteReplica.replicaId,
+                          envelope.persistenceId,
+                          envelope.sequenceNr)
+                      Future.successful(Done)
 
+                    case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
                       val replicationId = ReplicationId.fromString(envelope.persistenceId)
                       val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
                       val entityRef =

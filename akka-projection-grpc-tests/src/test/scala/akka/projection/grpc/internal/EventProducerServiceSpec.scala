@@ -29,17 +29,22 @@ import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQu
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
 import akka.persistence.typed.PersistenceId
+import akka.persistence.typed.ReplicaId
+import akka.persistence.typed.internal.ReplicatedEventMetadata
+import akka.persistence.typed.internal.VersionVector
 import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.ReplayReq
+import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
+import akka.projection.grpc.replication.internal.EventOriginFilter
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
@@ -147,10 +152,11 @@ object EventProducerServiceSpec {
       pid: PersistenceId,
       seqNr: Long,
       evt: String,
-      tags: Set[String] = Set.empty): EventEnvelope[String] = {
+      tags: Set[String] = Set.empty,
+      source: String = ""): EventEnvelope[String] = {
     val now = Instant.now()
     val slice = math.abs(pid.hashCode % 1024)
-    EventEnvelope(
+    val env = EventEnvelope(
       TimestampOffset(Instant.now, Map(pid.id -> seqNr)),
       pid.id,
       seqNr,
@@ -161,7 +167,25 @@ object EventProducerServiceSpec {
       filtered = false,
       source = "",
       tags)
+
+    if (source == "BT")
+      env.withEventOption(None)
+    else
+      env
   }
+
+  private def createEnvelope(pid: PersistenceId, seqNr: Long, evt: String, origin: String): EventEnvelope[String] =
+    createEnvelope(pid, seqNr, evt)
+      .withMetadata(ReplicatedEventMetadata(ReplicaId(origin), seqNr, VersionVector.empty, false))
+
+  private def createBacktrackingEnvelope(
+      pid: PersistenceId,
+      seqNr: Long,
+      evt: String,
+      origin: String): EventEnvelope[String] =
+    createEnvelope(pid, seqNr, evt, source = "BT")
+      .withMetadata(ReplicatedEventMetadata(ReplicaId(origin), seqNr, VersionVector.empty, false))
+
 }
 
 class EventProducerServiceSpec
@@ -195,9 +219,11 @@ class EventProducerServiceSpec
   val streamId4 = "stream_id_" + entityType4
   val entityType5 = nextEntityType() + "_snap"
   val streamId5 = "stream_id_" + entityType5
+  val entityType6 = nextEntityType()
+  val streamId6 = "stream_id_" + entityType6
 
   private val eventsBySlicesQueries =
-    Map(streamId1 -> query, streamId2 -> query, streamId3 -> query)
+    Map(streamId1 -> query, streamId2 -> query, streamId3 -> query, streamId6 -> query)
   private val eventsBySlicesStartingFromSnapshotsQueries =
     Map(streamId4 -> query, streamId5 -> query)
   private val currentEventsByPersistenceIdQueries =
@@ -222,7 +248,9 @@ class EventProducerServiceSpec
           evt.replace("-snap", "")
         else
           evt
-      })
+      },
+    EventProducerSource(entityType6, streamId6, transformation, settings)
+      .withReplicatedEventOriginFilter(new EventOriginFilter(ReplicaId("replica1"))))
 
   private val eventProducerService =
     new EventProducerServiceImpl(
@@ -491,6 +519,59 @@ class EventProducerServiceSpec
       // transformSnapshot removes the "-snap"
       protoAnySerialization.deserialize(out3.getEvent.payload.get) shouldBe "E-3"
     }
+
+    "filter based on event origin" in {
+      val replicaInfo = ReplicaInfo("replica2", List("replica1", "replica3"))
+      val initReq = InitReq(streamId6, 0, 1023, offset = None, replicaInfo = Some(replicaInfo))
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+
+      probe.request(100)
+      val testPublisher =
+        query.testPublisher(entityType6).futureValue
+
+      val pid = nextPid(entityType6)
+      // emitted because replica1 is the producer self replica
+      val env1 = createEnvelope(pid, 1L, "e-1", "replica1")
+      testPublisher.sendNext(env1)
+      // will be filtered because replica2 is the consumer self replica
+      val env2 = createEnvelope(pid, 2L, "e-2", "replica2")
+      testPublisher.sendNext(env2)
+      // will be filtered because replica3 is included in other replicas
+      val env3 = createEnvelope(pid, 3L, "e-3", "replica3")
+      testPublisher.sendNext(env3)
+      // emitted because replica4 is not included in other replicas
+      val env4 = createEnvelope(pid, 4L, "e-4", "replica4")
+      testPublisher.sendNext(env4)
+      // emitted because backtracking
+      val env5 = createBacktrackingEnvelope(pid, 4L, "e-4", "replica2")
+      testPublisher.sendNext(env5)
+
+      val out1 = probe.expectNext()
+      out1.message.isEvent shouldBe true
+      out1.getEvent.seqNr shouldBe env1.sequenceNr
+
+      val out2 = probe.expectNext()
+      out2.message.isFilteredEvent shouldBe true
+      out2.getFilteredEvent.seqNr shouldBe env2.sequenceNr
+
+      val out3 = probe.expectNext()
+      out3.message.isFilteredEvent shouldBe true
+      out3.getFilteredEvent.seqNr shouldBe env3.sequenceNr
+
+      val out4 = probe.expectNext()
+      out4.message.isEvent shouldBe true
+      out4.getEvent.seqNr shouldBe env4.sequenceNr
+
+      val out5 = probe.expectNext()
+      out5.message.isEvent shouldBe true
+      out5.getEvent.seqNr shouldBe env5.sequenceNr
+
+    }
+
   }
 
 }
