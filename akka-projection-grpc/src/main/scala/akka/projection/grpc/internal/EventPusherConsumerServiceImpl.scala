@@ -149,6 +149,7 @@ private[akka] final class EventPusherConsumerServiceImpl(
                       transformedEventEnvelope.sequenceNr,
                       transformedEventEnvelope.eventOption.getOrElse(FilteredPayload),
                       isSnapshotEvent = fromSnapshot(transformedEventEnvelope),
+                      fillSequenceNumberGaps = init.fillSequenceNumberGaps,
                       transformedEventEnvelope.eventMetadata,
                       transformedEventEnvelope.tags,
                       _))(destination.eventProducerPushDestination.settings.journalWriteTimeout, system.scheduler)
