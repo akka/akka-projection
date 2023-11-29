@@ -4,11 +4,9 @@
 
 package akka.projection.grpc.replication
 
-import akka.Done
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
@@ -18,15 +16,11 @@ import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
 import akka.http.scaladsl.Http
 import akka.persistence.typed.ReplicaId
-import akka.persistence.typed.crdt.LwwTime
-import akka.persistence.typed.scaladsl.Effect
-import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication
 import akka.projection.grpc.replication.scaladsl.Replica
-import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
 import akka.projection.grpc.replication.scaladsl.Replication.EdgeReplication
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
@@ -51,7 +45,7 @@ object PushReplicationIntegrationSpec {
        akka.actor.provider = cluster
        akka.actor {
          serialization-bindings {
-           "${classOf[replication.PushReplicationIntegrationSpec].getName}$$LWWHelloWorld$$Event" = jackson-json
+           "${classOf[replication.ReplicationIntegrationSpec].getName}$$LWWHelloWorld$$Event" = jackson-json
          }
        }
        akka.http.server.preview.enable-http2 = on
@@ -82,47 +76,6 @@ object PushReplicationIntegrationSpec {
   private val DCB = ReplicaId("DCB")
   private val EdgeReplicaA = ReplicaId("EdgeA")
 
-  object LWWHelloWorld {
-
-    sealed trait Command
-
-    case class Get(replyTo: ActorRef[String]) extends Command
-
-    case class SetGreeting(newGreeting: String, replyTo: ActorRef[Done]) extends Command
-
-    sealed trait Event
-
-    case class GreetingChanged(greeting: String, timestamp: LwwTime) extends Event
-
-    object State {
-      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId("")))
-    }
-
-    case class State(greeting: String, timestamp: LwwTime)
-
-    def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) =
-      replicatedBehaviors.setup { replicationContext =>
-        EventSourcedBehavior[Command, Event, State](
-          replicationContext.persistenceId,
-          State.initial, {
-            case (State(greeting, _), Get(replyTo)) =>
-              replyTo ! greeting
-              Effect.none
-            case (state, SetGreeting(greeting, replyTo)) =>
-              Effect
-                .persist(
-                  GreetingChanged(
-                    greeting,
-                    state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
-                .thenRun((_: State) => replyTo ! Done)
-          }, {
-            case (currentState, GreetingChanged(newGreeting, newTimestamp)) =>
-              if (newTimestamp.isAfter(currentState.timestamp))
-                State(newGreeting, newTimestamp)
-              else currentState
-          })
-      }
-  }
 }
 
 class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
@@ -139,6 +92,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     with BeforeAndAfterAll
     with LogCapturing {
   import PushReplicationIntegrationSpec._
+  import ReplicationIntegrationSpec.LWWHelloWorld
   implicit val ec: ExecutionContext = system.executionContext
 
   def this() = this(new TestContainerConf)
@@ -222,7 +176,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       8,
       R2dbcReplication()).withEdgeReplication(true)
     val started =
-      Replication.grpcReplication(settings)(PushReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
+      Replication.grpcReplication(settings)(LWWHelloWorld.apply)(replicaSystem)
 
     // start producer server
     Http(system)
@@ -244,7 +198,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       10.seconds,
       8,
       R2dbcReplication()).withEdgeReplication(true)
-    Replication.grpcEdgeReplication(settings)(PushReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
+    Replication.grpcEdgeReplication(settings)(LWWHelloWorld.apply)(replicaSystem)
   }
 
   "Replication over gRPC" should {
