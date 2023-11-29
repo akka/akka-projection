@@ -13,10 +13,10 @@
     </logger>
 
     <!-- One of the tests depend on these, don't change -->
-    <logger name="akka.projection.grpc" level="DEBUG" />
+    <logger name="akka.projection.grpc" level="TRACE" />
     <logger name="akka.projection.r2dbc" level="DEBUG" />
     <logger name="akka.persistence.r2dbc" level="DEBUG" />
-    <logger name="akka.persistence.typed" level="DEBUG" />
+    <logger name="akka.persistence.typed" level="TRACE" />
 
     <!-- Silence some other stuff -->
     <logger name="akka.actor.typed.pubsub" level="INFO" />
