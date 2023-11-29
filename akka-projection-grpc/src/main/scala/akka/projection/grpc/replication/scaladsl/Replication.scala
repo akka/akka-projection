@@ -22,10 +22,6 @@ import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
 
-import scala.concurrent.Future
-import akka.persistence.query.typed.EventEnvelope
-import akka.projection.grpc.internal.TopicMatcher
-
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
  * replication stream consumers but not the replication endpoint needed to publish events to other replication places.

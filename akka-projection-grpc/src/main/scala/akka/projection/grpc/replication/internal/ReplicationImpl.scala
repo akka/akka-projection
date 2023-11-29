@@ -112,7 +112,7 @@ private[akka] object ReplicationImpl {
         // Fold in edge push gRPC consumer service if enabled
         log.info("Edge replication enabled for Replicated Entity [{}]", settings.entityTypeKey.name)
         val pushConsumer = EventConsumerServicePowerApiHandler.partial(
-          EventPusherConsumerServiceImpl.applyForRES(
+          EventPusherConsumerServiceImpl.forRES(
             Set(settings),
             // FIXME prefer depends on caller?
             ProtoAnySerialization.Prefer.Scala))
@@ -273,8 +273,10 @@ private[akka] object ReplicationImpl {
 
     settings.otherReplicas.foreach { remoteReplica =>
       log.infoN(
-        "Starting replication of [{}] to [{}:{}]",
+        "Starting replication for [{}] between replica [{}] and [{}] at [{}:{}]",
         settings.entityTypeKey.name,
+        settings.selfReplicaId,
+        remoteReplica.replicaId.id,
         remoteReplica.grpcClientSettings.serviceName,
         remoteReplica.grpcClientSettings.defaultPort)
       startProducerAndConsumer(remoteReplica, settings, shardingEntityRefFactory)

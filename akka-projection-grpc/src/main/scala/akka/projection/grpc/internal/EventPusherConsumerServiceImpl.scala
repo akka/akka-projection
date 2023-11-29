@@ -30,6 +30,7 @@ import akka.projection.grpc.internal.proto.ConsumeEventOut
 import akka.projection.grpc.internal.proto.ConsumerEventAck
 import akka.projection.grpc.internal.proto.ConsumerEventStart
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApi
+import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
@@ -56,7 +57,8 @@ private[akka] object EventPusherConsumerServiceImpl {
 
   private case class Destination(
       eventProducerPushDestination: EventProducerPushDestination,
-      sendEvent: (EventEnvelope[_], Boolean) => Future[Any])
+      sendEvent: (EventEnvelope[_], Boolean) => Future[Any],
+      replicationSettings: Option[ReplicationSettings[_]])
 
   // FIXME weird reverse-package-tree-dependency,
   //       possibly worth pull factories into grpc.consumer.internal and grpc.replication.internal
@@ -85,7 +87,7 @@ private[akka] object EventPusherConsumerServiceImpl {
               replyTo = replyTo))(d.settings.journalWriteTimeout, system.scheduler)
       }
 
-      d.acceptedStreamId -> Destination(d, sendEvent)
+      d.acceptedStreamId -> Destination(d, sendEvent, None)
     }.toMap
 
     new EventPusherConsumerServiceImpl(eventProducerDestinations, preferProtobuf, destinationPerStreamId)
@@ -94,7 +96,7 @@ private[akka] object EventPusherConsumerServiceImpl {
   /**
    * Replicated Event Sourcing factory, uses sharding to pass the events to the replicas
    */
-  def applyForRES(replicationSettings: Set[ReplicationSettings[_]], preferProtobuf: ProtoAnySerialization.Prefer)(
+  def forRES(replicationSettings: Set[ReplicationSettings[_]], preferProtobuf: ProtoAnySerialization.Prefer)(
       implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
     implicit val timeout: Timeout = 3.seconds // FIXME config
     implicit val ec: ExecutionContext = system.executionContext
@@ -111,6 +113,9 @@ private[akka] object EventPusherConsumerServiceImpl {
                 // send event to entity in this replica
                 val replicationId = ReplicationId.fromString(envelope.persistenceId)
                 val destinationReplicaId = replicationId.withReplica(replicationSetting.selfReplicaId)
+                if (fillSequenceNumberGaps)
+                  throw new IllegalArgumentException(
+                    s"fillSequenceNumberGaps can not be true for RES (pid ${envelope.persistenceId}, seq nr ${envelope.sequenceNr} from ${replicationId}")
                 val askResult = sharding
                   .entityRefFor(replicationSetting.entityTypeKey, destinationReplicaId.entityId)
                   .asInstanceOf[EntityRef[PublishedEvent]]
@@ -145,7 +150,8 @@ private[akka] object EventPusherConsumerServiceImpl {
 
           (
             eventProducerDestinations + eppd,
-            destinationPerStreamId.updated(replicationSetting.streamId, Destination(eppd, sendEvent)))
+            destinationPerStreamId
+              .updated(replicationSetting.streamId, Destination(eppd, sendEvent, Some(replicationSetting))))
       }
 
     new EventPusherConsumerServiceImpl(eventProducerDestinations, preferProtobuf, destinationPerStreamId)
@@ -190,8 +196,10 @@ private[akka] final class EventPusherConsumerServiceImpl private (
           destinationPerStreamId.get(init.streamId) match {
             case Some(destination) =>
               startEvent.success(
-                ConsumeEventOut(ConsumeEventOut.Message.Start(
-                  ConsumerEventStart(toProtoFilterCriteria(destination.eventProducerPushDestination.filters)))))
+                ConsumeEventOut(ConsumeEventOut.Message.Start(ConsumerEventStart(
+                  toProtoFilterCriteria(destination.eventProducerPushDestination.filters),
+                  destination.replicationSettings
+                    .map(rs => ReplicaInfo(rs.selfReplicaId.id, rs.otherReplicas.map(_.replicaId.id).toSeq))))))
 
               val eventsAndFiltered = tail.collect {
                 case c if c.message.isEvent || c.message.isFilteredEvent => c

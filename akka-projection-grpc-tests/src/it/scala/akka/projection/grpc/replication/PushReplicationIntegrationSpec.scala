@@ -306,20 +306,16 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       }, 10.seconds)
 
       // then indirectly replica B
-      // FIXME not working yet waiting for indirect replication
-      pendingUntilFixed {
-        val dcBEntityRef = replicationB.entityRefFactory(entityIdOne)
-        probe.awaitAssert({
-          dcBEntityRef
-            .ask(LWWHelloWorld.Get.apply)
-            .futureValue should ===(s"hello 1 from ${DCB.id}")
-        }, 10.seconds)
-      }
+      val dcBEntityRef = replicationB.entityRefFactory(entityIdOne)
+      probe.awaitAssert({
+        dcBEntityRef
+          .ask(LWWHelloWorld.Get.apply)
+          .futureValue should ===(s"hello 1 from ${EdgeReplicaA.id}")
+      }, 10.seconds)
 
     }
 
-    // FIXME not working yet, waiting for indirect replication PR
-    "replicate writes from one DCB to DCA and then the edge node" in pendingUntilFixed {
+    "replicate writes from one DCB to DCA and then the edge node" in {
       logger.infoN("Updating greeting for [{}] from dc [{}]", entityIdOne, DCB)
       replicationB
         .entityRefFactory(entityIdOne)
@@ -348,7 +344,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
   protected override def afterAll(): Unit = {
     logger.info("Shutting down all three DCs")
-    systems.foreach(_.terminate()) // speed up termination by terminating all at the once
+    systems.foreach(_.terminate()) // speed up termination by terminating all at once
     // and then make sure they are completely shutdown
     systems.foreach { system =>
       ActorTestKit.shutdown(system)
