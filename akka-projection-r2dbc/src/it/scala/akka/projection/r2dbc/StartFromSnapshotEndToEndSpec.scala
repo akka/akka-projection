@@ -85,7 +85,7 @@ object StartFromSnapshotEndToEndSpec {
 
   sealed trait HandlerEvt
   final case class Processed(projectionId: ProjectionId, envelope: EventEnvelope[String]) extends HandlerEvt
-  final case object Stopped extends HandlerEvt
+  case object Stopped extends HandlerEvt
 
   class TestHandler(projectionId: ProjectionId, probe: ActorRef[HandlerEvt])
       extends R2dbcHandler[EventEnvelope[String]] {
