@@ -126,9 +126,6 @@ object Replication {
    * Important: Note that this does not publish the endpoint, additional steps are needed!
    */
   // FIXME factory method name
-  // FIXME filtering is important here, to control what gets replicated to the edge
-  // FIXME a separate settings class because it differs enough?
-  // FIXME maybe not grpcClientSettings directly?
   // FIXME replica id of the edge node should not be in the otherReplicas of cloud nodes, is documenting that enough?
   // FIXME replica id should still be unique, is documenting that enough (tricky to do any checks)?
   def grpcEdgeReplication[Command, Event, State](settings: ReplicationSettings[Command])(

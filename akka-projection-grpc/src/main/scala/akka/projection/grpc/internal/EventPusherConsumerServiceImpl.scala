@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import scala.concurrent.duration.DurationInt
 
 /**
  * INTERNAL API
@@ -59,10 +58,6 @@ private[akka] object EventPusherConsumerServiceImpl {
       eventProducerPushDestination: EventProducerPushDestination,
       sendEvent: (EventEnvelope[_], Boolean) => Future[Any],
       replicationSettings: Option[ReplicationSettings[_]])
-
-  // FIXME weird reverse-package-tree-dependency,
-  //       possibly worth pull factories into grpc.consumer.internal and grpc.replication.internal
-  //       where the other specifics for each lives
 
   /**
    * Projection producer push factory, uses the event writer to pass the events
@@ -98,7 +93,6 @@ private[akka] object EventPusherConsumerServiceImpl {
    */
   def forRES(replicationSettings: Set[ReplicationSettings[_]], preferProtobuf: ProtoAnySerialization.Prefer)(
       implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
-    implicit val timeout: Timeout = 3.seconds // FIXME config
     implicit val ec: ExecutionContext = system.executionContext
     val sharding = ClusterSharding(system)
 
@@ -107,6 +101,7 @@ private[akka] object EventPusherConsumerServiceImpl {
       destinationPerStreamId: Map[String, Destination]) =
       replicationSettings.foldLeft((Set.empty[EventProducerPushDestination], Map.empty[String, Destination])) {
         case ((eventProducerDestinations, destinationPerStreamId), replicationSetting) =>
+          implicit val timeout: Timeout = replicationSetting.entityEventReplicationTimeout
           val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
             envelope.eventMetadata match {
               case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
