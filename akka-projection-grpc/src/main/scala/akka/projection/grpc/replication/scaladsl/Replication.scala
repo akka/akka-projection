@@ -119,11 +119,9 @@ object Replication {
   }
 
   /**
-   * Called to bootstrap the entity on each edge cluster node. In edge mode all connections for replication
-   * comes from edge node to cloud. Cloud service needs to be configured with edge replication enabled through
-   * `ReplicationSettings.withEdgeReplication(true)`.
-   *
-   * Important: Note that this does not publish the endpoint, additional steps are needed!
+   * Called to bootstrap the entity on each edge node. In edge mode all connections for replication
+   * comes from edge node to cloud. Cloud service needs to be configured for regular grpc replication
+   * with edge replication enabled through `ReplicationSettings#withEdgeReplication(true)`.
    */
   // FIXME factory method name
   // FIXME replica id of the edge node should not be in the otherReplicas of cloud nodes, is documenting that enough?

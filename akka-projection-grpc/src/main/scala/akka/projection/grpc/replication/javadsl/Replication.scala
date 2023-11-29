@@ -163,4 +163,65 @@ object Replication {
     grpcReplication(settings.withProducerFilterTopicExpression(topicExpression), replicatedBehaviorFactory, system)
   }
 
+  /**
+   * Called to bootstrap the entity on each edge node. In edge mode all connections for replication
+   * comes from edge node to cloud. Cloud service needs to be configured for regular grpc replication
+   * with edge replication enabled through `ReplicationSettings#withEdgeReplication(true)`.
+   */
+  def grpcEdgeReplication[Command, Event, State](settings: ReplicationSettings[Command])(
+      replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
+      implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+    val scalaReplicationSettings = settings.toScala
+
+    val replicatedEntity =
+      ReplicatedEntity[Command](
+        settings.selfReplicaId,
+        settings.configureEntity
+          .apply(
+            Entity.of(
+              settings.entityTypeKey, { (entityContext: EntityContext[Command]) =>
+                val replicationId =
+                  ReplicationId(entityContext.getEntityTypeKey.name, entityContext.getEntityId, settings.selfReplicaId)
+                replicatedBehaviorFactory.apply(
+                  factory =>
+                    ReplicatedEventSourcing.externalReplication(
+                      replicationId,
+                      scalaReplicationSettings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(
+                      replicationContext =>
+                        factory
+                          .apply(replicationContext.asInstanceOf[ReplicationContext])
+                          .createEventSourcedBehavior()
+                          // MEH
+                          .withReplication(replicationContext.asInstanceOf[ReplicationContextImpl])))
+              }))
+          .toScala)
+
+    val scalaRESOG =
+      ReplicationImpl.grpcReplication[Command, Event, State](scalaReplicationSettings, replicatedEntity)(system)
+
+    new EdgeReplication[Command] {
+      override def entityTypeKey: EntityTypeKey[Command] =
+        scalaRESOG.entityTypeKey.asJava
+
+      override def entityRefFactory: String => EntityRef[Command] =
+        (entityId: String) => scalaRESOG.entityRefFactory.apply(entityId).asJava
+
+      override def toString: String = scalaRESOG.toString
+    }
+  }
+
+}
+
+trait EdgeReplication[Command] {
+
+  /**
+   * Entity type key for looking up the entities
+   */
+  def entityTypeKey: EntityTypeKey[Command]
+
+  /**
+   * Shortcut for creating EntityRefs for the sharded Replicated Event Sourced entities for
+   * sending commands.
+   */
+  def entityRefFactory: String => EntityRef[Command]
 }

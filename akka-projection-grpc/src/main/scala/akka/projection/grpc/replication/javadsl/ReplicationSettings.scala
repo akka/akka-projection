@@ -75,6 +75,7 @@ object ReplicationSettings {
       parallelUpdates,
       replicationProjectionProvider,
       Optional.empty(),
+      false,
       identity,
       _ => true,
       Collections.emptyList)
@@ -127,6 +128,7 @@ object ReplicationSettings {
       parallelUpdates = config.getInt("parallel-updates"),
       replicationProjectionProvider = replicationProjectionProvider,
       Optional.empty(),
+      false,
       identity,
       _ => true,
       Collections.emptyList)
@@ -148,6 +150,7 @@ final class ReplicationSettings[Command] private (
     val parallelUpdates: Int,
     val replicationProjectionProvider: ReplicationProjectionProvider,
     val eventProducerInterceptor: Optional[EventProducerInterceptor],
+    val edgeReplication: Boolean,
     val configureEntity: JFunction[
       Entity[Command, ShardingEnvelope[Command]],
       Entity[Command, ShardingEnvelope[Command]]],
@@ -223,6 +226,10 @@ final class ReplicationSettings[Command] private (
       initialConsumerFilter: JList[ConsumerFilter.FilterCriteria]): ReplicationSettings[Command] =
     copy(initialConsumerFilter = initialConsumerFilter)
 
+  def withEdgeReplication(edgeReplication: Boolean): ReplicationSettings[Command] = {
+    copy(edgeReplication = edgeReplication)
+  }
+
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
       entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
@@ -233,6 +240,7 @@ final class ReplicationSettings[Command] private (
       parallelUpdates: Int = parallelUpdates,
       projectionProvider: ReplicationProjectionProvider = replicationProjectionProvider,
       eventProducerInterceptor: Optional[EventProducerInterceptor] = eventProducerInterceptor,
+      edgeReplication: Boolean = edgeReplication,
       configureEntity: JFunction[
         Entity[Command, ShardingEnvelope[Command]],
         Entity[Command, ShardingEnvelope[Command]]] = configureEntity,
@@ -249,6 +257,7 @@ final class ReplicationSettings[Command] private (
       parallelUpdates,
       projectionProvider,
       eventProducerInterceptor,
+      edgeReplication,
       configureEntity,
       producerFilter,
       initialConsumerFilter)
@@ -270,6 +279,7 @@ final class ReplicationSettings[Command] private (
       parallelUpdates = parallelUpdates,
       replicationProjectionProvider = ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))
       .withProducerFilter(producerFilter.test)
+      .withEdgeReplication(edgeReplication)
       .withInitialConsumerFilter(initialConsumerFilter.asScala.toVector)
 
 }
