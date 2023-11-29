@@ -317,10 +317,6 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
   "use consumer filter on tag" in {
     val entityId = nextPid(LWWHelloWorld.EntityType.name).entityId
-    ClusterSharding(systemPerDc(CloudReplicaA))
-      .entityRefFor(LWWHelloWorld.EntityType, entityId)
-      .ask(LWWHelloWorld.SetGreeting("Hello All", _))
-      .futureValue
 
     ConsumerFilter(systemPerDc(EdgeReplicaC)).ref ! UpdateFilter(
       LWWHelloWorld.EntityType.name,
@@ -353,7 +349,7 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     ClusterSharding(systemPerDc(EdgeReplicaD))
       .entityRefFor(LWWHelloWorld.EntityType, entityId)
       .ask(LWWHelloWorld.Get(_))
-      .futureValue shouldBe "Hello All"
+      .futureValue shouldBe "Hello world"
 
     // change tag
     ClusterSharding(systemPerDc(CloudReplicaA))
