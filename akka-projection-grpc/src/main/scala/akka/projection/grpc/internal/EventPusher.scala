@@ -36,6 +36,7 @@ import akka.stream.stage.GraphStage
 import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
 import akka.stream.stage.OutHandler
+import akka.util.ConstantFun
 import org.slf4j.LoggerFactory
 
 import java.util
@@ -82,14 +83,7 @@ private[akka] object EventPusher {
                   .getOrElse(throw new IllegalArgumentException(
                     s"Entity ${eps.entityType} is a replicated entity but `replicatedEventOriginFilter` is not set"))
                   .createFilter(replicaInfo)
-                val eventOriginFilterFlow =
-                  Flow[(EventEnvelope[Event], ProjectionContext)]
-                    .filter {
-                      case (envelope, _) =>
-                        // completely filter out replicated events that originated in the cloud
-                        eventOriginFilterPredicate(envelope)
-                    }
-                (filter, eventOriginFilterFlow)
+                (filter, eventOriginFilterPredicate)
 
               case None =>
                 (
@@ -97,16 +91,16 @@ private[akka] object EventPusher {
                     Filter.empty(eps.settings.topicTagPrefix),
                     startMessage.filter,
                     mapEntityIdToPidHandledByThisStream = identity),
-                  Flow[(EventEnvelope[Event], ProjectionContext)])
+                  ConstantFun.anyToTrue)
             }
           }
 
           Flow[(EventEnvelope[Event], ProjectionContext)]
-            .via(replicatedEventOriginFilter)
             .mapAsync(eps.settings.transformationParallelism) {
               case (envelope, projectionContext) =>
                 val filteredTransformed =
-                  if (eps.producerFilter(envelope.asInstanceOf[EventEnvelope[Any]]) &&
+                  if (replicatedEventOriginFilter(envelope) && eps.producerFilter(
+                        envelope.asInstanceOf[EventEnvelope[Any]]) &&
                       consumerFilter.matches(envelope)) {
                     if (logger.isTraceEnabled())
                       logger.trace(

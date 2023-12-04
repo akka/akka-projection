@@ -103,50 +103,54 @@ private[akka] object EventPusherConsumerServiceImpl {
         case ((eventProducerDestinations, destinationPerStreamId), replicationSetting) =>
           implicit val timeout: Timeout = replicationSetting.entityEventReplicationTimeout
           val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
-            envelope.eventMetadata match {
-              case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
-                // send event to entity in this replica
-                val replicationId = ReplicationId.fromString(envelope.persistenceId)
-                val destinationReplicaId = replicationId.withReplica(replicationSetting.selfReplicaId)
-                if (fillSequenceNumberGaps)
+            if (envelope.filtered) {
+              Future.successful(Done)
+            } else {
+              envelope.eventMetadata match {
+                case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
+                  // send event to entity in this replica
+                  val replicationId = ReplicationId.fromString(envelope.persistenceId)
+                  val destinationReplicaId = replicationId.withReplica(replicationSetting.selfReplicaId)
+                  if (fillSequenceNumberGaps)
+                    throw new IllegalArgumentException(
+                      s"fillSequenceNumberGaps can not be true for RES (pid ${envelope.persistenceId}, seq nr ${envelope.sequenceNr} from ${replicationId}")
+                  val entityRef = sharding
+                    .entityRefFor(replicationSetting.entityTypeKey, destinationReplicaId.entityId)
+                    .asInstanceOf[EntityRef[PublishedEvent]]
+                  val ask = () =>
+                    entityRef.ask[Done](
+                      replyTo =>
+                        PublishedEventImpl(
+                          replicationId.persistenceId,
+                          replicatedEventMetadata.originSequenceNr,
+                          envelope.event,
+                          envelope.timestamp,
+                          Some(
+                            new ReplicatedPublishedEventMetaData(
+                              replicatedEventMetadata.originReplica,
+                              replicatedEventMetadata.version)),
+                          Some(replyTo)))
+
+                  // try a few times before tearing stream down, forcing the client to restart/reconnect
+                  val askResult = akka.pattern.retry(
+                    ask,
+                    replicationSetting.edgeReplicationDeliveryRetries,
+                    replicationSetting.edgeReplicationDeliveryMinBackoff,
+                    replicationSetting.edgeReplicationDeliveryMaxBackoff,
+                    0.2d)(system.executionContext, system.classicSystem.scheduler)
+
+                  askResult.failed.foreach(
+                    error =>
+                      log.warn(
+                        s"Failing replication stream from [${replicatedEventMetadata.originReplica.id}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
+                        error))
+                  askResult
+
+                case unexpected =>
                   throw new IllegalArgumentException(
-                    s"fillSequenceNumberGaps can not be true for RES (pid ${envelope.persistenceId}, seq nr ${envelope.sequenceNr} from ${replicationId}")
-                val entityRef = sharding
-                  .entityRefFor(replicationSetting.entityTypeKey, destinationReplicaId.entityId)
-                  .asInstanceOf[EntityRef[PublishedEvent]]
-                val ask = () =>
-                  entityRef.ask[Done](
-                    replyTo =>
-                      PublishedEventImpl(
-                        replicationId.persistenceId,
-                        replicatedEventMetadata.originSequenceNr,
-                        envelope.event,
-                        envelope.timestamp,
-                        Some(
-                          new ReplicatedPublishedEventMetaData(
-                            replicatedEventMetadata.originReplica,
-                            replicatedEventMetadata.version)),
-                        Some(replyTo)))
-
-                // try a few times before tearing stream down, forcing the client to restart/reconnect
-                val askResult = akka.pattern.retry(
-                  ask,
-                  replicationSetting.edgeReplicationDeliveryRetries,
-                  replicationSetting.edgeReplicationDeliveryMinBackoff,
-                  replicationSetting.edgeReplicationDeliveryMaxBackoff,
-                  0.2d)(system.executionContext, system.classicSystem.scheduler)
-
-                askResult.failed.foreach(
-                  error =>
-                    log.warn(
-                      s"Failing replication stream from [${replicatedEventMetadata.originReplica.id}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
-                      error))
-                askResult
-
-              case unexpected =>
-                throw new IllegalArgumentException(
-                  s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
-                  ", is the remote entity really a Replicated Event Sourced Entity?")
+                    s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
+                    ", is the remote entity really a Replicated Event Sourced Entity?")
+              }
             }
           }
 
