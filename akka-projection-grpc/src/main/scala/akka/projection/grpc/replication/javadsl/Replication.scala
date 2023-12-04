@@ -197,22 +197,21 @@ object Replication {
                         factory
                           .apply(replicationContext.asInstanceOf[ReplicationContext])
                           .createEventSourcedBehavior()
-                          // MEH
                           .withReplication(replicationContext.asInstanceOf[ReplicationContextImpl])))
               }))
           .toScala)
 
-    val scalaRESOG =
+    val scalaReplication =
       ReplicationImpl.grpcReplication[Command, Event, State](scalaReplicationSettings, replicatedEntity)(system)
 
     new EdgeReplication[Command] {
       override def entityTypeKey: EntityTypeKey[Command] =
-        scalaRESOG.entityTypeKey.asJava
+        scalaReplication.entityTypeKey.asJava
 
       override def entityRefFactory: String => EntityRef[Command] =
-        (entityId: String) => scalaRESOG.entityRefFactory.apply(entityId).asJava
+        (entityId: String) => scalaReplication.entityRefFactory.apply(entityId).asJava
 
-      override def toString: String = scalaRESOG.toString
+      override def toString: String = scalaReplication.toString
     }
   }
 

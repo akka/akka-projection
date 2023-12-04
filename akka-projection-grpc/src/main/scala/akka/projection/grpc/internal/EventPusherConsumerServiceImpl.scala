@@ -138,15 +138,12 @@ private[akka] object EventPusherConsumerServiceImpl {
             }
           }
 
-          val eppd = EventProducerPushDestination(
-            replicationSetting.streamId,
-            // FIXME do we need proto descriptors?
-            protobufDescriptors = Nil)
+          val pushDestination = EventProducerPushDestination(replicationSetting.streamId, protobufDescriptors = Nil)
 
           (
-            eventProducerDestinations + eppd,
+            eventProducerDestinations + pushDestination,
             destinationPerStreamId
-              .updated(replicationSetting.streamId, Destination(eppd, sendEvent, Some(replicationSetting))))
+              .updated(replicationSetting.streamId, Destination(pushDestination, sendEvent, Some(replicationSetting))))
       }
 
     new EventPusherConsumerServiceImpl(eventProducerDestinations, preferProtobuf, destinationPerStreamId)
