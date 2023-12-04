@@ -6,7 +6,6 @@ package akka.projection.grpc.replication.javadsl
 
 import java.util.function.{ Function => JFunction }
 import java.util.{ List => JList }
-
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
@@ -22,17 +21,20 @@ import akka.projection.grpc.replication.internal.ReplicaImpl
 import akka.projection.grpc.replication.scaladsl.{ ReplicationSettings => SReplicationSettings }
 import akka.util.JavaDurationConverters.JavaDurationOps
 import com.typesafe.config.Config
+
 import java.time.Duration
 import java.util.Collections
 import java.util.Optional
 import java.util.function.Predicate
 import java.util.{ Set => JSet }
-
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.internal.TopicMatcher
 import akka.util.ccompat.JavaConverters._
 import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
+import akka.util.JavaDurationConverters.ScalaDurationOps
+
+import scala.concurrent.duration.DurationInt
 
 object ReplicationSettings {
 
@@ -78,7 +80,11 @@ object ReplicationSettings {
       false,
       identity,
       _ => true,
-      Collections.emptyList)
+      Collections.emptyList,
+      // no system config to get defaults from, repeating config file defaults
+      edgeReplicationDeliveryRetries = 3,
+      edgeReplicationDeliveryMinBackoff = 250.millis.asJava,
+      edgeReplicationDeliveryMaxBackoff = 5.seconds.asJava)
   }
 
   /**
@@ -117,6 +123,9 @@ object ReplicationSettings {
     val otherReplicas = allReplicas.filter(_.replicaId != selfReplicaId).asJava
     val entityTypeKey = EntityTypeKey.create(commandClass, entityTypeName)
 
+    // global config only for some things
+    val replicationConfig = system.settings.config.getConfig("akka.projection.grpc.replication")
+
     new ReplicationSettings[Command](
       selfReplicaId = selfReplicaId,
       entityTypeKey = entityTypeKey,
@@ -131,7 +140,10 @@ object ReplicationSettings {
       false,
       identity,
       _ => true,
-      Collections.emptyList)
+      Collections.emptyList,
+      edgeReplicationDeliveryRetries = replicationConfig.getInt("edge-replication-delivery-retries"),
+      edgeReplicationDeliveryMinBackoff = replicationConfig.getDuration("edge-replication-delivery-min-backoff"),
+      edgeReplicationDeliveryMaxBackoff = replicationConfig.getDuration("edge-replication-delivery-max-backoff"))
   }
 }
 
@@ -155,7 +167,10 @@ final class ReplicationSettings[Command] private (
       Entity[Command, ShardingEnvelope[Command]],
       Entity[Command, ShardingEnvelope[Command]]],
     val producerFilter: Predicate[EventEnvelope[Any]],
-    val initialConsumerFilter: JList[ConsumerFilter.FilterCriteria]) {
+    val initialConsumerFilter: JList[ConsumerFilter.FilterCriteria],
+    val edgeReplicationDeliveryRetries: Int,
+    val edgeReplicationDeliveryMinBackoff: Duration,
+    val edgeReplicationDeliveryMaxBackoff: Duration) {
 
   def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command] =
     copy(selfReplicaId = selfReplicaId)
@@ -230,6 +245,19 @@ final class ReplicationSettings[Command] private (
     copy(edgeReplication = edgeReplication)
   }
 
+  /**
+   * Replicated event sourcing from edge sends each event over sharding, in case that delivery
+   * fails or times out, retry this number of times
+   */
+  def withEdgeReplicationDeliveryRetries(retries: Int): ReplicationSettings[Command] =
+    copy(edgeReplicationDeliveryRetries = retries)
+
+  def withEdgeReplicationDeliveryMinBackoff(minBackoff: Duration): ReplicationSettings[Command] =
+    copy(edgeReplicationDeliveryMinBackoff = minBackoff)
+
+  def withEdgeReplicationDeliveryMaxBackoff(maxBackoff: Duration): ReplicationSettings[Command] =
+    copy(edgeReplicationDeliveryMaxBackoff = maxBackoff)
+
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
       entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
@@ -245,8 +273,10 @@ final class ReplicationSettings[Command] private (
         Entity[Command, ShardingEnvelope[Command]],
         Entity[Command, ShardingEnvelope[Command]]] = configureEntity,
       producerFilter: Predicate[EventEnvelope[Any]] = producerFilter,
-      initialConsumerFilter: JList[ConsumerFilter.FilterCriteria] = initialConsumerFilter)
-      : ReplicationSettings[Command] =
+      initialConsumerFilter: JList[ConsumerFilter.FilterCriteria] = initialConsumerFilter,
+      edgeReplicationDeliveryRetries: Int = edgeReplicationDeliveryRetries,
+      edgeReplicationDeliveryMinBackoff: Duration = edgeReplicationDeliveryMinBackoff,
+      edgeReplicationDeliveryMaxBackoff: Duration = edgeReplicationDeliveryMaxBackoff): ReplicationSettings[Command] =
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,
@@ -260,7 +290,10 @@ final class ReplicationSettings[Command] private (
       edgeReplication,
       configureEntity,
       producerFilter,
-      initialConsumerFilter)
+      initialConsumerFilter,
+      edgeReplicationDeliveryRetries,
+      edgeReplicationDeliveryMinBackoff,
+      edgeReplicationDeliveryMaxBackoff)
 
   override def toString =
     s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, ${otherReplicas.asScala.mkString(", ")})"
@@ -281,5 +314,8 @@ final class ReplicationSettings[Command] private (
       .withProducerFilter(producerFilter.test)
       .withEdgeReplication(edgeReplication)
       .withInitialConsumerFilter(initialConsumerFilter.asScala.toVector)
+      .withEdgeReplicationDeliveryRetries(edgeReplicationDeliveryRetries)
+      .withEdgeReplicationDeliveryMinBackoff(edgeReplicationDeliveryMinBackoff.asScala)
+      .withEdgeReplicationDeliveryMaxBackoff(edgeReplicationDeliveryMaxBackoff.asScala)
 
 }

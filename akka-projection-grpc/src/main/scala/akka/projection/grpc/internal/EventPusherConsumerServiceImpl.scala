@@ -111,19 +111,31 @@ private[akka] object EventPusherConsumerServiceImpl {
                 if (fillSequenceNumberGaps)
                   throw new IllegalArgumentException(
                     s"fillSequenceNumberGaps can not be true for RES (pid ${envelope.persistenceId}, seq nr ${envelope.sequenceNr} from ${replicationId}")
-                val askResult = sharding
+                val entityRef = sharding
                   .entityRefFor(replicationSetting.entityTypeKey, destinationReplicaId.entityId)
                   .asInstanceOf[EntityRef[PublishedEvent]]
-                  .ask[Done](replyTo =>
-                    PublishedEventImpl(
-                      replicationId.persistenceId,
-                      replicatedEventMetadata.originSequenceNr,
-                      envelope.event,
-                      envelope.timestamp,
-                      Some(new ReplicatedPublishedEventMetaData(
-                        replicatedEventMetadata.originReplica,
-                        replicatedEventMetadata.version)),
-                      Some(replyTo)))
+                val ask = () =>
+                  entityRef.ask[Done](
+                    replyTo =>
+                      PublishedEventImpl(
+                        replicationId.persistenceId,
+                        replicatedEventMetadata.originSequenceNr,
+                        envelope.event,
+                        envelope.timestamp,
+                        Some(
+                          new ReplicatedPublishedEventMetaData(
+                            replicatedEventMetadata.originReplica,
+                            replicatedEventMetadata.version)),
+                        Some(replyTo)))
+
+                // try a few times before tearing stream down, forcing the client to restart/reconnect
+                val askResult = akka.pattern.retry(
+                  ask,
+                  replicationSetting.edgeReplicationDeliveryRetries,
+                  replicationSetting.edgeReplicationDeliveryMinBackoff,
+                  replicationSetting.edgeReplicationDeliveryMaxBackoff,
+                  0.2d)(system.executionContext, system.classicSystem.scheduler)
+
                 askResult.failed.foreach(
                   error =>
                     log.warn(
