@@ -102,7 +102,7 @@ private[akka] object ReplicationImpl {
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
 
-    // sharded daemon process for consuming event stream from the other dc:s
+    // sharded daemon process for consuming event stream from the other replicas
     val entityRefFactory: String => EntityRef[Command] = sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
     settings.otherReplicas.foreach(startConsumer(_, settings, entityRefFactory))
 
@@ -204,7 +204,7 @@ private[akka] object ReplicationImpl {
                         entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
                       if (log.isTraceEnabled) {
                         log.traceN(
-                          "[{}] forwarding event originating on dc [{}] to [{}] (origin seq_nr [{}]): [{}]",
+                          "[{}] forwarding event originating on replica [{}] to [{}] (origin seq_nr [{}]): [{}]",
                           projectionKey,
                           replicatedEventMetadata.originReplica,
                           destinationReplicaId.persistenceId.id,
@@ -267,7 +267,7 @@ private[akka] object ReplicationImpl {
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
 
-    // sharded daemon process for consuming event stream from the other dc:s
+    // sharded daemon process for consuming event stream from the other replicas
     val shardingEntityRefFactory: String => EntityRef[Command] =
       sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
 
