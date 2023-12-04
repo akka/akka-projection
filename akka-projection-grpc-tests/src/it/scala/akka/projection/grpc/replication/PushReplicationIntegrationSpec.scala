@@ -140,6 +140,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
   private var replicationB: Replication[LWWHelloWorld.Command] = _
   private var edgeReplicationA: EdgeReplication[LWWHelloWorld.Command] = _
   private val entityIdOne = "one"
+  private val entityIdTwo = "two"
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -196,7 +197,8 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       EventProducerSettings(replicaSystem),
       Set(connectTo),
       10.seconds,
-      8,
+      // few on edge node (but 2 rather than 1 here to make sure test actually covers parallel updates)
+      2,
       R2dbcReplication()).withEdgeReplication(true)
     Replication.grpcEdgeReplication(settings)(LWWHelloWorld.apply)(replicaSystem)
   }
@@ -220,79 +222,92 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     }
 
     "replicate writes directly from cloud to edge" in {
-      logger.infoN("Updating greeting for [{}] from dc [{}]", entityIdOne, DCA)
-      replicationA
-        .entityRefFactory(entityIdOne)
-        .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${DCA.id}", _))
-        .futureValue
+      for {
+        n <- 1 to 5
+        entityId <- Set(entityIdOne, entityIdTwo)
+      } {
+        logger.infoN("Updating greeting {} for [{}] from dc [{}]", n, entityId, DCA)
+        replicationA
+          .entityRefFactory(entityId)
+          .ask(LWWHelloWorld.SetGreeting(s"hello $n from ${DCA.id}", _))
+          .futureValue
 
-      val edgeEntityRef = edgeReplicationA.entityRefFactory(entityIdOne)
-      val probe = testKit.createTestProbe()
-      probe.awaitAssert({
-        edgeEntityRef
-          .ask(LWWHelloWorld.Get.apply)
-          .futureValue should ===(s"hello 1 from ${DCA.id}")
-      }, 10.seconds)
+        val edgeEntityRef = edgeReplicationA.entityRefFactory(entityId)
+        val probe = testKit.createTestProbe()
+        probe.awaitAssert({
+          edgeEntityRef
+            .ask(LWWHelloWorld.Get.apply)
+            .futureValue should ===(s"hello $n from ${DCA.id}")
+        }, 10.seconds)
 
-      // and also B ofc (unrelated to edge replication but for good measure)
-      val dcBEntityRef = replicationB.entityRefFactory(entityIdOne)
-      probe.awaitAssert({
-        dcBEntityRef
-          .ask(LWWHelloWorld.Get.apply)
-          .futureValue should ===(s"hello 1 from ${DCA.id}")
-      }, 10.seconds)
+        // and also B ofc (unrelated to edge replication but for good measure)
+        val dcBEntityRef = replicationB.entityRefFactory(entityId)
+        probe.awaitAssert({
+          dcBEntityRef
+            .ask(LWWHelloWorld.Get.apply)
+            .futureValue should ===(s"hello $n from ${DCA.id}")
+        }, 10.seconds)
+      }
     }
 
     "replicate writes from edge node to cloud" in {
-      logger.infoN("Updating greeting for [{}] from dc [{}]", entityIdOne, edgeReplicationA)
-      edgeReplicationA
-        .entityRefFactory(entityIdOne)
-        .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${EdgeReplicaA.id}", _))
-        .futureValue
+      for {
+        n <- 6 to 10
+        entityId <- Set(entityIdOne, entityIdTwo)
+      } {
+        logger.infoN("Updating greeting {} for [{}] from dc [{}]", n, entityId, edgeReplicationA)
+        edgeReplicationA
+          .entityRefFactory(entityId)
+          .ask(LWWHelloWorld.SetGreeting(s"hello $n from ${EdgeReplicaA.id}", _))
+          .futureValue
 
-      val probe = testKit.createTestProbe()
-      // should reach the direct replica
-      val dcAEntityRef = replicationA.entityRefFactory(entityIdOne)
-      probe.awaitAssert({
-        dcAEntityRef
-          .ask(LWWHelloWorld.Get.apply)
-          .futureValue should ===(s"hello 1 from ${EdgeReplicaA.id}")
-      }, 10.seconds)
+        val probe = testKit.createTestProbe()
+        // should reach the direct replica
+        val dcAEntityRef = replicationA.entityRefFactory(entityId)
+        probe.awaitAssert({
+          dcAEntityRef
+            .ask(LWWHelloWorld.Get.apply)
+            .futureValue should ===(s"hello $n from ${EdgeReplicaA.id}")
+        }, 10.seconds)
 
-      // then indirectly replica B
-      val dcBEntityRef = replicationB.entityRefFactory(entityIdOne)
-      probe.awaitAssert({
-        dcBEntityRef
-          .ask(LWWHelloWorld.Get.apply)
-          .futureValue should ===(s"hello 1 from ${EdgeReplicaA.id}")
-      }, 10.seconds)
-
+        // then indirectly replica B
+        val dcBEntityRef = replicationB.entityRefFactory(entityId)
+        probe.awaitAssert({
+          dcBEntityRef
+            .ask(LWWHelloWorld.Get.apply)
+            .futureValue should ===(s"hello $n from ${EdgeReplicaA.id}")
+        }, 10.seconds)
+      }
     }
 
     "replicate writes from one DCB to DCA and then the edge node" in {
-      logger.infoN("Updating greeting for [{}] from dc [{}]", entityIdOne, DCB)
-      replicationB
-        .entityRefFactory(entityIdOne)
-        .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${DCB.id}", _))
-        .futureValue
+      for {
+        n <- 6 to 10
+        entityId <- Set(entityIdOne, entityIdTwo)
+      } {
+        logger.infoN("Updating greeting {} for [{}] from dc [{}]", n, entityId, DCB)
+        replicationB
+          .entityRefFactory(entityId)
+          .ask(LWWHelloWorld.SetGreeting(s"hello $n from ${DCB.id}", _))
+          .futureValue
 
-      // should reach the other replica
-      val dcAEntityRef = replicationA.entityRefFactory(entityIdOne)
-      val probe = testKit.createTestProbe()
-      probe.awaitAssert({
-        dcAEntityRef
-          .ask(LWWHelloWorld.Get.apply)
-          .futureValue should ===(s"hello 1 from ${DCB.id}")
-      }, 10.seconds)
+        // should reach the other replica
+        val dcAEntityRef = replicationA.entityRefFactory(entityId)
+        val probe = testKit.createTestProbe()
+        probe.awaitAssert({
+          dcAEntityRef
+            .ask(LWWHelloWorld.Get.apply)
+            .futureValue should ===(s"hello $n from ${DCB.id}")
+        }, 10.seconds)
 
-      // then edge
-      val edgeEntityRef = edgeReplicationA.entityRefFactory(entityIdOne)
-      probe.awaitAssert({
-        edgeEntityRef
-          .ask(LWWHelloWorld.Get.apply)
-          .futureValue should ===(s"hello 1 from ${DCB.id}")
-      }, 10.seconds)
-
+        // then edge
+        val edgeEntityRef = edgeReplicationA.entityRefFactory(entityId)
+        probe.awaitAssert({
+          edgeEntityRef
+            .ask(LWWHelloWorld.Get.apply)
+            .futureValue should ===(s"hello $n from ${DCB.id}")
+        }, 10.seconds)
+      }
     }
   }
 
