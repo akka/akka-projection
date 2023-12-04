@@ -28,6 +28,8 @@ active-active entities or one-way event replication as provided by @extref[Akka 
 The edge services connect to the cloud services and can use event replication in both directions to communicate with
 cloud services. An edge service can be a single node or form a small Akka Cluster.
 
+The cloud and edge services may use active-active entities or one-way event replication between cloud and edge.
+
 The edge service can be fully autonomous and continue working when there are network disruptions, or if the
 edge service chooses to not always be connected. It will catch up on pending events when the communication is
 established again.

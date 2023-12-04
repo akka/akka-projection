@@ -147,7 +147,7 @@ object ReplicationSettings {
       parallelUpdates = config.getInt("parallel-updates"),
       projectionProvider = replicationProjectionProvider,
       eventProducerInterceptor = None,
-      acceptEdgeReplication = false,
+      acceptEdgeReplication = replicationConfig.getBoolean("accept-edge-replication"),
       configureEntity = identity,
       producerFilter = _ => true,
       initialConsumerFilter = Vector.empty,

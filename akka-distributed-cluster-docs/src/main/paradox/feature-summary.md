@@ -59,6 +59,7 @@ Replicated Event Sourcing gives:
 
 * redundancy to tolerate failures in one location and still be operational
 * serve requests from a location near the user to provide better responsiveness
+* allow updates to an entity from several locations
 * balance the load over many servers
 
 The replicas of the entities are running in separate Akka Clusters for the reasons described in
