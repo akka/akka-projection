@@ -118,4 +118,47 @@ object Replication {
     grpcReplication(settings.withProducerFilterTopicExpression(topicExpression))(replicatedBehaviorFactory)
   }
 
+  /**
+   * Called to bootstrap the entity on each edge node. In edge mode all connections for replication
+   * comes from edge node to cloud. Cloud service needs to be configured for regular grpc replication
+   * with edge replication enabled through `ReplicationSettings#withEdgeReplication(true)`.
+   *
+   * Each edge replica must use a unique replica id.
+   *
+   * The cloud replicas does not know about the edge replica ids up front (it should not be in their "other replicas" set).
+   *
+   * An edge replica can connect to more than one cloud replica for redundancy (but only one is required).
+   */
+  def grpcEdgeReplication[Command, Event, State](settings: ReplicationSettings[Command])(
+      replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
+      implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+    val replicatedEntity =
+      ReplicatedEntity(
+        settings.selfReplicaId,
+        settings.configureEntity.apply(Entity(settings.entityTypeKey) { entityContext =>
+          val replicationId =
+            ReplicationId(entityContext.entityTypeKey.name, entityContext.entityId, settings.selfReplicaId)
+          replicatedBehaviorFactory { factory =>
+            ReplicatedEventSourcing.externalReplication(
+              replicationId,
+              settings.otherReplicas.map(_.replicaId) + settings.selfReplicaId)(factory)
+          }
+        }))
+
+    ReplicationImpl.grpcEdgeReplication(settings, replicatedEntity)
+  }
+
+  trait EdgeReplication[Command] {
+
+    /**
+     * Entity type key for looking up the entities
+     */
+    def entityTypeKey: EntityTypeKey[Command]
+
+    /**
+     * Shortcut for creating EntityRefs for the sharded Replicated Event Sourced entities for
+     * sending commands.
+     */
+    def entityRefFactory: String => EntityRef[Command]
+  }
 }

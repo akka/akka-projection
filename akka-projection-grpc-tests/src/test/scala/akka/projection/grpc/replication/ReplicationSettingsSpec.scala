@@ -107,16 +107,19 @@ class ReplicationSettingsSpec extends AnyWordSpec with Matchers {
         replicaB.consumersOnClusterRole should ===(Some("dcb-consumer"))
 
         // And Java DSL
-        val javaSettings = JReplicationSettings.create(
-          classOf[MyCommand],
-          "my-replicated-entity",
-          // never actually used, just passed along
-          null: JReplicationProjectionProvider,
-          system)
+        val javaSettings = JReplicationSettings
+          .create(
+            classOf[MyCommand],
+            "my-replicated-entity",
+            // never actually used, just passed along
+            null: JReplicationProjectionProvider,
+            system)
+          .withEdgeReplication(true)
 
         val converted = javaSettings.toScala
         converted.selfReplicaId should ===(settings.selfReplicaId)
         converted.streamId should ===(settings.streamId)
+        converted.acceptEdgeReplication should ===(true)
 
         converted.otherReplicas.foreach { replica =>
           val scalaReplica = settings.otherReplicas.find(_.replicaId == replica.replicaId).get

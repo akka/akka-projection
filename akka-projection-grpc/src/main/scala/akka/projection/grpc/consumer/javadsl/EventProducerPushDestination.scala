@@ -75,8 +75,7 @@ object EventProducerPushDestination {
 
     val scalaConsumers = eventConsumers.asScala.map(_.asScala).toSet
     val handler =
-      EventConsumerServicePowerApiHandler(new EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(
-        system)
+      EventConsumerServicePowerApiHandler(EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(system)
     new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
       override def apply(request: HttpRequest): CompletionStage[HttpResponse] =
         handler(request.asInstanceOf[akka.http.scaladsl.model.HttpRequest])

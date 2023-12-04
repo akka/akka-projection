@@ -8,6 +8,7 @@ import akka.Done;
 import akka.NotUsed;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Behavior;
+import akka.cluster.sharding.typed.javadsl.EntityRef;
 import akka.grpc.GrpcClientSettings;
 import akka.grpc.javadsl.ServiceHandler;
 import akka.http.javadsl.Http;
@@ -23,11 +24,7 @@ import akka.projection.ProjectionId;
 import akka.projection.grpc.producer.EventProducerSettings;
 import akka.projection.grpc.producer.javadsl.EventProducer;
 import akka.projection.grpc.producer.javadsl.EventProducerSource;
-import akka.projection.grpc.replication.javadsl.Replica;
-import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
-import akka.projection.grpc.replication.javadsl.Replication;
-import akka.projection.grpc.replication.javadsl.ReplicationProjectionProvider;
-import akka.projection.grpc.replication.javadsl.ReplicationSettings;
+import akka.projection.grpc.replication.javadsl.*;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.R2dbcProjectionSettings;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
@@ -105,6 +102,9 @@ public class ReplicationCompileTest {
    CompletionStage<ServerBinding> bound =
        Http.get(system).newServerAt("127.0.0.1", 8080).bind(service);
 
+
+    EdgeReplication<MyCommand> edgeReplication = Replication.grpcEdgeReplication(settings, MyReplicatedBehavior::create, system);
+    EntityRef<MyCommand> entity = edgeReplication.entityRefFactory().apply("res-id");
   }
 
   static class ShoppingCart {

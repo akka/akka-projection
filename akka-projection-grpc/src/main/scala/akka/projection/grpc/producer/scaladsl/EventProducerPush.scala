@@ -44,6 +44,11 @@ object EventProducerPush {
     new EventProducerPush[Event](originId, eventProducerSource, None, grpcClientSettings)
 }
 
+/**
+ * @param originId unique producer identifier showing where the events came from/was produced
+ * @param connectionMetadata Additional metadata to pass to the consumer when connecting
+ * @param grpcClientSettings Where to connect and publish the events, must have a [[EventProducerPush]] service listening
+ */
 final class EventProducerPush[Event](
     val originId: String,
     val eventProducerSource: EventProducerSource,
