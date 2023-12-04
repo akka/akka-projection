@@ -325,9 +325,9 @@ private[akka] object ReplicationImpl {
     val epp =
       remoteReplica.additionalQueryRequestMetadata match {
         case None =>
-          EventProducerPush(settings.entityTypeKey.name, eps, remoteReplica.grpcClientSettings)
+          EventProducerPush[AnyRef](settings.entityTypeKey.name, eps, remoteReplica.grpcClientSettings)
         case Some(metadata) =>
-          EventProducerPush(settings.entityTypeKey.name, eps, metadata, remoteReplica.grpcClientSettings)
+          EventProducerPush[AnyRef](settings.entityTypeKey.name, eps, metadata, remoteReplica.grpcClientSettings)
       }
 
     ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
@@ -344,8 +344,7 @@ private[akka] object ReplicationImpl {
           projectionId,
           sourceProvider,
           epp
-            .handler()
-            .asInstanceOf[FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed]],
+            .handler(),
           system)
 
         ProjectionBehavior(projection)
