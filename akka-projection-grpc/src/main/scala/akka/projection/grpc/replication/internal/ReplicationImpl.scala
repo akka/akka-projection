@@ -320,6 +320,7 @@ private[akka] object ReplicationImpl {
       settings.streamId,
       Transformation.identity,
       settings.eventProducerSettings)
+      .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
 
     val epp =
       remoteReplica.additionalQueryRequestMetadata match {

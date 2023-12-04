@@ -39,7 +39,6 @@ import akka.stream.stage.OutHandler
 import org.slf4j.LoggerFactory
 
 import java.util
-import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
@@ -66,18 +65,44 @@ private[akka] object EventPusher {
     implicit val ec: ExecutionContext = system.executionContext
     val protoAnySerialization = new ProtoAnySerialization(system)
 
-    def filterAndTransformFlow(filters: Future[immutable.Seq[proto.FilterCriteria]])
+    def filterAndTransformFlow(filters: Future[proto.ConsumerEventStart])
         : Flow[(EventEnvelope[Event], ProjectionContext), (ConsumeEventIn, ProjectionContext), NotUsed] =
       Flow
-        .futureFlow(filters.map { filterCriteria =>
-          val consumerFilter =
-            updateFilterFromProto(
-              Filter.empty(eps.settings.topicTagPrefix),
-              filterCriteria,
-              // FIXME not replicated, so maybe this is safe?
-              mapEntityIdToPidHandledByThisStream = identity)
+        .futureFlow(filters.map { startMessage =>
+          val (consumerFilter, replicatedEventOriginFilter) = {
+
+            startMessage.replicaInfo match {
+              case Some(replicaInfo) =>
+                val filter = updateFilterFromProto(
+                  Filter.empty(eps.settings.topicTagPrefix),
+                  startMessage.filter,
+                  mapEntityIdToPidHandledByThisStream = identity)
+                // needed to make sure we don't replicate events from the cloud back to cloud
+                val eventOriginFilterPredicate = eps.replicatedEventOriginFilter
+                  .getOrElse(throw new IllegalArgumentException(
+                    s"Entity ${eps.entityType} is a replicated entity but `replicatedEventOriginFilter` is not set"))
+                  .createFilter(replicaInfo)
+                val eventOriginFilterFlow =
+                  Flow[(EventEnvelope[Event], ProjectionContext)]
+                    .filter {
+                      case (envelope, _) =>
+                        // completely filter out replicated events that originated in the cloud
+                        eventOriginFilterPredicate(envelope)
+                    }
+                (filter, eventOriginFilterFlow)
+
+              case None =>
+                (
+                  updateFilterFromProto(
+                    Filter.empty(eps.settings.topicTagPrefix),
+                    startMessage.filter,
+                    mapEntityIdToPidHandledByThisStream = identity),
+                  Flow[(EventEnvelope[Event], ProjectionContext)])
+            }
+          }
 
           Flow[(EventEnvelope[Event], ProjectionContext)]
+            .via(replicatedEventOriginFilter)
             .mapAsync(eps.settings.transformationParallelism) {
               case (envelope, projectionContext) =>
                 val filteredTransformed =
@@ -121,7 +146,7 @@ private[akka] object EventPusher {
       .fromTuples(
         Flow
           .fromMaterializer { (_, _) =>
-            val topicFiltersPromise = Promise[immutable.Seq[proto.FilterCriteria]]()
+            val topicFiltersPromise = Promise[proto.ConsumerEventStart]()
 
             Flow[(EventEnvelope[Event], ProjectionContext)]
               .via(filterAndTransformFlow(topicFiltersPromise.future))
@@ -151,7 +176,7 @@ private[akka] class EventPusherStage(
     eps: EventProducerSource,
     client: EventConsumerServiceClient,
     additionalRequestMetadata: Metadata,
-    topicFilterPromise: Promise[immutable.Seq[proto.FilterCriteria]])
+    startMessagePromise: Promise[proto.ConsumerEventStart])
     extends GraphStage[FlowShape[(ConsumeEventIn, ProjectionContext), (Done, ProjectionContext)]] {
   import EventPusher.KeepAliveTuple
 
@@ -192,7 +217,7 @@ private[akka] class EventPusherStage(
             push(out, (Done, context))
           case ConsumeEventOut(ConsumeEventOut.Message.Start(start), _) =>
             waitingForStart = false
-            topicFilterPromise.trySuccess(start.filter.toVector)
+            startMessagePromise.trySuccess(start)
             tryGrabInAndPushToClient()
             fromConsumer.pull()
           case unexpected =>
@@ -250,7 +275,7 @@ private[akka] class EventPusherStage(
     }
 
     override def postStop(): Unit = {
-      topicFilterPromise.tryFailure(new RuntimeException("Stage stopped before getting a start message from consumer"))
+      startMessagePromise.tryFailure(new RuntimeException("Stage stopped before getting a start message from consumer"))
     }
   }
 }
