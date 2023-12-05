@@ -116,10 +116,10 @@ accept an entity name, a @apidoc[ReplicationProjectionProvider] and an actor sys
 is expected to have a top level entry with the entity name containing this structure:
 
 Scala
-:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
+:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config-replicated-shopping-cart }
 
 Java
-:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
+:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config-replicated-shopping-cart }
 
 The entries in the block refer to the local replica while `replicas` is a list of all replicas, including the node itself,
 with details about how to reach the replicas across the network.
@@ -194,9 +194,22 @@ edge side, because there are no incoming connections.
 
 On the edge side you start with `Replication.grpcEdgeReplication`.
 
+Scala
+:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init-edge }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init-edge }
+
 On the cloud side you would start with `Replication.grpcReplication` as described above, but with the addition
 `withEdgeReplication(true)` in the @apidoc[ReplicationSettings] or enable `akka.projection.grpc.replication.accept-edge-replication`
 configuration.
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init-allow-edge }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init-allow-edge }
+
 
 ## Serialization of events
 
