@@ -59,7 +59,7 @@ message ConsumerEventInit {
 
 message ConsumerEventStart {
   repeated FilterCriteria filter = 1;
-  ReplicaInfo replica_info = 6;
+  ReplicaInfo replica_info = 2;
 }
 
 message KeepAlive { }
