@@ -4,6 +4,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorSystem, Behavior }
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
+import charging.ChargingStation
 
 object Main {
 
@@ -38,6 +39,9 @@ object Main {
       val deliveriesQueueService =
         new DeliveriesQueueServiceImpl(settings, deliveriesQueue)(
           context.system)
+
+      // replicated charging station entity
+      ChargingStation.initEdge(settings.locationId)(context.system)
 
       val grpcInterface =
         context.system.settings.config
