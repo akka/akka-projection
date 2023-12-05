@@ -20,6 +20,7 @@ import akka.persistence.typed.scaladsl.ReplyEffect
 import akka.persistence.typed.scaladsl.RetentionCriteria
 import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
+import akka.projection.grpc.replication.scaladsl.Replication.EdgeReplication
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.projection.r2dbc.scaladsl.R2dbcReplication
 import akka.serialization.jackson.CborSerializable
@@ -196,12 +197,13 @@ object ShoppingCart {
   // the replica they were created (but can be marked VIP at any point in time before being closed)
   // #init-producerFilter
   def initWithProducerFilter(implicit system: ActorSystem[_]): Replication[Command] = {
-    val replicationSettings = ReplicationSettings[Command](EntityType, R2dbcReplication())
     val producerFilter: EventEnvelope[Event] => Boolean = { envelope =>
       envelope.tags.contains(VipCustomerTag)
     }
+    val replicationSettings = ReplicationSettings[Command](EntityType, R2dbcReplication())
+      .withProducerFilter(producerFilter)
 
-    Replication.grpcReplication(replicationSettings, producerFilter)(ShoppingCart.applyWithProducerFilter)
+    Replication.grpcReplication(replicationSettings)(ShoppingCart.applyWithProducerFilter)
   }
 
   def applyWithProducerFilter(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]): Behavior[Command] = {
@@ -212,6 +214,21 @@ object ShoppingCart {
     }
   }
   // #init-producerFilter
+
+  // #init-allow-edge
+  def initAllowEdge(implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+    val replicationSettings = ReplicationSettings[Command](EntityType, R2dbcReplication())
+      .withEdgeReplication(true)
+    Replication.grpcEdgeReplication(replicationSettings)(ShoppingCart.apply)
+  }
+  // #init-allow-edge
+
+  // #init-edge
+  def initEdge(implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+    val replicationSettings = ReplicationSettings[Command](EntityType, R2dbcReplication())
+    Replication.grpcEdgeReplication(replicationSettings)(ShoppingCart.apply)
+  }
+  // #init-edge
 
 }
 

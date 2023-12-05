@@ -10,6 +10,7 @@ import akka.pattern.StatusReply;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.persistence.typed.ReplicaId;
 import akka.persistence.typed.javadsl.*;
+import akka.projection.grpc.replication.javadsl.EdgeReplication;
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
 import akka.projection.grpc.replication.javadsl.Replication;
 import akka.projection.grpc.replication.javadsl.ReplicationSettings;
@@ -46,6 +47,8 @@ import java.util.stream.Collectors;
 public final class ShoppingCart
     extends EventSourcedBehaviorWithEnforcedReplies<
         ShoppingCart.Command, ShoppingCart.Event, ShoppingCart.State> {
+
+  public static final String ENTITY_TYPE = "replicated-shopping-cart";
 
   static final String SMALL_QUANTITY_TAG = "small";
   static final String MEDIUM_QUANTITY_TAG = "medium";
@@ -308,7 +311,7 @@ public final class ShoppingCart
     ReplicationSettings<Command> replicationSettings =
         ReplicationSettings.create(
             Command.class,
-            "replicated-shopping-cart",
+            ShoppingCart.ENTITY_TYPE,
             R2dbcReplication.create(system),
             system);
     return Replication.grpcReplication(replicationSettings, ShoppingCart::create, system);
@@ -327,18 +330,17 @@ public final class ShoppingCart
   // Add at least a total quantity of 10 to the cart, smaller carts are excluded by the event filter.
   // #init-producerFilter
   public static Replication<Command> initWithProducerFilter(ActorSystem<?> system) {
+    Predicate<EventEnvelope<Event>> producerFilter =
+        envelope -> envelope.getTags().contains(VIP_CUSTOMER_TAG);
     ReplicationSettings<Command> replicationSettings =
         ReplicationSettings.create(
             Command.class,
-            "replicated-shopping-cart",
+            ShoppingCart.ENTITY_TYPE,
             R2dbcReplication.create(system),
-            system);
+            system)
+            .withProducerFilter(producerFilter);
 
-    Predicate<EventEnvelope<Event>> producerFilter = envelope -> {
-      return envelope.getTags().contains(VIP_CUSTOMER_TAG);
-    };
-
-    return Replication.grpcReplication(replicationSettings, producerFilter,  ShoppingCart::createWithProducerFilter, system);
+    return Replication.grpcReplication(replicationSettings,  ShoppingCart::createWithProducerFilter, system);
   }
 
   public static Behavior<Command> createWithProducerFilter(
@@ -353,6 +355,31 @@ public final class ShoppingCart
                     )));
   }
   // #init-producerFilter
+
+  // #init-allow-edge
+  public static Replication<Command> initAllowEdge(ActorSystem<?> system) {
+    ReplicationSettings<Command> replicationSettings =
+        ReplicationSettings.create(
+            Command.class,
+            ShoppingCart.ENTITY_TYPE,
+            R2dbcReplication.create(system),
+            system)
+            .withEdgeReplication(true);
+    return Replication.grpcReplication(replicationSettings, ShoppingCart::create, system);
+  }
+  // #init-allow-edge
+
+  // #init-edge
+  public static EdgeReplication<Command> initEdge(ActorSystem<?> system) {
+    ReplicationSettings<Command> replicationSettings =
+        ReplicationSettings.create(
+                Command.class,
+                ShoppingCart.ENTITY_TYPE,
+                R2dbcReplication.create(system),
+                system);
+    return Replication.grpcEdgeReplication(replicationSettings, ShoppingCart::create, system);
+  }
+  // #init-edge
 
   private final ActorContext<Command> context;
   private final ReplicationContext replicationContext;

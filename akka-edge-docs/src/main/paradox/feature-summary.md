@@ -1,6 +1,9 @@
 # Feature Summary
 
-The main feature of Akka Edge is Projections over gRPC - asynchronous brokerless service-to-service communication.
+Akka Edge has two main features:
+
+1. Projections over gRPC - asynchronous brokerless service-to-service communication
+1. Replicated Event Sourcing over gRPC - active-active entities
 
 ## Projections over gRPC
 
@@ -111,16 +114,39 @@ H2 database should not be used when the service is an Akka Cluster with more tha
 * @extref[Reference documentation of Akka Projection gRPC](akka-projection:grpc.html)
 * @extref[Reference documentation of Akka Projection gRPC with producer push](akka-projection:grpc-producer-push.html)
 
-## Replicated Event Sourcing is not for Edge
+## Replicated Event Sourcing over gRPC
 
-@extref[Replicated Event Sourcing over gRPC](akka-distributed-cluster:feature-summary.html#replicated-event-sourcing-over-grpc)
-is a useful feature in Akka Distributed Cluster, but it is not recommended for edge use cases. The reasons why it is currently
-not supported for Akka Edge are:
+You would use Replicated Event Sourcing over gRPC for entities that can be updated in more than one geographical
+location, such as edge Point-of-Presence (PoP) and different cloud regions. This makes it possible to implement
+patterns such as active-active and hot standby.
 
-* It requires gRPC connectivity in both directions between the replicas.
-* The overhead of CRDT metadata may become too large when there are many 100s of replicas, or if the replicas dynamically change over time.
+![Diagram showing services using Replicated Event Sourcing over gRPC between cloud and edge services](images/edge-res.svg)
 
-That said, if you can overcome these restrictions it can be a good fit also for edge use cases. You might have 
-a network topology that allows establishing connections in both directions (e.g. VPN solution) and you might not have
-that many edge services. The latter can also be mitigated by strict filters so that not all entities are replicated
-everywhere.
+Replicated Event Sourcing gives:
+
+* redundancy to tolerate failures in one location and still be operational
+* serve requests from a location near the user to provide better responsiveness
+* allow updates to an entity from several locations
+* balance the load over many servers
+
+The replicas of the entities are running in separate Akka Clusters in the cloud and edge.
+A reliable event replication transport over gRPC is used between the Akka Clusters. The replica entities belong
+to the same logical Microservice, i.e. same [Bounded Context](https://martinfowler.com/bliki/BoundedContext.html)
+in Domain-Driven Design (DDD) terminology.
+
+Note that the connection is established from the edge service. For this you need to setup @extref[Akka Replicated Event Sourcing gRPC with edge topology](akka-projection:grpc-replicated-event-sourcing-transport.html#edge-topology).
+
+Filters can be used to define that a subset of the entities should be replicated to certain locations.
+The filters can be changed at runtime.
+
+@@@ note
+Events are stored in a database for each replica. There is no direct database access between a replica and
+the database of another replica, which means different databases, and even different database products, can
+be used for the replicas. For example, Postgres in the Cloud and H2 at the edge.
+@@@
+
+### Learn more
+
+* FIXME link to guide
+* @extref[Reference documentation of Akka Replicated Event Sourcing](akka:typed/replicated-eventsourcing.html)
+* @extref[Reference documentation of Akka Replicated Event Sourcing over gRPC](akka-projection:grpc-replicated-event-sourcing-transport.html)

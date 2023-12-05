@@ -199,7 +199,6 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         10.seconds,
         8,
         R2dbcReplication())
-        .withEdgeReplication(true)
     }
 
     selfReplicaId match {

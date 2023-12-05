@@ -116,10 +116,10 @@ accept an entity name, a @apidoc[ReplicationProjectionProvider] and an actor sys
 is expected to have a top level entry with the entity name containing this structure:
 
 Scala
-:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
+:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config-replicated-shopping-cart }
 
 Java
-:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config }
+:  @@snip [config](/akka-projection-grpc-tests/src/test/scala/akka/projection/grpc/replication/ReplicationSettingsSpec.scala) { #config-replicated-shopping-cart }
 
 The entries in the block refer to the local replica while `replicas` is a list of all replicas, including the node itself,
 with details about how to reach the replicas across the network.
@@ -130,7 +130,12 @@ and other connection options as when using Akka gRPC directly. For more details 
 It is also possible to set up @apidoc[akka.projection.grpc.replication.*.ReplicationSettings] through APIs only and not rely
 on the configuration file at all.
 
-### Binding the publisher
+### Fully connected topology
+
+In a network topology where each replica cluster can connect to each other replica cluster the configuration should
+list all replicas and gRPC server must be started in each replica.
+
+#### Binding the publisher
 
 Binding the publisher is a manual step to allow arbitrary customization of the Akka HTTP server and combining the endpoint
 with other HTTP and gRPC routes.
@@ -172,7 +177,41 @@ Scala
 Java
 :  @@snip [ShoppingCartServer.java](/samples/grpc/shopping-cart-service-java/src/main/resources/grpc.conf) { #http2 }
 
-### Serialization of events
+### Edge topology
+
+In some use cases it is not possible to use a @ref[fully connected topology](#fully-connected-topology), for example because of firewalls or NAT in front of each producer. The consumer may also not know about all producers up front.
+
+This is typical when using @extref:[Replicated Event Sourcing at the edge](akka-edge:feature-summary.html#replicated-event-sourcing-over-grpc).
+where the connection can only be established from the edge service to the cloud service.
+
+For this purpose, Akka Replicated Event Sourcing gRPC has a mode where the replication streams for both consuming
+and producing events are initiated by one side. In this way a star topology can be defined, and it's possible
+to combine with replicas that are fully connected.
+
+You would still define how to connect to other replicas as described above, but it's only needed on the edge side, and
+it would typically only define one or a few cloud replicas that it will connect to. A gRPC server is not needed on the
+edge side, because there are no incoming connections.
+
+On the edge side you start with `Replication.grpcEdgeReplication`.
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init-edge }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init-edge }
+
+On the cloud side you would start with `Replication.grpcReplication` as described above, but with the addition
+`withEdgeReplication(true)` in the @apidoc[ReplicationSettings] or enable `akka.projection.grpc.replication.accept-edge-replication`
+configuration.
+
+Scala
+:  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init-allow-edge }
+
+Java
+:  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init-allow-edge }
+
+
+## Serialization of events
 
 The events are serialized for being passed over the wire using the same Akka serializer as configured for serializing
 the events for storage.
@@ -192,7 +231,7 @@ By default, events from all Replicated Event Sourced entities are replicated.
 The same kind of filters as described in @ref:[Akka Projection gRPC Filters](grpc.md#filters) can be used for
 Replicated Event Sourcing.
 
-The producer defined filter:
+The producer filter is defined with  `withProducerFilter` or `withProducerFilterTopicExpression` in @apidoc[ReplicationSettings]:
 
 Scala
 :  @@snip [ShoppingCart.scala](/samples/replicated/shopping-cart-service-scala/src/main/scala/shopping/cart/ShoppingCart.scala) { #init-producerFilter }
@@ -200,18 +239,16 @@ Scala
 Java
 :  @@snip [ShoppingCart.java](/samples/replicated/shopping-cart-service-java/src/main/java/shopping/cart/ShoppingCart.java) { #init-producerFilter }
 
-Consumer defined filters are updated as described in @ref:[Akka Projection gRPC Consumer defined filter](grpc.md#consumer-defined-filter)
+The initial consumer filter is defined with  `withInitialConsumerFilter` in @apidoc[ReplicationSettings].
+Consumer defined filters can be updated in runtime as described in @ref:[Akka Projection gRPC Consumer defined filter](grpc.md#consumer-defined-filter)
 
 One thing to note is that `streamId` is always the same as the `entityType` when using Replicated Event Sourcing.
 
 The entity id based filter criteria must include the replica id as suffix to the entity id, with `|` separator.
 
-Replicated Event Sourcing is bidirectional replication, and therefore you would typically have to define the same
-filters on both sides. That is not handled automatically.
-
 ## Sample projects
 
-Source code and build files for complete sample projects can be found in the @extref:[Akka Distributed Cluster Guide](akka-distributed-cluster:guide/3-active-active.html).
+Source code and build files for complete sample projects can be found in the @extref:[Akka Distributed Cluster Guide](akka-distributed-cluster:guide/3-active-active.html) and @extref:[Akka Edge Guide](akka-edge:guide.html).
 
 ## Security
 
