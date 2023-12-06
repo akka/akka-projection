@@ -40,10 +40,15 @@ trait Replication[Command] {
   /**
    * If combining multiple replicated entity types, or combining with direct usage of
    * Akka Projection gRPC, you will have to use the EventProducerSource of each of them
-   * in a set passed to EventProducer.grpcServiceHandler to create a single gRPC endpoint
+   * in a set passed to EventProducer.grpcServiceHandler to create a single gRPC endpoint.
    */
   def eventProducerSource: EventProducerSource
 
+  /**
+   * Scala API: Push destinations for accepting/combining multiple Replicated Event Sourced entity types
+   * and possibly also regular projections into one producer push destination handler in a set passed to
+   * EventProducerPushDestination.grpcServiceHandler to create a single gRPC endpoint.
+   */
   def eventProducerPushDestination: Option[EventProducerPushDestination]
 
   /**

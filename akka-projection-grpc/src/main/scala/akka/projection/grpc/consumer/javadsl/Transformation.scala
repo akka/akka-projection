@@ -14,8 +14,8 @@ import java.util.Optional
 import java.util.function.{ Function => JFunction }
 import scala.compat.java8.OptionConverters._
 import scala.reflect.ClassTag
-
 import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 
 object Transformation {
 
@@ -30,6 +30,13 @@ object Transformation {
    */
   val identity: Transformation =
     new Transformation(scaladsl.EventProducerPushDestination.Transformation.identity)
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def adapted(delegate: scaladsl.EventProducerPushDestination.Transformation) =
+    new Transformation(delegate)
 }
 
 /**

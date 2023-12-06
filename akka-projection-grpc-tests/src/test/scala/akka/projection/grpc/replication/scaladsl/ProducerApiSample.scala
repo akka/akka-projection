@@ -8,6 +8,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.grpc.scaladsl.ServiceHandler
 import akka.http.scaladsl.Http
+import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 
@@ -33,10 +34,11 @@ object ProducerApiSample {
     }
     val route = EventProducer.grpcServiceHandler(allSources)
 
-    // FIXME Java API for replication.eventProducerPushDestination
-
     val handler = ServiceHandler.concatOrNotFound(route)
     // #multi-service
+
+    // RES push to combine with multiple other services
+    val pushHandler = EventProducerPushDestination.grpcServiceHandler(replication.eventProducerPushDestination.toSet)
 
     val _ = Http(system).newServerAt(host, port).bind(handler)
   }
