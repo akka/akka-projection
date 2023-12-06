@@ -672,7 +672,9 @@ class JdbcProjectionSpec
       projectionTestKit.run(projection) {
         result.toString shouldBe "e1|e2|e3|e4|e5|e6|"
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
   }
 
@@ -693,7 +695,9 @@ class JdbcProjectionSpec
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "skip failing events when using RecoveryStrategy.skip, save after 1" in {
@@ -714,7 +718,9 @@ class JdbcProjectionSpec
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e5|e6")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "skip failing events when using RecoveryStrategy.skip, save after 2" in {
@@ -735,7 +741,9 @@ class JdbcProjectionSpec
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e5|e6")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "restart from previous offset - handler throwing an exception, save after 1" in {
@@ -777,7 +785,9 @@ class JdbcProjectionSpec
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
 
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "restart from previous offset - handler throwing an exception, save after 2" in {
@@ -1032,7 +1042,9 @@ class JdbcProjectionSpec
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
 
     }
   }
