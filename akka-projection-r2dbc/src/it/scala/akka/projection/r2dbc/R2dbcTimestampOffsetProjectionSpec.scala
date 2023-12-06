@@ -418,7 +418,9 @@ class R2dbcTimestampOffsetProjectionSpec
       projectionTestKit.run(projectionFailing) {
         projectedValueShouldBe("e1|e2|e3|e4|e5")
       }
-      offsetShouldBe(envelopes.last.offset)
+      eventually {
+        offsetShouldBe(envelopes.last.offset)
+      }
     }
 
     "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {

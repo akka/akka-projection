@@ -273,8 +273,10 @@ class SlickProjectionSpec
         }
       }
       withClue("check - all offsets were seen") {
-        val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
-        offset shouldBe 6L
+        eventually {
+          val offset = offsetStore.readOffset[Long](projectionId).futureValue.value
+          offset shouldBe 6L
+        }
       }
     }
 

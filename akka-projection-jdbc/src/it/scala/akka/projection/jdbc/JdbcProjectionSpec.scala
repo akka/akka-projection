@@ -361,7 +361,9 @@ class JdbcProjectionSpec
       projectionTestKit.run(projectionFailing) {
         projectedValueShouldBe("e1|e2|e3|e4|e5")
       }
-      offsetShouldBe(6L)
+      eventually {
+        offsetShouldBe(6L)
+      }
     }
 
     "skip failing events after retrying when using RecoveryStrategy.retryAndSkip" in {
