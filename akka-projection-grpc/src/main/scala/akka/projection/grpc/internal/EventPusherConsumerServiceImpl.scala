@@ -65,44 +65,17 @@ private[akka] object EventPusherConsumerServiceImpl {
   def apply(eventProducerDestinations: Set[EventProducerPushDestination], preferProtobuf: ProtoAnySerialization.Prefer)(
       implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
     val eventWriterExtension = EventWriterExtension(system)
+    import system.executionContext
+    lazy val sharding = ClusterSharding(system)
+
     val destinationPerStreamId = eventProducerDestinations.map { d =>
       val writerForJournal = eventWriterExtension.writerForJournal(d.journalPluginId)
 
-      val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
-        writerForJournal.askWithStatus[EventWriter.WriteAck](
-          replyTo =>
-            EventWriter.Write(
-              persistenceId = envelope.persistenceId,
-              sequenceNumber = envelope.sequenceNr,
-              event = envelope.eventOption.getOrElse(FilteredPayload),
-              isSnapshotEvent = fromSnapshot(envelope),
-              fillSequenceNumberGaps = fillSequenceNumberGaps,
-              metadata = envelope.eventMetadata,
-              tags = envelope.tags,
-              replyTo = replyTo))(d.settings.journalWriteTimeout, system.scheduler)
-      }
+      val sendEvent = d.replicationSettings match {
+        case Some(replicationSettings) =>
+          implicit val timeout: Timeout = replicationSettings.entityEventReplicationTimeout
 
-      d.acceptedStreamId -> Destination(d, sendEvent, None)
-    }.toMap
-
-    new EventPusherConsumerServiceImpl(eventProducerDestinations, preferProtobuf, destinationPerStreamId)
-  }
-
-  /**
-   * Replicated Event Sourcing factory, uses sharding to pass the events to the replicas
-   */
-  def forRES(replicationSettings: Set[ReplicationSettings[_]], preferProtobuf: ProtoAnySerialization.Prefer)(
-      implicit system: ActorSystem[_]): EventPusherConsumerServiceImpl = {
-    implicit val ec: ExecutionContext = system.executionContext
-    val sharding = ClusterSharding(system)
-
-    val (
-      eventProducerDestinations: Set[EventProducerPushDestination],
-      destinationPerStreamId: Map[String, Destination]) =
-      replicationSettings.foldLeft((Set.empty[EventProducerPushDestination], Map.empty[String, Destination])) {
-        case ((eventProducerDestinations, destinationPerStreamId), replicationSetting) =>
-          implicit val timeout: Timeout = replicationSetting.entityEventReplicationTimeout
-          val sendEvent = { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
+          { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
             if (envelope.filtered) {
               Future.successful(Done)
             } else {
@@ -110,12 +83,12 @@ private[akka] object EventPusherConsumerServiceImpl {
                 case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
                   // send event to entity in this replica
                   val replicationId = ReplicationId.fromString(envelope.persistenceId)
-                  val destinationReplicaId = replicationId.withReplica(replicationSetting.selfReplicaId)
+                  val destinationReplicaId = replicationId.withReplica(replicationSettings.selfReplicaId)
                   if (fillSequenceNumberGaps)
                     throw new IllegalArgumentException(
                       s"fillSequenceNumberGaps can not be true for RES (pid ${envelope.persistenceId}, seq nr ${envelope.sequenceNr} from ${replicationId}")
                   val entityRef = sharding
-                    .entityRefFor(replicationSetting.entityTypeKey, destinationReplicaId.entityId)
+                    .entityRefFor(replicationSettings.entityTypeKey, destinationReplicaId.entityId)
                     .asInstanceOf[EntityRef[PublishedEvent]]
                   val ask = () =>
                     entityRef.ask[Done](
@@ -134,9 +107,9 @@ private[akka] object EventPusherConsumerServiceImpl {
                   // try a few times before tearing stream down, forcing the client to restart/reconnect
                   val askResult = akka.pattern.retry(
                     ask,
-                    replicationSetting.edgeReplicationDeliveryRetries,
-                    replicationSetting.edgeReplicationDeliveryMinBackoff,
-                    replicationSetting.edgeReplicationDeliveryMaxBackoff,
+                    replicationSettings.edgeReplicationDeliveryRetries,
+                    replicationSettings.edgeReplicationDeliveryMinBackoff,
+                    replicationSettings.edgeReplicationDeliveryMaxBackoff,
                     0.2d)(system.executionContext, system.classicSystem.scheduler)
 
                   askResult.failed.foreach(
@@ -154,17 +127,26 @@ private[akka] object EventPusherConsumerServiceImpl {
             }
           }
 
-          val pushDestination = EventProducerPushDestination(replicationSetting.streamId, protobufDescriptors = Nil)
-
-          (
-            eventProducerDestinations + pushDestination,
-            destinationPerStreamId
-              .updated(replicationSetting.streamId, Destination(pushDestination, sendEvent, Some(replicationSetting))))
+        case None => { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
+          writerForJournal.askWithStatus[EventWriter.WriteAck](
+            replyTo =>
+              EventWriter.Write(
+                persistenceId = envelope.persistenceId,
+                sequenceNumber = envelope.sequenceNr,
+                event = envelope.eventOption.getOrElse(FilteredPayload),
+                isSnapshotEvent = fromSnapshot(envelope),
+                fillSequenceNumberGaps = fillSequenceNumberGaps,
+                metadata = envelope.eventMetadata,
+                tags = envelope.tags,
+                replyTo = replyTo))(d.settings.journalWriteTimeout, system.scheduler)
+        }
       }
+
+      d.acceptedStreamId -> Destination(d, sendEvent, d.replicationSettings)
+    }.toMap
 
     new EventPusherConsumerServiceImpl(eventProducerDestinations, preferProtobuf, destinationPerStreamId)
   }
-
 }
 
 /**
@@ -192,7 +174,9 @@ private[akka] final class EventPusherConsumerServiceImpl private (
 
   logger.info(
     "Passive event consumer service created, accepting stream ids [{}]",
-    destinationPerStreamId.keys.mkString(", "))
+    destinationPerStreamId
+      .map { case (id, dest) => id + dest.replicationSettings.map(_ => s" (replicated entity)").getOrElse("") }
+      .mkString(", "))
 
   override def consumeEvent(
       in: Source[ConsumeEventIn, NotUsed],

@@ -27,11 +27,13 @@ object ProducerApiSample {
 
     val allSources: Set[EventProducerSource] = {
       Set(
-        replication.eventProducerService,
+        replication.eventProducerSource,
         // producers from other replicated entities or gRPC projections
-        otherReplication.eventProducerService)
+        otherReplication.eventProducerSource)
     }
     val route = EventProducer.grpcServiceHandler(allSources)
+
+    // FIXME Java API for replication.eventProducerPushDestination
 
     val handler = ServiceHandler.concatOrNotFound(route)
     // #multi-service

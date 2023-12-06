@@ -160,5 +160,6 @@ final class EventProducerPushDestination private (
         (streamId, meta) => javaInterceptor.intercept(streamId, new JavaMetadataImpl(meta)).toScala),
       filters.asScala.toVector,
       protobufDescriptors.asScala.toVector,
-      settings)
+      settings,
+      None)
 }

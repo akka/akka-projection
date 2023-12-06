@@ -6,6 +6,7 @@ package akka.projection.grpc.consumer.scaladsl
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
+import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.HttpResponse
@@ -17,11 +18,12 @@ import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
 import akka.projection.grpc.internal.ProtoAnySerialization.Prefer
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 import com.google.protobuf.Descriptors
+
 import scala.collection.immutable
 import scala.reflect.ClassTag
-
 import akka.persistence.Persistence
 import akka.persistence.typed.PersistenceId
+import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 
 /**
  * A passive consumer service for event producer push that can be bound as a gRPC endpoint accepting active producers
@@ -52,7 +54,8 @@ object EventProducerPushDestination {
       None,
       immutable.Seq.empty,
       protobufDescriptors,
-      EventProducerPushDestinationSettings(system))
+      EventProducerPushDestinationSettings(system),
+      None)
 
   @ApiMayChange
   object Transformation {
@@ -190,7 +193,9 @@ final class EventProducerPushDestination private[akka] (
     val interceptor: Option[EventDestinationInterceptor],
     val filters: immutable.Seq[FilterCriteria],
     val protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
-    val settings: EventProducerPushDestinationSettings) {
+    val settings: EventProducerPushDestinationSettings,
+    /** INTERNAL API */
+    private[akka] val replicationSettings: Option[ReplicationSettings[_]]) {
   import EventProducerPushDestination._
 
   def withInterceptor(interceptor: EventDestinationInterceptor): EventProducerPushDestination =
@@ -228,6 +233,13 @@ final class EventProducerPushDestination private[akka] (
   def withConsumerFilters(filters: immutable.Seq[FilterCriteria]): EventProducerPushDestination =
     copy(filters = filters)
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def withEdgeReplication(replicationSettings: ReplicationSettings[_]): EventProducerPushDestination =
+    copy(replicationSettings = Some(replicationSettings))
+
   private def copy(
       journalPluginId: Option[String] = journalPluginId,
       acceptedStreamId: String = acceptedStreamId,
@@ -235,7 +247,8 @@ final class EventProducerPushDestination private[akka] (
       interceptor: Option[EventDestinationInterceptor] = interceptor,
       filters: immutable.Seq[FilterCriteria] = filters,
       protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor] = protobufDescriptors,
-      settings: EventProducerPushDestinationSettings = settings): EventProducerPushDestination =
+      settings: EventProducerPushDestinationSettings = settings,
+      replicationSettings: Option[ReplicationSettings[_]] = replicationSettings): EventProducerPushDestination =
     new EventProducerPushDestination(
       journalPluginId,
       acceptedStreamId,
@@ -243,5 +256,6 @@ final class EventProducerPushDestination private[akka] (
       interceptor,
       filters,
       protobufDescriptors,
-      settings)
+      settings,
+      replicationSettings)
 }
