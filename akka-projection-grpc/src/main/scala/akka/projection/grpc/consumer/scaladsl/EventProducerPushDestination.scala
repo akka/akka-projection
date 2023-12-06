@@ -195,6 +195,7 @@ final class EventProducerPushDestination private[akka] (
     val protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
     val settings: EventProducerPushDestinationSettings,
     /** INTERNAL API */
+    @InternalApi
     private[akka] val replicationSettings: Option[ReplicationSettings[_]]) {
   import EventProducerPushDestination._
 
