@@ -262,7 +262,7 @@ class JdbcProjectionSpec
   private def projectedValueShouldIncludeNTimes(expected: String, nTimes: Int)(implicit entityId: String) = {
     withClue(s"checking projected value contains [$expected] $nTimes times: ") {
       val text = withRepo(_.findById(entityId)).futureValue.value.text
-      text.split("\\|").count(_ == expected) shouldBe nTimes
+      text.split('|').count(_ == expected) shouldBe nTimes
     }
   }
 
