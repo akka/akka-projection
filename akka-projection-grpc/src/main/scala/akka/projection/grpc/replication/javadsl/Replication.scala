@@ -226,7 +226,7 @@ object Replication {
       override def entityTypeKey: EntityTypeKey[Command] =
         scalaReplication.entityTypeKey.asJava
 
-      override def entityRefFactory: String => EntityRef[Command] =
+      override def entityRefFactory: JFunction[String, EntityRef[Command]] =
         (entityId: String) => scalaReplication.entityRefFactory.apply(entityId).asJava
 
       override def toString: String = scalaReplication.toString
@@ -246,5 +246,5 @@ trait EdgeReplication[Command] {
    * Shortcut for creating EntityRefs for the sharded Replicated Event Sourced entities for
    * sending commands.
    */
-  def entityRefFactory: String => EntityRef[Command]
+  def entityRefFactory: JFunction[String, EntityRef[Command]]
 }
