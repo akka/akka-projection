@@ -77,7 +77,7 @@ object ChargingStation {
       implicit system: ActorSystem[_]): EdgeReplication[Command] = {
     val replicationSettings =
       ReplicationSettings[Command](EntityType, R2dbcReplication())
-        .withSelfReplicaId(ReplicaId(locationId.replace("/", "_")))
+        .withSelfReplicaId(ReplicaId(locationId))
     Replication.grpcEdgeReplication(replicationSettings)(ChargingStation.apply)
   }
 
@@ -87,6 +87,9 @@ object ChargingStation {
     Behaviors.setup[Command] { context =>
       Behaviors.withTimers { timers =>
         replicatedBehaviors.setup { replicationContext =>
+          context.log.info(
+            "Charging Station {} starting up",
+            replicationContext.entityId)
           new ChargingStation(context, replicationContext, timers).behavior()
         }
       }
@@ -185,7 +188,12 @@ class ChargingStation(
         }
 
       case CompleteCharging(droneId) =>
-        Effect.persist(ChargingCompleted(droneId))
+        if (state.dronesCharging.exists(_.droneId == droneId)) {
+          context.log.info("Drone {} completed charging", droneId)
+          Effect.persist(ChargingCompleted(droneId))
+        } else {
+
+        }
 
       case GetState(replyTo) =>
         Effect.reply(replyTo)(state)

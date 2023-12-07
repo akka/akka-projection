@@ -5,6 +5,7 @@ import akka.actor.typed.{ ActorSystem, Behavior }
 import akka.cluster.typed.{ ClusterSingleton, SingletonActor }
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
+import charging.ChargingStation
 
 /**
  * Main for starting the local-drone-control as a cluster rather than a single self-contained node. Requires
@@ -53,13 +54,20 @@ object ClusteredMain {
         new DeliveriesQueueServiceImpl(settings, deliveriesQueue)(
           context.system)
 
+      // replicated charging station entity
+      val chargingStationReplication =
+        ChargingStation.initEdge(settings.locationId)(context.system)
+
       val grpcInterface =
         context.system.settings.config
           .getString("local-drone-control.grpc.interface")
       val grpcPort =
         context.system.settings.config.getInt("local-drone-control.grpc.port")
       val droneService =
-        new DroneServiceImpl(deliveriesQueue, settings)(context.system)
+        new DroneServiceImpl(
+          deliveriesQueue,
+          chargingStationReplication.entityRefFactory,
+          settings)(context.system)
       LocalDroneControlServer.start(
         grpcInterface,
         grpcPort,

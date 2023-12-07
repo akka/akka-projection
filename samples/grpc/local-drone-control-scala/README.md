@@ -47,6 +47,19 @@ Inspect the current state of the local delivery queue
 grpcurl -plaintext 127.0.0.1:8080 local.drones.DeliveriesQueueService.GetCurrentQueue
 ```
 
+Ask to charge the drone, with a charging station first created in the restaurant-drone-deliveries service:
+
+```shell
+grpcurl -d '{"drone_id":"drone1","charging_station_id":"station1"}' -plaintext 127.0.0.1:8080 local.drones.DroneService.GoCharge
+```
+
+Use the restaurant-drone-deliveries charge station inspection command to see the charging drones, and that they eventually
+complete their charging:
+
+```shell
+grpcurl -d '{"charging_station_id":"station1"}' -plaintext localhost:8101 charging.ChargingStationService.GetChargingStationState
+```
+
 ## Running the sample as a multi node service
 
 It is also possible to run this sample service as a multi node Akka Cluster, for that you need to start a PostgreSQL

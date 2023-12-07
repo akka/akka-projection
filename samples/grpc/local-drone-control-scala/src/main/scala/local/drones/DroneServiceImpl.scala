@@ -4,9 +4,12 @@ import akka.Done
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.{ ActorRef, ActorSystem }
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.grpc.GrpcServiceException
 import akka.util.Timeout
+import charging.ChargingStation
 import com.google.protobuf.empty.Empty
+import com.google.protobuf.timestamp.Timestamp
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 import local.drones.proto
@@ -16,6 +19,8 @@ import scala.concurrent.TimeoutException
 
 class DroneServiceImpl(
     deliveriesQueue: ActorRef[DeliveriesQueue.Command],
+    chargingStationEntityRefFactory: String => EntityRef[
+      ChargingStation.Command],
     settings: Settings)(implicit system: ActorSystem[_])
     extends proto.DroneService {
 
@@ -80,6 +85,28 @@ class DroneServiceImpl(
     deliveriesQueue
       .askWithStatus[Done](DeliveriesQueue.CompleteDelivery(in.deliveryId, _))
       .map(_ => Empty.defaultInstance)
+  }
+
+  override def goCharge(
+      in: proto.GoChargeRequest): Future[proto.ChargingResponse] = {
+    logger.info(
+      "Requesting charge of {} from {}",
+      in.droneId,
+      in.chargingStationId)
+    val entityRef = chargingStationEntityRefFactory(in.chargingStationId)
+    entityRef
+      .ask[ChargingStation.StartChargingResponse](
+        ChargingStation.StartCharging(in.droneId, _))
+      .map {
+        case ChargingStation.ChargingStarted(_, chargeComplete) =>
+          proto.ChargingResponse(
+            ChargingResponse.Response.Started(
+              proto.ChargingStarted(Some(Timestamp(chargeComplete)))))
+        case ChargingStation.AllSlotsBusy(comeBackAt) =>
+          proto.ChargingResponse(
+            ChargingResponse.Response.ComeBackLater(
+              proto.ComeBackLater(Some(Timestamp(comeBackAt)))))
+      }
   }
 
   private def convertError[T](response: Future[T]): Future[T] = {

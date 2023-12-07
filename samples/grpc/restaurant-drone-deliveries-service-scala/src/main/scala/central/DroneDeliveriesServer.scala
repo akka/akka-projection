@@ -25,13 +25,9 @@ object DroneDeliveriesServer {
       port: Int,
       droneOverviewService: central.drones.proto.DroneOverviewService,
       restaurantDeliveriesService: central.deliveries.proto.RestaurantDeliveriesService,
-      deliveryEventsProducerService: PartialFunction[
-        HttpRequest,
-        Future[HttpResponse]],
-      pushedDroneEventsHandler: PartialFunction[
-        HttpRequest,
-        Future[HttpResponse]],
-      chargingStationService: charging.proto.ChargingStationService)(
+      chargingStationService: charging.proto.ChargingStationService,
+      eventPullHandler: PartialFunction[HttpRequest, Future[HttpResponse]],
+      eventPushHandler: PartialFunction[HttpRequest, Future[HttpResponse]])(
       implicit system: ActorSystem[_]): Unit = {
     import system.executionContext
 
@@ -40,8 +36,8 @@ object DroneDeliveriesServer {
       DroneOverviewServiceHandler.partial(droneOverviewService),
       RestaurantDeliveriesServiceHandler.partial(restaurantDeliveriesService),
       ChargingStationServiceHandler.partial(chargingStationService),
-      deliveryEventsProducerService,
-      pushedDroneEventsHandler,
+      eventPullHandler,
+      eventPushHandler,
       ServerReflection.partial(
         List(
           DroneOverviewService,

@@ -41,7 +41,8 @@ object Main {
           context.system)
 
       // replicated charging station entity
-      ChargingStation.initEdge(settings.locationId)(context.system)
+      val chargingStationReplication =
+        ChargingStation.initEdge(settings.locationId)(context.system)
 
       val grpcInterface =
         context.system.settings.config
@@ -49,7 +50,10 @@ object Main {
       val grpcPort =
         context.system.settings.config.getInt("local-drone-control.grpc.port")
       val droneService =
-        new DroneServiceImpl(deliveriesQueue, settings)(context.system)
+        new DroneServiceImpl(
+          deliveriesQueue,
+          chargingStationReplication.entityRefFactory,
+          settings)(context.system)
       LocalDroneControlServer.start(
         grpcInterface,
         grpcPort,
