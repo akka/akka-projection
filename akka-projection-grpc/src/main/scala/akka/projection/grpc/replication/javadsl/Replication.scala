@@ -6,7 +6,6 @@ package akka.projection.grpc.replication.javadsl
 
 import java.util.concurrent.CompletionStage
 import java.util.function.Predicate
-
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.annotation.ApiMayChange
@@ -24,6 +23,7 @@ import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.internal.ReplicationContextImpl
 import akka.persistence.typed.javadsl.ReplicationContext
 import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
+import akka.projection.grpc.consumer.javadsl.EventProducerPushDestination
 import akka.projection.grpc.producer.javadsl.EventProducer
 import akka.projection.grpc.producer.javadsl.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
@@ -40,12 +40,22 @@ import akka.projection.grpc.replication.internal.ReplicationImpl
 @DoNotInherit
 trait Replication[Command] {
 
+  @deprecated("Use eventProducerSource instead", "1.5.1")
+  def eventProducerService: EventProducerSource
+
   /**
    * If combining multiple entity types replicated, or combining with direct usage of
    * Akka Projection gRPC you will have to use the EventProducerService of each of them
    * in a set passed to EventProducer.grpcServiceHandler to create a single gRPC endpoint
    */
-  def eventProducerService: EventProducerSource
+  def eventProducerSource: EventProducerSource
+
+  /**
+   * Scala API: Push destinations for accepting/combining multiple Replicated Event Sourced entity types
+   * and possibly also regular projections into one producer push destination handler in a set passed to
+   * EventProducerPushDestination.grpcServiceHandler to create a single gRPC endpoint.
+   */
+  def eventProducerPushDestination: Option[EventProducerPushDestination]
 
   /**
    * If only replicating one Replicated Event Sourced Entity and not using
@@ -103,27 +113,32 @@ object Replication {
               }))
           .toScala)
 
-    val scalaRESOG =
+    val scalaReplication =
       ReplicationImpl.grpcReplication[Command, Event, State](scalaReplicationSettings, replicatedEntity)(system)
     val jEventProducerSource = new EventProducerSource(
-      scalaRESOG.eventProducerService.entityType,
-      scalaRESOG.eventProducerService.streamId,
-      scalaRESOG.eventProducerService.transformation.toJava,
-      scalaRESOG.eventProducerService.settings)
+      scalaReplication.eventProducerService.entityType,
+      scalaReplication.eventProducerService.streamId,
+      scalaReplication.eventProducerService.transformation.toJava,
+      scalaReplication.eventProducerService.settings)
 
     new Replication[Command] {
       override def eventProducerService: EventProducerSource = jEventProducerSource
+
+      override def eventProducerSource: EventProducerSource = jEventProducerSource
+
+      override def eventProducerPushDestination: Option[EventProducerPushDestination] =
+        scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala)
 
       override def createSingleServiceHandler(): JFunction[HttpRequest, CompletionStage[HttpResponse]] =
         EventProducer.grpcServiceHandler(system, jEventProducerSource)
 
       override def entityTypeKey: EntityTypeKey[Command] =
-        scalaRESOG.entityTypeKey.asJava
+        scalaReplication.entityTypeKey.asJava
 
       override def entityRefFactory: String => EntityRef[Command] =
-        (entityId: String) => scalaRESOG.entityRefFactory.apply(entityId).asJava
+        (entityId: String) => scalaReplication.entityRefFactory.apply(entityId).asJava
 
-      override def toString: String = scalaRESOG.toString
+      override def toString: String = scalaReplication.toString
     }
   }
 

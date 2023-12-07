@@ -21,6 +21,7 @@ import akka.persistence.query.typed.EventEnvelope;
 import akka.persistence.typed.ReplicaId;
 import akka.projection.ProjectionContext;
 import akka.projection.ProjectionId;
+import akka.projection.grpc.consumer.javadsl.EventProducerPushDestination;
 import akka.projection.grpc.producer.EventProducerSettings;
 import akka.projection.grpc.producer.javadsl.EventProducer;
 import akka.projection.grpc.producer.javadsl.EventProducerSource;
@@ -134,6 +135,12 @@ public class ReplicationCompileTest {
     Function<HttpRequest, CompletionStage<HttpResponse>> handler =
         ServiceHandler.concatOrNotFound(route);
     // #multi-service
+
+    // RES push
+    Set<EventProducerPushDestination> destinations = new HashSet<>();
+    destinations.add(replication.eventProducerPushDestination().get());
+    // ... .add other destinations ...
+    EventProducerPushDestination.grpcServiceHandler(destinations, system);
 
     CompletionStage<ServerBinding> bound =
         Http.get(system).newServerAt(host, port).bind(handler);

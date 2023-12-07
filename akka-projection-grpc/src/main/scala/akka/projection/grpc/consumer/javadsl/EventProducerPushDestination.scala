@@ -4,6 +4,7 @@
 
 package akka.projection.grpc.consumer.javadsl
 
+import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
@@ -30,6 +31,7 @@ import java.util.{ List => JList, Set => JSet }
 import scala.compat.java8.FutureConverters.CompletionStageOps
 import scala.compat.java8.FutureConverters.FutureOps
 import scala.compat.java8.OptionConverters.RichOptionalGeneric
+import scala.jdk.OptionConverters.RichOption
 
 /**
  * A passive consumer service for event producer push that can be bound as a gRPC endpoint accepting active producers
@@ -83,6 +85,26 @@ object EventProducerPushDestination {
           .toJava
     }
   }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def fromScala(scalaDestination: scaladsl.EventProducerPushDestination): EventProducerPushDestination =
+    new EventProducerPushDestination(
+      scalaDestination.journalPluginId.toJava,
+      scalaDestination.acceptedStreamId,
+      (origin, meta) => Transformation.adapted(scalaDestination.transformationForOrigin.apply(origin, meta.asScala)),
+      scalaDestination.interceptor
+        .map(scalaInterceptor =>
+          new EventDestinationInterceptor {
+            override def intercept(streamId: String, requestMetadata: Metadata): CompletionStage[Done] =
+              scalaInterceptor.intercept(streamId, requestMetadata.asScala).toJava
+          })
+        .toJava,
+      scalaDestination.filters.asJava,
+      scalaDestination.protobufDescriptors.asJava,
+      scalaDestination.settings)
 
 }
 
@@ -160,5 +182,6 @@ final class EventProducerPushDestination private (
         (streamId, meta) => javaInterceptor.intercept(streamId, new JavaMetadataImpl(meta)).toScala),
       filters.asScala.toVector,
       protobufDescriptors.asScala.toVector,
-      settings)
+      settings,
+      None)
 }

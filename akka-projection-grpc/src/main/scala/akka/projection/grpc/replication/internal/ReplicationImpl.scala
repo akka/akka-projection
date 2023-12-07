@@ -34,10 +34,9 @@ import akka.projection.ProjectionId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
+import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
-import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
 import akka.projection.grpc.internal.ProtoAnySerialization
-import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
@@ -58,11 +57,13 @@ import scala.concurrent.Future
  */
 @InternalApi
 private[akka] final class ReplicationImpl[Command] private (
-    val eventProducerService: EventProducerSource,
+    val eventProducerSource: EventProducerSource,
     val createSingleServiceHandler: () => PartialFunction[HttpRequest, Future[HttpResponse]],
     val entityTypeKey: EntityTypeKey[Command],
-    val entityRefFactory: String => EntityRef[Command])
+    val entityRefFactory: String => EntityRef[Command],
+    val eventProducerPushDestination: Option[EventProducerPushDestination])
     extends Replication[Command] {
+  override def eventProducerService: EventProducerSource = eventProducerSource
   override def toString: String = s"Replication(${eventProducerService.entityType}, ${eventProducerService.streamId})"
 }
 
@@ -106,20 +107,35 @@ private[akka] object ReplicationImpl {
     val entityRefFactory: String => EntityRef[Command] = sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
     settings.otherReplicas.foreach(startConsumer(_, settings, entityRefFactory))
 
-    new ReplicationImpl[Command](eventProducerService = eps, createSingleServiceHandler = () => {
-      val handler = EventProducer.grpcServiceHandler(Set(eps), settings.eventProducerInterceptor)
-      if (settings.acceptEdgeReplication) {
-        // Fold in edge push gRPC consumer service if enabled
-        log.info("Edge replication enabled for Replicated Entity [{}]", settings.entityTypeKey.name)
-        val pushConsumer = EventConsumerServicePowerApiHandler.partial(
-          EventPusherConsumerServiceImpl.forRES(
-            Set(settings),
-            // FIXME prefer depends on caller?
-            ProtoAnySerialization.Prefer.Scala))
-        handler.orElse(pushConsumer)
-      } else handler
+    if (settings.acceptEdgeReplication) {
+      val pushDestination =
+        EventProducerPushDestination(settings.streamId, protobufDescriptors = Nil).withEdgeReplication(settings)
+      new ReplicationImpl[Command](
+        eventProducerSource = eps,
+        createSingleServiceHandler = () => {
+          val handler = EventProducer.grpcServiceHandler(Set(eps), settings.eventProducerInterceptor)
+          if (settings.acceptEdgeReplication) {
+            // Fold in edge push gRPC consumer service if enabled
+            log.info("Edge replication enabled for Replicated Entity [{}]", settings.entityTypeKey.name)
+            val eventProducerPushHandler = EventProducerPushDestination.grpcServiceHandler(pushDestination)
+            handler.orElse(eventProducerPushHandler)
+          } else handler
+        },
+        entityTypeKey = replicatedEntity.entity.typeKey,
+        entityRefFactory = entityRefFactory,
+        eventProducerPushDestination =
+          if (settings.acceptEdgeReplication) Some(pushDestination)
+          else None)
+    } else {
+      new ReplicationImpl[Command](
+        eventProducerSource = eps,
+        createSingleServiceHandler = () =>
+          EventProducer.grpcServiceHandler(Set(eps), settings.eventProducerInterceptor),
+        entityTypeKey = replicatedEntity.entity.typeKey,
+        entityRefFactory = entityRefFactory,
+        eventProducerPushDestination = None)
+    }
 
-    }, entityTypeKey = replicatedEntity.entity.typeKey, entityRefFactory = entityRefFactory)
   }
 
   private def startConsumer[C](
