@@ -49,6 +49,8 @@ import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -187,7 +189,7 @@ private[akka] object ReplicationImpl {
         case Some(role) => defaultWithShardingSettings.withRole(role)
       }
     }
-    ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, {
+    ShardedDaemonProcess(system).init(sanitizeActorName(projectionName), remoteReplica.numberOfConsumers, {
       idx =>
         val sliceRange = sliceRanges(idx)
         val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
@@ -341,13 +343,13 @@ private[akka] object ReplicationImpl {
     val epp =
       remoteReplica.additionalQueryRequestMetadata match {
         case None =>
-          EventProducerPush[AnyRef](settings.entityTypeKey.name, eps, remoteReplica.grpcClientSettings)
+          EventProducerPush[AnyRef](settings.selfReplicaId.id, eps, remoteReplica.grpcClientSettings)
         case Some(metadata) =>
-          EventProducerPush[AnyRef](settings.entityTypeKey.name, eps, metadata, remoteReplica.grpcClientSettings)
+          EventProducerPush[AnyRef](settings.selfReplicaId.id, eps, metadata, remoteReplica.grpcClientSettings)
       }
 
     ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
-      s"${settings.selfReplicaId.id}EventProducer",
+      sanitizeActorName(s"${settings.selfReplicaId.id}EventProducer"),
       // FIXME separate setting for number of producers?
       remoteReplica.numberOfConsumers, { (context: ShardedDaemonProcessContext) =>
         val sliceRange = sliceRanges(context.processNumber)
@@ -369,5 +371,8 @@ private[akka] object ReplicationImpl {
       ProjectionBehavior.Stop)
 
   }
+
+  private def sanitizeActorName(text: String): String =
+    URLEncoder.encode(text, StandardCharsets.UTF_8.name())
 
 }

@@ -5,12 +5,10 @@
 package akka.projection.scaladsl
 
 import java.util.concurrent.ConcurrentHashMap
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration.FiniteDuration
-
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -22,6 +20,9 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.util.JavaDurationConverters._
 import akka.util.Timeout
+
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 object ProjectionManagement extends ExtensionId[ProjectionManagement] {
   def createExtension(system: ActorSystem[_]): ProjectionManagement = new ProjectionManagement(system)
@@ -50,7 +51,7 @@ class ProjectionManagement(system: ActorSystem[_]) extends Extension {
   private def topic(projectionName: String): ActorRef[Topic.Command[ProjectionManagementCommand]] = {
     topics.computeIfAbsent(projectionName, _ => {
       val name = topicName(projectionName)
-      system.systemActorOf(Topic[ProjectionManagementCommand](name), name)
+      system.systemActorOf(Topic[ProjectionManagementCommand](name), sanitizeActorName(name))
     })
   }
 
@@ -151,4 +152,7 @@ class ProjectionManagement(system: ActorSystem[_]) extends Extension {
     }
     retry(() => askSetPaused())
   }
+
+  private def sanitizeActorName(text: String): String =
+    URLEncoder.encode(text, StandardCharsets.UTF_8.name())
 }
