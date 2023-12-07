@@ -25,7 +25,7 @@
         <akka-http.version>10.5.1</akka-http.version>
         <akka-grpc.version>2.4.0</akka-grpc.version>
         <akka-grpc-maven-plugin.version>2.4.0</akka-grpc-maven-plugin.version>
-        <logback.version>1.3.11</logback.version>
+        <logback.version>1.2.13</logback.version>
         <prometheus.client.version>0.16.0</prometheus.client.version>
         <junit.version>4.13.1</junit.version>
         <scala.binary.version>2.13</scala.binary.version>
