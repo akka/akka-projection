@@ -8,6 +8,7 @@ import akka.cluster.typed.ClusterSingleton;
 import akka.cluster.typed.SingletonActor;
 import akka.management.cluster.bootstrap.ClusterBootstrap;
 import akka.management.javadsl.AkkaManagement;
+import charging.ChargingStation;
 
 /**
  * Main for starting the local-drone-control as a cluster rather than a single self-contained node.
@@ -56,7 +57,18 @@ public class ClusteredMain {
 
           var deliveriesQueueService =
               new DeliveriesQueueServiceImpl(context.getSystem(), settings, deliveriesQueue);
-          var droneService = new DroneServiceImpl(context.getSystem(), deliveriesQueue, settings);
+
+          // replicated charging station entity
+          var chargingStationReplication =
+              ChargingStation.initEdge(context.getSystem(), settings.locationId);
+
+          var droneService =
+              new DroneServiceImpl(
+                  context.getSystem(),
+                  deliveriesQueue,
+                  // FIXME wrong function type
+                  id -> chargingStationReplication.entityRefFactory().apply(id),
+                  settings);
 
           var grpcInterface =
               context

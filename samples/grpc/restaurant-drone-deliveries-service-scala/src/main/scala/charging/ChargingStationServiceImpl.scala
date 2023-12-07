@@ -16,6 +16,7 @@ class ChargingStationServiceImpl(
     extends proto.ChargingStationService {
   private final val log = LoggerFactory.getLogger(getClass)
   import system.executionContext
+  // FIXME separate setting
   implicit val askTimeout: Timeout = 3.seconds
 
   override def createChargingStation(in: proto.CreateChargingStationRequest)

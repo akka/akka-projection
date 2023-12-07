@@ -4,10 +4,7 @@ import akka.Done;
 import akka.actor.typed.ActorSystem;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
-import akka.http.javadsl.model.HttpRequest;
-import akka.http.javadsl.model.HttpResponse;
 import akka.japi.Pair;
-import akka.japi.function.Function;
 import akka.persistence.query.Offset;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.persistence.r2dbc.query.javadsl.R2dbcReadJournal;
@@ -41,22 +38,18 @@ public final class LocalDroneEvents {
   // use it here as well when we consume the events
   private static final String PRODUCER_ENTITY_TYPE = "Drone";
 
-  public static Function<HttpRequest, CompletionStage<HttpResponse>> pushedEventsGrpcHandler(
-      ActorSystem<?> system) {
-    var destination =
-        EventProducerPushDestination.create(
-                DRONE_EVENT_STREAM_ID,
-                Collections.singletonList(local.drones.proto.DroneEvents.getDescriptor()),
-                system)
-            .withTransformationForOrigin(
-                (origin, metadataa) ->
-                    akka.projection.grpc.consumer.javadsl.Transformation.empty()
-                        // tag all events with the location name of the local control it came from
-                        .registerTagMapper(
-                            local.drones.proto.CoarseDroneLocation.class,
-                            envelope -> Collections.singleton("location:" + origin)));
-
-    return EventProducerPushDestination.grpcServiceHandler(destination, system);
+  public static EventProducerPushDestination pushedEventsDestination(ActorSystem<?> system) {
+    return EventProducerPushDestination.create(
+            DRONE_EVENT_STREAM_ID,
+            Collections.singletonList(local.drones.proto.DroneEvents.getDescriptor()),
+            system)
+        .withTransformationForOrigin(
+            (origin, metadataa) ->
+                akka.projection.grpc.consumer.javadsl.Transformation.empty()
+                    // tag all events with the location name of the local control it came from
+                    .registerTagMapper(
+                        local.drones.proto.CoarseDroneLocation.class,
+                        envelope -> Collections.singleton("location:" + origin)));
   }
 
   // #eventConsumer

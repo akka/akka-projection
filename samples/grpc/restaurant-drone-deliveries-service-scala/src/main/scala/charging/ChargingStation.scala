@@ -11,11 +11,13 @@ import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.TimerScheduler
 import akka.persistence.typed.RecoveryCompleted
+import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplicationContext
 import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
+import akka.projection.grpc.replication.scaladsl.Replication.EdgeReplication
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.projection.r2dbc.scaladsl.R2dbcReplication
 import akka.serialization.jackson.CborSerializable
@@ -70,6 +72,8 @@ object ChargingStation {
 
   private val FullChargeTime = 5.minutes
 
+  /** Init for running in cloud replica, this is the only difference from the ChargingStation
+   * in local-drone-control */
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
     // FIXME replication filter so only charging stations in a given edge replica is replicated there
     val replicationSettings =
@@ -183,7 +187,12 @@ class ChargingStation(
         }
 
       case CompleteCharging(droneId) =>
-        Effect.persist(ChargingCompleted(droneId))
+        if (state.dronesCharging.exists(_.droneId == droneId)) {
+          context.log.info("Drone {} completed charging", droneId)
+          Effect.persist(ChargingCompleted(droneId))
+        } else {
+          Effect.none
+        }
 
       case GetState(replyTo) =>
         Effect.reply(replyTo)(state)

@@ -6,11 +6,16 @@ import akka.Done;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
+import akka.cluster.sharding.typed.javadsl.EntityRef;
 import akka.grpc.GrpcServiceException;
 import akka.pattern.StatusReply;
+import charging.ChargingStation;
+import com.google.protobuf.Timestamp;
 import io.grpc.Status;
+import java.time.Instant;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import local.drones.proto.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,15 +25,21 @@ public class DroneServiceImpl implements DroneService {
   private static final Logger logger = LoggerFactory.getLogger(DroneServiceImpl.class);
 
   private final ActorRef<DeliveriesQueue.Command> deliveriesQueue;
+  private final Function<String, EntityRef<ChargingStation.Command>>
+      chargingStationEntityRefFactory;
   private final Settings settings;
   private final ActorSystem<?> system;
 
   private final ClusterSharding sharding;
 
   public DroneServiceImpl(
-      ActorSystem<?> system, ActorRef<DeliveriesQueue.Command> deliveriesQueue, Settings settings) {
+      ActorSystem<?> system,
+      ActorRef<DeliveriesQueue.Command> deliveriesQueue,
+      Function<String, EntityRef<ChargingStation.Command>> chargingStationEntityRefFactory,
+      Settings settings) {
     this.system = system;
     this.deliveriesQueue = deliveriesQueue;
+    this.chargingStationEntityRefFactory = chargingStationEntityRefFactory;
     this.settings = settings;
     this.sharding = ClusterSharding.get(system);
   }
@@ -109,6 +120,48 @@ public class DroneServiceImpl implements DroneService {
     var reply = completeReply.thenApply(done -> CompleteDeliveryResponse.getDefaultInstance());
 
     return convertError(reply);
+  }
+
+  @Override
+  public CompletionStage<ChargingResponse> goCharge(GoChargeRequest in) {
+    logger.info("Requesting charge of {} from {}", in.getDroneId(), in.getChargingStationId());
+    var entityRef = chargingStationEntityRefFactory.apply(in.getChargingStationId());
+
+    CompletionStage<ChargingStation.StartChargingResponse> reply =
+        entityRef.ask(
+            (ActorRef<ChargingStation.StartChargingResponse> replyTo) ->
+                new ChargingStation.StartCharging(in.getDroneId(), replyTo),
+            settings.askTimeout);
+
+    return reply.thenApply(
+        response -> {
+          if (response instanceof ChargingStation.ChargingStarted) {
+            var chargeComplete = ((ChargingStation.ChargingStarted) response).chargeComplete;
+            return ChargingResponse.newBuilder()
+                .setStarted(
+                    ChargingStarted.newBuilder()
+                        .setDoneBy(instantToProtoTimestamp(chargeComplete))
+                        .build())
+                .build();
+          } else if (response instanceof ChargingStation.AllSlotsBusy) {
+            var firstSlotFreeAt = ((ChargingStation.AllSlotsBusy) response).firstSlotFreeAt;
+            return ChargingResponse.newBuilder()
+                .setComeBackLater(
+                    ComeBackLater.newBuilder()
+                        .setFirstSlotFreeAt(instantToProtoTimestamp(firstSlotFreeAt))
+                        .build())
+                .build();
+          } else {
+            throw new IllegalArgumentException("Unexpected response type " + response.getClass());
+          }
+        });
+  }
+
+  private static Timestamp instantToProtoTimestamp(Instant instant) {
+    return Timestamp.newBuilder()
+        .setSeconds(instant.getEpochSecond())
+        .setNanos(instant.getNano())
+        .build();
   }
 
   private <T> CompletionStage<T> convertError(CompletionStage<T> response) {

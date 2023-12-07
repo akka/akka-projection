@@ -6,6 +6,7 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.cluster.typed.Cluster;
 import akka.cluster.typed.Join;
+import charging.ChargingStation;
 
 public class Main {
 
@@ -38,7 +39,18 @@ public class Main {
               "DeliveriesProjection");
           var deliveriesQueueService =
               new DeliveriesQueueServiceImpl(context.getSystem(), settings, deliveriesQueue);
-          var droneService = new DroneServiceImpl(context.getSystem(), deliveriesQueue, settings);
+
+          // replicated charging station entity
+          var chargingStationReplication =
+              ChargingStation.initEdge(context.getSystem(), settings.locationId);
+
+          var droneService =
+              new DroneServiceImpl(
+                  context.getSystem(),
+                  deliveriesQueue,
+                  // FIXME wrong function type
+                  id -> chargingStationReplication.entityRefFactory().apply(id),
+                  settings);
 
           var grpcInterface =
               context

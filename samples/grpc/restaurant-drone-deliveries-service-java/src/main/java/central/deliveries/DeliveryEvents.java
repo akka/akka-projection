@@ -1,12 +1,8 @@
 package central.deliveries;
 
 import akka.actor.typed.ActorSystem;
-import akka.http.javadsl.model.HttpRequest;
-import akka.http.javadsl.model.HttpResponse;
-import akka.japi.function.Function;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.grpc.producer.EventProducerSettings;
-import akka.projection.grpc.producer.javadsl.EventProducer;
 import akka.projection.grpc.producer.javadsl.EventProducerSource;
 import akka.projection.grpc.producer.javadsl.Transformation;
 import central.deliveries.proto.DeliveryRegistered;
@@ -19,8 +15,7 @@ public final class DeliveryEvents {
   // Note: stream id used in consumer to consume this specific stream
   public static final String STREAM_ID = "delivery-events";
 
-  public static Function<HttpRequest, CompletionStage<HttpResponse>> eventProducerService(
-      ActorSystem<?> system) {
+  public static EventProducerSource eventProducerSource(ActorSystem<?> system) {
     var transformation =
         Transformation.empty()
             .registerAsyncEnvelopeMapper(
@@ -29,14 +24,11 @@ public final class DeliveryEvents {
             // exclude all other types of events for the RestaurantDeliveries
             .registerOrElseMapper(envelope -> Optional.empty());
 
-    var eventProducerSource =
-        new EventProducerSource(
-            RestaurantDeliveries.ENTITY_KEY.name(),
-            STREAM_ID,
-            transformation,
-            EventProducerSettings.create(system));
-
-    return EventProducer.grpcServiceHandler(system, eventProducerSource);
+    return new EventProducerSource(
+        RestaurantDeliveries.ENTITY_KEY.name(),
+        STREAM_ID,
+        transformation,
+        EventProducerSettings.create(system));
   }
 
   private static CompletionStage<Optional<DeliveryRegistered>> transformDeliveryRegistration(

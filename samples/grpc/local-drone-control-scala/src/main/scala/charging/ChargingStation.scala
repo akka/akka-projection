@@ -72,7 +72,8 @@ object ChargingStation {
 
   private val FullChargeTime = 5.minutes
 
-  // FIXME This is the only difference from the cloud one, maybe include in both and keep the RES identical?
+  /** Init for running in edge node, this is the only difference from the ChargingStation
+   * in restaurant-deliveries-service */
   def initEdge(locationId: String)(
       implicit system: ActorSystem[_]): EdgeReplication[Command] = {
     val replicationSettings =
@@ -192,7 +193,7 @@ class ChargingStation(
           context.log.info("Drone {} completed charging", droneId)
           Effect.persist(ChargingCompleted(droneId))
         } else {
-
+          Effect.none
         }
 
       case GetState(replyTo) =>

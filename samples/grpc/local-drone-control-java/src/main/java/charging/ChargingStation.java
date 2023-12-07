@@ -9,7 +9,9 @@ import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.TimerScheduler;
+import akka.persistence.typed.ReplicaId;
 import akka.persistence.typed.javadsl.*;
+import akka.projection.grpc.replication.javadsl.EdgeReplication;
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
 import akka.projection.grpc.replication.javadsl.Replication;
 import akka.projection.grpc.replication.javadsl.ReplicationSettings;
@@ -52,7 +54,7 @@ public class ChargingStation
     }
   }
 
-  interface StartChargingResponse extends CborSerializable {}
+  public interface StartChargingResponse extends CborSerializable {}
 
   public static final class AllSlotsBusy implements StartChargingResponse {
     public final Instant firstSlotFreeAt;
@@ -137,13 +139,16 @@ public class ChargingStation
 
   private static final Duration FULL_CHARGE_TIME = Duration.ofMinutes(5);
 
-  public static Replication<Command> init(ActorSystem<?> system) {
+  /**
+   * Init for running in edge node, this is the only difference from the ChargingStation in
+   * restaurant-deliveries-service
+   */
+  public static EdgeReplication<Command> initEdge(ActorSystem<?> system, String locationId) {
     var replicationSettings =
         ReplicationSettings.create(
                 Command.class, ENTITY_TYPE, R2dbcReplication.create(system), system)
-            // FIXME remove once release out with flag in config (1.5.1-M2/GA)
-            .withEdgeReplication(true);
-    return Replication.grpcReplication(replicationSettings, ChargingStation::create, system);
+            .withSelfReplicaId(new ReplicaId(locationId));
+    return Replication.grpcEdgeReplication(replicationSettings, ChargingStation::create, system);
   }
 
   public static Behavior<Command> create(
@@ -153,13 +158,8 @@ public class ChargingStation
             Behaviors.withTimers(
                 (TimerScheduler<Command> timers) ->
                     replicatedBehaviors.setup(
-                        replicationContext -> {
-                          context.getLog().info(
-                              "Charging Station {} starting up",
-                              replicationContext.entityId());
-                          return new ChargingStation(context, replicationContext, timers)
-                        })
-                ));
+                        replicationContext ->
+                            new ChargingStation(context, replicationContext, timers))));
   }
 
   private static Duration durationUntil(Instant instant) {

@@ -163,6 +163,7 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- for using predefined protobuf message types, see also maven dependency plugin config below -->
         <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
@@ -253,7 +254,9 @@
                 <configuration>
                     <language>Java</language>
                     <protoPaths>
+                        <!-- include predefined google protobuf message types -->
                         <protoPath>target/proto</protoPath>
+                        <!-- our own protobuf messages and gRPC services -->
                         <protoPath>src/main/protobuf</protoPath>
                     </protoPaths>
                 </configuration>
