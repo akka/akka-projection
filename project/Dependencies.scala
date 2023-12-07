@@ -86,7 +86,7 @@ object Dependencies {
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
 
-    val logback = "ch.qos.logback" % "logback-classic" % "1.2.13" % allTestConfig
+    val logback = "ch.qos.logback" % "logback-classic" % "1.4.14" % allTestConfig
 
     val cassandraContainer =
       "org.testcontainers" % "cassandra" % Versions.testContainers % allTestConfig

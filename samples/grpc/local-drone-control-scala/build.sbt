@@ -2,8 +2,7 @@ name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(
-  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
@@ -69,7 +68,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.2.13",
+  "ch.qos.logback" % "logback-classic" % "1.4.14",
   "org.scalatest" %% "scalatest" % "3.1.2" % Test,
   // Prometheus client for custom metrics
   "io.prometheus" % "simpleclient" % "0.16.0",
@@ -105,8 +104,9 @@ nativeImageOptions := Seq(
 
 NativeImage / mainClass := sys.props
   .get("native.mode")
-  .collect { case "clustered" =>
-    "local.drones.ClusteredMain"
+  .collect {
+    case "clustered" =>
+      "local.drones.ClusteredMain"
   }
   .orElse((Compile / run / mainClass).value)
 
