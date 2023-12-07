@@ -28,6 +28,9 @@ import akka.projection.grpc.producer.javadsl.EventProducer
 import akka.projection.grpc.producer.javadsl.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
 
+import java.util.Optional
+import scala.jdk.OptionConverters.RichOption
+
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
  * replication stream consumers but not the replication endpoint needed to publish events to other replication places.
@@ -55,7 +58,7 @@ trait Replication[Command] {
    * and possibly also regular projections into one producer push destination handler in a set passed to
    * EventProducerPushDestination.grpcServiceHandler to create a single gRPC endpoint.
    */
-  def eventProducerPushDestination: Option[EventProducerPushDestination]
+  def eventProducerPushDestination: Optional[EventProducerPushDestination]
 
   /**
    * If only replicating one Replicated Event Sourced Entity and not using
@@ -126,8 +129,8 @@ object Replication {
 
       override def eventProducerSource: EventProducerSource = jEventProducerSource
 
-      override def eventProducerPushDestination: Option[EventProducerPushDestination] =
-        scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala)
+      override def eventProducerPushDestination: Optional[EventProducerPushDestination] =
+        scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).toJava
 
       override def createSingleServiceHandler(): JFunction[HttpRequest, CompletionStage[HttpResponse]] =
         EventProducer.grpcServiceHandler(system, jEventProducerSource)
