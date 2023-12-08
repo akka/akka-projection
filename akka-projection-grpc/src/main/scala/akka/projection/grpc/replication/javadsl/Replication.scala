@@ -29,7 +29,7 @@ import akka.projection.grpc.producer.javadsl.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
 
 import java.util.Optional
-import scala.jdk.OptionConverters.RichOption
+import scala.compat.java8.OptionConverters._
 
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
@@ -130,7 +130,7 @@ object Replication {
       override def eventProducerSource: EventProducerSource = jEventProducerSource
 
       override def eventProducerPushDestination: Optional[EventProducerPushDestination] =
-        scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).toJava
+        scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).asJava
 
       override def createSingleServiceHandler(): JFunction[HttpRequest, CompletionStage[HttpResponse]] =
         EventProducer.grpcServiceHandler(system, jEventProducerSource)
