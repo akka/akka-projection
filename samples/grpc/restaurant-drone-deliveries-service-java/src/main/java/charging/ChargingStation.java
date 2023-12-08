@@ -17,6 +17,7 @@ import akka.projection.grpc.replication.javadsl.Replication;
 import akka.projection.grpc.replication.javadsl.ReplicationSettings;
 import akka.projection.r2dbc.javadsl.R2dbcReplication;
 import akka.serialization.jackson.CborSerializable;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -56,6 +57,7 @@ public class ChargingStation
   public static final class AllSlotsBusy implements StartChargingResponse {
     public final Instant firstSlotFreeAt;
 
+    @JsonCreator
     public AllSlotsBusy(Instant firstSlotFreeAt) {
       this.firstSlotFreeAt = firstSlotFreeAt;
     }
@@ -64,6 +66,7 @@ public class ChargingStation
   public static final class GetState implements Command {
     public final ActorRef<StatusReply<State>> replyTo;
 
+    @JsonCreator
     public GetState(ActorRef<StatusReply<State>> replyTo) {
       this.replyTo = replyTo;
     }
@@ -72,6 +75,7 @@ public class ChargingStation
   private static final class CompleteCharging implements Command {
     final String droneId;
 
+    @JsonCreator
     public CompleteCharging(String droneId) {
       this.droneId = droneId;
     }
@@ -103,6 +107,7 @@ public class ChargingStation
   public static final class ChargingCompleted implements Event {
     public final String droneId;
 
+    @JsonCreator
     public ChargingCompleted(String droneId) {
       this.droneId = droneId;
     }
@@ -272,12 +277,7 @@ public class ChargingStation
   private Effect<Event, State> handleStartCharging(State state, StartCharging startCharging) {
     if (state.dronesCharging.stream()
         .anyMatch(charging -> charging.droneId.equals(startCharging.droneId))) {
-      context
-          .getLog()
-          .warn(
-              "Drone {} requested charging but is already charging. Ignoring.",
-              startCharging.droneId);
-      return Effect().none();
+      return Effect().reply(startCharging.replyTo, StatusReply.error("Drone already charging"));
     } else if (state.dronesCharging.size() >= state.chargingSlots) {
       var earliestFreeSlot =
           state.dronesCharging.stream()
