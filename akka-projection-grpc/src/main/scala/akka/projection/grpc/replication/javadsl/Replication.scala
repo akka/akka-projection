@@ -227,7 +227,7 @@ object Replication {
       override def entityTypeKey: EntityTypeKey[Command] =
         scalaReplication.entityTypeKey.asJava
 
-      override def entityRefFactory: java.util.function.Function[String, EntityRef[Command]] =
+      override def entityRefFactory: JFunction[String, EntityRef[Command]] =
         (entityId: String) => scalaReplication.entityRefFactory.apply(entityId).asJava
 
       override def toString: String = scalaReplication.toString
