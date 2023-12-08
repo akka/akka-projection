@@ -10,6 +10,7 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.TimerScheduler
+import akka.pattern.StatusReply
 import akka.persistence.typed.RecoveryCompleted
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
@@ -35,17 +36,18 @@ object ChargingStation {
   case class Create(
       locationId: String,
       chargingSlots: Int,
-      replyTo: ActorRef[Done])
+      replyTo: ActorRef[StatusReply[Done]])
       extends Command
   case class StartCharging(
       droneId: String,
-      replyTo: ActorRef[StartChargingResponse])
+      replyTo: ActorRef[StatusReply[StartChargingResponse]])
       extends Command
-  sealed trait StartChargingResponse
+  sealed trait StartChargingResponse extends CborSerializable
   case class AllSlotsBusy(firstSlotFreeAt: Instant)
       extends StartChargingResponse
 
-  case class GetState(replyTo: ActorRef[ChargingStation.State]) extends Command
+  case class GetState(replyTo: ActorRef[StatusReply[ChargingStation.State]])
+      extends Command
 
   private case class CompleteCharging(droneId: String) extends Command
 
@@ -72,14 +74,28 @@ object ChargingStation {
 
   private val FullChargeTime = 5.minutes
 
-  /** Init for running in edge node, this is the only difference from the ChargingStation
-   * in restaurant-deliveries-service */
+  /**
+   * Init for running in edge node, this is the only difference from the ChargingStation
+   * in restaurant-deliveries-service
+   */
   def initEdge(locationId: String)(
       implicit system: ActorSystem[_]): EdgeReplication[Command] = {
     val replicationSettings =
       ReplicationSettings[Command](EntityType, R2dbcReplication())
         .withSelfReplicaId(ReplicaId(locationId))
     Replication.grpcEdgeReplication(replicationSettings)(ChargingStation.apply)
+  }
+
+  /**
+   * Init for running in cloud replica
+   */
+  def init(implicit system: ActorSystem[_]): Replication[Command] = {
+    // FIXME replication filter so only charging stations in a given edge replica is replicated there
+    val replicationSettings =
+      ReplicationSettings[Command](EntityType, R2dbcReplication())
+        // FIXME remove once release out with flag in config (1.5.1-M2/GA)
+        .withEdgeReplication(true)
+    Replication.grpcReplication(replicationSettings)(ChargingStation.apply)
   }
 
   def apply(
@@ -138,7 +154,15 @@ class ChargingStation(
       case Create(locationId, chargingSlots, replyTo) =>
         Effect
           .persist(Created(locationId, chargingSlots))
-          .thenReply(replyTo)(_ => Done)
+          .thenReply(replyTo)(_ => StatusReply.Ack)
+      case StartCharging(_, replyTo) =>
+        Effect.reply(replyTo)(
+          StatusReply.Error(
+            s"Charging station ${replicationContext.entityId} not initialized"))
+      case GetState(replyTo) =>
+        Effect.reply(replyTo)(
+          StatusReply.Error(
+            s"Charging station ${replicationContext.entityId} not initialized"))
       case unexpected =>
         context.log.warn(
           "Got an unexpected command {} but charging station with id {} not initialized",
@@ -151,11 +175,9 @@ class ChargingStation(
       state: ChargingStation.State,
       command: ChargingStation.Command): Effect[Event, Option[State]] = {
     command match {
-      case Create(_, _, _) =>
-        context.log.warn(
-          "Got a create command, but station id {} was already created, ignoring",
-          replicationContext.entityId)
-        Effect.none
+      case Create(_, _, replyTo) =>
+        Effect.reply(replyTo)(StatusReply.Error(
+          s"Got a create command, but station id ${replicationContext.entityId} was already created"))
 
       case StartCharging(droneId, replyTo) =>
         if (state.dronesCharging.exists(_.droneId == droneId)) {
@@ -169,7 +191,8 @@ class ChargingStation(
             "Drone {} requested charging but all stations busy, earliest free slot {}",
             droneId,
             earliestFreeSlot)
-          Effect.reply(replyTo)(AllSlotsBusy(earliestFreeSlot))
+          Effect.reply(replyTo)(
+            StatusReply.Success(AllSlotsBusy(earliestFreeSlot)))
         } else {
           // charge
           val chargeCompletedBy =
@@ -184,7 +207,7 @@ class ChargingStation(
               CompleteCharging(droneId),
               durationUntil(chargeCompletedBy))
             // Note: The event is also the reply
-            replyTo ! event
+            replyTo ! StatusReply.Success(event)
           }
         }
 
@@ -197,7 +220,7 @@ class ChargingStation(
         }
 
       case GetState(replyTo) =>
-        Effect.reply(replyTo)(state)
+        Effect.reply(replyTo)(StatusReply.Success(state))
 
     }
   }
@@ -234,6 +257,8 @@ class ChargingStation(
   }
 
   private def handleRecoveryCompleted(state: State): Unit = {
+    // FIXME this scheme is not quite reliable, because station is not remembered/restarted
+    //       until next new event/command if edge system is shut down/restarted
     // Complete or set up timers for completion for drones charging,
     // but only if the charging was initiated in this replica
     val now = Instant.now()

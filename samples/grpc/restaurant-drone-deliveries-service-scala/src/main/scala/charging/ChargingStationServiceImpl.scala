@@ -39,7 +39,7 @@ class ChargingStationServiceImpl(
     log.info("Get charging station {} state", in.chargingStationId)
     val entityRef = entityRefFactory(in.chargingStationId)
     entityRef
-      .ask(ChargingStation.GetState.apply)
+      .askWithStatus(ChargingStation.GetState.apply)
       .map(state =>
         proto.GetChargingStationStateResponse(
           locationId = state.stationLocationId,

@@ -94,19 +94,20 @@ class DroneServiceImpl(
       in.droneId,
       in.chargingStationId)
     val entityRef = chargingStationEntityRefFactory(in.chargingStationId)
-    entityRef
-      .ask[ChargingStation.StartChargingResponse](
+    val response = entityRef
+      .askWithStatus[ChargingStation.StartChargingResponse](
         ChargingStation.StartCharging(in.droneId, _))
       .map {
         case ChargingStation.ChargingStarted(_, chargeComplete) =>
           proto.ChargingResponse(
-            ChargingResponse.Response.Started(
-              proto.ChargingStarted(Some(Timestamp(chargeComplete)))))
+            proto.ChargingResponse.Response
+              .Started(proto.ChargingStarted(Some(Timestamp(chargeComplete)))))
         case ChargingStation.AllSlotsBusy(comeBackAt) =>
           proto.ChargingResponse(
-            ChargingResponse.Response.ComeBackLater(
-              proto.ComeBackLater(Some(Timestamp(comeBackAt)))))
+            proto.ChargingResponse.Response
+              .ComeBackLater(proto.ComeBackLater(Some(Timestamp(comeBackAt)))))
       }
+    convertError(response)
   }
 
   private def convertError[T](response: Future[T]): Future[T] = {
