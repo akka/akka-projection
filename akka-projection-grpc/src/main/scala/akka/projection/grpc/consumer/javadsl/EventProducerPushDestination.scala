@@ -21,6 +21,7 @@ import akka.projection.grpc.consumer.scaladsl
 import akka.util.ccompat.JavaConverters._
 import akka.japi.function.{ Function => JapiFunction }
 import akka.projection.grpc.internal.ProtoAnySerialization.Prefer
+import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import com.google.protobuf.Descriptors
 
 import java.util.Collections
@@ -64,7 +65,8 @@ object EventProducerPushDestination {
       Optional.empty(),
       Collections.emptyList(),
       protobufDescriptors,
-      EventProducerPushDestinationSettings.create(system))
+      EventProducerPushDestinationSettings.create(system),
+      None)
 
   def grpcServiceHandler(
       eventConsumer: EventProducerPushDestination,
@@ -104,7 +106,8 @@ object EventProducerPushDestination {
         .toJava,
       scalaDestination.filters.asJava,
       scalaDestination.protobufDescriptors.asJava,
-      scalaDestination.settings)
+      scalaDestination.settings,
+      scalaDestination.replicationSettings)
 
 }
 
@@ -116,7 +119,10 @@ final class EventProducerPushDestination private (
     val interceptor: Optional[EventDestinationInterceptor],
     val filters: java.util.List[FilterCriteria],
     val protobufDescriptors: JList[Descriptors.FileDescriptor],
-    val settings: EventProducerPushDestinationSettings) {
+    val settings: EventProducerPushDestinationSettings,
+    /** INTERNAL API */
+    @InternalApi
+    private[akka] val replicationSettings: Option[ReplicationSettings[_]]) {
   def withInterceptor(interceptor: EventDestinationInterceptor): EventProducerPushDestination =
     copy(interceptor = Optional.of(interceptor))
 
@@ -167,7 +173,8 @@ final class EventProducerPushDestination private (
       interceptor,
       filters,
       protobufDescriptors,
-      settings)
+      settings,
+      replicationSettings)
 
   /**
    * INTERNAL API
@@ -183,5 +190,5 @@ final class EventProducerPushDestination private (
       filters.asScala.toVector,
       protobufDescriptors.asScala.toVector,
       settings,
-      None)
+      replicationSettings)
 }
