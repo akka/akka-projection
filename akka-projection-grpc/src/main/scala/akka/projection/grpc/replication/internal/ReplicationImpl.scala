@@ -285,6 +285,10 @@ private[akka] object ReplicationImpl {
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
 
+    if (settings.initialConsumerFilter.nonEmpty) {
+      ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(settings.streamId, settings.initialConsumerFilter)
+    }
+
     // sharded daemon process for consuming event stream from the other replicas
     val shardingEntityRefFactory: String => EntityRef[Command] =
       sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
