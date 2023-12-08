@@ -1,0 +1,3 @@
+# never released
+ProblemFilters.exclude[IncompatibleResultTypeProblem]("akka.projection.grpc.replication.javadsl.EdgeReplication.entityRefFactory")
+ProblemFilters.exclude[ReversedMissingMethodProblem]("akka.projection.grpc.replication.javadsl.EdgeReplication.entityRefFactory")
