@@ -127,34 +127,37 @@ public class DroneServiceImpl implements DroneService {
     logger.info("Requesting charge of {} from {}", in.getDroneId(), in.getChargingStationId());
     var entityRef = chargingStationEntityRefFactory.apply(in.getChargingStationId());
 
-    CompletionStage<ChargingStation.StartChargingResponse> reply =
-        entityRef.ask(
-            (ActorRef<ChargingStation.StartChargingResponse> replyTo) ->
-                new ChargingStation.StartCharging(in.getDroneId(), replyTo),
+    CompletionStage<ChargingStation.StartChargingResponse> chargingStationResponse =
+        entityRef.askWithStatus(
+            replyTo -> new ChargingStation.StartCharging(in.getDroneId(), replyTo),
             settings.askTimeout);
 
-    return reply.thenApply(
-        response -> {
-          if (response instanceof ChargingStation.ChargingStarted) {
-            var chargeComplete = ((ChargingStation.ChargingStarted) response).chargeComplete;
-            return ChargingResponse.newBuilder()
-                .setStarted(
-                    ChargingStarted.newBuilder()
-                        .setDoneBy(instantToProtoTimestamp(chargeComplete))
-                        .build())
-                .build();
-          } else if (response instanceof ChargingStation.AllSlotsBusy) {
-            var firstSlotFreeAt = ((ChargingStation.AllSlotsBusy) response).firstSlotFreeAt;
-            return ChargingResponse.newBuilder()
-                .setComeBackLater(
-                    ComeBackLater.newBuilder()
-                        .setFirstSlotFreeAt(instantToProtoTimestamp(firstSlotFreeAt))
-                        .build())
-                .build();
-          } else {
-            throw new IllegalArgumentException("Unexpected response type " + response.getClass());
-          }
-        });
+    var response =
+        chargingStationResponse.thenApply(
+            message -> {
+              if (message instanceof ChargingStation.ChargingStarted) {
+                var chargeComplete = ((ChargingStation.ChargingStarted) message).chargeComplete;
+                return ChargingResponse.newBuilder()
+                    .setStarted(
+                        ChargingStarted.newBuilder()
+                            .setDoneBy(instantToProtoTimestamp(chargeComplete))
+                            .build())
+                    .build();
+              } else if (message instanceof ChargingStation.AllSlotsBusy) {
+                var firstSlotFreeAt = ((ChargingStation.AllSlotsBusy) message).firstSlotFreeAt;
+                return ChargingResponse.newBuilder()
+                    .setComeBackLater(
+                        ComeBackLater.newBuilder()
+                            .setFirstSlotFreeAt(instantToProtoTimestamp(firstSlotFreeAt))
+                            .build())
+                    .build();
+              } else {
+                throw new IllegalArgumentException(
+                    "Unexpected response type " + message.getClass());
+              }
+            });
+
+    return convertError(response);
   }
 
   private static Timestamp instantToProtoTimestamp(Instant instant) {

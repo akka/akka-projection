@@ -1,7 +1,5 @@
 package charging;
 
-import static akka.Done.done;
-
 import akka.Done;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
@@ -9,8 +7,10 @@ import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.TimerScheduler;
+import akka.pattern.StatusReply;
 import akka.persistence.typed.ReplicaId;
 import akka.persistence.typed.javadsl.*;
+import akka.projection.grpc.consumer.ConsumerFilter;
 import akka.projection.grpc.replication.javadsl.EdgeReplication;
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors;
 import akka.projection.grpc.replication.javadsl.Replication;
@@ -19,10 +19,7 @@ import akka.projection.r2dbc.javadsl.R2dbcReplication;
 import akka.serialization.jackson.CborSerializable;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class ChargingStation
@@ -35,9 +32,9 @@ public class ChargingStation
   public static final class Create implements Command {
     public final String locationId;
     public final int chargingSlots;
-    public final ActorRef<Done> replyTo;
+    public final ActorRef<StatusReply<Done>> replyTo;
 
-    public Create(String locationId, int chargingSlots, ActorRef<Done> replyTo) {
+    public Create(String locationId, int chargingSlots, ActorRef<StatusReply<Done>> replyTo) {
       this.locationId = locationId;
       this.chargingSlots = chargingSlots;
       this.replyTo = replyTo;
@@ -46,9 +43,9 @@ public class ChargingStation
 
   public static final class StartCharging implements Command {
     public final String droneId;
-    public final ActorRef<StartChargingResponse> replyTo;
+    public final ActorRef<StatusReply<StartChargingResponse>> replyTo;
 
-    public StartCharging(String droneId, ActorRef<StartChargingResponse> replyTo) {
+    public StartCharging(String droneId, ActorRef<StatusReply<StartChargingResponse>> replyTo) {
       this.droneId = droneId;
       this.replyTo = replyTo;
     }
@@ -65,9 +62,9 @@ public class ChargingStation
   }
 
   public static final class GetState implements Command {
-    public final ActorRef<State> replyTo;
+    public final ActorRef<StatusReply<State>> replyTo;
 
-    public GetState(ActorRef<State> replyTo) {
+    public GetState(ActorRef<StatusReply<State>> replyTo) {
       this.replyTo = replyTo;
     }
   }
@@ -147,8 +144,23 @@ public class ChargingStation
     var replicationSettings =
         ReplicationSettings.create(
                 Command.class, ENTITY_TYPE, R2dbcReplication.create(system), system)
-            .withSelfReplicaId(new ReplicaId(locationId));
+            .withSelfReplicaId(new ReplicaId(locationId))
+            .withInitialConsumerFilter(
+                List.of(
+                    // only replicate charging stations local to the edge system
+                    ConsumerFilter.excludeAll(),
+                    new ConsumerFilter.IncludeTopics(Set.of(locationId))));
     return Replication.grpcEdgeReplication(replicationSettings, ChargingStation::create, system);
+  }
+
+  /** Init for running in cloud replica */
+  public static Replication<Command> init(ActorSystem<?> system) {
+    var replicationSettings =
+        ReplicationSettings.create(
+                Command.class, ENTITY_TYPE, R2dbcReplication.create(system), system)
+            // FIXME remove once release out with flag in config (1.5.1-M2/GA)
+            .withEdgeReplication(true);
+    return Replication.grpcReplication(replicationSettings, ChargingStation::create, system);
   }
 
   public static Behavior<Command> create(
@@ -199,8 +211,27 @@ public class ChargingStation
                 (state, create) ->
                     Effect()
                         .persist(new Created(create.locationId, create.chargingSlots))
-                        .thenReply(create.replyTo, stateAfter -> done()))
-            // FIXME no catch all for particular state in Java?
+                        .thenReply(create.replyTo, stateAfter -> StatusReply.ack()))
+            .onCommand(
+                StartCharging.class,
+                startCharging ->
+                    Effect()
+                        .reply(
+                            startCharging.replyTo,
+                            StatusReply.error(
+                                "Charging station "
+                                    + getReplicationContext().entityId()
+                                    + " not initialized")))
+            .onCommand(
+                GetState.class,
+                getState ->
+                    Effect()
+                        .reply(
+                            getState.replyTo,
+                            StatusReply.error(
+                                "Charging station "
+                                    + getReplicationContext().entityId()
+                                    + " not initialized")))
             .onCommand(
                 command -> true,
                 unexpected -> {
@@ -218,21 +249,22 @@ public class ChargingStation
             .forNonNullState()
             .onCommand(
                 Create.class,
-                command -> {
-                  context
-                      .getLog()
-                      .warn(
-                          "Got a create command, but station id {} was already created, ignoring",
-                          getReplicationContext().entityId());
-                  return Effect().none();
-                })
+                create ->
+                    Effect()
+                        .reply(
+                            create.replyTo,
+                            StatusReply.error(
+                                "Got a create command, but station id "
+                                    + getReplicationContext().entityId()
+                                    + " was already created")))
             .onCommand(StartCharging.class, this::handleStartCharging)
             .onCommand(
                 CompleteCharging.class,
                 completeCharging ->
                     Effect().persist(new ChargingCompleted(completeCharging.droneId)))
             .onCommand(
-                GetState.class, (state, getState) -> Effect().reply(getState.replyTo, state));
+                GetState.class,
+                (state, getState) -> Effect().reply(getState.replyTo, StatusReply.success(state)));
 
     return noStateHandler.orElse(initializedHandler).build();
   }
@@ -258,7 +290,8 @@ public class ChargingStation
               "Drone {} requested charging but all stations busy, earliest free slot {}",
               startCharging.droneId,
               earliestFreeSlot);
-      return Effect().reply(startCharging.replyTo, new AllSlotsBusy(earliestFreeSlot));
+      return Effect()
+          .reply(startCharging.replyTo, StatusReply.success(new AllSlotsBusy(earliestFreeSlot)));
     } else {
       // charge
       var chargeCompletedBy = Instant.now().plus(FULL_CHARGE_TIME);
@@ -276,7 +309,7 @@ public class ChargingStation
                 timers.startSingleTimer(
                     new CompleteCharging(startCharging.droneId), durationUntil(chargeCompletedBy));
                 // Note: The event is also the reply
-                startCharging.replyTo.tell(event);
+                startCharging.replyTo.tell(StatusReply.success(event));
               });
     }
   }
@@ -328,5 +361,11 @@ public class ChargingStation
                 });
 
     return noStateHandler.orElse(initializedStateHandler).build();
+  }
+
+  @Override
+  public Set<String> tagsFor(State state, Event event) {
+    if (state == null) return Set.of();
+    else return Set.of("t:" + state.stationLocationId);
   }
 }

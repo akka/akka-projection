@@ -1,14 +1,16 @@
 package charging;
 
 import akka.Done;
-import akka.actor.typed.ActorRef;
 import akka.cluster.sharding.typed.javadsl.EntityRef;
+import akka.grpc.GrpcServiceException;
 import central.DeliveriesSettings;
 import charging.proto.*;
 import com.google.protobuf.Timestamp;
+import io.grpc.Status;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -40,12 +42,16 @@ public class ChargingStationServiceImpl implements ChargingStationService {
 
     var entityRef = entityRefFactory.apply(in.getChargingStationId());
 
-    return entityRef
-        .ask(
-            (ActorRef<Done> replyTo) ->
+    CompletionStage<Done> chargingStationReply =
+        entityRef.askWithStatus(
+            replyTo ->
                 new ChargingStation.Create(in.getLocationId(), in.getChargingSlots(), replyTo),
-            askTimeout)
-        .thenApply(done -> CreateChargingStationResponse.getDefaultInstance());
+            askTimeout);
+
+    var response =
+        chargingStationReply.thenApply(done -> CreateChargingStationResponse.getDefaultInstance());
+
+    return convertError(response);
   }
 
   @Override
@@ -54,7 +60,7 @@ public class ChargingStationServiceImpl implements ChargingStationService {
     logger.info("Get charging station {} state", in.getChargingStationId());
     var entityRef = entityRefFactory.apply(in.getChargingStationId());
     return entityRef
-        .ask(ChargingStation.GetState::new, askTimeout)
+        .askWithStatus(ChargingStation.GetState::new, askTimeout)
         .thenApply(
             state ->
                 GetChargingStationStateResponse.newBuilder()
@@ -78,5 +84,17 @@ public class ChargingStationServiceImpl implements ChargingStationService {
         .setSeconds(instant.getEpochSecond())
         .setNanos(instant.getNano())
         .build();
+  }
+
+  private <T> CompletionStage<T> convertError(CompletionStage<T> response) {
+    return response.exceptionally(
+        error -> {
+          if (error instanceof TimeoutException) {
+            throw new GrpcServiceException(
+                Status.UNAVAILABLE.withDescription("Operation timed out"));
+          } else {
+            throw new GrpcServiceException(Status.INTERNAL.withDescription(error.getMessage()));
+          }
+        });
   }
 }
