@@ -10,6 +10,7 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
+import akka.japi.function.{ Function => JApiFunction }
 import akka.cluster.sharding.typed.ReplicatedEntity
 import akka.cluster.sharding.typed.javadsl.Entity
 import akka.cluster.sharding.typed.javadsl.EntityContext
@@ -17,7 +18,6 @@ import akka.cluster.sharding.typed.javadsl.EntityRef
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
-import akka.japi.function.{ Function => JFunction }
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.ReplicationId
 import akka.persistence.typed.internal.ReplicationContextImpl
@@ -28,6 +28,7 @@ import akka.projection.grpc.producer.javadsl.EventProducer
 import akka.projection.grpc.producer.javadsl.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
 
+import java.util.function.{ Function => JFunction }
 import java.util.Optional
 import scala.compat.java8.OptionConverters._
 
@@ -65,7 +66,7 @@ trait Replication[Command] {
    * Akka Projection gRPC this endpoint factory can be used to get a partial function
    * that can be served/bound with an Akka HTTP/2 server
    */
-  def createSingleServiceHandler(): JFunction[HttpRequest, CompletionStage[HttpResponse]]
+  def createSingleServiceHandler(): JApiFunction[HttpRequest, CompletionStage[HttpResponse]]
 
   /**
    * Entity type key for looking up the entities
@@ -76,7 +77,7 @@ trait Replication[Command] {
    * Shortcut for creating EntityRefs for the sharded Replicated Event Sourced entities for
    * sending commands.
    */
-  def entityRefFactory: String => EntityRef[Command]
+  def entityRefFactory: JFunction[String, EntityRef[Command]]
 }
 
 @ApiMayChange
@@ -89,7 +90,7 @@ object Replication {
    */
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
-      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
+      replicatedBehaviorFactory: JApiFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
       system: ActorSystem[_]): Replication[Command] = {
     val scalaReplicationSettings = settings.toScala
 
@@ -132,13 +133,13 @@ object Replication {
       override def eventProducerPushDestination: Optional[EventProducerPushDestination] =
         scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).asJava
 
-      override def createSingleServiceHandler(): JFunction[HttpRequest, CompletionStage[HttpResponse]] =
+      override def createSingleServiceHandler(): JApiFunction[HttpRequest, CompletionStage[HttpResponse]] =
         EventProducer.grpcServiceHandler(system, jEventProducerSource)
 
       override def entityTypeKey: EntityTypeKey[Command] =
         scalaReplication.entityTypeKey.asJava
 
-      override def entityRefFactory: String => EntityRef[Command] =
+      override def entityRefFactory: JFunction[String, EntityRef[Command]] =
         (entityId: String) => scalaReplication.entityRefFactory.apply(entityId).asJava
 
       override def toString: String = scalaReplication.toString
@@ -157,7 +158,7 @@ object Replication {
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
       producerFilter: Predicate[EventEnvelope[Event]],
-      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
+      replicatedBehaviorFactory: JApiFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
       system: ActorSystem[_]): Replication[Command] = {
     grpcReplication(settings.withProducerFilter(producerFilter), replicatedBehaviorFactory, system)
 
@@ -176,7 +177,7 @@ object Replication {
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
       topicExpression: String,
-      replicatedBehaviorFactory: JFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
+      replicatedBehaviorFactory: JApiFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
       system: ActorSystem[_]): Replication[Command] = {
     grpcReplication(settings.withProducerFilterTopicExpression(topicExpression), replicatedBehaviorFactory, system)
   }
@@ -226,7 +227,7 @@ object Replication {
       override def entityTypeKey: EntityTypeKey[Command] =
         scalaReplication.entityTypeKey.asJava
 
-      override def entityRefFactory: JFunction[String, EntityRef[Command]] =
+      override def entityRefFactory: java.util.function.Function[String, EntityRef[Command]] =
         (entityId: String) => scalaReplication.entityRefFactory.apply(entityId).asJava
 
       override def toString: String = scalaReplication.toString
