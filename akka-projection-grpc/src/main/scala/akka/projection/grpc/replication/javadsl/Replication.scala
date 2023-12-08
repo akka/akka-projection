@@ -220,17 +220,17 @@ object Replication {
               }))
           .toScala)
 
-    val scalaReplication =
-      ReplicationImpl.grpcReplication[Command, Event, State](scalaReplicationSettings, replicatedEntity)(system)
+    val scalaEdgeReplication =
+      ReplicationImpl.grpcEdgeReplication[Command](scalaReplicationSettings, replicatedEntity)(system)
 
     new EdgeReplication[Command] {
       override def entityTypeKey: EntityTypeKey[Command] =
-        scalaReplication.entityTypeKey.asJava
+        scalaEdgeReplication.entityTypeKey.asJava
 
       override def entityRefFactory: JFunction[String, EntityRef[Command]] =
-        (entityId: String) => scalaReplication.entityRefFactory.apply(entityId).asJava
+        (entityId: String) => scalaEdgeReplication.entityRefFactory.apply(entityId).asJava
 
-      override def toString: String = scalaReplication.toString
+      override def toString: String = scalaEdgeReplication.toString
     }
   }
 
