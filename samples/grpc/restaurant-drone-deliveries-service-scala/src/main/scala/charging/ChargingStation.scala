@@ -16,6 +16,7 @@ import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplicationContext
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
 import akka.projection.grpc.replication.scaladsl.Replication.EdgeReplication
@@ -83,6 +84,11 @@ object ChargingStation {
     val replicationSettings =
       ReplicationSettings[Command](EntityType, R2dbcReplication())
         .withSelfReplicaId(ReplicaId(locationId))
+        .withInitialConsumerFilter(
+          // only replicate charging stations local to the edge system
+          Seq(
+            ConsumerFilter.excludeAll,
+            ConsumerFilter.IncludeTopics(Set(locationId))))
     Replication.grpcEdgeReplication(replicationSettings)(ChargingStation.apply)
   }
 
@@ -90,7 +96,6 @@ object ChargingStation {
    * Init for running in cloud replica
    */
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
-    // FIXME replication filter so only charging stations in a given edge replica is replicated there
     val replicationSettings =
       ReplicationSettings[Command](EntityType, R2dbcReplication())
         // FIXME remove once release out with flag in config (1.5.1-M2/GA)
@@ -137,7 +142,7 @@ class ChargingStation(
       // tag with location id so we can replicate only to the right edge node
       .withTaggerForState {
         case (None, _)        => Set.empty
-        case (Some(state), _) => Set(state.stationLocationId)
+        case (Some(state), _) => Set("t:" + state.stationLocationId)
       }
 
   private def handleCommand(
