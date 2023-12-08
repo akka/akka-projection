@@ -157,7 +157,12 @@ private[akka] object ReplicationImpl {
 
     val grpcQuerySettings = {
       val s = GrpcQuerySettings(settings.streamId)
-      remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
+      val s2 =
+        if (settings.initialConsumerFilter.isEmpty) s else s.withInitialConsumerFilter(settings.initialConsumerFilter)
+      remoteReplica.additionalQueryRequestMetadata match {
+        case Some(metadata) => s2.withAdditionalRequestMetadata(metadata)
+        case None           => s2
+      }
     }
     val eventsBySlicesQuery = GrpcReadJournal(
       grpcQuerySettings,
