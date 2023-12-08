@@ -8,6 +8,7 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.TimerScheduler;
 import akka.pattern.StatusReply;
+import akka.persistence.typed.RecoveryCompleted;
 import akka.persistence.typed.ReplicaId;
 import akka.persistence.typed.javadsl.*;
 import akka.projection.grpc.consumer.ConsumerFilter;
@@ -25,7 +26,7 @@ import java.util.stream.Collectors;
 
 public class ChargingStation
     extends ReplicatedEventSourcedBehavior<
-        ChargingStation.Command, ChargingStation.Event, ChargingStation.State> {
+    ChargingStation.Command, ChargingStation.Event, ChargingStation.State> {
 
   // commands and replies
   public interface Command extends CborSerializable {}
@@ -265,8 +266,10 @@ public class ChargingStation
             .onCommand(StartCharging.class, this::handleStartCharging)
             .onCommand(
                 CompleteCharging.class,
-                completeCharging ->
-                    Effect().persist(new ChargingCompleted(completeCharging.droneId)))
+                completeCharging -> {
+                  context.getLog().info("Drone {} completed charging", completeCharging.droneId);
+                  return Effect().persist(new ChargingCompleted(completeCharging.droneId));
+                })
             .onCommand(
                 GetState.class,
                 (state, getState) -> Effect().reply(getState.replyTo, StatusReply.success(state)));
@@ -364,8 +367,37 @@ public class ChargingStation
   }
 
   @Override
+  public SignalHandler<State> signalHandler() {
+    return newSignalHandlerBuilder()
+        .onSignal(
+            RecoveryCompleted.class, (state, recoveryCompleted) -> handleRecoveryCompleted(state))
+        .build();
+  }
+
+  @Override
   public Set<String> tagsFor(State state, Event event) {
     if (state == null) return Set.of();
     else return Set.of("t:" + state.stationLocationId);
+  }
+
+  private void handleRecoveryCompleted(State state) {
+    // FIXME this scheme is not quite reliable, because station is not remembered/restarted
+    //       until next new event/command if edge system is shut down/restarted
+    // Complete or set up timers for completion for drones charging,
+    // but only if the charging was initiated in this replica
+    var now = Instant.now();
+    if (state != null) {
+      state.dronesCharging.stream()
+          .filter(d -> d.replicaId.equals(getReplicationContext().replicaId().id()))
+          .forEach(
+              chargingDrone -> {
+                if (chargingDrone.chargingDone.isBefore(now))
+                  context.getSelf().tell(new CompleteCharging(chargingDrone.droneId));
+                else
+                  timers.startSingleTimer(
+                      new CompleteCharging(chargingDrone.droneId),
+                      durationUntil(chargingDrone.chargingDone));
+              });
+    }
   }
 }
