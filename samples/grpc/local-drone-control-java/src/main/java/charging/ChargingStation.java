@@ -158,8 +158,13 @@ public class ChargingStation
             Behaviors.withTimers(
                 (TimerScheduler<Command> timers) ->
                     replicatedBehaviors.setup(
-                        replicationContext ->
-                            new ChargingStation(context, replicationContext, timers))));
+                        replicationContext -> {
+                          context
+                              .getLog()
+                              .info(
+                                  "Charging Station {} starting up", replicationContext.entityId());
+                          return new ChargingStation(context, replicationContext, timers);
+                        })));
   }
 
   private static Duration durationUntil(Instant instant) {
