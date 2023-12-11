@@ -4,12 +4,6 @@
 
 package akka.projection.internal
 
-import java.util.Optional
-import java.util.concurrent.CompletionStage
-import java.util.function.Supplier
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
-import scala.concurrent.Future
 import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.annotation.InternalStableApi
@@ -17,8 +11,15 @@ import akka.dispatch.ExecutionContexts
 import akka.projection.BySlicesSourceProvider
 import akka.projection.javadsl
 import akka.projection.scaladsl
-import akka.stream.scaladsl.Source
 import akka.stream.javadsl.{ Source => JSource }
+import akka.stream.scaladsl.Source
+
+import java.util.Optional
+import java.util.concurrent.CompletionStage
+import java.util.function.Supplier
+import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
+import scala.concurrent.Future
 
 /**
  * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider

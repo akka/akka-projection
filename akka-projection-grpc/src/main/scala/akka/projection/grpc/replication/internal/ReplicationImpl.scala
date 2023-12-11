@@ -110,6 +110,7 @@ private[akka] object ReplicationImpl {
     settings.otherReplicas.foreach(startConsumer(_, settings, entityRefFactory))
 
     if (settings.acceptEdgeReplication) {
+      // Note: duplicated in the Java Replication
       val pushDestination =
         EventProducerPushDestination(settings.streamId, protobufDescriptors = Nil).withEdgeReplication(settings)
       new ReplicationImpl[Command](

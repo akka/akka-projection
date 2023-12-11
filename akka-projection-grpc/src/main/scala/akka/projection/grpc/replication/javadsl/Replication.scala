@@ -16,6 +16,7 @@ import akka.cluster.sharding.typed.javadsl.Entity
 import akka.cluster.sharding.typed.javadsl.EntityContext
 import akka.cluster.sharding.typed.javadsl.EntityRef
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey
+import akka.grpc.javadsl.ServiceHandler
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.persistence.query.typed.EventEnvelope
@@ -125,16 +126,25 @@ object Replication {
       scalaReplication.eventProducerService.transformation.toJava,
       scalaReplication.eventProducerService.settings)
 
+    val jEventProducerPushDestination =
+      scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).asJava
     new Replication[Command] {
       override def eventProducerService: EventProducerSource = jEventProducerSource
 
       override def eventProducerSource: EventProducerSource = jEventProducerSource
 
       override def eventProducerPushDestination: Optional[EventProducerPushDestination] =
-        scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).asJava
+        jEventProducerPushDestination
 
-      override def createSingleServiceHandler(): JApiFunction[HttpRequest, CompletionStage[HttpResponse]] =
-        EventProducer.grpcServiceHandler(system, jEventProducerSource)
+      override def createSingleServiceHandler(): JApiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
+        val handler = EventProducer.grpcServiceHandler(system, jEventProducerSource)
+        if (jEventProducerPushDestination.isPresent) {
+          // Fold in edge push gRPC consumer service if enabled
+          val eventProducerPushHandler =
+            EventProducerPushDestination.grpcServiceHandler(jEventProducerPushDestination.get(), system)
+          ServiceHandler.concatOrNotFound(handler, eventProducerPushHandler)
+        } else handler
+      }
 
       override def entityTypeKey: EntityTypeKey[Command] =
         scalaReplication.entityTypeKey.asJava
@@ -193,9 +203,10 @@ object Replication {
    *
    * An edge replica can connect to more than one cloud replica for redundancy (but only one is required).
    */
-  def grpcEdgeReplication[Command, Event, State](settings: ReplicationSettings[Command])(
-      replicatedBehaviorFactory: ReplicatedBehaviors[Command, Event, State] => Behavior[Command])(
-      implicit system: ActorSystem[_]): EdgeReplication[Command] = {
+  def grpcEdgeReplication[Command, Event, State](
+      settings: ReplicationSettings[Command],
+      replicatedBehaviorFactory: JApiFunction[ReplicatedBehaviors[Command, Event, State], Behavior[Command]],
+      system: ActorSystem[_]): EdgeReplication[Command] = {
     val scalaReplicationSettings = settings.toScala
 
     val replicatedEntity =
