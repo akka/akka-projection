@@ -77,6 +77,7 @@ private[akka] object EventPusherConsumerServiceImpl {
 
           { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
             if (envelope.filtered) {
+              log.trace("Ignoring filtered event [{}] for pid [{}]", envelope.sequenceNr, envelope.persistenceId)
               Future.successful(Done)
             } else {
               envelope.eventMetadata match {
@@ -90,7 +91,11 @@ private[akka] object EventPusherConsumerServiceImpl {
                   val entityRef = sharding
                     .entityRefFor(replicationSettings.entityTypeKey, destinationReplicaId.entityId)
                     .asInstanceOf[EntityRef[PublishedEvent]]
-                  val ask = () =>
+                  val ask = { () =>
+                    log.trace(
+                      "Passing event [{}] for pid [{}] to replicated entity",
+                      envelope.sequenceNr,
+                      envelope.persistenceId)
                     entityRef.ask[Done](
                       replyTo =>
                         PublishedEventImpl(
@@ -103,6 +108,7 @@ private[akka] object EventPusherConsumerServiceImpl {
                               replicatedEventMetadata.originReplica,
                               replicatedEventMetadata.version)),
                           Some(replyTo)))
+                  }
 
                   // try a few times before tearing stream down, forcing the client to restart/reconnect
                   val askResult = akka.pattern.retry(
@@ -128,6 +134,7 @@ private[akka] object EventPusherConsumerServiceImpl {
           }
 
         case None => { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
+          log.trace("Passing event [{}] for pid [{}] to event writer", envelope.sequenceNr, envelope.persistenceId)
           writerForJournal.askWithStatus[EventWriter.WriteAck](
             replyTo =>
               EventWriter.Write(

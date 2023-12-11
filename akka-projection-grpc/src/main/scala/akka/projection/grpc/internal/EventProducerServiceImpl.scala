@@ -133,7 +133,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
       val offset = protocolOffsetToOffset(init.offset)
 
       log.debugN(
-        "Starting eventsBySlices stream [{}], [{}], slices [{} - {}], offset [{}]",
+        "Starting eventsBySlices stream [{}], [{}], slices [{} - {}], offset [{}]{}",
         producerSource.streamId,
         producerSource.entityType,
         init.sliceMin,
@@ -141,7 +141,8 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
         offset match {
           case t: TimestampOffset => t.timestamp
           case _                  => offset
-        })
+        },
+        init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
       val events: Source[EventEnvelope[Any], NotUsed] =
         eventsBySlicesPerStreamId.get(init.streamId) match {
@@ -211,20 +212,24 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
             transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
               .map {
                 case Some(event) =>
-                  log.traceN(
-                    "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
-                    env.persistenceId,
-                    env.sequenceNr,
-                    env.offset,
-                    event.source)
+                  if (log.isTraceEnabled)
+                    log.traceN(
+                      "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+                      env.persistenceId,
+                      env.sequenceNr,
+                      env.offset,
+                      event.source,
+                      init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
                   StreamOut(StreamOut.Message.Event(event))
                 case None =>
-                  log.traceN(
-                    "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
-                    env.persistenceId,
-                    env.sequenceNr,
-                    env.offset,
-                    env.source)
+                  if (log.isTraceEnabled)
+                    log.traceN(
+                      "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+                      env.persistenceId,
+                      env.sequenceNr,
+                      env.offset,
+                      env.source,
+                      init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
                   StreamOut(
                     StreamOut.Message.FilteredEvent(
                       FilteredEvent(
@@ -234,12 +239,14 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                         ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
               }
           } else {
-            log.traceN(
-              "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
-              env.persistenceId,
-              env.sequenceNr,
-              env.offset,
-              env.source)
+            if (log.isTraceEnabled)
+              log.traceN(
+                "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+                env.persistenceId,
+                env.sequenceNr,
+                env.offset,
+                env.source,
+                init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
             Future.successful(
               StreamOut(
                 StreamOut.Message.FilteredEvent(

@@ -10,6 +10,8 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.javadsl.ActorContext
+import akka.actor.typed.javadsl.Behaviors
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
@@ -110,10 +112,12 @@ object ReplicationJavaDSLIntegrationSpec {
 
     case class State(greeting: String, timestamp: LwwTime, tag: String)
 
-    def create(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) =
-      replicatedBehaviors.setup { replicationContext => new LWWHelloWorldBehavior(replicationContext) }
+    def create(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) = {
+      Behaviors.setup[Command](context =>
+        replicatedBehaviors.setup { replicationContext => new LWWHelloWorldBehavior(context, replicationContext) })
+    }
 
-    class LWWHelloWorldBehavior(replicationContext: ReplicationContext)
+    class LWWHelloWorldBehavior(context: ActorContext[Command], replicationContext: ReplicationContext)
         extends EventSourcedBehavior[Command, Event, State](replicationContext.persistenceId) {
       protected def emptyState: State = State.initial
 
@@ -126,6 +130,7 @@ object ReplicationJavaDSLIntegrationSpec {
           })
           .onCommand(
             classOf[SetGreeting], { (state: State, command: SetGreeting) =>
+              context.getLog.info("Request to change greeting to {}", command.newGreeting)
               Effect
                 .persist(
                   GreetingChanged(
@@ -136,6 +141,7 @@ object ReplicationJavaDSLIntegrationSpec {
             })
           .onCommand(
             classOf[SetTag], { (state: State, command: SetTag) =>
+              context.getLog.info("Request to change tag to {}", command.tag)
               Effect
                 .persist(
                   TagChanged(
@@ -151,16 +157,30 @@ object ReplicationJavaDSLIntegrationSpec {
           .forAnyState()
           .onEvent(
             classOf[GreetingChanged], { (currentState: State, event: GreetingChanged) =>
-              if (event.timestamp.isAfter(currentState.timestamp))
+              if (event.timestamp.isAfter(currentState.timestamp)) {
+                context.getLog.info("Changing greeting to {}", event.greeting)
                 State(event.greeting, event.timestamp, currentState.tag)
-              else currentState
+              } else {
+                context.getLog
+                  .info(
+                    "Ignoring greeting change to {} since state was changed after {}",
+                    event.greeting,
+                    currentState.timestamp)
+                currentState
+              }
             })
-          .onEvent(classOf[TagChanged], { (currentState: State, event: TagChanged) =>
-            if (event.timestamp.isAfter(currentState.timestamp)) {
-              State(currentState.greeting, event.timestamp, event.tag)
-            } else currentState
+          .onEvent(
+            classOf[TagChanged], { (currentState: State, event: TagChanged) =>
+              if (event.timestamp.isAfter(currentState.timestamp)) {
+                context.getLog.info("Changing tag to {}", event.tag)
+                State(currentState.greeting, event.timestamp, event.tag)
+              } else {
+                context.getLog
+                  .info("Ignoring tag change to {} since state was changed after {}", event.tag, currentState.timestamp)
+                currentState
+              }
 
-          })
+            })
           .build()
 
       override def tagsFor(state: State, event: Event): util.Set[String] =

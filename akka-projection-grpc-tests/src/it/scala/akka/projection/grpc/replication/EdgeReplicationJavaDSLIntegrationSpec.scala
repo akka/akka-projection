@@ -411,6 +411,7 @@ class EdgeReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf
     }
   }
   "use consumer filter on tag" in {
+    system.log.info("Consumer filter test starting")
     val entityId = nextPid(LWWHelloWorld.EntityType.name).entityId
 
     ConsumerFilter(systemPerDc(EdgeReplicaC)).ref ! UpdateFilter(
@@ -422,6 +423,7 @@ class EdgeReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf
 
     // let the filter propagate to producer
     Thread.sleep(1000)
+    system.log.info("Continuing after setting IncludeTags")
 
     ClusterSharding
       .get(systemPerDc(CloudReplicaA))
@@ -453,6 +455,8 @@ class EdgeReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf
       .ask(LWWHelloWorld.Get(_), askTimeout)
       .toScala
       .futureValue shouldBe "Hello world"
+
+    system.log.info("Verified filter worked, changing tag on entity")
 
     // change tag
     ClusterSharding
