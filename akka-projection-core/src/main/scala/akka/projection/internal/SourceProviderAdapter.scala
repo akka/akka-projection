@@ -8,12 +8,18 @@ import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.annotation.InternalStableApi
 import akka.dispatch.ExecutionContexts
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.javadsl.EventTimestampQuery
+import akka.persistence.query.typed.javadsl.LoadEventQuery
+import akka.persistence.query.typed.scaladsl.{ EventTimestampQuery => ScalaEventTimestampQuery }
+import akka.persistence.query.typed.scaladsl.{ LoadEventQuery => ScalaLoadEventQuery }
 import akka.projection.BySlicesSourceProvider
 import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.stream.javadsl.{ Source => JSource }
 import akka.stream.scaladsl.Source
 
+import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
@@ -49,7 +55,9 @@ import scala.concurrent.Future
 @InternalApi private[projection] class ScalaBySlicesSourceProviderAdapter[Offset, Envelope](
     delegate: scaladsl.SourceProvider[Offset, Envelope] with BySlicesSourceProvider)
     extends javadsl.SourceProvider[Offset, Envelope]
-    with BySlicesSourceProvider {
+    with BySlicesSourceProvider
+    with EventTimestampQuery
+    with LoadEventQuery {
   override def source(
       offset: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[JSource[Envelope, NotUsed]] =
     delegate
@@ -64,4 +72,23 @@ import scala.concurrent.Future
   def minSlice: Int = delegate.minSlice
 
   def maxSlice: Int = delegate.maxSlice
+
+  override def timestampOf(persistenceId: String, sequenceNr: Long): CompletionStage[Optional[Instant]] =
+    delegate match {
+      case etq: ScalaEventTimestampQuery =>
+        etq.timestampOf(persistenceId, sequenceNr).map(_.asJava)(ExecutionContexts.parasitic).toJava
+      case _ =>
+        throw new IllegalStateException(
+          s"timestampOf was called but delegate of type [${delegate.getClass}] does not implement akka.persistence.query.typed.scaladsl.EventTimestampQuery")
+    }
+
+  override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): CompletionStage[EventEnvelope[Event]] =
+    delegate match {
+      case etq: ScalaLoadEventQuery =>
+        etq.loadEnvelope[Event](persistenceId, sequenceNr).toJava
+      case _ =>
+        throw new IllegalStateException(
+          s"loadEnvelope was called but delegate of type [${delegate.getClass}] does not implement akka.persistence.query.typed.scaladsl.LoadEventQuery")
+    }
+
 }
