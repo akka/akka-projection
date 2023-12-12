@@ -27,7 +27,7 @@ import scala.concurrent.duration._
 
 object ChargingStation {
 
-  // commands and replies
+  // #commands
   sealed trait Command extends CborSerializable
   case class Create(
       locationId: String,
@@ -49,8 +49,9 @@ object ChargingStation {
       droneId: String,
       reply: ActorRef[StatusReply[Done]])
       extends Command
+  // #commands
 
-  // events
+  // #events
   sealed trait Event extends CborSerializable
   case class Created(locationId: String, chargingSlots: Int) extends Event
   case class ChargingStarted(droneId: String, expectedComplete: Instant)
@@ -58,6 +59,7 @@ object ChargingStation {
       with StartChargingResponse
 
   case class ChargingCompleted(droneId: String) extends Event
+  // #events
 
   case class ChargingDrone(
       droneId: String,

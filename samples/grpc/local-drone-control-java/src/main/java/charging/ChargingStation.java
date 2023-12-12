@@ -26,7 +26,7 @@ public class ChargingStation
     extends ReplicatedEventSourcedBehavior<
         ChargingStation.Command, ChargingStation.Event, ChargingStation.State> {
 
-  // commands and replies
+  // #commands
   public interface Command extends CborSerializable {}
 
   public static final class Create implements Command {
@@ -81,8 +81,9 @@ public class ChargingStation
       this.replyTo = replyTo;
     }
   }
+  // #commands
 
-  // events
+  // #events
   public interface Event extends CborSerializable {}
 
   public static final class Created implements Event {
@@ -125,7 +126,7 @@ public class ChargingStation
       this.replicaId = replicaId;
     }
   }
-
+  // #events
   public static final class State implements CborSerializable {
     public final int chargingSlots;
     public final Set<ChargingDrone> dronesCharging;
