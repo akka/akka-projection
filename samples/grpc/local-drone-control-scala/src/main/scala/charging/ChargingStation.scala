@@ -61,6 +61,7 @@ object ChargingStation {
   case class ChargingCompleted(droneId: String) extends Event
   // #events
 
+  // #state
   case class ChargingDrone(
       droneId: String,
       expectedComplete: Instant,
@@ -70,6 +71,7 @@ object ChargingStation {
       dronesCharging: Set[ChargingDrone],
       stationLocationId: String)
       extends CborSerializable
+  // #state
 
   val EntityType = "charging-station"
 
@@ -79,6 +81,7 @@ object ChargingStation {
    * Init for running in edge node, this is the only difference from the ChargingStation
    * in restaurant-deliveries-service
    */
+  // #edgeReplicaInit
   def initEdge(locationId: String)(
       implicit system: ActorSystem[_]): EdgeReplication[Command] = {
     val replicationSettings =
@@ -91,10 +94,12 @@ object ChargingStation {
             ConsumerFilter.IncludeTopics(Set(locationId))))
     Replication.grpcEdgeReplication(replicationSettings)(ChargingStation.apply)
   }
+  // #edgeReplicaInit
 
   /**
    * Init for running in cloud replica
    */
+  // #replicaInit
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
     val replicationSettings =
       ReplicationSettings[Command](EntityType, R2dbcReplication())
@@ -102,6 +107,7 @@ object ChargingStation {
         .withEdgeReplication(true)
     Replication.grpcReplication(replicationSettings)(ChargingStation.apply)
   }
+  // #replicaInit
 
   def apply(
       replicatedBehaviors: ReplicatedBehaviors[Command, Event, Option[State]])
@@ -130,11 +136,14 @@ class ChargingStation(
       handleCommand,
       handleEvent)
       // tag with location id so we can replicate only to the right edge node
+      // #tagging
       .withTaggerForState {
         case (None, _)        => Set.empty
         case (Some(state), _) => Set("t:" + state.stationLocationId)
       }
+  // #tagging
 
+  // #commandHandler
   private def handleCommand(
       state: Option[State],
       command: Command): Effect[Event, Option[State]] =
@@ -219,7 +228,9 @@ class ChargingStation(
 
     }
   }
+  // #commandHandler
 
+  // #eventHandler
   private def handleEvent(state: Option[State], event: Event): Option[State] = {
     state match {
       case None =>
@@ -250,5 +261,6 @@ class ChargingStation(
 
     }
   }
+  // #eventHandler
 
 }

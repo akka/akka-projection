@@ -50,6 +50,8 @@ public class Main {
     var deliveryEventsProducerSource = DeliveryEvents.eventProducerSource(system);
     var droneOverviewService = new DroneOverviewServiceImpl(system, settings);
     var restaurantDeliveriesService = new RestaurantDeliveriesServiceImpl(system, settings);
+
+    // #replicationEndpoint
     var chargingStationService =
         new ChargingStationServiceImpl(
             settings,
@@ -74,6 +76,7 @@ public class Main {
                 pushedEventsDestination,
                 chargingStationReplication.eventProducerPushDestination().get()),
             system);
+    // #replicationEndpoint
 
     DroneDeliveriesServer.start(
         system,

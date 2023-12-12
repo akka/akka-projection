@@ -87,6 +87,7 @@ class DroneServiceImpl(
       .map(_ => Empty.defaultInstance)
   }
 
+  // #charging
   override def goCharge(
       in: proto.GoChargeRequest): Future[proto.ChargingResponse] = {
     logger.info(
@@ -109,6 +110,8 @@ class DroneServiceImpl(
       }
     convertError(response)
   }
+  // #charging
+
 
   override def completeCharge(in: proto.CompleteChargeRequest)
       : Future[proto.CompleteChargingResponse] = {

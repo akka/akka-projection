@@ -122,6 +122,7 @@ public class DroneServiceImpl implements DroneService {
     return convertError(reply);
   }
 
+  // #charging
   @Override
   public CompletionStage<ChargingResponse> goCharge(GoChargeRequest in) {
     logger.info("Requesting charge of {} from {}", in.getDroneId(), in.getChargingStationId());
@@ -176,7 +177,7 @@ public class DroneServiceImpl implements DroneService {
 
     return convertError(response);
   }
-
+  // #charging
   private static Timestamp instantToProtoTimestamp(Instant instant) {
     return Timestamp.newBuilder()
         .setSeconds(instant.getEpochSecond())

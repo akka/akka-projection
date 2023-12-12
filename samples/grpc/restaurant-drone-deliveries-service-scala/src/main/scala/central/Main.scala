@@ -55,6 +55,7 @@ object Main {
     val restaurantDeliveriesService =
       new RestaurantDeliveriesServiceImpl(system, settings)
 
+    // #replicationEndpoint
     val chargingStationService = new ChargingStationServiceImpl(
       chargingStationReplication.entityRefFactory)
 
@@ -71,6 +72,7 @@ object Main {
       Set(
         pushedEventsDestination,
         chargingStationReplication.eventProducerPushDestination.get))(system)
+    // #replicationEndpoint
 
     DroneDeliveriesServer.start(
       interface,
