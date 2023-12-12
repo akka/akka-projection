@@ -113,7 +113,6 @@ object Replication {
                         factory
                           .apply(replicationContext.asInstanceOf[ReplicationContext])
                           .createEventSourcedBehavior()
-                          // MEH
                           .withReplication(replicationContext.asInstanceOf[ReplicationContextImpl])))
               }))
           .toScala)

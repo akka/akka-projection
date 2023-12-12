@@ -2,35 +2,45 @@
  * Copyright (C) 2022 - 2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.projection.r2dbc.internal
+package akka.projection.internal
+
+import akka.NotUsed
+import akka.annotation.InternalApi
+import akka.dispatch.ExecutionContexts
+import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.scaladsl.EventTimestampQuery
+import akka.persistence.query.typed.scaladsl.LoadEventQuery
+import akka.projection.BySlicesSourceProvider
+import akka.projection.javadsl
+import akka.projection.scaladsl
+import akka.stream.scaladsl.Source
 
 import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
-
-import scala.concurrent.Future
-
-import akka.NotUsed
-import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
-import akka.projection.javadsl
-import akka.projection.scaladsl
-import akka.stream.scaladsl.Source
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
-
-import akka.persistence.query.typed.EventEnvelope
-import akka.persistence.query.typed.scaladsl.EventTimestampQuery
-import akka.persistence.query.typed.scaladsl.LoadEventQuery
-import akka.projection.BySlicesSourceProvider
-import akka.projection.internal.CanTriggerReplay
+import scala.concurrent.Future
+@InternalApi private[projection] object JavaToScalaBySliceSourceProviderAdapter {
+  def apply[Offset, Envelope](
+      delegate: javadsl.SourceProvider[Offset, Envelope]): scaladsl.SourceProvider[Offset, Envelope] =
+    delegate match {
+      case adapted: ScalaToJavaBySlicesSourceProviderAdapter[_, _] =>
+        // just unwrap rather than wrapping further
+        adapted.delegate
+      case delegate: BySlicesSourceProvider with CanTriggerReplay =>
+        new JavaToScalaBySliceSourceProviderAdapterWithCanTriggerReplay(delegate)
+      case _: BySlicesSourceProvider => new JavaToScalaBySliceSourceProviderAdapter(delegate)
+      case _                         => new JavaToScalaSourceProviderAdapter(delegate)
+    }
+}
 
 /**
  * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
  */
-@InternalApi private[projection] class BySliceSourceProviderAdapter[Offset, Envelope](
-    delegate: javadsl.SourceProvider[Offset, Envelope])
+@InternalApi private[projection] sealed class JavaToScalaBySliceSourceProviderAdapter[Offset, Envelope] private[internal] (
+    val delegate: javadsl.SourceProvider[Offset, Envelope])
     extends scaladsl.SourceProvider[Offset, Envelope]
     with BySlicesSourceProvider
     with EventTimestampQuery
@@ -84,9 +94,10 @@ import akka.projection.internal.CanTriggerReplay
  * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider that also implements
  * CanTriggerReplay
  */
-@InternalApi private[projection] class BySliceSourceProviderAdapterWithCanTriggerReplay[Offset, Envelope](
+@InternalApi
+private[projection] final class JavaToScalaBySliceSourceProviderAdapterWithCanTriggerReplay[Offset, Envelope] private[internal] (
     delegate: javadsl.SourceProvider[Offset, Envelope] with CanTriggerReplay)
-    extends BySliceSourceProviderAdapter[Offset, Envelope](delegate)
+    extends JavaToScalaBySliceSourceProviderAdapter[Offset, Envelope](delegate)
     with CanTriggerReplay {
   override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
     delegate.triggerReplay(persistenceId, fromSeqNr)
