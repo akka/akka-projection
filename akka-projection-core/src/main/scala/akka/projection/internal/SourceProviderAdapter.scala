@@ -57,7 +57,8 @@ import scala.concurrent.Future
     extends javadsl.SourceProvider[Offset, Envelope]
     with BySlicesSourceProvider
     with EventTimestampQuery
-    with LoadEventQuery {
+    with LoadEventQuery
+    with CanTriggerReplay {
   override def source(
       offset: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[JSource[Envelope, NotUsed]] =
     delegate
@@ -91,4 +92,13 @@ import scala.concurrent.Future
           s"loadEnvelope was called but delegate of type [${delegate.getClass}] does not implement akka.persistence.query.typed.scaladsl.LoadEventQuery")
     }
 
+  override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = {
+    delegate match {
+      case ctr: CanTriggerReplay =>
+        ctr.triggerReplay(persistenceId, fromSeqNr)
+      case _ =>
+        throw new IllegalStateException(
+          s"triggerReplay was called but delegate of type [${delegate.getClass}] does not implement CanTriggerReplay")
+    }
+  }
 }

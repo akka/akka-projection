@@ -8,21 +8,23 @@ import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
+
 import scala.concurrent.Future
+
 import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.stream.scaladsl.Source
-
 import scala.compat.java8.FutureConverters._
-
 import scala.compat.java8.OptionConverters._
+
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
+import akka.projection.internal.CanTriggerReplay
 
 /**
  * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider
@@ -32,7 +34,8 @@ import akka.projection.BySlicesSourceProvider
     extends scaladsl.SourceProvider[Offset, Envelope]
     with BySlicesSourceProvider
     with EventTimestampQuery
-    with LoadEventQuery {
+    with LoadEventQuery
+    with CanTriggerReplay {
 
   def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
     // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,
@@ -75,4 +78,14 @@ import akka.projection.BySlicesSourceProvider
             s"Expected SourceProvider [${delegate.getClass.getName}] to implement " +
             s"EventTimestampQuery when LoadEventQuery is used."))
     }
+
+  override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = {
+    delegate match {
+      case ctr: CanTriggerReplay =>
+        ctr.triggerReplay(persistenceId, fromSeqNr)
+      case _ =>
+        throw new IllegalStateException(
+          s"triggerReplay was called but delegate of type [${delegate.getClass}] does not implement CanTriggerReplay")
+    }
+  }
 }
