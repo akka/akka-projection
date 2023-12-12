@@ -1,0 +1,4 @@
+# internal/renamed
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.internal.ScalaBySlicesSourceProviderAdapter")
+# (was internal stable but only because it was historically used by akka-persistence-r2dbc)
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.internal.SourceProviderAdapter")
