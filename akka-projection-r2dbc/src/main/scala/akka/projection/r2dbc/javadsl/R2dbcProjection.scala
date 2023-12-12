@@ -15,6 +15,7 @@ import akka.annotation.ApiMayChange
 import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
+import akka.projection.internal.CanTriggerReplay
 import akka.projection.internal.GroupedHandlerAdapter
 import akka.projection.internal.HandlerAdapter
 import akka.projection.internal.SourceProviderAdapter
@@ -26,6 +27,7 @@ import akka.projection.javadsl.Handler
 import akka.projection.javadsl.SourceProvider
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.internal.BySliceSourceProviderAdapter
+import akka.projection.r2dbc.internal.BySliceSourceProviderAdapterWithCanTriggerReplay
 import akka.projection.r2dbc.internal.R2dbcGroupedHandlerAdapter
 import akka.projection.r2dbc.internal.R2dbcHandlerAdapter
 import akka.projection.r2dbc.scaladsl
@@ -204,6 +206,8 @@ object R2dbcProjection {
 
   private def adaptSourceProvider[Offset, Envelope](sourceProvider: SourceProvider[Offset, Envelope]) =
     sourceProvider match {
+      case delegate: BySlicesSourceProvider with CanTriggerReplay =>
+        new BySliceSourceProviderAdapterWithCanTriggerReplay(delegate)
       case _: BySlicesSourceProvider => new BySliceSourceProviderAdapter(sourceProvider)
       case _                         => new SourceProviderAdapter(sourceProvider)
     }

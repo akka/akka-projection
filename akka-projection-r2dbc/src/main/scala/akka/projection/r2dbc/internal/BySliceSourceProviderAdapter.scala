@@ -34,8 +34,7 @@ import akka.projection.internal.CanTriggerReplay
     extends scaladsl.SourceProvider[Offset, Envelope]
     with BySlicesSourceProvider
     with EventTimestampQuery
-    with LoadEventQuery
-    with CanTriggerReplay {
+    with LoadEventQuery {
 
   def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
     // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,
@@ -79,13 +78,16 @@ import akka.projection.internal.CanTriggerReplay
             s"EventTimestampQuery when LoadEventQuery is used."))
     }
 
-  override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = {
-    delegate match {
-      case ctr: CanTriggerReplay =>
-        ctr.triggerReplay(persistenceId, fromSeqNr)
-      case _ =>
-        throw new IllegalStateException(
-          s"triggerReplay was called but delegate of type [${delegate.getClass}] does not implement CanTriggerReplay")
-    }
-  }
+}
+
+/**
+ * INTERNAL API: Adapter from javadsl.SourceProvider to scaladsl.SourceProvider that also implements
+ * CanTriggerReplay
+ */
+@InternalApi private[projection] class BySliceSourceProviderAdapterWithCanTriggerReplay[Offset, Envelope](
+    delegate: javadsl.SourceProvider[Offset, Envelope] with CanTriggerReplay)
+    extends BySliceSourceProviderAdapter[Offset, Envelope](delegate)
+    with CanTriggerReplay {
+  override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
+    delegate.triggerReplay(persistenceId, fromSeqNr)
 }
