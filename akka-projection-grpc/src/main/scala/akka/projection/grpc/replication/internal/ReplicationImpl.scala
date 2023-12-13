@@ -49,6 +49,8 @@ import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -108,6 +110,7 @@ private[akka] object ReplicationImpl {
     settings.otherReplicas.foreach(startConsumer(_, settings, entityRefFactory))
 
     if (settings.acceptEdgeReplication) {
+      // Note: duplicated in the Java Replication
       val pushDestination =
         EventProducerPushDestination(settings.streamId, protobufDescriptors = Nil).withEdgeReplication(settings)
       new ReplicationImpl[Command](
@@ -155,7 +158,12 @@ private[akka] object ReplicationImpl {
 
     val grpcQuerySettings = {
       val s = GrpcQuerySettings(settings.streamId)
-      remoteReplica.additionalQueryRequestMetadata.fold(s)(s.withAdditionalRequestMetadata)
+      val s2 =
+        if (settings.initialConsumerFilter.isEmpty) s else s.withInitialConsumerFilter(settings.initialConsumerFilter)
+      remoteReplica.additionalQueryRequestMetadata match {
+        case Some(metadata) => s2.withAdditionalRequestMetadata(metadata)
+        case None           => s2
+      }
     }
     val eventsBySlicesQuery = GrpcReadJournal(
       grpcQuerySettings,
@@ -187,7 +195,7 @@ private[akka] object ReplicationImpl {
         case Some(role) => defaultWithShardingSettings.withRole(role)
       }
     }
-    ShardedDaemonProcess(system).init(projectionName, remoteReplica.numberOfConsumers, {
+    ShardedDaemonProcess(system).init(sanitizeActorName(projectionName), remoteReplica.numberOfConsumers, {
       idx =>
         val sliceRange = sliceRanges(idx)
         val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
@@ -283,6 +291,10 @@ private[akka] object ReplicationImpl {
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
 
+    if (settings.initialConsumerFilter.nonEmpty) {
+      ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(settings.streamId, settings.initialConsumerFilter)
+    }
+
     // sharded daemon process for consuming event stream from the other replicas
     val shardingEntityRefFactory: String => EntityRef[Command] =
       sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
@@ -341,13 +353,13 @@ private[akka] object ReplicationImpl {
     val epp =
       remoteReplica.additionalQueryRequestMetadata match {
         case None =>
-          EventProducerPush[AnyRef](settings.entityTypeKey.name, eps, remoteReplica.grpcClientSettings)
+          EventProducerPush[AnyRef](settings.selfReplicaId.id, eps, remoteReplica.grpcClientSettings)
         case Some(metadata) =>
-          EventProducerPush[AnyRef](settings.entityTypeKey.name, eps, metadata, remoteReplica.grpcClientSettings)
+          EventProducerPush[AnyRef](settings.selfReplicaId.id, eps, metadata, remoteReplica.grpcClientSettings)
       }
 
     ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
-      s"${settings.selfReplicaId.id}EventProducer",
+      sanitizeActorName(s"${settings.selfReplicaId.id}EventProducer"),
       // FIXME separate setting for number of producers?
       remoteReplica.numberOfConsumers, { (context: ShardedDaemonProcessContext) =>
         val sliceRange = sliceRanges(context.processNumber)
@@ -369,5 +381,8 @@ private[akka] object ReplicationImpl {
       ProjectionBehavior.Stop)
 
   }
+
+  private def sanitizeActorName(text: String): String =
+    URLEncoder.encode(text, StandardCharsets.UTF_8.name())
 
 }

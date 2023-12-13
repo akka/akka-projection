@@ -4,11 +4,6 @@
 
 package akka.projection.grpc.replication
 
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
-
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -17,11 +12,11 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
-import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.cluster.sharding.typed.javadsl.ClusterSharding
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
-import akka.http.scaladsl.Http
+import akka.http.javadsl.Http
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
@@ -30,52 +25,26 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.ConsumerFilter.IncludeTags
 import akka.projection.grpc.consumer.ConsumerFilter.UpdateFilter
 import akka.projection.grpc.producer.EventProducerSettings
-import akka.projection.grpc.replication.scaladsl.Replica
-import akka.projection.grpc.replication.scaladsl.Replication
-import akka.projection.grpc.replication.scaladsl.Replication.EdgeReplication
-import akka.projection.grpc.replication.scaladsl.ReplicationSettings
+import akka.projection.grpc.replication.javadsl.EdgeReplication
+import akka.projection.grpc.replication.javadsl.Replica
+import akka.projection.grpc.replication.javadsl.Replication
+import akka.projection.grpc.replication.javadsl.ReplicationSettings
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.scaladsl.R2dbcReplication
+import akka.projection.r2dbc.javadsl.R2dbcReplication
 import akka.testkit.SocketUtil
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
-object EdgeReplicationIntegrationSpec {
+import java.time.Duration
+import scala.compat.java8.FutureConverters.CompletionStageOps
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters._
 
-  private def config(dc: ReplicaId): Config =
-    ConfigFactory.parseString(s"""
-       akka.actor.provider = cluster
-       akka.actor {
-         serialization-bindings {
-           "${classOf[ReplicationIntegrationSpec].getName}$$LWWHelloWorld$$Event" = jackson-json
-         }
-       }
-       akka.http.server.preview.enable-http2 = on
-       akka.persistence.r2dbc {
-          query {
-            refresh-interval = 500 millis
-            # reducing this to have quicker test, triggers backtracking earlier
-            backtracking.behind-current-time = 3 seconds
-          }
-        }
-        akka.projection.grpc {
-          producer {
-            query-plugin-id = "akka.persistence.r2dbc.query"
-          }
-        }
-        akka.projection.r2dbc.offset-store {
-          timestamp-offset-table = "akka_projection_timestamp_offset_store_${dc.id}"
-        }
-        akka.remote.artery.canonical.host = "127.0.0.1"
-        akka.remote.artery.canonical.port = 0
-        akka.actor.testkit.typed {
-          filter-leeway = 10s
-          system-shutdown-default = 30s
-        }
-      """)
+object EdgeReplicationJavaDSLIntegrationSpec {
 
   private val CloudReplicaA = ReplicaId("DCA")
   private val CloudReplicaB = ReplicaId("DCB")
@@ -84,13 +53,13 @@ object EdgeReplicationIntegrationSpec {
 
 }
 
-class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
+class EdgeReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
       akka.actor
         .ActorSystem(
-          "EdgeReplicationIntegrationSpecA",
-          EdgeReplicationIntegrationSpec
-            .config(EdgeReplicationIntegrationSpec.CloudReplicaA)
+          "EdgeReplicationIntegrationJavaSpecA",
+          ReplicationJavaDSLIntegrationSpec
+            .config(EdgeReplicationJavaDSLIntegrationSpec.CloudReplicaA)
             .withFallback(testContainerConf.config))
         .toTyped)
     with AnyWordSpecLike
@@ -98,38 +67,40 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     with BeforeAndAfterAll
     with LogCapturing
     with TestData {
-  import EdgeReplicationIntegrationSpec._
-  import ReplicationIntegrationSpec.LWWHelloWorld
+  import EdgeReplicationJavaDSLIntegrationSpec._
+  import ReplicationJavaDSLIntegrationSpec.LWWHelloWorld
   implicit val ec: ExecutionContext = system.executionContext
 
   def this() = this(new TestContainerConf)
 
-  private val logger = LoggerFactory.getLogger(classOf[EdgeReplicationIntegrationSpec])
+  private val logger = LoggerFactory.getLogger(classOf[EdgeReplicationJavaDSLIntegrationSpec])
   override def typedSystem: ActorSystem[_] = testKit.system
+
+  private val askTimeout = Duration.ofSeconds(3)
 
   private val systems = Seq[ActorSystem[_]](
     typedSystem,
     akka.actor
       .ActorSystem(
-        "EdgeReplicationIntegrationSpecB",
-        EdgeReplicationIntegrationSpec.config(CloudReplicaB).withFallback(testContainerConf.config))
+        "EdgeReplicationIntegrationJavaSpecB",
+        ReplicationJavaDSLIntegrationSpec.config(CloudReplicaB).withFallback(testContainerConf.config))
       .toTyped,
     akka.actor
       .ActorSystem(
-        "EdgeReplicationIntegrationSpecC",
-        EdgeReplicationIntegrationSpec.config(EdgeReplicaC).withFallback(testContainerConf.config))
+        "EdgeReplicationIntegrationJavaSpecC",
+        ReplicationJavaDSLIntegrationSpec.config(EdgeReplicaC).withFallback(testContainerConf.config))
       .toTyped,
     akka.actor
       .ActorSystem(
-        "EdgeReplicationIntegrationSpecD",
-        EdgeReplicationIntegrationSpec.config(EdgeReplicaD).withFallback(testContainerConf.config))
+        "EdgeReplicationIntegrationJavaSpecD",
+        ReplicationJavaDSLIntegrationSpec.config(EdgeReplicaD).withFallback(testContainerConf.config))
       .toTyped)
 
   private val grpcPorts = SocketUtil.temporaryServerAddresses(systems.size, "127.0.0.1").map(_.getPort)
   private val allDcsAndPorts = Seq(CloudReplicaA, CloudReplicaB, EdgeReplicaC, EdgeReplicaD).zip(grpcPorts)
   private val allReplicas = allDcsAndPorts.map {
     case (id, port) =>
-      Replica(id, 2, GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
+      Replica.create(id, 2, GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
   }.toSet
 
   private val testKitsPerDc = Map(
@@ -162,25 +133,27 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
   def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
     def replicationSettings(otherReplicas: Set[Replica]) = {
-      ReplicationSettings[LWWHelloWorld.Command](
-        LWWHelloWorld.EntityType.name,
-        selfReplicaId,
-        EventProducerSettings(replicaSystem),
-        otherReplicas,
-        10.seconds,
-        8,
-        R2dbcReplication()(replicaSystem))
+      ReplicationSettings
+        .create(
+          classOf[LWWHelloWorld.Command],
+          LWWHelloWorld.EntityType.name,
+          selfReplicaId,
+          EventProducerSettings.create(replicaSystem),
+          otherReplicas.asJava,
+          Duration.ofSeconds(10),
+          8,
+          R2dbcReplication.create(system))
         .withEdgeReplication(true)
     }
 
     selfReplicaId match {
       case CloudReplicaA =>
         val otherReplicas = allReplicas.filter(_.replicaId == CloudReplicaB)
-        Replication.grpcReplication(replicationSettings(otherReplicas))(LWWHelloWorld.apply)(replicaSystem)
+        Replication.grpcReplication(replicationSettings(otherReplicas), LWWHelloWorld.create _, replicaSystem)
 
       case CloudReplicaB =>
         val otherReplicas = allReplicas.filter(_.replicaId == CloudReplicaA)
-        Replication.grpcReplication(replicationSettings(otherReplicas))(LWWHelloWorld.apply)(replicaSystem)
+        Replication.grpcReplication(replicationSettings(otherReplicas), LWWHelloWorld.create _, replicaSystem)
 
       case other =>
         throw new IllegalArgumentException(other.id)
@@ -191,24 +164,25 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       replicaSystem: ActorSystem[_],
       selfReplicaId: ReplicaId): EdgeReplication[LWWHelloWorld.Command] = {
     def replicationSettings(otherReplicas: Set[Replica]) = {
-      ReplicationSettings[LWWHelloWorld.Command](
+      ReplicationSettings.create(
+        classOf[LWWHelloWorld.Command],
         LWWHelloWorld.EntityType.name,
         selfReplicaId,
-        EventProducerSettings(replicaSystem),
-        otherReplicas,
-        10.seconds,
+        EventProducerSettings.create(replicaSystem),
+        otherReplicas.asJava,
+        Duration.ofSeconds(10),
         8,
-        R2dbcReplication()(replicaSystem))
+        R2dbcReplication.create(replicaSystem))
     }
 
     selfReplicaId match {
       case EdgeReplicaC =>
         val otherReplicas = allReplicas.filter(_.replicaId == CloudReplicaA)
-        Replication.grpcEdgeReplication(replicationSettings(otherReplicas))(LWWHelloWorld.apply)(replicaSystem)
+        Replication.grpcEdgeReplication(replicationSettings(otherReplicas), LWWHelloWorld.create _, replicaSystem)
 
       case EdgeReplicaD =>
         val otherReplicas = allReplicas.filter(_.replicaId == CloudReplicaA)
-        Replication.grpcEdgeReplication(replicationSettings(otherReplicas))(LWWHelloWorld.apply)(replicaSystem)
+        Replication.grpcEdgeReplication(replicationSettings(otherReplicas), LWWHelloWorld.create _, replicaSystem)
 
       case other =>
         throw new IllegalArgumentException(other.id)
@@ -220,12 +194,15 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       withClue(s"on ${testKit.system.name}") {
         val probe = testKit.createTestProbe()
         withClue(s"for entity id $entityId") {
-          val entityRef = ClusterSharding(testKit.system)
+          val entityRef = ClusterSharding
+            .get(testKit.system)
             .entityRefFor(LWWHelloWorld.EntityType, entityId)
 
           probe.awaitAssert({
             entityRef
-              .ask(LWWHelloWorld.Get.apply)
+              .ask(LWWHelloWorld.Get(_), askTimeout)
+              .toCompletableFuture
+              .toScala
               .futureValue should ===(expected)
           }, 10.seconds)
         }
@@ -260,10 +237,12 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
             val grpcPort = grpcPorts(index)
 
             // start producer server
-            Http(system)
+            Http
+              .get(system)
               .newServerAt("127.0.0.1", grpcPort)
               .bind(started.createSingleServiceHandler())
-              .map(_.addToCoordinatedShutdown(3.seconds)(system))(system.executionContext)
+              .toScala
+              .map(_.addToCoordinatedShutdown(Duration.ofSeconds(3), system))(system.executionContext)
               .map(_ => Done)
           } else {
             startEdgeReplica(system, replica.replicaId)
@@ -278,15 +257,19 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     "replicate directly" in {
       val entityId = nextPid(LWWHelloWorld.EntityType.name).entityId
 
-      ClusterSharding(systemPerDc(CloudReplicaA))
+      ClusterSharding
+        .get(systemPerDc(CloudReplicaA))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.SetGreeting("Hello from A1", _))
+        .ask(LWWHelloWorld.SetGreeting("Hello from A1", _), askTimeout)
+        .toScala
         .futureValue
       assertGreeting(entityId, "Hello from A1")
 
-      ClusterSharding(systemPerDc(CloudReplicaA))
+      ClusterSharding
+        .get(systemPerDc(CloudReplicaA))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.SetGreeting("Hello from A2", _))
+        .ask(LWWHelloWorld.SetGreeting("Hello from A2", _), askTimeout)
+        .toScala
         .futureValue
       assertGreeting(entityId, "Hello from A2")
     }
@@ -295,15 +278,19 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       val entityId = nextPid(LWWHelloWorld.EntityType.name).entityId
 
       // Edge replicas are only connected to CloudReplicaA
-      ClusterSharding(systemPerDc(CloudReplicaB))
+      ClusterSharding
+        .get(systemPerDc(CloudReplicaB))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.SetGreeting("Hello from B1", _))
+        .ask(LWWHelloWorld.SetGreeting("Hello from B1", _), askTimeout)
+        .toScala
         .futureValue
       assertGreeting(entityId, "Hello from B1")
 
-      ClusterSharding(systemPerDc(CloudReplicaB))
+      ClusterSharding
+        .get(systemPerDc(CloudReplicaB))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.SetGreeting("Hello from B2", _))
+        .ask(LWWHelloWorld.SetGreeting("Hello from B2", _), askTimeout)
+        .toScala
         .futureValue
       assertGreeting(entityId, "Hello from B2")
     }
@@ -311,27 +298,35 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     "replicate both directions" in {
       val entityId = nextPid(LWWHelloWorld.EntityType.name).entityId
 
-      ClusterSharding(systemPerDc(CloudReplicaA))
+      ClusterSharding
+        .get(systemPerDc(CloudReplicaA))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.SetGreeting("Hello from A1", _))
+        .ask(LWWHelloWorld.SetGreeting("Hello from A1", _), askTimeout)
+        .toScala
         .futureValue
       assertGreeting(entityId, "Hello from A1")
 
-      ClusterSharding(systemPerDc(EdgeReplicaC))
+      ClusterSharding
+        .get(systemPerDc(EdgeReplicaC))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.SetGreeting("Hello from C1", _))
+        .ask(LWWHelloWorld.SetGreeting("Hello from C1", _), askTimeout)
+        .toScala
         .futureValue
       assertGreeting(entityId, "Hello from C1")
 
-      ClusterSharding(systemPerDc(CloudReplicaA))
+      ClusterSharding
+        .get(systemPerDc(CloudReplicaA))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.SetGreeting("Hello from A2", _))
+        .ask(LWWHelloWorld.SetGreeting("Hello from A2", _), askTimeout)
+        .toScala
         .futureValue
       assertGreeting(entityId, "Hello from A2")
 
-      ClusterSharding(systemPerDc(EdgeReplicaC))
+      ClusterSharding
+        .get(systemPerDc(EdgeReplicaC))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.SetGreeting("Hello from C2", _))
+        .ask(LWWHelloWorld.SetGreeting("Hello from C2", _), askTimeout)
+        .toScala
         .futureValue
       assertGreeting(entityId, "Hello from C2")
     }
@@ -342,9 +337,11 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
           Future
             .sequence(entityIds.map { entityId =>
               logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
-              ClusterSharding(systemPerDc(dc))
+              ClusterSharding
+                .get(systemPerDc(dc))
                 .entityRefFor(LWWHelloWorld.EntityType, entityId)
-                .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _))
+                .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _), askTimeout)
+                .toScala
             })
             .futureValue
 
@@ -354,12 +351,14 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
               entityIds.foreach { entityId =>
                 withClue(s"for entity id $entityId") {
-                  val entityRef = ClusterSharding(testKit.system)
+                  val entityRef = ClusterSharding
+                    .get(testKit.system)
                     .entityRefFor(LWWHelloWorld.EntityType, entityId)
 
                   probe.awaitAssert({
                     entityRef
-                      .ask(LWWHelloWorld.Get.apply)
+                      .ask(LWWHelloWorld.Get.apply, askTimeout)
+                      .toScala
                       .futureValue should ===(s"hello 1 from ${dc.id}")
                   }, 10.seconds)
                 }
@@ -377,9 +376,11 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
             withClue(s"from ${dc.id}") {
               Future.sequence(entityIds.map { entityId =>
                 logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
-                ClusterSharding(systemPerDc(dc))
+                ClusterSharding
+                  .get(systemPerDc(dc))
                   .entityRefFor(LWWHelloWorld.EntityType, entityId)
-                  .ask(LWWHelloWorld.SetGreeting(s"hello $greetingNo from ${dc.id}", _))
+                  .ask(LWWHelloWorld.SetGreeting(s"hello $greetingNo from ${dc.id}", _), askTimeout)
+                  .toScala
               })
             }
           })
@@ -393,11 +394,13 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
               entityIds.foreach { entityId =>
                 withClue(s"for entity id $entityId") {
                   testKitsPerDc.values.map { testKit =>
-                    val entityRef = ClusterSharding(testKit.system)
+                    val entityRef = ClusterSharding
+                      .get(testKit.system)
                       .entityRefFor(LWWHelloWorld.EntityType, entityId)
 
                     entityRef
-                      .ask(LWWHelloWorld.Get.apply)
+                      .ask(LWWHelloWorld.Get.apply, askTimeout)
+                      .toScala
                       .futureValue
                   }.toSet should have size (1)
                 }
@@ -407,8 +410,8 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       }
     }
   }
-
   "use consumer filter on tag" in {
+    system.log.info("Consumer filter test starting")
     val entityId = nextPid(LWWHelloWorld.EntityType.name).entityId
 
     ConsumerFilter(systemPerDc(EdgeReplicaC)).ref ! UpdateFilter(
@@ -420,59 +423,80 @@ class EdgeReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
     // let the filter propagate to producer
     Thread.sleep(1000)
+    system.log.info("Continuing after setting IncludeTags")
 
-    ClusterSharding(systemPerDc(CloudReplicaA))
+    ClusterSharding
+      .get(systemPerDc(CloudReplicaA))
       .entityRefFor(LWWHelloWorld.EntityType, entityId)
-      .ask(LWWHelloWorld.SetTag("tag-C", _))
+      .ask(LWWHelloWorld.SetTag("tag-C", _), askTimeout)
+      .toScala
       .futureValue
 
-    ClusterSharding(systemPerDc(CloudReplicaA))
+    ClusterSharding
+      .get(systemPerDc(CloudReplicaA))
       .entityRefFor(LWWHelloWorld.EntityType, entityId)
-      .ask(LWWHelloWorld.SetGreeting("Hello C", _))
+      .ask(LWWHelloWorld.SetGreeting("Hello C", _), askTimeout)
+      .toScala
       .futureValue
 
     eventually {
-      ClusterSharding(systemPerDc(EdgeReplicaC))
+      ClusterSharding
+        .get(systemPerDc(EdgeReplicaC))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.Get(_))
+        .ask(LWWHelloWorld.Get(_), askTimeout)
+        .toScala
         .futureValue shouldBe "Hello C"
     }
 
     // but not updated in D
-    ClusterSharding(systemPerDc(EdgeReplicaD))
+    ClusterSharding
+      .get(systemPerDc(EdgeReplicaD))
       .entityRefFor(LWWHelloWorld.EntityType, entityId)
-      .ask(LWWHelloWorld.Get(_))
+      .ask(LWWHelloWorld.Get(_), askTimeout)
+      .toScala
       .futureValue shouldBe "Hello world"
 
+    system.log.info("Verified filter worked, changing tag on entity")
+
     // change tag
-    ClusterSharding(systemPerDc(CloudReplicaA))
+    ClusterSharding
+      .get(systemPerDc(CloudReplicaA))
       .entityRefFor(LWWHelloWorld.EntityType, entityId)
-      .ask(LWWHelloWorld.SetTag("tag-D", _))
+      .ask(LWWHelloWorld.SetTag("tag-D", _), askTimeout)
+      .toScala
       .futureValue
 
     // previous greeting should be replicated
     eventually {
-      ClusterSharding(systemPerDc(EdgeReplicaD))
+      ClusterSharding
+        .get(systemPerDc(EdgeReplicaD))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.Get(_))
+        .ask(LWWHelloWorld.Get(_), askTimeout)
+        .toScala
         .futureValue shouldBe "Hello C"
     }
 
-    ClusterSharding(systemPerDc(CloudReplicaA))
+    ClusterSharding
+      .get(systemPerDc(CloudReplicaA))
       .entityRefFor(LWWHelloWorld.EntityType, entityId)
-      .ask(LWWHelloWorld.SetGreeting("Hello D", _))
+      .ask(LWWHelloWorld.SetGreeting("Hello D", _), askTimeout)
+      .toScala
       .futureValue
     eventually {
-      ClusterSharding(systemPerDc(EdgeReplicaD))
+      ClusterSharding
+        .get(systemPerDc(EdgeReplicaD))
         .entityRefFor(LWWHelloWorld.EntityType, entityId)
-        .ask(LWWHelloWorld.Get(_))
+        .ask[String](LWWHelloWorld.Get(_), askTimeout)
+        .toScala
         .futureValue shouldBe "Hello D"
     }
 
     // but not updated in C
-    ClusterSharding(systemPerDc(EdgeReplicaC))
+    ClusterSharding
+      .get(systemPerDc(EdgeReplicaC))
       .entityRefFor(LWWHelloWorld.EntityType, entityId)
-      .ask(LWWHelloWorld.Get(_))
+      .ask(LWWHelloWorld.Get(_), askTimeout)
+      .toScala
       .futureValue shouldBe "Hello C"
   }
 

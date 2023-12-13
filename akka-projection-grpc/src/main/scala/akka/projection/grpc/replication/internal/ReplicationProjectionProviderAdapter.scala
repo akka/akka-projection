@@ -15,7 +15,7 @@ import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.grpc.replication.javadsl.{ ReplicationProjectionProvider => JReplicationProjectionProvider }
 import akka.projection.grpc.replication.scaladsl.{ ReplicationProjectionProvider => SReplicationProjectionProvider }
-import akka.projection.internal.ScalaBySlicesSourceProviderAdapter
+import akka.projection.internal.ScalaToJavaBySlicesSourceProviderAdapter
 import akka.projection.scaladsl.{ AtLeastOnceFlowProjection => SAtLeastOnceFlowProjection }
 import akka.projection.scaladsl.{ SourceProvider => SSourceProvider }
 import akka.stream.scaladsl.{ FlowWithContext => SFlowWithContext }
@@ -37,12 +37,10 @@ private[akka] object ReplicationProjectionProviderAdapter {
           throw new IllegalArgumentException(
             s"The source provider is required to implement akka.projection.BySlicesSourceProvider but ${noSlices.getClass} does not")
       }
+
+      val sourceProviderAdapter = ScalaToJavaBySlicesSourceProviderAdapter(providerWithSlices)
       val javaProjection =
-        provider.create(
-          projectionId,
-          new ScalaBySlicesSourceProviderAdapter(providerWithSlices),
-          replicationFlow.asJava,
-          system)
+        provider.create(projectionId, sourceProviderAdapter, replicationFlow.asJava, system)
       javaProjection match {
         case alsoSProjection: SAtLeastOnceFlowProjection[Offset @unchecked, EventEnvelope[AnyRef] @unchecked] =>
           alsoSProjection

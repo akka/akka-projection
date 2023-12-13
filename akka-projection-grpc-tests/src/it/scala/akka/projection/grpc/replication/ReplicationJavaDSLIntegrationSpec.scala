@@ -10,10 +10,13 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.javadsl.ActorContext
+import akka.actor.typed.javadsl.Behaviors
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
 import akka.cluster.sharding.typed.javadsl.ClusterSharding
+import akka.cluster.sharding.typed.javadsl.EntityTypeKey
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
@@ -28,13 +31,13 @@ import akka.persistence.typed.javadsl.ReplicationContext
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.producer.EventProducerSettings
-import akka.projection.grpc.replication
 import akka.projection.grpc.replication.javadsl.Replica
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.javadsl.Replication
 import akka.projection.grpc.replication.javadsl.ReplicationSettings
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.javadsl.R2dbcReplication
+import akka.serialization.jackson.CborSerializable
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -50,16 +53,13 @@ import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import akka.util.ccompat.JavaConverters._
 
+import java.util
+
 object ReplicationJavaDSLIntegrationSpec {
 
-  private def config(dc: ReplicaId): Config =
+  def config(dc: ReplicaId): Config =
     ConfigFactory.parseString(s"""
        akka.actor.provider = cluster
-       akka.actor {
-         serialization-bindings {
-           "${classOf[replication.ReplicationJavaDSLIntegrationSpec].getName}$$LWWHelloWorld$$Event" = jackson-json
-         }
-       }
        akka.http.server.preview.enable-http2 = on
        akka.persistence.r2dbc {
           query {
@@ -90,26 +90,34 @@ object ReplicationJavaDSLIntegrationSpec {
 
   object LWWHelloWorld {
 
+    val EntityType: EntityTypeKey[Command] = EntityTypeKey.create(classOf[Command], "hello-world")
+
     sealed trait Command
 
     case class Get(replyTo: ActorRef[String]) extends Command
 
     case class SetGreeting(newGreeting: String, replyTo: ActorRef[Done]) extends Command
 
-    sealed trait Event
+    case class SetTag(tag: String, replyTo: ActorRef[Done]) extends Command
+
+    sealed trait Event extends CborSerializable
 
     case class GreetingChanged(greeting: String, timestamp: LwwTime) extends Event
 
+    final case class TagChanged(tag: String, timestamp: LwwTime) extends Event
+
     object State {
-      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId("")))
+      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId("")), "")
     }
 
-    case class State(greeting: String, timestamp: LwwTime)
+    case class State(greeting: String, timestamp: LwwTime, tag: String)
 
-    def create(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) =
-      replicatedBehaviors.setup { replicationContext => new LWWHelloWorldBehavior(replicationContext) }
+    def create(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) = {
+      Behaviors.setup[Command](context =>
+        replicatedBehaviors.setup { replicationContext => new LWWHelloWorldBehavior(context, replicationContext) })
+    }
 
-    class LWWHelloWorldBehavior(replicationContext: ReplicationContext)
+    class LWWHelloWorldBehavior(context: ActorContext[Command], replicationContext: ReplicationContext)
         extends EventSourcedBehavior[Command, Event, State](replicationContext.persistenceId) {
       protected def emptyState: State = State.initial
 
@@ -122,10 +130,22 @@ object ReplicationJavaDSLIntegrationSpec {
           })
           .onCommand(
             classOf[SetGreeting], { (state: State, command: SetGreeting) =>
+              context.getLog.info("Request to change greeting to {}", command.newGreeting)
               Effect
                 .persist(
                   GreetingChanged(
                     greeting = command.newGreeting,
+                    timestamp =
+                      state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+                .thenReply(command.replyTo, _ => Done)
+            })
+          .onCommand(
+            classOf[SetTag], { (state: State, command: SetTag) =>
+              context.getLog.info("Request to change tag to {}", command.tag)
+              Effect
+                .persist(
+                  TagChanged(
+                    tag = command.tag,
                     timestamp =
                       state.timestamp.increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
                 .thenReply(command.replyTo, _ => Done)
@@ -135,12 +155,39 @@ object ReplicationJavaDSLIntegrationSpec {
       protected def eventHandler(): EventHandler[State, Event] =
         newEventHandlerBuilder()
           .forAnyState()
-          .onEvent(classOf[GreetingChanged], { (currentState: State, event: GreetingChanged) =>
-            if (event.timestamp.isAfter(currentState.timestamp)) State(event.greeting, event.timestamp)
-            else currentState
-          })
+          .onEvent(
+            classOf[GreetingChanged], { (currentState: State, event: GreetingChanged) =>
+              if (event.timestamp.isAfter(currentState.timestamp)) {
+                context.getLog.info("Changing greeting to {}", event.greeting)
+                State(event.greeting, event.timestamp, currentState.tag)
+              } else {
+                context.getLog
+                  .info(
+                    "Ignoring greeting change to {} since state was changed after {}",
+                    event.greeting,
+                    currentState.timestamp)
+                currentState
+              }
+            })
+          .onEvent(
+            classOf[TagChanged], { (currentState: State, event: TagChanged) =>
+              if (event.timestamp.isAfter(currentState.timestamp)) {
+                context.getLog.info("Changing tag to {}", event.tag)
+                State(currentState.greeting, event.timestamp, event.tag)
+              } else {
+                context.getLog
+                  .info("Ignoring tag change to {} since state was changed after {}", event.tag, currentState.timestamp)
+                currentState
+              }
+
+            })
           .build()
+
+      override def tagsFor(state: State, event: Event): util.Set[String] =
+        if (state.tag.isEmpty) util.Set.of()
+        else util.Set.of(state.tag)
     }
+
   }
 }
 
@@ -208,15 +255,17 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
   }
 
   def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
-    val settings = ReplicationSettings.create(
-      classOf[LWWHelloWorld.Command],
-      "hello-world-java",
-      selfReplicaId,
-      EventProducerSettings.create(replicaSystem),
-      allReplicas.toSet.asJava: java.util.Set[Replica],
-      Duration.ofSeconds(10),
-      8,
-      R2dbcReplication.create(system))
+    val settings = ReplicationSettings
+      .create(
+        classOf[LWWHelloWorld.Command],
+        "hello-world-java",
+        selfReplicaId,
+        EventProducerSettings.create(replicaSystem),
+        allReplicas.toSet.asJava: java.util.Set[Replica],
+        Duration.ofSeconds(10),
+        8,
+        R2dbcReplication.create(system))
+      .withEdgeReplication(true)
     Replication.grpcReplication(settings, LWWHelloWorld.create _, replicaSystem)
   }
 

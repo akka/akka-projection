@@ -92,6 +92,10 @@ private[akka] object EventPusher {
                 (filter, eventOriginFilterPredicate)
 
               case None =>
+                if (eps.replicatedEventOriginFilter.isDefined)
+                  throw new IllegalArgumentException(
+                    s"Entity ${eps.entityType} is not a replicated entity but `replicatedEventOriginFilter` is set")
+
                 (
                   updateFilterFromProto(
                     Filter.empty(eps.settings.topicTagPrefix),
@@ -110,17 +114,19 @@ private[akka] object EventPusher {
                       consumerFilter.matches(envelope)) {
                     if (logger.isTraceEnabled())
                       logger.trace(
-                        "Pushing event persistence id [{}], sequence number [{}]",
+                        "Pushing event persistence id [{}], sequence number [{}]{}",
                         envelope.persistenceId,
-                        envelope.sequenceNr)
+                        envelope.sequenceNr,
+                        startMessage.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
                     transformAndEncodeEvent(eps.transformation, envelope, protoAnySerialization)
                   } else {
                     if (logger.isTraceEnabled())
                       logger.trace(
-                        "Filtering event persistence id [{}], sequence number [{}]",
+                        "Filtering event persistence id [{}], sequence number [{}]{}",
                         envelope.persistenceId,
-                        envelope.sequenceNr)
+                        envelope.sequenceNr,
+                        startMessage.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
                     Future.successful(None)
                   }

@@ -6,18 +6,15 @@ package akka.projection.r2dbc.javadsl
 
 import java.util.Optional
 import java.util.function.Supplier
-
 import scala.compat.java8.OptionConverters._
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
-import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.internal.GroupedHandlerAdapter
 import akka.projection.internal.HandlerAdapter
-import akka.projection.internal.SourceProviderAdapter
+import akka.projection.internal.JavaToScalaBySliceSourceProviderAdapter
 import akka.projection.javadsl.AtLeastOnceFlowProjection
 import akka.projection.javadsl.AtLeastOnceProjection
 import akka.projection.javadsl.ExactlyOnceProjection
@@ -25,7 +22,6 @@ import akka.projection.javadsl.GroupedProjection
 import akka.projection.javadsl.Handler
 import akka.projection.javadsl.SourceProvider
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.internal.BySliceSourceProviderAdapter
 import akka.projection.r2dbc.internal.R2dbcGroupedHandlerAdapter
 import akka.projection.r2dbc.internal.R2dbcHandlerAdapter
 import akka.projection.r2dbc.scaladsl
@@ -50,7 +46,7 @@ object R2dbcProjection {
       .exactlyOnce[Offset, Envelope](
         projectionId,
         settings.asScala,
-        adaptSourceProvider(sourceProvider),
+        JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => new R2dbcHandlerAdapter(handler.get()))(system)
       .asInstanceOf[ExactlyOnceProjection[Offset, Envelope]]
   }
@@ -79,7 +75,7 @@ object R2dbcProjection {
       .atLeastOnce[Offset, Envelope](
         projectionId,
         settings.asScala,
-        adaptSourceProvider(sourceProvider),
+        JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => new R2dbcHandlerAdapter(handler.get()))(system)
       .asInstanceOf[AtLeastOnceProjection[Offset, Envelope]]
   }
@@ -109,7 +105,7 @@ object R2dbcProjection {
       .atLeastOnceAsync[Offset, Envelope](
         projectionId,
         settings.asScala,
-        adaptSourceProvider(sourceProvider),
+        JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => HandlerAdapter(handler.get()))(system)
       .asInstanceOf[AtLeastOnceProjection[Offset, Envelope]]
   }
@@ -133,7 +129,7 @@ object R2dbcProjection {
       .groupedWithin[Offset, Envelope](
         projectionId,
         settings.asScala,
-        adaptSourceProvider(sourceProvider),
+        JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => new R2dbcGroupedHandlerAdapter(handler.get()))(system)
       .asInstanceOf[GroupedProjection[Offset, Envelope]]
   }
@@ -161,7 +157,7 @@ object R2dbcProjection {
       .groupedWithinAsync[Offset, Envelope](
         projectionId,
         settings.asScala,
-        adaptSourceProvider(sourceProvider),
+        JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => new GroupedHandlerAdapter(handler.get()))(system)
       .asInstanceOf[GroupedProjection[Offset, Envelope]]
   }
@@ -197,15 +193,9 @@ object R2dbcProjection {
       .atLeastOnceFlow[Offset, Envelope](
         projectionId,
         settings.asScala,
-        adaptSourceProvider(sourceProvider),
+        JavaToScalaBySliceSourceProviderAdapter[Offset, Envelope](sourceProvider),
         handler.asScala)(system)
       .asInstanceOf[AtLeastOnceFlowProjection[Offset, Envelope]]
   }
-
-  private def adaptSourceProvider[Offset, Envelope](sourceProvider: SourceProvider[Offset, Envelope]) =
-    sourceProvider match {
-      case _: BySlicesSourceProvider => new BySliceSourceProviderAdapter(sourceProvider)
-      case _                         => new SourceProviderAdapter(sourceProvider)
-    }
 
 }

@@ -16,7 +16,7 @@ import akka.projection.internal.HandlerAdapter
 import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.SingleHandlerStrategy
-import akka.projection.internal.SourceProviderAdapter
+import akka.projection.internal.JavaToScalaSourceProviderAdapter
 import akka.projection.testkit.internal.TestInMemoryOffsetStoreImpl
 import akka.projection.testkit.internal.TestProjectionImpl
 
@@ -45,7 +45,7 @@ object TestProjection {
       handler: Supplier[akka.projection.javadsl.Handler[Envelope]]): TestProjection[Offset, Envelope] =
     new TestProjectionImpl(
       projectionId = projectionId,
-      sourceProvider = new SourceProviderAdapter(sourceProvider),
+      sourceProvider = new JavaToScalaSourceProviderAdapter(sourceProvider),
       handlerStrategy = SingleHandlerStrategy(() => new HandlerAdapter[Envelope](handler.get())),
       // Disable batching so that `ProjectionTestKit.runWithTestSink` emits 1 `Done` per envelope.
       offsetStrategy = AtLeastOnce(afterEnvelopes = Some(1)),

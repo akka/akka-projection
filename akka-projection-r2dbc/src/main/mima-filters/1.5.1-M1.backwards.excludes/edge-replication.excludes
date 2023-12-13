@@ -1,0 +1,2 @@
+# internal, moved to projection-core/renamed
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.r2dbc.internal.BySliceSourceProviderAdapter")
