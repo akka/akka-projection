@@ -160,6 +160,23 @@ public class DroneServiceImpl implements DroneService {
     return convertError(response);
   }
 
+  @Override
+  public CompletionStage<CompleteChargingResponse> completeCharge(CompleteChargeRequest in) {
+    logger.info(
+        "Requesting complete charging of {} from {}", in.getDroneId(), in.getChargingStationId());
+    var entityRef = chargingStationEntityRefFactory.apply(in.getChargingStationId());
+
+    CompletionStage<Done> chargingStationResponse =
+        entityRef.askWithStatus(
+            replyTo -> new ChargingStation.CompleteCharging(in.getDroneId(), replyTo),
+            settings.askTimeout);
+
+    var response =
+        chargingStationResponse.thenApply(done -> CompleteChargingResponse.getDefaultInstance());
+
+    return convertError(response);
+  }
+
   private static Timestamp instantToProtoTimestamp(Instant instant) {
     return Timestamp.newBuilder()
         .setSeconds(instant.getEpochSecond())

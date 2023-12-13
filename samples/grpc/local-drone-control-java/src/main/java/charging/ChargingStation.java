@@ -8,7 +8,6 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.TimerScheduler;
 import akka.pattern.StatusReply;
-import akka.persistence.typed.RecoveryCompleted;
 import akka.persistence.typed.ReplicaId;
 import akka.persistence.typed.javadsl.*;
 import akka.projection.grpc.consumer.ConsumerFilter;
@@ -73,12 +72,14 @@ public class ChargingStation
     }
   }
 
-  private static final class CompleteCharging implements Command {
+  public static final class CompleteCharging implements Command {
     final String droneId;
 
-    @JsonCreator
-    public CompleteCharging(String droneId) {
+    final ActorRef<StatusReply<Done>> replyTo;
+
+    public CompleteCharging(String droneId, ActorRef<StatusReply<Done>> replyTo) {
       this.droneId = droneId;
+      this.replyTo = replyTo;
     }
   }
 
@@ -185,10 +186,6 @@ public class ChargingStation
                         })));
   }
 
-  private static Duration durationUntil(Instant instant) {
-    return Duration.ofSeconds(instant.getEpochSecond() - Instant.now().getEpochSecond());
-  }
-
   private final ActorContext<Command> context;
   private final TimerScheduler<Command> timers;
 
@@ -266,9 +263,22 @@ public class ChargingStation
             .onCommand(StartCharging.class, this::handleStartCharging)
             .onCommand(
                 CompleteCharging.class,
-                completeCharging -> {
+                (state, completeCharging) -> {
                   context.getLog().info("Drone {} completed charging", completeCharging.droneId);
-                  return Effect().persist(new ChargingCompleted(completeCharging.droneId));
+                  if (state.dronesCharging.stream()
+                      .anyMatch(
+                          chargingDrone -> chargingDrone.droneId.equals(completeCharging.droneId)))
+                    return Effect()
+                        .persist(new ChargingCompleted(completeCharging.droneId))
+                        .thenReply(completeCharging.replyTo, newState -> StatusReply.ack());
+                  else
+                    return Effect()
+                        .reply(
+                            completeCharging.replyTo,
+                            StatusReply.error(
+                                "Drone "
+                                    + completeCharging.droneId
+                                    + " is not currently charging."));
                 })
             .onCommand(
                 GetState.class,
@@ -307,13 +317,7 @@ public class ChargingStation
       var event = new ChargingStarted(startCharging.droneId, chargeCompletedBy);
       return Effect()
           .persist(event)
-          .thenRun(
-              newState -> {
-                timers.startSingleTimer(
-                    new CompleteCharging(startCharging.droneId), durationUntil(chargeCompletedBy));
-                // Note: The event is also the reply
-                startCharging.replyTo.tell(StatusReply.success(event));
-              });
+          .thenReply(startCharging.replyTo, newState -> StatusReply.success(event));
     }
   }
 
@@ -367,37 +371,8 @@ public class ChargingStation
   }
 
   @Override
-  public SignalHandler<State> signalHandler() {
-    return newSignalHandlerBuilder()
-        .onSignal(
-            RecoveryCompleted.class, (state, recoveryCompleted) -> handleRecoveryCompleted(state))
-        .build();
-  }
-
-  @Override
   public Set<String> tagsFor(State state, Event event) {
     if (state == null) return Set.of();
     else return Set.of("t:" + state.stationLocationId);
-  }
-
-  private void handleRecoveryCompleted(State state) {
-    // FIXME this scheme is not quite reliable, because station is not remembered/restarted
-    //       until next new event/command if edge system is shut down/restarted
-    // Complete or set up timers for completion for drones charging,
-    // but only if the charging was initiated in this replica
-    var now = Instant.now();
-    if (state != null) {
-      state.dronesCharging.stream()
-          .filter(d -> d.replicaId.equals(getReplicationContext().replicaId().id()))
-          .forEach(
-              chargingDrone -> {
-                if (chargingDrone.chargingDone.isBefore(now))
-                  context.getSelf().tell(new CompleteCharging(chargingDrone.droneId));
-                else
-                  timers.startSingleTimer(
-                      new CompleteCharging(chargingDrone.droneId),
-                      durationUntil(chargingDrone.chargingDone));
-              });
-    }
   }
 }
