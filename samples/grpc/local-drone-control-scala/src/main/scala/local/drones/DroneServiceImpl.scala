@@ -110,6 +110,21 @@ class DroneServiceImpl(
     convertError(response)
   }
 
+  override def completeCharge(in: proto.CompleteChargeRequest)
+      : Future[proto.CompleteChargingResponse] = {
+    logger.info(
+      "Requesting complete charging of {} from {}",
+      in.droneId,
+      in.chargingStationId)
+
+    val entityRef = chargingStationEntityRefFactory(in.chargingStationId)
+    val response = entityRef
+      .askWithStatus(ChargingStation.CompleteCharging(in.droneId, _))
+      .map(_ => proto.CompleteChargingResponse.defaultInstance)
+
+    convertError(response)
+  }
+
   private def convertError[T](response: Future[T]): Future[T] = {
     response.recoverWith {
       case _: TimeoutException =>

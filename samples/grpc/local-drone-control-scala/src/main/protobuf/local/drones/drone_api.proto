@@ -20,6 +20,7 @@ service DroneService {
 
     // charging
     rpc GoCharge (GoChargeRequest) returns (ChargingResponse) {}
+    rpc CompleteCharge (CompleteChargeRequest) returns (CompleteChargingResponse) {}
 }
 
 
@@ -62,4 +63,12 @@ message ChargingStarted {
 
 message ComeBackLater {
     google.protobuf.Timestamp first_slot_free_at = 1;
+}
+
+message CompleteChargeRequest {
+    string charging_station_id = 1;
+    string drone_id = 2;
+}
+
+message CompleteChargingResponse {
 }

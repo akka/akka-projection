@@ -11,7 +11,6 @@ import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.TimerScheduler
 import akka.pattern.StatusReply
-import akka.persistence.typed.RecoveryCompleted
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
@@ -25,10 +24,7 @@ import akka.projection.r2dbc.scaladsl.R2dbcReplication
 import akka.serialization.jackson.CborSerializable
 
 import java.time.Instant
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.duration.DurationLong
-import scala.concurrent.duration.FiniteDuration
-import scala.math.Ordered.orderingToOrdered
+import scala.concurrent.duration._
 
 object ChargingStation {
 
@@ -50,7 +46,10 @@ object ChargingStation {
   case class GetState(replyTo: ActorRef[StatusReply[ChargingStation.State]])
       extends Command
 
-  private case class CompleteCharging(droneId: String) extends Command
+  case class CompleteCharging(
+      droneId: String,
+      reply: ActorRef[StatusReply[Done]])
+      extends Command
 
   // events
   sealed trait Event extends CborSerializable {}
@@ -118,9 +117,6 @@ object ChargingStation {
     }
   }
 
-  private def durationUntil(instant: Instant): FiniteDuration =
-    (instant.getEpochSecond - Instant.now().getEpochSecond).seconds
-
 }
 
 class ChargingStation(
@@ -136,9 +132,6 @@ class ChargingStation(
       None,
       handleCommand,
       handleEvent)
-      .receiveSignal { case (Some(state: State), RecoveryCompleted) =>
-        handleRecoveryCompleted(state)
-      }
       // tag with location id so we can replicate only to the right edge node
       .withTaggerForState {
         case (None, _)        => Set.empty
@@ -203,25 +196,24 @@ class ChargingStation(
           val chargeCompletedBy =
             Instant.now().plusSeconds(FullChargeTime.toSeconds)
           context.log.info(
-            "Drone {} requested charging, will complete charging at {}",
+            "Drone {} requested charging, expected to complete charging at {}",
             droneId,
             chargeCompletedBy)
           val event = ChargingStarted(droneId, chargeCompletedBy)
-          Effect.persist(event).thenRun { (_: Option[State]) =>
-            timers.startSingleTimer(
-              CompleteCharging(droneId),
-              durationUntil(chargeCompletedBy))
-            // Note: The event is also the reply
-            replyTo ! StatusReply.Success(event)
-          }
+          Effect
+            .persist(event)
+            .thenReply(replyTo)(_ => StatusReply.Success(event))
         }
 
-      case CompleteCharging(droneId) =>
+      case CompleteCharging(droneId, replyTo) =>
         if (state.dronesCharging.exists(_.droneId == droneId)) {
           context.log.info("Drone {} completed charging", droneId)
-          Effect.persist(ChargingCompleted(droneId))
+          Effect
+            .persist(ChargingCompleted(droneId))
+            .thenReply(replyTo)(_ => StatusReply.Ack)
         } else {
-          Effect.none
+          Effect.reply(replyTo)(
+            StatusReply.error(s"Drone $droneId is not currently charging"))
         }
 
       case GetState(replyTo) =>
@@ -259,24 +251,6 @@ class ChargingStation(
         }
 
     }
-  }
-
-  private def handleRecoveryCompleted(state: State): Unit = {
-    // FIXME this scheme is not quite reliable, because station is not remembered/restarted
-    //       until next new event/command if edge system is shut down/restarted
-    // Complete or set up timers for completion for drones charging,
-    // but only if the charging was initiated in this replica
-    val now = Instant.now()
-    state.dronesCharging
-      .filter(_.replicaId == replicationContext.replicaId.id)
-      .foreach { chargingDrone =>
-        if (chargingDrone.chargingDone < now)
-          context.self ! CompleteCharging(chargingDrone.droneId)
-        else
-          timers.startSingleTimer(
-            CompleteCharging(chargingDrone.droneId),
-            durationUntil(chargingDrone.chargingDone))
-      }
   }
 
 }
