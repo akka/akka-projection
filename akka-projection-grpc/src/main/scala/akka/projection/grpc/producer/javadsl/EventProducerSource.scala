@@ -16,6 +16,11 @@ import akka.projection.grpc.replication.internal.EventOriginFilter
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 
 object EventProducerSource {
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private[akka] def fromScala(
       source: akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource): EventProducerSource =
     new EventProducerSource(
@@ -24,7 +29,7 @@ object EventProducerSource {
       source.transformation.toJava,
       source.settings,
       source.producerFilter.apply,
-      source.transformSnapshot.map[JFunction[Any, Any]](ts => ts.apply).asJava,
+      source.transformSnapshot.map[JFunction[Any, Any]](_.apply).asJava,
       source.replicatedEventOriginFilter)
 }
 
