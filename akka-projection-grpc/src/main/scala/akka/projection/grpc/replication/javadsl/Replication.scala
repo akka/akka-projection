@@ -119,11 +119,7 @@ object Replication {
 
     val scalaReplication =
       ReplicationImpl.grpcReplication[Command, Event, State](scalaReplicationSettings, replicatedEntity)(system)
-    val jEventProducerSource = new EventProducerSource(
-      scalaReplication.eventProducerService.entityType,
-      scalaReplication.eventProducerService.streamId,
-      scalaReplication.eventProducerService.transformation.toJava,
-      scalaReplication.eventProducerService.settings)
+    val jEventProducerSource = EventProducerSource.fromScala(scalaReplication.eventProducerSource)
 
     val jEventProducerPushDestination =
       scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).asJava
