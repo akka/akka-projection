@@ -1,9 +1,7 @@
 # Changes from Durable State
 
-A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/durable-state/persistence.html). Durable state changes can be [tagged](https://doc.akka.io/docs/akka/current/typed/durable-state/persistence.html#tagging) and then
-consumed with the [changes query](https://doc.akka.io/docs/akka/current/durable-state/persistence-query.html#using-query-with-akka-projections).
-
-Akka Projections has integration with `changes`, which is described here. 
+A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/durable-state/persistence.html). Durable state changes can be consumed in a Projection with
+`changesByTag`, `changesBySlices` or `eventsBySlices` queries.
 
 @@@ note { title=Alternative }
 When using the R2DBC plugin an alternative to using a Projection is to @extref:[store the query representation](akka-persistence-r2dbc:durable-state-store.html#storing-query-representation) directly from the write side.
@@ -76,3 +74,44 @@ This source is consuming all the changes from the `Account` `DurableStateBehavio
 The @scala[`DurableStateChange[AccountEntity.Account]`]@java[`DurableStateChange<AccountEntity.Account>`] is what the `Projection`
 handler will process. It contains the `State` and additional meta data, such as the offset that will be stored
 by the `Projection`. See @apidoc[akka.persistence.query.DurableStateChange] for full details of what it contains. 
+
+## SourceProvider for eventsBySlices
+
+An alternative to the @apidoc[akka.persistence.query.DurableStateChange] emitted by `changesBySlices` is to store
+additional change event when the state is updated or deleted. Those events are stored in the event journal and
+can therefore be used with the @ref:[SourceProvider for eventsBySlices](eventsourced.md#sourceprovider-for-eventsbyslices).
+
+Compared to `changesBySlices` the advantages of `eventsBySlices` are:
+
+* can be used with @ref:[Akka Projection gRPC](grpc.md) for asynchronous event based service-to-service communication
+* has support for @extref:[Publish events for lower latency](akka-persistence-r2dbc:query.html#publish-events-for-lower-latency-of-eventsbyslices)
+* change events can represent smaller deltas than the full state
+* all individual change events are received by the consumer, not only the latest as is the case for `changesBySlices`
+
+`DurableState` with change events has the disadvantage that the events must be stored in addition to the latest state. 
+
+You create the change events by defining a @apidoc[ChangeEventHandler] in the `DurableStateBehavior`:
+
+Scala
+:  @@snip [DurableStateChangeEventDocExample.scala](/examples/src/test/scala/docs/state/DurableStateChangeEventDocExample.scala) { #changeEventHandler }
+
+Java
+:  @@snip [DurableStateChangeEventDocExample.java](/examples/src/test/java/jdocs/state/DurableStateChangeEventDocExample.java) { #changeEventHandler }
+
+In this example we create events that represent deltas of the state changes using the command. In addition to the 
+command the `updateHandler` is given the previous state and the new updated state as parameters. If you want to
+keep it simple you can use the full state as the change event.
+
+@@@ note
+
+The `updateHandler` and `deleteHandler` are invoked after the ordinary command handler. Be aware of that
+if the state is mutable and modified by the command handler the previous state parameter of the `updateHandler`
+will also include the modification, since it's the same instance. If that is problem you need to use
+immutable state and create a new state instance when modifying it in the command handler.
+
+@@@
+
+The change events are only used for the Projections and is not the source for the `DurableStateBehavior`
+state, as they would be with `EventSourcedBehavior`. Therefore, you might not be interested in keeping old events
+for too long. Also, the events are not automatically removed when the Durable State is deleted. For event deletion
+you can use the @extref:[cleanup tool](akka-persistence-r2dbc:cleanup.html)

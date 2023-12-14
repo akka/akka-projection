@@ -166,6 +166,12 @@ Java
 This example includes an application specific `ShoppingCartService`, which is unrelated to Akka Projections gRPC,
 but it illustrates how to combine the `EventProducer` service with other gRPC services.
 
+### Durable State as source of events
+
+Projections over gRPC requires events, and are therefore typically used with `EventSourcedBehavior`.
+`DurableStateBehavior` can also be the source of events and be used with Projections over gRPC.
+For `DurableStateBehavior` you need to use change events as described in @ref[Changes from Durable State](durable-state.md#sourceprovider-for-eventsbyslices).
+
 ## Filters
 
 By default, events from all entities of the given entity type and slice range are emitted from the producer to the

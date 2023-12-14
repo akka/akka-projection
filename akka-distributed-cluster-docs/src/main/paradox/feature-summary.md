@@ -42,6 +42,12 @@ producer. The offsets on the consumer side are stored in a database, but that is
 database of the producer.
 @@@
 
+### Durable State as source of events
+
+Projections over gRPC requires events, and are therefore typically used with `EventSourcedBehavior`.
+`DurableStateBehavior` can also be the source of events and be used with Projections over gRPC.
+For `DurableStateBehavior` you need to use change events as described in @extref[Changes from Durable State](akka-projection:durable-state.html#sourceprovider-for-eventsbyslices).
+
 ### Learn more
 
 * @ref[Part 2 of the Guide: Service to Service eventing](guide/2-service-to-service.md)

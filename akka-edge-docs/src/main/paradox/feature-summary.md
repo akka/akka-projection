@@ -108,6 +108,12 @@ it may not be an option.
 H2 database should not be used when the service is an Akka Cluster with more than 1 node.
 @@@
 
+### Durable State as source of events
+
+Projections over gRPC requires events, and are therefore typically used with `EventSourcedBehavior`.
+`DurableStateBehavior` can also be the source of events and be used with Projections over gRPC.
+For `DurableStateBehavior` you need to use change events as described in @extref[Changes from Durable State](akka-projection:durable-state.html#sourceprovider-for-eventsbyslices).
+
 ### Learn more
 
 * @ref[Hands-on guide for implementing an Akka Edge application](guide.md)

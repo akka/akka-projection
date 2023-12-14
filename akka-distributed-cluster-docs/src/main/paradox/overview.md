@@ -52,11 +52,6 @@ with the latest events it can consume the "live" events immediately without the 
 round trip. This gives very low end-to-end latency. The journal is still used as the reliable source in
 case the consumer can't keep up or in failure scenarios.
 
-@@@ note
-Currently, the event replication mechanism requires Event Sourced entities as the source on the producer side.
-Replication of Akka's Durable State entities is currently not supported. 
-@@@
-
 ## Dynamic filters
 
 Events from all entities might not be needed at all locations. Therefore, it is possible to define filters that
