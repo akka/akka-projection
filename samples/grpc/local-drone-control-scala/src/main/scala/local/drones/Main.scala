@@ -4,6 +4,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorSystem, Behavior }
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
+import charging.ChargingStation
 
 object Main {
 
@@ -39,13 +40,20 @@ object Main {
         new DeliveriesQueueServiceImpl(settings, deliveriesQueue)(
           context.system)
 
+      // replicated charging station entity
+      val chargingStationReplication =
+        ChargingStation.initEdge(settings.locationId)(context.system)
+
       val grpcInterface =
         context.system.settings.config
           .getString("local-drone-control.grpc.interface")
       val grpcPort =
         context.system.settings.config.getInt("local-drone-control.grpc.port")
       val droneService =
-        new DroneServiceImpl(deliveriesQueue, settings)(context.system)
+        new DroneServiceImpl(
+          deliveriesQueue,
+          chargingStationReplication.entityRefFactory,
+          settings)(context.system)
       LocalDroneControlServer.start(
         grpcInterface,
         grpcPort,

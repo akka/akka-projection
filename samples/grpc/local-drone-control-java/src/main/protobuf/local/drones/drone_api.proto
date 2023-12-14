@@ -4,6 +4,7 @@ option java_multiple_files = true;
 option java_package = "local.drones.proto";
 
 import "common/coordinates.proto";
+import "google/protobuf/timestamp.proto";
 
 package local.drones;
 
@@ -15,6 +16,10 @@ service DroneService {
     // deliveries
     rpc RequestNextDelivery (RequestNextDeliveryRequest) returns (RequestNextDeliveryResponse) {}
     rpc CompleteDelivery (CompleteDeliveryRequest) returns (CompleteDeliveryResponse) {}
+
+    // charging
+    rpc GoCharge (GoChargeRequest) returns (ChargingResponse) {}
+    rpc CompleteCharge (CompleteChargeRequest) returns (CompleteChargingResponse) {}
 }
 
 
@@ -43,4 +48,32 @@ message CompleteDeliveryRequest {
 }
 
 message CompleteDeliveryResponse {
+}
+
+message GoChargeRequest {
+    string drone_id = 1;
+    string charging_station_id = 2;
+}
+
+message ChargingResponse {
+    oneof response {
+        ChargingStarted started = 1;
+        ComeBackLater come_back_later = 2;
+    };
+}
+
+message ChargingStarted {
+    google.protobuf.Timestamp expected_complete = 1;
+}
+
+message ComeBackLater {
+    google.protobuf.Timestamp first_slot_free_at = 1;
+}
+
+message CompleteChargeRequest {
+    string charging_station_id = 1;
+    string drone_id = 2;
+}
+
+message CompleteChargingResponse {
 }

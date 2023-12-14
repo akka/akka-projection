@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "charging.proto";
+
+import "google/protobuf/timestamp.proto";
+
+package charging;
+
+service ChargingStationService {
+  rpc CreateChargingStation(CreateChargingStationRequest) returns (CreateChargingStationResponse) {}
+  rpc GetChargingStationState(GetChargingStationStateRequest) returns (GetChargingStationStateResponse) {}
+}
+
+message CreateChargingStationRequest {
+  // unique identifier for the charging station
+  string charging_station_id = 1;
+  // location of the station
+  string location_id = 2;
+  // number of parallel charging slots for drones
+  uint32 charging_slots = 3;
+}
+
+message CreateChargingStationResponse {
+}
+
+message GetChargingStationStateRequest {
+  string charging_station_id = 1;
+}
+
+message GetChargingStationStateResponse {
+  // location of the station
+  string location_id = 1;
+  // number of parallel charging slots for drones
+  uint32 charging_slots = 2;
+  // drones currently at the station charging
+  repeated ChargingDrone currently_charging_drones = 3;
+}
+
+message ChargingDrone {
+  string drone_id = 1;
+  // timestamp when charging is estimated to complete
+  google.protobuf.Timestamp expected_complete = 2;
+}

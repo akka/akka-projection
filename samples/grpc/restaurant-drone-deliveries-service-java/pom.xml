@@ -27,6 +27,7 @@
         <logback.version>1.2.13</logback.version>
         <junit.version>4.13.1</junit.version>
         <scala.binary.version>2.13</scala.binary.version>
+        <protobuf-java.version>3.22.2</protobuf-java.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
         <!-- Version of the Docker image is derived from git commit.
@@ -162,6 +163,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- for using predefined protobuf message types, see also maven dependency plugin config below -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${protobuf-java.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -204,11 +212,53 @@
             </plugin>
 
             <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>getClasspathFilenames</id>
+                        <goals>
+                            <!-- provides the jars of the classpath as properties inside of maven
+                                 so that we can refer to one of the jars in the exec plugin config below -->
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>unpack</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>com.google.protobuf</groupId>
+                                    <artifactId>protobuf-java</artifactId>
+                                    <version>${protobuf-java.version}</version>
+                                    <type>jar</type>
+                                    <overWrite>true</overWrite>
+                                    <outputDirectory>${project.build.directory}/proto</outputDirectory>
+                                    <includes>**/*.proto</includes>
+                                </artifactItem>
+                            </artifactItems>
+                            <overWriteReleases>false</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
                 <groupId>com.lightbend.akka.grpc</groupId>
                 <artifactId>akka-grpc-maven-plugin</artifactId>
                 <version>${akka-grpc-maven-plugin.version}</version>
                 <configuration>
                     <language>Java</language>
+                    <protoPaths>
+                        <!-- include predefined google protobuf message types -->
+                        <protoPath>target/proto</protoPath>
+                        <!-- our own protobuf messages and gRPC services -->
+                        <protoPath>src/main/protobuf</protoPath>
+                    </protoPaths>
                 </configuration>
                 <executions>
                     <execution>

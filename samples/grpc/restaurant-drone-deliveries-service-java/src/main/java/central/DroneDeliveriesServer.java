@@ -11,8 +11,10 @@ import central.deliveries.proto.RestaurantDeliveriesService;
 import central.deliveries.proto.RestaurantDeliveriesServiceHandlerFactory;
 import central.drones.proto.DroneOverviewService;
 import central.drones.proto.DroneOverviewServiceHandlerFactory;
+import charging.proto.ChargingStationService;
+import charging.proto.ChargingStationServiceHandlerFactory;
 import java.time.Duration;
-import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletionStage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,8 +29,9 @@ public final class DroneDeliveriesServer {
       int port,
       central.drones.proto.DroneOverviewService droneOverviewService,
       central.deliveries.proto.RestaurantDeliveriesService restaurantDeliveriesService,
-      Function<HttpRequest, CompletionStage<HttpResponse>> deliveryEventsProducerService,
-      Function<HttpRequest, CompletionStage<HttpResponse>> pushedDroneEventsHandler) {
+      charging.proto.ChargingStationService chargingStationService,
+      Function<HttpRequest, CompletionStage<HttpResponse>> eventPullHandler,
+      Function<HttpRequest, CompletionStage<HttpResponse>> eventPushHandler) {
 
     // #composeAndBind
     @SuppressWarnings("unchecked")
@@ -36,11 +39,14 @@ public final class DroneDeliveriesServer {
         ServiceHandler.concatOrNotFound(
             DroneOverviewServiceHandlerFactory.create(droneOverviewService, system),
             RestaurantDeliveriesServiceHandlerFactory.create(restaurantDeliveriesService, system),
-            deliveryEventsProducerService,
-            pushedDroneEventsHandler,
+            ChargingStationServiceHandlerFactory.create(chargingStationService, system),
+            eventPullHandler,
+            eventPushHandler,
             ServerReflection.create(
-                Arrays.asList(
-                    DroneOverviewService.description, RestaurantDeliveriesService.description),
+                List.of(
+                    DroneOverviewService.description,
+                    RestaurantDeliveriesService.description,
+                    ChargingStationService.description),
                 system));
 
     var bound = Http.get(system).newServerAt(host, port).bind(service);

@@ -11,6 +11,8 @@ import central.deliveries.proto.RestaurantDeliveriesService
 import central.deliveries.proto.RestaurantDeliveriesServiceHandler
 import central.drones.proto.DroneOverviewService
 import central.drones.proto.DroneOverviewServiceHandler
+import charging.proto.ChargingStationService
+import charging.proto.ChargingStationServiceHandler
 
 import scala.concurrent.Future
 import scala.util.Failure
@@ -23,22 +25,24 @@ object DroneDeliveriesServer {
       port: Int,
       droneOverviewService: central.drones.proto.DroneOverviewService,
       restaurantDeliveriesService: central.deliveries.proto.RestaurantDeliveriesService,
-      deliveryEventsProducerService: PartialFunction[
-        HttpRequest,
-        Future[HttpResponse]],
-      pushedDroneEventsHandler: PartialFunction[
-        HttpRequest,
-        Future[HttpResponse]])(implicit system: ActorSystem[_]): Unit = {
+      chargingStationService: charging.proto.ChargingStationService,
+      eventPullHandler: PartialFunction[HttpRequest, Future[HttpResponse]],
+      eventPushHandler: PartialFunction[HttpRequest, Future[HttpResponse]])(
+      implicit system: ActorSystem[_]): Unit = {
     import system.executionContext
 
     // #composeAndBind
     val service = ServiceHandler.concatOrNotFound(
       DroneOverviewServiceHandler.partial(droneOverviewService),
       RestaurantDeliveriesServiceHandler.partial(restaurantDeliveriesService),
-      deliveryEventsProducerService,
-      pushedDroneEventsHandler,
+      ChargingStationServiceHandler.partial(chargingStationService),
+      eventPullHandler,
+      eventPushHandler,
       ServerReflection.partial(
-        List(DroneOverviewService, RestaurantDeliveriesService)))
+        List(
+          DroneOverviewService,
+          RestaurantDeliveriesService,
+          ChargingStationService)))
 
     val bound = Http(system).newServerAt(interface, port).bind(service)
     // #composeAndBind

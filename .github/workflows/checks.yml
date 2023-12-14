@@ -200,3 +200,12 @@ jobs:
         run: |-
           cd samples/grpc/iot-service-scala
           sbt test -Dakka-projection.version=`cat ~/.version`
+
+      - name: gRPC sample Java charger RES identical impl check
+        run: |-
+          diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java
+
+      - name: gRPC sample Scala charger RES identical impl check
+        run: |-
+          # RES sample should be identical
+          diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala

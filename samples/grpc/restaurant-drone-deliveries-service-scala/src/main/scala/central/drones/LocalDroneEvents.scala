@@ -1,11 +1,8 @@
 package central.drones
 
 import akka.actor.typed.ActorSystem
-import akka.cluster.sharding.typed.scaladsl.{
-  ClusterSharding,
-  ShardedDaemonProcess
-}
-import akka.http.scaladsl.model.{ HttpRequest, HttpResponse }
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.persistence.query.Offset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
@@ -13,13 +10,15 @@ import akka.persistence.typed.PersistenceId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
-import akka.projection.scaladsl.{ Handler, SourceProvider }
-import akka.projection.{ Projection, ProjectionBehavior, ProjectionId }
+import akka.projection.scaladsl.Handler
+import akka.projection.scaladsl.SourceProvider
+import akka.projection.Projection
+import akka.projection.ProjectionBehavior
+import akka.projection.ProjectionId
 import akka.util.Timeout
 import central.CoarseGrainedCoordinates
 import central.Main.logger
 
-import scala.concurrent.Future
 import scala.jdk.DurationConverters.JavaDurationOps
 
 /**
@@ -34,9 +33,9 @@ object LocalDroneEvents {
   // use it here as well when we consume the events
   private val ProducerEntityType = "Drone"
 
-  def pushedEventsGrpcHandler(implicit system: ActorSystem[_])
-      : PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val destination = EventProducerPushDestination(
+  def pushedEventsDestination(
+      implicit system: ActorSystem[_]): EventProducerPushDestination =
+    EventProducerPushDestination(
       DroneEventStreamId,
       local.drones.proto.DroneEventsProto.javaDescriptor.getFile :: Nil)
       .withTransformationForOrigin((origin, _) =>
@@ -44,9 +43,6 @@ object LocalDroneEvents {
           // tag all events with the location name of the local control it came from)
           .registerTagMapper[local.drones.proto.CoarseDroneLocation](_ =>
             Set("location:" + origin)))
-
-    EventProducerPushDestination.grpcServiceHandler(destination)(system)
-  }
   // #eventConsumer
 
   // #eventProjection

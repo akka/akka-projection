@@ -1,8 +1,6 @@
 package central.deliveries
 
 import akka.actor.typed.ActorSystem
-import akka.http.scaladsl.model.HttpRequest
-import akka.http.scaladsl.model.HttpResponse
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
@@ -12,8 +10,8 @@ import scala.concurrent.Future
 
 object DeliveryEvents {
 
-  def eventProducerService(system: ActorSystem[_])
-      : PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  def eventProducerSource(
+      system: ActorSystem[_]): EventProducer.EventProducerSource = {
     val transformation = Transformation.empty
       .registerAsyncEnvelopeMapper[
         RestaurantDeliveries.DeliveryRegistered,
@@ -29,7 +27,7 @@ object DeliveryEvents {
       transformation,
       EventProducerSettings(system))
 
-    EventProducer.grpcServiceHandler(eventProducerSource)(system)
+    eventProducerSource
   }
 
   private def transformDeliveryRegistration(
