@@ -71,12 +71,15 @@ Scala
 Java
 :  @@snip [ChargingStation.java](/samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java) { #eventHandler }
 
+@@@ note
+
 The charging station is a very limited replicated entity example to keep the guide simple. It doesn't expect any possible 
 conflicts, stations are created, once, in the central cloud and replicated to the edge, updates related to drones currently 
 charging in the station happen at the edge and are replicated to the cloud. Akka replicated event sourcing provides APIs 
 for both CRDTs where conflicts are automatically handled by the data structure and business domain level conflict resolution. 
 For more details about see the @extref[Akka documentation](akka:replicated-eventsourcing.html).
 
+@@@
 
 ### Tagging based on location
 
@@ -88,19 +91,6 @@ Scala
 
 Java
 :  @@snip [ChargingStation.java](/samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java) { #tagging }
-
-### Additional logic on start
-
-In case the entity is stopped or entire local-drone-control system is shut down, we also need to schedule completion of
-current charging sessions when it completes starting up, this is done with a signal handler for the `RecoveryCompleted` signal
-which Akka will send to it every time it has completed starting up. Note how we are using the `ReplicationContext` to only
-do this on the replica where the charging was started:
-
-Scala
-:  @@snip [ChargingStation.scala](/samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala) { #eventHandler }
-
-Java
-:  @@snip [ChargingStation.java](/samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java) { #eventHandler }
 
 ### Serialization
 
@@ -258,6 +248,17 @@ grpcurl -d '{"drone_id":"drone1","charging_station_id":"station1"}' -plaintext 1
 ```
 
 Inspect the state of the charging station in the cloud service to see the charging drone replicated there:
+
+```shell
+grpcurl -d '{"charging_station_id":"station1"}' -plaintext localhost:8101 charging.ChargingStationService.GetChargingStationState
+```
+Inform the station that the drone completed charging:
+
+```shell
+grpcurl -d '{"drone_id":"drone1","charging_station_id":"station1"}' -plaintext 127.0.0.1:8080 local.drones.DroneService.CompleteCharge
+```
+
+Again query the restaurant-drone-deliveries charge station inspection command to see the set of charging drones changing again:
 
 ```shell
 grpcurl -d '{"charging_station_id":"station1"}' -plaintext localhost:8101 charging.ChargingStationService.GetChargingStationState

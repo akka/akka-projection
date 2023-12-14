@@ -319,6 +319,7 @@ public class ChargingStation
   }
   // #commandHandler
 
+  // #eventHandler
   @Override
   public EventHandler<State, Event> eventHandler() {
     var noStateHandler =
@@ -367,6 +368,7 @@ public class ChargingStation
 
     return noStateHandler.orElse(initializedStateHandler).build();
   }
+  // #eventHandler
 
   // #tagging
   @Override
