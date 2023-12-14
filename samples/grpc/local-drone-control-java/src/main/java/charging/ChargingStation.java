@@ -6,7 +6,6 @@ import akka.actor.typed.ActorSystem;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
-import akka.actor.typed.javadsl.TimerScheduler;
 import akka.pattern.StatusReply;
 import akka.persistence.typed.ReplicaId;
 import akka.persistence.typed.javadsl.*;
@@ -174,28 +173,20 @@ public class ChargingStation
       ReplicatedBehaviors<Command, Event, State> replicatedBehaviors) {
     return Behaviors.setup(
         (ActorContext<Command> context) ->
-            Behaviors.withTimers(
-                (TimerScheduler<Command> timers) ->
-                    replicatedBehaviors.setup(
-                        replicationContext -> {
-                          context
-                              .getLog()
-                              .info(
-                                  "Charging Station {} starting up", replicationContext.entityId());
-                          return new ChargingStation(context, replicationContext, timers);
-                        })));
+            replicatedBehaviors.setup(
+                replicationContext -> {
+                  context
+                      .getLog()
+                      .info("Charging Station {} starting up", replicationContext.entityId());
+                  return new ChargingStation(context, replicationContext);
+                }));
   }
 
   private final ActorContext<Command> context;
-  private final TimerScheduler<Command> timers;
 
-  public ChargingStation(
-      ActorContext<Command> context,
-      ReplicationContext replicationContext,
-      TimerScheduler<Command> timers) {
+  public ChargingStation(ActorContext<Command> context, ReplicationContext replicationContext) {
     super(replicationContext);
     this.context = context;
-    this.timers = timers;
   }
 
   @Override

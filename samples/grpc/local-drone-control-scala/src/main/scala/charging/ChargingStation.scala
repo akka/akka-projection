@@ -9,7 +9,6 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.scaladsl.TimerScheduler
 import akka.pattern.StatusReply
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
@@ -29,7 +28,7 @@ import scala.concurrent.duration._
 object ChargingStation {
 
   // commands and replies
-  sealed trait Command extends CborSerializable {}
+  sealed trait Command extends CborSerializable
   case class Create(
       locationId: String,
       chargingSlots: Int,
@@ -52,7 +51,7 @@ object ChargingStation {
       extends Command
 
   // events
-  sealed trait Event extends CborSerializable {}
+  sealed trait Event extends CborSerializable
   case class Created(locationId: String, chargingSlots: Int) extends Event
   case class ChargingStarted(droneId: String, chargeComplete: Instant)
       extends Event
@@ -106,13 +105,10 @@ object ChargingStation {
       replicatedBehaviors: ReplicatedBehaviors[Command, Event, Option[State]])
       : Behavior[Command] = {
     Behaviors.setup[Command] { context =>
-      Behaviors.withTimers { timers =>
-        replicatedBehaviors.setup { replicationContext =>
-          context.log.info(
-            "Charging Station {} starting up",
-            replicationContext.entityId)
-          new ChargingStation(context, replicationContext, timers).behavior()
-        }
+      replicatedBehaviors.setup { replicationContext =>
+        context.log
+          .info("Charging Station {} starting up", replicationContext.entityId)
+        new ChargingStation(context, replicationContext).behavior()
       }
     }
   }
@@ -121,8 +117,7 @@ object ChargingStation {
 
 class ChargingStation(
     context: ActorContext[ChargingStation.Command],
-    replicationContext: ReplicationContext,
-    timers: TimerScheduler[ChargingStation.Command]) {
+    replicationContext: ReplicationContext) {
 
   import ChargingStation._
 
