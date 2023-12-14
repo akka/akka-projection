@@ -168,10 +168,12 @@ Java
 
 The complete sample can be downloaded from GitHub, but note that it also includes the next steps of the guide:
 
-* restaurant-drone-deliveries-service Scala: [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-scala.zip)
-* local-drone-control-service Scala: [local-drone-control-service.zip](../attachments/local-drone-control-service-scala.zip)
-* restaurant-drone-deliveries-service Java: [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-java.zip)
-* local-drone-control-service Java: [local-drone-control-service.zip](../attachments/local-drone-control-service-java.zip)
+* Scala
+    * [local-drone-control-service.zip](../attachments/local-drone-control-service-scala.zip)
+    * [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-scala.zip)
+* Java
+    * [local-drone-control-service.zip](../attachments/local-drone-control-service-java.zip)
+    * [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-java.zip)
 
 As this service consumes events from the service built in the previous step, start the local-drone-control service first:
 

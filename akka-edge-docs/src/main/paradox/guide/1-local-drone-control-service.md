@@ -173,8 +173,8 @@ Java
 
 The complete sample can be downloaded from GitHub, but note that it also includes the next steps of the guide:
 
-* local-drone-control-service Scala: [local-drone-control-service.zip](../attachments/local-drone-control-service-scala.zip)
-* local-drone-control-service Java: [local-drone-control-service.zip](../attachments/local-drone-control-service-java.zip)
+* Scala [local-drone-control-service.zip](../attachments/local-drone-control-service-scala.zip)
+* Java [local-drone-control-service.zip](../attachments/local-drone-control-service-java.zip)
 
 @@@ div { .group-scala }
 

@@ -116,8 +116,8 @@ We are now going to deploy the `restaurant-drone-deliveries-service` to the crea
 
 This step is for deploying:
 
-* restaurant-drone-deliveries-service Scala: [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-scala.zip)
-* restaurant-drone-deliveries-service Java: [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-java.zip)
+* Scala: [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-scala.zip)
+* Java: [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-java.zip)
 
 Build and publish the docker image to docker.io:
 
@@ -216,8 +216,8 @@ kubectl get services
 
 This step is for deploying:
 
-* local-drone-control-service Scala: [local-drone-control-service.zip](../attachments/local-drone-control-service-scala.zip)
-* local-drone-control-service Java: [local-drone-control-service.zip](../attachments/local-drone-control-service-java.zip)
+* Scala: [local-drone-control-service.zip](../attachments/local-drone-control-service-scala.zip)
+* Java: [local-drone-control-service.zip](../attachments/local-drone-control-service-java.zip)
 
 ### Local Drone Control Namespace
 
