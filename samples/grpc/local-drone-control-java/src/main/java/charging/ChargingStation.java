@@ -97,11 +97,11 @@ public class ChargingStation
 
   public static final class ChargingStarted implements Event, StartChargingResponse {
     public final String droneId;
-    public final Instant chargeComplete;
+    public final Instant expectedComplete;
 
-    public ChargingStarted(String droneId, Instant chargeComplete) {
+    public ChargingStarted(String droneId, Instant expectedComplete) {
       this.droneId = droneId;
-      this.chargeComplete = chargeComplete;
+      this.expectedComplete = expectedComplete;
     }
   }
 
@@ -116,12 +116,12 @@ public class ChargingStation
 
   public static final class ChargingDrone {
     public final String droneId;
-    public final Instant chargingDone;
+    public final Instant expectedComplete;
     public final String replicaId;
 
-    public ChargingDrone(String droneId, Instant chargingDone, String replicaId) {
+    public ChargingDrone(String droneId, Instant expectedComplete, String replicaId) {
       this.droneId = droneId;
-      this.chargingDone = chargingDone;
+      this.expectedComplete = expectedComplete;
       this.replicaId = replicaId;
     }
   }
@@ -252,25 +252,7 @@ public class ChargingStation
                                     + getReplicationContext().entityId()
                                     + " was already created")))
             .onCommand(StartCharging.class, this::handleStartCharging)
-            .onCommand(
-                CompleteCharging.class,
-                (state, completeCharging) -> {
-                  context.getLog().info("Drone {} completed charging", completeCharging.droneId);
-                  if (state.dronesCharging.stream()
-                      .anyMatch(
-                          chargingDrone -> chargingDrone.droneId.equals(completeCharging.droneId)))
-                    return Effect()
-                        .persist(new ChargingCompleted(completeCharging.droneId))
-                        .thenReply(completeCharging.replyTo, newState -> StatusReply.ack());
-                  else
-                    return Effect()
-                        .reply(
-                            completeCharging.replyTo,
-                            StatusReply.error(
-                                "Drone "
-                                    + completeCharging.droneId
-                                    + " is not currently charging."));
-                })
+            .onCommand(CompleteCharging.class, this::handleCompleteCharging)
             .onCommand(
                 GetState.class,
                 (state, getState) -> Effect().reply(getState.replyTo, StatusReply.success(state)));
@@ -285,9 +267,9 @@ public class ChargingStation
     } else if (state.dronesCharging.size() >= state.chargingSlots) {
       var earliestFreeSlot =
           state.dronesCharging.stream()
-              .min(Comparator.comparing(chargingDrone -> chargingDrone.chargingDone))
+              .min(Comparator.comparing(chargingDrone -> chargingDrone.expectedComplete))
               .get()
-              .chargingDone;
+              .expectedComplete;
       context
           .getLog()
           .info(
@@ -298,18 +280,34 @@ public class ChargingStation
           .reply(startCharging.replyTo, StatusReply.success(new AllSlotsBusy(earliestFreeSlot)));
     } else {
       // charge
-      var chargeCompletedBy = Instant.now().plus(FULL_CHARGE_TIME);
+      var expectedComplete = Instant.now().plus(FULL_CHARGE_TIME);
       context
           .getLog()
           .info(
               "Drone {} requested charging, will complete charging at {}",
               startCharging.droneId,
-              chargeCompletedBy);
-      var event = new ChargingStarted(startCharging.droneId, chargeCompletedBy);
+              expectedComplete);
+      var event = new ChargingStarted(startCharging.droneId, expectedComplete);
       return Effect()
           .persist(event)
           .thenReply(startCharging.replyTo, newState -> StatusReply.success(event));
     }
+  }
+
+  private Effect<Event, State> handleCompleteCharging(
+      State state, CompleteCharging completeCharging) {
+    context.getLog().info("Drone {} completed charging", completeCharging.droneId);
+    if (state.dronesCharging.stream()
+        .anyMatch(chargingDrone -> chargingDrone.droneId.equals(completeCharging.droneId)))
+      return Effect()
+          .persist(new ChargingCompleted(completeCharging.droneId))
+          .thenReply(completeCharging.replyTo, newState -> StatusReply.ack());
+    else
+      return Effect()
+          .reply(
+              completeCharging.replyTo,
+              StatusReply.error(
+                  "Drone " + completeCharging.droneId + " is not currently charging."));
   }
 
   @Override
@@ -338,7 +336,7 @@ public class ChargingStation
                   newSet.add(
                       new ChargingDrone(
                           event.droneId,
-                          event.chargeComplete,
+                          event.expectedComplete,
                           getReplicationContext().origin().id()));
                   return new State(
                       state.chargingSlots,

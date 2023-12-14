@@ -20,6 +20,7 @@ public class LocalDroneControlServer {
       ActorSystem<?> system,
       DroneService droneService,
       DeliveriesQueueService deliveriesQueueService) {
+    @SuppressWarnings("unchecked")
     var service =
         ServiceHandler.concatOrNotFound(
             DroneServiceHandlerFactory.create(droneService, system),

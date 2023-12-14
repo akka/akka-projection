@@ -40,5 +40,5 @@ message GetChargingStationStateResponse {
 message ChargingDrone {
   string drone_id = 1;
   // timestamp when charging is estimated to complete
-  google.protobuf.Timestamp charging_complete = 2;
+  google.protobuf.Timestamp expected_complete = 2;
 }

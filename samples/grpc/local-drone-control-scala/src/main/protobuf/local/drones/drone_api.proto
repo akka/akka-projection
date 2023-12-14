@@ -58,7 +58,7 @@ message ChargingResponse {
 }
 
 message ChargingStarted {
-    google.protobuf.Timestamp done_by = 1;
+    google.protobuf.Timestamp expected_complete = 1;
 }
 
 message ComeBackLater {

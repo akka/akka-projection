@@ -136,11 +136,11 @@ public class DroneServiceImpl implements DroneService {
         chargingStationResponse.thenApply(
             message -> {
               if (message instanceof ChargingStation.ChargingStarted) {
-                var chargeComplete = ((ChargingStation.ChargingStarted) message).chargeComplete;
+                var expectedComplete = ((ChargingStation.ChargingStarted) message).expectedComplete;
                 return ChargingResponse.newBuilder()
                     .setStarted(
                         ChargingStarted.newBuilder()
-                            .setDoneBy(instantToProtoTimestamp(chargeComplete))
+                            .setExpectedComplete(instantToProtoTimestamp(expectedComplete))
                             .build())
                     .build();
               } else if (message instanceof ChargingStation.AllSlotsBusy) {

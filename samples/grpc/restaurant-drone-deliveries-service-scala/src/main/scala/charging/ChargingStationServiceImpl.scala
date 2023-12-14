@@ -48,7 +48,7 @@ class ChargingStationServiceImpl(
             .map(d =>
               proto.ChargingDrone(
                 droneId = d.droneId,
-                chargingComplete = Some(Timestamp(d.chargingDone))))
+                expectedComplete = Some(Timestamp(d.expectedComplete))))
             .toSeq))
   }
 }

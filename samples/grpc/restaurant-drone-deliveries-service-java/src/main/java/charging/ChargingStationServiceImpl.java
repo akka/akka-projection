@@ -72,8 +72,8 @@ public class ChargingStationServiceImpl implements ChargingStationService {
                                 d ->
                                     ChargingDrone.newBuilder()
                                         .setDroneId(d.droneId)
-                                        .setChargingComplete(
-                                            instantToProtoTimestamp(d.chargingDone))
+                                        .setExpectedComplete(
+                                            instantToProtoTimestamp(d.expectedComplete))
                                         .build())
                             .collect(Collectors.toList()))
                     .build());

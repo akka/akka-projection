@@ -53,7 +53,7 @@ object ChargingStation {
   // events
   sealed trait Event extends CborSerializable
   case class Created(locationId: String, chargingSlots: Int) extends Event
-  case class ChargingStarted(droneId: String, chargeComplete: Instant)
+  case class ChargingStarted(droneId: String, expectedComplete: Instant)
       extends Event
       with StartChargingResponse
 
@@ -61,7 +61,7 @@ object ChargingStation {
 
   case class ChargingDrone(
       droneId: String,
-      chargingDone: Instant,
+      expectedComplete: Instant,
       replicaId: String)
   case class State(
       chargingSlots: Int,
@@ -179,7 +179,8 @@ class ChargingStation(
             droneId)
           Effect.none
         } else if (state.dronesCharging.size >= state.chargingSlots) {
-          val earliestFreeSlot = state.dronesCharging.map(_.chargingDone).min
+          val earliestFreeSlot =
+            state.dronesCharging.map(_.expectedComplete).min
           context.log.info(
             "Drone {} requested charging but all stations busy, earliest free slot {}",
             droneId,
@@ -188,13 +189,13 @@ class ChargingStation(
             StatusReply.Success(AllSlotsBusy(earliestFreeSlot)))
         } else {
           // charge
-          val chargeCompletedBy =
+          val expectedComplete =
             Instant.now().plusSeconds(FullChargeTime.toSeconds)
           context.log.info(
             "Drone {} requested charging, expected to complete charging at {}",
             droneId,
-            chargeCompletedBy)
-          val event = ChargingStarted(droneId, chargeCompletedBy)
+            expectedComplete)
+          val event = ChargingStarted(droneId, expectedComplete)
           Effect
             .persist(event)
             .thenReply(replyTo)(_ => StatusReply.Success(event))
@@ -233,11 +234,11 @@ class ChargingStation(
           case Created(_, _) =>
             context.log.warn("Saw a second created event, ignoring")
             Some(state)
-          case ChargingStarted(droneId, chargeComplete) =>
+          case ChargingStarted(droneId, expectedComplete) =>
             Some(
               state.copy(dronesCharging = state.dronesCharging + ChargingDrone(
                 droneId,
-                chargeComplete,
+                expectedComplete,
                 replicationContext.origin.id)))
           case ChargingCompleted(droneId) =>
             Some(

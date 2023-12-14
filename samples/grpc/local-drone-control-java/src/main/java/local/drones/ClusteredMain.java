@@ -66,8 +66,7 @@ public class ClusteredMain {
               new DroneServiceImpl(
                   context.getSystem(),
                   deliveriesQueue,
-                  // FIXME wrong function type
-                  id -> chargingStationReplication.entityRefFactory().apply(id),
+                  chargingStationReplication.entityRefFactory(),
                   settings);
 
           var grpcInterface =

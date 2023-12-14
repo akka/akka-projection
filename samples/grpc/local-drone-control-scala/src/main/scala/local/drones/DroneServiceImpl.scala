@@ -98,10 +98,10 @@ class DroneServiceImpl(
       .askWithStatus[ChargingStation.StartChargingResponse](
         ChargingStation.StartCharging(in.droneId, _))
       .map {
-        case ChargingStation.ChargingStarted(_, chargeComplete) =>
+        case ChargingStation.ChargingStarted(_, expectedComplete) =>
           proto.ChargingResponse(
-            proto.ChargingResponse.Response
-              .Started(proto.ChargingStarted(Some(Timestamp(chargeComplete)))))
+            proto.ChargingResponse.Response.Started(
+              proto.ChargingStarted(Some(Timestamp(expectedComplete)))))
         case ChargingStation.AllSlotsBusy(comeBackAt) =>
           proto.ChargingResponse(
             proto.ChargingResponse.Response
