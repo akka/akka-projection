@@ -73,8 +73,8 @@ Java
 
 The complete sample can be downloaded from GitHub, but note that it also includes the next step of the guide:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-scala
+* restaurant-drone-deliveries-service Scala: [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-scala.zip)
+* restaurant-drone-deliveries-service Java: [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-java.zip)
 
 In this step we created a local entity, so we can try it out by running the restaurant-drone-deliveries-service without
 any local-drone-control services.
