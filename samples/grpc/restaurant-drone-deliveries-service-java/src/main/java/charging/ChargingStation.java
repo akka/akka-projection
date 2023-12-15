@@ -26,7 +26,7 @@ public class ChargingStation
     extends ReplicatedEventSourcedBehavior<
         ChargingStation.Command, ChargingStation.Event, ChargingStation.State> {
 
-  // commands and replies
+  // #commands
   public interface Command extends CborSerializable {}
 
   public static final class Create implements Command {
@@ -81,8 +81,9 @@ public class ChargingStation
       this.replyTo = replyTo;
     }
   }
+  // #commands
 
-  // events
+  // #events
   public interface Event extends CborSerializable {}
 
   public static final class Created implements Event {
@@ -125,7 +126,9 @@ public class ChargingStation
       this.replicaId = replicaId;
     }
   }
+  // #events
 
+  // #state
   public static final class State implements CborSerializable {
     public final int chargingSlots;
     public final Set<ChargingDrone> dronesCharging;
@@ -137,6 +140,7 @@ public class ChargingStation
       this.stationLocationId = stationLocationId;
     }
   }
+  // #state
 
   public static final String ENTITY_TYPE = "charging-station";
 
@@ -146,6 +150,7 @@ public class ChargingStation
    * Init for running in edge node, this is the only difference from the ChargingStation in
    * restaurant-deliveries-service
    */
+  // #edgeReplicaInit
   public static EdgeReplication<Command> initEdge(ActorSystem<?> system, String locationId) {
     var replicationSettings =
         ReplicationSettings.create(
@@ -158,8 +163,10 @@ public class ChargingStation
                     new ConsumerFilter.IncludeTopics(Set.of(locationId))));
     return Replication.grpcEdgeReplication(replicationSettings, ChargingStation::create, system);
   }
+  // #edgeReplicaInit
 
   /** Init for running in cloud replica */
+  // #replicaInit
   public static Replication<Command> init(ActorSystem<?> system) {
     var replicationSettings =
         ReplicationSettings.create(
@@ -168,6 +175,7 @@ public class ChargingStation
             .withEdgeReplication(true);
     return Replication.grpcReplication(replicationSettings, ChargingStation::create, system);
   }
+  // #replicaInit
 
   public static Behavior<Command> create(
       ReplicatedBehaviors<Command, Event, State> replicatedBehaviors) {
@@ -194,9 +202,9 @@ public class ChargingStation
     return null;
   }
 
+  // #commandHandler
   @Override
   public CommandHandler<Command, Event, State> commandHandler() {
-
     var noStateHandler =
         newCommandHandlerBuilder()
             .forNullState()
@@ -309,7 +317,9 @@ public class ChargingStation
               StatusReply.error(
                   "Drone " + completeCharging.droneId + " is not currently charging."));
   }
+  // #commandHandler
 
+  // #eventHandler
   @Override
   public EventHandler<State, Event> eventHandler() {
     var noStateHandler =
@@ -358,10 +368,13 @@ public class ChargingStation
 
     return noStateHandler.orElse(initializedStateHandler).build();
   }
+  // #eventHandler
 
+  // #tagging
   @Override
   public Set<String> tagsFor(State state, Event event) {
     if (state == null) return Set.of();
     else return Set.of("t:" + state.stationLocationId);
   }
+  // #tagging
 }
