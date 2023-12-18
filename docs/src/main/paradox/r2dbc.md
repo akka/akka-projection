@@ -124,8 +124,7 @@ using 1024 slices and running 4 Projection instances the slice ranges would be 0
 Changing to 8 slice ranges means that the ranges would be 0-127, 128-255, 256-383, ..., 768-895, 896-1023.
 
 However, when changing the number of slices the projections with the old slice distribution must be
-stopped before starting new projections. That can be done with a full shutdown before deploying the
-new slice distribution or pause (stop) the projections with @ref:[the management API](management.md).
+stopped before starting new projections. That can be done at runtime when @ref[Running with Sharded Daemon Process](#running-with-sharded-daemon-process).
 
 When using `R2dbcProjection` together with the `EventSourcedProvider.eventsBySlices` the events will be delivered in
 sequence number order without duplicates.

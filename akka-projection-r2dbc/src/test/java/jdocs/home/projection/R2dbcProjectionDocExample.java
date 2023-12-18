@@ -7,6 +7,7 @@ package jdocs.home.projection;
 import akka.Done;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings;
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
 import akka.japi.Pair;
 import akka.persistence.query.Offset;
@@ -154,19 +155,20 @@ class R2dbcProjectionDocExample {
 
   // #initProjections
   void initProjections() {
-    // Split the slices into 4 ranges
-    int numberOfSliceRanges = 4;
-    List<Pair<Integer, Integer>> sliceRanges =
-        EventSourcedProvider.sliceRanges(
-            system, R2dbcReadJournal.Identifier(), numberOfSliceRanges);
-
     ShardedDaemonProcess.get(system)
-        .init(
+        .initWithContext(
             ProjectionBehavior.Command.class,
             "ShoppingCartProjection",
-            sliceRanges.size(),
-            i -> ProjectionBehavior.create(createProjection(sliceRanges.get(i))),
-            ProjectionBehavior.stopMessage());
+            4,
+            daemonContext -> {
+              List<Pair<Integer, Integer>> sliceRanges =
+                  EventSourcedProvider.sliceRanges(
+                      system, R2dbcReadJournal.Identifier(), daemonContext.totalProcesses());
+              Pair<Integer, Integer> sliceRange = sliceRanges.get(daemonContext.processNumber());
+              return ProjectionBehavior.create(createProjection(sliceRange));
+            },
+            ShardedDaemonProcessSettings.create(system),
+            Optional.of(ProjectionBehavior.stopMessage()));
   }
 
   Projection<EventEnvelope<ShoppingCart.Event>> createProjection(

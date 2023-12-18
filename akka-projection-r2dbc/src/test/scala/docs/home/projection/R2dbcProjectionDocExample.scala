@@ -13,11 +13,13 @@ import akka.persistence.query.Offset
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.serialization.jackson.CborSerializable
 import org.slf4j.LoggerFactory
-
 import java.time.Instant
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
+
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 
 //#handler
 //#grouped-handler
@@ -136,14 +138,16 @@ object R2dbcProjectionDocExample {
             handler = () => new ShoppingCartHandler)
       }
 
-      // Split the slices into 4 ranges
-      val numberOfSliceRanges: Int = 4
-      val sliceRanges = EventSourcedProvider.sliceRanges(system, R2dbcReadJournal.Identifier, numberOfSliceRanges)
-
-      ShardedDaemonProcess(system).init(
+      ShardedDaemonProcess(system).initWithContext(
         name = "ShoppingCartProjection",
-        numberOfInstances = sliceRanges.size,
-        behaviorFactory = i => ProjectionBehavior(projection(sliceRanges(i))),
+        initialNumberOfInstances = 4,
+        behaviorFactory = { daemonContext =>
+          val sliceRanges =
+            EventSourcedProvider.sliceRanges(system, R2dbcReadJournal.Identifier, daemonContext.totalProcesses)
+          val sliceRange = sliceRanges(daemonContext.processNumber)
+          ProjectionBehavior(projection(sliceRange))
+        },
+        ShardedDaemonProcessSettings(system),
         stopMessage = ProjectionBehavior.Stop)
     }
     // #initProjections
