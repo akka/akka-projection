@@ -47,8 +47,7 @@ The command handler is in fact two separate handlers, one for when the entity is
 the `Create` command, and one that is used to handle commands once the station has been initialized.
 
 The `StartCharging` command is the only one that requires more complicated logic: if a slot is free, persist a `ChargingStarted`
-event and tell the drone when charging will be done. A timer is also set, to send a `CompleteCharging` to itself once the
-charging time has passed. If all charging slots are busy the reply will instead be when the first slot will
+event and tell the drone when charging will be done. If all charging slots are busy the reply will instead be when the first slot will
 be free again and the drone can come back and try charge again.
 
 Scala
@@ -91,12 +90,6 @@ Scala
 
 Java
 :  @@snip [ChargingStation.java](/samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java) { #tagging }
-
-### Serialization
-
-The state and events of the entity must be serializable because they are written to the datastore, if the local drone control needs to scale out across several nodes to handle traffic, the commands would also be sent between nodes within the Akka cluster. The sample project includes built-in CBOR serialization using the @extref[Akka Serialization Jackson module](akka:serialization-jackson.html). This section describes how serialization is implemented. You do not need to do anything specific to take advantage of CBOR, but this section explains how it is included.
-
-The state, commands and events are marked as `akka.serialization.jackson.CborSerializable` which is configured to use the built-in CBOR serialization.
 
 ### Setting up replication for the charging station
 
@@ -154,8 +147,9 @@ Java
 
 ## Interacting with the charging station at the edge
 
-The local-drone-control service does not contain the full gRPC API for interaction but instead has a single `goCharge` method
-in the drone gRPC service:
+The local-drone-control service does not contain the full gRPC API for creating and inspecting charging stations but 
+instead two methods in the drone gRPC service `goCharge` to initiate charging of a drone if possible and `completeCharge`
+to complete a charging session for a given drone:
 
 Scala
 :  @@snip [DroneServiceImpl.scala](/samples/grpc/local-drone-control-scala/src/main/scala/local/drones/DroneServiceImpl.scala) { #charging }
@@ -168,12 +162,8 @@ Java
 
 The complete sample can be downloaded from GitHub, but note that it also includes the next steps of the guide:
 
-* Scala
-    * [local-drone-control-service.zip](../attachments/local-drone-control-service-scala.zip)
-    * [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-scala.zip)
-* Java
-    * [local-drone-control-service.zip](../attachments/local-drone-control-service-java.zip)
-    * [restaurant-drone-deliveries-service.zip](../attachments/restaurant-drone-deliveries-service-java.zip)
+* Scala [drone-scala.zip](../attachments/drone-scala.zip)
+* Java [drone-java.zip](../attachments/drone-java.zip)
 
 As this service consumes events from the service built in the previous step, start the local-drone-control service first:
 

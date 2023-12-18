@@ -110,8 +110,6 @@ class DroneServiceImpl(
       }
     convertError(response)
   }
-  // #charging
-
 
   override def completeCharge(in: proto.CompleteChargeRequest)
       : Future[proto.CompleteChargingResponse] = {
@@ -127,6 +125,7 @@ class DroneServiceImpl(
 
     convertError(response)
   }
+  // #charging
 
   private def convertError[T](response: Future[T]): Future[T] = {
     response.recoverWith {
