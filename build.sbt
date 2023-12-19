@@ -1,4 +1,5 @@
 import akka.projections.Dependencies
+import akka.projections.IntegrationTests
 
 // avoid + in snapshot versions
 ThisBuild / dynverSeparator := "-"
@@ -71,18 +72,20 @@ lazy val slick =
 // provides offset storage backed by a Cassandra table
 lazy val cassandra =
   Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
-    .configs(IntegrationTest)
-    .settings(headerSettings(IntegrationTest))
-    .settings(Defaults.itSettings)
     .settings(Dependencies.cassandra)
     .dependsOn(core)
     // strictly speaking it is not needed to have test->test here.
     // Cassandra module doesn't have tests, only integration tests
     // however, without it the generated pom.xml doesn't get this test dependencies
-    .dependsOn(coreTest % "test->test;it->test")
-    .dependsOn(testkit % "test->compile;it->compile")
     .settings(Scala3.settings)
     .disablePlugins(CiReleasePlugin)
+
+lazy val cassandraIntegration =
+  Project(id = "akka-projection-cassandra-integration", base = file("akka-projection-cassandra-integration"))
+    .settings(IntegrationTests.settings)
+    .settings(Dependencies.cassandraIntegration)
+    .dependsOn(coreTest % "test->test", testkit, cassandra)
+    .disablePlugins(CiReleasePlugin, AkkaDisciplinePlugin)
 
 // provides source providers for akka-persistence-query
 lazy val eventsourced =
@@ -341,6 +344,10 @@ lazy val root = Project(id = "akka-projection", base = file("."))
   .settings(publish / skip := true)
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin, MimaPlugin, CiReleasePlugin)
+
+// separate aggregate for integration tests
+lazy val integraitonTests = Project(id = "akka-projection-integration", base = file("."))
+  .aggregate(cassandraIntegration)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {

@@ -66,42 +66,40 @@ object Dependencies {
   }
 
   object Test {
-    private val allTestConfig = "test,it"
+    val akkaTypedTestkit = Compile.akkaTypedTestkit % sbt.Test
+    val akkaStreamTestkit = Compile.akkaStreamTestkit % sbt.Test
+    val akkaShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % sbt.Test
+    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka % sbt.Test
+    val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % sbt.Test
+    val akkaDiscovery = "com.typesafe.akka" %% "akka-discovery" % Versions.akka % sbt.Test
+    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % sbt.Test
 
-    val akkaTypedTestkit = Compile.akkaTypedTestkit % allTestConfig
-    val akkaStreamTestkit = Compile.akkaStreamTestkit % allTestConfig
-    val akkaShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % allTestConfig
-    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka % allTestConfig
-    val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % allTestConfig
-    val akkaDiscovery = "com.typesafe.akka" %% "akka-discovery" % Versions.akka % allTestConfig
-    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % allTestConfig
+    val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
+    val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % sbt.Test
+    val junit = "junit" % "junit" % Versions.junit % sbt.Test
 
-    val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % allTestConfig
-    val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % allTestConfig
-    val junit = "junit" % "junit" % Versions.junit % allTestConfig
+    val h2Driver = "com.h2database" % "h2" % "2.2.224" % sbt.Test
+    val postgresDriver = "org.postgresql" % "postgresql" % "42.7.1" % sbt.Test
+    val mysqlDriver = "com.mysql" % "mysql-connector-j" % "8.2.0" % sbt.Test
+    val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % sbt.Test
+    val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % sbt.Test
 
-    val h2Driver = "com.h2database" % "h2" % "2.2.224" % allTestConfig
-    val postgresDriver = "org.postgresql" % "postgresql" % "42.7.1" % allTestConfig
-    val mysqlDriver = "com.mysql" % "mysql-connector-j" % "8.2.0" % allTestConfig
-    val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % allTestConfig
-    val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % allTestConfig
-
-    val logback = "ch.qos.logback" % "logback-classic" % "1.2.13" % allTestConfig
+    val logback = "ch.qos.logback" % "logback-classic" % "1.2.13" % sbt.Test
 
     val cassandraContainer =
-      "org.testcontainers" % "cassandra" % Versions.testContainers % allTestConfig
+      "org.testcontainers" % "cassandra" % Versions.testContainers % sbt.Test
     val postgresContainer =
-      "org.testcontainers" % "postgresql" % Versions.testContainers % allTestConfig
+      "org.testcontainers" % "postgresql" % Versions.testContainers % sbt.Test
     val mysqlContainer =
-      "org.testcontainers" % "mysql" % Versions.testContainers % allTestConfig
+      "org.testcontainers" % "mysql" % Versions.testContainers % sbt.Test
     val msSQLServerContainer =
-      "org.testcontainers" % "mssqlserver" % Versions.testContainers % allTestConfig
+      "org.testcontainers" % "mssqlserver" % Versions.testContainers % sbt.Test
 
     val oracleDbContainer =
-      "org.testcontainers" % "oracle-xe" % Versions.testContainers % allTestConfig
+      "org.testcontainers" % "oracle-xe" % Versions.testContainers % sbt.Test
 
     val alpakkaKafkaTestkit =
-      "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % allTestConfig
+      "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
 
   }
 
@@ -186,13 +184,10 @@ object Dependencies {
         Test.logback)
 
   val cassandra =
-    deps ++= Seq(
-        Compile.alpakkaCassandra,
-        Compile.akkaPersistenceQuery,
-        Test.akkaTypedTestkit,
-        Test.logback,
-        Test.cassandraContainer,
-        Test.scalatestJUnit)
+    deps ++= Seq(Compile.alpakkaCassandra, Compile.akkaPersistenceQuery)
+
+  val cassandraIntegration =
+    deps ++= Seq(Test.scalatest, Test.akkaTypedTestkit, Test.logback, Test.cassandraContainer, Test.scalatestJUnit)
 
   val kafka =
     deps ++= Seq(
