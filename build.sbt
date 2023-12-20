@@ -108,24 +108,19 @@ lazy val eventsourced =
 // provides offset storage backed by Kafka managed offset commits
 lazy val kafka =
   Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
-    .configs(IntegrationTest)
     .settings(Dependencies.kafka)
     .settings(Scala3.settings)
     .dependsOn(testkit)
     .dependsOn(core)
     .disablePlugins(CiReleasePlugin)
 
-// separated for Scala 3 support in Kafka, while it tests use Slick
-lazy val `kafka-tests` =
-  Project(id = "akka-projection-kafka-tests", base = file("akka-projection-kafka-tests"))
-    .configs(IntegrationTest)
-    .settings(Dependencies.kafkaTests)
-    .settings(Defaults.itSettings)
-    .settings(headerSettings(IntegrationTest))
-    .settings(Defaults.itSettings)
-    .settings(publish / skip := true)
-    .dependsOn(kafka, testkit % "test->it")
-    .dependsOn(slick % "test->test;it->test")
+lazy val kafkaIntegration =
+  Project(id = "akka-projection-kafka-integration", base = file("akka-projection-kafka-integration"))
+    .settings(IntegrationTests.settings)
+    .settings(Dependencies.kafkaIntegration)
+    .dependsOn(kafka, testkit % "test->test")
+    .dependsOn(slick)
+    .dependsOn(slickIntegration % "test->test")
     .disablePlugins(CiReleasePlugin)
 
 // provides source providers for durable state changes
@@ -330,7 +325,6 @@ lazy val root = Project(id = "akka-projection", base = file("."))
     cassandra,
     eventsourced,
     kafka,
-    `kafka-tests`,
     `durable-state`,
     grpc,
     grpcTests,
@@ -345,7 +339,13 @@ lazy val root = Project(id = "akka-projection", base = file("."))
 
 // separate aggregate for integration tests, note that this will create a directory when used (which is then gitignored)
 lazy val integrationTests = Project(id = "akka-projection-integration", base = file("akka-projection-integration"))
-  .aggregate(cassandraIntegration, grpcIntegration, r2dbcIntegration, jdbcIntegration, slickIntegration)
+  .aggregate(
+    cassandraIntegration,
+    grpcIntegration,
+    jdbcIntegration,
+    kafkaIntegration,
+    r2dbcIntegration,
+    slickIntegration)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {
