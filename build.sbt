@@ -342,8 +342,8 @@ lazy val root = Project(id = "akka-projection", base = file("."))
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin, MimaPlugin, CiReleasePlugin)
 
-// separate aggregate for integration tests
-lazy val integrationTests = Project(id = "akka-projection-integration", base = file("."))
+// separate aggregate for integration tests, note that this will create a directory when used (which is then gitignored)
+lazy val integrationTests = Project(id = "akka-projection-integration", base = file("akka-projection-integration"))
   .aggregate(cassandraIntegration, grpcIntegration)
 
 // check format and headers
