@@ -164,7 +164,6 @@ public class ChargingStation
     var replicationSettings =
         ReplicationSettings.create(
                 Command.class, ENTITY_TYPE, R2dbcReplication.create(system), system)
-            // FIXME remove once release out with flag in config (1.5.1-M2/GA)
             .withEdgeReplication(true);
     return Replication.grpcReplication(replicationSettings, ChargingStation::create, system);
   }
