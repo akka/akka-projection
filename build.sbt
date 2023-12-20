@@ -9,9 +9,6 @@ ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/mave
 
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
-    .configs(IntegrationTest)
-    .settings(headerSettings(IntegrationTest))
-    .settings(Defaults.itSettings)
     .settings(Dependencies.core)
     .settings(
       name := "akka-projection-core",
@@ -23,10 +20,7 @@ lazy val core =
 
 lazy val coreTest =
   Project(id = "akka-projection-core-test", base = file("akka-projection-core-test"))
-    .configs(IntegrationTest)
-    .settings(headerSettings(IntegrationTest))
     .disablePlugins(MimaPlugin, CiReleasePlugin)
-    .settings(Defaults.itSettings)
     .settings(Dependencies.coreTest)
     .settings(publish / skip := true)
     .settings(Scala3.settings)
@@ -35,9 +29,6 @@ lazy val coreTest =
 
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
-    .configs(IntegrationTest)
-    .settings(headerSettings(IntegrationTest))
-    .settings(Defaults.itSettings)
     .settings(Dependencies.testKit)
     .settings(Scala3.settings)
     .dependsOn(core)
@@ -57,6 +48,7 @@ lazy val jdbcIntegration =
   Project(id = "akka-projection-jdbc-integration", base = file("akka-projection-jdbc-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.jdbcIntegration)
+    .settings(Scala3.settings)
     .dependsOn(jdbc)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
@@ -83,9 +75,6 @@ lazy val cassandra =
   Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
     .settings(Dependencies.cassandra)
     .dependsOn(core)
-    // strictly speaking it is not needed to have test->test here.
-    // Cassandra module doesn't have tests, only integration tests
-    // however, without it the generated pom.xml doesn't get this test dependencies
     .settings(Scala3.settings)
     .disablePlugins(CiReleasePlugin)
 
@@ -93,6 +82,7 @@ lazy val cassandraIntegration =
   Project(id = "akka-projection-cassandra-integration", base = file("akka-projection-cassandra-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.cassandraIntegration)
+    .settings(Scala3.settings)
     .dependsOn(coreTest % "test->test", testkit, cassandra)
     .disablePlugins(CiReleasePlugin, AkkaDisciplinePlugin)
 
@@ -100,9 +90,9 @@ lazy val cassandraIntegration =
 lazy val eventsourced =
   Project(id = "akka-projection-eventsourced", base = file("akka-projection-eventsourced"))
     .settings(Dependencies.eventsourced)
+    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(testkit % Test)
-    .settings(Scala3.settings)
     .disablePlugins(CiReleasePlugin)
 
 // provides offset storage backed by Kafka managed offset commits
@@ -118,6 +108,7 @@ lazy val kafkaIntegration =
   Project(id = "akka-projection-kafka-integration", base = file("akka-projection-kafka-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.kafkaIntegration)
+    .settings(Scala3.settings)
     .dependsOn(kafka, testkit % "test->test")
     .dependsOn(slick)
     .dependsOn(slickIntegration % "test->test")
@@ -126,21 +117,20 @@ lazy val kafkaIntegration =
 // provides source providers for durable state changes
 lazy val `durable-state` =
   Project(id = "akka-projection-durable-state", base = file("akka-projection-durable-state"))
-    .configs(IntegrationTest)
     .settings(Dependencies.state)
+    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(testkit % Test)
-    .settings(Scala3.settings)
     .disablePlugins(CiReleasePlugin)
 
 lazy val grpc =
   Project(id = "akka-projection-grpc", base = file("akka-projection-grpc"))
     .settings(Dependencies.grpc)
+    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
+    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(eventsourced)
     .enablePlugins(AkkaGrpcPlugin)
-    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
-    .settings(Scala3.settings)
     .disablePlugins(CiReleasePlugin)
 
 lazy val grpcTests =
@@ -148,21 +138,23 @@ lazy val grpcTests =
     .disablePlugins(MimaPlugin)
     .settings(Dependencies.grpcTest)
     .settings(publish / skip := true)
+    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
+    .settings(Scala3.settings)
     .dependsOn(grpc)
     .dependsOn(r2dbc) // for compile only tests
     .dependsOn(testkit % Test)
     .enablePlugins(AkkaGrpcPlugin)
     .disablePlugins(CiReleasePlugin)
-    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
 
 lazy val grpcIntegration =
   Project(id = "akka-projection-grpc-integration", base = file("akka-projection-grpc-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.grpcIntegration)
+    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
+    // FIXME test coverage with Scala 3 ? .settings(Scala3.settings)
     .dependsOn(grpc, r2dbc)
     .enablePlugins(AkkaGrpcPlugin)
     .disablePlugins(CiReleasePlugin)
-    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
     .dependsOn(testkit % Test)
     .dependsOn(r2dbcIntegration % Test) // uses test infra from r2dbc tests
 
@@ -178,24 +170,35 @@ lazy val r2dbcIntegration =
   Project(id = "akka-projection-r2dbc-integration", base = file("akka-projection-r2dbc-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.r2dbcIntegration)
+    .settings(Scala3.settings)
     .dependsOn(r2dbc)
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
 
 lazy val examples = project
-  .configs(IntegrationTest.extend(Test))
-  .settings(headerSettings(IntegrationTest))
   .disablePlugins(MimaPlugin, CiReleasePlugin)
-  .settings(Defaults.itSettings)
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
   .dependsOn(jdbc % "test->test")
-  .dependsOn(cassandra % "test->test;test->it")
+  .dependsOn(cassandra % "test->test")
   .dependsOn(eventsourced)
   .dependsOn(`durable-state`)
   .dependsOn(kafka % "test->test")
   .dependsOn(testkit % Test)
   .settings(publish / skip := true, scalacOptions += "-feature", javacOptions += "-parameters")
+
+lazy val examplesIntegration = Project(id = "examples-integration", base = file("examples-integration"))
+  .settings(IntegrationTests.settings)
+  .settings(Dependencies.examples)
+  .dependsOn(examples % "test->test")
+  .dependsOn(eventsourced)
+  .dependsOn(slick % "test->test")
+  .dependsOn(jdbc % "test->test")
+  .dependsOn(cassandra)
+  .dependsOn(cassandraIntegration % "test->test")
+  .dependsOn(`durable-state`)
+  .dependsOn(kafka % "test->test")
+  .dependsOn(testkit % Test)
 
 lazy val commonParadoxProperties = Def.settings(
   Compile / paradoxProperties ++= Map(
@@ -341,11 +344,14 @@ lazy val root = Project(id = "akka-projection", base = file("."))
 lazy val integrationTests = Project(id = "akka-projection-integration", base = file("akka-projection-integration"))
   .aggregate(
     cassandraIntegration,
+    examplesIntegration,
     grpcIntegration,
     jdbcIntegration,
     kafkaIntegration,
     r2dbcIntegration,
     slickIntegration)
+  .settings(publish / skip := true)
+  .disablePlugins(SitePlugin, MimaPlugin, CiReleasePlugin)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {

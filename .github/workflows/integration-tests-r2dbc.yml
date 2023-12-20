@@ -53,7 +53,7 @@ jobs:
       - name: Run integration tests with with Scala and Java ${{ matrix.jdkVersion }}
         # -Dconf.resource=application-postgres.conf but it's the default through application.conf as well
         run: |-
-          sbt akka-projection-r2dbc/IntegrationTest/test
+          sbt akka-projection-r2dbc-integration/test
 
   test-r2dbc-yugabyte:
     name: Run r2dbc tests with Yugabyte
@@ -101,7 +101,7 @@ jobs:
 
       - name: Run integration tests with with Scala and Java ${{ matrix.jdkVersion }}
         run: |-
-          sbt -Dconfig.resource=application-yugabyte.conf akka-projection-r2dbc/IntegrationTest/test
+          sbt -Dconfig.resource=application-yugabyte.conf akka-projection-r2dbc-integration/test
           
 
   test-r2dbc-h2:
