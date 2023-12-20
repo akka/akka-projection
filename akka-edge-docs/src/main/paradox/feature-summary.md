@@ -153,6 +153,6 @@ be used for the replicas. For example, Postgres in the Cloud and H2 at the edge.
 
 ### Learn more
 
-* FIXME link to guide
+* @ref[Hands-on guide for implementing an Akka Edge application](guide.md) (Drone Charging Station)
 * @extref[Reference documentation of Akka Replicated Event Sourcing](akka:typed/replicated-eventsourcing.html)
 * @extref[Reference documentation of Akka Replicated Event Sourcing over gRPC](akka-projection:grpc-replicated-event-sourcing-transport.html)
