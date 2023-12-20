@@ -209,3 +209,21 @@ jobs:
         run: |-
           # RES sample should be identical
           diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala
+
+      - name: Set up GraalVM 17
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.4
+        uses: coursier/setup-action@48280172a2c999022e42527711d6b28e4945e6f0
+        with:
+          jvm: graalvm-community:17.0.8
+
+      - name: Local drone control sample Scala native image build
+        run: |-
+          cd samples/grpc/local-drone-control-scala
+          # note the trixery ot re-use graal from path instead of resolving itself (which fails)
+          sbt "set nativeImageGraalHome := file(\"$JAVA_HOME\").toPath; nativeImage;" -Dakka-projection.version=`cat ~/.version`
+
+      - name: Local drone control sample Java native image build
+        run: |-
+          cd samples/grpc/local-drone-control-java
+          mvn -DskipTests=true -Pnative -Pclustered package -nsu -Dakka-projection.version=`cat ~/.version`

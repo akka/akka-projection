@@ -2,8 +2,7 @@ name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(
-  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
@@ -105,8 +104,9 @@ nativeImageOptions := Seq(
 
 NativeImage / mainClass := sys.props
   .get("native.mode")
-  .collect { case "clustered" =>
-    "local.drones.ClusteredMain"
+  .collect {
+    case "clustered" =>
+      "local.drones.ClusteredMain"
   }
   .orElse((Compile / run / mainClass).value)
 
