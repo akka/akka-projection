@@ -143,4 +143,4 @@ jobs:
 
       - name: Run integration tests with with Scala and Java ${{ matrix.jdkVersion }}
         run: |-
-          sbt -Dconfig.resource=application-h2.conf akka-projection-r2dbc/IntegrationTest/test
+          sbt -Dconfig.resource=application-h2.conf akka-projection-r2dbc-integration/test

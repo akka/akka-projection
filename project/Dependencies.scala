@@ -259,6 +259,21 @@ object Dependencies {
         Test.logback,
         Test.scalatest)
 
+  val r2dbcIntegration = deps ++= Seq(
+        Compile.akkaPersistenceQuery,
+        Compile.akkaPersistenceR2dbc,
+        Compile.h2, // provided
+        Compile.r2dbcH2, // provided
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped,
+        Test.akkaStreamTestkit,
+        Test.akkaTypedTestkit,
+        Test.akkaClusterShardingTyped,
+        Test.akkaSerializationJackson,
+        Test.akkaDiscovery,
+        Test.logback,
+        Test.scalatest)
+
   val examples =
     deps ++= Seq(
         Examples.akkaPersistenceTyped,

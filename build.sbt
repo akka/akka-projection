@@ -159,30 +159,22 @@ lazy val grpcIntegration =
     .enablePlugins(AkkaGrpcPlugin)
     .disablePlugins(CiReleasePlugin)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
-    .dependsOn(r2dbc % Test, testkit % Test)
-    .dependsOn(r2dbc % IntegrationTest) // FIXME drop once separate module
+    .dependsOn(testkit % Test)
+    .dependsOn(r2dbcIntegration % Test) // uses test infra from r2dbc tests
 
 // provides offset storage backed by akka-persistence-r2dbc
 lazy val r2dbc =
   Project(id = "akka-projection-r2dbc", base = file("akka-projection-r2dbc"))
-    .configs(IntegrationTest.extend(Test))
     .settings(Scala3.settings)
-    .settings(headerSettings(IntegrationTest))
-    .settings(Defaults.itSettings)
     .settings(Dependencies.r2dbc)
-    .settings(Test / javaOptions ++= {
-      import scala.collection.JavaConverters._
-      // include all passed -Dakka. properties to the javaOptions for forked tests
-      // useful to switch DB dialects for example
-      val akkaProperties = System.getProperties.stringPropertyNames.asScala.toList.collect {
-        case key: String if key.startsWith("akka.") || key.startsWith("config") =>
-          "-D" + key + "=" + System.getProperty(key)
-      }
-      akkaProperties
-    })
-    .settings(IntegrationTest / javaOptions := (Test / javaOptions).value)
-    .settings(Test / fork := true)
     .dependsOn(core, grpc, eventsourced, `durable-state`)
+    .disablePlugins(CiReleasePlugin)
+
+lazy val r2dbcIntegration =
+  Project(id = "akka-projection-r2dbc-integration", base = file("akka-projection-r2dbc-integration"))
+    .settings(IntegrationTests.settings)
+    .settings(Dependencies.r2dbcIntegration)
+    .dependsOn(r2dbc)
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
 
@@ -344,7 +336,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
 
 // separate aggregate for integration tests, note that this will create a directory when used (which is then gitignored)
 lazy val integrationTests = Project(id = "akka-projection-integration", base = file("akka-projection-integration"))
-  .aggregate(cassandraIntegration, grpcIntegration)
+  .aggregate(cassandraIntegration, grpcIntegration, r2dbcIntegration)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {
