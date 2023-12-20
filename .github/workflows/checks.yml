@@ -220,7 +220,8 @@ jobs:
       - name: Local drone control sample Scala native image build
         run: |-
           cd samples/grpc/local-drone-control-scala
-          sbt nativeImage -Dakka-projection.version=`cat ~/.version`
+          # note the trixery ot re-use graal from path instead of resolving itself (which fails)
+          sbt "set nativeImageGraalHome := file(\"$JAVA_HOME\").toPath; nativeImage;" -Dakka-projection.version=`cat ~/.version`
 
       - name: Local drone control sample Java native image build
         run: |-
