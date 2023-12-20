@@ -46,12 +46,18 @@ lazy val testkit =
 // provides offset storage backed by a JDBC table
 lazy val jdbc =
   Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
-    .configs(IntegrationTest.extend(Test))
-    .settings(headerSettings(IntegrationTest))
-    .settings(Defaults.itSettings)
     .settings(Dependencies.jdbc)
     .settings(Scala3.settings)
     .dependsOn(core)
+    .dependsOn(coreTest % "test->test")
+    .dependsOn(testkit % Test)
+    .disablePlugins(CiReleasePlugin)
+
+lazy val jdbcIntegration =
+  Project(id = "akka-projection-jdbc-integration", base = file("akka-projection-jdbc-integration"))
+    .settings(IntegrationTests.settings)
+    .settings(Dependencies.jdbcIntegration)
+    .dependsOn(jdbc)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
@@ -336,7 +342,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
 
 // separate aggregate for integration tests, note that this will create a directory when used (which is then gitignored)
 lazy val integrationTests = Project(id = "akka-projection-integration", base = file("akka-projection-integration"))
-  .aggregate(cassandraIntegration, grpcIntegration, r2dbcIntegration)
+  .aggregate(cassandraIntegration, grpcIntegration, r2dbcIntegration, jdbcIntegration)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {

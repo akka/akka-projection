@@ -153,6 +153,9 @@ object Dependencies {
     deps ++= Seq(Compile.akkaPersistenceQuery, Test.persistenceTestkit, Test.akkaStreamTestkit, Test.scalatest)
 
   val jdbc =
+    deps ++= Seq(Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.logback)
+
+  val jdbcIntegration =
     deps ++= Seq(
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
