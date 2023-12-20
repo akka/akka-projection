@@ -103,7 +103,6 @@ object ChargingStation {
   def init(implicit system: ActorSystem[_]): Replication[Command] = {
     val replicationSettings =
       ReplicationSettings[Command](EntityType, R2dbcReplication())
-        // FIXME remove once release out with flag in config (1.5.1-M2/GA)
         .withEdgeReplication(true)
     Replication.grpcReplication(replicationSettings)(ChargingStation.apply)
   }
