@@ -2,8 +2,7 @@ name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(
-  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
@@ -100,13 +99,15 @@ nativeImageOptions := Seq(
   "--enable-http",
   "--enable-https",
   "--install-exit-handlers",
+  "--initialize-at-build-time=org.slf4j.impl.StaticLoggerBinder,org.slf4j.LoggerFactory,ch.qos.logback.classic.Logger,ch.qos.logback.core.spi.AppenderAttachableImpl,ch.qos.logback.core.status.StatusBase,ch.qos.logback.classic.Level,ch.qos.logback.core.status.InfoStatus,ch.qos.logback.classic.PatternLayout,ch.qos.logback.core.CoreConstants",
   "-Dlogback.configurationFile=logback-native-image.xml" // configured at build time
 )
 
 NativeImage / mainClass := sys.props
   .get("native.mode")
-  .collect { case "clustered" =>
-    "local.drones.ClusteredMain"
+  .collect {
+    case "clustered" =>
+      "local.drones.ClusteredMain"
   }
   .orElse((Compile / run / mainClass).value)
 
