@@ -217,9 +217,18 @@ object Dependencies {
         Compile.akkaClusterShardingTyped % "provided")
 
   val grpcTest = deps ++= Seq(
-        Test.postgresDriver,
-        Test.h2Driver,
-        Compile.r2dbcH2,
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped,
+        Compile.akkaPersistenceQuery,
+        Test.akkaShardingTyped,
+        Test.akkaStreamTestkit,
+        Test.akkaSerializationJackson,
+        Test.akkaTypedTestkit,
+        Test.logback,
+        Test.scalatest,
+        Test.akkaDiscovery)
+
+  val grpcIntegration = deps ++= Seq(
         Compile.akkaPersistenceTyped,
         Compile.akkaStreamTyped,
         Compile.akkaPersistenceQuery,
@@ -230,6 +239,9 @@ object Dependencies {
         Test.logback,
         Test.scalatest,
         Test.akkaDiscovery,
+        Test.postgresDriver,
+        Test.h2Driver,
+        Compile.r2dbcH2,
         Test.postgresContainer)
 
   val r2dbc = deps ++= Seq(

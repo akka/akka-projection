@@ -141,29 +141,26 @@ lazy val grpc =
 
 lazy val grpcTests =
   Project(id = "akka-projection-grpc-tests", base = file("akka-projection-grpc-tests"))
-    .configs(IntegrationTest)
-    .settings(headerSettings(IntegrationTest))
     .disablePlugins(MimaPlugin)
-    .settings(Defaults.itSettings)
     .settings(Dependencies.grpcTest)
     .settings(publish / skip := true)
     .dependsOn(grpc)
-    .dependsOn(r2dbc % Test)
+    .dependsOn(r2dbc) // for compile only tests
     .dependsOn(testkit % Test)
-    .dependsOn(r2dbc % IntegrationTest)
     .enablePlugins(AkkaGrpcPlugin)
     .disablePlugins(CiReleasePlugin)
-    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis", IntegrationTest / fork := true)
-    .settings(Test / javaOptions ++= {
-      import scala.collection.JavaConverters._
-      // include all passed -Dakka. properties to the javaOptions for forked tests
-      // useful to switch DB dialects for example
-      val akkaProperties = System.getProperties.stringPropertyNames.asScala.toList.collect {
-        case key: String if key.startsWith("akka.") || key.startsWith("config") =>
-          "-D" + key + "=" + System.getProperty(key)
-      }
-      akkaProperties
-    })
+    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
+
+lazy val grpcIntegration =
+  Project(id = "akka-projection-grpc-integration", base = file("akka-projection-grpc-integration"))
+    .settings(IntegrationTests.settings)
+    .settings(Dependencies.grpcIntegration)
+    .dependsOn(grpc, r2dbc)
+    .enablePlugins(AkkaGrpcPlugin)
+    .disablePlugins(CiReleasePlugin)
+    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
+    .dependsOn(r2dbc % Test, testkit % Test)
+    .dependsOn(r2dbc % IntegrationTest) // FIXME drop once separate module
 
 // provides offset storage backed by akka-persistence-r2dbc
 lazy val r2dbc =
@@ -346,8 +343,8 @@ lazy val root = Project(id = "akka-projection", base = file("."))
   .disablePlugins(SitePlugin, MimaPlugin, CiReleasePlugin)
 
 // separate aggregate for integration tests
-lazy val integraitonTests = Project(id = "akka-projection-integration", base = file("."))
-  .aggregate(cassandraIntegration)
+lazy val integrationTests = Project(id = "akka-projection-integration", base = file("."))
+  .aggregate(cassandraIntegration, grpcIntegration)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {
