@@ -175,30 +175,21 @@ lazy val r2dbcIntegration =
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
 
+// note that this is in the integration test aggregate
+// rather than root since it depends on other integration test modules
 lazy val examples = project
   .disablePlugins(MimaPlugin, CiReleasePlugin)
+  .settings(IntegrationTests.settings)
   .settings(Dependencies.examples)
   .dependsOn(slick % "test->test")
   .dependsOn(jdbc % "test->test")
-  .dependsOn(cassandra % "test->test")
+  .dependsOn(cassandra)
+  .dependsOn(cassandraIntegration % "test->test")
   .dependsOn(eventsourced)
   .dependsOn(`durable-state`)
   .dependsOn(kafka % "test->test")
   .dependsOn(testkit % Test)
   .settings(publish / skip := true, scalacOptions += "-feature", javacOptions += "-parameters")
-
-lazy val examplesIntegration = Project(id = "examples-integration", base = file("examples-integration"))
-  .settings(IntegrationTests.settings)
-  .settings(Dependencies.examples)
-  .dependsOn(examples % "test->test")
-  .dependsOn(eventsourced)
-  .dependsOn(slick % "test->test")
-  .dependsOn(jdbc % "test->test")
-  .dependsOn(cassandra)
-  .dependsOn(cassandraIntegration % "test->test")
-  .dependsOn(`durable-state`)
-  .dependsOn(kafka % "test->test")
-  .dependsOn(testkit % Test)
 
 lazy val commonParadoxProperties = Def.settings(
   Compile / paradoxProperties ++= Map(
@@ -332,7 +323,6 @@ lazy val root = Project(id = "akka-projection", base = file("."))
     grpc,
     grpcTests,
     r2dbc,
-    examples,
     docs,
     `akka-distributed-cluster-docs`,
     `akka-edge-docs`)
@@ -344,7 +334,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
 lazy val integrationTests = Project(id = "akka-projection-integration", base = file("akka-projection-integration"))
   .aggregate(
     cassandraIntegration,
-    examplesIntegration,
+    examples,
     grpcIntegration,
     jdbcIntegration,
     kafkaIntegration,

@@ -71,7 +71,7 @@ connection instead of up front (needed as there is no way to connect to the data
 
 When using default table names a pre-packaged schema for H2 can be used through config:
 
-@@snip [Default H2 Schema](/akka-projection-r2dbc/src/it/resources/application-h2.conf) { #default-schema }
+@@snip [Default H2 Schema](/akka-projection-r2dbc-integration/src/test/resources/application-h2.conf) { #default-schema }
 
 
 ## Configuration

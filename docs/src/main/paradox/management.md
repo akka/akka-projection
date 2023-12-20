@@ -7,28 +7,28 @@ With the @apidoc[ProjectionManagement] API you can manage the offset of a projec
 To retrieve latest stored offset:
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #get-offset }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #get-offset }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #get-offset }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #get-offset }
 
 The offset can be cleared if the projection should be completely rebuilt, starting over again from the first offset.
 The operation will automatically restart the projection.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #clear-offset }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #clear-offset }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #clear-offset }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #clear-offset }
 
 The offset can also be updated, which can be useful if the projection is stuck with errors on a specific offset
 and should skip that offset and continue with next. The operation will automatically restart the projection.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #update-offset }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #update-offset }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #update-offset }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #update-offset }
 
 ## Pause and resume
 
@@ -37,10 +37,10 @@ this can be useful when performing some data migration and projection processing
 is in progress.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #pause-resume }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #pause-resume }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #pause-resume }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #pause-resume }
 
 
 The paused/resumed state is stored and, and it is read when the Projections are started, for example in case of rebalance or system restart.
@@ -48,10 +48,10 @@ The paused/resumed state is stored and, and it is read when the Projections are 
 To retrieve the paused state:
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #is-paused }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #is-paused }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #is-paused }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #is-paused }
 
 ## Status tracking
 

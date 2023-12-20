@@ -45,7 +45,7 @@ The destination is then used as a parameter to @apidoc[EventProducerPushDestinat
 handler that can be bound as an Akka HTTP/gRPC endpoint:
 
 Scala
-:  @@snip [ShoppingCartEventConsumer.scala](/akka-projection-grpc-tests/src/it/scala/akka/projection/grpc/producer/EventProducerPushSpec.scala) { #consumerSetup }
+:  @@snip [ShoppingCartEventConsumer.scala](/akka-projection-grpc-integration/src/test/scala/akka/projection/grpc/producer/EventProducerPushSpec.scala) { #consumerSetup }
 
 Java
 :  @@snip [ShoppingCartEventConsumer.java](/akka-projection-grpc-tests/src/test/java/akka/projection/grpc/consumer/javadsl/EventProducerPushDestinationCompileTest.java) { #consumerSetup }
@@ -63,7 +63,7 @@ in the consumer journal but without any payload sent from the producer or stored
 Filters are set for the destination using @apidoc[withConsumerFilters](EventProducerPushDestination){ scala="#withConsumerFilters(filters:immutable.Seq)" java="#withConsumerFilters(java.util.List)" }
 
 Scala
-:  @@snip [ShoppingCartEventConsumer.scala](/akka-projection-grpc-tests/src/it/scala/akka/projection/grpc/producer/EventProducerPushSpec.scala) { #consumerFilters }
+:  @@snip [ShoppingCartEventConsumer.scala](/akka-projection-grpc-integration/src/test/scala/akka/projection/grpc/producer/EventProducerPushSpec.scala) { #consumerFilters }
 
 Java
 :  @@snip [ShoppingCartEventConsumer.java](/akka-projection-grpc-tests/src/test/java/akka/projection/grpc/consumer/javadsl/EventProducerPushDestinationCompileTest.java) { #consumerFilters }
@@ -86,7 +86,7 @@ The payload transformation also allows for arbitrary filtering logic, returning 
 the event as filtered and avoids storing the payload in the consumer journal.
 
 Scala
-:  @@snip [ShoppingCartEventConsumer.scala](/akka-projection-grpc-tests/src/it/scala/akka/projection/grpc/producer/EventProducerPushSpec.scala) { #consumerTransformation }
+:  @@snip [ShoppingCartEventConsumer.scala](/akka-projection-grpc-integration/src/test/scala/akka/projection/grpc/producer/EventProducerPushSpec.scala) { #consumerTransformation }
 
 Java
 :  @@snip [ShoppingCartEventConsumer.java](/akka-projection-grpc-tests/src/test/java/akka/projection/grpc/consumer/javadsl/EventProducerPushDestinationCompileTest.java) { #consumerTransformation }
@@ -109,7 +109,7 @@ an `atLeastOnceFlow` projection. The first parameter, the `originId` is how the 
 FIXME better producer setup sample than this
 
 Scala
-:  @@snip [ShoppingCartEventConsumer.scala](/akka-projection-grpc-tests/src/it/scala/akka/projection/grpc/producer/EventProducerPushSpec.scala) { #producerSetup }
+:  @@snip [ShoppingCartEventConsumer.scala](/akka-projection-grpc-integration/src/test/scala/akka/projection/grpc/producer/EventProducerPushSpec.scala) { #producerSetup }
 
 Java
 :  @@snip [ShoppingCartEventConsumer.java](/akka-projection-grpc-tests/src/test/java/akka/projection/grpc/producer/javadsl/EventProducerPushCompileTest.java) { #producerSetup }

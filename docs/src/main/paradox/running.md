@@ -71,10 +71,10 @@ See also the [Akka reference documentation for tagging](https://doc.akka.io/docs
 We can use the @ref:[EventSourcedProvider](eventsourced.md) to consume the `ShoppingCart` events.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #source-provider-imports #running-source-provider }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #source-provider-imports #running-source-provider }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #source-provider-imports #running-source-provider }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #source-provider-imports #running-source-provider }
 
 Note that we define a method that builds a new `SourceProvider` for each passed `tag`.
 
@@ -83,20 +83,20 @@ Note that we define a method that builds a new `SourceProvider` for each passed 
 Next we create a method to return Projection instances. Again, we pass a tag that is used to initialize the `SourceProvider` and as the key in `ProjectionId`.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #running-projection }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #projection-imports #running-projection }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #projection-imports #running-projection }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #projection-imports #running-projection }
 
 ### Initializing the Sharded Daemon
 
 Once we have the tags, the `SourceProvider` and the `Projection` of our choice, we can glue all the pieces together using the Sharded Daemon Process and let it be distributed across the cluster.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #daemon-imports #running-with-daemon-process }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #daemon-imports #running-with-daemon-process }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #daemon-imports #running-with-daemon-process }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #daemon-imports #running-with-daemon-process }
 
 For this example, we configure as many `ShardedDaemonProcess` as tags and we define the behavior factory to return `ProjectionBehavior` wrapping each time a different `Projection` instance. Finally, the `ShardedDaemon` is configured to use the `ProjectionBehavior.Stop` as its control stop message.
 
@@ -114,10 +114,10 @@ You can spawn the `ProjectionBehavior` as any other `Behavior`. This can be usef
 a local `ActorSystem` without Akka Cluster.
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #running-with-actor }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #running-with-actor }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #running-with-actor }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #running-with-actor }
 
 Be aware of that the projection and its offset storage is based on the `ProjectionId`. If more than one instance with the same `ProjectionId` are running concurrently they will
 overwrite each others offset storage with undefined and unpredictable results.
@@ -128,10 +128,10 @@ If you know that you only need one or a few projection instances an alternative 
 is to use [Akka Cluster Singleton](https://doc.akka.io/docs/akka/current/typed/cluster-singleton.html)  
 
 Scala
-:  @@snip [CassandraProjectionDocExample.scala](/examples/src/it/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #running-with-singleton }
+:  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #running-with-singleton }
 
 Java
-:  @@snip [CassandraProjectionDocExample.java](/examples/src/it/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #singleton-imports #running-with-singleton }
+:  @@snip [CassandraProjectionDocExample.java](/examples/src/test/java/jdocs/cassandra/CassandraProjectionDocExample.java) { #singleton-imports #running-with-singleton }
 
 Be aware of that all projection instances that are running with Cluster Singleton will be running on the same node
 in the Cluster.
