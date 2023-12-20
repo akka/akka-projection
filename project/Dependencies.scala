@@ -171,6 +171,9 @@ object Dependencies {
         Test.logback)
 
   val slick =
+    deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+
+  val slickIntegration =
     deps ++= Seq(
         Compile.slick,
         Compile.akkaPersistenceQuery,

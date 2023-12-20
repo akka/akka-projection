@@ -65,12 +65,15 @@ lazy val jdbcIntegration =
 // provides offset storage backed by a JDBC (Slick) table
 lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
-    .configs(IntegrationTest.extend(Test))
-    .settings(headerSettings(IntegrationTest))
-    .settings(Defaults.itSettings)
     .settings(Dependencies.slick)
-    .dependsOn(jdbc)
-    .dependsOn(core)
+    .dependsOn(jdbc, core)
+    .disablePlugins(CiReleasePlugin)
+
+lazy val slickIntegration =
+  Project(id = "akka-projection-slick-integration", base = file("akka-projection-slick-integration"))
+    .settings(IntegrationTests.settings)
+    .settings(Dependencies.slickIntegration)
+    .dependsOn(slick)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
@@ -342,7 +345,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
 
 // separate aggregate for integration tests, note that this will create a directory when used (which is then gitignored)
 lazy val integrationTests = Project(id = "akka-projection-integration", base = file("akka-projection-integration"))
-  .aggregate(cassandraIntegration, grpcIntegration, r2dbcIntegration, jdbcIntegration)
+  .aggregate(cassandraIntegration, grpcIntegration, r2dbcIntegration, jdbcIntegration, slickIntegration)
 
 // check format and headers
 TaskKey[Unit]("verifyCodeFmt") := {

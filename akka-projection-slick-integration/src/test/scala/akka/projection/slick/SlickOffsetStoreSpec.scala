@@ -4,10 +4,6 @@
 
 package akka.projection.slick
 
-import java.time.Instant
-import java.util.UUID
-import scala.concurrent.Await
-import scala.concurrent.duration._
 import akka.Done
 import akka.actor.Scheduler
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -30,7 +26,11 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
 
+import java.time.Instant
+import java.util.UUID
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 object SlickOffsetStoreSpec {
 
