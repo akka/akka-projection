@@ -85,9 +85,9 @@ Java
 
 ### Serialization
 
-The state and events of the entity must be serializable because they are written to the datastore, if the local drone control needs to scale out across several nodes to handle traffic, the commands would also be sent between nodes within the Akka cluster. The sample project includes built-in CBOR serialization using the @extref[Akka Serialization Jackson module](akka:serialization-jackson.html). This section describes how serialization is implemented. You do not need to do anything specific to take advantage of CBOR, but this section explains how it is included.
+The state and events of the entity must be serializable because they are written to the datastore, if the local drone control needs to scale out across several nodes to handle traffic, the commands would also be sent between nodes within the Akka cluster. 
 
-The state, commands and events are marked as `akka.serialization.jackson.CborSerializable` which is configured to use the built-in CBOR serialization.
+The state, commands and events are marked with `akka.serialization.jackson.CborSerializable` to use CBOR serialization from @extref[Akka Serialization Jackson module](akka:serialization-jackson.html) for serialization.
 
 ### Journal storage
 
@@ -173,8 +173,8 @@ Java
 
 The complete sample can be downloaded from GitHub, but note that it also includes the next steps of the guide:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-service-scala
+* Scala [drone-scala.zip](../attachments/drone-scala.zip)
+* Java [drone-java.zip](../attachments/drone-java.zip)
 
 @@@ div { .group-scala }
 

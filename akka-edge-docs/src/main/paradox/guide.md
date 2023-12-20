@@ -18,7 +18,8 @@ the local center to pick up available orders closest to their location.
 2. [Coarse Grained Location Replication](guide/2-drone-location-to-cloud-service.md)
 3. [Restaurant Deliveries Service](guide/3-restaurant-deliveries-service.md)
 4. [Local Drone Delivery Selection](guide/4-local-drone-delivery-selection.md)
-5. [Deploying the Services](guide/5-deploying-the-services.md)
+5. [Drone Charging Station](guide/5-charging-station.md)
+6. [Deploying the Services](guide/6-deploying-the-services.md)
 
 @@@
 

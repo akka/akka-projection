@@ -163,9 +163,9 @@ Java
 
 The complete sample can be downloaded from GitHub, but note that it also includes the next steps of the guide:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-scala
-
+* Scala [drone-scala.zip](../attachments/drone-scala.zip)
+* Java [drone-java.zip](../attachments/drone-java.zip)
+  
 As this service consumes events from the service built in the previous step, start the local-drone-control service first:
 
 @@@ div { .group-scala }

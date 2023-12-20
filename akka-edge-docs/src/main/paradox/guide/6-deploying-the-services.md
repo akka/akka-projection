@@ -114,10 +114,10 @@ SQL
 
 We are now going to deploy the `restaurant-drone-deliveries-service` to the created kubernetes cluster in `us-east-2`.
 
-This step is for deploying:
+This step is for deploying the restaurant-deliveries-service project, full sources can be downloaded from:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/restaurant-drone-deliveries-service-scala
+* Scala [drone-scala.zip](../attachments/drone-scala.zip)
+* Java [drone-java.zip](../attachments/drone-java.zip)
 
 Build and publish the docker image to docker.io:
 
@@ -214,10 +214,10 @@ kubectl get services
 
 ## Deploy local drone control instances
 
-This step is for deploying:
+This step is for deploying the local-drone-control project, full sources can be downloaded from:
 
-* Java: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-java
-* Scala: https://github.com/akka/akka-projection/tree/main/samples/grpc/local-drone-control-scala
+* Scala [drone-scala.zip](../attachments/drone-scala.zip)
+* Java [drone-java.zip](../attachments/drone-java.zip)
 
 ### Local Drone Control Namespace
 
