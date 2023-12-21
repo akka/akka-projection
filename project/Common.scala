@@ -1,5 +1,4 @@
 import akka.projections.Dependencies
-import com.geirsson.CiReleasePlugin
 import sbtdynver.DynVerPlugin.autoImport._
 import com.lightbend.paradox.projectinfo.ParadoxProjectInfoPluginKeys._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
@@ -71,13 +70,12 @@ object Common extends AutoPlugin {
     apiURL := Some(url(s"https://doc.akka.io/api/akka-projection/${projectInfoVersion.value}")),
     // show full stack traces and test case durations
     Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
-    IntegrationTest / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
+    Test / parallelExecution := false,
     // -a Show stack traces and exception class name for AssertionErrors.
     // -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
     // -q Suppress stdout for successful tests.
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
     Test / logBuffered := false,
-    IntegrationTest / logBuffered := false,
     mimaPreviousArtifacts := {
       moduleName.value match {
         case name if name.endsWith("-tests") => Set.empty
