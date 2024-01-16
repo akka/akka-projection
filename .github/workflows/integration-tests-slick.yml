@@ -36,7 +36,7 @@ jobs:
 
       - name: Copy license acceptance
         run: |-
-          cp container-license-acceptance.txt akka-projection-slick/src/it/resources/container-license-acceptance.txt
+          cp container-license-acceptance.txt akka-projection-slick-integration/src/test/resources/container-license-acceptance.txt
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
@@ -51,7 +51,7 @@ jobs:
           jvm: ${{ matrix.jvmName }}
 
       - name: Run all integration tests with default Scala and Java ${{ matrix.jdkVersion }}
-        run: sbt "akka-projection-slick/It/test" ${{ matrix.extraOpts }}
+        run: sbt "akka-projection-slick-integration/test" ${{ matrix.extraOpts }}
         env: # Disable Ryuk resource reaper since we always spin up fresh VMs
           TESTCONTAINERS_RYUK_DISABLED: true
 

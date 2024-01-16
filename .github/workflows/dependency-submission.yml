@@ -30,4 +30,4 @@ jobs:
         uses: scalacenter/sbt-dependency-submission@6807cf91e9dc7af7c314b988d56d928d5828605b
         with:
           modules-ignore: examples_2.13
-          configs-ignore: test It scala-tool scala-doc-tool
+          configs-ignore: test scala-tool scala-doc-tool
