@@ -1,5 +1,21 @@
 # Example Use Cases
 
+## Energy management
+
+Energy management systems, including those that manage energy at a residential property, have a particular trait 
+where they should strive to function without being connected to the internet. All local processing decisions should
+occur while treating the internet opportunistically. When the internet is there, it can be used to update data
+for improved decision making. When it is not though, the energy system must be able to continue to function using the
+data it has.
+
+Take residential Electric Vehicle charging as an example. It is important that a car is able to receive a charge even when
+the internet is not present. When the internet is present then energy market forecast data can be downloaded for the
+next 24 hours, and a charging schedule is set up in consideration of grid demands. Failing connectivity, off-peak
+scheduling and historical trends on usage can be relied on.
+
+In the case where access to the edge-based system is not possible due to an internet outage, Bluetooth or WiFi can be
+used to connect locally and access the user interface of the system.
+
 ## Vehicle communications
 
 There are many use cases for having vehicles communicate with each other, or with local devices such
@@ -43,6 +59,21 @@ of a game require low latency for real-time updates. Quick access to rules of th
 may also be of importance for a nice interactive experience. Many people gathered at the same place is demanding
 for the communication infrastructure and the backend systems. Local services running at the sports arena would
 be a good use case for Akka Edge.
+
+## Agriculture
+
+Edge based systems can be very useful on farms to collect data from sensors monitoring water tank levels, water pipe
+pressure, electric fence voltages, soil moisture and temperature and more. Most of the data here is about being able
+to view trends in data over time. The function of the edge in this situation is to store and then forward these observations. 
+If there is no internet connection then these observations should continue to be collected and stored; even if a short 
+power outage causes the edge-device to restart, noting that sensors often transmit at most once per hour and can 
+re-transmit their previous observation along with a new one.
+
+When internet connectivity is re-established, non-synchronized observations can be forwarded to a cloud-based service.
+
+For more remote farms, having internet connectivity is not strictly necessary either. An edge-device can forward its 
+observations on to another computer located at a local building using low-powered directional WiFi. 
+This other computer is then available only on the farm's LAN.
 
 ## Factories
 

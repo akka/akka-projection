@@ -1,4 +1,4 @@
-# Guide
+# Guide - Java/Scala
 
 As a hands-on guide we will step by step implement a drone restaurant to customer delivery service where orders for deliveries
 between restaurants and customers are created in a cloud hosted service.
