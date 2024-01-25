@@ -95,3 +95,10 @@ prepareTemporalFolder
 fetchProject ${samples_sources}/grpc/local-drone-control-java local-drone-control
 fetchProject ${samples_sources}/grpc/restaurant-drone-deliveries-service-java restaurant-drone-deliveries-service
 zipAndAttach ${akka_edge_docs_attachments}/drone-java.zip ${target_temporal_attachments}
+
+## akka-edge-docs Scala zip files
+prepareTemporalFolder
+fetchProject ${samples_sources}/grpc/iot-service-scala iot-service-scala
+fetchProject ${samples_sources}/grpc/iot-service-java iot-service-java
+fetchProject ${samples_sources}/grpc/iot-service-rs iot-service-rs
+zipAndAttach ${akka_edge_docs_attachments}/iot-service.zip ${target_temporal_attachments}

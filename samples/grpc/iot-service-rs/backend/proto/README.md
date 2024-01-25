@@ -1,0 +1,1 @@
+Contains the same file(s) as per https://github.com/akka/akka-projection/blob/main/samples/grpc/iot-service-scala/src/main/protobuf/iot/registration/RegistrationEvents.proto.

@@ -1,0 +1,54 @@
+body {
+    main {
+        max-width: 30em;
+        margin: auto;
+      
+        font-family: "Figtree", Arial, Helvetica, sans-serif;
+
+        section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+
+            form {
+                border: 1px solid #ccc;
+                display: grid;
+                gap: 0.5em;
+                grid-template-columns: 1fr;
+                padding: 1em;
+                width: 12em;
+
+                input {
+                    border: 1px solid #ccc;
+                    font-size: inherit;
+                }
+
+                input[readonly] {
+                    border: none;
+                }
+
+                input[type="submit"] {
+                    box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+                    background-color: #ffa94b;
+                    border: none;
+                    color: white;
+                    justify-self: right;
+                    line-height: 18px;
+                    padding: 10px 15px;
+                    text-transform: uppercase;
+                    transition: background-color 150ms ease-in-out;
+                    width: fit-content;
+                }
+            }
+        }
+    }
+}
+
+.logo {
+    width: 20em;
+}
+
+#temperature {
+    font-size: 3em;
+    font-weight: bold;
+    width: 3em;
+}

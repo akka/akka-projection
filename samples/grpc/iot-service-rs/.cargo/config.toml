@@ -1,0 +1,2 @@
+[registries]
+lightbend-akka-rs = { index = "sparse+https://repo.akka.io/cargo/" }

@@ -1,0 +1,47 @@
+[package]
+name = "iot-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+akka-persistence-rs = { workspace = true }
+akka-persistence-rs-commitlog = { workspace = true, features = ["cbor"] }
+akka-projection-rs = { workspace = true }
+akka-projection-rs-commitlog = { workspace = true }
+akka-projection-rs-grpc = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+env_logger = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+humantime = { workspace = true }
+itoa = { workspace = true }
+log = { workspace = true }
+postcard = { workspace = true, default-features = false, features = [
+    "use-std",
+] }
+prost = { workspace = true }
+rand = { workspace = true }
+scopeguard = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+smol_str = { workspace = true, features = ["serde"] }
+streambed = { workspace = true }
+streambed-confidant = { workspace = true }
+streambed-logged = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true, features = ["codec"] }
+tonic = { workspace = true }
+warp = { workspace = true }
+
+iot-service-model = { path = "../model" }
+
+[dev-dependencies]
+env_logger = { workspace = true }
+test-log = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }

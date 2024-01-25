@@ -111,6 +111,10 @@ jobs:
   check-samples:
     name: Check Sample Projects
     runs-on: ubuntu-22.04
+    env:
+      RUSTFLAGS: -Dwarnings
+      CARGO_TERM_COLOR: always
+      PROTOC_VERSION: 3.23.4
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
@@ -136,6 +140,22 @@ jobs:
         uses: coursier/setup-action@48280172a2c999022e42527711d6b28e4945e6f0
         with:
           jvm: temurin:1.11
+
+      - name: Update Rust
+        run: |
+          rustup update
+
+      - name: Install protoc
+        # https://github.com/taiki-e/install-action/releases
+        # v2.20.3
+        uses: taiki-e/install-action@47d27149ff6b3422864ec504071d5cc7873d642e
+        with:
+          tool: protoc@${{ env.PROTOC_VERSION }}
+
+      - name: Cache Rust
+        # https://github.com/Swatinem/rust-cache/releases
+        # v2.7.0
+        uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43
 
       - name: Gather version
         run: |-
@@ -200,6 +220,18 @@ jobs:
         run: |-
           cd samples/grpc/iot-service-scala
           sbt test -Dakka-projection.version=`cat ~/.version`
+
+      - name: Compile Java Projection gRPC IoT service sample
+        run: |-
+          cd samples/grpc/iot-service-java
+          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
+
+      - name: Test Rust IoT service sample
+        run: |-
+          cd samples/grpc/iot-service-rs
+          cargo clippy --tests
+          cargo fmt -- --check
+          cargo test
 
       - name: gRPC sample Java charger RES identical impl check
         run: |-

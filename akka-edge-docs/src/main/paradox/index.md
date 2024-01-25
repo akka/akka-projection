@@ -20,7 +20,8 @@ to be used together.
 * [Overview](overview.md)
 * [Example Use Cases](use-cases.md)
 * [Feature Summary](feature-summary.md)
-* [Guide](guide.md)
+* [Guide - Java/Scala](guide.md)
+* [Guide - Rust](guide-rs.md)
 * [Lightweight deployments](lightweight-deployments.md)
 
 @@@

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "iot.temperature.proto";
+
+package iot.temperature;
+
+// gRPC definition for SensorTwinService
+
+service SensorTwinService {
+    rpc GetTemperature (GetTemperatureRequest) returns (CurrentTemperature) {}
+}
+
+message GetTemperatureRequest {
+    string sensor_entity_id = 1;
+}
+
+message CurrentTemperature {
+    string sensor_entity_id = 1;
+    int32 temperature = 2;
+}

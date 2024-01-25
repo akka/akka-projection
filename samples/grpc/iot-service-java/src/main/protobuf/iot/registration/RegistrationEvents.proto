@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "iot.registration.proto";
+
+package iot.registration;
+
+// Events published to external services
+
+message Registered {
+    SecretDataValue secret = 1;
+}
+
+message SecretDataValue {
+    string value = 1;
+}

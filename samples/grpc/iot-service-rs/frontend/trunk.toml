@@ -1,0 +1,9 @@
+[[proxy]]
+# This proxy example has a backend and a rewrite field. Requests received on `rewrite` will be
+# proxied to the backend after rewriting the `rewrite` prefix to the `backend`'s URI prefix.
+# E.G., `/api/v1/resource/x/y/z` -> `/resource/x/y/z`
+backend = "http://localhost:8080/api/"
+
+[serve]
+# The port to serve on.
+port = 8081
