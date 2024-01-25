@@ -1,0 +1,65 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "backend",
+    "frontend",
+    "model",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70.0"
+
+[workspace.dependencies]
+akka-persistence-rs = { version = "0.7.0", registry = "lightbend-akka-rs" }
+akka-persistence-rs-commitlog = { version = "0.7.0", registry = "lightbend-akka-rs" }
+akka-projection-rs = { version = "0.7.0", registry = "lightbend-akka-rs" }
+akka-projection-rs-commitlog = { version = "0.7.0", registry = "lightbend-akka-rs" }
+akka-projection-rs-grpc = { version = "0.7.0", registry = "lightbend-akka-rs" }
+#akka-persistence-rs = { path = "../../../../akka-edge-rs/akka-persistence-rs" }
+#akka-persistence-rs-commitlog = { path = "../../../../akka-edge-rs/akka-persistence-rs-commitlog" }
+#akka-projection-rs = { path = "../../../../akka-edge-rs/akka-projection-rs" }
+#akka-projection-rs-commitlog = { path = "../../../../akka-edge-rs/akka-projection-rs-commitlog" }
+#akka-projection-rs-grpc = { path = "../../../../akka-edge-rs/akka-projection-rs-grpc" }
+async-stream = "0.3.3"
+async-trait = "0.1.72"
+chrono = "0.4.31"
+clap = "4.0.29"
+env_logger = "0.10.0"
+futures = "0.3.28"
+git-version = "0.3.5"
+gloo-net = "0.4"
+hex = "0.4.3"
+humantime = "2.1.0"
+itoa = "1.0"
+js-sys = "0.3.60"
+log = "0.4.17"
+postcard = { version = "1.0.8", default-features = false }
+prost = { version = "0.12.0" }
+prost-build = { version = "0.12.0" }
+rand = "0.8"
+scopeguard = "1.1"
+serde = "1.0.151"
+serde_json = "1.0.107"
+smol_str = "0.2.0"
+streambed = { version = "0.9.1" }
+streambed-confidant = { version = "0.9.1" }
+streambed-logged = { version = "0.9.1" }
+test-log = "0.2.11"
+tokio = "1.23.0"
+tokio-stream = "0.1.14"
+tokio-util = "0.7.4"
+tonic = "0.10.0"
+warp = "0.3"
+wasm-logger = "0.2"
+web-sys = "0.3"
+yew = { version = "0.21" }
+
+[profile.release]
+codegen-units = 1 # better optimizations
+lto = true        # better optimizations
+opt-level = 'z'   # Optimize for size
+panic = "abort"   # No unwinding or helpful backtrace
+strip = true      # No debug symbols etc

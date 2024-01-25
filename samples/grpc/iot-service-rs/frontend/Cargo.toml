@@ -1,0 +1,29 @@
+[package]
+name = "iot-service-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+akka-persistence-rs = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+gloo-net = { workspace = true }
+log = { workspace = true }
+js-sys = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+smol_str = { workspace = true }
+tokio = { workspace = true, features = [
+    "sync",
+    "macros",
+    "io-util",
+    "rt",
+    "time",
+] }
+tokio-stream = { workspace = true }
+wasm-logger = { workspace = true }
+web-sys = { workspace = true }
+yew = { workspace = true, features = ["csr"] }
+
+iot-service-model = { path = "../model" }
