@@ -201,6 +201,11 @@ jobs:
           cd samples/grpc/iot-service-scala
           sbt test -Dakka-projection.version=`cat ~/.version`
 
+      - name: Compile Java Projection gRPC IoT service sample
+        run: |-
+          cd samples/grpc/iot-service-java
+          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
+
       - name: gRPC sample Java charger RES identical impl check
         run: |-
           diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java

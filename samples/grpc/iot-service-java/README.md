@@ -13,19 +13,19 @@
 2. Start a first node:
 
     ```shell
-    sbt -Dconfig.resource=local1.conf run
+    mvn compile exec:exec -DAPP_CONFIG=local1.conf
     ```
 
 3. (Optional) Start another node with different ports:
 
     ```shell
-    sbt -Dconfig.resource=local2.conf run
+    mvn compile exec:exec -DAPP_CONFIG=local2.conf
     ```
 
 4. (Optional) More can be started:
 
     ```shell
-    sbt -Dconfig.resource=local3.conf run
+    mvn compile exec:exec -DAPP_CONFIG=local3.conf
     ```
 
 5. Check for service readiness
@@ -44,7 +44,7 @@
 
 7. Consume events from edge by running `iot-service-rs` and send temperature updates to it.
 
-8. Read current temperature:
+8. Read current temperature: 
 
    ```shell
     grpcurl -d '{"sensor_entity_id":"1"}' -plaintext 127.0.0.1:8101 iot.temperature.SensorTwinService.GetTemperature
