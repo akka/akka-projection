@@ -42,3 +42,4 @@ a React-like framework known as [Yew](https://yew.rs/).
 
 @@@
 
+See also @extref:[API documentation](akka-edge-rs-api:index.html).

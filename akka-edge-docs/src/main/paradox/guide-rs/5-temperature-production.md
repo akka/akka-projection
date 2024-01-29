@@ -31,7 +31,7 @@ Rust
 
 ## The producer
 
-A "sink" of envelopes is established that forward on to a remote consumer via a producer "flow". The flow will be used 
+A "sink" of envelopes is established that forward on to a remote consumer via a @extref:[producer flow](akka-edge-rs-api:akka_projection_rs_grpc/producer/index.html). The flow will be used 
 to bridge between source of events and this sink.
 
 A great deal of flexibility is provided in terms of expressing how the remote consumer's endpoint is established via the

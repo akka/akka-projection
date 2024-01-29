@@ -301,7 +301,9 @@ lazy val `akka-edge-docs` = project
         "extref.akka-projection.base_url" -> s"https://doc.akka.io/docs/akka-projection/${Dependencies.AkkaProjectionVersionInDocs}/%s",
         "scaladoc.akka.projection.base_url" -> s"https://doc.akka.io/api/akka-projection/${Dependencies.AkkaProjectionVersionInDocs}/",
         "extref.akka-distributed-cluster.base_url" -> s"https://doc.akka.io/docs/akka-distributed-cluster/${Dependencies.AkkaProjectionVersionInDocs}/%s",
-        "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/docs/akka-persistence-r2dbc/${Dependencies.AkkaPersistenceR2dbcVersionInDocs}/%s"),
+        "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/docs/akka-persistence-r2dbc/${Dependencies.AkkaPersistenceR2dbcVersionInDocs}/%s",
+        // API docs for akka-edge-rs
+        "extref.akka-edge-rs-api.base_url" -> s"https://doc.akka.io/api/akka-edge-rs/current/%s"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     paradoxRoots := List("index.html"),
     resolvers += Resolver.jcenterRepo,
