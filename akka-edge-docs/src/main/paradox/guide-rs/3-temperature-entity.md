@@ -84,7 +84,7 @@ The structure for our temperature entity is as follows:
 Rust
 :  @@snip [temperature.rs](/samples/grpc/iot-service-rs/backend/src/temperature.rs) { #behavior-1 }
 
-An entity behavior declaration associates the types used for the state, commands, and events of an entity instances. The
+An @extref:[`EventSourcedBehavior`](akka-edge-rs-api:akka_persistence_rs/entity/trait.EventSourcedBehavior.html) declaration associates the types used for the state, commands, and events of an entity instances. The
 declaration also includes how the entity's commands are processed, and how events are applied to state. Note that it is 
 impossible to update state from a command handler as it is immutable by design. Updating state only via
 the event handler enables entities to be sourced from their stored events without effects.
@@ -145,7 +145,7 @@ Rust
 
 ## Running the entity manager
 
-We are now ready to run the entity manager. An entity manager task handles the lifecycle 
+We are now ready to run the @extref:[entity manager](akka-edge-rs-api:akka_persistence_rs/entity_manager/index.html). An entity manager task handles the lifecycle 
 and routing of messages per type of entity.
  
 Rust

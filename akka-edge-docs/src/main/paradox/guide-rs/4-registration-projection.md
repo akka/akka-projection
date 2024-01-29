@@ -27,7 +27,7 @@ Each offset store must also have a distinct identity also, hence the `offset-sto
 
 ## The gRPC source provider
 
-We use a gRPC source provider to source events from a remote producer. The remote endpoint is declared as a function
+We use a @extref:[`GrpcSourceProvider`](akka-edge-rs-api:akka_projection_rs_grpc/consumer/struct.GrpcSourceProvider.html) to source events from a remote producer. The remote endpoint is declared as a function
 that establishes a gRPC connection. This function can be enhanced to establish the connection flexibly e.g. we can
 establish a TLS-based connection or even a Unix Domain Socket based connection if desired.
 
