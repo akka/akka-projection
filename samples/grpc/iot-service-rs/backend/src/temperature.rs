@@ -68,10 +68,13 @@ impl EventSourcedBehavior for Behavior {
 // A namespace for our entity's events when constructing persistence ids.
 pub const ENTITY_TYPE: &str = "Sensor";
 
+// Produces a marshaller for our file based commit log and uses the
+// upper 12 bits of the log's 64 bit key for holding up to 4K event
+// types. The remainder of the key is for the numeric entity id (52 bits).
 pub fn marshaller(
     events_key_secret_path: String,
     secret_store: FileSecretStore,
-) -> Marshaller<Event, impl Fn(&Event) -> u32, FileSecretStore> {
+) -> Marshaller<Event, impl Fn(&Event) -> u64, FileSecretStore, 12> {
     let to_record_type = |event: &Event| match event {
         Event::TemperatureRead { .. } => 0,
         Event::Registered { .. } => 1,
