@@ -13,11 +13,11 @@ edition = "2021"
 rust-version = "1.70.0"
 
 [workspace.dependencies]
-akka-persistence-rs = { version = "0.7.0", registry = "lightbend-akka-rs" }
-akka-persistence-rs-commitlog = { version = "0.7.0", registry = "lightbend-akka-rs" }
-akka-projection-rs = { version = "0.7.0", registry = "lightbend-akka-rs" }
-akka-projection-rs-commitlog = { version = "0.7.0", registry = "lightbend-akka-rs" }
-akka-projection-rs-grpc = { version = "0.7.0", registry = "lightbend-akka-rs" }
+akka-persistence-rs = { version = "0.8.0", registry = "lightbend-akka-rs" }
+akka-persistence-rs-commitlog = { version = "0.8.0", registry = "lightbend-akka-rs" }
+akka-projection-rs = { version = "0.8.0", registry = "lightbend-akka-rs" }
+akka-projection-rs-commitlog = { version = "0.8.0", registry = "lightbend-akka-rs" }
+akka-projection-rs-grpc = { version = "0.8.0", registry = "lightbend-akka-rs" }
 #akka-persistence-rs = { path = "../../../../akka-edge-rs/akka-persistence-rs" }
 #akka-persistence-rs-commitlog = { path = "../../../../akka-edge-rs/akka-persistence-rs-commitlog" }
 #akka-projection-rs = { path = "../../../../akka-edge-rs/akka-projection-rs" }
