@@ -41,6 +41,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import scala.concurrent.Future
 
+import akka.persistence.FilteredPayload
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 
 /**
@@ -186,6 +187,11 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
             }
         }
 
+      val eventOriginFilter: EventEnvelope[_] => Boolean =
+        producerSource.replicatedEventOriginFilter
+          .flatMap(f => init.replicaInfo.map(f.createFilter))
+          .getOrElse((_: EventEnvelope[_]) => true)
+
       val eventsFlow: Flow[StreamIn, EventEnvelope[Any], NotUsed] =
         BidiFlow
           .fromGraph(
@@ -196,65 +202,62 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
               init.filter,
               currentEventsByPersistenceId,
               producerFilter = producerSource.producerFilter,
+              eventOriginFilter,
               topicTagPrefix = producerSource.settings.topicTagPrefix,
               replayParallelism = producerSource.settings.replayParallelism))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
-      val eventOriginFilter: EventEnvelope[_] => Boolean =
-        producerSource.replicatedEventOriginFilter
-          .flatMap(f => init.replicaInfo.map(f.createFilter))
-          .getOrElse((_: EventEnvelope[_]) => true)
-
       val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =
         eventsFlow.mapAsync(producerSource.settings.transformationParallelism) { env =>
-          if (eventOriginFilter(env)) {
-            import system.executionContext
-            transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
-              .map {
-                case Some(event) =>
-                  if (log.isTraceEnabled)
-                    log.traceN(
-                      "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+          env.eventOption match {
+            case Some(FilteredPayload) =>
+              if (log.isTraceEnabled)
+                log.traceN(
+                  "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+                  env.persistenceId,
+                  env.sequenceNr,
+                  env.offset,
+                  env.source,
+                  init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
+              Future.successful(
+                StreamOut(
+                  StreamOut.Message.FilteredEvent(
+                    FilteredEvent(
                       env.persistenceId,
                       env.sequenceNr,
-                      env.offset,
-                      event.source,
-                      init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
-                  StreamOut(StreamOut.Message.Event(event))
-                case None =>
-                  if (log.isTraceEnabled)
-                    log.traceN(
-                      "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
-                      env.persistenceId,
-                      env.sequenceNr,
-                      env.offset,
-                      env.source,
-                      init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
-                  StreamOut(
-                    StreamOut.Message.FilteredEvent(
-                      FilteredEvent(
+                      env.slice,
+                      ProtobufProtocolConversions.offsetToProtoOffset(env.offset)))))
+            case _ =>
+              import system.executionContext
+              transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+                .map {
+                  case Some(event) =>
+                    if (log.isTraceEnabled)
+                      log.traceN(
+                        "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
                         env.persistenceId,
                         env.sequenceNr,
-                        env.slice,
-                        ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
-              }
-          } else {
-            if (log.isTraceEnabled)
-              log.traceN(
-                "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
-                env.persistenceId,
-                env.sequenceNr,
-                env.offset,
-                env.source,
-                init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
-            Future.successful(
-              StreamOut(
-                StreamOut.Message.FilteredEvent(
-                  FilteredEvent(
-                    env.persistenceId,
-                    env.sequenceNr,
-                    env.slice,
-                    ProtobufProtocolConversions.offsetToProtoOffset(env.offset)))))
+                        env.offset,
+                        event.source,
+                        init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
+                    StreamOut(StreamOut.Message.Event(event))
+                  case None =>
+                    if (log.isTraceEnabled)
+                      log.traceN(
+                        "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+                        env.persistenceId,
+                        env.sequenceNr,
+                        env.offset,
+                        env.source,
+                        init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
+                    StreamOut(
+                      StreamOut.Message.FilteredEvent(
+                        FilteredEvent(
+                          env.persistenceId,
+                          env.sequenceNr,
+                          env.slice,
+                          ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
+                }
           }
         }
 
