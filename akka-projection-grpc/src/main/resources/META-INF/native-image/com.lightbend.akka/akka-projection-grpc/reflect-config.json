@@ -1,0 +1,58 @@
+[
+  {
+    "name": "akka.projection.grpc.internal.ConsumerSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "condition": {
+      "typeReachable": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+    },
+    "name": "akka.projection.grpc.internal.DdataConsumerFilterStore$",
+    "fields": [
+      {
+        "name": "MODULE$"
+      }
+    ]
+  },
+  {
+    "condition": {
+      "typeReachable": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+    },
+    "name": "akka.projection.grpc.internal.DdataConsumerFilterStore$",
+    "methods": [
+      {
+        "name": "apply",
+        "parameterTypes": [
+          "akka.projection.grpc.consumer.ConsumerFilter$ConsumerFilterSettings",
+          "java.lang.String",
+          "akka.actor.typed.ActorRef"
+        ]
+      }
+    ]
+  },
+  {
+    "condition": {
+      "typeReachable": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+    },
+    "name": "akka.projection.grpc.internal.DdataConsumerFilterStore$State"
+  },
+  {
+    "condition": {
+      "typeReachable": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+    },
+    "name": "akka.projection.grpc.internal.DdataConsumerFilterStore$ConsumerFilterKey"
+  },
+  {
+    "condition": {
+      "typeReachable": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+    },
+    "name": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+  }
+]
