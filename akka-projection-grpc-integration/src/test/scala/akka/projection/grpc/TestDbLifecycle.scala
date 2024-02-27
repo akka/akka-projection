@@ -38,8 +38,15 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
   lazy val persistenceExt: Persistence = Persistence(typedSystem)
 
   override protected def beforeAll(): Unit = {
-    lazy val r2dbcSettings: R2dbcSettings =
-      R2dbcSettings(typedSystem.settings.config.getConfig("akka.persistence.r2dbc"))
+    beforeAllDeleteFromTables(typedSystem)
+    super.beforeAll()
+  }
+
+  protected def beforeAllDeleteFromTables(sys: ActorSystem[_]): Unit = {
+    val r2dbcSettings: R2dbcSettings =
+      R2dbcSettings(sys.settings.config.getConfig("akka.persistence.r2dbc"))
+    val r2dbcProjectionSettings: R2dbcProjectionSettings =
+      R2dbcProjectionSettings(sys.settings.config.getConfig(testConfigPath))
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(
         _.createStatement(s"delete from ${r2dbcSettings.journalTableWithSchema}")),
@@ -48,7 +55,7 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
       r2dbcExecutor.updateOne("beforeAll delete")(
         _.createStatement(s"delete from ${r2dbcProjectionSettings.timestampOffsetTableWithSchema}")),
       10.seconds)
-    super.beforeAll()
+
   }
 
 }

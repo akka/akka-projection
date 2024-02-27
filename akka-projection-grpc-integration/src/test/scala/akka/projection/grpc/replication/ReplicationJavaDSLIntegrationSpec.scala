@@ -35,7 +35,6 @@ import akka.projection.grpc.replication.javadsl.Replica
 import akka.projection.grpc.replication.javadsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.javadsl.Replication
 import akka.projection.grpc.replication.javadsl.ReplicationSettings
-import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.javadsl.R2dbcReplication
 import akka.serialization.jackson.CborSerializable
 import akka.testkit.SocketUtil
@@ -47,7 +46,6 @@ import org.slf4j.LoggerFactory
 
 import java.time.Duration
 import scala.compat.java8.FutureConverters.CompletionStageOps
-import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -62,6 +60,7 @@ object ReplicationJavaDSLIntegrationSpec {
        akka.actor.provider = cluster
        akka.http.server.preview.enable-http2 = on
        akka.persistence.r2dbc {
+          journal.table = "event_journal_${dc.id}"
           query {
             refresh-interval = 500 millis
             # reducing this to have quicker test, triggers backtracking earlier
@@ -240,18 +239,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    // We can share the journal to save a bit of work, because the persistence id contains
-    // the dc so is unique (this is ofc completely synthetic, the whole point of replication
-    // over grpc is to replicate between different dcs/regions with completely separate databases).
-    // The offset tables need to be separate though to not get conflicts on projection names
-    systemPerDc.values.foreach { system =>
-      val r2dbcProjectionSettings = R2dbcProjectionSettings(system)
-      Await.result(
-        r2dbcExecutor.updateOne("beforeAll delete")(
-          _.createStatement(s"delete from ${r2dbcProjectionSettings.timestampOffsetTableWithSchema}")),
-        10.seconds)
-
-    }
+    systemPerDc.values.foreach(beforeAllDeleteFromTables)
   }
 
   def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {

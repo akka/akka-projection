@@ -24,7 +24,6 @@ import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.Replication
 import akka.projection.grpc.replication.scaladsl.Replication.EdgeReplication
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
-import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.scaladsl.R2dbcReplication
 import akka.testkit.SocketUtil
 import com.typesafe.config.Config
@@ -33,7 +32,6 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -50,6 +48,7 @@ object PushReplicationIntegrationSpec {
        }
        akka.http.server.preview.enable-http2 = on
        akka.persistence.r2dbc {
+          journal.table = "event_journal_${dc.id}"
           query {
             refresh-interval = 500 millis
             # reducing this to have quicker test, triggers backtracking earlier
@@ -144,17 +143,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    // We can share the journal to save a bit of work, because the persistence id contains
-    // the dc so is unique (this is ofc completely synthetic, the whole point of replication
-    // over grpc is to replicate between different dcs/regions with completely separate databases).
-    // The offset tables need to be separate though to not get conflicts on projection names
-    systemPerDc.values.foreach { system =>
-      val r2dbcProjectionSettings = R2dbcProjectionSettings(system)
-      Await.result(
-        r2dbcExecutor.updateOne("beforeAll delete")(
-          _.createStatement(s"delete from ${r2dbcProjectionSettings.timestampOffsetTableWithSchema}")),
-        10.seconds)
-    }
+    systemPerDc.values.foreach(beforeAllDeleteFromTables)
   }
 
   val EntityTypeName = "hello-edge-world"

@@ -223,7 +223,7 @@ import org.slf4j.LoggerFactory
 
       private def tryPullReplay(pid: String): Unit = {
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
-          log.trace2("Stream [{}]: tryPullReplay persistenceId [{}}]", logPrefix, pid)
+          log.trace2("Stream [{}]: tryPullReplay persistenceId [{}]", logPrefix, pid)
           val next =
             replayInProgress(pid).queue.pull().map(ReplayEnvelope(pid, _))(ExecutionContexts.parasitic)
           next.value match {
