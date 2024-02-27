@@ -25,11 +25,13 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
-import java.time.Instant
-import java.time.{ Duration => JDuration }
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
+
+import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.typed.scaladsl.EventTimestampQuery
+import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 
 class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(testContainerConf.config)
@@ -62,6 +64,8 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
       GrpcQuerySettings(streamId),
       GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")),
       protobufDescriptors = Nil)
+
+    lazy val readJournal = PersistenceQuery(system).readJournalFor[EventTimestampQuery](R2dbcReadJournal.Identifier)
   }
 
   override protected def beforeAll(): Unit = {
@@ -94,15 +98,13 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
 
       val timestampA =
         grpcReadJournal.timestampOf(pid.id, sequenceNr = 1L).futureValue.get
-      JDuration
-        .between(timestampA, Instant.now())
-        .toMillis should (be >= 0L and be <= 3000L)
+      val expectedTimestampA = readJournal.timestampOf(pid.id, sequenceNr = 1L).futureValue.get
+      timestampA shouldBe expectedTimestampA
 
       val timestampB =
         grpcReadJournal.timestampOf(pid.id, sequenceNr = 2L).futureValue.get
-      JDuration
-        .between(timestampA, Instant.now())
-        .toMillis should (be >= 0L and be <= 3000L)
+      val expectedTimestampB = readJournal.timestampOf(pid.id, sequenceNr = 2L).futureValue.get
+      timestampB shouldBe expectedTimestampB
 
       if (timestampB != timestampA)
         timestampB.isAfter(timestampA) shouldBe true
