@@ -87,6 +87,17 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       this(streamId, persistenceIdOffsets.asScala.toSet)
   }
 
+  /**
+   * Explicit request to replay events for given entities.
+   */
+  final case class ReplayWithFilter(streamId: String, replayPersistenceIds: Set[ReplayPersistenceId])
+      extends SubscriberCommand {
+
+    /** Java API */
+    def this(streamId: String, persistenceIdOffsets: JSet[ReplayPersistenceId]) =
+      this(streamId, persistenceIdOffsets.asScala.toSet)
+  }
+
   sealed trait FilterCriteria
   sealed trait RemoveCriteria extends FilterCriteria
 
@@ -305,6 +316,8 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   final case class EntityIdOffset(entityId: String, seqNr: Long)
 
   final case class PersistenceIdOffset(persistenceIdId: String, seqNr: Long)
+
+  final case class ReplayPersistenceId(persistenceIdOffset: PersistenceIdOffset, filterAfterSeqNr: Long)
 
   override def createExtension(system: ActorSystem[_]): ConsumerFilter = new ConsumerFilter(system)
 
