@@ -13,6 +13,7 @@ import akka.NotUsed
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
+import akka.persistence.FilteredPayload
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
@@ -154,6 +155,7 @@ import org.slf4j.LoggerFactory
     var initFilter: Iterable[FilterCriteria],
     currentEventsByPersistenceId: (String, Long) => Source[EventEnvelope[Any], NotUsed],
     val producerFilter: EventEnvelope[Any] => Boolean,
+    replicatedEventOriginFilter: EventEnvelope[_] => Boolean,
     topicTagPrefix: String,
     replayParallelism: Int)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
@@ -221,7 +223,7 @@ import org.slf4j.LoggerFactory
 
       private def tryPullReplay(pid: String): Unit = {
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
-          log.trace2("Stream [{}]: tryPullReplay persistenceId [{}}]", logPrefix, pid)
+          log.trace2("Stream [{}]: tryPullReplay persistenceId [{}]", logPrefix, pid)
           val next =
             replayInProgress(pid).queue.pull().map(ReplayEnvelope(pid, _))(ExecutionContexts.parasitic)
           next.value match {
@@ -366,7 +368,6 @@ import org.slf4j.LoggerFactory
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
                 if (replayReq.persistenceIdOffset.nonEmpty) {
                   log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.persistenceIdOffset)
-                  // FIXME for RES, can we check if the replicaId is handled by this stream, to avoid unnecessary replay queries
                   replayAll(replayReq.persistenceIdOffset)
                 }
 
@@ -393,11 +394,20 @@ import org.slf4j.LoggerFactory
             if (replicaId.isEmpty && ReplicationId.isReplicationId(pid))
               replicaId = Some(ReplicationId.fromString(pid).replicaId)
 
-            // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
-            // can never include them
             if (producerFilter(env) && filter.matches(env)) {
-              log.traceN("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
-              push(outEnv, env)
+              if (replicatedEventOriginFilter(env)) {
+                // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
+                // can never include them
+                log.traceN("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+                push(outEnv, env)
+              } else {
+                log.traceN(
+                  "Stream [{}]: Filter event, due to origin, persistenceId [{}], seqNr [{}]",
+                  logPrefix,
+                  pid,
+                  env.sequenceNr)
+                push(outEnv, env.withEvent(FilteredPayload)) // FilteredPayload will be transformed to FilteredEvent
+              }
             } else {
               log.debugN("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               pullInEnvOrReplay()

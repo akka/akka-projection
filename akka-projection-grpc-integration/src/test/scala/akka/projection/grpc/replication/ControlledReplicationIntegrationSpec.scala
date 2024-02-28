@@ -4,6 +4,10 @@
 
 package akka.projection.grpc.replication
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
+
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -14,16 +18,17 @@ import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
 import akka.http.scaladsl.Http
 import akka.persistence.typed.ReplicaId
-import akka.persistence.typed.crdt.LwwTime
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestDbLifecycle
+import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
@@ -36,20 +41,15 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
 
-import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
-
-object ReplicationIntegrationSpec {
+object ControlledReplicationIntegrationSpec {
 
   private def config(dc: ReplicaId): Config =
     ConfigFactory.parseString(s"""
        akka.actor.provider = cluster
        akka.actor {
          serialization-bindings {
-           "${classOf[ReplicationIntegrationSpec].getName}$$LWWHelloWorld$$Event" = jackson-json
+           "${classOf[ControlledReplicationIntegrationSpec].getName}$$TestEntity$$Event" = jackson-json
          }
        }
        akka.http.server.preview.enable-http2 = on
@@ -81,130 +81,127 @@ object ReplicationIntegrationSpec {
   private val DCB = ReplicaId("DCB")
   private val DCC = ReplicaId("DCC")
 
-  object LWWHelloWorld {
+  object TestEntity {
 
-    val EntityType: EntityTypeKey[Command] = EntityTypeKey[Command]("hello-world")
+    val EntityType: EntityTypeKey[Command] = EntityTypeKey[Command]("items")
 
     sealed trait Command
-    final case class Get(replyTo: ActorRef[String]) extends Command
-    final case class SetGreeting(newGreeting: String, replyTo: ActorRef[Done]) extends Command
-    final case class SetTag(tag: String, replyTo: ActorRef[Done]) extends Command
+    final case class Get(replyTo: ActorRef[State]) extends Command
+    final case class UpdateItem(key: String, value: Int, replyTo: ActorRef[Done]) extends Command
+    final case class SetScope(scope: Set[String], replyTo: ActorRef[Done]) extends Command
 
     sealed trait Event
-    final case class GreetingChanged(greeting: String, timestamp: LwwTime) extends Event
-    final case class TagChanged(tag: String, timestamp: LwwTime) extends Event
+    final case class ItemUpdated(key: String, value: Int) extends Event
+    final case class ScopeChanged(scope: Set[String]) extends Event
 
     object State {
       val initial =
-        State("Hello world", LwwTime(Long.MinValue, ReplicaId("")), "", LwwTime(Long.MinValue, ReplicaId("")))
+        State(Map.empty, Set.empty)
     }
 
-    case class State(greeting: String, greetingTimestamp: LwwTime, tag: String, tagTimestamp: LwwTime)
+    case class State(items: Map[String, Int], scope: Set[String]) {
+      def updateItem(key: String, value: Int): State =
+        copy(items = items.updated(key, value))
+
+      def updateScope(scope: Set[String]): State =
+        copy(scope = scope)
+    }
 
     def apply(replicatedBehaviors: ReplicatedBehaviors[Command, Event, State]) =
       replicatedBehaviors.setup { replicationContext =>
         EventSourcedBehavior[Command, Event, State](
           replicationContext.persistenceId,
           State.initial, {
-            case (State(greeting, _, _, _), Get(replyTo)) =>
-              replyTo ! greeting
+            case (state, Get(replyTo)) =>
+              replyTo ! state
               Effect.none
-            case (state, SetGreeting(greeting, replyTo)) =>
+            case (_, UpdateItem(key, value, replyTo)) =>
               Effect
-                .persist(
-                  GreetingChanged(
-                    greeting,
-                    state.greetingTimestamp
-                      .increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+                .persist(ItemUpdated(key, value))
                 .thenRun((_: State) => replyTo ! Done)
-            case (state, SetTag(tag, replyTo)) =>
+            case (_, SetScope(scope, replyTo)) =>
               Effect
-                .persist(
-                  TagChanged(
-                    tag,
-                    state.greetingTimestamp
-                      .increase(replicationContext.currentTimeMillis(), replicationContext.replicaId)))
+                .persist(ScopeChanged(scope))
                 .thenRun((_: State) => replyTo ! Done)
           }, {
-            case (currentState, GreetingChanged(newGreeting, newTimestamp)) =>
-              if (newTimestamp.isAfter(currentState.greetingTimestamp))
-                currentState.copy(newGreeting, newTimestamp)
-              else currentState
-            case (currentState, TagChanged(newTag, newTimestamp)) =>
-              if (newTimestamp.isAfter(currentState.tagTimestamp))
-                currentState.copy(tag = newTag, tagTimestamp = newTimestamp)
-              else currentState
+            case (currentState, ItemUpdated(key, value)) =>
+              currentState.updateItem(key, value)
+            case (currentState, ScopeChanged(scope)) =>
+              currentState.updateScope(scope)
           })
           .withTaggerForState {
-            case (state, _) => if (state.tag == "") Set.empty else Set(state.tag)
+            case (state, _) => state.scope
           }
       }
   }
 }
 
-class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
+class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
     extends ScalaTestWithActorTestKit(
       akka.actor
         .ActorSystem(
-          "ReplicationIntegrationSpecA",
-          ReplicationIntegrationSpec
-            .config(ReplicationIntegrationSpec.DCA)
+          "ControlledReplicationIntegrationSpecA",
+          ControlledReplicationIntegrationSpec
+            .config(ControlledReplicationIntegrationSpec.DCA)
             .withFallback(testContainerConf.config))
         .toTyped)
     with AnyWordSpecLike
     with TestDbLifecycle
     with BeforeAndAfterAll
     with LogCapturing {
-  import ReplicationIntegrationSpec._
+  import ControlledReplicationIntegrationSpec._
   implicit val ec: ExecutionContext = system.executionContext
 
   def this() = this(new TestContainerConf)
 
-  private val logger = LoggerFactory.getLogger(classOf[ReplicationIntegrationSpec])
+  private val logger = LoggerFactory.getLogger(classOf[ControlledReplicationIntegrationSpec])
   override def typedSystem: ActorSystem[_] = testKit.system
 
   private val systems = Seq[ActorSystem[_]](
     typedSystem,
     akka.actor
       .ActorSystem(
-        "ReplicationIntegrationSpecB",
-        ReplicationIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
+        "ControlledReplicationIntegrationSpecB",
+        ControlledReplicationIntegrationSpec.config(DCB).withFallback(testContainerConf.config))
       .toTyped,
     akka.actor
       .ActorSystem(
-        "ReplicationIntegrationSpecC",
-        ReplicationIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
+        "ControlledReplicationIntegrationSpecC",
+        ControlledReplicationIntegrationSpec.config(DCC).withFallback(testContainerConf.config))
       .toTyped)
 
   private val grpcPorts = SocketUtil.temporaryServerAddresses(systems.size, "127.0.0.1").map(_.getPort)
   private val allDcsAndPorts = Seq(DCA, DCB, DCC).zip(grpcPorts)
   private val allReplicas = allDcsAndPorts.map {
     case (id, port) =>
-      Replica(id, 2, GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
+      Replica(id, 1, GrpcClientSettings.connectToServiceAt("127.0.0.1", port).withTls(false))
   }.toSet
 
   private val testKitsPerDc = Map(DCA -> testKit, DCB -> ActorTestKit(systems(1)), DCC -> ActorTestKit(systems(2)))
   private val systemPerDc = Map(DCA -> system, DCB -> systems(1), DCC -> systems(2))
-  private val entityIds = Set("one", "two", "three")
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     systemPerDc.values.foreach(beforeAllDeleteFromTables)
   }
 
-  def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[LWWHelloWorld.Command] = {
-    val settings = ReplicationSettings[LWWHelloWorld.Command](
-      LWWHelloWorld.EntityType.name,
+  def startReplica(replicaSystem: ActorSystem[_], selfReplicaId: ReplicaId): Replication[TestEntity.Command] = {
+    val settings = ReplicationSettings[TestEntity.Command](
+      TestEntity.EntityType.name,
       selfReplicaId,
       EventProducerSettings(replicaSystem),
       allReplicas,
       10.seconds,
       8,
       R2dbcReplication())
-    Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
+
+    val consumerFilter = Seq(ConsumerFilter.excludeAll, ConsumerFilter.IncludeTags(Set(settings.selfReplicaId.id)))
+    val settingsWIthFilter = settings.withInitialConsumerFilter(consumerFilter)
+    Replication.grpcReplication(settingsWIthFilter)(ControlledReplicationIntegrationSpec.TestEntity.apply)(
+      replicaSystem)
   }
 
-  "Replication over gRPC" should {
+  "Controlled Replication over gRPC" should {
     "form three one node clusters" in {
       testKitsPerDc.values.foreach { testKit =>
         val cluster = Cluster(testKit.system)
@@ -240,76 +237,51 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       logger.info("All three replication/producer services bound")
     }
 
-    "replicate writes from one dc to the other two" in {
-      systemPerDc.keys.foreach { dc =>
-        withClue(s"from ${dc.id}") {
-          Future
-            .sequence(entityIds.map { entityId =>
-              logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
-              ClusterSharding(systemPerDc(dc))
-                .entityRefFor(LWWHelloWorld.EntityType, entityId)
-                .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _))
-            })
-            .futureValue
+    "replicate writes from one dc to others by tagging" in {
+      val entityId = "one"
+      val entityRefA = ClusterSharding(systemPerDc(DCA)).entityRefFor(TestEntity.EntityType, entityId)
+      val entityRefB = ClusterSharding(systemPerDc(DCB)).entityRefFor(TestEntity.EntityType, entityId)
+      val entityRefC = ClusterSharding(systemPerDc(DCC)).entityRefFor(TestEntity.EntityType, entityId)
 
-          testKitsPerDc.values.foreach { testKit =>
-            withClue(s"on ${testKit.system.name}") {
-              val probe = testKit.createTestProbe()
+      // update in A
+      entityRefA.ask(TestEntity.UpdateItem("A", 0, _)).futureValue
+      entityRefA.ask(TestEntity.UpdateItem("A", 1, _)).futureValue
 
-              entityIds.foreach { entityId =>
-                withClue(s"for entity id $entityId") {
-                  val entityRef = ClusterSharding(testKit.system)
-                    .entityRefFor(LWWHelloWorld.EntityType, entityId)
-
-                  probe.awaitAssert({
-                    entityRef
-                      .ask(LWWHelloWorld.Get.apply)
-                      .futureValue should ===(s"hello 1 from ${dc.id}")
-                  }, 10.seconds)
-                }
-              }
-            }
-          }
-        }
+      // replicate to B
+      entityRefA.ask(TestEntity.SetScope(Set(DCB.id), _)).futureValue
+      eventually {
+        entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1), Set(DCB.id))
       }
+      entityRefC.ask(TestEntity.Get).futureValue shouldBe TestEntity.State.initial
+
+      // update in B
+      entityRefB.ask(TestEntity.UpdateItem("B", 2, _)).futureValue
+      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCB.id))
+      logger.info("Replicate from B to A")
+      // replicate to A
+      entityRefB.ask(TestEntity.SetScope(Set(DCA.id), _)).futureValue
+      eventually {
+        entityRefA.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+      }
+
+      // replicate to C
+      entityRefA.ask(TestEntity.SetScope(Set(DCC.id), _)).futureValue
+      eventually {
+        entityRefC.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCC.id))
+      }
+      // update in C
+      entityRefC.ask(TestEntity.UpdateItem("C", 3, _)).futureValue
+
+      // replicate to A
+      entityRefC.ask(TestEntity.SetScope(Set(DCA.id), _)).futureValue
+      eventually {
+        entityRefA.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(
+          Map("A" -> 1, "B" -> 2, "C" -> 3),
+          Set(DCA.id))
+      }
+
     }
 
-    "replicate concurrent writes to the other DCs" in (2 to 4).foreach { greetingNo =>
-      withClue(s"Greeting $greetingNo") {
-        Future
-          .sequence(systemPerDc.keys.map { dc =>
-            withClue(s"from ${dc.id}") {
-              Future.sequence(entityIds.map { entityId =>
-                logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
-                ClusterSharding(systemPerDc(dc))
-                  .entityRefFor(LWWHelloWorld.EntityType, entityId)
-                  .ask(LWWHelloWorld.SetGreeting(s"hello $greetingNo from ${dc.id}", _))
-              })
-            }
-          })
-          .futureValue // all three updated in roughly parallel
-
-        // All 3 should eventually arrive at the same value
-        testKit
-          .createTestProbe()
-          .awaitAssert(
-            {
-              entityIds.foreach { entityId =>
-                withClue(s"for entity id $entityId") {
-                  testKitsPerDc.values.map { testKit =>
-                    val entityRef = ClusterSharding(testKit.system)
-                      .entityRefFor(LWWHelloWorld.EntityType, entityId)
-
-                    entityRef
-                      .ask(LWWHelloWorld.Get.apply)
-                      .futureValue
-                  }.toSet should have size (1)
-                }
-              }
-            },
-            20.seconds)
-      }
-    }
   }
 
   protected override def afterAll(): Unit = {
