@@ -134,7 +134,9 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
   }
 
   private def streamInReplayReq(pid: String, fromSeqNr: Long, filterAfterSeqNr: Long = Long.MaxValue): StreamIn =
-    StreamIn(StreamIn.Message.Replay(ReplayReq(List(replayPersistenceId(pid, fromSeqNr, filterAfterSeqNr)))))
+    StreamIn(
+      StreamIn.Message.Replay(
+        ReplayReq(replayPersistenceIds = List(replayPersistenceId(pid, fromSeqNr, filterAfterSeqNr)))))
 
   private def replayPersistenceId(pid: String, fromSeqNr: Long, filterAfterSeqNr: Long = Long.MaxValue) =
     ReplayPersistenceId(Some(PersistenceIdSeqNr(pid, fromSeqNr)), filterAfterSeqNr)
@@ -249,7 +251,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
       inPublisher.sendNext(
         StreamIn(
-          StreamIn.Message.Replay(ReplayReq(List(
+          StreamIn.Message.Replay(ReplayReq(replayPersistenceIds = List(
             replayPersistenceId(PersistenceId(entityType, "b").id, 1L),
             replayPersistenceId(PersistenceId(entityType, "c").id, 1L))))))
 
@@ -296,14 +298,14 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
         entityIds.map(id => createEnvelope(PersistenceId(entityType, id), 1, id))
 
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(
-          ReplayReq(entityIds.take(7).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(ReplayReq(replayPersistenceIds =
+          entityIds.take(7).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(
-          ReplayReq(entityIds.slice(7, 10).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(ReplayReq(replayPersistenceIds =
+          entityIds.slice(7, 10).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(
-          ReplayReq(entityIds.drop(10).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(ReplayReq(replayPersistenceIds =
+          entityIds.drop(10).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
 
       outProbe.request(100)
       // no guarantee of order between different entityIds

@@ -400,6 +400,12 @@ import org.slf4j.LoggerFactory
                   log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.replayPersistenceIds)
                   replayAll(replayReq.replayPersistenceIds)
                 }
+                // needed for compatibility with 2.5.2
+                if (replayReq.replayPersistenceIds.isEmpty && replayReq.persistenceIdOffset.nonEmpty) {
+                  log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.persistenceIdOffset)
+                  replayAll(replayReq.persistenceIdOffset.map(p =>
+                    ReplayPersistenceId(Some(p), filterAfterSeqNr = Long.MaxValue)))
+                }
 
               case StreamIn(StreamIn.Message.Init(_), _) =>
                 log.warn("Stream [{}]: Init request can only be used as the first message", logPrefix)

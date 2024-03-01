@@ -75,7 +75,9 @@ message FilterReq {
 
 // Replay events for given entities.
 message ReplayReq {
-  repeated ReplayPersistenceId replay_persistence_ids = 1;
+  // deprecated in 1.5.3, use replay_persistence_ids
+  repeated PersistenceIdSeqNr persistence_id_offset = 1;
+  repeated ReplayPersistenceId replay_persistence_ids = 2;
 }
 
 message ReplayPersistenceId {

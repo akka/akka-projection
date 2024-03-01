@@ -342,6 +342,9 @@ final class GrpcReadJournal private (
           ReplayPersistenceId(Some(PersistenceIdSeqNr(pid, seqNr)), filterAfterSeqNr)
       }.toVector
 
+      // need this for compatibility with 1.5.2
+      val protoPersistenceIdOffsets = protoReplayPersistenceIds.map(_.fromPersistenceIdOffset.get)
+
       if (log.isDebugEnabled() && protoReplayPersistenceIds.nonEmpty)
         log.debug2(
           "{}: Replay triggered for [{}]",
@@ -353,7 +356,7 @@ final class GrpcReadJournal private (
             }
             .mkString(", "))
 
-      StreamIn(StreamIn.Message.Replay(ReplayReq(protoReplayPersistenceIds)))
+      StreamIn(StreamIn.Message.Replay(ReplayReq(protoPersistenceIdOffsets, protoReplayPersistenceIds)))
     }
 
     val initFilter = {

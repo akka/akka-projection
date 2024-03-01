@@ -428,7 +428,7 @@ class EventProducerServiceSpec
     "replay events" in {
       val persistenceId = nextPid(entityType3)
       val initReq = InitReq(streamId3, 0, 1023, offset = None)
-      val replayReq = ReplayReq(
+      val replayReq = ReplayReq(replayPersistenceIds =
         List(ReplayPersistenceId(Some(PersistenceIdSeqNr(persistenceId.id, 2L)), filterAfterSeqNr = Long.MaxValue)))
       val streamIn =
         Source(List(StreamIn(StreamIn.Message.Init(initReq)), StreamIn(StreamIn.Message.Replay(replayReq))))
@@ -490,7 +490,7 @@ class EventProducerServiceSpec
     "replay events StartingFromSnapshots" in {
       val persistenceId = nextPid(entityType5)
       val initReq = InitReq(streamId5, 0, 1023, offset = None)
-      val replayReq = ReplayReq(
+      val replayReq = ReplayReq(replayPersistenceIds =
         List(ReplayPersistenceId(Some(PersistenceIdSeqNr(persistenceId.id, 1L)), filterAfterSeqNr = Long.MaxValue)))
       val streamIn =
         Source(List(StreamIn(StreamIn.Message.Init(initReq)), StreamIn(StreamIn.Message.Replay(replayReq))))
