@@ -20,11 +20,11 @@
         <akka.version>2.9.1</akka.version>
         <akka-projection.version>1.5.2</akka-projection.version>
         <akka-persistence-r2dbc.version>1.2.2</akka-persistence-r2dbc.version>
-        <akka-management.version>1.5.0</akka-management.version>
+        <akka-management.version>1.5.1</akka-management.version>
         <akka-diagnostics.version>2.1.0</akka-diagnostics.version>
         <akka-http.version>10.6.0</akka-http.version>
-        <akka-grpc.version>2.4.0</akka-grpc.version>
-        <akka-grpc-maven-plugin.version>2.4.0</akka-grpc-maven-plugin.version>
+        <akka-grpc.version>2.4.1</akka-grpc.version>
+        <akka-grpc-maven-plugin.version>2.4.1</akka-grpc-maven-plugin.version>
         <logback.version>1.2.13</logback.version>
         <prometheus.client.version>0.16.0</prometheus.client.version>
         <junit.version>4.13.1</junit.version>
@@ -448,9 +448,8 @@
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>--verbose</buildArg>
-                                <buildArg>--enable-http</buildArg>
-                                <buildArg>--enable-https</buildArg>
                                 <buildArg>--install-exit-handlers</buildArg>
+                                <buildArg>--initialize-at-build-time=ch.qos.logback</buildArg>
                                 <buildArg>-Dlogback.configurationFile=logback-native-image.xml</buildArg>
                             </buildArgs>
                         </configuration>

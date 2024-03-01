@@ -2,8 +2,7 @@ name := "local-drone-control"
 
 organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
-licenses := Seq(
-  ("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
+licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
@@ -31,14 +30,12 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.9.1+49-90f6f268+20240226-1352-SNAPSHOT"
-val AkkaHttpVersion = "10.6.0+27-8a992e17"
-val AkkaManagementVersion = "1.5.0+40-b0a94fa3+20240226-1444-SNAPSHOT"
-val AkkaPersistenceR2dbcVersion = "1.2.2+5-3d35a28d-SNAPSHOT"
+val AkkaVersion = "2.9.2"
+val AkkaHttpVersion = "10.6.1"
+val AkkaManagementVersion = "1.5.1"
+val AkkaPersistenceR2dbcVersion = "1.2.3"
 val AkkaProjectionVersion =
-  sys.props.getOrElse(
-    "akka-projection.version",
-    "1.5.2-7-0d14e4fa-20240226-1548-SNAPSHOT")
+  sys.props.getOrElse("akka-projection.version", "1.5.2-7-0d14e4fa-20240226-1548-SNAPSHOT")
 val AkkaDiagnosticsVersion = "2.1.0"
 
 enablePlugins(AkkaGrpcPlugin)
@@ -68,10 +65,8 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
   "com.typesafe.akka" %% "akka-stream-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-protobuf-v3" % AkkaVersion,
-  // FIXME should we support diagnostics in native image?
+  // Note: diagnostics not supported in native image
   // "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
-  // FIXME remove after bumping in akka-projection
-  "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.4.0-34-90a23d93-SNAPSHOT",
   // Note: only management/bootstrap only needed when running the multi-node version of the service
   // Akka Management powers Health Checks and Akka Cluster Bootstrapping
   "com.lightbend.akka.management" %% "akka-management" % AkkaManagementVersion,
@@ -110,18 +105,16 @@ nativeImageVersion := "21.0.2"
 nativeImageOptions := Seq(
   "--no-fallback",
   "--verbose",
-  "--enable-http",
-  "--enable-https",
   "--install-exit-handlers",
-  "--trace-class-initialization=io.grpc.netty.shaded.io.netty.buffer.PooledByteBufAllocator",
   "--initialize-at-build-time=ch.qos.logback",
   "-Dlogback.configurationFile=logback-native-image.xml" // configured at build time
 )
 
 NativeImage / mainClass := sys.props
   .get("native.mode")
-  .collect { case "clustered" =>
-    "local.drones.ClusteredMain"
+  .collect {
+    case "clustered" =>
+      "local.drones.ClusteredMain"
   }
   .orElse((Compile / run / mainClass).value)
 
