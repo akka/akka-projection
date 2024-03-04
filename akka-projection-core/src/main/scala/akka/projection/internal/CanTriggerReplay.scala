@@ -11,5 +11,5 @@ import akka.annotation.InternalApi
  */
 @InternalApi
 private[akka] trait CanTriggerReplay {
-  private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit
+  private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long, triggeredBySeqNr: Long): Unit
 }

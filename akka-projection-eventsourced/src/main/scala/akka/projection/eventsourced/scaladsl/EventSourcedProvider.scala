@@ -125,8 +125,11 @@ object EventSourcedProvider {
           minSlice,
           maxSlice,
           adjustStartOffset) with CanTriggerReplay {
-          override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
-            query.triggerReplay(persistenceId, fromSeqNr)
+          override private[akka] def triggerReplay(
+              persistenceId: String,
+              fromSeqNr: Long,
+              triggeredBySeqNr: Long): Unit =
+            query.triggerReplay(persistenceId, fromSeqNr, triggeredBySeqNr)
         }
       case _ =>
         new EventsBySlicesSourceProvider(system, eventsBySlicesQuery, entityType, minSlice, maxSlice, adjustStartOffset)
@@ -212,8 +215,11 @@ object EventSourcedProvider {
           maxSlice,
           transformSnapshot,
           adjustStartOffset) with CanTriggerReplay {
-          override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
-            query.triggerReplay(persistenceId, fromSeqNr)
+          override private[akka] def triggerReplay(
+              persistenceId: String,
+              fromSeqNr: Long,
+              triggeredBySeqNr: Long): Unit =
+            query.triggerReplay(persistenceId, fromSeqNr, triggeredBySeqNr)
         }
       case _ =>
         new EventsBySlicesStartingFromSnapshotsSourceProvider(

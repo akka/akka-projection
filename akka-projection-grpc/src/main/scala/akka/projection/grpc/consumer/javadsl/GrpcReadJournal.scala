@@ -99,8 +99,8 @@ class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     delegate.streamId
 
   @InternalApi
-  private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
-    delegate.triggerReplay(persistenceId, fromSeqNr)
+  private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long, triggeredBySeqNr: Long): Unit =
+    delegate.triggerReplay(persistenceId, fromSeqNr, triggeredBySeqNr)
 
   override def eventsBySlices[Event](
       entityType: String,

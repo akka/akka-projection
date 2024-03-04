@@ -127,6 +127,10 @@ import akka.util.Timeout
 
           behavior(subscribers, stores.updated(streamId, store))
 
+        case cmd: ReplayWithFilter =>
+          publishToSubscribers(cmd)
+          Behaviors.same
+
         case cmd: Replay =>
           publishToSubscribers(cmd)
           Behaviors.same

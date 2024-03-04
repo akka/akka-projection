@@ -94,6 +94,6 @@ private[projection] final class ScalaToJavaBySlicesSourceProviderAdapterWithCanT
     extends ScalaToJavaBySlicesSourceProviderAdapter[Offset, Envelope](delegate)
     with CanTriggerReplay {
 
-  override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit =
-    delegate.triggerReplay(persistenceId, fromSeqNr)
+  override private[akka] def triggerReplay(persistenceId: String, fromSeqNr: Long, triggeredBySeqNr: Long): Unit =
+    delegate.triggerReplay(persistenceId, fromSeqNr, triggeredBySeqNr)
 }

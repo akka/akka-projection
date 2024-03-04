@@ -22,6 +22,7 @@ import akka.persistence.typed.ReplicationId
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
+import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.stream.Attributes
 import akka.stream.BidiShape
@@ -141,7 +142,10 @@ import org.slf4j.LoggerFactory
 
   private case class ReplayEnvelope(persistenceId: String, env: Option[EventEnvelope[Any]])
 
-  private case class ReplaySession(fromSeqNr: Long, queue: SinkQueueWithCancel[EventEnvelope[Any]])
+  private case class ReplaySession(
+      fromSeqNr: Long,
+      filterAfterSeqNr: Long,
+      queue: SinkQueueWithCancel[EventEnvelope[Any]])
 
 }
 
@@ -177,7 +181,7 @@ import org.slf4j.LoggerFactory
 
       // only one pull replay stream -> async callback at a time
       private var replayHasBeenPulled = false
-      private var pendingReplayRequests: Vector[PersistenceIdSeqNr] = Vector.empty
+      private var pendingReplayRequests: Vector[ReplayPersistenceId] = Vector.empty
       // several replay streams may be in progress at the same time
       private var replayInProgress: Map[String, ReplaySession] = Map.empty
       private val replayCallback = getAsyncCallback[Try[ReplayEnvelope]] {
@@ -202,18 +206,35 @@ import org.slf4j.LoggerFactory
           pullInEnvOrReplay()
         }
 
+        val currentReplay = replayInProgress(replayEnv.persistenceId)
         replayHasBeenPulled = false
 
         replayEnv match {
           case ReplayEnvelope(_, Some(env)) =>
             // the predicate to replay events from start for a given pid
-            // Note: we do not apply the filter here as that may be what triggered the replay
-            log.traceN(
-              "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
-              logPrefix,
-              env.persistenceId,
-              env.sequenceNr)
-            push(outEnv, env)
+
+            // protobuf ReplayReq was changed in akka-projection-grpc version 1.5.3 in a compatible way.
+            // For consumers running an earlier version the filterAfterSeqNr will be 0 (default value in protobuf)
+            val filterAfterSeqNr =
+              if (currentReplay.filterAfterSeqNr == 0) Long.MaxValue else currentReplay.filterAfterSeqNr
+
+            // Note: we do not apply the filter before filterAfterSeqNr as that may be what triggered the replay.
+            // replicatedEventOriginFilter not used for replay.
+            if (env.sequenceNr < filterAfterSeqNr || producerFilter(env) && filter.matches(env)) {
+              log.traceN(
+                "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
+                logPrefix,
+                env.persistenceId,
+                env.sequenceNr)
+              push(outEnv, env)
+            } else {
+              log.debugN(
+                "Stream [{}]: Filter out replayed event persistenceId [{}], seqNr [{}]",
+                logPrefix,
+                env.persistenceId,
+                env.sequenceNr)
+              pullInEnvOrReplay()
+            }
 
           case ReplayEnvelope(persistenceId, None) =>
             log.debug2("Stream [{}]: Completed replay of persistenceId [{}]", logPrefix, persistenceId)
@@ -285,24 +306,28 @@ import org.slf4j.LoggerFactory
         criteria.foreach {
           _.message match {
             case FilterCriteria.Message.IncludeEntityIds(include) =>
-              replayAll(mapEntityIdOffsetToPidHandledByThisStream(include.entityIdOffset))
+              val replayPersistenceIds = mapEntityIdOffsetToPidHandledByThisStream(include.entityIdOffset)
+                .map(p => ReplayPersistenceId(Some(p), filterAfterSeqNr = Long.MaxValue))
+              replayAll(replayPersistenceIds)
             case _ =>
           }
         }
       }
 
-      private def replayAll(persistenceIdOffsets: Iterable[PersistenceIdSeqNr]): Unit = {
-        persistenceIdOffsets.foreach { offset =>
-          if (offset.seqNr >= 1)
-            replay(offset)
-        // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter
-        // change. In that case we must have a way to signal to the R2dbcOffsetStore that the
-        // first seqNr of that new pid is ok to pass through even though it isn't 1
-        // and the offset store doesn't know about previous seqNr.
+      private def replayAll(replayPersistenceIds: Iterable[ReplayPersistenceId]): Unit = {
+        replayPersistenceIds.foreach {
+          case r @ ReplayPersistenceId(Some(fromOffset), _, _) if fromOffset.seqNr >= 1 =>
+            replay(r)
+          case _ =>
+          // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter
+          // change. In that case we must have a way to signal to the R2dbcOffsetStore that the
+          // first seqNr of that new pid is ok to pass through even though it isn't 1
+          // and the offset store doesn't know about previous seqNr.
         }
       }
 
-      private def replay(persistenceIdOffset: PersistenceIdSeqNr): Unit = {
+      private def replay(replayPersistenceId: ReplayPersistenceId): Unit = {
+        val persistenceIdOffset = replayPersistenceId.fromPersistenceIdOffset.get
         val fromSeqNr = persistenceIdOffset.seqNr
         val pid = persistenceIdOffset.persistenceId
         if (replicaIdHandledByThisStream(pid) && sliceHandledByThisStream(pid)) {
@@ -326,25 +351,30 @@ import org.slf4j.LoggerFactory
               logPrefix,
               pid,
               fromSeqNr)
+            replayInProgress = replayInProgress.updated(
+              pid,
+              replayInProgress(pid).copy(filterAfterSeqNr = replayPersistenceId.filterAfterSeqNr))
           } else if (replayInProgress.size < replayParallelism) {
             log.debugN("Stream [{}]: Starting replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
             val queue =
               currentEventsByPersistenceId(pid, fromSeqNr)
                 .runWith(Sink.queue())(materializer)
-            replayInProgress = replayInProgress.updated(pid, ReplaySession(fromSeqNr, queue))
+            replayInProgress =
+              replayInProgress.updated(pid, ReplaySession(fromSeqNr, replayPersistenceId.filterAfterSeqNr, queue))
             tryPullReplay(pid)
           } else {
             log.debugN("Stream [{}]: Queueing replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
-            pendingReplayRequests = pendingReplayRequests.filterNot(_.persistenceId == pid) :+ persistenceIdOffset
+            pendingReplayRequests =
+              pendingReplayRequests.filterNot(_.fromPersistenceIdOffset.get.persistenceId == pid) :+ replayPersistenceId
           }
         }
       }
 
       private def pullInEnvOrReplay(): Unit = {
         if (replayInProgress.size < replayParallelism && pendingReplayRequests.nonEmpty) {
-          val pendingEntityOffset = pendingReplayRequests.head
+          val pendingReplay = pendingReplayRequests.head
           pendingReplayRequests = pendingReplayRequests.tail
-          replay(pendingEntityOffset)
+          replay(pendingReplay)
         }
 
         if (replayInProgress.isEmpty) {
@@ -366,9 +396,15 @@ import org.slf4j.LoggerFactory
                 replayFromFilterCriteria(filterReq.criteria)
 
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
-                if (replayReq.persistenceIdOffset.nonEmpty) {
+                if (replayReq.replayPersistenceIds.nonEmpty) {
+                  log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.replayPersistenceIds)
+                  replayAll(replayReq.replayPersistenceIds)
+                }
+                // needed for compatibility with 2.5.2
+                if (replayReq.replayPersistenceIds.isEmpty && replayReq.persistenceIdOffset.nonEmpty) {
                   log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.persistenceIdOffset)
-                  replayAll(replayReq.persistenceIdOffset)
+                  replayAll(replayReq.persistenceIdOffset.map(p =>
+                    ReplayPersistenceId(Some(p), filterAfterSeqNr = Long.MaxValue)))
                 }
 
               case StreamIn(StreamIn.Message.Init(_), _) =>

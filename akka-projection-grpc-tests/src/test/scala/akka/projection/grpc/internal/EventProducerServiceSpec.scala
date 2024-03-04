@@ -36,6 +36,7 @@ import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
+import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplayReq
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.internal.proto.StreamIn
@@ -427,7 +428,8 @@ class EventProducerServiceSpec
     "replay events" in {
       val persistenceId = nextPid(entityType3)
       val initReq = InitReq(streamId3, 0, 1023, offset = None)
-      val replayReq = ReplayReq(List(PersistenceIdSeqNr(persistenceId.id, 2L)))
+      val replayReq = ReplayReq(replayPersistenceIds =
+        List(ReplayPersistenceId(Some(PersistenceIdSeqNr(persistenceId.id, 2L)), filterAfterSeqNr = Long.MaxValue)))
       val streamIn =
         Source(List(StreamIn(StreamIn.Message.Init(initReq)), StreamIn(StreamIn.Message.Replay(replayReq))))
           .concat(Source.maybe)
@@ -488,7 +490,8 @@ class EventProducerServiceSpec
     "replay events StartingFromSnapshots" in {
       val persistenceId = nextPid(entityType5)
       val initReq = InitReq(streamId5, 0, 1023, offset = None)
-      val replayReq = ReplayReq(List(PersistenceIdSeqNr(persistenceId.id, 1L)))
+      val replayReq = ReplayReq(replayPersistenceIds =
+        List(ReplayPersistenceId(Some(PersistenceIdSeqNr(persistenceId.id, 1L)), filterAfterSeqNr = Long.MaxValue)))
       val streamIn =
         Source(List(StreamIn(StreamIn.Message.Init(initReq)), StreamIn(StreamIn.Message.Replay(replayReq))))
           .concat(Source.maybe)

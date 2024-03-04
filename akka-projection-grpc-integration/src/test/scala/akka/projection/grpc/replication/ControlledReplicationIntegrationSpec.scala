@@ -23,6 +23,7 @@ import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
 import akka.http.scaladsl.Http
+import akka.persistence.r2dbc.R2dbcSettings
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
@@ -157,6 +158,8 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
   private val logger = LoggerFactory.getLogger(classOf[ControlledReplicationIntegrationSpec])
   override def typedSystem: ActorSystem[_] = testKit.system
 
+  private lazy val r2dbcSettings = R2dbcSettings(system.settings.config.getConfig("akka.persistence.r2dbc"))
+
   private val systems = Seq[ActorSystem[_]](
     typedSystem,
     akka.actor
@@ -237,7 +240,7 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       logger.info("All three replication/producer services bound")
     }
 
-    "replicate writes from one dc to others by tagging" in {
+    "control replication by ConsumerFilter tagging" in {
       val entityId = "one"
       val entityRefA = ClusterSharding(systemPerDc(DCA)).entityRefFor(TestEntity.EntityType, entityId)
       val entityRefB = ClusterSharding(systemPerDc(DCB)).entityRefFor(TestEntity.EntityType, entityId)
@@ -278,6 +281,69 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         entityRefA.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(
           Map("A" -> 1, "B" -> 2, "C" -> 3),
           Set(DCA.id))
+      }
+
+    }
+
+    "not replicate filtered events after replay trigger" in {
+      val entityId = "two"
+      val entityRefA = ClusterSharding(systemPerDc(DCA)).entityRefFor(TestEntity.EntityType, entityId)
+      val entityRefB = ClusterSharding(systemPerDc(DCB)).entityRefFor(TestEntity.EntityType, entityId)
+      val entityRefC = ClusterSharding(systemPerDc(DCC)).entityRefFor(TestEntity.EntityType, entityId)
+
+      // update in A
+      entityRefA.ask(TestEntity.UpdateItem("A", 0, _)).futureValue
+      entityRefA.ask(TestEntity.UpdateItem("A", 1, _)).futureValue
+
+      // replicate to B
+      logger.info("Replicate from A to B")
+      entityRefA.ask(TestEntity.SetScope(Set(DCB.id), _)).futureValue
+      eventually {
+        entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1), Set(DCB.id))
+      }
+
+      // update in B
+      entityRefB.ask(TestEntity.UpdateItem("B", 2, _)).futureValue
+      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCB.id))
+      logger.info("Replicate from B to A")
+      // replicate to A
+      entityRefB.ask(TestEntity.SetScope(Set(DCA.id), _)).futureValue
+      eventually {
+        entityRefA.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+      }
+
+      // replicate to C
+      // This will emit event from C to B for event that was scoped for B originally (those between A and B).
+      // That will trigger replay request from B to C. Filters are normally not used in replay because
+      // the changed filter is typically what is triggering the replay, but filters should still be applied
+      // after the event that triggered the replay.
+      logger.info("Replicate from A to C")
+      entityRefA.ask(TestEntity.SetScope(Set(DCC.id), _)).futureValue
+      eventually {
+        entityRefC.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCC.id))
+      }
+
+      // update in C
+      entityRefC.ask(TestEntity.UpdateItem("C", 3, _)).futureValue
+      // latest should not be replicated to B
+      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+      Thread.sleep(r2dbcSettings.querySettings.backtrackingBehindCurrentTime.toMillis + 200)
+      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+
+      // another update in C
+      entityRefC.ask(TestEntity.UpdateItem("C", 4, _)).futureValue
+      // latest should still not be replicated to B
+      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+      Thread.sleep(r2dbcSettings.querySettings.backtrackingBehindCurrentTime.toMillis + 200)
+      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+
+      // replicate to B
+      logger.info("Replicate from C to B")
+      entityRefC.ask(TestEntity.SetScope(Set(DCB.id), _)).futureValue
+      eventually {
+        entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(
+          Map("A" -> 1, "B" -> 2, "C" -> 4),
+          Set(DCB.id))
       }
 
     }

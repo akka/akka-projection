@@ -64,6 +64,7 @@ import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
+import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 @ApiMayChange
@@ -205,10 +206,12 @@ final class GrpcReadJournal private (
     replicationSettings.map(s => ReplicaInfo(s.selfReplicaId.id, s.otherReplicas.toSeq.map(_.replicaId.id)))
 
   @InternalApi
-  private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long): Unit = {
-    consumerFilter.ref ! ConsumerFilter.Replay(
+  private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long, triggeredBySeqNr: Long): Unit = {
+    consumerFilter.ref ! ConsumerFilter.ReplayWithFilter(
       streamId,
-      Set(ConsumerFilter.PersistenceIdOffset(persistenceId, fromSeqNr)))
+      Set(
+        ConsumerFilter
+          .ReplayPersistenceId(ConsumerFilter.PersistenceIdOffset(persistenceId, fromSeqNr), triggeredBySeqNr + 1)))
   }
 
   private def addRequestHeaders[Req, Res](
@@ -318,24 +321,43 @@ final class GrpcReadJournal private (
               log.debug2("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
+          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _) =>
+            streamInReplay(r)
+
           case ConsumerFilter.Replay(`streamId`, persistenceIdOffsets) =>
-            val protoPersistenceIdOffsets = persistenceIdOffsets.collect {
-              case ConsumerFilter.PersistenceIdOffset(pid, seqNr) if sliceHandledByThisStream(pid) =>
-                PersistenceIdSeqNr(pid, seqNr)
-            }.toVector
-
-            if (log.isDebugEnabled() && protoPersistenceIdOffsets.nonEmpty)
-              log.debug2(
-                "{}: Replay triggered for [{}]",
-                streamId,
-                protoPersistenceIdOffsets.map(offset => offset.persistenceId -> offset.seqNr).mkString(", "))
-
-            StreamIn(StreamIn.Message.Replay(ReplayReq(protoPersistenceIdOffsets)))
+            val replayWithFilter = ConsumerFilter.ReplayWithFilter(
+              streamId,
+              persistenceIdOffsets.map(p => ConsumerFilter.ReplayPersistenceId(p, filterAfterSeqNr = Long.MaxValue)))
+            streamInReplay(replayWithFilter)
         }
         .mapMaterializedValue { ref =>
           consumerFilter.ref ! ConsumerFilter.Subscribe(streamId, initCriteria, ref)
           NotUsed
         }
+
+    def streamInReplay(r: ConsumerFilter.ReplayWithFilter): StreamIn = {
+      val protoReplayPersistenceIds = r.replayPersistenceIds.collect {
+        case ConsumerFilter.ReplayPersistenceId(ConsumerFilter.PersistenceIdOffset(pid, seqNr), filterAfterSeqNr)
+            if sliceHandledByThisStream(pid) =>
+          ReplayPersistenceId(Some(PersistenceIdSeqNr(pid, seqNr)), filterAfterSeqNr)
+      }.toVector
+
+      // need this for compatibility with 1.5.2
+      val protoPersistenceIdOffsets = protoReplayPersistenceIds.map(_.fromPersistenceIdOffset.get)
+
+      if (log.isDebugEnabled() && protoReplayPersistenceIds.nonEmpty)
+        log.debug2(
+          "{}: Replay triggered for [{}]",
+          streamId,
+          protoReplayPersistenceIds
+            .map { replayPersistenceId =>
+              val offset = replayPersistenceId.fromPersistenceIdOffset.get
+              s"${offset.persistenceId} -> ${offset.seqNr} (${replayPersistenceId.filterAfterSeqNr})"
+            }
+            .mkString(", "))
+
+      StreamIn(StreamIn.Message.Replay(ReplayReq(protoPersistenceIdOffsets, protoReplayPersistenceIds)))
+    }
 
     val initFilter = {
       import akka.actor.typed.scaladsl.AskPattern._

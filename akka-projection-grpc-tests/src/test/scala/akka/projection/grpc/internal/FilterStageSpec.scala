@@ -30,6 +30,7 @@ import akka.projection.grpc.internal.proto.IncludeEntityIds
 import akka.projection.grpc.internal.proto.IncludeTags
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.ReplayReq
+import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.stream.scaladsl.BidiFlow
@@ -131,6 +132,14 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
     val (inPublisher, outProbe) = streamIn.via(envFlow).toMat(TestSink())(Keep.both).run()
     val envPublisher = envPublisherPromise.future.futureValue
   }
+
+  private def streamInReplayReq(pid: String, fromSeqNr: Long, filterAfterSeqNr: Long = Long.MaxValue): StreamIn =
+    StreamIn(
+      StreamIn.Message.Replay(
+        ReplayReq(replayPersistenceIds = List(replayPersistenceId(pid, fromSeqNr, filterAfterSeqNr)))))
+
+  private def replayPersistenceId(pid: String, fromSeqNr: Long, filterAfterSeqNr: Long = Long.MaxValue) =
+    ReplayPersistenceId(Some(PersistenceIdSeqNr(pid, fromSeqNr)), filterAfterSeqNr)
 
   "FilterStage" must {
     "emit EventEnvelope" in new Setup {
@@ -242,17 +251,16 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
       inPublisher.sendNext(
         StreamIn(
-          StreamIn.Message.Replay(ReplayReq(List(
-            PersistenceIdSeqNr(PersistenceId(entityType, "b").id, 1L),
-            PersistenceIdSeqNr(PersistenceId(entityType, "c").id, 1L))))))
+          StreamIn.Message.Replay(ReplayReq(replayPersistenceIds = List(
+            replayPersistenceId(PersistenceId(entityType, "b").id, 1L),
+            replayPersistenceId(PersistenceId(entityType, "c").id, 1L))))))
 
       outProbe.request(10)
       // no guarantee of order between b and c
       outProbe.expectNextN(2).map(_.event).toSet shouldBe Set("b1", "c1")
       outProbe.expectNoMessage()
 
-      inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(ReplayReq(List(PersistenceIdSeqNr(PersistenceId(entityType, "d").id, 1L))))))
+      inPublisher.sendNext(streamInReplayReq(PersistenceId(entityType, "d").id, 1L))
       // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
       outProbe.expectNoMessage()
       envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1", tags = Set("WIP")))
@@ -272,9 +280,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.request(10)
       outProbe.expectNext().event shouldBe "a2"
 
-      inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(
-          ReplayReq(List(PersistenceIdSeqNr(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId.id, 1L))))))
+      inPublisher.sendNext(streamInReplayReq(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId.id, 1L))
       // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
       envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
       outProbe.expectNext().event shouldBe "e1"
@@ -282,9 +288,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNext().event shouldBe "a2"
 
       // but ignored if it's a request for another replicaId
-      inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(
-          ReplayReq(List(PersistenceIdSeqNr(ReplicationId(entityType, "a", ReplicaId("B")).persistenceId.id, 1L))))))
+      inPublisher.sendNext(streamInReplayReq(ReplicationId(entityType, "a", ReplicaId("B")).persistenceId.id, 1L))
       outProbe.expectNoMessage()
     }
 
@@ -294,14 +298,14 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
         entityIds.map(id => createEnvelope(PersistenceId(entityType, id), 1, id))
 
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(
-          ReplayReq(entityIds.take(7).map(id => PersistenceIdSeqNr(PersistenceId(entityType, id).id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(ReplayReq(replayPersistenceIds =
+          entityIds.take(7).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(
-          ReplayReq(entityIds.slice(7, 10).map(id => PersistenceIdSeqNr(PersistenceId(entityType, id).id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(ReplayReq(replayPersistenceIds =
+          entityIds.slice(7, 10).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
       inPublisher.sendNext(
-        StreamIn(StreamIn.Message.Replay(
-          ReplayReq(entityIds.drop(10).map(id => PersistenceIdSeqNr(PersistenceId(entityType, id).id, 1L))))))
+        StreamIn(StreamIn.Message.Replay(ReplayReq(replayPersistenceIds =
+          entityIds.drop(10).map(id => replayPersistenceId(PersistenceId(entityType, id).id, 1L))))))
 
       outProbe.request(100)
       // no guarantee of order between different entityIds
@@ -311,6 +315,34 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNoMessage()
 
       envPublisher.sendComplete()
+    }
+
+    "replay from ReplayReq and filter after seqNr" in new Setup {
+      override lazy val allEnvelopes =
+        Vector(
+          createEnvelope(PersistenceId(entityType, "d"), 1, "d1"),
+          createEnvelope(PersistenceId(entityType, "d"), 2, "d2"),
+          createEnvelope(PersistenceId(entityType, "d"), 3, "d3", tags = Set("WIP")),
+          createEnvelope(PersistenceId(entityType, "d"), 4, "d4"),
+          createEnvelope(PersistenceId(entityType, "d"), 5, "d5"))
+
+      // filter should not exclude events from replay, e.g. d1 without the WIP tag, but
+      // filters are applied for events with seqNr >= filterAfterSeqNr
+      val filterCriteria = List(
+        FilterCriteria(FilterCriteria.Message.ExcludeMatchingEntityIds(ExcludeRegexEntityIds(List(".*")))),
+        FilterCriteria(FilterCriteria.Message.IncludeTags(IncludeTags(List("WIP")))))
+      inPublisher.sendNext(StreamIn(StreamIn.Message.Filter(FilterReq(filterCriteria))))
+
+      outProbe.request(10)
+
+      inPublisher.sendNext(streamInReplayReq(PersistenceId(entityType, "d").id, 1L, filterAfterSeqNr = 4))
+      // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
+      outProbe.expectNoMessage()
+      envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
+      outProbe.expectNext().event shouldBe "d1"
+      outProbe.expectNext().event shouldBe "d2"
+      outProbe.expectNext().event shouldBe "d3"
+      outProbe.expectNoMessage() // d4 and d5 filtered out
     }
 
   }

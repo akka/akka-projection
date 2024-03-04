@@ -75,7 +75,16 @@ message FilterReq {
 
 // Replay events for given entities.
 message ReplayReq {
+  // deprecated in 1.5.3, use replay_persistence_ids
   repeated PersistenceIdSeqNr persistence_id_offset = 1;
+  repeated ReplayPersistenceId replay_persistence_ids = 2;
+}
+
+message ReplayPersistenceId {
+  PersistenceIdSeqNr from_persistence_id_offset = 1;
+  // apply filters for replayed events after this sequence number
+  int64 filter_after_seq_nr = 2;
+
 }
 
 message FilterCriteria {

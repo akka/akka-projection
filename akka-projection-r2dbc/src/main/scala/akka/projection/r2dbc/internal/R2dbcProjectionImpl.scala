@@ -453,7 +453,7 @@ private[projection] object R2dbcProjectionImpl {
         sourceProvider match {
           case provider: CanTriggerReplay =>
             val fromSeqNr = offsetStore.storedSeqNr(env.persistenceId) + 1
-            provider.triggerReplay(env.persistenceId, fromSeqNr)
+            provider.triggerReplay(env.persistenceId, fromSeqNr, env.sequenceNr)
             true
           case _ =>
             false // no replay support for other source providers

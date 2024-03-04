@@ -1,0 +1,3 @@
+# adding filterAfterSeqNr
+ProblemFilters.exclude[Problem]("akka.projection.grpc.internal.FilterStage*")
+ProblemFilters.exclude[Problem]("akka.projection.grpc.internal.proto.ReplayReq*")
