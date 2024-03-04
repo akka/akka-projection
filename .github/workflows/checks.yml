@@ -247,8 +247,13 @@ jobs:
       - name: Local drone control sample Scala native image build
         run: |-
           cd samples/grpc/local-drone-control-scala
-          sbt nativeImage -Dakka-projection.version=`cat ~/.version`
           sbt nativeImage -Dnative.mode=clustered -Dakka-projection.version=`cat ~/.version`
+          sbt nativeImage -Dakka-projection.version=`cat ~/.version`
+          # This will likely be quite noisy, logging failures to connect to restaurant-drone-deliveries service
+          target/native-image/local-drone-control &
+          DRONE_CONTROL_PID=$!
+          sbt "Test/runMain drones.DroneClientTestApp 127.0.0.1 8080"
+          kill -9 $DRONE_CONTROL_PID
 
       - name: Set up GraalVM 21
         # https://github.com/coursier/setup-action/releases
