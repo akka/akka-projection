@@ -3,6 +3,8 @@
  */
 
 package akka.projection
+import java.time.Instant
+
 import akka.actor.typed.scaladsl.LoggerOps
 import scala.util.Failure
 import scala.util.Success
@@ -19,6 +21,7 @@ import akka.actor.typed.scaladsl.StashBuffer
 import akka.annotation.InternalApi
 import akka.projection.internal.ManagementState
 import akka.projection.scaladsl.ProjectionManagement
+import akka.projection.scaladsl.ProjectionManagement.UpdateTimestampOffset
 
 object ProjectionBehavior {
 
@@ -47,6 +50,12 @@ object ProjectionBehavior {
     final case class SetOffset[Offset](projectionId: ProjectionId, offset: Option[Offset], replyTo: ActorRef[Done])
         extends ProjectionManagementCommand
     final case class SetOffsetResult[Offset](replyTo: ActorRef[Done]) extends ProjectionManagementCommand
+
+    final case class SetTimestampOffset(
+        projectionId: ProjectionId,
+        updates: Set[UpdateTimestampOffset],
+        replyTo: ActorRef[Done])
+        extends ProjectionManagementCommand
 
     final case class IsPaused(projectionId: ProjectionId, replyTo: ActorRef[Boolean])
         extends ProjectionManagementCommand
