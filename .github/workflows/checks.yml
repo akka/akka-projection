@@ -252,7 +252,7 @@ jobs:
           # This will likely be quite noisy, logging failures to connect to restaurant-drone-deliveries service
           target/native-image/local-drone-control &
           DRONE_CONTROL_PID=$!
-          sbt "Test/runMain drones.DroneClientTestApp 127.0.0.1 8080"
+          sbt "Test/runMain drones.DroneClientTestApp 127.0.0.1 8080" -Dakka-projection.version=`cat ~/.version`
           kill -9 $DRONE_CONTROL_PID
 
       - name: Set up GraalVM 21
