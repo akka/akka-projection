@@ -1,0 +1,19 @@
+[
+  {
+    "name": "akka.projection.internal.ProjectionSerializer",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "akka.actor.ExtendedActorSystem"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "akka.projection.ProjectionBehavior$Internal$ProjectionManagementCommand"
+  },
+  {
+    "name": "akka.projection.ProjectionBehavior$Internal$CurrentOffset"
+  }
+]

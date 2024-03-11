@@ -30,12 +30,12 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.9.1"
-val AkkaHttpVersion = "10.6.0"
-val AkkaManagementVersion = "1.5.0"
-val AkkaPersistenceR2dbcVersion = "1.2.2"
+val AkkaVersion = "2.9.2"
+val AkkaHttpVersion = "10.6.1"
+val AkkaManagementVersion = "1.5.1"
+val AkkaPersistenceR2dbcVersion = "1.2.3"
 val AkkaProjectionVersion =
-  sys.props.getOrElse("akka-projection.version", "1.5.2")
+  sys.props.getOrElse("akka-projection.version", "1.5.2-7-0d14e4fa-20240226-1548-SNAPSHOT")
 val AkkaDiagnosticsVersion = "2.1.0"
 
 enablePlugins(AkkaGrpcPlugin)
@@ -51,13 +51,22 @@ ThisBuild / dynverSeparator := "-"
 libraryDependencies ++= Seq(
   // 1. Basic dependencies for a clustered application
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
   "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
+  "com.typesafe.akka" %% "akka-cluster" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-distributed-data" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-remote" % AkkaVersion,
   "com.typesafe.akka" %% "akka-cluster-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-cluster-sharding-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
-  "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
+  "com.typesafe.akka" %% "akka-stream-typed" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-protobuf-v3" % AkkaVersion,
+  // Note: diagnostics not supported in native image
+  // "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
   // Note: only management/bootstrap only needed when running the multi-node version of the service
   // Akka Management powers Health Checks and Akka Cluster Bootstrapping
   "com.lightbend.akka.management" %% "akka-management" % AkkaManagementVersion,
@@ -79,7 +88,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
   // local single-node lightweight database with h2
-  "com.h2database" % "h2" % "2.1.210",
+  "com.h2database" % "h2" % "2.2.224",
   "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE",
   // 3. Querying or projecting data from Akka Persistence
   "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion,
@@ -91,14 +100,13 @@ libraryDependencies ++= Seq(
 // GraalVM native image build
 
 enablePlugins(NativeImagePlugin)
-nativeImageJvm := "graalvm"
-nativeImageVersion := "17.0.8"
+nativeImageJvm := "graalvm-community"
+nativeImageVersion := "21.0.2"
 nativeImageOptions := Seq(
   "--no-fallback",
   "--verbose",
-  "--enable-http",
-  "--enable-https",
   "--install-exit-handlers",
+  "--initialize-at-build-time=ch.qos.logback",
   "-Dlogback.configurationFile=logback-native-image.xml" // configured at build time
 )
 

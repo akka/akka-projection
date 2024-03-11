@@ -125,7 +125,7 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
       R2dbcSettings(typedSystem.settings.config.getConfig("test.consumer.r2dbc"))
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(
-        _.createStatement(s"delete from ${consumerSettings.journalTableWithSchema}")),
+        _.createStatement(s"delete from ${consumerSettings.journalTableWithSchema(0)}")),
       10.seconds)
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(
