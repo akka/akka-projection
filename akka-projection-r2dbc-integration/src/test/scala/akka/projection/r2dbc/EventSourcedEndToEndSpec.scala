@@ -142,7 +142,7 @@ class EventSourcedEndToEndSpec
   private def writeEvent(persistenceId: String, seqNr: Long, timestamp: Instant, event: String): Unit = {
     log.debugN("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
     val insertEventSql = sql"""
-      INSERT INTO ${journalSettings.journalTableWithSchema}
+      INSERT INTO ${journalSettings.journalTableWithSchema(0)}
       (slice, entity_type, persistence_id, seq_nr, db_timestamp, writer, adapter_manifest, event_ser_id, event_ser_manifest, event_payload)
       VALUES (?, ?, ?, ?, ?, '', '', ?, '', ?)"""
 

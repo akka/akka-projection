@@ -114,6 +114,7 @@ public class ReplicationCompileTest {
     }
   }
 
+  @SuppressWarnings("deprecation")
   public static void multiEventProducers(ActorSystem<?> system, ReplicationSettings<MyCommand> settings, String host, int port) {
 
     Replication<Void> otherReplication = null;
