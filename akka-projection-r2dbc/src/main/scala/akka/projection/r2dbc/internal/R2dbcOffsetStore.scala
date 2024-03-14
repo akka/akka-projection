@@ -181,6 +181,8 @@ private[projection] object R2dbcOffsetStore {
   }
 
   val FutureDone: Future[Done] = Future.successful(Done)
+
+  case class LatestBySlice(slice: Int, pid: String, seqNr: Long)
 }
 
 /**
@@ -212,9 +214,10 @@ private[projection] class R2dbcOffsetStore(
     val dialectName = system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect")
     val dialect =
       dialectName match {
-        case "postgres" => PostgresDialect
-        case "yugabyte" => YugabyteDialect
-        case "h2"       => H2Dialect
+        case "postgres"  => PostgresDialect
+        case "yugabyte"  => YugabyteDialect
+        case "h2"        => H2Dialect
+        case "sqlserver" => SqlServerDialect
         case unknown =>
           throw new IllegalArgumentException(
             s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
@@ -730,7 +733,7 @@ private[projection] class R2dbcOffsetStore(
           case record if record.timestamp.isBefore(until) =>
             // note that deleteOldTimestampOffsetSql already has `AND timestamp_offset < ?`
             // and that's why timestamp >= until don't have to be included here
-            s"${record.pid}-${record.seqNr}"
+            LatestBySlice(record.slice, record.pid, record.seqNr)
         }
         val result = dao.deleteOldTimestampOffset(until, notInLatestBySlice)
         result.failed.foreach { exc =>
@@ -851,6 +854,8 @@ private[projection] class R2dbcOffsetStore(
   def savePaused(paused: Boolean): Future[Done] = {
     dao
       .updateManagementState(paused, Instant.now(clock))
+      // workaround for https://github.com/r2dbc/r2dbc-mssql/pull/290
+      .map(_ => 1)
       .flatMap {
         case i if i == 1 => Future.successful(Done)
         case _ =>

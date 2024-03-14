@@ -15,6 +15,7 @@
     <logger name="akka.projection" level="DEBUG" />
     <logger name="akka.persistence.r2dbc" level="DEBUG" />
 <!--    <logger name="io.r2dbc.postgresql.QUERY" level="DEBUG" />-->
+<!--    <logger name="io.r2dbc.mssql.QUERY" level="DEBUG" />-->
 <!--    <logger name="io.r2dbc.pool" level="DEBUG" />-->
 
 
