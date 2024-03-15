@@ -210,18 +210,18 @@ private[projection] class R2dbcOffsetStore(
   import offsetSerialization.fromStorageRepresentation
   import offsetSerialization.toStorageRepresentation
 
+  private val dialectName = system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect")
+  private val dialect =
+    dialectName match {
+      case "postgres"  => PostgresDialect
+      case "yugabyte"  => YugabyteDialect
+      case "h2"        => H2Dialect
+      case "sqlserver" => SqlServerDialect
+      case unknown =>
+        throw new IllegalArgumentException(
+          s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
+    }
   private val dao = {
-    val dialectName = system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect")
-    val dialect =
-      dialectName match {
-        case "postgres"  => PostgresDialect
-        case "yugabyte"  => YugabyteDialect
-        case "h2"        => H2Dialect
-        case "sqlserver" => SqlServerDialect
-        case unknown =>
-          throw new IllegalArgumentException(
-            s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
-      }
     logger.debug2("Offset store [{}] created, with dialect [{}]", projectionId, dialectName)
     dialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
   }
@@ -852,10 +852,12 @@ private[projection] class R2dbcOffsetStore(
     dao.readManagementState()
 
   def savePaused(paused: Boolean): Future[Done] = {
-    dao
-      .updateManagementState(paused, Instant.now(clock))
-      // workaround for https://github.com/r2dbc/r2dbc-mssql/pull/290
-      .map(_ => 1)
+
+    val update = dao.updateManagementState(paused, Instant.now(clock))
+    (if (dialect == SqlServerDialect) {
+       // workaround for https://github.com/r2dbc/r2dbc-mssql/pull/290
+       update.map(_ => 1)
+     } else update)
       .flatMap {
         case i if i == 1 => Future.successful(Done)
         case _ =>

@@ -45,6 +45,14 @@ import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
  * INTERNAL API
  */
 @InternalApi
+private[projection] object PostgresOffsetStoreDao {
+  private def log: Logger = LoggerFactory.getLogger(classOf[PostgresOffsetStoreDao])
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
 private[projection] class PostgresOffsetStoreDao(
     settings: R2dbcProjectionSettings,
     sourceProvider: Option[BySlicesSourceProvider],
@@ -53,7 +61,7 @@ private[projection] class PostgresOffsetStoreDao(
     projectionId: ProjectionId)
     extends OffsetStoreDao {
 
-  protected def logger: Logger = LoggerFactory.getLogger(getClass)
+  protected def logger: Logger = PostgresOffsetStoreDao.log
 
   private val persistenceExt = Persistence(system)
 
