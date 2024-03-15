@@ -182,7 +182,7 @@ private[projection] object R2dbcOffsetStore {
 
   val FutureDone: Future[Done] = Future.successful(Done)
 
-  case class LatestBySlice(slice: Int, pid: String, seqNr: Long)
+  final case class LatestBySlice(slice: Int, pid: String, seqNr: Long)
 }
 
 /**
