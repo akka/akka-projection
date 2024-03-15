@@ -107,7 +107,7 @@ private[projection] class PostgresOffsetStoreDao(
       .bind(1, maxSlice)
       .bind(2, projectionId.name)
       .bindTimestamp(3, until)
-      .bind(4, notInLatestBySlice.map(record => s"${record.pid}-${record.seqNr}").toArray[String])
+      .bind(4, notInLatestBySlice.iterator.map(record => s"${record.pid}-${record.seqNr}").toArray[String])
   }
 
   // delete greater than or equal a timestamp
