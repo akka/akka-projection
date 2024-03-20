@@ -13,7 +13,6 @@ import scala.concurrent.Future
 
 import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Statement
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import akka.Done
