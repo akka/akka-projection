@@ -47,6 +47,13 @@ The table below shows `akka-projection-kafka`'s direct dependencies and the seco
 
 ## KafkaSourceProvider
 
+@@@ warning { title=Important }
+Due to the mutable state inside @apidoc[KafkaSourceProvider$], DO NOT share the instance of provider across projections.
+
+For example, if you distribute projection via @apidoc[ShardedDaemonProcess], instantiate each provider inside the behavior
+factory.
+@@@
+
 A @apidoc[SourceProvider] defines the source of the envelopes that the `Projection` will process. A `SourceProvider`
 for messages from Kafka can be defined with the @apidoc[KafkaSourceProvider$] like this:
 
