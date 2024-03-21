@@ -113,7 +113,7 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
           sourceProvider =
             EventSourcedProvider.eventsBySlices[String](system, "test.consumer.r2dbc.query", entityType, 0, 1023),
           handler = () => {
-            envelope: EventEnvelope[String] =>
+            (envelope: EventEnvelope[String]) =>
               probe ! envelope
               Future.successful(Done)
           })))
@@ -159,7 +159,7 @@ class EventProducerPushSpec(testContainerConf: TestContainerConf)
           }
           .withConsumerFilters(Vector(ConsumerFilter.ExcludeEntityIds(Set(consumerFilterExcludedPid.id))))
       // #consumerSetup
-      val bound = Http(system)
+      val bound = Http()(system)
         .newServerAt("127.0.0.1", grpcPort)
         .bind(EventProducerPushDestination.grpcServiceHandler(destination))
       // #consumerSetup

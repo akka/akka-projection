@@ -40,7 +40,7 @@ object ProducerApiSample {
     // RES push to combine with multiple other services
     val _ = EventProducerPushDestination.grpcServiceHandler(replication.eventProducerPushDestination.toSet)
 
-    val _ = Http(system).newServerAt(host, port).bind(handler)
+    val _ = Http().newServerAt(host, port).bind(handler)
   }
 
 }

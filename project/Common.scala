@@ -43,7 +43,7 @@ object Common extends AutoPlugin {
   override lazy val projectSettings = Seq(
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
     crossVersion := CrossVersion.binary,
-    crossScalaVersions := Dependencies.Scala2Versions,
+    crossScalaVersions := Dependencies.ScalaVersions,
     scalaVersion := Dependencies.Scala213,
     Compile / javacOptions ++= List("-Xlint:unchecked", "-Xlint:deprecation", "--release", "11"),
     Compile / scalacOptions ++= Seq("-release", "11"),

@@ -5,10 +5,8 @@
 package akka.projection.slick.internal
 
 import java.time.Clock
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -25,6 +23,7 @@ import akka.projection.jdbc.internal.MySQLDialect
 import akka.projection.jdbc.internal.OracleDialect
 import akka.projection.jdbc.internal.PostgresDialect
 import akka.util.Helpers.toRootLowerCase
+import slick.basic.DatabaseConfig
 import slick.jdbc.JdbcProfile
 
 /**
@@ -32,16 +31,18 @@ import slick.jdbc.JdbcProfile
  */
 @InternalApi private[projection] class SlickOffsetStore[P <: JdbcProfile](
     system: ActorSystem[_],
-    val db: P#Backend#Database,
-    val profile: P,
+    databaseConfig: DatabaseConfig[P],
     slickSettings: SlickSettings,
     clock: Clock) {
   import OffsetSerialization.MultipleOffsets
   import OffsetSerialization.SingleOffset
-  import profile.api._
 
-  def this(system: ActorSystem[_], db: P#Backend#Database, profile: P, slickSettings: SlickSettings) =
-    this(system, db, profile, slickSettings, Clock.systemUTC())
+  def this(system: ActorSystem[_], databaseConfig: DatabaseConfig[P], slickSettings: SlickSettings) =
+    this(system, databaseConfig, slickSettings, Clock.systemUTC())
+
+  private[akka] val profile: P = databaseConfig.profile
+  private val db: databaseConfig.profile.Backend#Database = databaseConfig.db
+  import profile.api._
 
   val (dialect, useLowerCase): (Dialect, Boolean) = {
 
@@ -114,7 +115,7 @@ import slick.jdbc.JdbcProfile
     if (useLowerCase) toRootLowerCase(str)
     else str
 
-  class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, dialect.schema, dialect.tableName) {
+  private[akka] class OffsetStoreTable(tag: Tag) extends Table[OffsetRow](tag, dialect.schema, dialect.tableName) {
 
     def projectionName = column[String](adaptCase("PROJECTION_NAME"), O.Length(255))
     def projectionKey = column[String](adaptCase("PROJECTION_KEY"), O.Length(255))
@@ -137,11 +138,12 @@ import slick.jdbc.JdbcProfile
       mergeable: Boolean,
       lastUpdated: Long)
 
-  val offsetTable = TableQuery[OffsetStoreTable]
+  private[akka] val offsetTable = TableQuery[OffsetStoreTable]
 
   case class ManagementStateRow(projectionName: String, projectionKey: String, paused: Boolean, lastUpdated: Long)
 
-  class ManagementTable(tag: Tag) extends Table[ManagementStateRow](tag, dialect.schema, dialect.managementTableName) {
+  private[akka] class ManagementTable(tag: Tag)
+      extends Table[ManagementStateRow](tag, dialect.schema, dialect.managementTableName) {
 
     def projectionName = column[String](adaptCase("PROJECTION_NAME"), O.Length(255))
     def projectionKey = column[String](adaptCase("PROJECTION_KEY"), O.Length(255))
@@ -153,7 +155,7 @@ import slick.jdbc.JdbcProfile
     def * = (projectionName, projectionKey, paused, lastUpdated).mapTo[ManagementStateRow]
   }
 
-  val managementTable = TableQuery[ManagementTable]
+  private[akka] val managementTable = TableQuery[ManagementTable]
 
   def createIfNotExists(): Future[Done] = {
     val prepareSchemaDBIO = SimpleDBIO[Unit] { jdbcContext =>

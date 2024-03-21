@@ -213,7 +213,7 @@ class IndirectReplicationIntegrationSpec(testContainerConf: TestContainerConf)
           val grpcPort = grpcPorts(index)
 
           // start producer server
-          Http(system)
+          Http()(system)
             .newServerAt("127.0.0.1", grpcPort)
             .bind(started.createSingleServiceHandler())
             .map(_.addToCoordinatedShutdown(3.seconds)(system))(system.executionContext)
