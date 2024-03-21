@@ -158,7 +158,6 @@ object Replication {
    *
    * Important: Note that this does not publish the endpoint, additional steps are needed!
    */
-  @Deprecated
   @deprecated("Define producerFilter via settings.withProducerFilter", "1.5.1")
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],
@@ -177,7 +176,6 @@ object Replication {
    *
    * Important: Note that this does not publish the endpoint, additional steps are needed!
    */
-  @Deprecated
   @deprecated("Define topicExpression via settings.withProducerFilterTopicExpression", "1.5.1")
   def grpcReplication[Command, Event, State](
       settings: ReplicationSettings[Command],

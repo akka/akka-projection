@@ -23,7 +23,6 @@ object JdbcHandler {
     override def process(session: S, envelope: Envelope): Unit = handler.accept(session, envelope)
   }
 
-  @Deprecated
   @deprecated("Use the similar method with Java functional interface as a parameter", "1.2.1")
   def fromFunction[Envelope, S <: JdbcSession](handler: (S, Envelope) => Unit): JdbcHandler[Envelope, S] =
     new HandlerFunction((s, env) => handler(s, env))
