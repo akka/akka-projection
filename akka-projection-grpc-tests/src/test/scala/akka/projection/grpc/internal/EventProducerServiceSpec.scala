@@ -177,7 +177,7 @@ object EventProducerServiceSpec {
 
   private def createEnvelope(pid: PersistenceId, seqNr: Long, evt: String, origin: String): EventEnvelope[String] =
     createEnvelope(pid, seqNr, evt)
-      .withMetadata(ReplicatedEventMetadata(ReplicaId(origin), seqNr, VersionVector.empty, false))
+      .withMetadata(ReplicatedEventMetadata(ReplicaId(origin), seqNr, VersionVector.empty, concurrent = false))
 
   private def createBacktrackingEnvelope(
       pid: PersistenceId,
@@ -185,7 +185,7 @@ object EventProducerServiceSpec {
       evt: String,
       origin: String): EventEnvelope[String] =
     createEnvelope(pid, seqNr, evt, source = "BT")
-      .withMetadata(ReplicatedEventMetadata(ReplicaId(origin), seqNr, VersionVector.empty, false))
+      .withMetadata(ReplicatedEventMetadata(ReplicaId(origin), seqNr, VersionVector.empty, concurrent = false))
 
 }
 

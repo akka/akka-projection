@@ -36,7 +36,7 @@ object AkkaDisciplinePlugin extends AutoPlugin {
                 "-Ywarn-nullary-override",
                 "-Ywarn-nullary-unit",
                 "-Ypartial-unification",
-                "-Yno-adapted-args")
+                "-Yno-adapted-args") + noWarnSettings
             case _ =>
               Nil
           }).toSeq,
@@ -50,6 +50,8 @@ object AkkaDisciplinePlugin extends AutoPlugin {
     } else {
       Seq(Compile / scalacOptions += "-deprecation")
     }
+
+  val noWarnSettings = "-Wconf:cat=lint-deprecation:s"
 
   val testUndicipline = Seq("-Ywarn-dead-code" // '???' used in compile only specs
   )
