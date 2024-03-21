@@ -587,7 +587,7 @@ class SlickProjectionSpec
                       fail(s"Envelope has already been verified at least twice for offset $o")
                     case Some(state) if state.envReceived =>
                       acc + (o -> state.copy(verifyCount = state.verifyCount + 1))
-                    case None => acc + (o -> VerifyState(1, false))
+                    case None => acc + (o -> VerifyState(1, envReceived = false))
                     case _    => throw new IllegalStateException
                   }
                 case e: Envelope =>
