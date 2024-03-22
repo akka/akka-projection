@@ -108,6 +108,9 @@ lazy val kafkaIntegration =
   Project(id = "akka-projection-kafka-integration", base = file("akka-projection-kafka-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.kafkaIntegration)
+    .settings(
+      // needed because test uses Slick which pulls in 2.2.0
+      dependencyOverrides += Dependencies.Compile.sl4j)
     .dependsOn(kafka, testkit % "test->test")
     .dependsOn(slick)
     .dependsOn(slickIntegration % "test->test")
