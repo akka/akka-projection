@@ -173,11 +173,20 @@ object Dependencies {
         Test.logback)
 
   val slick =
-    deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+    deps ++= Seq(
+        // Slick 3.5 pulls in slf4j-api 2.2 which doesn't work with Akka
+        Compile.slick.exclude("org.slf4j", "slf4j-api"),
+        Compile.sl4j,
+        Compile.akkaPersistenceQuery,
+        Test.akkaTypedTestkit,
+        Test.h2Driver,
+        Test.logback)
 
   val slickIntegration =
     deps ++= Seq(
-        Compile.slick,
+        // Slick 3.5 pulls in slf4j-api 2.2 which doesn't work with Akka
+        Compile.slick.exclude("org.slf4j", "slf4j-api"),
+        Compile.sl4j,
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.h2Driver,
