@@ -1,0 +1,10 @@
+version: '2.2'
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver-db
+    environment:
+      - MSSQL_SA_PASSWORD=<YourStrong@Passw0rd>
+      - ACCEPT_EULA=Y
+    ports:
+      - 1433:1433

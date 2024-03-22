@@ -12,13 +12,15 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.persistence.query.Sequence
 import akka.persistence.query.TimeBasedUUID
-import akka.persistence.r2dbc.internal.Sql.Interpolation
+import akka.persistence.r2dbc.internal.Sql.InterpolationWithAdapter
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
 import akka.projection.r2dbc.internal.OffsetPidSeqNr
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import akka.persistence.r2dbc.internal.codec.QueryAdapter
 
 class R2dbcOffsetStoreSpec
     extends ScalaTestWithActorTestKit(TestConfig.config)
@@ -33,6 +35,8 @@ class R2dbcOffsetStoreSpec
   private val clock = TestClock.nowMillis()
 
   private val settings = R2dbcProjectionSettings(testKit.system)
+
+  private implicit val queryAdapter: QueryAdapter = r2dbcSettings.codecSettings.queryAdapter
 
   private def createOffsetStore(projectionId: ProjectionId) =
     new R2dbcOffsetStore(projectionId, None, system, settings, r2dbcExecutor, clock)

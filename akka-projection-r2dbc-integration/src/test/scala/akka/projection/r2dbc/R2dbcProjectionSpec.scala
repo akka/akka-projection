@@ -7,12 +7,14 @@ package akka.projection.r2dbc
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+
 import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.TestException
@@ -20,7 +22,7 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.persistence.r2dbc.internal.Sql.Interpolation
+import akka.persistence.r2dbc.internal.Sql.InterpolationWithAdapter
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.OffsetVerification
@@ -46,8 +48,11 @@ import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
-
 import scala.util.control.NonFatal
+
+import akka.persistence.r2dbc.internal.codec.IdentityAdapter
+import akka.persistence.r2dbc.internal.codec.QueryAdapter
+import akka.persistence.r2dbc.internal.codec.SqlServerQueryAdapter
 
 object R2dbcProjectionSpec {
   final case class Envelope(id: String, offset: Long, message: String)
@@ -86,16 +91,35 @@ object R2dbcProjectionSpec {
   object TestRepository {
     val table = "projection_spec_model"
 
-    val createTableSql: String =
-      s"""|CREATE table IF NOT EXISTS $table (
-          |  id VARCHAR(255) NOT NULL,
-          |  concatenated VARCHAR(255) NOT NULL,
-          |  PRIMARY KEY(id)
-          |);""".stripMargin
+    def createTableSql(dialectName: String): String = {
+      dialectName match {
+        case "sqlserver" =>
+          s"""|IF object_id('$table') is null
+              |  CREATE TABLE $table (
+              |    id NVARCHAR(255) NOT NULL,
+              |    concatenated NVARCHAR(255) NOT NULL
+              |    PRIMARY KEY(id)
+              |  );""".stripMargin
+        case _ =>
+          s"""|CREATE table IF NOT EXISTS $table (
+              |  id VARCHAR(255) NOT NULL,
+              |  concatenated VARCHAR(255) NOT NULL,
+              |  PRIMARY KEY(id)
+              |);""".stripMargin
+      }
+
+    }
   }
 
   final case class TestRepository(session: R2dbcSession)(implicit ec: ExecutionContext, system: ActorSystem[_]) {
     import TestRepository.table
+
+    private val dialect = system.settings.config.getString("akka.persistence.r2dbc.connection-factory.dialect")
+
+    // no R2dbcSettings available to get the implicits
+    implicit private val queryAdapter: QueryAdapter = if (dialect == "sqlserver") {
+      SqlServerQueryAdapter
+    } else IdentityAdapter
 
     private val logger = LoggerFactory.getLogger(this.getClass)
 
@@ -125,11 +149,21 @@ object R2dbcProjectionSpec {
       logger.debug("TestRepository.upsert: [{}]", concatStr)
 
       val stmtSql = {
-        if (system.settings.config.getString("akka.persistence.r2dbc.connection-factory.dialect") == "h2") {
+        if (dialect == "h2") {
           sql"""
              MERGE INTO $table (id, concatenated)
              KEY (id)
              VALUES (?, ?)
+          """
+        } else if (dialect == "sqlserver") {
+          sql"""
+          UPDATE $table SET
+            id = @id,
+            concatenated = @concatenated
+          WHERE id = @id
+          if @@ROWCOUNT = 0
+            INSERT INTO $table (id, concatenated)
+            VALUES (@id, @concatenated)
           """
         } else {
           sql"""
@@ -188,7 +222,8 @@ class R2dbcProjectionSpec
     super.beforeAll()
     try {
       Await.result(
-        r2dbcExecutor.executeDdl("beforeAll createTable")(_.createStatement(TestRepository.createTableSql)),
+        r2dbcExecutor.executeDdl("beforeAll createTable")(
+          _.createStatement(TestRepository.createTableSql(r2dbcSettings.dialectName))),
         10.seconds)
       Await.result(
         r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),

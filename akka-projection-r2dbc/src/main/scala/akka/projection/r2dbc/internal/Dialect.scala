@@ -65,3 +65,17 @@ private[projection] object H2Dialect extends Dialect {
       projectionId: ProjectionId): OffsetStoreDao =
     new H2OffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
 }
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[projection] object SqlServerDialect extends Dialect {
+  def createOffsetStoreDao(
+      settings: R2dbcProjectionSettings,
+      sourceProvider: Option[BySlicesSourceProvider],
+      system: ActorSystem[_],
+      r2dbcExecutor: R2dbcExecutor,
+      projectionId: ProjectionId): OffsetStoreDao =
+    new SqlServerOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
+}

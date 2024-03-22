@@ -9,10 +9,12 @@ import akka.annotation.InternalApi
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import io.r2dbc.spi.Connection
-
 import java.time.Instant
+
 import scala.collection.immutable
 import scala.concurrent.Future
+
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.LatestBySlice
 
 /**
  * INTERNAL API
@@ -33,7 +35,7 @@ private[projection] trait OffsetStoreDao {
       timestamp: Instant,
       storageRepresentation: OffsetSerialization.StorageRepresentation): Future[Done]
 
-  def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[String]): Future[Long]
+  def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[LatestBySlice]): Future[Long]
 
   def deleteNewTimestampOffsetsInTx(connection: Connection, timestamp: Instant): Future[Long]
 
