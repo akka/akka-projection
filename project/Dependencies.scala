@@ -54,6 +54,8 @@ object Dependencies {
     val h2 = "com.h2database" % "h2" % "2.1.210" % Provided // EPL 1.0
     val r2dbcH2 = "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Provided // ApacheV2
 
+    // pin this because testcontainers and slick brings in incompatible SLF4J 2.2
+    val sl4j = "org.slf4j" % "slf4j-api" % "1.7.36"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
@@ -67,7 +69,6 @@ object Dependencies {
 
   object Test {
     val akkaTypedTestkit = Compile.akkaTypedTestkit % sbt.Test
-    val akkaSlf4j = "com.typesafe.akka" %% "akka-slf4j" % Versions.akka % sbt.Test
     val akkaStreamTestkit = Compile.akkaStreamTestkit % sbt.Test
     val akkaShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % sbt.Test
     val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka % sbt.Test
@@ -179,7 +180,6 @@ object Dependencies {
         Compile.slick,
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
-        Test.akkaSlf4j,
         Test.h2Driver,
         Test.postgresDriver,
         Test.postgresContainer,
@@ -209,7 +209,6 @@ object Dependencies {
   val kafkaIntegration =
     deps ++= Seq(
         Test.scalatest,
-        Test.akkaSlf4j,
         Test.akkaTypedTestkit,
         Test.akkaStreamTestkit,
         Test.alpakkaKafkaTestkit,

@@ -35,6 +35,9 @@ lazy val testkit =
 lazy val jdbc =
   Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
     .settings(Dependencies.jdbc)
+    .settings(
+      // needed because slick pulls in 2.2.0
+      dependencyOverrides += Dependencies.Compile.sl4j)
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
@@ -53,6 +56,9 @@ lazy val jdbcIntegration =
 lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
     .settings(Dependencies.slick)
+    .settings(
+      // needed because slick pulls in 2.2.0
+      dependencyOverrides += Dependencies.Compile.sl4j)
     .dependsOn(jdbc, core)
     .disablePlugins(CiReleasePlugin)
 
@@ -60,6 +66,9 @@ lazy val slickIntegration =
   Project(id = "akka-projection-slick-integration", base = file("akka-projection-slick-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.slickIntegration)
+    .settings(
+      // needed because slick pulls in 2.2.0
+      dependencyOverrides += Dependencies.Compile.sl4j)
     .dependsOn(slick)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
