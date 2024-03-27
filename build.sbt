@@ -15,7 +15,6 @@ lazy val core =
       Compile / packageBin / packageOptions += Package.ManifestAttributes(
           "Automatic-Module-Name" -> "akka.projection.core"))
     .settings(Protobuf.settings)
-    .settings(Scala3.settings)
     .disablePlugins(CiReleasePlugin)
 
 lazy val coreTest =
@@ -23,14 +22,12 @@ lazy val coreTest =
     .disablePlugins(MimaPlugin, CiReleasePlugin)
     .settings(Dependencies.coreTest)
     .settings(publish / skip := true)
-    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(testkit % Test)
 
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
     .settings(Dependencies.testKit)
-    .settings(Scala3.settings)
     .dependsOn(core)
     .disablePlugins(CiReleasePlugin)
 
@@ -38,7 +35,9 @@ lazy val testkit =
 lazy val jdbc =
   Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
     .settings(Dependencies.jdbc)
-    .settings(Scala3.settings)
+    .settings(
+      // needed because slick pulls in 2.2.0
+      dependencyOverrides += Dependencies.Compile.sl4j)
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
@@ -48,7 +47,6 @@ lazy val jdbcIntegration =
   Project(id = "akka-projection-jdbc-integration", base = file("akka-projection-jdbc-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.jdbcIntegration)
-    .settings(Scala3.settings)
     .dependsOn(jdbc)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
@@ -58,6 +56,9 @@ lazy val jdbcIntegration =
 lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
     .settings(Dependencies.slick)
+    .settings(
+      // needed because slick pulls in 2.2.0
+      dependencyOverrides += Dependencies.Compile.sl4j)
     .dependsOn(jdbc, core)
     .disablePlugins(CiReleasePlugin)
 
@@ -65,6 +66,9 @@ lazy val slickIntegration =
   Project(id = "akka-projection-slick-integration", base = file("akka-projection-slick-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.slickIntegration)
+    .settings(
+      // needed because slick pulls in 2.2.0
+      dependencyOverrides += Dependencies.Compile.sl4j)
     .dependsOn(slick)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
@@ -75,14 +79,12 @@ lazy val cassandra =
   Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
     .settings(Dependencies.cassandra)
     .dependsOn(core)
-    .settings(Scala3.settings)
     .disablePlugins(CiReleasePlugin)
 
 lazy val cassandraIntegration =
   Project(id = "akka-projection-cassandra-integration", base = file("akka-projection-cassandra-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.cassandraIntegration)
-    .settings(Scala3.settings)
     .dependsOn(coreTest % "test->test", testkit, cassandra)
     .disablePlugins(CiReleasePlugin, AkkaDisciplinePlugin)
 
@@ -90,7 +92,6 @@ lazy val cassandraIntegration =
 lazy val eventsourced =
   Project(id = "akka-projection-eventsourced", base = file("akka-projection-eventsourced"))
     .settings(Dependencies.eventsourced)
-    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
@@ -99,7 +100,6 @@ lazy val eventsourced =
 lazy val kafka =
   Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
     .settings(Dependencies.kafka)
-    .settings(Scala3.settings)
     .dependsOn(testkit)
     .dependsOn(core)
     .disablePlugins(CiReleasePlugin)
@@ -108,7 +108,9 @@ lazy val kafkaIntegration =
   Project(id = "akka-projection-kafka-integration", base = file("akka-projection-kafka-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.kafkaIntegration)
-    .settings(Scala3.settings)
+    .settings(
+      // needed because test uses Slick which pulls in 2.2.0
+      dependencyOverrides += Dependencies.Compile.sl4j)
     .dependsOn(kafka, testkit % "test->test")
     .dependsOn(slick)
     .dependsOn(slickIntegration % "test->test")
@@ -118,7 +120,6 @@ lazy val kafkaIntegration =
 lazy val `durable-state` =
   Project(id = "akka-projection-durable-state", base = file("akka-projection-durable-state"))
     .settings(Dependencies.state)
-    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
@@ -127,7 +128,6 @@ lazy val grpc =
   Project(id = "akka-projection-grpc", base = file("akka-projection-grpc"))
     .settings(Dependencies.grpc)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
-    .settings(Scala3.settings)
     .dependsOn(core)
     .dependsOn(eventsourced)
     .enablePlugins(AkkaGrpcPlugin)
@@ -139,7 +139,6 @@ lazy val grpcTests =
     .settings(Dependencies.grpcTest)
     .settings(publish / skip := true)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
-    .settings(Scala3.settings)
     .dependsOn(grpc)
     .dependsOn(r2dbc) // for compile only tests
     .dependsOn(testkit % Test)
@@ -151,7 +150,6 @@ lazy val grpcIntegration =
     .settings(IntegrationTests.settings)
     .settings(Dependencies.grpcIntegration)
     .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
-    // FIXME test coverage with Scala 3 ? .settings(Scala3.settings)
     .dependsOn(grpc, r2dbc)
     .enablePlugins(AkkaGrpcPlugin)
     .disablePlugins(CiReleasePlugin)
@@ -161,7 +159,6 @@ lazy val grpcIntegration =
 // provides offset storage backed by akka-persistence-r2dbc
 lazy val r2dbc =
   Project(id = "akka-projection-r2dbc", base = file("akka-projection-r2dbc"))
-    .settings(Scala3.settings)
     .settings(Dependencies.r2dbc)
     .dependsOn(core, grpc, eventsourced, `durable-state`)
     .disablePlugins(CiReleasePlugin)
@@ -170,7 +167,6 @@ lazy val r2dbcIntegration =
   Project(id = "akka-projection-r2dbc-integration", base = file("akka-projection-r2dbc-integration"))
     .settings(IntegrationTests.settings)
     .settings(Dependencies.r2dbcIntegration)
-    .settings(Scala3.settings)
     .dependsOn(r2dbc)
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)

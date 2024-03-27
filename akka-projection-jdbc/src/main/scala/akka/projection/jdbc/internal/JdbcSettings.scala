@@ -17,7 +17,7 @@ import com.typesafe.config.ConfigValueType
  * INTERNAL API
  */
 @InternalApi
-private[projection] case class JdbcSettings(config: Config, executionContext: ExecutionContext) {
+case class JdbcSettings(config: Config, executionContext: ExecutionContext) {
 
   val schema: Option[String] =
     Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty)

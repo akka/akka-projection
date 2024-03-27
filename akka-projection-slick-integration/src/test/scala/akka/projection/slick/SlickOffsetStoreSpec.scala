@@ -99,7 +99,7 @@ abstract class SlickOffsetStoreSpec(specConfig: SlickSpecConfig)
   private val clock = new TestClock
 
   private val offsetStore =
-    new SlickOffsetStore(system, dbConfig.db, dbConfig.profile, SlickSettings(slickConfig), clock)
+    new SlickOffsetStore(system, dbConfig, SlickSettings(slickConfig), clock)
 
   override protected def beforeAll(): Unit = {
     // create offset table

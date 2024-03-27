@@ -229,7 +229,7 @@ class EdgeReplicationMultiIntegrationSpec(testContainerConf: TestContainerConf)
       val combinedHandler = consumeHandler.orElse(produceHandler)
 
       // start producer server
-      Http(system)
+      Http()(system)
         .newServerAt("127.0.0.1", grpcPort)
         .bind(combinedHandler)
         .map(_.addToCoordinatedShutdown(3.seconds)(system))(system.executionContext)

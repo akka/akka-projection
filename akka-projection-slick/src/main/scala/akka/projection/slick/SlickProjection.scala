@@ -385,7 +385,7 @@ object SlickProjection {
   @nowarn("msg=never used")
   private def createOffsetStore[P <: JdbcProfile: ClassTag](databaseConfig: DatabaseConfig[P])(
       implicit system: ActorSystem[_]) =
-    new SlickOffsetStore(system, databaseConfig.db, databaseConfig.profile, SlickSettings(system))
+    new SlickOffsetStore(system, databaseConfig, SlickSettings(system))
 }
 
 object SlickHandler {
