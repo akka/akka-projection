@@ -1,0 +1,17 @@
+version: 3
+
+# https://github.com/fossas/fossa-cli/blob/master/docs/references/files/fossa-yml.md
+
+paths:
+  exclude:
+    - ./akka-projection-core-test
+    - ./akka-projection-grpc-integration
+    - ./akka-projection-grpc-tests
+    - ./akka-projection-jdbc-integration
+    - ./akka-projection-kafka-integration
+    - ./akka-projection-r2dbc-integration
+    - ./akka-projection-slick-integration
+    - ./examples
+    - ./examples-integration
+    - ./samples
+    - ./native-image-tests

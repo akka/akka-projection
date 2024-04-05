@@ -10,7 +10,7 @@ addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.5.12")
 addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.4.1")
 
 // Documentation
-addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.54")
+addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.55")
 addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.4")
 addSbtPlugin("com.lightbend.sbt" % "sbt-publish-rsync" % "0.3")
 addSbtPlugin("com.github.sbt" % "sbt-unidoc" % "0.5.0")
