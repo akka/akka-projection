@@ -55,7 +55,7 @@ object Dependencies {
     val r2dbcH2 = "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Provided // ApacheV2
 
     // pin this because testcontainers and slick brings in incompatible SLF4J 2.2
-    val sl4j = "org.slf4j" % "slf4j-api" % "1.7.36"
+    val sl4j = "org.slf4j" % "slf4j-api" % "2.0.13"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
