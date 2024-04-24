@@ -57,11 +57,11 @@ CREATE TABLE IF NOT EXISTS durable_state (
   state_payload BYTEA NOT NULL,
   tags TEXT ARRAY,
 
-  PRIMARY KEY(persistence_id, revision)
+  PRIMARY KEY(persistence_id)
 );
 
 -- `durable_state_slice_idx` is only needed if the slice based queries are used
-CREATE INDEX IF NOT EXISTS durable_state_slice_idx ON durable_state(slice, entity_type, db_timestamp, revision);
+CREATE INDEX IF NOT EXISTS durable_state_slice_idx ON durable_state(slice, entity_type, db_timestamp);
 
 -- Primitive offset types are stored in this table.
 -- If only timestamp based offsets are used this table is optional.
