@@ -169,7 +169,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       Replication.grpcReplication(settings)(LWWHelloWorld.apply)(replicaSystem)
 
     // start producer server
-    Http(system)
+    Http()(system)
       .newServerAt("127.0.0.1", grpcPort)
       .bind(started.createSingleServiceHandler())
       .map(_.addToCoordinatedShutdown(3.seconds)(system))(system.executionContext)

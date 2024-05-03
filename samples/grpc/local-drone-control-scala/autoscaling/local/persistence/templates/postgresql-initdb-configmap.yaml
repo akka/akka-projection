@@ -54,10 +54,10 @@ data:
       state_ser_manifest VARCHAR(255),
       state_payload BYTEA NOT NULL,
       tags TEXT ARRAY,
-      PRIMARY KEY(persistence_id, revision)
+      PRIMARY KEY(persistence_id)
     );
 
-    CREATE INDEX IF NOT EXISTS durable_state_slice_idx ON durable_state(slice, entity_type, db_timestamp, revision);
+    CREATE INDEX IF NOT EXISTS durable_state_slice_idx ON durable_state(slice, entity_type, db_timestamp);
 
     CREATE TABLE IF NOT EXISTS akka_projection_offset_store (
       projection_name VARCHAR(255) NOT NULL,

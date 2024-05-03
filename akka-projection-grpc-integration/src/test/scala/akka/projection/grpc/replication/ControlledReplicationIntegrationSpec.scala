@@ -229,7 +229,7 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
           val grpcPort = grpcPorts(index)
 
           // start producer server
-          Http(system)
+          Http()(system)
             .newServerAt("127.0.0.1", grpcPort)
             .bind(started.createSingleServiceHandler())
             .map(_.addToCoordinatedShutdown(3.seconds)(system))(system.executionContext)
@@ -253,24 +253,24 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       // replicate to B
       entityRefA.ask(TestEntity.SetScope(Set(DCB.id), _)).futureValue
       eventually {
-        entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1), Set(DCB.id))
+        entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1), Set(DCB.id))
       }
-      entityRefC.ask(TestEntity.Get).futureValue shouldBe TestEntity.State.initial
+      entityRefC.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State.initial
 
       // update in B
       entityRefB.ask(TestEntity.UpdateItem("B", 2, _)).futureValue
-      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCB.id))
+      entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCB.id))
       logger.info("Replicate from B to A")
       // replicate to A
       entityRefB.ask(TestEntity.SetScope(Set(DCA.id), _)).futureValue
       eventually {
-        entityRefA.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+        entityRefA.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
       }
 
       // replicate to C
       entityRefA.ask(TestEntity.SetScope(Set(DCC.id), _)).futureValue
       eventually {
-        entityRefC.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCC.id))
+        entityRefC.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCC.id))
       }
       // update in C
       entityRefC.ask(TestEntity.UpdateItem("C", 3, _)).futureValue
@@ -278,7 +278,7 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       // replicate to A
       entityRefC.ask(TestEntity.SetScope(Set(DCA.id), _)).futureValue
       eventually {
-        entityRefA.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(
+        entityRefA.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(
           Map("A" -> 1, "B" -> 2, "C" -> 3),
           Set(DCA.id))
       }
@@ -299,17 +299,17 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       logger.info("Replicate from A to B")
       entityRefA.ask(TestEntity.SetScope(Set(DCB.id), _)).futureValue
       eventually {
-        entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1), Set(DCB.id))
+        entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1), Set(DCB.id))
       }
 
       // update in B
       entityRefB.ask(TestEntity.UpdateItem("B", 2, _)).futureValue
-      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCB.id))
+      entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCB.id))
       logger.info("Replicate from B to A")
       // replicate to A
       entityRefB.ask(TestEntity.SetScope(Set(DCA.id), _)).futureValue
       eventually {
-        entityRefA.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+        entityRefA.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
       }
 
       // replicate to C
@@ -320,28 +320,28 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       logger.info("Replicate from A to C")
       entityRefA.ask(TestEntity.SetScope(Set(DCC.id), _)).futureValue
       eventually {
-        entityRefC.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCC.id))
+        entityRefC.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCC.id))
       }
 
       // update in C
       entityRefC.ask(TestEntity.UpdateItem("C", 3, _)).futureValue
       // latest should not be replicated to B
-      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+      entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
       Thread.sleep(r2dbcSettings.querySettings.backtrackingBehindCurrentTime.toMillis + 200)
-      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+      entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
 
       // another update in C
       entityRefC.ask(TestEntity.UpdateItem("C", 4, _)).futureValue
       // latest should still not be replicated to B
-      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+      entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
       Thread.sleep(r2dbcSettings.querySettings.backtrackingBehindCurrentTime.toMillis + 200)
-      entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
+      entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(Map("A" -> 1, "B" -> 2), Set(DCA.id))
 
       // replicate to B
       logger.info("Replicate from C to B")
       entityRefC.ask(TestEntity.SetScope(Set(DCB.id), _)).futureValue
       eventually {
-        entityRefB.ask(TestEntity.Get).futureValue shouldBe TestEntity.State(
+        entityRefB.ask(TestEntity.Get.apply).futureValue shouldBe TestEntity.State(
           Map("A" -> 1, "B" -> 2, "C" -> 4),
           Set(DCB.id))
       }

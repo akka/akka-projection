@@ -162,7 +162,7 @@ object ProducerPushSampleConsumer {
           settings = None,
           sourceProvider = consumerProjectionProvider,
           handler = () => {
-            envelope: EventEnvelope[String] =>
+            (envelope: EventEnvelope[String]) =>
               log.infoN(
                 "Saw projected event: {}-{}: {}",
                 envelope.persistenceId,
@@ -179,7 +179,7 @@ object ProducerPushSampleConsumer {
       streamId,
       // note: we use akka serialization for the payloads here, so no proto descriptors
       Nil)
-    val bound = Http(system)
+    val bound = Http()(system)
       .newServerAt("127.0.0.1", grpcPort)
       .bind(EventProducerPushDestination.grpcServiceHandler(destination))
     bound.foreach(binding =>

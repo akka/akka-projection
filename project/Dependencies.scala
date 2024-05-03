@@ -5,8 +5,8 @@ import sbt._
 
 object Dependencies {
 
-  val Scala213 = "2.13.12"
-  val Scala3 = "3.3.1"
+  val Scala213 = "2.13.13"
+  val Scala3 = "3.3.3"
 
   val Scala2Versions = Seq(Scala213)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
@@ -21,11 +21,11 @@ object Dependencies {
   object Versions {
     val akka = sys.props.getOrElse("build.akka.version", "2.9.2")
     val akkaPersistenceCassandra = "1.2.0"
-    val akkaPersistenceJdbc = "5.3.0"
+    val akkaPersistenceJdbc = "5.4.0"
     val akkaPersistenceR2dbc = "1.2.3"
     val alpakka = "7.0.0"
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "5.0.0")
-    val slick = "3.4.1"
+    val slick = "3.5.0"
     val scalaTest = "3.2.18"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
@@ -56,6 +56,8 @@ object Dependencies {
 
     val r2dbcSqlServer = "io.r2dbc" % "r2dbc-mssql" % "1.0.2.RELEASE" % Provided // ApacheV2
 
+    // pin this because testcontainers and slick brings in incompatible SLF4J 2.2
+    val sl4j = "org.slf4j" % "slf4j-api" % "1.7.36"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
@@ -173,11 +175,20 @@ object Dependencies {
         Test.logback)
 
   val slick =
-    deps ++= Seq(Compile.slick, Compile.akkaPersistenceQuery, Test.akkaTypedTestkit, Test.h2Driver, Test.logback)
+    deps ++= Seq(
+        // Slick 3.5 pulls in slf4j-api 2.2 which doesn't work with Akka
+        Compile.slick.exclude("org.slf4j", "slf4j-api"),
+        Compile.sl4j,
+        Compile.akkaPersistenceQuery,
+        Test.akkaTypedTestkit,
+        Test.h2Driver,
+        Test.logback)
 
   val slickIntegration =
     deps ++= Seq(
-        Compile.slick,
+        // Slick 3.5 pulls in slf4j-api 2.2 which doesn't work with Akka
+        Compile.slick.exclude("org.slf4j", "slf4j-api"),
+        Compile.sl4j,
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.h2Driver,

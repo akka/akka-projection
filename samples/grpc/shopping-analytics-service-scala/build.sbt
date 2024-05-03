@@ -6,7 +6,7 @@ licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
-scalaVersion := "2.13.12"
+scalaVersion := "2.13.13"
 
 Compile / scalacOptions ++= Seq(
   "-target:11",
@@ -30,7 +30,7 @@ Global / cancelable := false // ctrl-c
 
 val AkkaVersion = "2.9.2"
 val AkkaHttpVersion = "10.6.1"
-val AkkaManagementVersion = "1.5.0"
+val AkkaManagementVersion = "1.5.1"
 val AkkaPersistenceR2dbcVersion = "1.2.3"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.5.2")

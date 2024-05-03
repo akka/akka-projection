@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS durable_state (
   -- additional column
   location VARCHAR(255),
 
-  PRIMARY KEY(persistence_id, revision)
+  PRIMARY KEY(persistence_id)
 );
 -- // #queryableColumn
 
