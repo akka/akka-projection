@@ -41,11 +41,6 @@
             <name>Akka library repository</name>
             <url>https://repo.akka.io/maven</url>
         </repository>
-    <repository>
-      <id>akka-snapshot-repository</id>
-      <name>Akka library snapshot repository</name>
-      <url>https://repo.akka.io/snapshots</url>
-    </repository>
     </repositories>
     <pluginRepositories>
         <pluginRepository>
