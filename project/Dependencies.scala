@@ -12,20 +12,20 @@ object Dependencies {
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
   val AkkaVersionInDocs = "2.9"
-  val AlpakkaVersionInDocs = "7.0"
-  val AlpakkaKafkaVersionInDocs = "5.0"
+  val AlpakkaVersionInDocs = "8.0"
+  val AlpakkaKafkaVersionInDocs = "6.0"
   val AkkaGrpcVersionInDocs = "2.4"
   val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
   val AkkaProjectionVersionInDocs = "1.5"
 
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.9.2")
-    val akkaPersistenceCassandra = "1.2.0"
-    val akkaPersistenceJdbc = "5.4.0"
-    val akkaPersistenceR2dbc = "1.2.3"
-    val alpakka = "7.0.0"
-    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "5.0.0")
-    val slick = "3.5.0"
+    val akka = sys.props.getOrElse("build.akka.version", "2.9.3")
+    val akkaPersistenceCassandra = "1.2.1"
+    val akkaPersistenceJdbc = "5.4.1"
+    val akkaPersistenceR2dbc = "1.2.4"
+    val alpakka = "8.0.0"
+    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "6.0.0")
+    val slick = "3.5.1"
     val scalaTest = "3.2.18"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
@@ -51,7 +51,7 @@ object Dependencies {
     val akkaPersistenceR2dbcState =
       "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.akkaPersistenceR2dbc
 
-    val h2 = "com.h2database" % "h2" % "2.1.210" % Provided // EPL 1.0
+    val h2 = "com.h2database" % "h2" % "2.2.224" % Provided // EPL 1.0
     val r2dbcH2 = "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Provided // ApacheV2
 
     val r2dbcSqlServer = "io.r2dbc" % "r2dbc-mssql" % "1.0.2.RELEASE" % Provided // ApacheV2
