@@ -43,7 +43,7 @@ public final class TemperatureEvents {
         EventProducerPushDestination.create(
                 TEMPERATURE_EVENT_STREAM_ID,
                 Collections.singletonList(iot.temperature.proto.TemperatureEvents.getDescriptor()),
-                system));
+                system);
 
     return EventProducerPushDestination.grpcServiceHandler(destination, system);
   }
