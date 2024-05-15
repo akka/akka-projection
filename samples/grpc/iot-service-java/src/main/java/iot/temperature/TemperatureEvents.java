@@ -43,9 +43,7 @@ public final class TemperatureEvents {
         EventProducerPushDestination.create(
                 TEMPERATURE_EVENT_STREAM_ID,
                 Collections.singletonList(iot.temperature.proto.TemperatureEvents.getDescriptor()),
-                system)
-            // FIXME withTransformation can be removed when updating to akka-projection-grpc 1.5.1
-            .withTransformation(Transformation.identity());
+                system));
 
     return EventProducerPushDestination.grpcServiceHandler(destination, system);
   }
