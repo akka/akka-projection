@@ -46,7 +46,7 @@ class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[S
     logger.info("checkout {}", in.cartId)
     val entityRef = sharding.entityRefFor(entityKey, in.cartId)
     val reply: Future[ShoppingCart.Summary] =
-      entityRef.askWithStatus(ShoppingCart.Checkout)
+      entityRef.askWithStatus(ShoppingCart.Checkout.apply)
     val response = reply.map(cart => toProtoCart(cart))
     convertError(response)
   }
@@ -55,7 +55,7 @@ class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[S
     logger.info("getCart {}", in.cartId)
     val entityRef = sharding.entityRefFor(entityKey, in.cartId)
     val response =
-      entityRef.ask(ShoppingCart.Get).map { cart =>
+      entityRef.ask(ShoppingCart.Get.apply).map { cart =>
         if (cart.items.isEmpty)
           throw new GrpcServiceException(Status.NOT_FOUND.withDescription(s"Cart ${in.cartId} not found"))
         else
@@ -68,7 +68,7 @@ class ShoppingCartServiceImpl(system: ActorSystem[_], entityKey: EntityTypeKey[S
     logger.info("markCustomerVip {}", in.cartId)
     val entityRef = sharding.entityRefFor(entityKey, in.cartId)
     val reply: Future[ShoppingCart.Summary] =
-      entityRef.askWithStatus(ShoppingCart.MarkCustomerVip)
+      entityRef.askWithStatus(ShoppingCart.MarkCustomerVip.apply)
     val response = reply.map(cart => toProtoCart(cart))
     convertError(response)
   }

@@ -168,15 +168,17 @@ jobs:
         run: |-
           sbt "publishLocal; publishM2"
 
-      - name: Compile Scala Projection gRPC sample Shopping Cart
+      - name: Test Scala Projection gRPC sample Shopping Cart
         run: |-
           cd samples/grpc/shopping-cart-service-scala
           sbt test -Dakka-projection.version=`cat ~/.version`
+          sbt "clean; ++3.3.3!; test;" -Dakka-projection.version=`cat ~/.version`
 
       - name: Compile Scala Projection gRPC sample Analytics
         run: |-
           cd samples/grpc/shopping-analytics-service-scala
-          sbt compile -Dakka-projection.version=`cat ~/.version`
+          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+          sbt "clean; ++3.3.3!; Test/compile;"
 
       - name: Compile Java Projection gRPC sample Shopping Cart
         run: |-
@@ -191,7 +193,8 @@ jobs:
       - name: Compile Scala Replicated Event Sourcing over gRPC sample Shopping Cart
         run: |-
           cd samples/replicated/shopping-cart-service-scala
-          sbt compile -Dakka-projection.version=`cat ~/.version`
+          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+          sbt "clean; ++3.3.3!; Test/compile;"
 
       - name: Compile Java Replicated Event Sourcing over gRPC sample Shopping Cart
         run: |-
@@ -201,12 +204,14 @@ jobs:
       - name: Compile Scala Projection gRPC Local Drone Control sample
         run: |-
           cd samples/grpc/local-drone-control-scala
-          sbt compile -Dakka-projection.version=`cat ~/.version`
+          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+          sbt "clean; ++3.3.3!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
 
       - name: Compile Scala Projection gRPC Restaurant Drone Deliveries sample
         run: |-
           cd samples/grpc/restaurant-drone-deliveries-service-scala
           sbt compile -Dakka-projection.version=`cat ~/.version`
+          sbt "clean; ++3.3.3!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
 
       - name: Compile Java Projection gRPC Local Drone Control sample
         run: |-
@@ -218,10 +223,11 @@ jobs:
           cd samples/grpc/restaurant-drone-deliveries-service-java
           mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
 
-      - name: Compile Scala Projection gRPC IoT service sample
+      - name: Test Scala Projection gRPC IoT service sample
         run: |-
           cd samples/grpc/iot-service-scala
           sbt test -Dakka-projection.version=`cat ~/.version`
+          sbt "clean; ++3.3.3!; test;" -Dakka-projection.version=`cat ~/.version`
 
       - name: Compile Java Projection gRPC IoT service sample
         run: |-

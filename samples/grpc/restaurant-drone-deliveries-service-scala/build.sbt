@@ -30,11 +30,11 @@ Global / cancelable := false // ctrl-c
 
 val AkkaVersion = "2.9.3"
 val AkkaHttpVersion = "10.6.3"
-val AkkaManagementVersion = "1.5.1"
-val AkkaPersistenceR2dbcVersion = "1.2.3"
+val AkkaManagementVersion = "1.5.2"
+val AkkaPersistenceR2dbcVersion = "1.2.2"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.5.4")
-val AkkaDiagnosticsVersion = "2.1.0"
+val AkkaDiagnosticsVersion = "2.1.1"
 
 enablePlugins(AkkaGrpcPlugin)
 
@@ -65,7 +65,7 @@ libraryDependencies ++= Seq(
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.2.13",
-  "org.scalatest" %% "scalatest" % "3.1.2" % Test,
+  "org.scalatest" %% "scalatest" % "3.2.18" % Test,
   // 2. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,

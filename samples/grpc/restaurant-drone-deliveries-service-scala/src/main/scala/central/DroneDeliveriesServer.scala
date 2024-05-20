@@ -44,7 +44,7 @@ object DroneDeliveriesServer {
           RestaurantDeliveriesService,
           ChargingStationService)))
 
-    val bound = Http(system).newServerAt(interface, port).bind(service)
+    val bound = Http().newServerAt(interface, port).bind(service)
     // #composeAndBind
     bound.foreach(binding =>
       logger.info(

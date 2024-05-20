@@ -19,7 +19,7 @@ class DeliveriesQueueServiceImpl(
 
   override def getCurrentQueue(
       in: Empty): Future[proto.GetCurrentQueueResponse] = {
-    val reply = deliveriesQueue.ask(DeliveriesQueue.GetCurrentState(_))
+    val reply = deliveriesQueue.ask(DeliveriesQueue.GetCurrentState.apply)
 
     reply.map { state =>
       proto.GetCurrentQueueResponse(

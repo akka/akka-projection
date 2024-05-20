@@ -157,7 +157,7 @@ object EdgeApp {
 
     sealed trait Command
 
-    final case object Tick extends Command
+    case object Tick extends Command
 
     sealed trait Event extends CborSerializable
 
