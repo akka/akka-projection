@@ -166,7 +166,7 @@ jobs:
 
       - name: Publish artifacts locally
         run: |-
-          sbt "publishLocal; publishM2"
+          sbt "+publishLocal; publishM2"
 
       - name: Test Scala Projection gRPC sample Shopping Cart
         run: |-
