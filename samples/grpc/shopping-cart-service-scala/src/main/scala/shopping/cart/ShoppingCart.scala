@@ -207,10 +207,10 @@ object ShoppingCart {
       command: Command): ReplyEffect[Event, State] = {
     command match {
       case AddItem(itemId, quantity, replyTo) =>
-       if (quantity <= 0)
+       if (quantity <= 0) {
           Effect.reply(replyTo)(
             StatusReply.Error("Quantity must be greater than zero"))
-        else
+       } else
           Effect
             .persist(ItemUpdated(itemId, quantity))
             .thenReply(replyTo) { updatedCart =>

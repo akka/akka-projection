@@ -57,7 +57,7 @@ class ShoppingCartServiceImpl(system: ActorSystem[_])
     logger.info("getCart {}", in.cartId)
     val entityRef = sharding.entityRefFor(ShoppingCart.EntityKey, in.cartId)
     val response =
-      entityRef.ask(ShoppingCart.Get).map { cart =>
+      entityRef.ask(ShoppingCart.Get.apply).map { cart =>
         if (cart.items.isEmpty)
           throw new GrpcServiceException(
             Status.NOT_FOUND.withDescription(s"Cart ${in.cartId} not found"))

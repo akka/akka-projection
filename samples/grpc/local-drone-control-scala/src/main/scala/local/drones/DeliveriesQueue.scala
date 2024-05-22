@@ -57,7 +57,7 @@ object DeliveriesQueue {
   // #state
 
   // Not really an entity, we just have one
-  val EntityKey = EntityTypeKey("RestaurantDeliveries")
+  val EntityKey = EntityTypeKey[Command]("RestaurantDeliveries")
 
   def apply(): Behavior[Command] = {
     Behaviors
