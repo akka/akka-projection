@@ -82,7 +82,7 @@ artifact4=akka-persistence-r2dbc_$scala.binary.version$
 version4=$akka.r2dbc.version$
 group5=com.lightbend.akka
 artifact5=akka-projection-r2dbc_$scala.binary.version$
-version5=$akka.r2dbc.version$
+version5=$project.version$
 }
 
 ### Transitive dependencies
