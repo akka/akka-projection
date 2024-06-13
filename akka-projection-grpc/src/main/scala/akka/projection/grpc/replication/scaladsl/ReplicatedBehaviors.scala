@@ -5,6 +5,7 @@
 package akka.projection.grpc.replication.scaladsl
 
 import akka.actor.typed.Behavior
+import akka.annotation.DoNotInherit
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplicationContext
 
@@ -14,7 +15,10 @@ import akka.persistence.typed.scaladsl.ReplicationContext
  * Must be used to create an event sourced behavior to be replicated with [[Replication.grpcReplication]].
  *
  * Can optionally be composed with other Behavior factories, to get access to actor context or timers.
+ *
+ * Not for user extension.
  */
+@DoNotInherit
 abstract class ReplicatedBehaviors[Command, Event, State] {
   def setup(factory: ReplicationContext => EventSourcedBehavior[Command, Event, State]): Behavior[Command]
 }

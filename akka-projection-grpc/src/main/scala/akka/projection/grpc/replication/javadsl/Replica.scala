@@ -26,7 +26,7 @@ object Replica {
 }
 
 /**
- * Not for user extension, construct using Replica#create
+ * Not for user extension, construct using [[Replica.create]]
  */
 @DoNotInherit
 trait Replica {

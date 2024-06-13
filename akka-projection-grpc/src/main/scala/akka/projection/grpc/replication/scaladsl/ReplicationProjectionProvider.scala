@@ -18,6 +18,7 @@ import akka.stream.scaladsl.FlowWithContext
 /**
  * Factory/function for creating the projection where offsets are kept track of for the replication streams
  */
+@FunctionalInterface
 trait ReplicationProjectionProvider {
   def apply(
       projectionId: ProjectionId,

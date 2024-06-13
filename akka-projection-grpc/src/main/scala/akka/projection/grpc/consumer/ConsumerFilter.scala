@@ -590,7 +590,7 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
 }
 
-class ConsumerFilter(system: ActorSystem[_]) extends Extension {
+final class ConsumerFilter(system: ActorSystem[_]) extends Extension {
 
   private val settings = ConsumerFilter.ConsumerFilterSettings(system)
 

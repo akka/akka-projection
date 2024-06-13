@@ -81,7 +81,7 @@ object GrpcReadJournal {
 
 }
 
-class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
+final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     extends ReadJournal
     with EventsBySliceQuery
     with EventTimestampQuery
