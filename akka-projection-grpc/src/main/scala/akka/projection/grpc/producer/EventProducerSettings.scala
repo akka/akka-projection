@@ -5,13 +5,11 @@
 package akka.projection.grpc.producer
 
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.util.JavaDurationConverters.JavaDurationOps
 import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
 
-@ApiMayChange
 object EventProducerSettings {
 
   /** Scala API */
@@ -37,7 +35,6 @@ object EventProducerSettings {
     apply(config)
 }
 
-@ApiMayChange
 final class EventProducerSettings private (
     val queryPluginId: String,
     val transformationParallelism: Int,

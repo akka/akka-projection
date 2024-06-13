@@ -5,7 +5,6 @@
 package akka.projection.grpc.consumer.scaladsl
 
 import akka.Done
-import akka.annotation.ApiMayChange
 import akka.grpc.scaladsl.Metadata
 
 import scala.concurrent.Future
@@ -13,7 +12,6 @@ import scala.concurrent.Future
 /**
  * Interceptor allowing for example authentication/authorization of incoming connections to a [[EventProducerPushDestination]]
  */
-@ApiMayChange
 @FunctionalInterface
 trait EventDestinationInterceptor {
 

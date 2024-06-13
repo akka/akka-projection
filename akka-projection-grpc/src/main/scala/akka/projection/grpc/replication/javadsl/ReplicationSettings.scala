@@ -7,7 +7,6 @@ package akka.projection.grpc.replication.javadsl
 import java.util.function.{ Function => JFunction }
 import java.util.{ List => JList }
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalApi
 import akka.cluster.sharding.typed.ShardingEnvelope
@@ -150,7 +149,6 @@ object ReplicationSettings {
 /**
  * Not for user extension, construct using ReplicationSettings#create
  */
-@ApiMayChange
 @DoNotInherit
 final class ReplicationSettings[Command] private (
     val selfReplicaId: ReplicaId,

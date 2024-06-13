@@ -7,7 +7,6 @@ package akka.projection.grpc.replication.scaladsl
 import scala.concurrent.Future
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
-import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.cluster.sharding.typed.ReplicatedEntity
 import akka.cluster.sharding.typed.scaladsl.Entity
@@ -30,7 +29,6 @@ import akka.projection.grpc.replication.internal.ReplicationImpl
  *
  * Not for user extension
  */
-@ApiMayChange
 @DoNotInherit
 trait Replication[Command] {
 
@@ -70,7 +68,6 @@ trait Replication[Command] {
   def entityRefFactory: String => EntityRef[Command]
 }
 
-@ApiMayChange
 object Replication {
 
   /**

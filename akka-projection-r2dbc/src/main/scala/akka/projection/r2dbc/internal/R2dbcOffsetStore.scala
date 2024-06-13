@@ -556,7 +556,7 @@ private[projection] class R2dbcOffsetStore(
     val seqNr = recordWithOffset.record.seqNr
     val currentState = getState()
 
-    val duplicate = getState().isDuplicate(recordWithOffset.record)
+    val duplicate = currentState.isDuplicate(recordWithOffset.record)
 
     if (duplicate) {
       logger.trace("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid)

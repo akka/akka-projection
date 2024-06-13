@@ -13,7 +13,6 @@ import scala.compat.java8.OptionConverters._
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcClientSettings
@@ -31,7 +30,6 @@ import akka.projection.internal.CanTriggerReplay
 import akka.stream.javadsl.Source
 import com.google.protobuf.Descriptors
 
-@ApiMayChange
 object GrpcReadJournal {
   val Identifier: String = scaladsl.GrpcReadJournal.Identifier
 
@@ -83,7 +81,6 @@ object GrpcReadJournal {
 
 }
 
-@ApiMayChange
 class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     extends ReadJournal
     with EventsBySliceQuery

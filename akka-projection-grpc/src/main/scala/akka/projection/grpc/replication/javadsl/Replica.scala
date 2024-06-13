@@ -4,7 +4,6 @@
 
 package akka.projection.grpc.replication.javadsl
 
-import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
@@ -12,7 +11,6 @@ import akka.projection.grpc.replication.internal.ReplicaImpl
 
 import java.util.Optional
 
-@ApiMayChange
 object Replica {
 
   /**
@@ -30,7 +28,6 @@ object Replica {
 /**
  * Not for user extension, construct using Replica#create
  */
-@ApiMayChange
 @DoNotInherit
 trait Replica {
 

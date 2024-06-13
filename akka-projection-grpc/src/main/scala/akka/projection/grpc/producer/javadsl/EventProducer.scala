@@ -5,7 +5,6 @@
 package akka.projection.grpc.producer.javadsl
 
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.dispatch.ExecutionContexts
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
@@ -23,7 +22,6 @@ import scala.compat.java8.OptionConverters.RichOptionalGeneric
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
  */
-@ApiMayChange
 object EventProducer {
 
   /**

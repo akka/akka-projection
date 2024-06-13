@@ -8,7 +8,6 @@ import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.cluster.sharding.typed.ShardingEnvelope
 import akka.cluster.sharding.typed.scaladsl.Entity
@@ -28,7 +27,6 @@ import com.typesafe.config.Config
 
 import scala.concurrent.duration.DurationInt
 
-@ApiMayChange
 object ReplicationSettings {
 
   /**
@@ -163,7 +161,6 @@ object ReplicationSettings {
 /**
  * Not for user extension. Constructed through companion object factories.
  */
-@ApiMayChange
 final class ReplicationSettings[Command] private (
     val selfReplicaId: ReplicaId,
     val entityTypeKey: EntityTypeKey[Command],
