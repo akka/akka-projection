@@ -149,8 +149,16 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
         },
         init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
+      val transformMetadata: Flow[EventEnvelope[Any], EventEnvelope[Any], NotUsed] =
+        Flow[EventEnvelope[Any]].map { env =>
+          producerSource.replicatedEventMetadataTransformation(env) match {
+            case None           => env
+            case Some(metadata) => env.withMetadata(metadata)
+          }
+        }
+
       val events: Source[EventEnvelope[Any], NotUsed] =
-        eventsBySlicesPerStreamId.get(init.streamId) match {
+        (eventsBySlicesPerStreamId.get(init.streamId) match {
           case Some(query) =>
             query.eventsBySlices[Any](producerSource.entityType, init.sliceMin, init.sliceMax, offset)
           case None =>
@@ -167,22 +175,27 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                 Source.failed(
                   new IllegalArgumentException(s"No events by slices query defined for stream id [${init.streamId}]"))
             }
-        }
+        }).via(transformMetadata)
 
       val currentEventsByPersistenceId: (String, Long) => Source[EventEnvelope[Any], NotUsed] =
         currentEventsByPersistenceIdPerStreamId.get(init.streamId) match {
           case Some(query) =>
-            (pid, seqNr) => query.currentEventsByPersistenceIdTyped[Any](pid, seqNr, Long.MaxValue)
+            (pid, seqNr) =>
+              query
+                .currentEventsByPersistenceIdTyped[Any](pid, seqNr, Long.MaxValue)
+                .via(transformMetadata)
           case None =>
             currentEventsByPersistenceIdStartingFromSnapshotPerStreamId.get(init.streamId) match {
               case Some(query) =>
                 val transformSnapshot = streamIdToSourceMap(init.streamId).transformSnapshot.get
                 (pid, seqNr) =>
-                  query.currentEventsByPersistenceIdStartingFromSnapshot[Any, Any](
-                    pid,
-                    seqNr,
-                    Long.MaxValue,
-                    transformSnapshot)
+                  query
+                    .currentEventsByPersistenceIdStartingFromSnapshot[Any, Any](
+                      pid,
+                      seqNr,
+                      Long.MaxValue,
+                      transformSnapshot)
+                    .via(transformMetadata)
               case None =>
                 (_, _) =>
                   Source.failed(
@@ -305,6 +318,12 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
         case q: LoadEventQuery =>
           import system.executionContext
           q.loadEnvelope[Any](req.persistenceId, req.seqNr)
+            .map { env =>
+              producerSource.replicatedEventMetadataTransformation(env) match {
+                case None           => env
+                case Some(metadata) => env.withMetadata(metadata)
+              }
+            }
             .flatMap { env =>
               val eventOriginFilter: EventEnvelope[_] => Boolean =
                 producerSource.replicatedEventOriginFilter

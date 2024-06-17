@@ -20,6 +20,7 @@ import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartin
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
+import akka.persistence.typed.internal.ReplicatedEventMetadata
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
@@ -45,7 +46,8 @@ object EventProducer {
         settings,
         _ => true,
         transformSnapshot = None,
-        replicatedEventOriginFilter = None)
+        replicatedEventOriginFilter = None,
+        replicatedEventMetadataTransformation = _ => None)
 
     def apply[Event](
         entityType: String,
@@ -60,7 +62,8 @@ object EventProducer {
         settings,
         producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean],
         transformSnapshot = None,
-        replicatedEventOriginFilter = None)
+        replicatedEventOriginFilter = None,
+        replicatedEventMetadataTransformation = _ => None)
 
   }
 
@@ -78,7 +81,10 @@ object EventProducer {
       val producerFilter: EventEnvelope[Any] => Boolean,
       val transformSnapshot: Option[Any => Any],
       /** INTERNAL API */
-      @InternalApi private[akka] val replicatedEventOriginFilter: Option[EventOriginFilter]) {
+      @InternalApi private[akka] val replicatedEventOriginFilter: Option[EventOriginFilter],
+      /** INTERNAL API */
+      @InternalApi private[akka] val replicatedEventMetadataTransformation: EventEnvelope[Any] => Option[
+        ReplicatedEventMetadata]) {
     require(entityType.nonEmpty, "Entity type must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
@@ -116,6 +122,13 @@ object EventProducer {
     def withReplicatedEventOriginFilter(filter: EventOriginFilter): EventProducerSource =
       copy(replicatedEventOriginFilter = Some(filter))
 
+    /**
+     * INTERNAL API
+     */
+    @InternalApi private[akka] def withReplicatedEventMetadataTransformation(
+        f: EventEnvelope[Any] => Option[ReplicatedEventMetadata]): EventProducerSource =
+      copy(replicatedEventMetadataTransformation = f)
+
     def copy(
         entityType: String = entityType,
         streamId: String = streamId,
@@ -123,7 +136,9 @@ object EventProducer {
         settings: EventProducerSettings = settings,
         producerFilter: EventEnvelope[Any] => Boolean = producerFilter,
         transformSnapshot: Option[Any => Any] = transformSnapshot,
-        replicatedEventOriginFilter: Option[EventOriginFilter] = replicatedEventOriginFilter): EventProducerSource =
+        replicatedEventOriginFilter: Option[EventOriginFilter] = replicatedEventOriginFilter,
+        replicatedEventMetadataTransformation: EventEnvelope[Any] => Option[ReplicatedEventMetadata] =
+          replicatedEventMetadataTransformation): EventProducerSource =
       new EventProducerSource(
         entityType,
         streamId,
@@ -131,7 +146,8 @@ object EventProducer {
         settings,
         producerFilter,
         transformSnapshot,
-        replicatedEventOriginFilter)
+        replicatedEventOriginFilter,
+        replicatedEventMetadataTransformation)
 
   }
 
