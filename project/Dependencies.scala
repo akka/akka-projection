@@ -77,6 +77,7 @@ object Dependencies {
     val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % sbt.Test
     val akkaDiscovery = "com.typesafe.akka" %% "akka-discovery" % Versions.akka % sbt.Test
     val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % sbt.Test
+    val akkaPki = "com.typesafe.akka" %% "akka-pki" % Versions.akka % sbt.Test
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % sbt.Test
@@ -258,6 +259,7 @@ object Dependencies {
         Test.logback,
         Test.scalatest,
         Test.akkaDiscovery,
+        Test.akkaPki,
         Test.postgresDriver,
         Test.h2Driver,
         Compile.r2dbcH2,
