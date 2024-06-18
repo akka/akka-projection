@@ -261,7 +261,7 @@ class EventProducerServiceSpec
           else
             Some(
               ReplicatedEventMetadata(
-                originReplica = ReplicaId(""),
+                originReplica = ReplicaId.empty,
                 originSequenceNr = env.sequenceNr,
                 version = VersionVector(env.persistenceId, env.sequenceNr),
                 concurrent = false))))
@@ -609,14 +609,14 @@ class EventProducerServiceSpec
 
       val out1 = probe.expectNext()
       protoAnySerialization.deserialize(out1.getEvent.metadata.get) shouldBe ReplicatedEventMetadata(
-        originReplica = ReplicaId(""),
+        originReplica = ReplicaId.empty,
         originSequenceNr = env1.sequenceNr,
         version = VersionVector(env1.persistenceId, env1.sequenceNr),
         concurrent = false)
 
       val out2 = probe.expectNext()
       protoAnySerialization.deserialize(out2.getEvent.metadata.get) shouldBe ReplicatedEventMetadata(
-        originReplica = ReplicaId(""),
+        originReplica = ReplicaId.empty,
         originSequenceNr = env2.sequenceNr,
         version = VersionVector(env2.persistenceId, env2.sequenceNr),
         concurrent = false)
