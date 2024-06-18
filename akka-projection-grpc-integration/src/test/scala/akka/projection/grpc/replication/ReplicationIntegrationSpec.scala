@@ -95,7 +95,7 @@ object ReplicationIntegrationSpec {
 
     object State {
       val initial =
-        State("Hello world", LwwTime(Long.MinValue, ReplicaId("")), "", LwwTime(Long.MinValue, ReplicaId("")))
+        State("Hello world", LwwTime(Long.MinValue, ReplicaId.empty), "", LwwTime(Long.MinValue, ReplicaId.empty))
     }
 
     case class State(greeting: String, greetingTimestamp: LwwTime, tag: String, tagTimestamp: LwwTime)

@@ -106,7 +106,7 @@ object ReplicationJavaDSLIntegrationSpec {
     final case class TagChanged(tag: String, timestamp: LwwTime) extends Event
 
     object State {
-      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId("")), "")
+      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId.empty), "")
     }
 
     case class State(greeting: String, timestamp: LwwTime, tag: String)
