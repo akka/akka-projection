@@ -129,7 +129,10 @@ object EventProducer {
         f: EventEnvelope[Any] => Option[ReplicatedEventMetadata]): EventProducerSource =
       copy(replicatedEventMetadataTransformation = f)
 
-    def copy(
+    /**
+     * INTERNAL API
+     */
+    @InternalApi private[akka] def copy(
         entityType: String = entityType,
         streamId: String = streamId,
         transformation: Transformation = transformation,
