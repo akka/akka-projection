@@ -49,9 +49,10 @@ import org.slf4j.LoggerFactory
 object ReplicationMigrationIntegrationSpec {
 
   private def config(dc: ReplicaId): Config = {
-    val journalTable = if (dc.id == "") "event_journal" else s"event_journal_${dc.id}"
+    val journalTable = if (dc == ReplicaId.empty) "event_journal" else s"event_journal_${dc.id}"
     val timestampOffsetTable =
-      if (dc.id == "") "akka_projection_timestamp_offset_store" else s"akka_projection_timestamp_offset_store_${dc.id}"
+      if (dc == ReplicaId.empty) "akka_projection_timestamp_offset_store"
+      else s"akka_projection_timestamp_offset_store_${dc.id}"
     ConfigFactory.parseString(s"""
        akka.actor.provider = cluster
        akka.http.server.preview.enable-http2 = on
@@ -80,7 +81,7 @@ object ReplicationMigrationIntegrationSpec {
       """)
   }
 
-  private val DCA = ReplicaId("")
+  private val DCA = ReplicaId.empty
   private val DCB = ReplicaId("DCB")
   private val DCC = ReplicaId("DCC")
 
