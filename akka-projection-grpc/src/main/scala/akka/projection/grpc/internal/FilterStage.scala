@@ -16,6 +16,7 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
+import akka.persistence.typed.internal.ReplicatedEventMetadata
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
@@ -267,9 +268,8 @@ import scala.concurrent.ExecutionContext
 
       private def replicaIdHandledByThisStream(pid: String): Boolean = {
         replicaId match {
-          case None => true
-          case Some(id) =>
-            !ReplicationId.isReplicationId(pid) || ReplicationId.fromString(pid).replicaId == id
+          case None     => true
+          case Some(id) => ReplicationId.fromString(pid).replicaId == id
         }
       }
 
@@ -426,7 +426,7 @@ import scala.concurrent.ExecutionContext
             val pid = env.persistenceId
 
             // replicaId is used for validation of replay requests, to avoid replay for other replicas
-            if (replicaId.isEmpty && ReplicationId.isReplicationId(pid))
+            if (replicaId.isEmpty && env.eventMetadata.exists(_.isInstanceOf[ReplicatedEventMetadata]))
               replicaId = Some(ReplicationId.fromString(pid).replicaId)
 
             if (producerFilter(env) && filter.matches(env)) {
