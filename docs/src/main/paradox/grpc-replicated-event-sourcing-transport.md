@@ -256,3 +256,14 @@ The consumer can pass metadata, such as auth headers, in each request to the pro
 Authentication and authorization for the producer can be done by implementing an @apidoc[EventProducerInterceptor] and passing
 it to the `grpcServiceHandler` method during producer bootstrap. The interceptor is invoked with the stream id and
 gRPC request metadata for each incoming request and can return a suitable error through @apidoc[GrpcServiceException]
+
+## Migrating from non-replicated
+
+It is possible to migrate from an ordinary single-writer `EventSourcedBehavior` to a `ReplicatedEventSourcedBehavior`.
+The events are stored in the same way, aside from some metadata that is filled in automatically if it's missing.
+
+The `ReplicaId` for the where the original entity was located should be empty. This makes sure that the
+same `PersistenceId` and same events are used for the original replica.
+
+The aspects of @extref[Resolving conflicting updates](akka:typed/replicated-eventsourcing.html#resolving-conflicting-updates) must be considered in the
+logic of the event handler when migrating to Replicated Event Sourcing.
