@@ -1,0 +1,3 @@
+# adding replicatedEventMetadataTransformation, migration from non-replicated
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.producer.scaladsl.EventProducer#EventProducerSource.copy")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.producer.scaladsl.EventProducer#EventProducerSource.this")
