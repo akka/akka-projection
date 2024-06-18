@@ -8,15 +8,6 @@ NAT in front of each producer. The consumer may also not know about all producer
 Akka Projection gRPC producer push solves this by letting the producers initiate the connection to the consumer and then
 push events that the consumer is interested in.
 
-@@@ warning
-
-This module is currently marked as [May Change](https://doc.akka.io/docs/akka/current/common/may-change.html)
-in the sense that the API might be changed based on feedback from initial usage.
-However, the module is ready for usage in production and we will not break serialization format of
-messages or stored data.
-
-@@@
-
 ## Overview
 
 ![overview.png](images/reverse-grpc.svg)

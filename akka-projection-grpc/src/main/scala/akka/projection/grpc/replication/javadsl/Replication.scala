@@ -8,7 +8,6 @@ import java.util.concurrent.CompletionStage
 import java.util.function.Predicate
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
-import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.japi.function.{ Function => JApiFunction }
 import akka.cluster.sharding.typed.ReplicatedEntity
@@ -41,7 +40,6 @@ import scala.compat.java8.OptionConverters._
  *
  * Not for user extension
  */
-@ApiMayChange
 @DoNotInherit
 trait Replication[Command] {
 
@@ -81,7 +79,6 @@ trait Replication[Command] {
   def entityRefFactory: JFunction[String, EntityRef[Command]]
 }
 
-@ApiMayChange
 object Replication {
 
   /**

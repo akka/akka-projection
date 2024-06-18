@@ -14,15 +14,6 @@ Akka Replicated Event Sourcing over gRPC builds on @ref:[Akka Projection gRPC](g
 There are no requirements that the replicas are sharing a cluster, instead it is expected that each replica is a separate
 Akka cluster with the gRPC replication transport as only connection in between.
 
-@@@ warning
-
-This module is currently marked as [May Change](https://doc.akka.io/docs/akka/current/common/may-change.html)
-in the sense that the API might be changed based on feedback from initial usage.
-However, the module is ready for usage in production and we will not break serialization format of
-messages or stored data.
-
-@@@
-
 ## Overview
 
 For a basic overview of Replicated Event Sourcing see the @extref:[Akka Replicated Event Sourcing docs](akka:typed/replicated-eventsourcing.html)

@@ -4,7 +4,7 @@
 
 package akka.projection.grpc.replication.scaladsl
 
-import akka.annotation.ApiMayChange
+import akka.annotation.DoNotInherit
 import akka.grpc.GrpcClientSettings
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.replication.internal.ReplicaImpl
@@ -23,7 +23,10 @@ object Replica {
 
 }
 
-@ApiMayChange
+/**
+ * Not for user extension, construct using [[Replica.apply]]
+ */
+@DoNotInherit
 trait Replica {
   def replicaId: ReplicaId
   def numberOfConsumers: Int

@@ -6,7 +6,6 @@ package akka.projection.grpc.consumer.javadsl
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.grpc.internal.JavaMetadataImpl
@@ -45,7 +44,6 @@ import scala.jdk.OptionConverters.RichOption
  *
  * Producers are started using the [[akka.projection.grpc.producer.javadsl.EventProducerPush]] API.
  */
-@ApiMayChange
 object EventProducerPushDestination {
 
   /**
@@ -111,7 +109,6 @@ object EventProducerPushDestination {
 
 }
 
-@ApiMayChange
 final class EventProducerPushDestination private (
     val journalPluginId: Optional[String],
     val acceptedStreamId: String,

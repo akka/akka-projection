@@ -1,0 +1,3 @@
+# remove ApiMayChange
+ProblemFilters.exclude[FinalClassProblem]("akka.projection.grpc.consumer.ConsumerFilter")
+ProblemFilters.exclude[FinalClassProblem]("akka.projection.grpc.consumer.javadsl.GrpcReadJournal")

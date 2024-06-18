@@ -5,7 +5,6 @@
 package akka.projection.grpc.consumer.scaladsl
 
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
@@ -36,7 +35,6 @@ import akka.projection.grpc.replication.scaladsl.ReplicationSettings
  *
  * Producers are started using the [[akka.projection.grpc.producer.scaladsl.EventProducerPush]] API.
  */
-@ApiMayChange
 object EventProducerPushDestination {
 
   /**
@@ -57,7 +55,6 @@ object EventProducerPushDestination {
       EventProducerPushDestinationSettings(system),
       None)
 
-  @ApiMayChange
   object Transformation {
 
     /**
@@ -185,7 +182,6 @@ object EventProducerPushDestination {
 
 }
 
-@ApiMayChange
 final class EventProducerPushDestination private[akka] (
     val journalPluginId: Option[String],
     val acceptedStreamId: String,

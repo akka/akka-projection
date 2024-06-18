@@ -9,7 +9,6 @@ import scala.reflect.ClassTag
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.grpc.scaladsl.Metadata
 import akka.http.scaladsl.model.HttpRequest
@@ -31,7 +30,6 @@ import akka.projection.grpc.replication.internal.EventOriginFilter
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
  */
-@ApiMayChange
 object EventProducer {
 
   object EventProducerSource {
@@ -72,7 +70,6 @@ object EventProducer {
    * @param transformation Transformations for turning the internal events to public message types
    * @param settings       The event producer settings used (can be shared for multiple sources)
    */
-  @ApiMayChange
   final class EventProducerSource private (
       val entityType: String,
       val streamId: String,
@@ -138,7 +135,6 @@ object EventProducer {
 
   }
 
-  @ApiMayChange
   object Transformation {
 
     /**
@@ -164,7 +160,6 @@ object EventProducer {
    * Transformation of events to the external (public) representation.
    * Events can be excluded by mapping them to `None`.
    */
-  @ApiMayChange
   final class Transformation private (
       private[akka] val mappers: Map[Class[_], EventEnvelope[Any] => Future[Option[Any]]],
       private[akka] val orElse: EventEnvelope[Any] => Future[Option[Any]]) {
@@ -373,7 +368,6 @@ object EventProducer {
 /**
  * Interceptor allowing for example authentication/authorization of incoming requests to consume a specific stream.
  */
-@ApiMayChange
 trait EventProducerInterceptor {
 
   /**

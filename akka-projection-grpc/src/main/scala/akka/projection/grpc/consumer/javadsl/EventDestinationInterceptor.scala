@@ -5,14 +5,12 @@
 package akka.projection.grpc.consumer.javadsl
 
 import akka.Done
-import akka.annotation.ApiMayChange
 import akka.grpc.javadsl.Metadata
 
 import java.util.concurrent.CompletionStage
 
 /**
  * Interceptor allowing for example authentication/authorization of incoming connections to a [[EventProducerPushDestination]] */
-@ApiMayChange
 @FunctionalInterface
 trait EventDestinationInterceptor {
 

@@ -5,7 +5,6 @@
 package akka.projection.grpc.producer.javadsl
 
 import akka.Done
-import akka.annotation.ApiMayChange
 import akka.grpc.internal.JavaMetadataImpl
 import akka.grpc.javadsl.Metadata
 import akka.grpc.scaladsl
@@ -17,7 +16,6 @@ import scala.concurrent.Future
 /**
  * Interceptor allowing for example authentication/authorization of incoming requests to consume a specific stream.
  */
-@ApiMayChange
 @FunctionalInterface
 trait EventProducerInterceptor {
 

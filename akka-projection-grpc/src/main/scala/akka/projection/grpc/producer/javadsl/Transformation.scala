@@ -4,7 +4,6 @@
 
 package akka.projection.grpc.producer.javadsl
 
-import akka.annotation.ApiMayChange
 import akka.dispatch.ExecutionContexts
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.producer.scaladsl
@@ -17,14 +16,12 @@ import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.reflect.ClassTag
 
-@ApiMayChange
 @FunctionalInterface
 trait Mapper[A, B] {
   def apply(event: A, metadata: Optional[Any]): CompletionStage[Optional[B]]
 
 }
 
-@ApiMayChange
 object Transformation {
 
   /**
@@ -47,7 +44,6 @@ object Transformation {
  * Not for direct construction, use [[Transformation.empty]] as starting point and register
  * mappers to build your needed Transformation
  */
-@ApiMayChange
 final class Transformation private[akka] (private[akka] val delegate: scaladsl.EventProducer.Transformation) {
 
   /**

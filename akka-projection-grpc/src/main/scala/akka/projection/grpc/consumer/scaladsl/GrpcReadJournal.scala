@@ -10,7 +10,6 @@ import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.grpc.GrpcClientSettings
 import akka.grpc.scaladsl.BytesEntry
@@ -67,7 +66,6 @@ import scala.concurrent.Future
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
-@ApiMayChange
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
 
@@ -159,7 +157,6 @@ object GrpcReadJournal {
 
 }
 
-@ApiMayChange
 final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,

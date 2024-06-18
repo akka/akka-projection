@@ -6,7 +6,6 @@ package akka.projection.grpc.producer.javadsl
 
 import java.util.Optional
 import java.util.function.{ Function => JFunction }
-import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.internal.TopicMatcher
@@ -39,7 +38,6 @@ object EventProducerSource {
  * @param transformation Transformations for turning the internal events to public message types
  * @param settings The event producer settings used (can be shared for multiple sources)
  */
-@ApiMayChange
 final class EventProducerSource(
     val entityType: String,
     val streamId: String,

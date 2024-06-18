@@ -5,7 +5,6 @@
 package akka.projection.grpc.consumer
 
 import akka.actor.ClassicActorSystemProvider
-import akka.annotation.ApiMayChange
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
@@ -13,7 +12,6 @@ import com.typesafe.config.Config
 
 import akka.util.ccompat.JavaConverters._
 import scala.collection.immutable
-@ApiMayChange
 object GrpcQuerySettings {
 
   /**
@@ -81,7 +79,6 @@ object GrpcQuerySettings {
   }
 }
 
-@ApiMayChange
 final class GrpcQuerySettings private (
     val streamId: String,
     val additionalRequestMetadata: Option[Metadata],
