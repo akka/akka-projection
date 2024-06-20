@@ -605,8 +605,13 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached. This
    * is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
-  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
-    new R2dbcInternalProjectionState(settingsOrDefaults).mappedSource()
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] = {
+    val projectionState = new R2dbcInternalProjectionState(settingsOrDefaults)
+    val result = projectionState.mappedSource()
+    // telemetry is initialized by mappedSource()
+    offsetStore.setTelemetry(projectionState.getTelemetry())
+    result
+  }
 
   private class R2dbcInternalProjectionState(settings: ProjectionSettings)(implicit val system: ActorSystem[_])
       extends InternalProjectionState[Offset, Envelope](
