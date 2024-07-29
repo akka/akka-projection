@@ -100,7 +100,7 @@ lazy val eventsourced =
 lazy val kafka =
   Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
     .settings(Dependencies.kafka)
-    .dependsOn(testkit)
+    .dependsOn(testkit % Test)
     .dependsOn(core)
     .disablePlugins(CiReleasePlugin)
 
