@@ -88,7 +88,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
   // local single-node lightweight database with h2
-  "com.h2database" % "h2" % "2.2.224",
+  "com.h2database" % "h2" % "2.3.230",
   "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE",
   // 3. Querying or projecting data from Akka Persistence
   "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion,
