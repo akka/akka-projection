@@ -13,6 +13,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.pattern.StatusReply
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.ReplicaId
+import akka.persistence.typed.crdt.ORSet
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.scaladsl.ReplicationContext
@@ -45,6 +46,22 @@ import akka.serialization.jackson.CborSerializable
  */
 object ShoppingCart {
 
+  final case class Item(itemId: String, quantity: Int)
+
+  final case class RuntimeState(
+    items: ORSet[Item],
+    closed: Set[ReplicaId],
+    checkedOut: Option[Instant],
+    vipCustomer: Boolean)
+    extends CborSerializable {
+
+    def foo(oldState: State, newState: State): RuntimeState ={
+      val newItems = newState.items.diff(oldState.items)
+      items.+()
+    }
+
+  }
+
   /**
    * The current state held by the `EventSourcedBehavior`.
    */
@@ -52,7 +69,7 @@ object ShoppingCart {
   //#stateUpdateItem
   //#stateVipCustomer
   final case class State(
-      items: Map[String, Int],
+      items: Set[Item],
       closed: Set[ReplicaId],
       checkedOut: Option[Instant],
       vipCustomer: Boolean)
@@ -65,8 +82,11 @@ object ShoppingCart {
       closed.nonEmpty
 
     //#stateUpdateItem
-    def updateItem(itemId: String, quantity: Int): State =
-      copy(items = items + (itemId -> (items.getOrElse(itemId, 0) + quantity)))
+    def updateItem(itemId: String, quantity: Int): State = {
+      val existing = items.find(_.itemId == itemId).getOrElse(Item(itemId, 0))
+      val newItem = existing.copy(quantity = existing.quantity + quantity)
+      copy(items = items.filterNot(_.itemId == itemId) + newItem)
+    }
     //#stateUpdateItem
 
     def markCustomerVip(): State =
@@ -83,13 +103,13 @@ object ShoppingCart {
 
     def toSummary: Summary = {
       val cartItems = items.collect {
-        case (id, quantity) if quantity > 0 => id -> quantity
+        case Item(id, quantity) if quantity > 0 => id -> quantity
       }
       Summary(cartItems, isClosed)
     }
 
     def totalQuantity: Int =
-      items.valuesIterator.sum
+      items.iterator.map(_.quantity).sum
 
     //#stateVipCustomer
 
@@ -107,7 +127,7 @@ object ShoppingCart {
   }
 
   object State {
-    val empty: State = State(items = Map.empty, closed = Set.empty, checkedOut = None, vipCustomer = false)
+    val empty: State = State(items = Set.empty, closed = Set.empty, checkedOut = None, vipCustomer = false)
   }
 
   /**
