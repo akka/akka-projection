@@ -1,7 +1,7 @@
 version: '2.2'
 services:
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-22.04
     container_name: sqlserver-db
     environment:
       - MSSQL_SA_PASSWORD=<YourStrong@Passw0rd>
