@@ -94,7 +94,7 @@ jobs:
 
       - name: Start DB
         run: |-
-          docker-compose -f docker-files/docker-compose-yugabyte.yml up -d
+          docker compose -f docker-files/docker-compose-yugabyte.yml up -d
           # TODO: could we poll the port instead of sleep?
           sleep 10
           docker exec -i yb-tserver-n1 /home/yugabyte/bin/ysqlsh -h yb-tserver-n1 -t < akka-projection-r2dbc/ddl-scripts/create_tables_yugabyte.sql
