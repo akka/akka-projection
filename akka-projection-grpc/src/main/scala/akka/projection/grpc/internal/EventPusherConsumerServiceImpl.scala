@@ -36,10 +36,12 @@ import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import io.grpc.Status
 import org.slf4j.LoggerFactory
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
+
+import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
+import akka.projection.grpc.replication.internal.NoEnvelopeEntityRef
 
 /**
  * INTERNAL API
@@ -88,9 +90,20 @@ private[akka] object EventPusherConsumerServiceImpl {
                   if (fillSequenceNumberGaps)
                     throw new IllegalArgumentException(
                       s"fillSequenceNumberGaps can not be true for RES (pid ${envelope.persistenceId}, seq nr ${envelope.sequenceNr} from ${replicationId}")
-                  val entityRef = sharding
-                    .entityRefFor(replicationSettings.entityTypeKey, destinationReplicaId.entityId)
-                    .asInstanceOf[EntityRef[PublishedEvent]]
+
+                  val entityRef =
+                    if (replicationSettings.configureEntityWithoutEnvelope.isEmpty) {
+                      sharding
+                        .entityRefFor(replicationSettings.entityTypeKey, destinationReplicaId.entityId)
+                        .asInstanceOf[EntityRef[PublishedEvent]]
+                    } else {
+                      new NoEnvelopeEntityRef[PublishedEvent](
+                        replicationSettings.entityTypeKey.asInstanceOf[EntityTypeKey[PublishedEvent]],
+                        dataCenter = None, // FIXME we don't have access to the Entity here
+                        shardRegion = ??? // FIXME would also be difficult to access
+                      )(system.scheduler)
+                    }
+
                   val ask = { () =>
                     log.trace(
                       "Passing event [{}] for pid [{}] to replicated entity",

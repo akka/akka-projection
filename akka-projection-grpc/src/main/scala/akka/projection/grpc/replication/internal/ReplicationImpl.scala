@@ -48,11 +48,13 @@ import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.actor.typed.ActorRef
 
 /**
  * INTERNAL API
@@ -103,10 +105,21 @@ private[akka] object ReplicationImpl {
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
 
     val sharding = ClusterSharding(system)
-    sharding.init(replicatedEntity.entity)
+    val shardRegion = sharding.init(replicatedEntity.entity)
 
     // sharded daemon process for consuming event stream from the other replicas
-    val entityRefFactory: String => EntityRef[Command] = sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
+    // sends events over cluster sharding to the entities
+    val entityRefFactory: String => EntityRef[Command] =
+      if (settings.configureEntityWithoutEnvelope.isEmpty) { entityId: String =>
+        sharding.entityRefFor(replicatedEntity.entity.typeKey, entityId)
+      } else { _: String =>
+        new NoEnvelopeEntityRef[Command](
+          replicatedEntity.entity.typeKey,
+          replicatedEntity.entity.dataCenter,
+          shardRegion.asInstanceOf[ActorRef[Command]] // it's not really ShardEnvelope[Command]
+        )(system.scheduler)
+      }
+
     settings.otherReplicas.foreach(startConsumer(_, settings, entityRefFactory))
 
     if (settings.acceptEdgeReplication) {
@@ -289,15 +302,24 @@ private[akka] object ReplicationImpl {
       implicit system: ActorSystem[_]): EdgeReplication[Command] = {
 
     val sharding = ClusterSharding(system)
-    sharding.init(replicatedEntity.entity)
+    val shardRegion = sharding.init(replicatedEntity.entity)
 
     if (settings.initialConsumerFilter.nonEmpty) {
       ConsumerFilter(system).ref ! ConsumerFilter.UpdateFilter(settings.streamId, settings.initialConsumerFilter)
     }
 
     // sharded daemon process for consuming event stream from the other replicas
+    // sends events over cluster sharding to the entities
     val shardingEntityRefFactory: String => EntityRef[Command] =
-      sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
+      if (settings.configureEntityWithoutEnvelope.isEmpty) { entityId: String =>
+        sharding.entityRefFor(replicatedEntity.entity.typeKey, entityId)
+      } else { _: String =>
+        new NoEnvelopeEntityRef[Command](
+          replicatedEntity.entity.typeKey,
+          replicatedEntity.entity.dataCenter,
+          shardRegion.asInstanceOf[ActorRef[Command]] // it's not really ShardEnvelope[Command]
+        )(system.scheduler)
+      }
 
     settings.otherReplicas.foreach { remoteReplica =>
       log.infoN(

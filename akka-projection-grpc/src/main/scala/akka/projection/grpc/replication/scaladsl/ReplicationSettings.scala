@@ -7,6 +7,7 @@ package akka.projection.grpc.replication.scaladsl
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
+
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.cluster.sharding.typed.ShardingEnvelope
@@ -24,8 +25,9 @@ import akka.projection.grpc.replication.scaladsl
 import akka.util.JavaDurationConverters._
 import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.Config
-
 import scala.concurrent.duration.DurationInt
+
+import akka.cluster.sharding.typed.HashCodeMessageExtractor
 
 object ReplicationSettings {
 
@@ -85,6 +87,7 @@ object ReplicationSettings {
       projectionProvider = replicationProjectionProvider,
       eventProducerInterceptor = None,
       configureEntity = identity,
+      configureEntityWithoutEnvelope = None,
       acceptEdgeReplication = false,
       producerFilter = _ => true,
       initialConsumerFilter = Vector.empty,
@@ -147,6 +150,7 @@ object ReplicationSettings {
       eventProducerInterceptor = None,
       acceptEdgeReplication = replicationConfig.getBoolean("accept-edge-replication"),
       configureEntity = identity,
+      configureEntityWithoutEnvelope = None,
       producerFilter = _ => true,
       initialConsumerFilter = Vector.empty,
       edgeReplicationDeliveryRetries = replicationConfig.getInt("edge-replication-delivery-retries"),
@@ -173,6 +177,7 @@ final class ReplicationSettings[Command] private (
     val eventProducerInterceptor: Option[EventProducerInterceptor],
     val acceptEdgeReplication: Boolean,
     val configureEntity: Entity[Command, ShardingEnvelope[Command]] => Entity[Command, ShardingEnvelope[Command]],
+    val configureEntityWithoutEnvelope: Option[Entity[Command, Command] => Entity[Command, Command]],
     val producerFilter: EventEnvelope[Any] => Boolean,
     val initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria],
     val edgeReplicationDeliveryRetries: Int,
@@ -236,7 +241,29 @@ final class ReplicationSettings[Command] private (
   def configureEntity(
       configure: Entity[Command, ShardingEnvelope[Command]] => Entity[Command, ShardingEnvelope[Command]])
       : ReplicationSettings[Command] =
-    copy(configureEntity = configure)
+    copy(configureEntity = configure, configureEntityWithoutEnvelope = None)
+
+  /**
+   * Allows for changing the settings of the replicated entity when ShardingEnvelope isn't used,
+   * such as messageExtractor, stop message, passivation strategy etc.
+   */
+  def configureEntityWithoutEnvelope(
+      configure: Entity[Command, Command] => Entity[Command, Command]): ReplicationSettings[Command] = {
+    val configureWithValidaiton: Entity[Command, Command] => Entity[Command, Command] = { entity =>
+      val newEntity = configure(entity)
+      if (newEntity.messageExtractor.isEmpty)
+        throw new IllegalArgumentException(
+          "messageExtractor isn't defined, default is using ShardingEnvelope " +
+          "and should not be used with configureEntityWithoutEnvelope")
+      if (newEntity.messageExtractor.exists(_.isInstanceOf[HashCodeMessageExtractor[_]]))
+        throw new IllegalArgumentException(
+          "HashCodeMessageExtractor is using ShardingEnvelope " +
+          "and should not be used with configureEntityWithoutEnvelope")
+      newEntity
+    }
+
+    copy(configureEntity = identity, configureEntityWithoutEnvelope = Some(configureWithValidaiton))
+  }
 
   /**
    * Filter events matching the `producerFilter` predicate, for example based on tags.
@@ -288,6 +315,8 @@ final class ReplicationSettings[Command] private (
       producerInterceptor: Option[EventProducerInterceptor] = eventProducerInterceptor,
       configureEntity: Entity[Command, ShardingEnvelope[Command]] => Entity[Command, ShardingEnvelope[Command]] =
         configureEntity,
+      configureEntityWithoutEnvelope: Option[Entity[Command, Command] => Entity[Command, Command]] =
+        configureEntityWithoutEnvelope,
       producerFilter: EventEnvelope[Any] => Boolean = producerFilter,
       initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria] = initialConsumerFilter,
       edgeReplicationDeliveryRetries: Int = edgeReplicationDeliveryRetries,
@@ -305,6 +334,7 @@ final class ReplicationSettings[Command] private (
       producerInterceptor,
       edgeReplication,
       configureEntity,
+      configureEntityWithoutEnvelope,
       producerFilter,
       initialConsumerFilter,
       edgeReplicationDeliveryRetries,
