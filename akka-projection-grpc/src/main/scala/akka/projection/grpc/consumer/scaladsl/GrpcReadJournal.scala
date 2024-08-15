@@ -17,7 +17,6 @@ import akka.grpc.scaladsl.SingleResponseRequestBuilder
 import akka.grpc.scaladsl.StreamResponseRequestBuilder
 import akka.grpc.scaladsl.StringEntry
 import akka.persistence.Persistence
-import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.scaladsl._
@@ -32,7 +31,6 @@ import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilder
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.ProtobufProtocolConversions
-import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.Event
 import akka.projection.grpc.internal.proto.EventProducerServiceClient
 import akka.projection.grpc.internal.proto.EventTimestampRequest
@@ -50,7 +48,6 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import com.google.protobuf.Descriptors
-import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
 import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
@@ -66,6 +63,7 @@ import scala.concurrent.Future
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
+
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
 
@@ -289,20 +287,7 @@ final class GrpcReadJournal private (
       minSlice <= slice && slice <= maxSlice
     }
 
-    val protoOffset =
-      offset match {
-        case o: TimestampOffset =>
-          val protoTimestamp = Timestamp(o.timestamp)
-          val protoSeen = o.seen.iterator.map {
-            case (pid, seqNr) =>
-              PersistenceIdSeqNr(pid, seqNr)
-          }.toSeq
-          Some(proto.Offset(Some(protoTimestamp), protoSeen))
-        case NoOffset =>
-          None
-        case _ =>
-          throw new IllegalArgumentException(s"Expected TimestampOffset or NoOffset, but got [$offset]")
-      }
+    val protoOffset = offsetToProtoOffset(offset)
 
     def inReqSource(initCriteria: immutable.Seq[ConsumerFilter.FilterCriteria]): Source[StreamIn, NotUsed] =
       Source

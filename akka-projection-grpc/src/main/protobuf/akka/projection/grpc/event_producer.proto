@@ -206,11 +206,18 @@ message Offset {
   // If empty it is assumed to be the persistence_id -> seq_nr of enclosing Event
   // or FilteredEvent.
   repeated PersistenceIdSeqNr seen = 2;
+  // Offsets by slice. If this is being used, then other offset fields will be empty.
+  repeated OffsetBySlice offsetsBySlice = 3;
 }
 
 message PersistenceIdSeqNr {
   string persistence_id = 1;
   int64 seq_nr = 2;
+}
+
+message OffsetBySlice {
+  int32 slice = 1;
+  Offset offset = 2;
 }
 
 // Used for Replicated Event Sourcing to filter events based on origin.

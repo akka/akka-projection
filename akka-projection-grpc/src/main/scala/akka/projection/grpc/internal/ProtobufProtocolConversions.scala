@@ -8,6 +8,7 @@ import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
+import akka.persistence.query.TimestampOffsetBySlice
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.consumer.ConsumerFilter
@@ -52,28 +53,49 @@ private[akka] object ProtobufProtocolConversions {
     offset match {
       case None => NoOffset
       case Some(o) =>
-        val timestamp =
-          o.timestamp.map(_.asJavaInstant).getOrElse(Instant.EPOCH)
-        val seen = o.seen.map {
-          case PersistenceIdSeqNr(pid, seqNr, _) =>
-            pid -> seqNr
-        }.toMap
-        TimestampOffset(timestamp, seen)
+        if (o.offsetsBySlice.nonEmpty) {
+          val offsets = o.offsetsBySlice.flatMap { offsetBySlice =>
+            offsetBySlice.offset.map(protocolOffsetToTimestampOffset).map(offsetBySlice.slice.->)
+          }
+          TimestampOffsetBySlice(offsets.toMap)
+        } else {
+          protocolOffsetToTimestampOffset(o)
+        }
     }
+
+  private def protocolOffsetToTimestampOffset(offset: proto.Offset): TimestampOffset = {
+    val timestamp =
+      offset.timestamp.map(_.asJavaInstant).getOrElse(Instant.EPOCH)
+    val seen = offset.seen.map {
+      case PersistenceIdSeqNr(pid, seqNr, _) =>
+        pid -> seqNr
+    }.toMap
+    TimestampOffset(timestamp, seen)
+  }
 
   def offsetToProtoOffset(offset: Offset): Option[proto.Offset] = {
     offset match {
-      case TimestampOffset(timestamp, _, seen) =>
-        val protoTimestamp = Timestamp(timestamp)
-        val protoSeen = seen.iterator.map {
-          case (pid, seqNr) =>
-            PersistenceIdSeqNr(pid, seqNr)
-        }.toSeq
-        Some(proto.Offset(Some(protoTimestamp), protoSeen))
+      case timestampOffset: TimestampOffset =>
+        Some(timestampOffsetToProtoOffset(timestampOffset))
+      case TimestampOffsetBySlice(offsets) =>
+        val offsetsBySlice = offsets.toSeq.map {
+          case (slice, timestampOffset) =>
+            proto.OffsetBySlice(slice, Some(timestampOffsetToProtoOffset(timestampOffset)))
+        }
+        Some(proto.Offset(offsetsBySlice = offsetsBySlice))
       case NoOffset => None
       case other =>
         throw new IllegalArgumentException(s"Unexpected offset type [$other]")
     }
+  }
+
+  private def timestampOffsetToProtoOffset(offset: TimestampOffset): proto.Offset = {
+    val protoTimestamp = Timestamp(offset.timestamp)
+    val protoSeen = offset.seen.iterator.map {
+      case (pid, seqNr) =>
+        PersistenceIdSeqNr(pid, seqNr)
+    }.toSeq
+    proto.Offset(Some(protoTimestamp), protoSeen)
   }
 
   def transformAndEncodeEvent(
