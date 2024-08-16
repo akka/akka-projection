@@ -279,7 +279,7 @@ class EventProducerServiceSpec
 
   "EventProducerService" must {
     "emit events" in {
-      val initReq = InitReq(streamId1, 0, 1023, offset = None)
+      val initReq = InitReq(streamId1, 0, 1023, offset = Seq.empty)
       val streamIn = Source
         .single(StreamIn(StreamIn.Message.Init(initReq)))
         .concat(Source.maybe)
@@ -306,7 +306,7 @@ class EventProducerServiceSpec
     }
 
     "emit filtered events" in {
-      val initReq = InitReq(streamId2, 0, 1023, offset = None)
+      val initReq = InitReq(streamId2, 0, 1023, offset = Seq.empty)
       val streamIn = Source
         .single(StreamIn(StreamIn.Message.Init(initReq)))
         .concat(Source.maybe)
@@ -375,7 +375,7 @@ class EventProducerServiceSpec
       val directStreamIdFail = interceptedProducerService
         .eventsBySlices(
           Source
-            .single(StreamIn(StreamIn.Message.Init(InitReq("nono-direct", 0, 1023, offset = None)))),
+            .single(StreamIn(StreamIn.Message.Init(InitReq("nono-direct", 0, 1023, offset = Seq.empty)))),
           MetadataBuilder.empty)
         .runWith(Sink.head)
         .failed
@@ -385,7 +385,7 @@ class EventProducerServiceSpec
       val directMetaFail = interceptedProducerService
         .eventsBySlices(
           Source
-            .single(StreamIn(StreamIn.Message.Init(InitReq("ok", 0, 1023, offset = None)))),
+            .single(StreamIn(StreamIn.Message.Init(InitReq("ok", 0, 1023, offset = Seq.empty)))),
           new MetadataBuilder().addText("nono-meta-direct", "value").build())
         .runWith(Sink.head)
         .failed
@@ -395,7 +395,7 @@ class EventProducerServiceSpec
       val asyncStreamFail = interceptedProducerService
         .eventsBySlices(
           Source
-            .single(StreamIn(StreamIn.Message.Init(InitReq("nono-async", 0, 1023, offset = None)))),
+            .single(StreamIn(StreamIn.Message.Init(InitReq("nono-async", 0, 1023, offset = Seq.empty)))),
           MetadataBuilder.empty)
         .runWith(Sink.head)
         .failed
@@ -405,7 +405,7 @@ class EventProducerServiceSpec
       val passThrough = interceptedProducerService
         .eventsBySlices(
           Source
-            .single(StreamIn(StreamIn.Message.Init(InitReq("ok", 0, 1023, offset = None)))),
+            .single(StreamIn(StreamIn.Message.Init(InitReq("ok", 0, 1023, offset = Seq.empty)))),
           MetadataBuilder.empty)
         .runWith(Sink.head)
         .failed
@@ -427,7 +427,7 @@ class EventProducerServiceSpec
 
     "replay events" in {
       val persistenceId = nextPid(entityType3)
-      val initReq = InitReq(streamId3, 0, 1023, offset = None)
+      val initReq = InitReq(streamId3, 0, 1023, offset = Seq.empty)
       val replayReq = ReplayReq(replayPersistenceIds =
         List(ReplayPersistenceId(Some(PersistenceIdSeqNr(persistenceId.id, 2L)), filterAfterSeqNr = Long.MaxValue)))
       val streamIn =
@@ -456,7 +456,7 @@ class EventProducerServiceSpec
     }
 
     "emit events StartingFromSnapshots" in {
-      val initReq = InitReq(streamId4, 0, 1023, offset = None)
+      val initReq = InitReq(streamId4, 0, 1023, offset = Seq.empty)
       val streamIn = Source
         .single(StreamIn(StreamIn.Message.Init(initReq)))
         .concat(Source.maybe)
@@ -489,7 +489,7 @@ class EventProducerServiceSpec
 
     "replay events StartingFromSnapshots" in {
       val persistenceId = nextPid(entityType5)
-      val initReq = InitReq(streamId5, 0, 1023, offset = None)
+      val initReq = InitReq(streamId5, 0, 1023, offset = Seq.empty)
       val replayReq = ReplayReq(replayPersistenceIds =
         List(ReplayPersistenceId(Some(PersistenceIdSeqNr(persistenceId.id, 1L)), filterAfterSeqNr = Long.MaxValue)))
       val streamIn =
@@ -525,7 +525,7 @@ class EventProducerServiceSpec
 
     "filter based on event origin" in {
       val replicaInfo = ReplicaInfo("replica2", List("replica1", "replica3"))
-      val initReq = InitReq(streamId6, 0, 1023, offset = None, replicaInfo = Some(replicaInfo))
+      val initReq = InitReq(streamId6, 0, 1023, offset = Seq.empty, replicaInfo = Some(replicaInfo))
       val streamIn = Source
         .single(StreamIn(StreamIn.Message.Init(initReq)))
         .concat(Source.maybe)

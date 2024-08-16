@@ -49,18 +49,15 @@ import scala.util.Success
 @InternalApi
 private[akka] object ProtobufProtocolConversions {
 
-  def protocolOffsetToOffset(offset: Option[proto.Offset]): Offset =
-    offset match {
-      case None => NoOffset
-      case Some(o) =>
-        if (o.offsetsBySlice.nonEmpty) {
-          val offsets = o.offsetsBySlice.flatMap { offsetBySlice =>
-            offsetBySlice.offset.map(offset => offsetBySlice.slice -> protocolOffsetToTimestampOffset(offset))
-          }
-          TimestampOffsetBySlice(offsets.toMap)
-        } else {
-          protocolOffsetToTimestampOffset(o)
-        }
+  def protocolOffsetToOffset(offsets: Seq[proto.Offset]): Offset =
+    if (offsets.isEmpty) NoOffset
+    else if (offsets.exists(_.slice.isDefined)) {
+      val offsetBySlice = offsets.flatMap { offset =>
+        offset.slice.map { _ -> protocolOffsetToTimestampOffset(offset) }
+      }.toMap
+      TimestampOffsetBySlice(offsetBySlice)
+    } else {
+      protocolOffsetToTimestampOffset(offsets.head)
     }
 
   private def protocolOffsetToTimestampOffset(offset: proto.Offset): TimestampOffset = {
@@ -81,29 +78,28 @@ private[akka] object ProtobufProtocolConversions {
     TimestampOffset(timestamp, seen)
   }
 
-  def offsetToProtoOffset(offset: Offset): Option[proto.Offset] = {
+  def offsetToProtoOffset(offset: Offset): Seq[proto.Offset] = {
     offset match {
       case timestampOffset: TimestampOffset =>
-        Some(timestampOffsetToProtoOffset(timestampOffset))
+        Seq(timestampOffsetToProtoOffset(timestampOffset))
       case TimestampOffsetBySlice(offsets) =>
-        val offsetsBySlice = offsets.iterator.map {
+        offsets.iterator.map {
           case (slice, timestampOffset) =>
-            proto.OffsetBySlice(slice, Some(timestampOffsetToProtoOffset(timestampOffset)))
+            timestampOffsetToProtoOffset(timestampOffset, Some(slice))
         }.toSeq
-        Some(proto.Offset(offsetsBySlice = offsetsBySlice))
-      case NoOffset => None
+      case NoOffset => Seq.empty
       case other =>
         throw new IllegalArgumentException(s"Unexpected offset type [$other]")
     }
   }
 
-  private def timestampOffsetToProtoOffset(offset: TimestampOffset): proto.Offset = {
+  private def timestampOffsetToProtoOffset(offset: TimestampOffset, slice: Option[Int] = None): proto.Offset = {
     val protoTimestamp = Timestamp(offset.timestamp)
     val protoSeen = offset.seen.iterator.map {
       case (pid, seqNr) =>
         PersistenceIdSeqNr(pid, seqNr)
     }.toSeq
-    proto.Offset(Some(protoTimestamp), protoSeen)
+    proto.Offset(Some(protoTimestamp), protoSeen, slice)
   }
 
   def transformAndEncodeEvent(

@@ -388,7 +388,7 @@ final class GrpcReadJournal private (
             clientSettings.serviceName,
             event.persistenceId,
             event.seqNr,
-            timestampOffset(event.offset.get).timestamp,
+            timestampOffset(event.offset.head).timestamp,
             event.source)
 
         eventToEnvelope(event, streamId)
@@ -400,7 +400,7 @@ final class GrpcReadJournal private (
             clientSettings.serviceName,
             filteredEvent.persistenceId,
             filteredEvent.seqNr,
-            timestampOffset(filteredEvent.offset.get).timestamp,
+            timestampOffset(filteredEvent.offset.head).timestamp,
             filteredEvent.source)
 
         filteredEventToEnvelope(filteredEvent, streamId)
@@ -420,7 +420,7 @@ final class GrpcReadJournal private (
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {
-    val eventOffset = timestampOffset(filteredEvent.offset.get)
+    val eventOffset = timestampOffset(filteredEvent.offset.head)
     new EventEnvelope(
       eventOffset,
       filteredEvent.persistenceId,
