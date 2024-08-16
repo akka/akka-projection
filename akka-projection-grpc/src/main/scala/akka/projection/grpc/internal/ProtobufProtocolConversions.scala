@@ -55,7 +55,7 @@ private[akka] object ProtobufProtocolConversions {
       case Some(o) =>
         if (o.offsetsBySlice.nonEmpty) {
           val offsets = o.offsetsBySlice.flatMap { offsetBySlice =>
-            offsetBySlice.offset.map(protocolOffsetToTimestampOffset).map(offsetBySlice.slice.->)
+            offsetBySlice.offset.map(offset => offsetBySlice.slice -> protocolOffsetToTimestampOffset(offset))
           }
           TimestampOffsetBySlice(offsets.toMap)
         } else {
@@ -64,12 +64,20 @@ private[akka] object ProtobufProtocolConversions {
     }
 
   private def protocolOffsetToTimestampOffset(offset: proto.Offset): TimestampOffset = {
-    val timestamp =
-      offset.timestamp.map(_.asJavaInstant).getOrElse(Instant.EPOCH)
-    val seen = offset.seen.map {
-      case PersistenceIdSeqNr(pid, seqNr, _) =>
-        pid -> seqNr
-    }.toMap
+    val timestamp = offset.timestamp match {
+      case Some(ts) => ts.asJavaInstant
+      case None     => Instant.EPOCH
+    }
+    // optimised for the expected normal case of one element
+    val seen = if (offset.seen.size == 1) {
+      Map(offset.seen.head.persistenceId -> offset.seen.head.seqNr)
+    } else if (offset.seen.nonEmpty) {
+      offset.seen.map {
+        case PersistenceIdSeqNr(pid, seqNr, _) => pid -> seqNr
+      }.toMap
+    } else {
+      Map.empty[String, Long]
+    }
     TimestampOffset(timestamp, seen)
   }
 
@@ -78,10 +86,10 @@ private[akka] object ProtobufProtocolConversions {
       case timestampOffset: TimestampOffset =>
         Some(timestampOffsetToProtoOffset(timestampOffset))
       case TimestampOffsetBySlice(offsets) =>
-        val offsetsBySlice = offsets.toSeq.map {
+        val offsetsBySlice = offsets.iterator.map {
           case (slice, timestampOffset) =>
             proto.OffsetBySlice(slice, Some(timestampOffsetToProtoOffset(timestampOffset)))
-        }
+        }.toSeq
         Some(proto.Offset(offsetsBySlice = offsetsBySlice))
       case NoOffset => None
       case other =>
