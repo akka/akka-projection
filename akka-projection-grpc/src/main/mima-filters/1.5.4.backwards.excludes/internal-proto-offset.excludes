@@ -1,0 +1,2 @@
+# Internal protocol updated for TimestampOffsetBySlice
+ProblemFilters.exclude[Problem]("akka.projection.grpc.internal.proto.*")

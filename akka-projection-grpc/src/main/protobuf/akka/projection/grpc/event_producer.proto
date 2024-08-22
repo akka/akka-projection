@@ -62,7 +62,10 @@ message InitReq {
   int32 slice_min = 2;
   int32 slice_max = 3;
   // start from this offset
-  Offset offset = 4;
+  // if empty, then NoOffset
+  // if single and no slice defined, then TimestampOffset
+  // if any and slice defined, then TimestampOffsetBySlice
+  repeated Offset offset = 4;
   // consumer defined event filters
   repeated FilterCriteria filter = 5;
   ReplicaInfo replica_info = 6;
@@ -206,6 +209,8 @@ message Offset {
   // If empty it is assumed to be the persistence_id -> seq_nr of enclosing Event
   // or FilteredEvent.
   repeated PersistenceIdSeqNr seen = 2;
+  // If defined then using offsets by slice.
+  optional int32 slice = 3;
 }
 
 message PersistenceIdSeqNr {
@@ -242,7 +247,7 @@ message Event {
   string persistence_id = 1;
   int64 seq_nr = 2;
   int32 slice = 3;
-  Offset offset = 4;
+  repeated Offset offset = 4;
   // The event payload may be serialized as Protobuf message when the type_url
   // prefix is `type.googleapis.com/` or with Akka serialization when the type_url
   // prefix `ser.akka.io/`. For Akka serialization, the serializer id and manifest
@@ -264,7 +269,7 @@ message FilteredEvent {
   string persistence_id = 1;
   int64 seq_nr = 2;
   int32 slice = 3;
-  Offset offset = 4;
+  repeated Offset offset = 4;
   string source = 5;
 }
 
