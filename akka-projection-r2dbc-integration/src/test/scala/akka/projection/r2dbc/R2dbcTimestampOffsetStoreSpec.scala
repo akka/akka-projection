@@ -1113,18 +1113,25 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.readManagementState().futureValue shouldBe Some(ManagementState(paused = false))
     }
 
-    "start from earliest slice when projection key is changed" in {
-      val projectionId1 = ProjectionId(UUID.randomUUID().toString, "512-767")
-      val projectionId2 = ProjectionId(projectionId1.name, "768-1023")
-      val projectionId3 = ProjectionId(projectionId1.name, "512-1023")
+    "start from earliest slice range when projection key is changed" in {
+      val projectionId1 = ProjectionId(UUID.randomUUID().toString, "640-767")
+      val projectionId2 = ProjectionId(projectionId1.name, "512-767")
+      val projectionId3 = ProjectionId(projectionId1.name, "768-1023")
+      val projectionId4 = ProjectionId(projectionId1.name, "512-1023")
       val offsetStore1 = new R2dbcOffsetStore(
         projectionId1,
-        Some(new TestTimestampSourceProvider(512, 767, clock)),
+        Some(new TestTimestampSourceProvider(640, 767, clock)),
         system,
         settings,
         r2dbcExecutor)
       val offsetStore2 = new R2dbcOffsetStore(
         projectionId2,
+        Some(new TestTimestampSourceProvider(512, 767, clock)),
+        system,
+        settings,
+        r2dbcExecutor)
+      val offsetStore3 = new R2dbcOffsetStore(
+        projectionId3,
         Some(new TestTimestampSourceProvider(768, 1023, clock)),
         system,
         settings,
@@ -1137,32 +1144,32 @@ class R2dbcTimestampOffsetStoreSpec
 
       val time1 = TestClock.nowMicros().instant()
       val time2 = time1.plusSeconds(1)
-      val time3 = time1.plusSeconds(2)
+      val time3a = time1.minusSeconds(5 * 60) // furthest behind, previous projection key
+      val time3b = time1.minusSeconds(3 * 60) // far behind
       val time4 = time1.plusSeconds(3 * 60) // far ahead
 
-      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time1, Map(p1 -> 1L)), p1, 1L)).futureValue
-      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time2, Map(p2 -> 1L)), p2, 1L)).futureValue
-      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time3, Map(p3 -> 1L)), p3, 1L)).futureValue
-      offsetStore2
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(time4, Map(p4 -> 1L)), p4, 1L))
-        .futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time1, Map(p1 -> 1L)), p1, 1L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time2, Map(p2 -> 1L)), p2, 1L)).futureValue
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time3a, Map(p3 -> 1L)), p3, 1L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time3b, Map(p3 -> 2L)), p3, 2L)).futureValue
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time4, Map(p4 -> 1L)), p4, 1L)).futureValue
 
       // after downscaling
-      val offsetStore3 = new R2dbcOffsetStore(
-        projectionId3,
+      val offsetStore4 = new R2dbcOffsetStore(
+        projectionId4,
         Some(new TestTimestampSourceProvider(512, 1023, clock)),
         system,
         settings,
         r2dbcExecutor)
 
-      val offset = TimestampOffset.toTimestampOffset(offsetStore3.readOffset().futureValue.get) // this will load from database
-      offsetStore3.getState().size shouldBe 4
+      val offset = TimestampOffset.toTimestampOffset(offsetStore4.readOffset().futureValue.get) // this will load from database
+      offsetStore4.getState().size shouldBe 4
 
       offset.timestamp shouldBe time2
       offset.seen shouldBe Map(p2 -> 1L)
 
       // getOffset is used by management api, and that should not be adjusted
-      TimestampOffset.toTimestampOffset(offsetStore3.getOffset().futureValue.get).timestamp shouldBe time4
+      TimestampOffset.toTimestampOffset(offsetStore4.getOffset().futureValue.get).timestamp shouldBe time4
     }
 
   }

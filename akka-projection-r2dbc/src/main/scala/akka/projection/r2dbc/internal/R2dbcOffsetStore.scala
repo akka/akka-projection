@@ -310,11 +310,27 @@ private[projection] class R2dbcOffsetStore(
         // When downscaling projection instances (changing slice distribution) there
         // is a possibility that one of the previous projection instances was further behind than the backtracking
         // window, which would cause missed events if we started from latest. In that case we use the latest
-        // offset of the earliest slice
-        val latestBySlice = newState.latestBySlice
-        val earliest = latestBySlice.minBy(_.timestamp)
-        // there could be other with same timestamp, but not important to reconstruct exactly the right `seen`
-        Some(TimestampOffset(earliest.timestamp, Map(earliest.pid -> earliest.seqNr)))
+        // offset of the earliest slice range (distinct projection key).
+        val latestBySliceWithKey = recordsWithKey
+          .groupBy(_.record.slice)
+          .map {
+            case (_, records) => records.maxBy(_.record.timestamp)
+          }
+          .toVector
+        // Only needed if there's more than one projection key within the latest offsets by slice.
+        // To handle restarts after previous downscaling, and all latest are from the same instance.
+        if (moreThanOneProjectionKey(latestBySliceWithKey)) {
+          // Use the earliest of the latest from each projection instance (distinct projection key).
+          val latestByKey =
+            latestBySliceWithKey.groupBy(_.projectionKey).map {
+              case (_, records) => records.maxBy(_.record.timestamp)
+            }
+          val earliest = latestByKey.minBy(_.record.timestamp).record
+          // there could be other with same timestamp, but not important to reconstruct exactly the right `seen`
+          Some(TimestampOffset(earliest.timestamp, Map(earliest.pid -> earliest.seqNr)))
+        } else {
+          newState.latestOffset
+        }
       } else {
         newState.latestOffset
       }
