@@ -723,7 +723,7 @@ private[projection] class R2dbcOffsetStore(
       Future.successful(0)
     } else {
       val currentState = getState()
-      if (currentState.size <= settings.keepNumberOfEntries || currentState.window.compareTo(settings.timeWindow) < 0) {
+      if (currentState.size <= settings.keepNumberOfEntries && currentState.window.compareTo(settings.timeWindow) < 0) {
         // it hasn't filled up the window yet
         Future.successful(0)
       } else {
