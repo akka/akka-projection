@@ -153,10 +153,9 @@ private[projection] object R2dbcOffsetStore {
     def evict(until: Instant, keepNumberOfEntries: Int): State = {
       if (oldestTimestamp.isBefore(until) && size > keepNumberOfEntries) {
         val newState = State(
-          sortedByTimestamp
-            .take(size - keepNumberOfEntries)
-            .filterNot(_.timestamp.isBefore(until)) ++ sortedByTimestamp
-            .takeRight(keepNumberOfEntries) ++ latestBySlice)
+          sortedByTimestamp.take(size - keepNumberOfEntries).filterNot(_.timestamp.isBefore(until))
+          ++ sortedByTimestamp.takeRight(keepNumberOfEntries)
+          ++ latestBySlice)
         newState.copy(sizeAfterEvict = newState.size)
       } else
         this

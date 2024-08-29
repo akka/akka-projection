@@ -1054,6 +1054,215 @@ class R2dbcTimestampOffsetStoreSpec
       }
     }
 
+    "delete old records triggered by time window, while still within entries limit" in {
+      val projectionId = genRandomProjectionId()
+      val evictSettings = settings
+        .withKeepNumberOfEntries(10)
+        .withTimeWindow(JDuration.ofSeconds(100))
+        .withEvictInterval(JDuration.ofSeconds(10))
+      val offsetStore = createOffsetStore(projectionId, evictSettings)
+
+      import evictSettings.{ evictInterval, timeWindow }
+
+      val t0 = TestClock.nowMicros().instant()
+      log.debug("Start time [{}]", t0)
+
+      val p1 = "p500" // slice 645
+      val p2 = "p92" // slice 905
+      val p3 = "p108" // slice 905
+      val p4 = "p863" // slice 645
+      val p5 = "p984" // slice 645
+      val p6 = "p3080" // slice 645
+      val p7 = "p4290" // slice 645
+      val p8 = "p20180" // slice 645
+
+      val t1 = t0.plusSeconds(1)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t1, Map(p1 -> 1L)), p1, 1L)).futureValue
+
+      val t2 = t0.plusSeconds(2)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t2, Map(p2 -> 1L)), p2, 1L)).futureValue
+
+      val t3 = t0.plusSeconds(3)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t3, Map(p3 -> 1L)), p3, 1L)).futureValue
+
+      val t4 = t0.plus(evictInterval).plusSeconds(1)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t4, Map(p4 -> 1L)), p4, 1L)).futureValue
+
+      val t5 = t0.plus(evictInterval).plusSeconds(2)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t5, Map(p5 -> 1L)), p5, 1L)).futureValue
+
+      val t6 = t0.plus(evictInterval).plusSeconds(3)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t6, Map(p6 -> 1L)), p6, 1L)).futureValue
+
+      offsetStore.getState().size shouldBe 6
+
+      val t7 = t0.plus(timeWindow.minusSeconds(10))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t7, Map(p7 -> 1L)), p7, 1L)).futureValue
+
+      offsetStore.getState().size shouldBe 7 // no eviction
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion (within time window)
+
+      val t8 = t0.plus(timeWindow.plus(evictInterval).minusSeconds(3))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t8, Map(p8 -> 1L)), p8, 1L)).futureValue
+
+      offsetStore.getState().size shouldBe 8 // no eviction
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 2 // deleted t1|p1 and t2|p2, kept t3|p3 (latest)
+
+      val t9 = t0.plus(timeWindow.plus(evictInterval).plusSeconds(3))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t9, Map(p8 -> 2L)), p8, 2L)).futureValue
+
+      offsetStore.getState().size shouldBe 8 // no eviction (outside eviction window, but within keep-number-of-entries)
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 2 // deleted t4|p4 and t5|p5, kept t3|p3 (latest)
+
+      offsetStore.getState().byPid.keySet shouldBe Set(p1, p2, p3, p4, p5, p6, p7, p8)
+      offsetStore.readOffset().futureValue // reload from database
+      offsetStore.getState().byPid.keySet shouldBe Set(p3, p6, p7, p8)
+    }
+
+    "delete old records triggered by time window, after eviction, given old latest by slice" in {
+      val projectionId = genRandomProjectionId()
+      val evictSettings = settings
+        .withKeepNumberOfEntries(5)
+        .withTimeWindow(JDuration.ofSeconds(100))
+        .withEvictInterval(JDuration.ofSeconds(10))
+      val offsetStore = createOffsetStore(projectionId, evictSettings)
+
+      import evictSettings.{ evictInterval, timeWindow }
+
+      val t0 = TestClock.nowMicros().instant()
+      log.debug("Start time [{}]", t0)
+
+      val p1 = "p500" // slice 645
+      val p2 = "p92" // slice 905
+      val p3 = "p108" // slice 905
+      val p4 = "p863" // slice 645
+      val p5 = "p984" // slice 645
+      val p6 = "p3080" // slice 645
+      val p7 = "p4290" // slice 645
+      val p8 = "p20180" // slice 645
+
+      val t1 = t0.plusSeconds(1)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t1, Map(p1 -> 1L)), p1, 1L)).futureValue
+
+      val t2 = t0.plusSeconds(2)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t2, Map(p2 -> 1L)), p2, 1L)).futureValue
+
+      val t3 = t0.plusSeconds(3)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t3, Map(p3 -> 1L)), p3, 1L)).futureValue
+
+      val t4 = t0.plus(evictInterval).plusSeconds(1)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t4, Map(p4 -> 1L)), p4, 1L)).futureValue
+
+      val t5 = t0.plus(evictInterval).plusSeconds(2)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t5, Map(p5 -> 1L)), p5, 1L)).futureValue
+
+      val t6 = t0.plus(evictInterval).plusSeconds(3)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t6, Map(p6 -> 1L)), p6, 1L)).futureValue
+
+      offsetStore.getState().size shouldBe 6
+
+      val t7 = t0.plus(timeWindow.minusSeconds(10))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t7, Map(p7 -> 1L)), p7, 1L)).futureValue
+
+      offsetStore.getState().size shouldBe 7 // no eviction
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion (within time window)
+
+      val t8 = t0.plus(timeWindow.plus(evictInterval).minusSeconds(3))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t8, Map(p8 -> 1L)), p8, 1L)).futureValue
+
+      offsetStore.getState().size shouldBe 8 // no eviction
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 2 // deleted t1|p1 and t2|p2, kept t3|p3 (latest)
+
+      val t9 = t0.plus(timeWindow.plus(evictInterval).plusSeconds(3))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t9, Map(p8 -> 2L)), p8, 2L)).futureValue
+
+      offsetStore.getState().byPid.keySet shouldBe Set(p3, p4, p5, p6, p7, p8) // evicted t1|p1 and t2|p2
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 2 // deleted t4|p4 and t5|p5, kept t3|p3 (latest)
+
+      offsetStore.getState().byPid.keySet shouldBe Set(p3, p4, p5, p6, p7, p8)
+      offsetStore.readOffset().futureValue // reload from database
+      offsetStore.getState().byPid.keySet shouldBe Set(p3, p6, p7, p8)
+    }
+
+    "delete old records triggered by number of entries, after eviction, given new persistence ids" in {
+      val projectionId = genRandomProjectionId()
+      val evictSettings = settings
+        .withKeepNumberOfEntries(5)
+        .withTimeWindow(JDuration.ofSeconds(100))
+        .withEvictInterval(JDuration.ofSeconds(10))
+      val offsetStore = createOffsetStore(projectionId, evictSettings)
+
+      import evictSettings.{ evictInterval, timeWindow }
+
+      val t0 = TestClock.nowMicros().instant()
+      log.debug("Start time [{}]", t0)
+
+      // all slice 645
+      val p1 = "p500"
+      val p2 = "p621"
+      val p3 = "p742"
+      val p4 = "p863"
+      val p5 = "p984"
+      val p6 = "p3080"
+      val p7 = "p4290"
+      val p8 = "p20180"
+      val p9 = "p21390"
+
+      val t1 = t0.plusSeconds(1)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t1, Map(p1 -> 1L)), p1, 1L)).futureValue
+
+      val t2 = t0.plusSeconds(2)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t2, Map(p2 -> 1L)), p2, 1L)).futureValue
+
+      val t3 = t0.plusSeconds(3)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t3, Map(p3 -> 1L)), p3, 1L)).futureValue
+
+      val t4 = t0.plus(evictInterval).plusSeconds(7)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t4, Map(p4 -> 1L)), p4, 1L)).futureValue
+
+      val t5 = t0.plus(evictInterval).plusSeconds(8)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t5, Map(p5 -> 1L)), p5, 1L)).futureValue
+
+      val t6 = t0.plus(evictInterval).plusSeconds(9)
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t6, Map(p6 -> 1L)), p6, 1L)).futureValue
+
+      offsetStore.getState().size shouldBe 6
+
+      val t7 = t0.plus(timeWindow.minusSeconds(10))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t7, Map(p7 -> 1L)), p7, 1L)).futureValue
+
+      offsetStore.getState().size shouldBe 7 // no eviction
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion (within time window)
+
+      val t8 = t0.plus(timeWindow.plus(evictInterval).plusSeconds(3))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t8, Map(p8 -> 1L)), p8, 1L)).futureValue
+
+      offsetStore.getState().byPid.keySet shouldBe Set(p4, p5, p6, p7, p8) // evicted t1|p1, t2|p2, and t3|p3
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion, as already evicted older records
+
+      val t9 = t0.plus(timeWindow.plus(evictInterval).plusSeconds(4))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t9, Map(p7 -> 2L)), p7, 2L)).futureValue
+
+      offsetStore.getState().byPid.size shouldBe 5 // no eviction (within time window and limit)
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion (still within limit)
+
+      val t10 = t0.plus(timeWindow.plus(evictInterval).plusSeconds(5))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t10, Map(p8 -> 2L)), p8, 2L)).futureValue
+
+      offsetStore.getState().byPid.size shouldBe 5 // no eviction (within time window and limit)
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion (still within limit)
+
+      val t11 = t0.plus(timeWindow.plus(evictInterval).plusSeconds(6))
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t11, Map(p9 -> 1L)), p9, 1L)).futureValue // new pid
+
+      offsetStore.getState().byPid.size shouldBe 6 // no eviction (over limit but still within time window)
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 3 // deleted t1|p1, t2|p2, and t3|p3
+
+      offsetStore.getState().byPid.keySet shouldBe Set(p4, p5, p6, p7, p8, p9)
+      offsetStore.readOffset().futureValue // reload from database
+      offsetStore.getState().byPid.keySet shouldBe Set(p4, p5, p6, p7, p8, p9)
+    }
+
     "set offset" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
