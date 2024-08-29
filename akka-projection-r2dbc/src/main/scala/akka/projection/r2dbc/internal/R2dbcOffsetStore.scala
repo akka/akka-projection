@@ -240,6 +240,9 @@ private[projection] class R2dbcOffsetStore(
   // To avoid delete requests when no new offsets have been stored since previous delete
   private val idle = new AtomicBoolean(false)
 
+  // To trigger next deletion after in-memory eviction
+  private val triggerDeletion = new AtomicBoolean(false)
+
   system.scheduler.scheduleWithFixedDelay(
     settings.deleteInterval,
     settings.deleteInterval,
@@ -438,6 +441,7 @@ private[projection] class R2dbcOffsetStore(
               .compareTo(evictWindow) > 0) {
           val evictUntil = newState.latestTimestamp.minus(settings.timeWindow)
           val s = newState.evict(evictUntil, settings.keepNumberOfEntries)
+          triggerDeletion.set(true)
           logger.debugN(
             "Evicted [{}] records until [{}], keeping [{}] records. Latest [{}].",
             newState.size - s.size,
@@ -722,7 +726,7 @@ private[projection] class R2dbcOffsetStore(
       Future.successful(0)
     } else {
       val currentState = getState()
-      if (currentState.size <= settings.keepNumberOfEntries && currentState.window.compareTo(settings.timeWindow) < 0) {
+      if (!triggerDeletion.getAndSet(false) && currentState.window.compareTo(settings.timeWindow) < 0) {
         // it hasn't filled up the window yet
         Future.successful(0)
       } else {
