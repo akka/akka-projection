@@ -16,4 +16,4 @@ addSbtPlugin("com.lightbend.sbt" % "sbt-publish-rsync" % "0.3")
 addSbtPlugin("com.github.sbt" % "sbt-unidoc" % "0.5.0")
 addSbtPlugin("com.github.sbt" % "sbt-site-paradox" % "1.7.0")
 
-addSbtPlugin("com.typesafe" % "sbt-mima-plugin" % "1.1.3")
+addSbtPlugin("com.typesafe" % "sbt-mima-plugin" % "1.1.4")
