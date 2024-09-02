@@ -5,10 +5,12 @@
 package akka.projection.scaladsl
 
 import java.util.concurrent.ConcurrentHashMap
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration.FiniteDuration
+
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -20,14 +22,18 @@ import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.util.JavaDurationConverters._
 import akka.util.Timeout
-
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Instant
+
+import akka.projection.scaladsl.ProjectionManagement.UpdateTimestampOffset
 
 object ProjectionManagement extends ExtensionId[ProjectionManagement] {
   def createExtension(system: ActorSystem[_]): ProjectionManagement = new ProjectionManagement(system)
 
   def get(system: ActorSystem[_]): ProjectionManagement = apply(system)
+
+  final case class UpdateTimestampOffset(persistenceId: String, seqNr: Long, timestamp: Instant)
 }
 
 class ProjectionManagement(system: ActorSystem[_]) extends Extension {
@@ -98,6 +104,24 @@ class ProjectionManagement(system: ActorSystem[_]) extends Extension {
         .ask(replyTo => Topic.Publish(SetOffset(projectionId, offset, replyTo)))
     }
     retry(() => askSetOffset())
+  }
+
+  /**
+   * Update the stored `TimestampOffset` for the `projectionId` and restart the `Projection`.
+   * This can be useful if the projection was stuck with errors on a specific offset and should skip
+   * that offset and continue with next.
+   *
+   * Another use case is to populate the offset store with know starting points when enabling change events
+   * for Durable State. In that case the offset sequence number should be set to current Durable State
+   * revision minus 1.
+   */
+  def updateTimestampOffset(projectionId: ProjectionId, updates: Set[UpdateTimestampOffset]): Future[Done] = {
+    def askSetTimestampOffset(): Future[Done] = {
+      topic(projectionId.name)
+        .ask(replyTo => Topic.Publish(SetTimestampOffset(projectionId, updates, replyTo)))
+    }
+
+    retry(() => askSetTimestampOffset())
   }
 
   private def retry[T](operation: () => Future[T]): Future[T] = {
