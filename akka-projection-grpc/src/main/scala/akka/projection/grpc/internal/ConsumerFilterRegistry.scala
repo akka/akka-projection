@@ -72,7 +72,7 @@ import akka.util.Timeout
               // but not removed yet. The actor name isn't important, but could be useful for debugging.
               context.spawn(
                 ConsumerFilterStore(context.system, settings, streamId, context.self),
-                s"encodedStreamId-${UUID.randomUUID()}")
+                s"$encodedStreamId-${UUID.randomUUID()}")
           }
       }
     }
