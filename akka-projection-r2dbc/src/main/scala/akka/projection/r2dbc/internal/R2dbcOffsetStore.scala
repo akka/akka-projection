@@ -243,11 +243,12 @@ private[projection] class R2dbcOffsetStore(
   // To trigger next deletion after in-memory eviction
   private val triggerDeletion = new AtomicBoolean(false)
 
-  system.scheduler.scheduleWithFixedDelay(
-    settings.deleteInterval,
-    settings.deleteInterval,
-    () => deleteOldTimestampOffsets(),
-    system.executionContext)
+  if (!settings.deleteInterval.isZero && !settings.deleteInterval.isNegative)
+    system.scheduler.scheduleWithFixedDelay(
+      settings.deleteInterval,
+      settings.deleteInterval,
+      () => deleteOldTimestampOffsets(),
+      system.executionContext)
 
   private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     sourceProvider match {

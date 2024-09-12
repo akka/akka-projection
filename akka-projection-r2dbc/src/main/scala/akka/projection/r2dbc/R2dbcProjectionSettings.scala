@@ -39,6 +39,11 @@ object R2dbcProjectionSettings {
         case _     => config.getDuration("log-db-calls-exceeding").asScala
       }
 
+    val deleteInterval = config.getString("offset-store.delete-interval").toLowerCase(Locale.ROOT) match {
+      case "off" => JDuration.ZERO
+      case _     => config.getDuration("offset-store.delete-interval")
+    }
+
     new R2dbcProjectionSettings(
       schema = Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty),
       offsetTable = config.getString("offset-store.offset-table"),
@@ -48,7 +53,7 @@ object R2dbcProjectionSettings {
       timeWindow = config.getDuration("offset-store.time-window"),
       keepNumberOfEntries = config.getInt("offset-store.keep-number-of-entries"),
       evictInterval = config.getDuration("offset-store.evict-interval"),
-      deleteInterval = config.getDuration("offset-store.delete-interval"),
+      deleteInterval,
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"))
