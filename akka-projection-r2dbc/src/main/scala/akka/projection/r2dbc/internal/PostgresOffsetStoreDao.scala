@@ -68,12 +68,14 @@ private[projection] class PostgresOffsetStoreDao(
     SELECT projection_key, slice, persistence_id, seq_nr, timestamp_offset
     FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
 
-  private val selectOneTimestampOffsetSql: String =
+  protected def createSelectOneTimestampOffsetSql: String =
     sql"""
     SELECT seq_nr, timestamp_offset
     FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND persistence_id = ?
     ORDER BY seq_nr DESC
     LIMIT 1"""
+
+  private val selectOneTimestampOffsetSql: String = createSelectOneTimestampOffsetSql
 
   private val insertTimestampOffsetSql: String =
     sql"""
