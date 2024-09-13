@@ -48,11 +48,13 @@ import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.persistence.typed.internal.VersionVector
 
 /**
  * INTERNAL API
@@ -101,6 +103,17 @@ private[akka] object ReplicationImpl {
       settings.eventProducerSettings,
       settings.producerFilter)
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
+      .withReplicatedEventMetadataTransformation(env =>
+        if (env.eventMetadata.isDefined) None
+        else {
+          // migrated from non-replicated, fill in metadata
+          Some(
+            ReplicatedEventMetadata(
+              originReplica = settings.selfReplicaId,
+              originSequenceNr = env.sequenceNr,
+              version = VersionVector(env.persistenceId, env.sequenceNr),
+              concurrent = false))
+        })
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
@@ -349,6 +362,17 @@ private[akka] object ReplicationImpl {
       Transformation.identity,
       settings.eventProducerSettings)
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
+      .withReplicatedEventMetadataTransformation(env =>
+        if (env.eventMetadata.isDefined) None
+        else {
+          // migrated from non-replicated, fill in metadata
+          Some(
+            ReplicatedEventMetadata(
+              originReplica = settings.selfReplicaId,
+              originSequenceNr = env.sequenceNr,
+              version = VersionVector(env.persistenceId, env.sequenceNr),
+              concurrent = false))
+        })
 
     val epp =
       remoteReplica.additionalQueryRequestMetadata match {
