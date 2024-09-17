@@ -463,6 +463,11 @@ import org.slf4j.LoggerFactory
           pullInEnvOrReplay()
         }
       })
+
+      override def postStop(): Unit = {
+        replayInProgress.values.foreach(_.queue.cancel())
+        replayInProgress = Map.empty
+      }
     }
 
 }
