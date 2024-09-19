@@ -47,11 +47,13 @@ import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.projection.grpc.internal.EnvelopeOrigin
 
 /**
  * INTERNAL API
@@ -204,7 +206,20 @@ private[akka] object ReplicationImpl {
             .mapAsyncPartitioned(parallelism = settings.parallelUpdates, perPartition = 1)(envelope =>
               envelope.persistenceId) {
               case (envelope, _) =>
-                if (!envelope.filtered) {
+                if (envelope.filtered) {
+                  // Events not originating on sending side already are filtered/have no payload and end up here
+                  if (log.isTraceEnabled)
+                    log.traceN(
+                      "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
+                      projectionKey,
+                      remoteReplica.replicaId,
+                      envelope.persistenceId,
+                      envelope.sequenceNr)
+                  Future.successful(Done)
+                } else if (EnvelopeOrigin.fromHeartbeat(envelope)) {
+                  log.trace("Ignoring heartbeat event [{}]", envelope.persistenceId)
+                  Future.successful(Done)
+                } else {
                   envelope.eventMetadata match {
                     case Some(replicatedEventMetadata: ReplicatedEventMetadata)
                         if replicatedEventMetadata.originReplica == settings.selfReplicaId =>
@@ -253,16 +268,6 @@ private[akka] object ReplicationImpl {
                         s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
                         ", is the remote entity really a Replicated Event Sourced Entity?")
                   }
-                } else {
-                  // Events not originating on sending side already are filtered/have no payload and end up here
-                  if (log.isTraceEnabled)
-                    log.trace(
-                      "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
-                      projectionKey,
-                      remoteReplica.replicaId,
-                      envelope.persistenceId,
-                      envelope.sequenceNr)
-                  Future.successful(Done)
                 }
             }
             .map(_ => Done)
