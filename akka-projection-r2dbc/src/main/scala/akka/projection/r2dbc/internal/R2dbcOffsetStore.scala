@@ -53,7 +53,8 @@ private[projection] object R2dbcOffsetStore {
       strictSeqNr: Boolean,
       fromBacktracking: Boolean,
       fromPubSub: Boolean,
-      fromSnapshot: Boolean)
+      fromSnapshot: Boolean,
+      fromHeartbeat: Boolean)
   final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
@@ -92,6 +93,8 @@ private[projection] object R2dbcOffsetStore {
               case Some(existingRecord) =>
                 if (r.seqNr > existingRecord.seqNr)
                   acc.byPid.updated(r.pid, r)
+                else if (r.seqNr == existingRecord.seqNr && r.timestamp.isAfter(existingRecord.timestamp))
+                  acc.byPid.updated(r.pid, r) // keep latest in case same same seqNr
                 else
                   acc.byPid // older or same seqNr
               case None =>
@@ -129,8 +132,10 @@ private[projection] object R2dbcOffsetStore {
 
     def isDuplicate(record: Record): Boolean = {
       byPid.get(record.pid) match {
-        case Some(existingRecord) => record.seqNr <= existingRecord.seqNr
-        case None                 => false
+        case Some(existingRecord) =>
+          record.seqNr < existingRecord.seqNr ||
+          (record.seqNr == existingRecord.seqNr && !record.timestamp.isAfter(existingRecord.timestamp))
+        case None => false
       }
     }
 
@@ -579,6 +584,9 @@ private[projection] class R2dbcOffsetStore(
     if (duplicate) {
       logger.trace("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid)
       FutureDuplicate
+    } else if (recordWithOffset.fromHeartbeat) {
+      // always accept non-duplicate heartbeats
+      FutureAccepted
     } else if (recordWithOffset.strictSeqNr) {
       // strictSeqNr == true is for event sourced
       val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
@@ -895,7 +903,8 @@ private[projection] class R2dbcOffsetStore(
             strictSeqNr = true,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(eventEnvelope),
             fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope),
-            fromSnapshot = EnvelopeOrigin.fromSnapshot(eventEnvelope)))
+            fromSnapshot = EnvelopeOrigin.fromSnapshot(eventEnvelope),
+            fromHeartbeat = EnvelopeOrigin.fromHeartbeat(eventEnvelope)))
       case change: UpdatedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
@@ -906,7 +915,8 @@ private[projection] class R2dbcOffsetStore(
             strictSeqNr = false,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(change),
             fromPubSub = false,
-            fromSnapshot = false))
+            fromSnapshot = false,
+            fromHeartbeat = false))
       case change: DeletedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
@@ -917,7 +927,8 @@ private[projection] class R2dbcOffsetStore(
             strictSeqNr = false,
             fromBacktracking = false,
             fromPubSub = false,
-            fromSnapshot = false))
+            fromSnapshot = false,
+            fromHeartbeat = false))
       case change: DurableStateChange[_] if change.offset.isInstanceOf[TimestampOffset] =>
         // in case additional types are added
         throw new IllegalArgumentException(
