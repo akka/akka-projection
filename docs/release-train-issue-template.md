@@ -28,7 +28,7 @@ Variables to be expanded in this template:
 ### Check availability
 
 - [ ] Check [API](https://doc.akka.io/api/akka-projection/$VERSION$/) documentation
-- [ ] Check [reference](https://doc.akka.io/docs/akka-projection/$VERSION$/) documentation. Check that the reference docs were deployed and show a version warning (see section below on how to fix the version warning).
+- [ ] Check [reference](https://doc.akka.io/libraries/akka-projection/$VERSION$/) documentation. Check that the reference docs were deployed and show a version warning (see section below on how to fix the version warning).
 - [ ] Check the release on https://repo.akka.io/maven/com/lightbend/akka/akka-projection-core_2.13/$VERSION$/akka-projection-core_2.13-$VERSION$.pom
 
 ### When everything is on https://repo.akka.io/maven
@@ -38,7 +38,7 @@ Variables to be expanded in this template:
          ```
          cd ~/www
          git status
-         git add docs/akka-projection/current docs/akka-projection/$VERSION$
+         git add libraries/akka-projection/current libraries/akka-projection/$VERSION$
          git add api/akka-projection/current api/akka-projection/$VERSION$
          git commit -m "Akka Projection $VERSION$"
          ```
@@ -49,7 +49,6 @@ For important patch releases, and only if critical issues have been fixed:
 
 - [ ] Send a release notification to [Lightbend discuss](https://discuss.akka.io)
 - [ ] Tweet using the [@akkateam](https://twitter.com/akkateam/) account (or ask someone to) about the new release
-- [ ] Announce on [Gitter akka/akka](https://gitter.im/akka/akka)
 - [ ] Announce internally (with links to Tweet, discuss)
 
 For minor or major releases:
@@ -58,6 +57,6 @@ For minor or major releases:
 
 ### Afterwards
 
-- [ ] Update [akka-dependencies bom](https://github.com/lightbend/akka-dependencies) and version for [Akka module versions](https://doc.akka.io/docs/akka-dependencies/current/) in [akka-dependencies repo](https://github.com/akka/akka-dependencies)
+- [ ] Update [akka-dependencies bom](https://github.com/akka/akka-dependencies) and version for [Akka module versions](https://doc.akka.io/libraries/akka-dependencies/current/) in [akka-dependencies repo](https://github.com/akka/akka-dependencies)
 - [ ] Update [Akka Guide samples](https://github.com/akka/akka-platform-guide)
 - Close this issue

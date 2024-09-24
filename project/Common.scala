@@ -60,9 +60,14 @@ object Common extends AutoPlugin {
         })
       ++ {
         if (scalaBinaryVersion.value.startsWith("3")) {
-          Seq("-skip-packages:akka.pattern") // different usage in scala3
+          Seq(
+            s"-external-mappings:https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api/java.base/", "-skip-packages:akka.pattern")
         } else {
-          Seq("-skip-packages", "akka.pattern") // for some reason Scaladoc creates this
+          Seq(
+            "-jdk-api-doc-base",
+            s"https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api/java.base/",
+            "-skip-packages",
+            "akka.pattern")
         }
       },
     scalafmtOnCompile := System.getenv("CI") != "true",

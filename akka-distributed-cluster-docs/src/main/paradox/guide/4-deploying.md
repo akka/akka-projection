@@ -203,7 +203,7 @@ There are many alternatives for secure access with a load balancer. An incomplet
 * [Linkerd multi-cluster](https://linkerd.io/2.13/features/multicluster/)
 
 Mutual authentication with TLS (mTLS) can be very useful where only other known services are allowed to interact with
-a service, and public access should be denied. See [Akka gRPC documentation](https://doc.akka.io/docs/akka-grpc/current/mtls.html).
+a service, and public access should be denied. See [Akka gRPC documentation](https://doc.akka.io/libraries/akka-grpc/current/mtls.html).
 
 We are going to use a network load balancer for simplicity of this example, and we are not using TLS. Real applications would of course require TLS.
 

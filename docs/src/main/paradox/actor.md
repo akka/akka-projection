@@ -1,6 +1,6 @@
 # Processing with Actor
 
-A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html).
+A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/libraries/akka-core/current/typed/actors.html).
 
 The following example is using the `CassandraProjection` but the handler and actor would be the same if used
 any other @ref:[offset storage](overview.md). 

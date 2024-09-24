@@ -1,6 +1,6 @@
 # Events from Akka Persistence
 
-A typical source for Projections is events stored with @apidoc[EventSourcedBehavior$] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/persistence.html). Events can be consumed in a Projection with 
+A typical source for Projections is events stored with @apidoc[EventSourcedBehavior$] in [Akka Persistence](https://doc.akka.io/libraries/akka-core/current/typed/persistence.html). Events can be consumed in a Projection with 
 `eventsByTag` or `eventsBySlices` queries.
 
 ## Dependencies
@@ -42,9 +42,9 @@ Scala
 Java
 :  @@snip [EventSourcedDocExample.java](/examples/src/test/java/jdocs/eventsourced/EventSourcedDocExample.java) { #eventsByTagSourceProvider }
 
-This example is using the [Cassandra plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-cassandra/current/read-journal.html),
+This example is using the [Cassandra plugin for Akka Persistence](https://doc.akka.io/libraries/akka-persistence-cassandra/current/read-journal.html),
 but same code can be used for other Akka Persistence plugins by replacing the `CassandraReadJournal.Identifier`.
-For example the [JDBC plugin](https://doc.akka.io/docs/akka-persistence-jdbc/current/) can be used. You will
+For example the [JDBC plugin](https://doc.akka.io/libraries/akka-persistence-jdbc/current/) can be used. You will
 use the same plugin as you have configured for the write side that is used by the `EventSourcedBehavior`.
 
 This source is consuming all events from the `ShoppingCart` `EventSourcedBehavior` that are tagged with `"cart-1"`.

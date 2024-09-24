@@ -6,7 +6,7 @@ addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.10.0")
 
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.6.1")
 
-// remember to bump in samples/grpc/ projects as well if changing
+// remember to bump in Dependencies.scala and samples/grpc/ projects as well if changing
 addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.5.0-M1")
 
 // Documentation
