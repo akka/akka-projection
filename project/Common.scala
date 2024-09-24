@@ -61,7 +61,8 @@ object Common extends AutoPlugin {
       ++ {
         if (scalaBinaryVersion.value.startsWith("3")) {
           Seq(
-            s"-external-mappings:https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api/java.base/", "-skip-packages:akka.pattern")
+            s"-external-mappings:https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api/java.base/",
+            "-skip-packages:akka.pattern")
         } else {
           Seq(
             "-jdk-api-doc-base",
