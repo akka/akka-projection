@@ -54,6 +54,7 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import scala.collection.immutable
@@ -186,10 +187,19 @@ final class GrpcReadJournal private (
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
     this(system, config, cfgPath, ProtoAnySerialization.Prefer.Scala)
 
+  /**
+   * Correlation id to be used with [[ConsumerFilter.ReplayWithFilter]].
+   * Such replay request will trigger replay in all `eventsBySlices` queries
+   * with the same `streamId` running from this instance of the `GrpcReadJournal`.
+   * Create separate instances of the `GrpcReadJournal` to have separation between
+   * replay requests for the same `streamId`.
+   */
+  val replayCorrelationId: UUID = UUID.randomUUID() // FIXME add to javadsl
+
   private implicit val typedSystem: akka.actor.typed.ActorSystem[_] = system.toTyped
   private val persistenceExt = Persistence(system)
 
-  lazy val consumerFilter = ConsumerFilter(typedSystem)
+  lazy val consumerFilter: ConsumerFilter = ConsumerFilter(typedSystem)
 
   private val client = EventProducerServiceClient(clientSettings)
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
@@ -206,7 +216,8 @@ final class GrpcReadJournal private (
       streamId,
       Set(
         ConsumerFilter
-          .ReplayPersistenceId(ConsumerFilter.PersistenceIdOffset(persistenceId, fromSeqNr), triggeredBySeqNr + 1)))
+          .ReplayPersistenceId(ConsumerFilter.PersistenceIdOffset(persistenceId, fromSeqNr), triggeredBySeqNr + 1)),
+      Some(replayCorrelationId))
   }
 
   private def addRequestHeaders[Req, Res](
@@ -303,13 +314,18 @@ final class GrpcReadJournal private (
               log.debug2("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
-          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _) =>
+          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _, Some(`replayCorrelationId`)) =>
+            streamInReplay(r)
+
+          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _, None) =>
             streamInReplay(r)
 
           case ConsumerFilter.Replay(`streamId`, persistenceIdOffsets) =>
+            // FIXME do we have to add corrId to this Replay too?
             val replayWithFilter = ConsumerFilter.ReplayWithFilter(
               streamId,
-              persistenceIdOffsets.map(p => ConsumerFilter.ReplayPersistenceId(p, filterAfterSeqNr = Long.MaxValue)))
+              persistenceIdOffsets.map(p => ConsumerFilter.ReplayPersistenceId(p, filterAfterSeqNr = Long.MaxValue)),
+              Some(replayCorrelationId))
             streamInReplay(replayWithFilter)
         }
         .mapMaterializedValue { ref =>

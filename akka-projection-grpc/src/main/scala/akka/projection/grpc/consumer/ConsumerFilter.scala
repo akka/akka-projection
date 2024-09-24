@@ -4,11 +4,14 @@
 
 package akka.projection.grpc.consumer
 
+import java.util.Optional
+import java.util.UUID
 import java.util.{ List => JList }
 import java.util.{ Set => JSet }
 
 import scala.annotation.tailrec
 import scala.collection.immutable
+import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.FiniteDuration
 
 import akka.actor.typed.ActorRef
@@ -88,12 +91,15 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
   /**
    * Explicit request to replay events for given entities.
    */
-  final case class ReplayWithFilter(streamId: String, replayPersistenceIds: Set[ReplayPersistenceId])
+  final case class ReplayWithFilter(
+      streamId: String,
+      replayPersistenceIds: Set[ReplayPersistenceId],
+      correlationId: Option[UUID]) // FIXME bin compat
       extends SubscriberCommand {
 
     /** Java API */
-    def this(streamId: String, persistenceIdOffsets: JSet[ReplayPersistenceId]) =
-      this(streamId, persistenceIdOffsets.asScala.toSet)
+    def this(streamId: String, persistenceIdOffsets: JSet[ReplayPersistenceId], correlationId: Optional[UUID]) =
+      this(streamId, persistenceIdOffsets.asScala.toSet, correlationId.asScala)
   }
 
   sealed trait FilterCriteria
