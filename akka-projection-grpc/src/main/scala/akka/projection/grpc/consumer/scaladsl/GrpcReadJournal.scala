@@ -194,7 +194,7 @@ final class GrpcReadJournal private (
    * Create separate instances of the `GrpcReadJournal` to have separation between
    * replay requests for the same `streamId`.
    */
-  val replayCorrelationId: UUID = UUID.randomUUID() // FIXME add to javadsl
+  val replayCorrelationId: UUID = UUID.randomUUID()
 
   private implicit val typedSystem: akka.actor.typed.ActorSystem[_] = system.toTyped
   private val persistenceExt = Persistence(system)
