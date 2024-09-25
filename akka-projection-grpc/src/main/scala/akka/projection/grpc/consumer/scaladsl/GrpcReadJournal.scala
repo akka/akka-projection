@@ -217,7 +217,7 @@ final class GrpcReadJournal private (
       Set(
         ConsumerFilter
           .ReplayPersistenceId(ConsumerFilter.PersistenceIdOffset(persistenceId, fromSeqNr), triggeredBySeqNr + 1)),
-      Some(replayCorrelationId))
+      replayCorrelationId)
   }
 
   private def addRequestHeaders[Req, Res](
@@ -314,19 +314,11 @@ final class GrpcReadJournal private (
               log.debug2("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
-          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _, Some(`replayCorrelationId`)) =>
+          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _) if r.correlationId.forall(_ == replayCorrelationId) =>
             streamInReplay(r)
 
-          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _, None) =>
-            streamInReplay(r)
-
-          case ConsumerFilter.Replay(`streamId`, persistenceIdOffsets) =>
-            // FIXME do we have to add corrId to this Replay too?
-            val replayWithFilter = ConsumerFilter.ReplayWithFilter(
-              streamId,
-              persistenceIdOffsets.map(p => ConsumerFilter.ReplayPersistenceId(p, filterAfterSeqNr = Long.MaxValue)),
-              Some(replayCorrelationId))
-            streamInReplay(replayWithFilter)
+          case r @ ConsumerFilter.Replay(`streamId`, _) if r.correlationId.forall(_ == replayCorrelationId) =>
+            streamInReplay(r.toReplayWithFilter)
         }
         .mapMaterializedValue { ref =>
           consumerFilter.ref ! ConsumerFilter.Subscribe(streamId, initCriteria, ref)
