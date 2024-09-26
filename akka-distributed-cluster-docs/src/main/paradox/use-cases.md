@@ -6,7 +6,7 @@ A car company collects and aggregates telemetry data from millions of cars aroun
 every third second to a backend service. The cars are connected to a nearby cloud region for low-latency and high
 availability reasons. All telemetry data is fed into an analytics system to find anomalies and gather statistics,
 but it would be an extreme amount of data and an unnecessary cost to transfer all telemetry samples to the global analytics
-system. Instead, the data is aggregated at the "local" regions and then transferred less frequent, but still
+system. Instead, the data is aggregated at the "local" regions and then transferred less frequently, but still
 near real time, to the analytics system.
 
 When an anomaly is found by the analytics system it can dynamically change the level of detail for certain categories
