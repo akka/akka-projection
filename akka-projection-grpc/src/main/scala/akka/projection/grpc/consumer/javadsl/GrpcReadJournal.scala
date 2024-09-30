@@ -7,9 +7,12 @@ package akka.projection.grpc.consumer.javadsl
 import java.time.Instant
 import java.util
 import java.util.Optional
+import java.util.UUID
 import java.util.concurrent.CompletionStage
+
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
@@ -94,6 +97,16 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
    */
   def streamId(): String =
     delegate.streamId
+
+  /**
+   * Correlation id to be used with [[ConsumerFilter.ReplayWithFilter]].
+   * Such replay request will trigger replay in all `eventsBySlices` queries
+   * with the same `streamId` running from this instance of the `GrpcReadJournal`.
+   * Create separate instances of the `GrpcReadJournal` to have separation between
+   * replay requests for the same `streamId`.
+   */
+  val replayCorrelationId: UUID =
+    delegate.replayCorrelationId
 
   @InternalApi
   private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long, triggeredBySeqNr: Long): Unit =

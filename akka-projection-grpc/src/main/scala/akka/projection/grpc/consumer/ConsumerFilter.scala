@@ -4,12 +4,14 @@
 
 package akka.projection.grpc.consumer
 
+import java.util.UUID
 import java.util.{ List => JList }
 import java.util.{ Set => JSet }
 
 import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
+import scala.runtime.AbstractFunction2
 
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -20,6 +22,7 @@ import akka.annotation.InternalApi
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.internal.ConsumerFilterRegistry
 import akka.projection.grpc.internal.TopicMatcher
+import akka.util.HashCode
 import akka.util.JavaDurationConverters._
 import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.Config
@@ -75,25 +78,158 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
       criteria.asJava
   }
 
-  /**
-   * Explicit request to replay events for given entities.
-   */
-  final case class Replay(streamId: String, persistenceIdOffsets: Set[PersistenceIdOffset]) extends SubscriberCommand {
+  object Replay extends AbstractFunction2[String, Set[PersistenceIdOffset], Replay] {
+    def apply(streamId: String, persistenceIdOffsets: Set[PersistenceIdOffset]): Replay =
+      new Replay(streamId, persistenceIdOffsets, correlationId = None)
 
-    /** Java API */
-    def this(streamId: String, persistenceIdOffsets: JSet[PersistenceIdOffset]) =
-      this(streamId, persistenceIdOffsets.asScala.toSet)
+    /**
+     * Use the `replayCorrelationId` from the `GrpcReadJournal`.
+     */
+    def apply(streamId: String, persistenceIdOffsets: Set[PersistenceIdOffset], correlationId: UUID): Replay =
+      new Replay(streamId, persistenceIdOffsets, Some(correlationId))
+
+    def unapply(arg: Replay): Option[(String, Set[PersistenceIdOffset])] =
+      Some((arg.streamId, arg.persistenceIdOffsets))
+
   }
 
   /**
    * Explicit request to replay events for given entities.
+   *
+   * Use the `replayCorrelationId` from the `GrpcReadJournal`.
    */
-  final case class ReplayWithFilter(streamId: String, replayPersistenceIds: Set[ReplayPersistenceId])
-      extends SubscriberCommand {
+  final class Replay(
+      val streamId: String,
+      val persistenceIdOffsets: Set[PersistenceIdOffset],
+      val correlationId: Option[UUID])
+      extends Product2[String, Set[PersistenceIdOffset]] // for binary compatibility (used to be a case class)
+      with SubscriberCommand
+      with Serializable {
+
+    // for binary compatibility (used to be a case class)
+    def this(streamId: String, persistenceIdOffsets: Set[PersistenceIdOffset]) =
+      this(streamId, persistenceIdOffsets, None)
+
+    /** Java API */
+    def this(streamId: String, persistenceIdOffsets: JSet[PersistenceIdOffset]) =
+      this(streamId, persistenceIdOffsets.asScala.toSet, None)
+
+    /**
+     * Java API
+     *
+     * Use the `replayCorrelationId` from the `GrpcReadJournal`.
+     */
+    def this(streamId: String, persistenceIdOffsets: JSet[PersistenceIdOffset], correlationId: UUID) =
+      this(streamId, persistenceIdOffsets.asScala.toSet, Some(correlationId))
+
+    def toReplayWithFilter: ReplayWithFilter =
+      new ReplayWithFilter(
+        streamId,
+        persistenceIdOffsets.map(p => ReplayPersistenceId(p, filterAfterSeqNr = Long.MaxValue)),
+        correlationId)
+
+    override def hashCode(): Int = {
+      var result = HashCode.SEED
+      result = HashCode.hash(result, streamId)
+      result = HashCode.hash(result, persistenceIdOffsets)
+      result = HashCode.hash(result, correlationId)
+      result
+    }
+
+    override def equals(obj: Any): Boolean = obj match {
+      case other: Replay =>
+        streamId == other.streamId && persistenceIdOffsets == other.persistenceIdOffsets && correlationId == other.correlationId
+      case _ => false
+    }
+
+    override def toString: String =
+      s"Replay($streamId,$persistenceIdOffsets,$correlationId)"
+
+    // for binary compatibility (used to be a case class)
+    def copy(
+        streamId: String = streamId,
+        persistenceIdOffsets: Set[PersistenceIdOffset] = persistenceIdOffsets): Replay =
+      new Replay(streamId, persistenceIdOffsets, correlationId)
+
+    // Product2, for binary compatibility (used to be a case class)
+    override def productPrefix = "Replay"
+    override def _1: String = streamId
+    override def _2: Set[PersistenceIdOffset] = persistenceIdOffsets
+    override def canEqual(that: Any): Boolean = that.isInstanceOf[Replay]
+  }
+
+  object ReplayWithFilter extends AbstractFunction2[String, Set[ReplayPersistenceId], ReplayWithFilter] {
+    def apply(streamId: String, replayPersistenceIds: Set[ReplayPersistenceId]): ReplayWithFilter =
+      new ReplayWithFilter(streamId, replayPersistenceIds, correlationId = None)
+
+    /**
+     * Use the `replayCorrelationId` from the `GrpcReadJournal`.
+     */
+    def apply(streamId: String, replayPersistenceIds: Set[ReplayPersistenceId], correlationId: UUID): ReplayWithFilter =
+      new ReplayWithFilter(streamId, replayPersistenceIds, Some(correlationId))
+
+    def unapply(arg: ReplayWithFilter): Option[(String, Set[ReplayPersistenceId])] =
+      Some((arg.streamId, arg.replayPersistenceIds))
+
+  }
+
+  /**
+   * Explicit request to replay events for given entities.
+   *
+   * Use the `replayCorrelationId` from the `GrpcReadJournal`.
+   */
+  final class ReplayWithFilter(
+      val streamId: String,
+      val replayPersistenceIds: Set[ReplayPersistenceId],
+      val correlationId: Option[UUID])
+      extends Product2[String, Set[ReplayPersistenceId]] // for binary compatibility (used to be a case class)
+      with SubscriberCommand
+      with Serializable {
+
+    // for binary compatibility (used to be a case class)
+    def this(streamId: String, replayPersistenceIds: Set[ReplayPersistenceId]) =
+      this(streamId, replayPersistenceIds, None)
 
     /** Java API */
     def this(streamId: String, persistenceIdOffsets: JSet[ReplayPersistenceId]) =
-      this(streamId, persistenceIdOffsets.asScala.toSet)
+      this(streamId, persistenceIdOffsets.asScala.toSet, None)
+
+    /**
+     * Java API
+     *
+     * Use the `replayCorrelationId` from the `GrpcReadJournal`.
+     */
+    def this(streamId: String, persistenceIdOffsets: JSet[ReplayPersistenceId], correlationId: UUID) =
+      this(streamId, persistenceIdOffsets.asScala.toSet, Some(correlationId))
+
+    override def hashCode(): Int = {
+      var result = HashCode.SEED
+      result = HashCode.hash(result, streamId)
+      result = HashCode.hash(result, replayPersistenceIds)
+      result = HashCode.hash(result, correlationId)
+      result
+    }
+
+    override def equals(obj: Any): Boolean = obj match {
+      case other: ReplayWithFilter =>
+        streamId == other.streamId && replayPersistenceIds == other.replayPersistenceIds && correlationId == other.correlationId
+      case _ => false
+    }
+
+    override def toString: String =
+      s"ReplayWithFilter($streamId,$replayPersistenceIds,$correlationId)"
+
+    // for binary compatibility (used to be a case class)
+    def copy(
+        streamId: String = streamId,
+        replayPersistenceIds: Set[ReplayPersistenceId] = replayPersistenceIds): ReplayWithFilter =
+      new ReplayWithFilter(streamId, replayPersistenceIds, correlationId)
+
+    // Product2, for binary compatibility (used to be a case class)
+    override def productPrefix = "ReplayWithFilter"
+    override def _1: String = streamId
+    override def _2: Set[ReplayPersistenceId] = replayPersistenceIds
+    override def canEqual(that: Any): Boolean = that.isInstanceOf[ReplayWithFilter]
   }
 
   sealed trait FilterCriteria
