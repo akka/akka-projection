@@ -543,7 +543,7 @@ class R2dbcTimestampOffsetStoreSpec
         .futureValue shouldBe RejectedBacktrackingSeqNr
 
       // it's keeping the inflight that are not in the "stored" state
-      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8, "p4" -> 2L, "p5" -> 8)
+      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L, "p4" -> 2L, "p5" -> 8L)
       // and they are removed from inflight once they have been stored
       offsetStore
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(2), Map("p4" -> 2L)), "p4", 2L))
@@ -551,7 +551,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L)), "p5", 8L))
         .futureValue
-      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8)
+      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L)
     }
 
     "update inflight on error and re-accept element" in {
@@ -689,7 +689,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.addInflight(env7)
 
       // it's keeping the inflight that are not in the "stored" state
-      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 20, "p4" -> 2L, "p5" -> 7)
+      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 20L, "p4" -> 2L, "p5" -> 7L)
       // and they are removed from inflight once they have been stored
       offsetStore
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(2), Map("p4" -> 2L)), "p4", 2L))
@@ -697,7 +697,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L)), "p5", 8L))
         .futureValue
-      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 20)
+      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 20L)
     }
 
     "evict old records" in {
