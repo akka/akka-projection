@@ -8,6 +8,7 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
+import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.InternalApi
@@ -28,6 +29,8 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
+import akka.projection.grpc.internal.AkkaProjectionGrpcSerialization
+import akka.projection.grpc.internal.DelegateToAkkaSerialization
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.ProtobufProtocolConversions
@@ -53,14 +56,13 @@ import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
@@ -144,6 +146,35 @@ object GrpcReadJournal {
       replicationSettings)
   }
 
+  /**
+   * INTERNAL API
+   *
+   * Factory method for replication, with replication specific serialization
+   */
+  @InternalApi private[akka] def apply(
+      settings: GrpcQuerySettings,
+      clientSettings: GrpcClientSettings,
+      replicationSettings: Option[ReplicationSettings[_]])(implicit system: ActorSystem[_]): GrpcReadJournal = {
+
+    // FIXME issue #702 This probably means that one GrpcReadJournal instance is created for each Projection instance,
+    // and therefore one grpc client for each. Is that fine or should the client be shared for same clientSettings?
+
+    val wireSerialization = new DelegateToAkkaSerialization(system)
+
+    if (settings.initialConsumerFilter.nonEmpty) {
+      ConsumerFilter(system.classicSystem.toTyped).ref ! ConsumerFilter.UpdateFilter(
+        settings.streamId,
+        settings.initialConsumerFilter)
+    }
+
+    new scaladsl.GrpcReadJournal(
+      system.classicSystem.asInstanceOf[ExtendedActorSystem],
+      settings,
+      withChannelBuilderOverrides(clientSettings),
+      wireSerialization,
+      replicationSettings)
+  }
+
   private def withChannelBuilderOverrides(clientSettings: GrpcClientSettings): GrpcClientSettings = {
     // compose with potential user overrides to allow overriding our defaults
     clientSettings.withChannelBuilderOverrides(channelBuilderOverrides.andThen(clientSettings.channelBuilderOverrides))
@@ -160,7 +191,7 @@ final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,
     clientSettings: GrpcClientSettings,
-    protoAnySerialization: ProtoAnySerialization,
+    wireSerialization: AkkaProjectionGrpcSerialization,
     replicationSettings: Option[ReplicationSettings[_]])
     extends ReadJournal
     with EventsBySliceQuery
@@ -424,7 +455,7 @@ final class GrpcReadJournal private (
       // not the normal entity type which is internal to the producing side
       streamId: String): EventEnvelope[Evt] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    ProtobufProtocolConversions.eventToEnvelope(event, protoAnySerialization)
+    ProtobufProtocolConversions.eventToEnvelope(event, wireSerialization)
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {
