@@ -34,6 +34,16 @@ import scalapb.options.Scalapb
 /**
  * INTERNAL API
  */
+@InternalApi
+private[akka] trait AkkaProjectionGrpcSerialization {
+  def serialize(event: Any): ScalaPbAny
+  def deserialize(scalaPbAny: ScalaPbAny): Any
+  def toSerializedEvent(scalaPbAny: ScalaPbAny): Option[SerializedEvent]
+}
+
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] object ProtoAnySerialization {
   final val GoogleTypeUrlPrefix = "type.googleapis.com/"
   final val AkkaSerializationTypeUrlPrefix = "ser.akka.io/"
@@ -115,16 +125,6 @@ import scalapb.options.Scalapb
       idAndManifest.substring(0, i).toInt -> idAndManifest.substring(i + 1)
   }
 
-}
-
-/**
- * INTERNAL API
- */
-@InternalApi
-private[akka] trait AkkaProjectionGrpcSerialization {
-  def serialize(event: Any): ScalaPbAny
-  def deserialize(scalaPbAny: ScalaPbAny): Any
-  def toSerializedEvent(scalaPbAny: ScalaPbAny): Option[SerializedEvent]
 }
 
 /**
