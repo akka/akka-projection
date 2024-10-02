@@ -27,7 +27,7 @@
         <logback.version>1.2.13</logback.version>
         <junit.version>4.13.1</junit.version>
         <scala.binary.version>2.13</scala.binary.version>
-        <protobuf-java.version>3.22.2</protobuf-java.version>
+        <protobuf-java.version>3.25.5</protobuf-java.version>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
         <APP_CONFIG>application.conf</APP_CONFIG>
         <!-- Version of the Docker image is derived from git commit.

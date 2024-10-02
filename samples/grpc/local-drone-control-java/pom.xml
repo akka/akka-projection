@@ -29,7 +29,7 @@
         <prometheus.client.version>0.16.0</prometheus.client.version>
         <junit.version>4.13.1</junit.version>
         <scala.binary.version>2.13</scala.binary.version>
-        <protobuf-java.version>3.22.2</protobuf-java.version>
+        <protobuf-java.version>3.25.5</protobuf-java.version>
         <native.maven.plugin.version>0.9.26</native.maven.plugin.version>
         <mainClass>local.drones.Main</mainClass>
         <!-- needs to be defined to allow for overriding through mvn exec:exec -DAPP_CONFIG=local1.conf -->
