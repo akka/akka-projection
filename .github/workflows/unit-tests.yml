@@ -48,7 +48,7 @@ jobs:
           jvm: ${{ matrix.jvmName }}
 
       - name: Run tests with default Scala and Java ${{ matrix.jdkVersion }}
-        run: sbt "test" ${{ matrix.extraOpts }}
+        run: sbt "test" ${{ matrix.extraOpts }} -Dakka.warn-on-no-license-key=false
 
       - name: Print logs on failure
         if: ${{ failure() }}

@@ -51,4 +51,4 @@ jobs:
 
       - name: Run integration tests with with Scala and Java ${{ matrix.jdkVersion }}
         run: |-
-          sbt -Dconfig.resource=application-sqlserver.conf akka-projection-r2dbc-integration/test
+          sbt -Dconfig.resource=application-sqlserver.conf -Dakka.warn-on-no-license-key=false akka-projection-r2dbc-integration/test

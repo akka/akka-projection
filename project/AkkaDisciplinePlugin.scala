@@ -76,6 +76,7 @@ object AkkaDisciplinePlugin extends AutoPlugin {
     "-Ywarn-nullary-unit",
     "-Ywarn-unused:_",
     "-Ypartial-unification",
-    "-Ywarn-extra-implicit")
+    "-Ywarn-extra-implicit",
+    "-Wconf:src=.*.txt.*:silent,src=.*target.*akka-grpc.*:silent")
 
 }
