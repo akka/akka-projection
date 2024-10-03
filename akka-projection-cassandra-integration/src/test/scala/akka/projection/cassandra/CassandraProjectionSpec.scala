@@ -7,14 +7,16 @@ package akka.projection.cassandra
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+
 import scala.annotation.tailrec
 import scala.collection.immutable
-import scala.jdk.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
+import scala.jdk.FutureConverters._
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.Scheduler
