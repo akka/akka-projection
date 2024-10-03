@@ -105,7 +105,7 @@ private[akka] object ProtobufProtocolConversions {
   def transformAndEncodeEvent(
       transformation: Transformation,
       env: EventEnvelope[_],
-      protoAnySerialization: AkkaProjectionGrpcSerialization)(
+      protoAnySerialization: ProjectionGrpcSerialization)(
       implicit executionContext: ExecutionContext): Future[Option[Event]] = {
     env.eventOption match {
       case Some(_) =>
@@ -147,12 +147,12 @@ private[akka] object ProtobufProtocolConversions {
     }
   }
 
-  def eventToEnvelope[Evt](event: Event, protoAnySerialization: AkkaProjectionGrpcSerialization): EventEnvelope[Evt] =
+  def eventToEnvelope[Evt](event: Event, protoAnySerialization: ProjectionGrpcSerialization): EventEnvelope[Evt] =
     eventToEnvelope(event, protoAnySerialization, deserializeEvent = true).asInstanceOf[EventEnvelope[Evt]]
 
   def eventToEnvelope(
       event: Event,
-      wireSerialization: AkkaProjectionGrpcSerialization,
+      wireSerialization: ProjectionGrpcSerialization,
       deserializeEvent: Boolean): EventEnvelope[Any] = {
     val eventOffset = populateSeenIfNeeded(
       TimestampOffset.toTimestampOffset(protocolOffsetToOffset(event.offset)),

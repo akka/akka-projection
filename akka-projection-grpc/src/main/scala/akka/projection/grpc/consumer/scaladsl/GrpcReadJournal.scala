@@ -29,7 +29,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
-import akka.projection.grpc.internal.AkkaProjectionGrpcSerialization
+import akka.projection.grpc.internal.ProjectionGrpcSerialization
 import akka.projection.grpc.internal.DelegateToAkkaSerialization
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
@@ -191,7 +191,7 @@ final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,
     clientSettings: GrpcClientSettings,
-    wireSerialization: AkkaProjectionGrpcSerialization,
+    wireSerialization: ProjectionGrpcSerialization,
     replicationSettings: Option[ReplicationSettings[_]])
     extends ReadJournal
     with EventsBySliceQuery

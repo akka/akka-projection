@@ -35,7 +35,7 @@ import scalapb.options.Scalapb
  * INTERNAL API
  */
 @InternalApi
-private[akka] trait AkkaProjectionGrpcSerialization {
+private[akka] trait ProjectionGrpcSerialization {
   def serialize(event: Any): ScalaPbAny
   def deserialize(scalaPbAny: ScalaPbAny): Any
   def toSerializedEvent(scalaPbAny: ScalaPbAny): Option[SerializedEvent]
@@ -137,7 +137,7 @@ private[akka] trait AkkaProjectionGrpcSerialization {
     system: ActorSystem[_],
     descriptors: immutable.Seq[Descriptors.FileDescriptor],
     prefer: ProtoAnySerialization.Prefer)
-    extends AkkaProjectionGrpcSerialization {
+    extends ProjectionGrpcSerialization {
   import ProtoAnySerialization._
 
   private val serialization = SerializationExtension(system.classicSystem)
@@ -473,7 +473,7 @@ private[akka] trait AkkaProjectionGrpcSerialization {
  * INTERNAL API
  */
 @InternalApi
-private[akka] final class DelegateToAkkaSerialization(system: ActorSystem[_]) extends AkkaProjectionGrpcSerialization {
+private[akka] final class DelegateToAkkaSerialization(system: ActorSystem[_]) extends ProjectionGrpcSerialization {
   import ProtoAnySerialization._
   private val serialization = SerializationExtension(system.classicSystem)
 

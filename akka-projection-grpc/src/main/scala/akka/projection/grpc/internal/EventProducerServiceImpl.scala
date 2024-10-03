@@ -98,7 +98,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
       .map(s => s"(stream id: [${s.streamId}], entity type: [${s.entityType}])")
       .mkString(", "))
 
-  private def wireSerialization(eps: EventProducer.EventProducerSource): AkkaProjectionGrpcSerialization =
+  private def wireSerialization(eps: EventProducer.EventProducerSource): ProjectionGrpcSerialization =
     if (eps.settings.akkaSerializationOnly) akkaOnlyWireSerialization
     else protoAnyWireSerialization
 
