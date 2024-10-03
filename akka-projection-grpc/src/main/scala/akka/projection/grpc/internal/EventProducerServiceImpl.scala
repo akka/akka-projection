@@ -86,7 +86,8 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
       "Use Transformation.identity to pass through each event as is.")
   }
 
-  private val protoAnySerialization = new ProtoAnySerialization(system)
+  private val protoAnyWireSerialization = new ProtoAnySerialization(system)
+  private val akkaOnlyWireSerialization = new DelegateToAkkaSerialization(system)
 
   private val streamIdToSourceMap: Map[String, EventProducer.EventProducerSource] =
     sources.map(s => s.streamId -> s).toMap
@@ -96,6 +97,10 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
     sources
       .map(s => s"(stream id: [${s.streamId}], entity type: [${s.entityType}])")
       .mkString(", "))
+
+  private def wireSerialization(eps: EventProducer.EventProducerSource): ProjectionGrpcSerialization =
+    if (eps.settings.akkaSerializationOnly) akkaOnlyWireSerialization
+    else protoAnyWireSerialization
 
   private def intercept(streamId: String, metadata: Metadata): Future[Done] =
     interceptor match {
@@ -229,7 +234,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                       ProtobufProtocolConversions.offsetToProtoOffset(env.offset)))))
             case _ =>
               import system.executionContext
-              transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+              transformAndEncodeEvent(producerSource.transformation, env, wireSerialization(producerSource))
                 .map {
                   case Some(event) =>
                     if (log.isTraceEnabled)
@@ -307,7 +312,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                   .flatMap(f => req.replicaInfo.map(f.createFilter))
                   .getOrElse((_: EventEnvelope[_]) => true)
               if (eventOriginFilter(env)) {
-                transformAndEncodeEvent(producerSource.transformation, env, protoAnySerialization)
+                transformAndEncodeEvent(producerSource.transformation, env, wireSerialization(producerSource))
                   .map {
                     case Some(event) =>
                       log.traceN(

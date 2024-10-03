@@ -36,7 +36,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
-import akka.projection.grpc.internal.ProtoAnySerialization
+import akka.projection.grpc.internal.DelegateToAkkaSerialization
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
@@ -98,7 +98,7 @@ private[akka] object ReplicationImpl {
       settings.entityTypeKey.name,
       settings.streamId,
       Transformation.identity,
-      settings.eventProducerSettings,
+      settings.eventProducerSettings.withAkkaSerializationOnly(),
       settings.producerFilter)
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
 
@@ -165,12 +165,10 @@ private[akka] object ReplicationImpl {
         case None           => s2
       }
     }
-    val eventsBySlicesQuery = GrpcReadJournal(
-      grpcQuerySettings,
-      remoteReplica.grpcClientSettings,
-      Nil,
-      ProtoAnySerialization.Prefer.Scala,
-      Some(settings))
+
+    val wireSerialization = new DelegateToAkkaSerialization(system)
+    val eventsBySlicesQuery =
+      GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, wireSerialization, Some(settings))
     log.infoN(
       "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",
       remoteReplica.numberOfConsumers,
@@ -347,7 +345,7 @@ private[akka] object ReplicationImpl {
       settings.entityTypeKey.name,
       settings.streamId,
       Transformation.identity,
-      settings.eventProducerSettings)
+      settings.eventProducerSettings.withAkkaSerializationOnly())
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
 
     val epp =
