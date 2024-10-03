@@ -28,6 +28,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
+import akka.projection.grpc.internal.ProjectionGrpcSerialization
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.ProtobufProtocolConversions
@@ -53,14 +54,13 @@ import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
@@ -110,8 +110,11 @@ object GrpcReadJournal {
       settings: GrpcQuerySettings,
       clientSettings: GrpcClientSettings,
       protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
-      implicit system: ClassicActorSystemProvider): GrpcReadJournal =
-    apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala, replicationSettings = None)
+      implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
+    val protoAnySerialization =
+      new ProtoAnySerialization(system.classicSystem.toTyped, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
+    apply(settings, clientSettings, protoAnySerialization, replicationSettings = None)
+  }
 
   /**
    * INTERNAL API
@@ -119,16 +122,12 @@ object GrpcReadJournal {
   @InternalApi private[akka] def apply(
       settings: GrpcQuerySettings,
       clientSettings: GrpcClientSettings,
-      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
-      protobufPrefer: ProtoAnySerialization.Prefer,
+      wireSerialization: ProjectionGrpcSerialization,
       replicationSettings: Option[ReplicationSettings[_]])(
       implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
 
     // FIXME issue #702 This probably means that one GrpcReadJournal instance is created for each Projection instance,
     // and therefore one grpc client for each. Is that fine or should the client be shared for same clientSettings?
-
-    val protoAnySerialization =
-      new ProtoAnySerialization(system.classicSystem.toTyped, protobufDescriptors, protobufPrefer)
 
     if (settings.initialConsumerFilter.nonEmpty) {
       ConsumerFilter(system.classicSystem.toTyped).ref ! ConsumerFilter.UpdateFilter(
@@ -140,7 +139,7 @@ object GrpcReadJournal {
       system.classicSystem.asInstanceOf[ExtendedActorSystem],
       settings,
       withChannelBuilderOverrides(clientSettings),
-      protoAnySerialization,
+      wireSerialization,
       replicationSettings)
   }
 
@@ -160,7 +159,7 @@ final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,
     clientSettings: GrpcClientSettings,
-    protoAnySerialization: ProtoAnySerialization,
+    wireSerialization: ProjectionGrpcSerialization,
     replicationSettings: Option[ReplicationSettings[_]])
     extends ReadJournal
     with EventsBySliceQuery
@@ -424,7 +423,7 @@ final class GrpcReadJournal private (
       // not the normal entity type which is internal to the producing side
       streamId: String): EventEnvelope[Evt] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    ProtobufProtocolConversions.eventToEnvelope(event, protoAnySerialization)
+    ProtobufProtocolConversions.eventToEnvelope(event, wireSerialization)
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {

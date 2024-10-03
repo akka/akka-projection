@@ -1,0 +1,20 @@
+// Copyright 2022 Lightbend Inc.
+
+syntax = "proto3";
+
+package akka.projection.grpc.test;
+
+message GreetingChanged {
+   string greeting = 1;
+  LwwTime timestamp = 2;
+}
+
+message TagChanged {
+    string tag = 1;
+  LwwTime timestamp = 2;
+}
+
+message LwwTime {
+  uint64 timestamp = 1;
+  string origin_replica = 2;
+}

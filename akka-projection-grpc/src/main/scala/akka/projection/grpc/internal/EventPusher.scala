@@ -65,7 +65,9 @@ private[akka] object EventPusher {
     import akka.projection.grpc.internal.ProtobufProtocolConversions.transformAndEncodeEvent
 
     implicit val ec: ExecutionContext = system.executionContext
-    val protoAnySerialization = new ProtoAnySerialization(system)
+    val wireSerialization =
+      if (eps.settings.akkaSerializationOnly) new DelegateToAkkaSerialization(system)
+      else new ProtoAnySerialization(system)
 
     def filterAndTransformFlow(filters: Future[proto.ConsumerEventStart])
         : Flow[(EventEnvelope[Event], ProjectionContext), (ConsumeEventIn, ProjectionContext), NotUsed] =
@@ -119,7 +121,7 @@ private[akka] object EventPusher {
                         envelope.sequenceNr,
                         startMessage.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
-                    transformAndEncodeEvent(eps.transformation, envelope, protoAnySerialization)
+                    transformAndEncodeEvent(eps.transformation, envelope, wireSerialization)
                   } else {
                     if (logger.isTraceEnabled())
                       logger.trace(

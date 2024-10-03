@@ -105,7 +105,7 @@ private[akka] object ProtobufProtocolConversions {
   def transformAndEncodeEvent(
       transformation: Transformation,
       env: EventEnvelope[_],
-      protoAnySerialization: ProtoAnySerialization)(
+      protoAnySerialization: ProjectionGrpcSerialization)(
       implicit executionContext: ExecutionContext): Future[Option[Event]] = {
     env.eventOption match {
       case Some(_) =>
@@ -147,22 +147,22 @@ private[akka] object ProtobufProtocolConversions {
     }
   }
 
-  def eventToEnvelope[Evt](event: Event, protoAnySerialization: ProtoAnySerialization): EventEnvelope[Evt] =
+  def eventToEnvelope[Evt](event: Event, protoAnySerialization: ProjectionGrpcSerialization): EventEnvelope[Evt] =
     eventToEnvelope(event, protoAnySerialization, deserializeEvent = true).asInstanceOf[EventEnvelope[Evt]]
 
   def eventToEnvelope(
       event: Event,
-      protoAnySerialization: ProtoAnySerialization,
+      wireSerialization: ProjectionGrpcSerialization,
       deserializeEvent: Boolean): EventEnvelope[Any] = {
     val eventOffset = populateSeenIfNeeded(
       TimestampOffset.toTimestampOffset(protocolOffsetToOffset(event.offset)),
       event.persistenceId,
       event.seqNr)
 
-    val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
+    val metadata: Option[Any] = event.metadata.map(wireSerialization.deserialize)
 
     def envelopeWithDeserializedEvent: EventEnvelope[Any] = {
-      val evt = event.payload.map(protoAnySerialization.deserialize)
+      val evt = event.payload.map(wireSerialization.deserialize)
       new EventEnvelope(
         eventOffset,
         event.persistenceId,
@@ -180,7 +180,7 @@ private[akka] object ProtobufProtocolConversions {
     if (deserializeEvent || event.payload.isEmpty) {
       envelopeWithDeserializedEvent
     } else {
-      protoAnySerialization.toSerializedEvent(event.payload.get) match {
+      wireSerialization.toSerializedEvent(event.payload.get) match {
         case Some(serializedEvent) =>
           new EventEnvelope(
             eventOffset,
