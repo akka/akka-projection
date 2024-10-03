@@ -8,7 +8,6 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
-import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.InternalApi
@@ -30,7 +29,6 @@ import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
 import akka.projection.grpc.internal.ProjectionGrpcSerialization
-import akka.projection.grpc.internal.DelegateToAkkaSerialization
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.ProtobufProtocolConversions
@@ -112,8 +110,11 @@ object GrpcReadJournal {
       settings: GrpcQuerySettings,
       clientSettings: GrpcClientSettings,
       protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
-      implicit system: ClassicActorSystemProvider): GrpcReadJournal =
-    apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala, replicationSettings = None)
+      implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
+    val protoAnySerialization =
+      new ProtoAnySerialization(system.classicSystem.toTyped, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
+    apply(settings, clientSettings, protoAnySerialization, replicationSettings = None)
+  }
 
   /**
    * INTERNAL API
@@ -121,45 +122,12 @@ object GrpcReadJournal {
   @InternalApi private[akka] def apply(
       settings: GrpcQuerySettings,
       clientSettings: GrpcClientSettings,
-      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
-      protobufPrefer: ProtoAnySerialization.Prefer,
+      wireSerialization: ProjectionGrpcSerialization,
       replicationSettings: Option[ReplicationSettings[_]])(
       implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
 
     // FIXME issue #702 This probably means that one GrpcReadJournal instance is created for each Projection instance,
     // and therefore one grpc client for each. Is that fine or should the client be shared for same clientSettings?
-
-    val protoAnySerialization =
-      new ProtoAnySerialization(system.classicSystem.toTyped, protobufDescriptors, protobufPrefer)
-
-    if (settings.initialConsumerFilter.nonEmpty) {
-      ConsumerFilter(system.classicSystem.toTyped).ref ! ConsumerFilter.UpdateFilter(
-        settings.streamId,
-        settings.initialConsumerFilter)
-    }
-
-    new scaladsl.GrpcReadJournal(
-      system.classicSystem.asInstanceOf[ExtendedActorSystem],
-      settings,
-      withChannelBuilderOverrides(clientSettings),
-      protoAnySerialization,
-      replicationSettings)
-  }
-
-  /**
-   * INTERNAL API
-   *
-   * Factory method for replication, with replication specific serialization
-   */
-  @InternalApi private[akka] def apply(
-      settings: GrpcQuerySettings,
-      clientSettings: GrpcClientSettings,
-      replicationSettings: Option[ReplicationSettings[_]])(implicit system: ActorSystem[_]): GrpcReadJournal = {
-
-    // FIXME issue #702 This probably means that one GrpcReadJournal instance is created for each Projection instance,
-    // and therefore one grpc client for each. Is that fine or should the client be shared for same clientSettings?
-
-    val wireSerialization = new DelegateToAkkaSerialization(system)
 
     if (settings.initialConsumerFilter.nonEmpty) {
       ConsumerFilter(system.classicSystem.toTyped).ref ! ConsumerFilter.UpdateFilter(

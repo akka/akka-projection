@@ -9,13 +9,12 @@ import java.util
 import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.CompletionStage
-
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcClientSettings
@@ -72,14 +71,14 @@ object GrpcReadJournal {
       clientSettings: GrpcClientSettings,
       protobufDescriptors: java.util.List[Descriptors.FileDescriptor]): GrpcReadJournal = {
     import akka.util.ccompat.JavaConverters._
+    val protoAnySerialization =
+      new ProtoAnySerialization(
+        system.classicSystem.toTyped,
+        protobufDescriptors.asScala.toVector,
+        ProtoAnySerialization.Prefer.Java)
     new GrpcReadJournal(
       scaladsl
-        .GrpcReadJournal(
-          settings,
-          clientSettings,
-          protobufDescriptors.asScala.toList,
-          ProtoAnySerialization.Prefer.Java,
-          replicationSettings = None)(system))
+        .GrpcReadJournal(settings, clientSettings, protoAnySerialization, replicationSettings = None)(system))
   }
 
 }

@@ -5,7 +5,6 @@
 package akka.projection.grpc.replication
 
 import akka.Done
-import akka.actor.ExtendedActorSystem
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -32,92 +31,22 @@ import akka.projection.grpc.replication.scaladsl.ReplicatedBehaviors
 import akka.projection.grpc.replication.scaladsl.Replication
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.projection.r2dbc.scaladsl.R2dbcReplication
-import akka.serialization.BaseSerializer
-import akka.serialization.ByteBufferSerializer
-import akka.serialization.SerializerWithStringManifest
 import akka.testkit.SocketUtil
-import com.google.protobuf.CodedInputStream
-import com.google.protobuf.CodedOutputStream
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 import scalapb.GeneratedMessage
-import scalapb.GeneratedMessageCompanion
-
-import java.nio.ByteBuffer
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
 object ReplicationProtoEventIntegrationSpec {
 
-  class ProtobufSerializer(val system: ExtendedActorSystem)
-      extends SerializerWithStringManifest
-      with BaseSerializer
-      with ByteBufferSerializer {
-
-    private val TagChangedManifest = akka.projection.grpc.test.TagChanged.javaDescriptor.getName
-    private val GreetingChangedManifest = akka.projection.grpc.test.GreetingChanged.javaDescriptor.getName
-
-    override def manifest(o: AnyRef): String = {
-      o match {
-        case msg: GeneratedMessage => msg.companion.javaDescriptor.getName
-        case _ =>
-          throw new IllegalArgumentException(s"Can't serialize object of type ${o.getClass} in [${getClass.getName}]")
-      }
-    }
-
-    override def toBinary(o: AnyRef): Array[Byte] = {
-      o match {
-        case msg: GeneratedMessage => msg.toByteArray
-        case _ =>
-          throw new IllegalArgumentException(s"Cannot serialize object of type [${o.getClass.getName}]")
-      }
-    }
-
-    override def toBinary(o: AnyRef, buf: ByteBuffer): Unit = {
-      o match {
-        case msg: GeneratedMessage =>
-          val output = CodedOutputStream.newInstance(buf)
-          msg.writeTo(output)
-          output.flush()
-        case _ =>
-          throw new IllegalArgumentException(s"Cannot serialize object of type [${o.getClass.getName}]")
-      }
-    }
-
-    override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = {
-      getCompanion(manifest).parseFrom(bytes).asInstanceOf[AnyRef]
-    }
-
-    override def fromBinary(buf: ByteBuffer, manifest: String): AnyRef = {
-      getCompanion(manifest).parseFrom(CodedInputStream.newInstance(buf)).asInstanceOf[AnyRef]
-    }
-
-    private def getCompanion(manifest: String): GeneratedMessageCompanion[_] = manifest match {
-      case GreetingChangedManifest => akka.projection.grpc.test.GreetingChanged.messageCompanion
-      case TagChangedManifest      => akka.projection.grpc.test.TagChanged.messageCompanion
-      case unknown                 => throw new IllegalArgumentException(s"Unknown manifest $unknown")
-    }
-
-  }
-
   private def config(dc: ReplicaId): Config =
     ConfigFactory.parseString(s"""
        akka.actor.provider = cluster
-       akka.actor {
-         serializers {
-           my-replication-serializer = "akka.projection.grpc.replication.ReplicationProtoEventIntegrationSpec$$ProtobufSerializer"
-         }
-         serialization-identifiers {
-           "akka.projection.grpc.replication.ReplicationProtoEventIntegrationSpec$$ProtobufSerializer" = 1528148901
-         }
-         serialization-bindings {
-           "scalapb.GeneratedMessage" = my-replication-serializer
-         }
-       }
        akka.http.server.preview.enable-http2 = on
        akka.persistence.r2dbc {
           journal.table = "event_journal_${dc.id}"
@@ -156,6 +85,7 @@ object ReplicationProtoEventIntegrationSpec {
     final case class SetTag(tag: String, replyTo: ActorRef[Done]) extends Command
 
     // events are defined directly as proto messages
+    // Note: uses the default auto-serialization of protobuf generated messages
     private implicit class ProtoLwwToScalaLww(protoLwwTime: akka.projection.grpc.test.LwwTime) {
       def toScala: LwwTime = LwwTime(protoLwwTime.timestamp, ReplicaId(protoLwwTime.originReplica))
     }
