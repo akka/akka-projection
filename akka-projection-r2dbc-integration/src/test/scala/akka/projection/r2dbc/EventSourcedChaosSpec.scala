@@ -17,7 +17,6 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
@@ -71,7 +70,7 @@ object EventSourcedChaosSpec {
       val failCount = failEvents.getOrDefault(envelope.eventOption, 0)
       if (failCount > 0) {
         failEvents.put(envelope.event, failCount - 1)
-        log.debugN(
+        log.debug(
           "{} Fail event [{}], pid [{}], seqNr [{}]",
           projectionId.key,
           envelope.event,
@@ -79,7 +78,7 @@ object EventSourcedChaosSpec {
           envelope.sequenceNr)
         throw TestException(s"Fail event [${envelope.event}]")
       } else {
-        log.debugN(
+        log.debug(
           "{} Processed event [{}], pid [{}], seqNr [{}]",
           projectionId.key,
           envelope.event,
@@ -266,7 +265,7 @@ class EventSourcedChaosSpec
               val failCount = 1 + rnd.nextInt(3)
               val i = rnd.nextInt(events.size)
               failEvents.put(events(i), failCount)
-              log.debugN(
+              log.debug(
                 "Persisting events [{}], it will fail [{}] in projection [{}] times",
                 events.mkString(", "),
                 events(i),

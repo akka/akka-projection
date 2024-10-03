@@ -31,7 +31,7 @@ import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.javadsl.Source;
 import org.junit.*;
 import org.scalatestplus.junit.JUnitSuite;
-import scala.compat.java8.FutureConverters;
+import scala.jdk.FutureConverters;
 import scala.concurrent.Await;
 
 import java.time.Duration;

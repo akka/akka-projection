@@ -6,7 +6,7 @@ package akka.projection.cassandra
 
 import java.time.Instant
 import java.util.UUID
-import scala.compat.java8.FutureConverters._
+import scala.jdk.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._

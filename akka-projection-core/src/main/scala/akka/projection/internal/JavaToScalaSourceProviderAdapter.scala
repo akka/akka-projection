@@ -6,7 +6,6 @@ package akka.projection.internal
 
 import akka.NotUsed
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
@@ -19,9 +18,9 @@ import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
-import scala.concurrent.Future
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
+import scala.concurrent.{ ExecutionContext, Future }
 
 @InternalApi private[projection] object JavaToScalaBySliceSourceProviderAdapter {
   def apply[Offset, Envelope](
@@ -47,11 +46,11 @@ private[projection] class JavaToScalaSourceProviderAdapter[Offset, Envelope](
   def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
     // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,
     // it _should_ not be used for the blocking operation of getting offsets themselves
-    val ec = akka.dispatch.ExecutionContexts.parasitic
+    val ec = scala.concurrent.ExecutionContext.parasitic
     val offsetAdapter = new Supplier[CompletionStage[Optional[Offset]]] {
-      override def get(): CompletionStage[Optional[Offset]] = offset().map(_.asJava)(ec).toJava
+      override def get(): CompletionStage[Optional[Offset]] = offset().map(_.toJava)(ec).asJava
     }
-    delegate.source(offsetAdapter).toScala.map(_.asScala)(ec)
+    delegate.source(offsetAdapter).asScala.map(_.asScala)(ec)
   }
 
   def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
@@ -72,11 +71,11 @@ private[projection] class JavaToScalaSourceProviderAdapter[Offset, Envelope](
   def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
     // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,
     // it _should_ not be used for the blocking operation of getting offsets themselves
-    val ec = akka.dispatch.ExecutionContexts.parasitic
+    val ec = scala.concurrent.ExecutionContext.parasitic
     val offsetAdapter = new Supplier[CompletionStage[Optional[Offset]]] {
-      override def get(): CompletionStage[Optional[Offset]] = offset().map(_.asJava)(ec).toJava
+      override def get(): CompletionStage[Optional[Offset]] = offset().map(_.toJava)(ec).asJava
     }
-    delegate.source(offsetAdapter).toScala.map(_.asScala)(ec)
+    delegate.source(offsetAdapter).asScala.map(_.asScala)(ec)
   }
 
   def extractOffset(envelope: Envelope): Offset = delegate.extractOffset(envelope)
@@ -92,7 +91,7 @@ private[projection] class JavaToScalaSourceProviderAdapter[Offset, Envelope](
   override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] =
     delegate match {
       case timestampQuery: akka.persistence.query.typed.javadsl.EventTimestampQuery =>
-        timestampQuery.timestampOf(persistenceId, sequenceNr).toScala.map(_.asScala)(ExecutionContexts.parasitic)
+        timestampQuery.timestampOf(persistenceId, sequenceNr).asScala.map(_.toScala)(ExecutionContext.parasitic)
       case _ =>
         Future.failed(
           new IllegalArgumentException(
@@ -103,7 +102,7 @@ private[projection] class JavaToScalaSourceProviderAdapter[Offset, Envelope](
   override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Event]] =
     delegate match {
       case timestampQuery: akka.persistence.query.typed.javadsl.LoadEventQuery =>
-        timestampQuery.loadEnvelope[Event](persistenceId, sequenceNr).toScala
+        timestampQuery.loadEnvelope[Event](persistenceId, sequenceNr).asScala
       case _ =>
         Future.failed(
           new IllegalArgumentException(

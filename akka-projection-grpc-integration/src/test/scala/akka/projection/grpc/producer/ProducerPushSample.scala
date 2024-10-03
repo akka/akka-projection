@@ -8,7 +8,6 @@ import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Props
 import akka.actor.typed.SpawnProtocol
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.Entity
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
@@ -122,7 +121,7 @@ object ProducerPushSampleProducer {
       val fruit = fruits.next()
       refs.foreach { ref =>
         val persist = TestEntity.Persist(s"$fruit-$n")
-        log.info2("Sending {} to {}", persist, ref.entityId)
+        log.info("Sending {} to {}", persist, ref.entityId)
         ref.tell(persist)
         Thread.sleep(10) // slow it down a bit
       }
@@ -163,7 +162,7 @@ object ProducerPushSampleConsumer {
           sourceProvider = consumerProjectionProvider,
           handler = () => {
             (envelope: EventEnvelope[String]) =>
-              log.infoN(
+              log.info(
                 "Saw projected event: {}-{}: {}",
                 envelope.persistenceId,
                 envelope.sequenceNr,
@@ -183,6 +182,6 @@ object ProducerPushSampleConsumer {
       .newServerAt("127.0.0.1", grpcPort)
       .bind(EventProducerPushDestination.grpcServiceHandler(destination))
     bound.foreach(binding =>
-      log.info2(s"Consumer listening at: {}:{}", binding.localAddress.getHostString, binding.localAddress.getPort))
+      log.info(s"Consumer listening at: {}:{}", binding.localAddress.getHostString, binding.localAddress.getPort))
   }
 }

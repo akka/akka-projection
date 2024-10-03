@@ -15,7 +15,6 @@ import scala.util.control.NonFatal
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
@@ -101,8 +100,8 @@ private[projection] object R2dbcProjectionImpl {
           case loadEventQuery: LoadEventQuery =>
             loadEventQuery.loadEnvelope[Any](pid, seqNr)
           case loadEventQuery: akka.persistence.query.typed.javadsl.LoadEventQuery =>
-            import scala.compat.java8.FutureConverters._
-            loadEventQuery.loadEnvelope[Any](pid, seqNr).toScala
+            import scala.jdk.FutureConverters._
+            loadEventQuery.loadEnvelope[Any](pid, seqNr).asScala
           case _ =>
             throw new IllegalArgumentException(
               s"Expected sourceProvider [${sourceProvider.getClass.getName}] " +
@@ -110,9 +109,9 @@ private[projection] object R2dbcProjectionImpl {
         }).map { loadedEnv =>
           val count = loadEnvelopeCounter.incrementAndGet()
           if (count % 1000 == 0)
-            log.infoN("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
+            log.info("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
           else
-            log.debugN("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
+            log.debug("Loaded event lazily, persistenceId [{}], seqNr [{}]. Load count [{}]", pid, seqNr, count)
           loadedEnv.asInstanceOf[Envelope]
         }
 
@@ -122,21 +121,21 @@ private[projection] object R2dbcProjectionImpl {
           case store: DurableStateStore[_] =>
             store.getObject(pid)
           case store: akka.persistence.state.javadsl.DurableStateStore[_] =>
-            import scala.compat.java8.FutureConverters._
-            store.getObject(pid).toScala.map(_.toScala)
+            import scala.jdk.FutureConverters._
+            store.getObject(pid).asScala.map(_.toScala)
           case unknown =>
             throw new IllegalArgumentException(s"Unsupported source provider type '${unknown.getClass}'")
         }).map {
           case GetObjectResult(Some(loadedValue), loadedRevision) =>
             val count = loadEnvelopeCounter.incrementAndGet()
             if (count % 1000 == 0)
-              log.infoN(
+              log.info(
                 "Loaded durable state lazily, persistenceId [{}], revision [{}]. Load count [{}]",
                 pid,
                 loadedRevision,
                 count)
             else
-              log.debugN(
+              log.debug(
                 "Loaded durable state lazily, persistenceId [{}], revision [{}]. Load count [{}]",
                 pid,
                 loadedRevision,

@@ -7,7 +7,6 @@ package akka.projection.grpc.internal
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
@@ -138,7 +137,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 
       val offset = protocolOffsetToOffset(init.offset)
 
-      log.debugN(
+      log.debug(
         "Starting eventsBySlices stream [{}], [{}], slices [{} - {}], offset [{}]{}",
         producerSource.streamId,
         producerSource.entityType,
@@ -217,7 +216,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
           env.eventOption match {
             case Some(FilteredPayload) =>
               if (log.isTraceEnabled)
-                log.traceN(
+                log.trace(
                   "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
                   env.persistenceId,
                   env.sequenceNr,
@@ -238,7 +237,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                 .map {
                   case Some(event) =>
                     if (log.isTraceEnabled)
-                      log.traceN(
+                      log.trace(
                         "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
                         env.persistenceId,
                         env.sequenceNr,
@@ -248,7 +247,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                     StreamOut(StreamOut.Message.Event(event))
                   case None =>
                     if (log.isTraceEnabled)
-                      log.traceN(
+                      log.trace(
                         "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
                         env.persistenceId,
                         env.sequenceNr,
@@ -315,14 +314,14 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                 transformAndEncodeEvent(producerSource.transformation, env, wireSerialization(producerSource))
                   .map {
                     case Some(event) =>
-                      log.traceN(
+                      log.trace(
                         "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
                         env.persistenceId,
                         env.sequenceNr,
                         env.offset)
                       LoadEventResponse(LoadEventResponse.Message.Event(event))
                     case None =>
-                      log.traceN(
+                      log.trace(
                         "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]",
                         env.persistenceId,
                         env.sequenceNr,
@@ -335,7 +334,7 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                         source = env.source)))
                   }
               } else {
-                log.traceN(
+                log.trace(
                   "Filtered loaded event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
                   env.persistenceId,
                   env.sequenceNr,

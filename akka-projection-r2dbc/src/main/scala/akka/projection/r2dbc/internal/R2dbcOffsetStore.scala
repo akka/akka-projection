@@ -6,9 +6,7 @@ package akka.projection.r2dbc.internal
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.query.DeletedDurableState
 import akka.persistence.query.DurableStateChange
@@ -221,7 +219,7 @@ private[projection] class R2dbcOffsetStore(
           s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
     }
   private val dao = {
-    logger.debug2("Offset store [{}] created, with dialect [{}]", projectionId, dialectName)
+    logger.debug("Offset store [{}] created, with dialect [{}]", projectionId, dialectName)
     dialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
   }
 
@@ -255,9 +253,9 @@ private[projection] class R2dbcOffsetStore(
       case Some(timestampQuery: EventTimestampQuery) =>
         timestampQuery.timestampOf(persistenceId, sequenceNr)
       case Some(timestampQuery: akka.persistence.query.typed.javadsl.EventTimestampQuery) =>
-        import scala.compat.java8.FutureConverters._
-        import scala.compat.java8.OptionConverters._
-        timestampQuery.timestampOf(persistenceId, sequenceNr).toScala.map(_.asScala)
+        import scala.jdk.FutureConverters._
+        import scala.jdk.OptionConverters._
+        timestampQuery.timestampOf(persistenceId, sequenceNr).asScala.map(_.toScala)
       case Some(_) =>
         throw new IllegalArgumentException(
           s"Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
@@ -299,7 +297,7 @@ private[projection] class R2dbcOffsetStore(
     val oldState = state.get()
     dao.readTimestampOffset().map { recordsWithKey =>
       val newState = State(recordsWithKey.map(_.record))
-      logger.debugN(
+      logger.debug(
         "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
         newState.byPid.size,
         newState.oldestTimestamp,
@@ -363,7 +361,7 @@ private[projection] class R2dbcOffsetStore(
             offsets.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
           }
 
-        logger.trace2("found offset [{}] for [{}]", result, projectionId)
+        logger.trace("found offset [{}] for [{}]", result, projectionId)
 
         result
       }
@@ -380,7 +378,7 @@ private[projection] class R2dbcOffsetStore(
       .withConnection("save offset") { conn =>
         saveOffsetInTx(conn, offset)
       }
-      .map(_ => Done)(ExecutionContexts.parasitic)
+      .map(_ => Done)(ExecutionContext.parasitic)
   }
 
   /**
@@ -404,7 +402,7 @@ private[projection] class R2dbcOffsetStore(
       .withConnection("save offsets") { conn =>
         saveOffsetsInTx(conn, offsets)
       }
-      .map(_ => Done)(ExecutionContexts.parasitic)
+      .map(_ => Done)(ExecutionContext.parasitic)
   }
 
   def saveOffsetsInTx(conn: Connection, offsets: immutable.IndexedSeq[OffsetPidSeqNr]): Future[Done] = {
@@ -459,7 +457,7 @@ private[projection] class R2dbcOffsetStore(
           val evictUntil = newState.latestTimestamp.minus(settings.timeWindow)
           val s = newState.evict(evictUntil, settings.keepNumberOfEntries)
           triggerDeletion.set(true)
-          logger.debugN(
+          logger.debug(
             "Evicted [{}] records until [{}], keeping [{}] records. Latest [{}].",
             newState.size - s.size,
             evictUntil,
@@ -587,21 +585,21 @@ private[projection] class R2dbcOffsetStore(
 
       def logUnexpected(): Unit = {
         if (recordWithOffset.fromPubSub)
-          logger.debugN(
+          logger.debug(
             "Rejecting pub-sub envelope, unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
             seqNr,
             pid,
             prevSeqNr,
             recordWithOffset.offset)
         else if (!recordWithOffset.fromBacktracking)
-          logger.debugN(
+          logger.debug(
             "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
             seqNr,
             pid,
             prevSeqNr,
             recordWithOffset.offset)
         else
-          logger.warnN(
+          logger.warn(
             "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
             seqNr,
             pid,
@@ -611,20 +609,20 @@ private[projection] class R2dbcOffsetStore(
 
       def logUnknown(): Unit = {
         if (recordWithOffset.fromPubSub) {
-          logger.debugN(
+          logger.debug(
             "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
             seqNr,
             pid,
             recordWithOffset.offset)
         } else if (!recordWithOffset.fromBacktracking) {
           // This may happen rather frequently when using `publish-events`, after reconnecting and such.
-          logger.debugN(
+          logger.debug(
             "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
             seqNr,
             pid,
             recordWithOffset.offset)
         } else {
-          logger.warnN(
+          logger.warn(
             "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}",
             seqNr,
             pid,
@@ -667,7 +665,7 @@ private[projection] class R2dbcOffsetStore(
           case Some(previousTimestamp) =>
             val before = currentState.latestTimestamp.minus(settings.timeWindow)
             if (previousTimestamp.isBefore(before)) {
-              logger.debugN(
+              logger.debug(
                 "Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
                 "is before time window [{}].",
                 pid,
@@ -696,7 +694,7 @@ private[projection] class R2dbcOffsetStore(
       if (ok) {
         FutureAccepted
       } else {
-        logger.traceN("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
+        logger.trace("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
         FutureDuplicate
       }
     }
@@ -766,7 +764,7 @@ private[projection] class R2dbcOffsetStore(
         }
         if (logger.isDebugEnabled)
           result.foreach { rows =>
-            logger.debugN(
+            logger.debug(
               "Deleted [{}] timestamp offset rows until [{}] for projection [{}].",
               rows,
               until,
@@ -803,14 +801,14 @@ private[projection] class R2dbcOffsetStore(
               dao.insertTimestampOffsetInTx(conn, records)
             }
           }
-          .map(_ => Done)(ExecutionContexts.parasitic)
+          .map(_ => Done)(ExecutionContext.parasitic)
 
       case _ =>
         r2dbcExecutor
           .withConnection("set offset") { conn =>
             savePrimitiveOffsetInTx(conn, offset)
           }
-          .map(_ => Done)(ExecutionContexts.parasitic)
+          .map(_ => Done)(ExecutionContext.parasitic)
     }
   }
 
@@ -823,7 +821,7 @@ private[projection] class R2dbcOffsetStore(
       val result = dao.deleteNewTimestampOffsetsInTx(conn, timestamp)
       if (logger.isDebugEnabled)
         result.foreach { rows =>
-          logger.debugN(
+          logger.debug(
             "Deleted [{}] timestamp offset rows >= [{}] for projection [{}].",
             rows,
             timestamp,

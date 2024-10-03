@@ -7,7 +7,6 @@ package akka.projection.grpc.consumer.javadsl
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.grpc.internal.JavaMetadataImpl
 import akka.grpc.javadsl.Metadata
 import akka.http.javadsl.model.HttpRequest
@@ -17,7 +16,6 @@ import akka.projection.grpc.consumer.EventProducerPushDestinationSettings
 import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 import akka.projection.grpc.consumer.scaladsl
-import akka.util.ccompat.JavaConverters._
 import akka.japi.function.{ Function => JapiFunction }
 import akka.projection.grpc.internal.ProtoAnySerialization.Prefer
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
@@ -28,9 +26,12 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.BiFunction
 import java.util.{ List => JList, Set => JSet }
-import scala.compat.java8.FutureConverters.CompletionStageOps
-import scala.compat.java8.FutureConverters.FutureOps
-import scala.compat.java8.OptionConverters.RichOptionalGeneric
+
+import scala.jdk.FutureConverters._
+import scala.jdk.FutureConverters.FutureOps
+import scala.jdk.OptionConverters._
+import scala.concurrent.ExecutionContext
+import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
 /**
@@ -81,8 +82,8 @@ object EventProducerPushDestination {
     new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
       override def apply(request: HttpRequest): CompletionStage[HttpResponse] =
         handler(request.asInstanceOf[akka.http.scaladsl.model.HttpRequest])
-          .map(_.asInstanceOf[HttpResponse])(ExecutionContexts.parasitic)
-          .toJava
+          .map(_.asInstanceOf[HttpResponse])(ExecutionContext.parasitic)
+          .asJava
     }
   }
 
@@ -99,7 +100,7 @@ object EventProducerPushDestination {
         .map(scalaInterceptor =>
           new EventDestinationInterceptor {
             override def intercept(streamId: String, requestMetadata: Metadata): CompletionStage[Done] =
-              scalaInterceptor.intercept(streamId, requestMetadata.asScala).toJava
+              scalaInterceptor.intercept(streamId, requestMetadata.asScala).asJava
           })
         .toJava,
       scalaDestination.filters.asJava,
@@ -179,11 +180,11 @@ final class EventProducerPushDestination private (
   @InternalApi
   private[akka] def asScala: scaladsl.EventProducerPushDestination =
     new scaladsl.EventProducerPushDestination(
-      journalPluginId.asScala,
+      journalPluginId.toScala,
       acceptedStreamId,
       (origin, meta) => transformationForOrigin.apply(origin, new JavaMetadataImpl(meta)).delegate,
-      interceptor.asScala.map(javaInterceptor =>
-        (streamId, meta) => javaInterceptor.intercept(streamId, new JavaMetadataImpl(meta)).toScala),
+      interceptor.toScala.map(javaInterceptor =>
+        (streamId, meta) => javaInterceptor.intercept(streamId, new JavaMetadataImpl(meta)).asScala),
       filters.asScala.toVector,
       protobufDescriptors.asScala.toVector,
       settings,

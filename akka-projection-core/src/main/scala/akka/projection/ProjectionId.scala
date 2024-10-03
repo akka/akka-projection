@@ -6,7 +6,7 @@ package akka.projection
 
 import scala.collection.immutable
 
-import akka.util.ccompat.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object ProjectionId {
 

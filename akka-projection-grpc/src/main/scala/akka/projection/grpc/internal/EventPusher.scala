@@ -7,7 +7,6 @@ package akka.projection.grpc.internal
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.grpc.scaladsl.BytesEntry
 import akka.grpc.scaladsl.Metadata
@@ -73,7 +72,7 @@ private[akka] object EventPusher {
         : Flow[(EventEnvelope[Event], ProjectionContext), (ConsumeEventIn, ProjectionContext), NotUsed] =
       Flow
         .futureFlow(filters.map { startMessage =>
-          logger.infoN(
+          logger.info(
             "Starting event push flow for [{}], origin id: [{}]{}",
             eps.streamId,
             originId,

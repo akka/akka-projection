@@ -17,9 +17,7 @@ import org.slf4j.LoggerFactory
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.internal.Sql.InterpolationWithAdapter
@@ -247,7 +245,7 @@ private[projection] class PostgresOffsetStoreDao(
 
     require(records.nonEmpty)
 
-    logger.trace2("saving timestamp offset [{}], {}", records.last.timestamp, records)
+    logger.trace("saving timestamp offset [{}], {}", records.last.timestamp, records)
 
     if (records.size == 1) {
       val statement = connection.createStatement(insertTimestampOffsetSql)
@@ -283,7 +281,7 @@ private[projection] class PostgresOffsetStoreDao(
           // This "batch" statement is not efficient, see issue #897
           R2dbcExecutor
             .updateBatchInTx(boundStatement)
-            .map(_ + batchResultCount)(ExecutionContexts.parasitic)
+            .map(_ + batchResultCount)(ExecutionContext.parasitic)
         } else
           Future.successful(batchResultCount)
       }
@@ -314,7 +312,7 @@ private[projection] class PostgresOffsetStoreDao(
       case MultipleOffsets(many) => many.map(upsertStmt).toVector
     }
 
-    R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContexts.parasitic)
+    R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContext.parasitic)
   }
 
   override def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[LatestBySlice]): Future[Long] = {

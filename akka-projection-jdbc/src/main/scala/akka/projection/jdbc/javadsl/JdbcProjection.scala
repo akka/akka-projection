@@ -7,7 +7,7 @@ package akka.projection.jdbc.javadsl
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.compat.java8.FutureConverters._
+import scala.jdk.FutureConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -282,7 +282,7 @@ object JdbcProjection {
   def createTablesIfNotExists[S <: JdbcSession](
       sessionFactory: Supplier[S],
       system: ActorSystem[_]): CompletionStage[Done] =
-    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).createIfNotExists().toJava
+    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).createIfNotExists().asJava
 
   @deprecated("Renamed to createTablesIfNotExists", "1.2.0")
   def createOffsetTableIfNotExists[S <: JdbcSession](
@@ -294,7 +294,7 @@ object JdbcProjection {
    * For testing purposes the projection offset and management tables can be dropped programmatically.
    */
   def dropTablesIfExists[S <: JdbcSession](sessionFactory: Supplier[S], system: ActorSystem[_]): CompletionStage[Done] =
-    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).dropIfExists().toJava
+    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).dropIfExists().asJava
 
   @deprecated("Renamed to dropTablesIfExists", "1.2.0")
   def dropOffsetTableIfExists[S <: JdbcSession](

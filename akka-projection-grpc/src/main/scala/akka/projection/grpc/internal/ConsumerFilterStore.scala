@@ -20,7 +20,6 @@ import akka.actor.typed.ExtensionId
 import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.cluster.UniqueAddress
 import akka.cluster.ddata.DeltaReplicatedData
@@ -91,7 +90,7 @@ import org.slf4j.LoggerFactory
           classOf[ActorRef[ConsumerFilterRegistry.FilterUpdated]])
         applyMethod.invoke(companion, settings, streamId, notifyUpdatesTo).asInstanceOf[Behavior[Command]]
       case Failure(exc) =>
-        LoggerFactory.getLogger(className).error2("Couldn't create instance of [{}]", className, exc)
+        LoggerFactory.getLogger(className).error("Couldn't create instance of [{}]", className, exc)
         throw exc
     }
   }
@@ -142,7 +141,7 @@ import org.slf4j.LoggerFactory
   def setState(old: immutable.Seq[FilterCriteria], filterCriteria: immutable.Seq[FilterCriteria]): Unit = {
     if (!storeExt.filtersByStreamId.replace(streamId, old, filterCriteria))
       throw new ConcurrentModificationException(s"Unexpected concurrent update of streamId [$streamId]")
-    context.log.debug2("Updated filter for streamId [{}] to [{}]", streamId, filterCriteria)
+    context.log.debug("Updated filter for streamId [{}] to [{}]", streamId, filterCriteria)
   }
 
   def behavior(): Behavior[Command] = {

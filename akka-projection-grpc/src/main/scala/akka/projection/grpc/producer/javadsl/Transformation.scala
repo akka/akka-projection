@@ -4,7 +4,6 @@
 
 package akka.projection.grpc.producer.javadsl
 
-import akka.dispatch.ExecutionContexts
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.producer.scaladsl
 
@@ -12,8 +11,9 @@ import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.function.{ Function => JFunction }
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
+import scala.concurrent.ExecutionContext
 import scala.reflect.ClassTag
 
 @FunctionalInterface
@@ -55,7 +55,7 @@ final class Transformation private[akka] (private[akka] val delegate: scaladsl.E
       f: JFunction[A, CompletionStage[Optional[B]]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
     new Transformation(
-      delegate.registerAsyncMapper[A, B](event => f.apply(event).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
+      delegate.registerAsyncMapper[A, B](event => f.apply(event).asScala.map(_.toScala)(ExecutionContext.parasitic)))
   }
 
   /**
@@ -64,7 +64,7 @@ final class Transformation private[akka] (private[akka] val delegate: scaladsl.E
    */
   def registerMapper[A, B](inputEventClass: Class[A], f: JFunction[A, Optional[B]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
-    new Transformation(delegate.registerMapper[A, B](event => f.apply(event).asScala))
+    new Transformation(delegate.registerMapper[A, B](event => f.apply(event).toScala))
   }
 
   /**
@@ -86,7 +86,7 @@ final class Transformation private[akka] (private[akka] val delegate: scaladsl.E
       f: JFunction[EventEnvelope[A], CompletionStage[Optional[B]]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
     new Transformation(delegate.registerAsyncEnvelopeMapper[A, B](envelope =>
-      f.apply(envelope).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
+      f.apply(envelope).asScala.map(_.toScala)(ExecutionContext.parasitic)))
   }
 
   /**
@@ -99,8 +99,8 @@ final class Transformation private[akka] (private[akka] val delegate: scaladsl.E
       delegate.registerAsyncOrElseMapper(
         event =>
           f.apply(event.asInstanceOf[AnyRef])
-            .toScala
-            .map(_.asScala)(ExecutionContexts.parasitic)))
+            .asScala
+            .map(_.toScala)(ExecutionContext.parasitic)))
   }
 
   /**
@@ -109,7 +109,7 @@ final class Transformation private[akka] (private[akka] val delegate: scaladsl.E
    *          mapper defined.
    */
   def registerOrElseMapper(f: AnyRef => Optional[AnyRef]): Transformation = {
-    new Transformation(delegate.registerOrElseMapper(event => f.apply(event.asInstanceOf[AnyRef]).asScala))
+    new Transformation(delegate.registerOrElseMapper(event => f.apply(event.asInstanceOf[AnyRef]).toScala))
   }
 
   /**
@@ -120,6 +120,6 @@ final class Transformation private[akka] (private[akka] val delegate: scaladsl.E
   def registerAsyncEnvelopeOrElseMapper(
       f: JFunction[EventEnvelope[Any], CompletionStage[Optional[Any]]]): Transformation = {
     new Transformation(delegate.registerAsyncEnvelopeOrElseMapper(envelope =>
-      f.apply(envelope).toScala.map(_.asScala)(ExecutionContexts.parasitic)))
+      f.apply(envelope).asScala.map(_.toScala)(ExecutionContext.parasitic)))
   }
 }

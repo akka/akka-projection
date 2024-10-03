@@ -12,6 +12,8 @@ import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.runtime.AbstractFunction2
+import scala.jdk.CollectionConverters._
+import scala.jdk.DurationConverters._
 
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -23,8 +25,6 @@ import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.internal.ConsumerFilterRegistry
 import akka.projection.grpc.internal.TopicMatcher
 import akka.util.HashCode
-import akka.util.JavaDurationConverters._
-import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.Config
 
 /**
@@ -715,8 +715,8 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
 
     def apply(config: Config): ConsumerFilterSettings =
       ConsumerFilterSettings(
-        ddataReadTimeout = config.getDuration("ddata-read-timeout").asScala,
-        ddataWriteTimeout = config.getDuration("ddata-write-timeout").asScala)
+        ddataReadTimeout = config.getDuration("ddata-read-timeout").toScala,
+        ddataWriteTimeout = config.getDuration("ddata-write-timeout").toScala)
   }
 
   /** INTERNAL API */

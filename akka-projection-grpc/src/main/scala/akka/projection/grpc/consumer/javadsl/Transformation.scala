@@ -4,18 +4,19 @@
 
 package akka.projection.grpc.consumer.javadsl
 
+import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.scaladsl
 
 import java.util.{ Set => JSet }
-import akka.util.ccompat.JavaConverters._
 
 import java.util.Optional
 import java.util.function.{ Function => JFunction }
-import scala.compat.java8.OptionConverters._
+
+import scala.jdk.OptionConverters._
 import scala.reflect.ClassTag
-import akka.actor.typed.ActorSystem
-import akka.annotation.InternalApi
+import scala.jdk.CollectionConverters._
 
 object Transformation {
 
@@ -69,7 +70,7 @@ final class Transformation private (val delegate: scaladsl.EventProducerPushDest
    */
   def registerMapper[A, B](inputEventClass: Class[A], f: JFunction[A, Optional[B]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
-    new Transformation(delegate.registerEnvelopeMapper[A, B](envelope => f(envelope.event).asScala))
+    new Transformation(delegate.registerEnvelopeMapper[A, B](envelope => f(envelope.event).toScala))
   }
 
   /**
@@ -81,14 +82,14 @@ final class Transformation private (val delegate: scaladsl.EventProducerPushDest
       inputEventClass: Class[A],
       f: JFunction[EventEnvelope[A], Optional[B]]): Transformation = {
     implicit val ct: ClassTag[A] = ClassTag(inputEventClass)
-    new Transformation(delegate.registerEnvelopeMapper[A, B](envelope => f(envelope).asScala))
+    new Transformation(delegate.registerEnvelopeMapper[A, B](envelope => f(envelope).toScala))
   }
 
   /**
    * Events can be excluded by mapping them to `Optional.empty`.
    */
   def registerOrElsePayloadMapper(f: JFunction[EventEnvelope[Any], Optional[Any]]): Transformation = {
-    new Transformation(delegate.registerOrElsePayloadMapper(envelope => f(envelope).asScala))
+    new Transformation(delegate.registerOrElsePayloadMapper(envelope => f(envelope).toScala))
   }
 
 }

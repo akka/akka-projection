@@ -6,16 +6,15 @@ package akka.projection.grpc.internal
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.SerializedEvent
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializer
 import akka.serialization.SerializerWithStringManifest
 import akka.serialization.Serializers
-import akka.util.ccompat.JavaConverters._
 import com.google.common.base.CaseFormat
 import com.google.protobuf.ByteString
 import com.google.protobuf.Descriptors
@@ -27,6 +26,7 @@ import com.google.protobuf.any.{ Any => ScalaPbAny }
 import com.google.protobuf.{ Any => JavaPbAny }
 import com.google.protobuf.{ Any => PbAny }
 import org.slf4j.LoggerFactory
+
 import scalapb.GeneratedMessage
 import scalapb.GeneratedMessageCompanion
 import scalapb.options.Scalapb
@@ -297,7 +297,7 @@ private[akka] trait ProjectionGrpcSerialization {
 
     } catch {
       case cnfe: ClassNotFoundException =>
-        log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
+        log.debug("Failed to load class [{}] because: {}", className, cnfe.getMessage)
         None
       case nsme: NoSuchElementException =>
         // Not sure this is exception is thrown. NoSuchMethodException is thrown from getMethod("parser").
@@ -353,10 +353,10 @@ private[akka] trait ProjectionGrpcSerialization {
         Some(new ScalaPbResolvedType(companionObject, clazz))
       } catch {
         case cnfe: ClassNotFoundException =>
-          log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
+          log.debug("Failed to load class [{}] because: {}", className, cnfe.getMessage)
           None
         case cce: ClassCastException =>
-          log.debug2("Failed to load class [{}] because: {}", className, cce.getMessage)
+          log.debug("Failed to load class [{}] because: {}", className, cce.getMessage)
           None
       }
     })
@@ -433,7 +433,7 @@ private[akka] trait ProjectionGrpcSerialization {
     val typeUrl = any.typeUrl
     // wrapped concrete protobuf message, parse into the right type
     if (!typeUrl.startsWith(GoogleTypeUrlPrefix)) {
-      log.warn2("Message type [{}] does not match type url prefix [{}]", typeUrl, GoogleTypeUrlPrefix)
+      log.warn("Message type [{}] does not match type url prefix [{}]", typeUrl, GoogleTypeUrlPrefix)
     }
 
     tryResolveTypeUrl(typeUrl) match {
@@ -457,7 +457,7 @@ private[akka] trait ProjectionGrpcSerialization {
       case Array(_, typeName) =>
         typeName
       case _ =>
-        log.warn2(
+        log.warn(
           "Message type [{}] does not have a url prefix, it should have one that matchers the type url prefix [{}]",
           typeUrl,
           GoogleTypeUrlPrefix)

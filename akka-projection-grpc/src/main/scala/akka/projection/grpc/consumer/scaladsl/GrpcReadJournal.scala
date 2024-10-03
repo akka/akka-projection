@@ -8,7 +8,6 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.InternalApi
 import akka.grpc.GrpcClientSettings
@@ -281,7 +280,7 @@ final class GrpcReadJournal private (
       maxSlice: Int,
       offset: Offset): Source[EventEnvelope[Evt], NotUsed] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    log.debugN(
+    log.debug(
       "Starting eventsBySlices stream from [{}] [{}], slices [{} - {}], offset [{}]",
       clientSettings.serviceName,
       streamId,
@@ -310,7 +309,7 @@ final class GrpcReadJournal private (
           case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
             val protoCriteria = toProtoFilterCriteria(criteria)
             if (log.isDebugEnabled)
-              log.debug2("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
+              log.debug("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
           case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _) if r.correlationId.forall(_ == replayCorrelationId) =>
@@ -335,7 +334,7 @@ final class GrpcReadJournal private (
       val protoPersistenceIdOffsets = protoReplayPersistenceIds.map(_.fromPersistenceIdOffset.get)
 
       if (log.isDebugEnabled() && protoReplayPersistenceIds.nonEmpty)
-        log.debug2(
+        log.debug(
           "{}: Replay triggered for [{}]",
           streamId,
           protoReplayPersistenceIds
@@ -390,7 +389,7 @@ final class GrpcReadJournal private (
     streamOut.map {
       case StreamOut(StreamOut.Message.Event(event), _) =>
         if (log.isTraceEnabled)
-          log.traceN(
+          log.trace(
             "Received event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
             clientSettings.serviceName,
             event.persistenceId,
@@ -402,7 +401,7 @@ final class GrpcReadJournal private (
 
       case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
         if (log.isTraceEnabled)
-          log.traceN(
+          log.trace(
             "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
             clientSettings.serviceName,
             filteredEvent.persistenceId,
@@ -460,7 +459,7 @@ final class GrpcReadJournal private (
 
   //LoadEventQuery
   override def loadEnvelope[Evt](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Evt]] = {
-    log.traceN(
+    log.trace(
       "Loading event from [{}] persistenceId [{}] with seqNr [{}]",
       clientSettings.serviceName,
       persistenceId,

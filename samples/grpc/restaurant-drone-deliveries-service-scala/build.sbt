@@ -28,10 +28,10 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.9.6"
+val AkkaVersion = "2.10.0-M1"
 val AkkaHttpVersion = "10.6.3"
 val AkkaManagementVersion = "1.5.2"
-val AkkaPersistenceR2dbcVersion = "1.2.5"
+val AkkaPersistenceR2dbcVersion = "1.3.0-M1"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.5.7")
 val AkkaDiagnosticsVersion = "2.1.1"
@@ -64,7 +64,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.2.13",
+  "ch.qos.logback" % "logback-classic" % "1.5.7",
   "org.scalatest" %% "scalatest" % "3.2.18" % Test,
   // 2. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
