@@ -13,7 +13,8 @@ import akka.japi.function.Procedure
 import akka.projection.Projection
 import akka.projection.testkit.scaladsl
 import akka.stream.testkit.TestSubscriber
-import akka.util.JavaDurationConverters._
+
+import scala.jdk.DurationConverters._
 
 object ProjectionTestKit {
   def create(system: ActorSystem[_]): ProjectionTestKit =
@@ -56,7 +57,7 @@ final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
    * @param assertFunction - a function that exercises the test assertions
    */
   def run(projection: Projection[_], max: Duration, assertFunction: Effect): Unit =
-    delegate.run(projection, max.asScala)(assertFunction.apply())
+    delegate.run(projection, max.toScala)(assertFunction.apply())
 
   /**
    * Run a Projection and assert its projected data using the passed assert function,
@@ -76,7 +77,7 @@ final class ProjectionTestKit private[projection] (system: ActorSystem[_]) {
    * @param assertFunction - a function that exercises the test assertions
    */
   def run(projection: Projection[_], max: Duration, interval: Duration, assertFunction: Effect): Unit =
-    delegate.run(projection, max.asScala, interval.asScala)(assertFunction.apply())
+    delegate.run(projection, max.toScala, interval.toScala)(assertFunction.apply())
 
   /**
    * Run a Projection with an attached `TestSubscriber.Probe` allowing

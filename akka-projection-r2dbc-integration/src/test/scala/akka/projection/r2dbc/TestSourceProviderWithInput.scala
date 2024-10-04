@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import akka.util.ccompat.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 import akka.NotUsed
 import akka.actor.typed.ActorRef

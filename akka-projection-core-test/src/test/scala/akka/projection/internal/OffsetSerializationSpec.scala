@@ -7,9 +7,6 @@ package akka.projection.internal
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import java.util.UUID
-
-import scala.collection.immutable
-
 import akka.actor.ExtendedActorSystem
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -17,8 +14,10 @@ import akka.persistence.query
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.serialization.SerializerWithStringManifest
-import akka.util.unused
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import scala.annotation.unused
+import scala.collection.immutable
 
 object OffsetSerializationSpec {
   class TestSerializer(@unused system: ExtendedActorSystem) extends SerializerWithStringManifest {

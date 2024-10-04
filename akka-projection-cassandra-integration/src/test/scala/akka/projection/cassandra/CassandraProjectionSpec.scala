@@ -7,14 +7,16 @@ package akka.projection.cassandra
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+
 import scala.annotation.tailrec
 import scala.collection.immutable
-import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
+import scala.jdk.FutureConverters._
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.Scheduler
@@ -152,10 +154,10 @@ class CassandraProjectionSpec
       for {
         s <- session.underlying()
         // reason for setSchemaMetadataEnabled is that it speed up tests
-        _ <- s.setSchemaMetadataEnabled(false).toScala
+        _ <- s.setSchemaMetadataEnabled(false).asScala
         _ <- offsetStore.createKeyspaceAndTable()
         _ <- repository.createKeyspaceAndTable()
-        _ <- s.setSchemaMetadataEnabled(null).toScala
+        _ <- s.setSchemaMetadataEnabled(null).asScala
       } yield Done
 
     // the container can takes time to be 'ready',
@@ -168,10 +170,10 @@ class CassandraProjectionSpec
     Await.ready(for {
       s <- session.underlying()
       // reason for setSchemaMetadataEnabled is that it speed up tests
-      _ <- s.setSchemaMetadataEnabled(false).toScala
+      _ <- s.setSchemaMetadataEnabled(false).asScala
       _ <- session.executeDDL(s"DROP keyspace ${offsetStore.keyspace}")
       _ <- session.executeDDL(s"DROP keyspace ${repository.keyspace}")
-      _ <- s.setSchemaMetadataEnabled(null).toScala
+      _ <- s.setSchemaMetadataEnabled(null).asScala
     } yield Done, 30.seconds)
     super.afterAll()
   }

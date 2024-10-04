@@ -4,7 +4,7 @@
 
 package akka.projection.testkit.javadsl
 
-import scala.compat.java8.FunctionConverters._
+import scala.jdk.FunctionConverters._
 
 import akka.NotUsed
 import akka.projection.OffsetVerification

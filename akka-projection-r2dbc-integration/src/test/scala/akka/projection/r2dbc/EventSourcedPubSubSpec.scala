@@ -14,7 +14,6 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
@@ -62,7 +61,7 @@ object EventSourcedPubSubSpec {
       whenDone(envelope).map { _ =>
         val timestampOffset = envelope.offset.asInstanceOf[TimestampOffset]
         val directReplication = timestampOffset.timestamp == timestampOffset.readTimestamp
-        log.debugN(
+        log.debug(
           "{} Processed {}, pid {}, seqNr {}, direct {}",
           projectionId.key,
           envelope.event,
@@ -218,7 +217,7 @@ class EventSourcedPubSubSpec
                 p.envelope.offset.asInstanceOf[TimestampOffset].timestamp == p.envelope.offset
                     .asInstanceOf[TimestampOffset]
                     .readTimestamp)
-          log.info2("via pub-sub {}: {}", pid, viaPubSub.map(_.envelope.sequenceNr).mkString(", "))
+          log.info("via pub-sub {}: {}", pid, viaPubSub.map(_.envelope.sequenceNr).mkString(", "))
       }
 
       val countViaPubSub = processed.count(

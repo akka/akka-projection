@@ -5,9 +5,9 @@
 package akka.projection
 
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.DurationConverters._
 
 import akka.annotation.InternalApi
-import akka.util.JavaDurationConverters._
 
 /**
  * Error handling strategy when processing an `Envelope` fails. The default is defined in configuration .
@@ -45,7 +45,7 @@ object HandlerRecoveryStrategy {
    * and fail the stream if all attempts fail.
    */
   def retryAndFail(retries: Int, delay: java.time.Duration): HandlerRecoveryStrategy =
-    retryAndFail(retries, delay.asScala)
+    retryAndFail(retries, delay.toScala)
 
   /**
    * Scala API: If the first attempt to invoke the handler fails it will retry invoking the handler with the
@@ -61,7 +61,7 @@ object HandlerRecoveryStrategy {
    * discard the element and continue with next if all attempts fail.
    */
   def retryAndSkip(retries: Int, delay: java.time.Duration): HandlerRecoveryStrategy =
-    retryAndSkip(retries, delay.asScala)
+    retryAndSkip(retries, delay.toScala)
 
   /**
    * INTERNAL API: placed here instead of the `internal` package because of sealed trait

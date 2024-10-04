@@ -11,7 +11,6 @@ import scala.util.Success
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.scaladsl.Handler
 import org.slf4j.LoggerFactory
@@ -56,9 +55,9 @@ class ItemPopularityProjectionHandler(tag: String, system: ActorSystem[_], repo:
         val itemId = itemEvent.itemId
         repo.getItem(itemId).foreach {
           case Some(count) =>
-            log.infoN("ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]", tag, itemId, count)
+            log.info("ItemPopularityProjectionHandler({}) item popularity for '{}': [{}]", tag, itemId, count)
           case None =>
-            log.info2("ItemPopularityProjectionHandler({}) item popularity for '{}': [0]", tag, itemId)
+            log.info("ItemPopularityProjectionHandler({}) item popularity for '{}': [0]", tag, itemId)
         }
       }
     case _ => ()

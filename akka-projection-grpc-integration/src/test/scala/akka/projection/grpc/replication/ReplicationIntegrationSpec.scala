@@ -10,7 +10,6 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
@@ -220,7 +219,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         case (replica, index) =>
           val system = systems(index)
           logger
-            .infoN(
+            .info(
               "Starting replica [{}], system [{}] on port [{}]",
               replica.replicaId,
               system.name,
@@ -245,7 +244,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         withClue(s"from ${dc.id}") {
           Future
             .sequence(entityIds.map { entityId =>
-              logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
+              logger.info("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
               ClusterSharding(systemPerDc(dc))
                 .entityRefFor(LWWHelloWorld.EntityType, entityId)
                 .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _))
@@ -280,7 +279,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
           .sequence(systemPerDc.keys.map { dc =>
             withClue(s"from ${dc.id}") {
               Future.sequence(entityIds.map { entityId =>
-                logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
+                logger.info("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
                 ClusterSharding(systemPerDc(dc))
                   .entityRefFor(LWWHelloWorld.EntityType, entityId)
                   .ask(LWWHelloWorld.SetGreeting(s"hello $greetingNo from ${dc.id}", _))

@@ -10,8 +10,9 @@ import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import com.typesafe.config.Config
 
-import akka.util.ccompat.JavaConverters._
 import scala.collection.immutable
+import scala.jdk.CollectionConverters._
+
 object GrpcQuerySettings {
 
   /**
@@ -30,7 +31,7 @@ object GrpcQuerySettings {
       "Configuration property [stream-id] must be an id exposed by the producing side but was undefined on the consuming side.")
 
     val additionalHeaders: Option[Metadata] = {
-      import akka.util.ccompat.JavaConverters._
+      import scala.jdk.CollectionConverters._
       val map = config.getConfig("additional-request-headers").root.unwrapped.asScala.toMap.map {
         case (k, v) => k -> v.toString
       }

@@ -8,7 +8,6 @@ import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
 import akka.cluster.typed.Cluster
@@ -150,7 +149,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
   def startReplica(replicaSystem: ActorSystem[_], replica: Replica): Future[Replication[LWWHelloWorld.Command]] = {
     logger
-      .infoN(
+      .info(
         "Starting replica [{}], system [{}] on port [{}]",
         replica.replicaId,
         replicaSystem.name,
@@ -215,7 +214,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         n <- 1 to 5
         entityId <- Set(entityIdOne, entityIdTwo)
       } {
-        logger.infoN("Updating greeting {} for [{}] from dc [{}]", n, entityId, DCA)
+        logger.info("Updating greeting {} for [{}] from dc [{}]", n, entityId, DCA)
         replicationA
           .entityRefFactory(entityId)
           .ask(LWWHelloWorld.SetGreeting(s"hello $n from ${DCA.id}", _))
@@ -244,7 +243,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         n <- 6 to 10
         entityId <- Set(entityIdOne, entityIdTwo)
       } {
-        logger.infoN("Updating greeting {} for [{}] from dc [{}]", n, entityId, edgeReplicationA)
+        logger.info("Updating greeting {} for [{}] from dc [{}]", n, entityId, edgeReplicationA)
         edgeReplicationA
           .entityRefFactory(entityId)
           .ask(LWWHelloWorld.SetGreeting(s"hello $n from ${EdgeReplicaA.id}", _))
@@ -274,7 +273,7 @@ class PushReplicationIntegrationSpec(testContainerConf: TestContainerConf)
         n <- 6 to 10
         entityId <- Set(entityIdOne, entityIdTwo)
       } {
-        logger.infoN("Updating greeting {} for [{}] from dc [{}]", n, entityId, DCB)
+        logger.info("Updating greeting {} for [{}] from dc [{}]", n, entityId, DCB)
         replicationB
           .entityRefFactory(entityId)
           .ask(LWWHelloWorld.SetGreeting(s"hello $n from ${DCB.id}", _))

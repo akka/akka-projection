@@ -8,9 +8,9 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.compat.java8.FunctionConverters._
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
+import scala.jdk.FunctionConverters._
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
 import scala.concurrent.Future
 
 import akka.NotUsed
@@ -77,7 +77,7 @@ private[projection] class TestSourceProviderImpl[Offset, Envelope] private[proje
   }
 
   override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
-    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
+    implicit val ec = scala.concurrent.ExecutionContext.parasitic
     val src =
       if (allowCompletion) sourceEvents
       else sourceEvents.concat(Source.maybe)
@@ -89,8 +89,8 @@ private[projection] class TestSourceProviderImpl[Offset, Envelope] private[proje
 
   override def source(offset: Supplier[CompletionStage[Optional[Offset]]])
       : CompletionStage[akka.stream.javadsl.Source[Envelope, NotUsed]] = {
-    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
-    source(() => offset.get().toScala.map(_.asScala)).map(_.asJava).toJava
+    implicit val ec = scala.concurrent.ExecutionContext.parasitic
+    source(() => offset.get().asScala.map(_.toScala)).map(_.asJava).asJava
   }
 
   override def extractOffset(envelope: Envelope): Offset = extractOffsetFn(envelope)

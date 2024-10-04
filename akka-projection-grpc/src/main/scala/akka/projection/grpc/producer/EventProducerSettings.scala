@@ -6,10 +6,10 @@ package akka.projection.grpc.producer
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
-import akka.util.JavaDurationConverters.JavaDurationOps
 import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.DurationConverters._
 
 object EventProducerSettings {
 
@@ -24,7 +24,7 @@ object EventProducerSettings {
       transformationParallelism = config.getInt("transformation-parallelism"),
       replayParallelism = config.getInt("filter.replay-parallelism"),
       topicTagPrefix = config.getString("filter.topic-tag-prefix"),
-      keepAliveInterval = config.getDuration("keep-alive-interval").asScala,
+      keepAliveInterval = config.getDuration("keep-alive-interval").toScala,
       akkaSerializationOnly = false)
   }
 

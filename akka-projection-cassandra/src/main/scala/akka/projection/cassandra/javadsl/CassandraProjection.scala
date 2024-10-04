@@ -143,9 +143,9 @@ object CassandraProjection {
    * before the system is started.
    */
   def createTablesIfNotExists(system: ActorSystem[_]): CompletionStage[Done] = {
-    import scala.compat.java8.FutureConverters._
+    import scala.jdk.FutureConverters._
     val offsetStore = new CassandraOffsetStore(system)
-    offsetStore.createKeyspaceAndTable().toJava
+    offsetStore.createKeyspaceAndTable().asJava
   }
 
   @deprecated("Renamed to createTablesIfNotExists", "1.2.0")

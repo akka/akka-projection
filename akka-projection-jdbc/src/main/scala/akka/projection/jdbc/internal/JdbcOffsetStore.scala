@@ -15,7 +15,6 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
@@ -133,7 +132,7 @@ class JdbcOffsetStore[S <: JdbcSession](
               buffer.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
             }
 
-          if (verboseLogging) logger.debug2("found offset [{}] for [{}]", result, projectionId)
+          if (verboseLogging) logger.debug("found offset [{}] for [{}]", result, projectionId)
 
           result
         }
@@ -186,7 +185,7 @@ class JdbcOffsetStore[S <: JdbcSession](
         }
 
       if (verboseLogging) {
-        logger.debug2("tried to update offset [{}], statement result [{}]", offset, tryUpdateResult)
+        logger.debug("tried to update offset [{}], statement result [{}]", offset, tryUpdateResult)
       }
 
       if (failedStatement(tryUpdateResult)) {
@@ -202,7 +201,7 @@ class JdbcOffsetStore[S <: JdbcSession](
           val triedInsertResult = stmt.executeUpdate()
 
           if (verboseLogging)
-            logger.debug2("tried to insert offset [{}], batch result [{}]", offset, triedInsertResult)
+            logger.debug("tried to insert offset [{}], batch result [{}]", offset, triedInsertResult)
 
           // did we get any failure on inserts?!
           if (failedStatement(triedInsertResult)) {
@@ -244,7 +243,7 @@ class JdbcOffsetStore[S <: JdbcSession](
           } else {
             None
           }
-          if (verboseLogging) logger.debug2("found ManagementState [{}] for [{}]", result, projectionId)
+          if (verboseLogging) logger.debug("found ManagementState [{}] for [{}]", result, projectionId)
 
           result
         }
@@ -256,7 +255,7 @@ class JdbcOffsetStore[S <: JdbcSession](
   def savePaused(projectionId: ProjectionId, paused: Boolean): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>
       if (verboseLogging)
-        logger.debugN(
+        logger.debug(
           "saving paused [{}] for [{}], using connection id [{}]",
           paused,
           projectionId,
@@ -285,7 +284,7 @@ class JdbcOffsetStore[S <: JdbcSession](
           }
 
         if (verboseLogging) {
-          logger.debugN(
+          logger.debug(
             s"tried to update paused [{}] for [{}], statement result [{}]",
             paused,
             projectionId,
@@ -303,7 +302,7 @@ class JdbcOffsetStore[S <: JdbcSession](
             val triedInsertResult = stmt.executeUpdate()
 
             if (verboseLogging)
-              logger.debugN(
+              logger.debug(
                 "tried to insert paused [{}] for [{}], batch result [{}]",
                 paused,
                 projectionId,

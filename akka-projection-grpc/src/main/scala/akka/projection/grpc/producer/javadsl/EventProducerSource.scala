@@ -12,7 +12,7 @@ import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication.internal.EventOriginFilter
 
-import scala.compat.java8.OptionConverters.RichOptionForJava8
+import scala.jdk.OptionConverters._
 
 object EventProducerSource {
 
@@ -28,7 +28,7 @@ object EventProducerSource {
       source.transformation.toJava,
       source.settings,
       source.producerFilter.apply,
-      source.transformSnapshot.map[JFunction[Any, Any]](_.apply).asJava,
+      source.transformSnapshot.map[JFunction[Any, Any]](_.apply).toJava,
       source.replicatedEventOriginFilter)
 }
 

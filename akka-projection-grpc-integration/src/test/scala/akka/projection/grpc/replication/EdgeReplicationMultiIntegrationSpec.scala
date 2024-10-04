@@ -8,7 +8,6 @@ import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
@@ -207,7 +206,7 @@ class EdgeReplicationMultiIntegrationSpec(testContainerConf: TestContainerConf)
 
     "start replicas" in {
       logger
-        .infoN(
+        .info(
           "Starting replica [{}], system [{}] on port [{}]",
           cloudReplica.replicaId,
           system.name,

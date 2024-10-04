@@ -8,7 +8,6 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.cluster.ClusterActorRefProvider
 import akka.cluster.sharding.typed.ClusterShardingSettings
@@ -169,7 +168,7 @@ private[akka] object ReplicationImpl {
     val wireSerialization = new DelegateToAkkaSerialization(system)
     val eventsBySlicesQuery =
       GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, wireSerialization, Some(settings))
-    log.infoN(
+    log.info(
       "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",
       remoteReplica.numberOfConsumers,
       remoteReplica.consumersOnClusterRole.fold("")(role => s" on nodes with cluster role $role"),
@@ -211,7 +210,7 @@ private[akka] object ReplicationImpl {
                         if replicatedEventMetadata.originReplica == settings.selfReplicaId =>
                       // skipping events originating from self replica (break cycle)
                       if (log.isTraceEnabled)
-                        log.traceN(
+                        log.trace(
                           "[{}] ignoring event from replica [{}] with self origin (pid [{}], seq_nr [{}])",
                           projectionKey,
                           remoteReplica.replicaId,
@@ -225,7 +224,7 @@ private[akka] object ReplicationImpl {
                       val entityRef =
                         entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
                       if (log.isTraceEnabled) {
-                        log.traceN(
+                        log.trace(
                           "[{}] forwarding event originating on replica [{}] to [{}] (origin seq_nr [{}]): [{}]",
                           projectionKey,
                           replicatedEventMetadata.originReplica,
@@ -257,7 +256,7 @@ private[akka] object ReplicationImpl {
                 } else {
                   // Events not originating on sending side already are filtered/have no payload and end up here
                   if (log.isTraceEnabled)
-                    log.traceN(
+                    log.trace(
                       "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
                       projectionKey,
                       remoteReplica.replicaId,
@@ -298,7 +297,7 @@ private[akka] object ReplicationImpl {
       sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
 
     settings.otherReplicas.foreach { remoteReplica =>
-      log.infoN(
+      log.info(
         "Starting replication for [{}] between replica [{}] and [{}] at [{}:{}]",
         settings.entityTypeKey.name,
         settings.selfReplicaId,
