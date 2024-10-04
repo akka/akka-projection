@@ -23,7 +23,9 @@ object Dependencies {
     val AlpakkaVersionInDocs = VersionNumber(Alpakka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
     val AlpakkaKafka = "7.0.0-M1"
-    val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
+    val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
+      case Seq(major, minor, _*) => s"$major.$minor"
+    }
     val AkkaGrpcVersionInDocs = "2.5.0-M1"
 
     val AkkaProjectionVersionInDocs = "1.6.0"
