@@ -154,10 +154,10 @@ class CassandraProjectionSpec
       for {
         s <- session.underlying()
         // reason for setSchemaMetadataEnabled is that it speed up tests
-        _ <- s.setSchemaMetadataEnabled(false).toScala
+        _ <- s.setSchemaMetadataEnabled(false).asScala
         _ <- offsetStore.createKeyspaceAndTable()
         _ <- repository.createKeyspaceAndTable()
-        _ <- s.setSchemaMetadataEnabled(null).toScala
+        _ <- s.setSchemaMetadataEnabled(null).asScala
       } yield Done
 
     // the container can takes time to be 'ready',
@@ -170,10 +170,10 @@ class CassandraProjectionSpec
     Await.ready(for {
       s <- session.underlying()
       // reason for setSchemaMetadataEnabled is that it speed up tests
-      _ <- s.setSchemaMetadataEnabled(false).toScala
+      _ <- s.setSchemaMetadataEnabled(false).asScala
       _ <- session.executeDDL(s"DROP keyspace ${offsetStore.keyspace}")
       _ <- session.executeDDL(s"DROP keyspace ${repository.keyspace}")
-      _ <- s.setSchemaMetadataEnabled(null).toScala
+      _ <- s.setSchemaMetadataEnabled(null).asScala
     } yield Done, 30.seconds)
     super.afterAll()
   }

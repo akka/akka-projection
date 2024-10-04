@@ -34,8 +34,6 @@ import akka.projection.internal.CanTriggerReplay
 import akka.stream.javadsl.Source
 import com.google.protobuf.Descriptors
 
-
-
 object GrpcReadJournal {
   val Identifier: String = scaladsl.GrpcReadJournal.Identifier
 

@@ -52,9 +52,9 @@ class CassandraOffsetStoreSpec
         s <- session.underlying()
 
         // reason for setSchemaMetadataEnabled is that it speed up tests
-        _ <- s.setSchemaMetadataEnabled(false).toScala
+        _ <- s.setSchemaMetadataEnabled(false).asScala
         _ <- offsetStore.createKeyspaceAndTable()
-        _ <- s.setSchemaMetadataEnabled(null).toScala
+        _ <- s.setSchemaMetadataEnabled(null).asScala
       } yield Done
 
     // the container can takes time to be 'ready',

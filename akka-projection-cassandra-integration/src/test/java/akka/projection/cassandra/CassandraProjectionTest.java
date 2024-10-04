@@ -33,7 +33,7 @@ import org.junit.*;
 import org.scalatestplus.junit.JUnitSuite;
 
 import scala.concurrent.Await;
-import scala.jdk.FutureConverters;
+import scala.jdk.javaapi.FutureConverters;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -70,13 +70,13 @@ public class CassandraProjectionTest extends JUnitSuite {
     // we should keep trying to create the table until it succeeds
     CompletionStage<Done> createTableAttempts =
         Patterns.retry(
-            () -> FutureConverters.toJava(offsetStore.createKeyspaceAndTable()),
+            () -> FutureConverters.asJava(offsetStore.createKeyspaceAndTable()),
             20,
             Duration.ofSeconds(3),
             testKit.system().classicSystem().scheduler(),
             testKit.system().executionContext());
     Await.result(
-        FutureConverters.toScala(createTableAttempts),
+        FutureConverters.asScala(createTableAttempts),
         scala.concurrent.duration.Duration.create(60, TimeUnit.SECONDS));
   }
 
