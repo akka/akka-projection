@@ -10,8 +10,8 @@ version=$project.version$
 }
 
 Import the @apidoc[akka.projection.testkit.(javadsl|scaladsl).ProjectionTestKit] and other utilities into a new 
-@scala[[ScalaTest](https://doc.akka.io/docs/akka/current/typed/testing-async.html#test-framework-integration) test spec]
-@java[[JUnit](https://doc.akka.io/docs/akka/current/typed/testing-async.html#test-framework-integration) test].
+@scala[[ScalaTest](https://doc.akka.io/libraries/akka-core/current/typed/testing-async.html#test-framework-integration) test spec]
+@java[[JUnit](https://doc.akka.io/libraries/akka-core/current/typed/testing-async.html#test-framework-integration) test].
 
 Scala
 :  @@snip [ShoppingCartAppSpec.scala](/examples/src/test/scala/docs/guide/ShoppingCartAppSpec.scala) { #testKitImports }

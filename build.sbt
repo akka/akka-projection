@@ -190,7 +190,7 @@ lazy val examples = project
 lazy val commonParadoxProperties = Def.settings(
   Compile / paradoxProperties ++= Map(
       // Akka
-      "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.Versions.AkkaVersionInDocs}/%s",
+      "extref.akka.base_url" -> s"https://doc.akka.io/libraries/akka-core/${Dependencies.Versions.AkkaVersionInDocs}/%s",
       "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.Versions.AkkaVersionInDocs}/",
       "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${Dependencies.Versions.AkkaVersionInDocs}/",
       "javadoc.akka.link_style" -> "direct",
@@ -203,9 +203,11 @@ lazy val commonParadoxProperties = Def.settings(
       "scaladoc.akka.kafka.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.Versions.AlpakkaKafkaVersionInDocs}/",
       "javadoc.akka.kafka.base_url" -> "",
       // Akka gRPC
-      "extref.akka-grpc.base_url" -> s"https://doc.akka.io/docs/akka-grpc/${Dependencies.Versions.AkkaGrpcVersionInDocs}/%s",
+      "extref.akka-grpc.base_url" -> s"https://doc.akka.io/libraries/akka-grpc/${Dependencies.Versions.AkkaGrpcVersionInDocs}/%s",
+      "scaladoc.akka.grpc.base_url" -> "",
+      "javadoc.akka.grpc.base_url" -> "",
       // Akka persistence R2DBC plugin
-      "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/docs/akka-persistence-r2dbc/${Dependencies.Versions.AkkaPersistenceR2dbcVersionInDocs}/%s",
+      "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/libraries/akka-persistence-r2dbc/${Dependencies.Versions.AkkaPersistenceR2dbcVersionInDocs}/%s",
       // Akka Guide
       "extref.akka-guide.base_url" -> "https://developer.lightbend.com/docs/akka-guide/microservices-tutorial/",
       // Java
@@ -235,13 +237,13 @@ lazy val docs = project
           _ => s"https://doc\\.akka\\.io/api/akka-grpc/${akka.grpc.gen.BuildInfo.version}/akka/grpc/")),
     Paradox / siteSubdirName := s"docs/akka-projection/${projectInfoVersion.value}",
     Compile / paradoxProperties ++= Map(
-        "project.url" -> "https://doc.akka.io/docs/akka-projection/current/",
-        "canonical.base_url" -> "https://doc.akka.io/docs/akka-projection/current",
+        "project.url" -> "https://doc.akka.io/libraries/akka-projection/current/",
+        "canonical.base_url" -> "https://doc.akka.io/libraries/akka-projection/current",
         "github.base_url" -> "https://github.com/akka/akka-projection",
         "akka.version" -> Dependencies.Versions.Akka,
         "akka.r2dbc.version" -> Dependencies.Versions.AkkaPersistenceR2dbc,
-        "extref.akka-distributed-cluster.base_url" -> s"https://doc.akka.io/docs/akka-distributed-cluster/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s",
-        "extref.akka-edge.base_url" -> s"https://doc.akka.io/docs/akka-edge/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s"),
+        "extref.akka-distributed-cluster.base_url" -> s"https://doc.akka.io/libraries/akka-distributed-cluster/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s",
+        "extref.akka-edge.base_url" -> s"https://doc.akka.io/libraries/akka-edge/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s"),
     commonParadoxProperties,
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     paradoxRoots := List("index.html", "getting-started/event-generator-app.html"),
@@ -262,12 +264,12 @@ lazy val `akka-distributed-cluster-docs` = project
     Paradox / siteSubdirName := s"docs/akka-distributed-cluster/${projectInfoVersion.value}",
     commonParadoxProperties,
     Compile / paradoxProperties ++= Map(
-        "project.url" -> "https://doc.akka.io/docs/akka-distributed-cluster/current/",
-        "canonical.base_url" -> "https://doc.akka.io/docs/akka-distributed-cluster/current",
+        "project.url" -> "https://doc.akka.io/libraries/akka-distributed-cluster/current/",
+        "canonical.base_url" -> "https://doc.akka.io/libraries/akka-distributed-cluster/current",
         "github.base_url" -> "https://github.com/akka/akka-projection",
         "akka.version" -> Dependencies.Versions.Akka,
         "akka.r2dbc.version" -> Dependencies.Versions.AkkaPersistenceR2dbc,
-        "extref.akka-projection.base_url" -> s"https://doc.akka.io/docs/akka-projection/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s",
+        "extref.akka-projection.base_url" -> s"https://doc.akka.io/libraries/akka-projection/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s",
         "scaladoc.akka.projection.base_url" -> s"https://doc.akka.io/api/akka-projection/${Dependencies.Versions.AkkaProjectionVersionInDocs}/"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     paradoxRoots := List("index.html"),
@@ -287,17 +289,17 @@ lazy val `akka-edge-docs` = project
     Paradox / siteSubdirName := s"docs/akka-edge/${projectInfoVersion.value}",
     commonParadoxProperties,
     Compile / paradoxProperties ++= Map(
-        "project.url" -> "https://doc.akka.io/docs/akka-edge/current/",
-        "canonical.base_url" -> "https://doc.akka.io/docs/akka-edge/current",
+        "project.url" -> "https://doc.akka.io/libraries/akka-edge/current/",
+        "canonical.base_url" -> "https://doc.akka.io/libraries/akka-edge/current",
         "github.base_url" -> "https://github.com/akka/akka-projection",
         "akka.version" -> Dependencies.Versions.Akka,
         "akka.r2dbc.version" -> Dependencies.Versions.AkkaPersistenceR2dbc,
         "h2.version" -> Dependencies.Compile.h2.revision,
         "r2dbc-h2.version" -> Dependencies.Compile.r2dbcH2.revision,
-        "extref.akka-projection.base_url" -> s"https://doc.akka.io/docs/akka-projection/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s",
+        "extref.akka-projection.base_url" -> s"https://doc.akka.io/libraries/akka-projection/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s",
         "scaladoc.akka.projection.base_url" -> s"https://doc.akka.io/api/akka-projection/${Dependencies.Versions.AkkaProjectionVersionInDocs}/",
-        "extref.akka-distributed-cluster.base_url" -> s"https://doc.akka.io/docs/akka-distributed-cluster/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s",
-        "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/docs/akka-persistence-r2dbc/${Dependencies.Versions.AkkaPersistenceR2dbcVersionInDocs}/%s",
+        "extref.akka-distributed-cluster.base_url" -> s"https://doc.akka.io/libraries/akka-distributed-cluster/${Dependencies.Versions.AkkaProjectionVersionInDocs}/%s",
+        "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/libraries/akka-persistence-r2dbc/${Dependencies.Versions.AkkaPersistenceR2dbcVersionInDocs}/%s",
         // API docs for akka-edge-rs
         "extref.akka-edge-rs-api.base_url" -> s"https://doc.akka.io/api/akka-edge-rs/current/%s"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),

@@ -51,7 +51,7 @@ All of them share a dependency to `akka-projection-core`:
 
 ### Akka version
 
-Akka Projections requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
+Akka Projections requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/libraries/akka-core/current/common/binary-compatibility-rules.html) for details.
 
 It is recommended to use the latest patch version of Akka. 
 It is important all Akka dependencies are in the same version, so it is recommended to depend on
@@ -81,8 +81,8 @@ See the individual modules for their transitive dependencies.
 
 ### Akka Classic
 
-Akka Projections can be used with the [new Actor API](https://doc.akka.io/docs/akka/current/typed/actors.html) or
-the [classic Actor API](https://doc.akka.io/docs/akka/current/index-classic.html). The documentation samples
+Akka Projections can be used with the [new Actor API](https://doc.akka.io/libraries/akka-core/current/typed/actors.html) or
+the [classic Actor API](https://doc.akka.io/libraries/akka-core/current/index-classic.html). The documentation samples
 show the new Actor API, and the @ref:[Akka Classic page](classic.md) highlights how to use it with the classic
 Actor API.
 

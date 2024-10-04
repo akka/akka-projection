@@ -5,6 +5,10 @@ import sbt._
 
 object Dependencies {
 
+  // Java Platform version for JavaDoc creation
+  // sync with Java version in .github/workflows/release.yml#documentation
+  lazy val JavaDocLinkVersion = 17
+
   val Scala213 = "2.13.15"
   val Scala3 = "3.3.4"
 
@@ -17,7 +21,11 @@ object Dependencies {
 
     val Alpakka = "9.0.0-M1"
     val AlpakkaVersionInDocs = VersionNumber(Alpakka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
-    val AlpakkaKafkaVersionInDocs = "7.0.0-M1"
+
+    val AlpakkaKafka = "7.0.0-M1"
+    val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
+      case Seq(major, minor, _*) => s"$major.$minor"
+    }
     val AkkaGrpcVersionInDocs = "2.5.0-M1"
 
     val AkkaProjectionVersionInDocs = "1.6.0"

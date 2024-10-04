@@ -1,9 +1,9 @@
 # Running the Projection in Akka Cluster
 
-Running the Projection with [Akka Cluster](https://doc.akka.io/docs/akka/current/typed/cluster.html) allows us to add two important aspects to our system: availability and scalability.
+Running the Projection with [Akka Cluster](https://doc.akka.io/libraries/akka-core/current/typed/cluster.html) allows us to add two important aspects to our system: availability and scalability.
 A Projection running as a single Actor creates a single point of failure (availability), when the app shuts down for any reason, the projection is no longer running until it's started again.
 A Projection running as a single Actor creates a processing bottleneck (scalability), all messages from the @apidoc[SourceProvider] are processed by a single Actor on a single machine.
-By using a [Sharded Daemon Process](https://doc.akka.io/docs/akka/current/typed/cluster-sharded-daemon-process.html#sharded-daemon-process) with Akka Cluster and [Akka Cluster Sharding](https://doc.akka.io/docs/akka/current/typed/cluster-sharding.html) we can scale up the Projection and make it more available by running at least as many instances of the same Projection as we have cluster members.
+By using a [Sharded Daemon Process](https://doc.akka.io/libraries/akka-core/current/typed/cluster-sharded-daemon-process.html#sharded-daemon-process) with Akka Cluster and [Akka Cluster Sharding](https://doc.akka.io/libraries/akka-core/current/typed/cluster-sharding.html) we can scale up the Projection and make it more available by running at least as many instances of the same Projection as we have cluster members.
 As Akka cluster members join and leave the cluster the Sharded Daemon Process will automatically scale and rebalance Sharded Daemon Processes (Projection instances) accordingly.
 
 Running the Projection as a Sharded Daemon Process requires no changes to our projection handler and repository, we only need to change the way in which the actor that runs the Projection is initialized.

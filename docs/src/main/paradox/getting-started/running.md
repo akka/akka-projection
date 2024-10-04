@@ -16,7 +16,7 @@ Change directory to the directory of the `docker-compose.yml` file and manage a 
 | Delete container state   | `docker-compose --project-name getting-started rm -f` |
 | CQL shell (when running) | `docker run -it --network getting-started_default --rm cassandra cqlsh cassandra` |
 
-To use a different Cassandra database update the [Cassandra driver's contact-points configuration](https://doc.akka.io/docs/akka-persistence-cassandra/current/configuration.html#contact-points-configuration) found in `./examples/src/resources/guide-shopping-cart-app.conf`.
+To use a different Cassandra database update the [Cassandra driver's contact-points configuration](https://doc.akka.io/libraries/akka-persistence-cassandra/current/configuration.html#contact-points-configuration) found in `./examples/src/resources/guide-shopping-cart-app.conf`.
 
 @@@
 
@@ -41,11 +41,11 @@ PRIMARY KEY (item_id));
 ```
 
 Source events are generated with the `EventGeneratorApp`.
-This app is configured to use [Akka Persistence Cassandra](https://doc.akka.io/docs/akka-persistence-cassandra/current/index.html) and [Akka Cluster](https://doc.akka.io/docs/akka/current/typed/cluster.html) [Sharding](https://doc.akka.io/docs/akka/current/typed/cluster-sharding.html) to persist random `ShoppingCartApp.Events` to a journal.
+This app is configured to use [Akka Persistence Cassandra](https://doc.akka.io/libraries/akka-persistence-cassandra/current/index.html) and [Akka Cluster](https://doc.akka.io/libraries/akka-core/current/typed/cluster.html) [Sharding](https://doc.akka.io/libraries/akka-core/current/typed/cluster-sharding.html) to persist random `ShoppingCartApp.Events` to a journal.
 It will checkout a shopping cart with random items and quantities every 1 second.
 The app will automatically create all the Akka Persistence infrastructure tables in the `akka` keyspace.
 We won't go into any further detail about how this app functions because it falls outside the scope of Akka Projections.
-To learn more about the writing events with [Akka Persistence see the Akka documentation](https://doc.akka.io/docs/akka/current/typed/index-persistence.html).
+To learn more about the writing events with [Akka Persistence see the Akka documentation](https://doc.akka.io/libraries/akka-core/current/typed/index-persistence.html).
 
 Add the Akka Cluster Sharding library to your project:
 

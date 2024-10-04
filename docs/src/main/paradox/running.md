@@ -12,7 +12,7 @@ name="Akka library repository"
 url="https://repo.akka.io/maven"
 }
 
-To distribute the projection over the cluster we recommend the use of [ShardedDaemonProcess](https://doc.akka.io/docs/akka/current/typed/cluster-sharded-daemon-process.html). Add the following dependency in your project if not yet using Akka Cluster Sharding:
+To distribute the projection over the cluster we recommend the use of [ShardedDaemonProcess](https://doc.akka.io/libraries/akka-core/current/typed/cluster-sharded-daemon-process.html). Add the following dependency in your project if not yet using Akka Cluster Sharding:
 
 @@dependency [sbt,Maven,Gradle] {
   group=com.typesafe.akka
@@ -22,7 +22,7 @@ To distribute the projection over the cluster we recommend the use of [ShardedDa
 
 Akka Projections require Akka $akka.version$ or later, see @ref:[Akka version](overview.md#akka-version).
 
-For more information on using Akka Cluster consult Akka's reference documentation on [Akka Cluster](https://doc.akka.io/docs/akka/current/typed/index-cluster.html) and [Akka Cluster Sharding](https://doc.akka.io/docs/akka/current/typed/cluster-sharding.html).
+For more information on using Akka Cluster consult Akka's reference documentation on [Akka Cluster](https://doc.akka.io/libraries/akka-core/current/typed/index-cluster.html) and [Akka Cluster Sharding](https://doc.akka.io/libraries/akka-core/current/typed/cluster-sharding.html).
 
 ## Running with Sharded Daemon Process
 
@@ -56,15 +56,15 @@ When using slices with @ref:[Projections R2DBC](r2dbc.md#slices) it is possible 
 We will use those tags to query the journal and create as many Projections instances, and distribute them in the cluster.
 
 @@@ warning
-When using [Akka Persistence Cassandra plugin](https://doc.akka.io/docs/akka-persistence-cassandra/current/) you should
+When using [Akka Persistence Cassandra plugin](https://doc.akka.io/libraries/akka-persistence-cassandra/current/) you should
 not use too many tags for each event. Each tag will result in a copy of the event in a separate table and
 that can impact write performance. Typically, you would use 1 tag per event as illustrated here. Additional
 filtering of events can be done in the Projection handler if it doesn't have to act on certain events.
-The [JDBC plugin](https://doc.akka.io/docs/akka-persistence-jdbc/current/) 
+The [JDBC plugin](https://doc.akka.io/libraries/akka-persistence-jdbc/current/) 
 don't have this constraint.
 @@@
 
-See also the [Akka reference documentation for tagging](https://doc.akka.io/docs/akka/current/typed/persistence.html#tagging).
+See also the [Akka reference documentation for tagging](https://doc.akka.io/libraries/akka-core/current/typed/persistence.html#tagging).
 
 ### Event Sourced Provider per tag
 
@@ -125,7 +125,7 @@ overwrite each others offset storage with undefined and unpredictable results.
 ## Running in Cluster Singleton
 
 If you know that you only need one or a few projection instances an alternative to @ref:[Sharded Daemon Process](#running-with-sharded-daemon-process)
-is to use [Akka Cluster Singleton](https://doc.akka.io/docs/akka/current/typed/cluster-singleton.html)  
+is to use [Akka Cluster Singleton](https://doc.akka.io/libraries/akka-core/current/typed/cluster-singleton.html)  
 
 Scala
 :  @@snip [CassandraProjectionDocExample.scala](/examples/src/test/scala/docs/cassandra/CassandraProjectionDocExample.scala) { #running-with-singleton }

@@ -42,4 +42,4 @@ Gradle
 
 ## Documentation
 
-The [snapshot documentation](https://doc.akka.io/docs/akka-projection/snapshot) is updated with every snapshot build.
+The [snapshot documentation](https://doc.akka.io/libraries/akka-projection/snapshot) is updated with every snapshot build.

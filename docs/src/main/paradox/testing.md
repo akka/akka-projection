@@ -66,7 +66,7 @@ Java
 
 ## Testing with a TestSink probe
 
-The [Akka Stream TestKit](https://doc.akka.io/docs/akka/current/stream/stream-testkit.html#using-the-testkit) can be used to drive the pace of envelopes flowing through the Projection.
+The [Akka Stream TestKit](https://doc.akka.io/libraries/akka-core/current/stream/stream-testkit.html#using-the-testkit) can be used to drive the pace of envelopes flowing through the Projection.
 
 The Projection starts as soon as the first element is requested by the `TestSink` probe, new elements will be emitted as requested. The Projection is stopped once the assert function completes.
 

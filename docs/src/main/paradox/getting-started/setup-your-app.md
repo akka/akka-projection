@@ -30,7 +30,7 @@ Java
 
 To enable serialization and deserialization of events with Akka Persistence it's necessary to define a base type for your event type hierarchy.
 In this guide we are using `akka.serialization.jackson.CborSerializable` that has a built-in binding to
-[Jackson Serialization](https://doc.akka.io/docs/akka/current/serialization-jackson.html).
+[Jackson Serialization](https://doc.akka.io/libraries/akka-core/current/serialization-jackson.html).
 
 @@@ note
 
@@ -50,7 +50,7 @@ Java
 :  @@snip [ShoppingCartTags.java](/examples/src/test/java/jdocs/guide/ShoppingCartTags.java) { #guideTags }
 
 Create the `ShoppingCartApp` with an `akka.actor.typed.ActorSystem` (API: @apidoc[akka.actor.typed.ActorSystem]) for Projections to use.
-Create an empty [Guardian Actor](https://doc.akka.io/docs/akka/current/typed/actor-lifecycle.html#the-guardian-actor) (the root Actor of the `ActorSystem`).
+Create an empty [Guardian Actor](https://doc.akka.io/libraries/akka-core/current/typed/actor-lifecycle.html#the-guardian-actor) (the root Actor of the `ActorSystem`).
 We will populate this Actor in the following steps of the guide.
 Note that we are using the @scala[`docs.scaladsl`]@java[`jdocs.scaladsl`] package.
 You may use any package, but we include this package in snippets throughout the guide.

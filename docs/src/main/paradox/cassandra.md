@@ -223,7 +223,7 @@ Java
 
 ### Actor handler
 
-A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html),
+A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/libraries/akka-core/current/typed/actors.html),
 which is described in @ref:[Processing with Actor](actor.md).
 
 ### Flow handler
@@ -307,7 +307,7 @@ One important setting is to configure the database driver to retry the initial c
 
 It is not enabled automatically as it is in the driver's reference.conf and is not overridable in a profile.
 
-It is possible to share the same Cassandra session as [Akka Persistence Cassandra](https://doc.akka.io/docs/akka-persistence-cassandra/current/)
+It is possible to share the same Cassandra session as [Akka Persistence Cassandra](https://doc.akka.io/libraries/akka-persistence-cassandra/current/)
 by setting the `session-config-path`:
 
 ```

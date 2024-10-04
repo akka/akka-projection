@@ -1,6 +1,6 @@
 # Changes from Durable State
 
-A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/durable-state/persistence.html). Durable state changes can be consumed in a Projection with
+A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in [Akka Persistence](https://doc.akka.io/libraries/akka-core/current/typed/durable-state/persistence.html). Durable state changes can be consumed in a Projection with
 `changesByTag`, `changesBySlices` or `eventsBySlices` queries.
 
 @@@ note { title=Alternative }
@@ -46,7 +46,7 @@ Scala
 Java
 :  @@snip [DurableStateStoreDocExample.java](/examples/src/test/java/jdocs/state/DurableStateStoreDocExample.java) { #changesByTagSourceProvider }
 
-This example is using the [DurableStateStore JDBC plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-jdbc/current/durable-state-store.html).
+This example is using the [DurableStateStore JDBC plugin for Akka Persistence](https://doc.akka.io/libraries/akka-persistence-jdbc/current/durable-state-store.html).
 You will use the same plugin that you configured for the write side. The one that is used by the `DurableStateBehavior`.
 
 This source is consuming all the changes from the `Account` `DurableStateBehavior` that are tagged with `"bank-accounts-1"`. In a production application, you would need to start as many instances as the number of different tags you used. That way you consume the changes from all entities.

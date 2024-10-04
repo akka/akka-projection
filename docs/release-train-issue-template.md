@@ -16,6 +16,7 @@ Variables to be expanded in this template:
 - [ ] Check that open PRs and issues assigned to the milestone are reasonable
 - [ ] Update the Change date and version in the LICENSE file
 - [ ] Update the Akka Projection version in the samples to $VERSION$, otherwise the published zip files of the samples will have the old version.   
+- [ ] Update the Akka Projection version in `Dependencies.AkkaProjectionVersionInDocs`   
 - [ ] Create a new milestone for the [next version](https://github.com/akka/akka-projection/milestones)
 - [ ] Close the [$VERSION$ milestone](https://github.com/akka/akka-projection/milestones?direction=asc&sort=due_date)
 - [ ] Make sure all important PRs have been merged
@@ -28,7 +29,7 @@ Variables to be expanded in this template:
 ### Check availability
 
 - [ ] Check [API](https://doc.akka.io/api/akka-projection/$VERSION$/) documentation
-- [ ] Check [reference](https://doc.akka.io/docs/akka-projection/$VERSION$/) documentation. Check that the reference docs were deployed and show a version warning (see section below on how to fix the version warning).
+- [ ] Check [reference](https://doc.akka.io/libraries/akka-projection/$VERSION$/) documentation. Check that the reference docs were deployed and show a version warning (see section below on how to fix the version warning).
 - [ ] Check the release on https://repo.akka.io/maven/com/lightbend/akka/akka-projection-core_2.13/$VERSION$/akka-projection-core_2.13-$VERSION$.pom
 
 ### When everything is on https://repo.akka.io/maven
@@ -38,7 +39,7 @@ Variables to be expanded in this template:
          ```
          cd ~/www
          git status
-         git add docs/akka-projection/current docs/akka-projection/$VERSION$
+         git add libraries/akka-projection/current libraries/akka-projection/$VERSION$
          git add api/akka-projection/current api/akka-projection/$VERSION$
          git commit -m "Akka Projection $VERSION$"
          ```
@@ -49,7 +50,6 @@ For important patch releases, and only if critical issues have been fixed:
 
 - [ ] Send a release notification to [Lightbend discuss](https://discuss.akka.io)
 - [ ] Tweet using the [@akkateam](https://twitter.com/akkateam/) account (or ask someone to) about the new release
-- [ ] Announce on [Gitter akka/akka](https://gitter.im/akka/akka)
 - [ ] Announce internally (with links to Tweet, discuss)
 
 For minor or major releases:
@@ -58,6 +58,6 @@ For minor or major releases:
 
 ### Afterwards
 
-- [ ] Update [akka-dependencies bom](https://github.com/lightbend/akka-dependencies) and version for [Akka module versions](https://doc.akka.io/docs/akka-dependencies/current/) in [akka-dependencies repo](https://github.com/akka/akka-dependencies)
+- [ ] Update [akka-dependencies bom](https://github.com/akka/akka-dependencies) and version for [Akka module versions](https://doc.akka.io/libraries/akka-dependencies/current/) in [akka-dependencies repo](https://github.com/akka/akka-dependencies)
 - [ ] Update [Akka Guide samples](https://github.com/akka/akka-platform-guide)
 - Close this issue
