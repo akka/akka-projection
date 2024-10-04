@@ -57,11 +57,22 @@ private[projection] object R2dbcOffsetStore {
   final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
-    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, 0)
+    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, 0, Vector.empty)
 
     def apply(records: immutable.IndexedSeq[Record]): State = {
       if (records.isEmpty) empty
       else empty.add(records)
+    }
+
+    def withKey(projectionKey: String, recordsWithKey: immutable.IndexedSeq[RecordWithProjectionKey]): State = {
+      val state = State(recordsWithKey.map(_.record))
+      val foreignLatestSortedByTimestamp = recordsWithKey
+        .groupBy(_.record.slice)
+        .map { case (_, records) => records.maxBy(_.record.timestamp) }
+        .filter(_.projectionKey != projectionKey)
+        .toVector
+        .sortBy(_.record.timestamp)
+      state.copy(foreignLatestSortedByTimestamp = foreignLatestSortedByTimestamp)
     }
   }
 
@@ -69,7 +80,8 @@ private[projection] object R2dbcOffsetStore {
       byPid: Map[Pid, Record],
       latest: immutable.IndexedSeq[Record],
       oldestTimestamp: Instant,
-      sizeAfterEvict: Int) {
+      sizeAfterEvict: Int,
+      foreignLatestSortedByTimestamp: immutable.IndexedSeq[RecordWithProjectionKey]) {
 
     def size: Int = byPid.size
 
@@ -296,7 +308,7 @@ private[projection] class R2dbcOffsetStore(
     idle.set(false)
     val oldState = state.get()
     dao.readTimestampOffset().map { recordsWithKey =>
-      val newState = State(recordsWithKey.map(_.record))
+      val newState = State.withKey(projectionId.key, recordsWithKey)
       logger.debug(
         "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
         newState.byPid.size,
@@ -469,8 +481,29 @@ private[projection] class R2dbcOffsetStore(
 
       val offsetInserts = dao.insertTimestampOffsetInTx(conn, filteredRecords)
 
-      offsetInserts.map { _ =>
-        if (state.compareAndSet(oldState, evictedNewState))
+      val adoptable =
+        if (oldState.foreignLatestSortedByTimestamp.isEmpty || filteredRecords.isEmpty) Vector.empty
+        else {
+          val latestTimestamp = filteredRecords.maxBy(_.timestamp).timestamp
+          oldState.foreignLatestSortedByTimestamp
+            .takeWhile(_.record.timestamp.compareTo(latestTimestamp) <= 0)
+            .map { adoptable =>
+              LatestBySlice(adoptable.record.slice, adoptable.record.pid, adoptable.record.seqNr)
+            }
+        }
+
+      val adoptedNewState =
+        if (adoptable.nonEmpty)
+          evictedNewState.copy(foreignLatestSortedByTimestamp =
+            oldState.foreignLatestSortedByTimestamp.drop(adoptable.size))
+        else evictedNewState
+
+      val adoptedOffsets =
+        if (adoptable.nonEmpty) offsetInserts.flatMap(_ => dao.adoptTimestampOffsets(adoptable))
+        else offsetInserts
+
+      adoptedOffsets.map { _ =>
+        if (state.compareAndSet(oldState, adoptedNewState))
           cleanupInflight(evictedNewState)
         else
           throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")

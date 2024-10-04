@@ -111,6 +111,9 @@ private[projection] class PostgresOffsetStoreDao(
   private val deleteNewTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset >= ?"
 
+  private val adoptTimestampOffsetSql: String =
+    sql"UPDATE $timestampOffsetTable SET projection_key = ? WHERE projection_name = ? AND slice = ? AND persistence_id = ? and seq_nr = ?"
+
   private val clearTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"
 
@@ -334,6 +337,22 @@ private[projection] class PostgresOffsetStoreDao(
         .bind(1, maxSlice)
         .bind(2, projectionId.name)
         .bindTimestamp(3, timestamp))
+  }
+
+  override def adoptTimestampOffsets(latestBySlice: Seq[LatestBySlice]): Future[Long] = {
+    Future.sequence(latestBySlice.map(adoptTimestampOffset)).map(_.sum)
+  }
+
+  private def adoptTimestampOffset(latest: LatestBySlice): Future[Long] = {
+    r2dbcExecutor.updateOne("adopt timestamp offset") { connection =>
+      connection
+        .createStatement(adoptTimestampOffsetSql)
+        .bind(0, projectionId.key)
+        .bind(1, projectionId.name)
+        .bind(2, latest.slice)
+        .bind(3, latest.pid)
+        .bind(4, latest.seqNr)
+    }
   }
 
   override def clearTimestampOffset(): Future[Long] = {

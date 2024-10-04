@@ -1338,5 +1338,122 @@ class R2dbcTimestampOffsetStoreSpec
       TimestampOffset.toTimestampOffset(offsetStore4.getOffset().futureValue.get).timestamp shouldBe time4
     }
 
+    "adopt latest-by-slice offsets from other projection keys" in {
+      val projectionName = UUID.randomUUID().toString
+
+      def offsetStore(minSlice: Int, maxSlice: Int) =
+        new R2dbcOffsetStore(
+          ProjectionId(projectionName, s"$minSlice-$maxSlice"),
+          Some(new TestTimestampSourceProvider(minSlice, maxSlice, clock)),
+          system,
+          settings.withTimeWindow(JDuration.ofSeconds(10)),
+          r2dbcExecutor)
+
+      // two projections at higher scale
+      val offsetStore1 = offsetStore(512, 767)
+      val offsetStore2 = offsetStore(768, 1023)
+
+      // one projection at lower scale
+      val offsetStore3 = offsetStore(512, 1023)
+
+      val p1 = "p-0960" // slice 576
+      val p2 = "p-6009" // slice 640
+      val p3 = "p-3039" // slice 832
+      val p4 = "p-2049" // slice 896
+
+      val t0 = clock.instant().minusSeconds(100)
+      def time(step: Int) = t0.plusSeconds(step)
+
+      // scaled to 4 projections, testing 512-767 and 768-1023
+
+      // key: 512-767 — this projection is further behind
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time(0), Map(p1 -> 1L)), p1, 1L)).futureValue
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time(1), Map(p2 -> 1L)), p2, 1L)).futureValue
+
+      // key: 768-1023
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time(2), Map(p3 -> 1L)), p3, 1L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time(3), Map(p3 -> 2L)), p3, 2L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time(4), Map(p3 -> 3L)), p3, 3L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time(5), Map(p3 -> 4L)), p3, 4L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time(6), Map(p4 -> 1L)), p4, 1L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time(7), Map(p4 -> 2L)), p4, 2L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time(8), Map(p4 -> 3L)), p4, 3L)).futureValue
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(time(9), Map(p4 -> 4L)), p4, 4L)).futureValue
+
+      // scaled down to 2 projections, testing 512-1023
+
+      // reload: start offset is latest from 512-767 (earliest of latest by slice range)
+      val startOffset1 = TimestampOffset.toTimestampOffset(offsetStore3.readOffset().futureValue.get)
+      startOffset1.timestamp shouldBe time(1)
+      startOffset1.seen shouldBe Map(p2 -> 1L)
+
+      val state1 = offsetStore3.getState()
+      state1.size shouldBe 4
+      state1.latestBySlice.size shouldBe 4
+      state1.foreignLatestSortedByTimestamp.size shouldBe 4 // all latest are from other projection keys
+
+      // move slice 640 forward, now under 512-1023 projection, triggering adoption of the 512-767 offsets
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(2), Map(p2 -> 2L)), p2, 2L)).futureValue
+
+      // reload: start offset is from 512-1023, which has new and adopted offsets, but before latest from 768-1023
+      val startOffset2 = TimestampOffset.toTimestampOffset(offsetStore3.readOffset().futureValue.get)
+      startOffset2.timestamp shouldBe time(2)
+      startOffset2.seen shouldBe Map(p2 -> 2L)
+
+      val state2 = offsetStore3.getState()
+      state2.size shouldBe 4
+      state2.latestBySlice.size shouldBe 4
+      state2.foreignLatestSortedByTimestamp.size shouldBe 2 // latest by slice that are still from other projection keys (from 768-1023)
+
+      // move slice 640 forward, up to the latest for slice 832 (still under 768-1023 key)
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(3), Map(p2 -> 3L)), p2, 3L)).futureValue
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(4), Map(p2 -> 4L)), p2, 4L)).futureValue
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(5), Map(p2 -> 5L)), p2, 5L)).futureValue
+
+      // reload: start offset is from 512-1023, which has new and adopted offsets, but before latest from 768-1023
+      val startOffset3 = TimestampOffset.toTimestampOffset(offsetStore3.readOffset().futureValue.get)
+      startOffset3.timestamp shouldBe time(5)
+      startOffset3.seen shouldBe Map(p2 -> 5L)
+
+      val state3 = offsetStore3.getState()
+      state3.size shouldBe 4
+      state3.latestBySlice.size shouldBe 4
+      state3.foreignLatestSortedByTimestamp.size shouldBe 1 // latest by slice still from 768-1023
+
+      // move slices 576, 640, 832 forward but not past slice 896 yet
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(6), Map(p1 -> 2L)), p1, 2L)).futureValue
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(7), Map(p2 -> 6L)), p2, 6L)).futureValue
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(8), Map(p3 -> 5L)), p3, 5L)).futureValue
+
+      // reload: start offset is from 512-1023, which has new and adopted offsets, but still before latest from 768-1023
+      val startOffset4 = TimestampOffset.toTimestampOffset(offsetStore3.readOffset().futureValue.get)
+      startOffset4.timestamp shouldBe time(8)
+      startOffset4.seen shouldBe Map(p3 -> 5L)
+
+      val state4 = offsetStore3.getState()
+      state4.size shouldBe 4
+      state4.latestBySlice.size shouldBe 4
+      state4.foreignLatestSortedByTimestamp.size shouldBe 1 // latest by slice still from 768-1023
+
+      // move slices past the latest from 768-1023
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(10), Map(p1 -> 3L)), p1, 3L)).futureValue
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(11), Map(p2 -> 7L)), p2, 7L)).futureValue
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(12), Map(p3 -> 6L)), p3, 6L)).futureValue
+
+      // reload: start offset is latest now, all offsets from 512-1023
+      val startOffset5 = TimestampOffset.toTimestampOffset(offsetStore3.readOffset().futureValue.get)
+      startOffset5.timestamp shouldBe time(12)
+      startOffset5.seen shouldBe Map(p3 -> 6L)
+
+      val state5 = offsetStore3.getState()
+      state5.size shouldBe 4
+      state5.latestBySlice.size shouldBe 4
+      state5.foreignLatestSortedByTimestamp shouldBe empty
+
+      // outdated offsets, included those for 768-1023, will eventually be deleted
+      offsetStore3.saveOffset(OffsetPidSeqNr(TimestampOffset(time(100), Map(p1 -> 4L)), p1, 4L)).futureValue
+      offsetStore3.deleteOldTimestampOffsets().futureValue shouldBe 17
+    }
+
   }
 }
