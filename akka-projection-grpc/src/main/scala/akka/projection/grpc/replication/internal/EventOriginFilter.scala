@@ -8,6 +8,7 @@ import akka.annotation.InternalApi
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.internal.ReplicatedEventMetadata
+import akka.projection.grpc.internal.EnvelopeOrigin
 import akka.projection.grpc.internal.proto.ReplicaInfo
 
 /**
@@ -33,7 +34,7 @@ import akka.projection.grpc.internal.proto.ReplicaInfo
       // eventMetadata is not included in backtracking envelopes.
       // Events from backtracking are lazily loaded via `loadEvent` if needed.
       // Filter is done via `loadEvent` in that case.
-      if (envelope.eventOption.isEmpty)
+      if (envelope.eventOption.isEmpty || EnvelopeOrigin.fromHeartbeat(envelope))
         true
       else
         envelope.eventMetadata match {

@@ -52,6 +52,26 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
       state3.oldestTimestamp shouldBe t0
     }
 
+    "add record with latest timestamp if same seqNr" in {
+      val t0 = TestClock.nowMillis().instant()
+      val state1 = State.empty
+        .add(
+          Vector(
+            createRecord("p1", 1, t0),
+            createRecord("p1", 2, t0.plusMillis(2)),
+            createRecord("p1", 2, t0.plusMillis(3)),
+            createRecord("p1", 2, t0.plusMillis(1))))
+      state1.byPid("p1").seqNr shouldBe 2L
+      state1.byPid("p1").timestamp shouldBe t0.plusMillis(3)
+      state1.latestTimestamp shouldBe t0.plusMillis(3)
+      state1.latestOffset.get.seen shouldBe Map("p1" -> 2L)
+      state1.oldestTimestamp shouldBe t0
+
+      val state2 = state1.add(Vector(createRecord("p1", 2, t0.plusMillis(4))))
+      state2.byPid("p1").timestamp shouldBe t0.plusMillis(4)
+      state2.latestTimestamp shouldBe t0.plusMillis(4)
+    }
+
     // reproducer of issue #173
     "include highest seqNr in seen of latestOffset" in {
       val t0 = TestClock.nowMillis().instant()
@@ -157,6 +177,9 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
       state.isDuplicate(createRecord("p1", 2, t0.plusMillis(10))) shouldBe false
       state.isDuplicate(createRecord("p2", 1, t0)) shouldBe true
       state.isDuplicate(createRecord("p4", 4, t0.plusMillis(10))) shouldBe false
+
+      state.isDuplicate(createRecord("p1", 1, t0.plusMillis(1))) shouldBe false
+      state.isDuplicate(createRecord("p1", 1, t0.minusMillis(1))) shouldBe true
     }
   }
 }

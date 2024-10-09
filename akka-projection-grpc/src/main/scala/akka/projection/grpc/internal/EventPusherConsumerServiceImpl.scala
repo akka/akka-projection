@@ -47,11 +47,6 @@ private[akka] object EventPusherConsumerServiceImpl {
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  // See akka.persistence.r2dbc.internal.EnvelopeOrigin, but we don't have a dependency
-  // to akka-persistence-r2dbc here
-  def fromSnapshot(env: EventEnvelope[_]): Boolean =
-    env.source == "SN"
-
   private case class Destination(
       eventProducerPushDestination: EventProducerPushDestination,
       sendEvent: (EventEnvelope[_], Boolean) => Future[Any],
@@ -76,6 +71,9 @@ private[akka] object EventPusherConsumerServiceImpl {
           { (envelope: EventEnvelope[_], fillSequenceNumberGaps: Boolean) =>
             if (envelope.filtered) {
               log.trace("Ignoring filtered event [{}] for pid [{}]", envelope.sequenceNr, envelope.persistenceId)
+              Future.successful(Done)
+            } else if (EnvelopeOrigin.fromHeartbeat(envelope)) {
+              log.trace("Ignoring heartbeat event [{}]", envelope.persistenceId)
               Future.successful(Done)
             } else {
               envelope.eventMetadata match {
@@ -139,7 +137,7 @@ private[akka] object EventPusherConsumerServiceImpl {
                 persistenceId = envelope.persistenceId,
                 sequenceNumber = envelope.sequenceNr,
                 event = envelope.eventOption.getOrElse(FilteredPayload),
-                isSnapshotEvent = fromSnapshot(envelope),
+                isSnapshotEvent = EnvelopeOrigin.fromSnapshot(envelope),
                 fillSequenceNumberGaps = fillSequenceNumberGaps,
                 metadata = envelope.eventMetadata,
                 tags = envelope.tags,
