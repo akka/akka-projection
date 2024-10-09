@@ -209,7 +209,7 @@ private[akka] object ReplicationImpl {
                 if (envelope.filtered) {
                   // Events not originating on sending side already are filtered/have no payload and end up here
                   if (log.isTraceEnabled)
-                    log.traceN(
+                    log.trace(
                       "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
                       projectionKey,
                       remoteReplica.replicaId,
