@@ -1,4 +1,0 @@
-# adding foreignLatestBySlice to R2dbcOffsetStore.State for offset adoption
-ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcOffsetStore#State.this")
-ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcOffsetStore#State.apply")
-ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcOffsetStore#State.copy")

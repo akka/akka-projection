@@ -44,6 +44,11 @@ object R2dbcProjectionSettings {
       case _     => config.getDuration("offset-store.delete-interval")
     }
 
+    val adoptInterval = config.getString("offset-store.adopt-interval").toLowerCase(Locale.ROOT) match {
+      case "off" => JDuration.ZERO
+      case _     => config.getDuration("offset-store.adopt-interval")
+    }
+
     new R2dbcProjectionSettings(
       schema = Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty),
       offsetTable = config.getString("offset-store.offset-table"),
@@ -54,6 +59,7 @@ object R2dbcProjectionSettings {
       keepNumberOfEntries = config.getInt("offset-store.keep-number-of-entries"),
       evictInterval = config.getDuration("offset-store.evict-interval"),
       deleteInterval,
+      adoptInterval,
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"))
@@ -77,6 +83,7 @@ final class R2dbcProjectionSettings private (
     val keepNumberOfEntries: Int,
     val evictInterval: JDuration,
     val deleteInterval: JDuration,
+    val adoptInterval: JDuration,
     val logDbCallsExceeding: FiniteDuration,
     val warnAboutFilteredEventsInFlow: Boolean,
     val offsetBatchSize: Int) {
@@ -121,6 +128,12 @@ final class R2dbcProjectionSettings private (
   def withDeleteInterval(deleteInterval: JDuration): R2dbcProjectionSettings =
     copy(deleteInterval = deleteInterval)
 
+  def withAdoptInterval(adoptInterval: FiniteDuration): R2dbcProjectionSettings =
+    copy(adoptInterval = adoptInterval.toJava)
+
+  def withAdoptInterval(adoptInterval: JDuration): R2dbcProjectionSettings =
+    copy(adoptInterval = adoptInterval)
+
   def withLogDbCallsExceeding(logDbCallsExceeding: FiniteDuration): R2dbcProjectionSettings =
     copy(logDbCallsExceeding = logDbCallsExceeding)
 
@@ -143,6 +156,7 @@ final class R2dbcProjectionSettings private (
       keepNumberOfEntries: Int = keepNumberOfEntries,
       evictInterval: JDuration = evictInterval,
       deleteInterval: JDuration = deleteInterval,
+      adoptInterval: JDuration = adoptInterval,
       logDbCallsExceeding: FiniteDuration = logDbCallsExceeding,
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
       offsetBatchSize: Int = offsetBatchSize) =
@@ -156,6 +170,7 @@ final class R2dbcProjectionSettings private (
       keepNumberOfEntries,
       evictInterval,
       deleteInterval,
+      adoptInterval,
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow,
       offsetBatchSize)
