@@ -235,7 +235,7 @@ lazy val docs = project
         ( // package duplication errors
           (s"https://doc\\.akka\\.io/api/akka-grpc/${akka.grpc.gen.BuildInfo.version}/akka/grpc/akka/grpc").r,
           _ => s"https://doc\\.akka\\.io/api/akka-grpc/${akka.grpc.gen.BuildInfo.version}/akka/grpc/")),
-    Paradox / siteSubdirName := s"docs/akka-projection/${projectInfoVersion.value}",
+    Paradox / siteSubdirName := s"libraries/akka-projection/${projectInfoVersion.value}",
     Compile / paradoxProperties ++= Map(
         "project.url" -> "https://doc.akka.io/libraries/akka-projection/current/",
         "canonical.base_url" -> "https://doc.akka.io/libraries/akka-projection/current",
