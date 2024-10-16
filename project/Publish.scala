@@ -1,7 +1,3 @@
-/*
- * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
- */
-
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.language.postfixOps
