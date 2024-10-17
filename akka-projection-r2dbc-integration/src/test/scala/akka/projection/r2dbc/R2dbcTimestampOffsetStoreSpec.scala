@@ -120,6 +120,22 @@ class R2dbcTimestampOffsetStoreSpec
       filtered = true,
       env.source)
 
+  def heartbeatEnvelope(pid: Pid, timestamp: Instant): EventEnvelope[String] = {
+    val entityType = PersistenceId.extractEntityType(pid)
+    val slice = persistenceExt.sliceForPersistenceId(pid)
+    new EventEnvelope[String](
+      TimestampOffset(timestamp, Map.empty),
+      pid,
+      1L,
+      eventOption = None,
+      timestamp.toEpochMilli,
+      None,
+      entityType,
+      slice,
+      filtered = true,
+      source = EnvelopeOrigin.SourceHeartbeat)
+  }
+
   def createUpdatedDurableState(
       pid: Pid,
       revision: SeqNr,
@@ -198,6 +214,28 @@ class R2dbcTimestampOffsetStoreSpec
       val readOffset3 = offsetStore.readOffset[TimestampOffset]()
       // then it should only contain that entry
       readOffset3.futureValue shouldBe Some(offset3)
+    }
+
+    "save TimestampOffset if same seqNr" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      tick()
+      val offset1 = TimestampOffset(clock.instant(), Map("p1" -> 1L))
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 1L)).futureValue
+
+      tick()
+      val offset2 = TimestampOffset(clock.instant(), Map("p1" -> 1L))
+      offsetStore.saveOffset(OffsetPidSeqNr(offset2, "p1", 1L)).futureValue
+      val readOffset2 = offsetStore.readOffset[TimestampOffset]()
+      readOffset2.futureValue shouldBe Some(offset2)
+
+      val offset3 = TimestampOffset(clock.instant().minusMillis(2), Map("p1" -> 1L))
+      offsetStore.saveOffset(OffsetPidSeqNr(offset3, "p1", 1L)).futureValue
+      val readOffset3 = offsetStore.readOffset[TimestampOffset]()
+      // offset3 not saved because earlier timestamp
+      readOffset3.futureValue shouldBe Some(offset2)
+
     }
 
     "save batch of TimestampOffsets" in {
@@ -460,6 +498,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
       offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p2", 1L)).futureValue
       offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p3", 5L)).futureValue
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "_hb", 1L)).futureValue
 
       // seqNr 1 is always accepted
       val env1 = createEnvelope("p4", 1L, startTime.plusMillis(1), "e4-1")
@@ -552,6 +591,12 @@ class R2dbcTimestampOffsetStoreSpec
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L)), "p5", 8L))
         .futureValue
       offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L)
+
+      // heartbeat is accepted, even though same seqNr, later timestamp
+      val hb2 = heartbeatEnvelope("_hb", startTime.plusMillis(10))
+      offsetStore.validate(hb2).futureValue shouldBe Accepted
+      val hb3 = heartbeatEnvelope("_hb", startTime.minusMillis(10))
+      offsetStore.validate(hb3).futureValue shouldBe Duplicate
     }
 
     "update inflight on error and re-accept element" in {
@@ -732,13 +777,6 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore
         .saveOffset(
           OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(1)), Map(p4 -> 1L)),
-            p4,
-            1L))
-        .futureValue
-      offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
             TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(2)), Map(p5 -> 1L)),
             p5,
             1L))
@@ -812,13 +850,6 @@ class R2dbcTimestampOffsetStoreSpec
         .futureValue
       offsetStore
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(evictInterval), Map(p4 -> 1L)), p4, 1L))
-        .futureValue
-      offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(1)), Map(p4 -> 1L)),
-            p4,
-            1L))
         .futureValue
       offsetStore
         .saveOffset(
