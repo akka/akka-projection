@@ -37,7 +37,7 @@ lazy val jdbc =
     .settings(Dependencies.jdbc)
     .settings(
       // needed because slick pulls in 2.2.0
-      dependencyOverrides += Dependencies.Compile.sl4j)
+      dependencyOverrides += Dependencies.Compile.slf4j)
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
@@ -58,7 +58,7 @@ lazy val slick =
     .settings(Dependencies.slick)
     .settings(
       // needed because slick pulls in 2.2.0
-      dependencyOverrides += Dependencies.Compile.sl4j)
+      dependencyOverrides += Dependencies.Compile.slf4j)
     .dependsOn(jdbc, core)
     .disablePlugins(CiReleasePlugin)
 
@@ -68,7 +68,7 @@ lazy val slickIntegration =
     .settings(Dependencies.slickIntegration)
     .settings(
       // needed because slick pulls in 2.2.0
-      dependencyOverrides += Dependencies.Compile.sl4j)
+      dependencyOverrides += Dependencies.Compile.slf4j)
     .dependsOn(slick)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
@@ -110,7 +110,7 @@ lazy val kafkaIntegration =
     .settings(Dependencies.kafkaIntegration)
     .settings(
       // needed because test uses Slick which pulls in 2.2.0
-      dependencyOverrides += Dependencies.Compile.sl4j)
+      dependencyOverrides += Dependencies.Compile.slf4j)
     .dependsOn(kafka, testkit % "test->test")
     .dependsOn(slick)
     .dependsOn(slickIntegration % "test->test")
@@ -171,6 +171,22 @@ lazy val r2dbcIntegration =
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
 
+lazy val dynamodb =
+  Project(id = "akka-projection-dynamodb", base = file("akka-projection-dynamodb"))
+    .settings(Dependencies.dynamodb)
+    .dependsOn(core, eventsourced)
+    .disablePlugins(CiReleasePlugin)
+    // FIXME: No previous artifact, disable MiMa until first release
+    .settings(mimaPreviousArtifacts := Set.empty)
+
+lazy val dynamodbIntegration =
+  Project(id = "akka-projection-dynamodb-integration", base = file("akka-projection-dynamodb-integration"))
+    .settings(IntegrationTests.settings)
+    .settings(Dependencies.dynamodbIntegration)
+    .dependsOn(dynamodb)
+    .dependsOn(testkit % Test)
+    .disablePlugins(CiReleasePlugin)
+
 // note that this is in the integration test aggregate
 // rather than root since it depends on other integration test modules
 lazy val examples = project
@@ -208,6 +224,8 @@ lazy val commonParadoxProperties = Def.settings(
       "javadoc.akka.grpc.base_url" -> "",
       // Akka persistence R2DBC plugin
       "extref.akka-persistence-r2dbc.base_url" -> s"https://doc.akka.io/libraries/akka-persistence-r2dbc/${Dependencies.Versions.AkkaPersistenceR2dbcVersionInDocs}/%s",
+      // Akka Persistence DynamoDB plugin
+      "extref.akka-persistence-dynamodb.base_url" -> s"https://doc.akka.io/libraries/akka-persistence-dynamodb/${Dependencies.Versions.AkkaPersistenceDynamodbVersionInDocs}/%s",
       // Akka Guide
       "extref.akka-guide.base_url" -> "https://developer.lightbend.com/docs/akka-guide/microservices-tutorial/",
       // Java
@@ -323,6 +341,7 @@ lazy val root = Project(id = "akka-projection", base = file("."))
     grpc,
     grpcTests,
     r2dbc,
+    dynamodb,
     docs,
     `akka-distributed-cluster-docs`,
     `akka-edge-docs`)
@@ -339,6 +358,7 @@ lazy val integrationTests = Project(id = "akka-projection-integration", base = f
     jdbcIntegration,
     kafkaIntegration,
     r2dbcIntegration,
+    dynamodbIntegration,
     slickIntegration)
   .settings(publish / skip := true)
   .disablePlugins(SitePlugin, MimaPlugin, CiReleasePlugin)
