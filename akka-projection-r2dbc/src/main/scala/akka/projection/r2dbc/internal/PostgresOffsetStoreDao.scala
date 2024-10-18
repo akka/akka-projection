@@ -68,6 +68,15 @@ private[projection] class PostgresOffsetStoreDao(
     SELECT projection_key, slice, persistence_id, seq_nr, timestamp_offset
     FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
 
+  protected def createSelectOneTimestampOffsetSql: String =
+    sql"""
+    SELECT seq_nr, timestamp_offset
+    FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND persistence_id = ?
+    ORDER BY seq_nr DESC
+    LIMIT 1"""
+
+  private val selectOneTimestampOffsetSql: String = createSelectOneTimestampOffsetSql
+
   private val insertTimestampOffsetSql: String =
     sql"""
     INSERT INTO $timestampOffsetTable
@@ -217,6 +226,23 @@ private[projection] class PostgresOffsetStoreDao(
         val seqNr = row.get("seq_nr", classOf[java.lang.Long])
         val timestamp = row.getTimestamp("timestamp_offset")
         R2dbcOffsetStore.RecordWithProjectionKey(R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp), projectionKey)
+      })
+  }
+
+  def readTimestampOffset(slice: Int, pid: String): Future[Option[R2dbcOffsetStore.Record]] = {
+    r2dbcExecutor.selectOne("read one timestamp offset")(
+      conn => {
+        logger.trace("reading one timestamp offset for [{}] pid [{}]", projectionId, pid)
+        conn
+          .createStatement(selectOneTimestampOffsetSql)
+          .bind(0, slice)
+          .bind(1, projectionId.name)
+          .bind(2, pid)
+      },
+      row => {
+        val seqNr = row.get("seq_nr", classOf[java.lang.Long])
+        val timestamp = row.getTimestamp("timestamp_offset")
+        R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
       })
   }
 

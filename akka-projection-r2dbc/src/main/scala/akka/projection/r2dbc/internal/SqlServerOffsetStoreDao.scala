@@ -39,6 +39,12 @@ private[projection] class SqlServerOffsetStoreDao(
 
   override protected implicit def timestampCodec: TimestampCodec = SqlServerTimestampCodec
 
+  override protected def createSelectOneTimestampOffsetSql: String =
+    sql"""
+    SELECT TOP(1) seq_nr, timestamp_offset
+    FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND persistence_id = ?
+    ORDER BY seq_nr DESC"""
+
   override protected def createUpsertOffsetSql() =
     sql"""
             UPDATE $offsetTable SET
