@@ -250,6 +250,26 @@ private[projection] class R2dbcOffsetStore(
       () => deleteOldTimestampOffsets(),
       system.executionContext)
 
+  // Foreign offsets (latest by slice offsets from other projection keys) that should be adopted when passed in time.
+  // Contains remaining offsets to adopt. Sorted by timestamp. Can be updated concurrently with CAS retries.
+  private val foreignOffsets = new AtomicReference(Seq.empty[RecordWithProjectionKey])
+
+  // The latest timestamp as seen by validation or saving offsets. For determining when to update foreign offsets.
+  // Can be updated concurrently with CAS retries.
+  private val latestSeen = new AtomicReference(Instant.EPOCH)
+
+  private val adoptingForeignOffsets = !settings.adoptInterval.isZero && !settings.adoptInterval.isNegative
+
+  private val scheduledAdoptForeignOffsets =
+    if (adoptingForeignOffsets)
+      Some(
+        system.scheduler.scheduleWithFixedDelay(
+          settings.adoptInterval,
+          settings.adoptInterval,
+          () => adoptForeignOffsets(),
+          system.executionContext))
+    else None
+
   private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     sourceProvider match {
       case Some(timestampQuery: EventTimestampQuery) =>
@@ -307,6 +327,8 @@ private[projection] class R2dbcOffsetStore(
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
       clearInflight()
+      clearForeignOffsets()
+      clearLatestSeen()
       if (newState == State.empty) {
         None
       } else if (moreThanOneProjectionKey(recordsWithKey)) {
@@ -323,6 +345,12 @@ private[projection] class R2dbcOffsetStore(
         // Only needed if there's more than one projection key within the latest offsets by slice.
         // To handle restarts after previous downscaling, and all latest are from the same instance.
         if (moreThanOneProjectionKey(latestBySliceWithKey)) {
+          if (adoptingForeignOffsets) {
+            val foreignOffsets = latestBySliceWithKey
+              .filter(_.projectionKey != projectionId.key)
+              .sortBy(_.record.timestamp)
+            setForeignOffsets(foreignOffsets)
+          }
           // Use the earliest of the latest from each projection instance (distinct projection key).
           val latestByKey =
             latestBySliceWithKey.groupBy(_.projectionKey).map {
@@ -443,6 +471,12 @@ private[projection] class R2dbcOffsetStore(
           }
           .toVector
       }
+    }
+    if (hasForeignOffsets() && records.nonEmpty) {
+      val latestTimestamp =
+        if (records.size == 1) records.head.timestamp
+        else records.maxBy(_.timestamp).timestamp
+      updateLatestSeen(latestTimestamp)
     }
     if (filteredRecords.isEmpty) {
       FutureDone
@@ -580,6 +614,8 @@ private[projection] class R2dbcOffsetStore(
 
     if (duplicate) {
       logger.trace("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid)
+      // also move latest seen forward, for adopting foreign offsets on replay of duplicates
+      if (hasForeignOffsets()) updateLatestSeen(recordWithOffset.offset.timestamp)
       FutureDuplicate
     } else if (recordWithOffset.strictSeqNr) {
       // strictSeqNr == true is for event sourced
@@ -775,6 +811,64 @@ private[projection] class R2dbcOffsetStore(
 
         result
       }
+    }
+  }
+
+  def getForeignOffsets(): Seq[RecordWithProjectionKey] =
+    foreignOffsets.get()
+
+  def hasForeignOffsets(): Boolean =
+    adoptingForeignOffsets && getForeignOffsets().nonEmpty
+
+  @tailrec private def setForeignOffsets(records: Seq[RecordWithProjectionKey]): Unit = {
+    val currentForeignOffsets = getForeignOffsets()
+    if (!foreignOffsets.compareAndSet(currentForeignOffsets, records))
+      setForeignOffsets(records) // CAS retry, concurrent update of foreignOffsets
+  }
+
+  // return the adoptable foreign offsets up to the latest timestamp, and set to the remaining foreign offsets
+  @tailrec private def takeAdoptableForeignOffsets(latestTimestamp: Instant): Seq[RecordWithProjectionKey] = {
+    val currentForeignOffsets = getForeignOffsets()
+    val adoptable = currentForeignOffsets.takeWhile(_.record.timestamp.compareTo(latestTimestamp) <= 0)
+    if (adoptable.isEmpty) Seq.empty
+    else {
+      val remainingForeignOffsets = currentForeignOffsets.drop(adoptable.size)
+      if (foreignOffsets.compareAndSet(currentForeignOffsets, remainingForeignOffsets)) adoptable
+      else takeAdoptableForeignOffsets(latestTimestamp) // CAS retry, concurrent update of foreignOffsets
+    }
+  }
+
+  private def clearForeignOffsets(): Unit = setForeignOffsets(Seq.empty)
+
+  def getLatestSeen(): Instant =
+    latestSeen.get()
+
+  @tailrec private def updateLatestSeen(instant: Instant): Unit = {
+    val currentLatestSeen = getLatestSeen()
+    if (instant.isAfter(currentLatestSeen)) {
+      if (!latestSeen.compareAndSet(currentLatestSeen, instant))
+        updateLatestSeen(instant) // CAS retry, concurrent update of latestSeen
+    }
+  }
+
+  @tailrec private def clearLatestSeen(): Unit = {
+    val currentLatestSeen = getLatestSeen()
+    if (!latestSeen.compareAndSet(currentLatestSeen, Instant.EPOCH))
+      clearLatestSeen() // CAS retry, concurrent update of latestSeen
+  }
+
+  def adoptForeignOffsets(): Future[Long] = {
+    if (!hasForeignOffsets()) {
+      scheduledAdoptForeignOffsets.foreach(_.cancel())
+      Future.successful(0)
+    } else {
+      val latestTimestamp = getLatestSeen()
+      val adoptableRecords = takeAdoptableForeignOffsets(latestTimestamp)
+      if (!hasForeignOffsets()) scheduledAdoptForeignOffsets.foreach(_.cancel())
+      val adoptableLatestBySlice = adoptableRecords.map { adoptable =>
+        LatestBySlice(adoptable.record.slice, adoptable.record.pid, adoptable.record.seqNr)
+      }
+      dao.adoptTimestampOffsets(adoptableLatestBySlice)
     }
   }
 
