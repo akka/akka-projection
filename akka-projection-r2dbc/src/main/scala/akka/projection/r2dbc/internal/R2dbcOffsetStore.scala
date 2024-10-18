@@ -220,7 +220,7 @@ private[projection] class R2dbcOffsetStore(
         throw new IllegalArgumentException(
           s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
     }
-  private val dao = {
+  val dao: OffsetStoreDao = {
     logger.debug2("Offset store [{}] created, with dialect [{}]", projectionId, dialectName)
     dialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
   }
@@ -645,29 +645,6 @@ private[projection] class R2dbcOffsetStore(
             recordWithOffset.offset)
       }
 
-      def logUnknown(): Unit = {
-        if (recordWithOffset.fromPubSub) {
-          logger.debugN(
-            "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
-            seqNr,
-            pid,
-            recordWithOffset.offset)
-        } else if (!recordWithOffset.fromBacktracking) {
-          // This may happen rather frequently when using `publish-events`, after reconnecting and such.
-          logger.debugN(
-            "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
-            seqNr,
-            pid,
-            recordWithOffset.offset)
-        } else {
-          logger.warnN(
-            "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}",
-            seqNr,
-            pid,
-            recordWithOffset.offset)
-        }
-      }
-
       if (prevSeqNr > 0) {
         // expecting seqNr to be +1 of previously known
         val ok = seqNr == prevSeqNr + 1
@@ -695,33 +672,16 @@ private[projection] class R2dbcOffsetStore(
         // always accept starting from snapshots when there was no previous event seen
         FutureAccepted
       } else {
-        // Haven't see seen this pid within the time window. Since events can be missed
-        // when read at the tail we will only accept it if the event with previous seqNr has timestamp
-        // before the time window of the offset store.
-        // Backtracking will emit missed event again.
-        timestampOf(pid, seqNr - 1).map {
-          case Some(previousTimestamp) =>
-            val before = currentState.latestTimestamp.minus(settings.timeWindow)
-            if (previousTimestamp.isBefore(before)) {
-              logger.debugN(
-                "Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
-                "is before time window [{}].",
-                pid,
-                seqNr,
-                previousTimestamp,
-                before)
-              Accepted
-            } else if (!recordWithOffset.fromBacktracking) {
-              logUnknown()
-              RejectedSeqNr
-            } else {
-              logUnknown()
-              // This will result in projection restart (with normal configuration)
-              RejectedBacktrackingSeqNr
-            }
+        dao.readTimestampOffset(recordWithOffset.record.slice, pid).flatMap {
+          case Some(loadedRecord) =>
+            if (seqNr == loadedRecord.seqNr + 1)
+              FutureAccepted
+            else if (seqNr <= loadedRecord.seqNr)
+              FutureDuplicate
+            else
+              validateEventTimestamp(currentState, recordWithOffset)
           case None =>
-            // previous not found, could have been deleted
-            Accepted
+            validateEventTimestamp(currentState, recordWithOffset)
         }
       }
     } else {
@@ -732,9 +692,67 @@ private[projection] class R2dbcOffsetStore(
       if (ok) {
         FutureAccepted
       } else {
-        logger.traceN("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
+        logger.trace("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
         FutureDuplicate
       }
+    }
+  }
+
+  private def validateEventTimestamp(currentState: State, recordWithOffset: RecordWithOffset) = {
+    import Validation._
+    val pid = recordWithOffset.record.pid
+    val seqNr = recordWithOffset.record.seqNr
+
+    def logUnknown(): Unit = {
+      if (recordWithOffset.fromPubSub) {
+        logger.debug(
+          "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+          seqNr,
+          pid,
+          recordWithOffset.offset)
+      } else if (!recordWithOffset.fromBacktracking) {
+        // This may happen rather frequently when using `publish-events`, after reconnecting and such.
+        logger.debug(
+          "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+          seqNr,
+          pid,
+          recordWithOffset.offset)
+      } else {
+        logger.warn(
+          "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}",
+          seqNr,
+          pid,
+          recordWithOffset.offset)
+      }
+    }
+
+    // Haven't see seen this pid within the time window. Since events can be missed
+    // when read at the tail we will only accept it if the event with previous seqNr has timestamp
+    // before the time window of the offset store.
+    // Backtracking will emit missed event again.
+    timestampOf(pid, seqNr - 1).map {
+      case Some(previousTimestamp) =>
+        val before = currentState.latestTimestamp.minus(settings.timeWindow)
+        if (previousTimestamp.isBefore(before)) {
+          logger.debug(
+            "Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
+            "is before time window [{}].",
+            pid,
+            seqNr,
+            previousTimestamp,
+            before)
+          Accepted
+        } else if (!recordWithOffset.fromBacktracking) {
+          logUnknown()
+          RejectedSeqNr
+        } else {
+          logUnknown()
+          // This will result in projection restart (with normal configuration)
+          RejectedBacktrackingSeqNr
+        }
+      case None =>
+        // previous not found, could have been deleted
+        Accepted
     }
   }
 

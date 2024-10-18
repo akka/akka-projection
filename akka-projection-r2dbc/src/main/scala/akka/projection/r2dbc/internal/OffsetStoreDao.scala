@@ -24,6 +24,8 @@ private[projection] trait OffsetStoreDao {
 
   def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]]
 
+  def readTimestampOffset(slice: Int, pid: String): Future[Option[R2dbcOffsetStore.Record]]
+
   def readPrimitiveOffset(): Future[immutable.IndexedSeq[OffsetSerialization.SingleOffset]]
 
   def insertTimestampOffsetInTx(
