@@ -554,6 +554,37 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L)
     }
 
+    "accept via loading of previous seqNr" in {
+      import R2dbcOffsetStore.Validation._
+      val projectionId = genRandomProjectionId()
+      val eventTimestampQueryClock = TestClock.nowMicros()
+      val offsetStore = createOffsetStore(projectionId, eventTimestampQueryClock = eventTimestampQueryClock)
+
+      val startTime = TestClock.nowMicros().instant()
+
+      // reject unknown
+      val pid1 = "p1"
+      val env1 = createEnvelope(pid1, 7L, startTime.plusMillis(8), "e1-7")
+      offsetStore.validate(env1).futureValue shouldBe RejectedSeqNr
+      offsetStore.validate(backtrackingEnvelope(env1)).futureValue shouldBe RejectedBacktrackingSeqNr
+      // but if there was a stored offset (maybe evicted)
+      val slice = persistenceExt.sliceForPersistenceId(pid1)
+      r2dbcExecutor
+        .withConnection("insert offset") { con =>
+          offsetStore.dao.insertTimestampOffsetInTx(
+            con,
+            Vector(R2dbcOffsetStore.Record(slice, pid1, 5L, startTime.minusMillis(1))))
+          offsetStore.dao.insertTimestampOffsetInTx(con, Vector(R2dbcOffsetStore.Record(slice, pid1, 6L, startTime)))
+        }
+        .futureValue
+      // then it is accepted
+      offsetStore.validate(env1).futureValue shouldBe Accepted
+
+      // and also detect duplicate that way
+      offsetStore.validate(createEnvelope(pid1, 4L, startTime.minusMillis(8), "e1-4")).futureValue shouldBe Duplicate
+      offsetStore.validate(createEnvelope(pid1, 6L, startTime, "e1-6")).futureValue shouldBe Duplicate
+    }
+
     "update inflight on error and re-accept element" in {
       import R2dbcOffsetStore.Validation._
       val projectionId = genRandomProjectionId()
