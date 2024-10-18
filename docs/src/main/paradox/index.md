@@ -16,6 +16,7 @@
 * [Cassandra](cassandra.md)
 * [JDBC](jdbc.md)
 * [Slick](slick.md)
+* [DynamoDB](dynamodb.md)
 * [Running](running.md)
 * [Actor](actor.md)
 * [Flow](flow.md)

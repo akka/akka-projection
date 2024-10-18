@@ -1,0 +1,54 @@
+name: Integration Tests for DynamoDB
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags-ignore: [ v.* ]
+
+jobs:
+  test-dynamodb:
+    name: Run DynamoDB tests
+    runs-on: ubuntu-22.04
+    if: github.repository == 'akka/akka-projection'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
+          - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
+
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Cache Coursier cache
+        # https://github.com/coursier/cache-action/releases
+        # v6.4.5
+        uses: coursier/cache-action@1ff273bff02a8787bc9f1877d347948af647956d
+
+      - name: Set up JDK ${{ matrix.jdkVersion }}
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.0
+        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
+        with:
+          jvm: ${{ matrix.jvmName }}
+
+      - name: Start DynamoDB
+        run: |-
+          docker compose -f docker-files/docker-compose-dynamodb.yml up --wait
+
+      - name: Run integration tests with with Scala and Java ${{ matrix.jdkVersion }}
+        run: |-
+          sbt akka-projection-dynamodb-integration/test -Dakka.warn-on-no-license-key=false
