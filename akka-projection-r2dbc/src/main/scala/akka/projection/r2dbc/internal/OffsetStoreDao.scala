@@ -39,6 +39,8 @@ private[projection] trait OffsetStoreDao {
 
   def deleteNewTimestampOffsetsInTx(connection: Connection, timestamp: Instant): Future[Long]
 
+  def adoptTimestampOffsets(latestBySlice: Seq[LatestBySlice]): Future[Long]
+
   def clearTimestampOffset(): Future[Long]
 
   def clearPrimitiveOffset(): Future[Long]
