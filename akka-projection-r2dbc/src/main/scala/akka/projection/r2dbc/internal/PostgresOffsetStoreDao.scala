@@ -111,6 +111,22 @@ private[projection] class PostgresOffsetStoreDao(
   private val deleteNewTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset >= ?"
 
+  private val adoptTimestampOffsetSql: String =
+    sql"""
+     UPDATE $timestampOffsetTable
+     SET projection_key = ?
+     WHERE projection_name = ? AND slice = ? AND persistence_id = ? AND seq_nr = ?
+   """
+
+  private def adoptTimestampOffsetBatchSql(offsets: Int): String = {
+    val conditions = (1 to offsets).map(_ => "(slice = ? AND persistence_id = ? AND seq_nr = ?)").mkString(" OR ")
+    sql"""
+      UPDATE $timestampOffsetTable
+      SET projection_key = ?
+      WHERE projection_name = ? AND ($conditions)
+    """
+  }
+
   private val clearTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"
 
@@ -334,6 +350,39 @@ private[projection] class PostgresOffsetStoreDao(
         .bind(1, maxSlice)
         .bind(2, projectionId.name)
         .bindTimestamp(3, timestamp))
+  }
+
+  override def adoptTimestampOffsets(latestBySlice: Seq[LatestBySlice]): Future[Long] = {
+    def bindCondition(statement: Statement, latest: LatestBySlice, startIndex: Int): Statement = {
+      statement
+        .bind(startIndex + 0, latest.slice)
+        .bind(startIndex + 1, latest.pid)
+        .bind(startIndex + 2, latest.seqNr)
+    }
+    if (latestBySlice.size == 1) {
+      r2dbcExecutor.updateOne("adopt timestamp offset") { connection =>
+        val statement = connection
+          .createStatement(adoptTimestampOffsetSql)
+          .bind(0, projectionId.key)
+          .bind(1, projectionId.name)
+        bindCondition(statement, latestBySlice.head, startIndex = 2)
+      }
+    } else {
+      val batches = latestBySlice.sliding(settings.offsetBatchSize, settings.offsetBatchSize).toIndexedSeq
+      r2dbcExecutor
+        .update("adopt timestamp offsets") { connection =>
+          batches.map { batch =>
+            val batchStatement = connection
+              .createStatement(adoptTimestampOffsetBatchSql(batch.size))
+              .bind(0, projectionId.key)
+              .bind(1, projectionId.name)
+            batch.zipWithIndex.foldLeft(batchStatement) {
+              case (statement, (latest, index)) => bindCondition(statement, latest, startIndex = 2 + index * 3)
+            }
+          }
+        }
+        .map(_.sum)
+    }
   }
 
   override def clearTimestampOffset(): Future[Long] = {
