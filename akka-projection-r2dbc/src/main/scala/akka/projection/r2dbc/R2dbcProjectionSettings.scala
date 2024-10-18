@@ -129,7 +129,7 @@ final class R2dbcProjectionSettings private (
     copy(deleteInterval = deleteInterval)
 
   def withAdoptInterval(adoptInterval: FiniteDuration): R2dbcProjectionSettings =
-    copy(adoptInterval = adoptInterval.toJava)
+    copy(adoptInterval = adoptInterval.asJava)
 
   def withAdoptInterval(adoptInterval: JDuration): R2dbcProjectionSettings =
     copy(adoptInterval = adoptInterval)
