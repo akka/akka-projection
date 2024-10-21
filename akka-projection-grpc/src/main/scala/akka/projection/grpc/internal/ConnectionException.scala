@@ -15,3 +15,10 @@ import scala.util.control.NoStackTrace
 private[akka] final class ConnectionException(host: String, port: String, streamId: String)
     extends RuntimeException(s"Connection to $host:$port for stream id $streamId failed or lost")
     with NoStackTrace
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[akka] final class DetailedConnectionException(host: String, port: String, streamId: String, cause: Throwable)
+    extends RuntimeException(s"Connection to $host:$port for stream id $streamId failed or lost", cause)
