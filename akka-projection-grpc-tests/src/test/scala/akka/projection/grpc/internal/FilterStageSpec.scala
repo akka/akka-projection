@@ -20,6 +20,8 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
+import akka.persistence.typed.internal.ReplicatedEventMetadata
+import akka.persistence.typed.internal.VersionVector
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.ExcludeEntityIds
 import akka.projection.grpc.internal.proto.ExcludeRegexEntityIds
@@ -70,6 +72,20 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       filtered = false,
       source = "",
       tags = tags)
+  }
+
+  private def createRESEnvelope(
+      pid: PersistenceId,
+      seqNr: Long,
+      evt: String,
+      tags: Set[String] = Set.empty): EventEnvelope[Any] = {
+    val replicationId = ReplicationId.fromString(pid.id)
+    createEnvelope(pid, seqNr, evt, tags).withMetadata(
+      ReplicatedEventMetadata(
+        replicationId.replicaId,
+        seqNr,
+        VersionVector.empty + replicationId.replicaId.id,
+        concurrent = true))
   }
 
   private val envelopes = Vector(
@@ -272,9 +288,9 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
     "replay from ReplayReq with RES ReplicaId" in new Setup {
       // some more envelopes
       override lazy val allEnvelopes = Vector(
-        createEnvelope(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId, 1, "a1"),
-        createEnvelope(ReplicationId(entityType, "a", ReplicaId("B")).persistenceId, 1, "b1"),
-        createEnvelope(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId, 2, "a2"))
+        createRESEnvelope(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId, 1, "a1"),
+        createRESEnvelope(ReplicationId(entityType, "a", ReplicaId("B")).persistenceId, 1, "b1"),
+        createRESEnvelope(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId, 2, "a2"))
 
       envPublisher.sendNext(allEnvelopes.last)
       outProbe.request(10)
@@ -282,7 +298,7 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
       inPublisher.sendNext(streamInReplayReq(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId.id, 1L))
       // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
-      envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
+      envPublisher.sendNext(createRESEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
       outProbe.expectNext().event shouldBe "e1"
       outProbe.expectNext().event shouldBe "a1"
       outProbe.expectNext().event shouldBe "a2"
