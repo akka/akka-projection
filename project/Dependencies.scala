@@ -16,29 +16,29 @@ object Dependencies {
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
   object Versions {
-    val Akka = sys.props.getOrElse("build.akka.version", "2.10.0-M1")
+    val Akka = sys.props.getOrElse("build.akka.version", "2.10.0")
     val AkkaVersionInDocs = VersionNumber(Akka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
-    val Alpakka = "9.0.0-M1"
+    val Alpakka = "9.0.0"
     val AlpakkaVersionInDocs = VersionNumber(Alpakka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
-    val AlpakkaKafka = "7.0.0-M1"
+    val AlpakkaKafka = "7.0.0"
     val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
-    val AkkaGrpcVersionInDocs = "2.5.0-M1"
+    val AkkaGrpcVersionInDocs = "2.5.0"
 
     val AkkaProjectionVersionInDocs = "1.6.0"
 
-    val AkkaPersistenceCassandra = "1.2.1"
-    val AkkaPersistenceJdbc = "5.5.0-M1"
+    val AkkaPersistenceCassandra = "1.3.0"
+    val AkkaPersistenceJdbc = "5.5.0"
 
-    val AkkaPersistenceR2dbc = "1.3.0-M1"
+    val AkkaPersistenceR2dbc = "1.3.0"
     val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val AkkaPersistenceDynamodb = "2.0.0-M1"
+    val AkkaPersistenceDynamodb = "2.0.0"
     val AkkaPersistenceDynamodbVersionInDocs = VersionNumber(AkkaPersistenceDynamodb).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
