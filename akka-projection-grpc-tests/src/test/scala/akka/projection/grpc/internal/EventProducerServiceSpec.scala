@@ -589,7 +589,7 @@ class EventProducerServiceSpec
     }
 
     "fill in missing metadata" in {
-      val initReq = InitReq(streamId7, 0, 1023, offset = None)
+      val initReq = InitReq(streamId7, 0, 1023, offset = Nil)
       val streamIn = Source
         .single(StreamIn(StreamIn.Message.Init(initReq)))
         .concat(Source.maybe)
