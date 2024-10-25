@@ -222,9 +222,11 @@ class EventProducerServiceSpec
   val streamId5 = "stream_id_" + entityType5
   val entityType6 = nextEntityType()
   val streamId6 = "stream_id_" + entityType6
+  val entityType7 = nextEntityType()
+  val streamId7 = "stream_id_" + entityType7
 
   private val eventsBySlicesQueries =
-    Map(streamId1 -> query, streamId2 -> query, streamId3 -> query, streamId6 -> query)
+    Map(streamId1 -> query, streamId2 -> query, streamId3 -> query, streamId6 -> query, streamId7 -> query)
   private val eventsBySlicesStartingFromSnapshotsQueries =
     Map(streamId4 -> query, streamId5 -> query)
   private val currentEventsByPersistenceIdQueries =
@@ -251,7 +253,18 @@ class EventProducerServiceSpec
           evt
       },
     EventProducerSource(entityType6, streamId6, transformation, settings)
-      .withReplicatedEventOriginFilter(new EventOriginFilter(ReplicaId("replica1"))))
+      .withReplicatedEventOriginFilter(new EventOriginFilter(ReplicaId("replica1"))),
+    EventProducerSource(entityType7, streamId7, transformation, settings)
+      .withReplicatedEventMetadataTransformation(
+        env =>
+          if (env.eventMetadata.isDefined) None
+          else
+            Some(
+              ReplicatedEventMetadata(
+                originReplica = ReplicaId.empty,
+                originSequenceNr = env.sequenceNr,
+                version = VersionVector(env.persistenceId, env.sequenceNr),
+                concurrent = false))))
 
   private val eventProducerService =
     new EventProducerServiceImpl(
@@ -573,6 +586,40 @@ class EventProducerServiceSpec
       out5.message.isEvent shouldBe true
       out5.getEvent.seqNr shouldBe env5.sequenceNr
 
+    }
+
+    "fill in missing metadata" in {
+      val initReq = InitReq(streamId7, 0, 1023, offset = Nil)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+
+      probe.request(100)
+      val testPublisher =
+        query.testPublisher(entityType7).futureValue
+
+      val env1 = createEnvelope(nextPid(entityType7), 1L, "e-1")
+      testPublisher.sendNext(env1)
+      val env2 = createEnvelope(nextPid(entityType7), 2L, "e-2")
+      testPublisher.sendNext(env2)
+
+      val protoAnySerialization = new ProtoAnySerialization(system)
+
+      val out1 = probe.expectNext()
+      protoAnySerialization.deserialize(out1.getEvent.metadata.get) shouldBe ReplicatedEventMetadata(
+        originReplica = ReplicaId.empty,
+        originSequenceNr = env1.sequenceNr,
+        version = VersionVector(env1.persistenceId, env1.sequenceNr),
+        concurrent = false)
+
+      val out2 = probe.expectNext()
+      protoAnySerialization.deserialize(out2.getEvent.metadata.get) shouldBe ReplicatedEventMetadata(
+        originReplica = ReplicaId.empty,
+        originSequenceNr = env2.sequenceNr,
+        version = VersionVector(env2.persistenceId, env2.sequenceNr),
+        concurrent = false)
     }
 
   }
