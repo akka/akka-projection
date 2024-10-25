@@ -38,6 +38,13 @@ object Dependencies {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
+    val AkkaPersistenceDynamodb = "2.0.0-M1"
+    val AkkaPersistenceDynamodbVersionInDocs = VersionNumber(AkkaPersistenceDynamodb).numbers match {
+      case Seq(major, minor, _*) => s"$major.$minor"
+    }
+
+    val DynamodbSdk = "2.25.59"
+
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "7.0.0-M1")
     val slick = "3.5.2"
     val scalaTest = "3.2.18"
@@ -70,7 +77,10 @@ object Dependencies {
 
     val r2dbcSqlServer = "io.r2dbc" % "r2dbc-mssql" % "1.0.2.RELEASE" % Provided // ApacheV2
 
-    val sl4j = "org.slf4j" % "slf4j-api" % "2.0.16"
+    val akkaPersistenceDynamodb = "com.lightbend.akka" %% "akka-persistence-dynamodb" % Versions.AkkaPersistenceDynamodb
+    val dynamodbSdk = "software.amazon.awssdk" % "dynamodb" % Versions.DynamodbSdk
+
+    val slf4j = "org.slf4j" % "slf4j-api" % "2.0.16"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.Alpakka
@@ -190,7 +200,7 @@ object Dependencies {
   val slick =
     deps ++= Seq(
         Compile.slick,
-        Compile.sl4j,
+        Compile.slf4j,
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.h2Driver,
@@ -199,7 +209,7 @@ object Dependencies {
   val slickIntegration =
     deps ++= Seq(
         Compile.slick,
-        Compile.sl4j,
+        Compile.slf4j,
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.h2Driver,
@@ -303,6 +313,21 @@ object Dependencies {
         Test.akkaClusterShardingTyped,
         Test.akkaSerializationJackson,
         Test.akkaDiscovery,
+        Test.logback,
+        Test.scalatest)
+
+  val dynamodb = deps ++= Seq(
+        Compile.dynamodbSdk.exclude("software.amazon.awssdk", "apache-client"),
+        Compile.akkaPersistenceDynamodb,
+        Compile.akkaPersistenceQuery,
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped)
+
+  val dynamodbIntegration = deps ++= Seq(
+        Test.akkaStreamTestkit,
+        Test.akkaTypedTestkit,
+        Test.akkaClusterShardingTyped,
+        Test.akkaSerializationJackson,
         Test.logback,
         Test.scalatest)
 
