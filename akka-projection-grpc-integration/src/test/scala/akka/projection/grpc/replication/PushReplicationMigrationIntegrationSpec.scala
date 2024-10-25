@@ -12,7 +12,6 @@ import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
@@ -149,7 +148,7 @@ class PushReplicationMigrationIntegrationSpec(testContainerConf: TestContainerCo
 
   def startReplica(replicaSystem: ActorSystem[_], replica: Replica): Future[Replication[HelloWorld.Command]] = {
     logger
-      .infoN(
+      .info(
         "Starting replica [{}], system [{}] on port [{}]",
         replica.replicaId,
         replicaSystem.name,
@@ -263,7 +262,7 @@ class PushReplicationMigrationIntegrationSpec(testContainerConf: TestContainerCo
         n <- 1 to 5
         entityId <- Set(entityIdOne, entityIdTwo)
       } {
-        logger.infoN("Updating greeting {} for [{}] from dc [{}]", n, entityId, DCA)
+        logger.info("Updating greeting {} for [{}] from dc [{}]", n, entityId, DCA)
         replicationA
           .entityRefFactory(entityId)
           .ask(HelloWorld.SetGreeting(s"hello $n from ${DCA.id}", _))
@@ -292,7 +291,7 @@ class PushReplicationMigrationIntegrationSpec(testContainerConf: TestContainerCo
         n <- 6 to 10
         entityId <- Set(entityIdOne, entityIdTwo)
       } {
-        logger.infoN("Updating greeting {} for [{}] from edge dc", n, entityId)
+        logger.info("Updating greeting {} for [{}] from edge dc", n, entityId)
         edgeReplicationA
           .entityRefFactory(entityId)
           .ask(HelloWorld.SetGreeting(s"hello $n from edge", _))

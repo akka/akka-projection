@@ -7,7 +7,7 @@ ThisBuild / dynverSeparator := "-"
 ThisBuild / dynverSonatypeSnapshots := true
 ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 ThisBuild / resolvers ++=
-  (if (Dependencies.Versions.akka.endsWith("-SNAPSHOT"))
+  (if (Dependencies.Versions.Akka.endsWith("-SNAPSHOT"))
      Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots"))
    else Seq.empty)
 
