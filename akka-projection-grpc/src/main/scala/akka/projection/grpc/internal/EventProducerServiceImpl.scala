@@ -149,13 +149,17 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
         },
         init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
-      val transformMetadata: Flow[EventEnvelope[Any], EventEnvelope[Any], NotUsed] =
-        Flow[EventEnvelope[Any]].map { env =>
-          producerSource.replicatedEventMetadataTransformation(env) match {
-            case None           => env
-            case Some(metadata) => env.withMetadata(metadata)
+      val transformMetadata: Flow[EventEnvelope[Any], EventEnvelope[Any], NotUsed] = {
+        if (producerSource.hasReplicatedEventMetadataTransformation)
+          Flow[EventEnvelope[Any]].map { env =>
+            producerSource.replicatedEventMetadataTransformation(env) match {
+              case None           => env
+              case Some(metadata) => env.withMetadata(metadata)
+            }
           }
-        }
+        else
+          Flow[EventEnvelope[Any]]
+      }
 
       val events: Source[EventEnvelope[Any], NotUsed] =
         (eventsBySlicesPerStreamId.get(init.streamId) match {

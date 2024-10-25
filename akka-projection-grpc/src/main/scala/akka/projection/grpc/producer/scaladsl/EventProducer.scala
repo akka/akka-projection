@@ -34,6 +34,9 @@ import akka.projection.grpc.replication.internal.EventOriginFilter
 object EventProducer {
 
   object EventProducerSource {
+    private val IdentityReplicatedEventMetadataTransformation: EventEnvelope[Any] => Option[ReplicatedEventMetadata] =
+      _ => None
+
     def apply(
         entityType: String,
         streamId: String,
@@ -47,7 +50,7 @@ object EventProducer {
         _ => true,
         transformSnapshot = None,
         replicatedEventOriginFilter = None,
-        replicatedEventMetadataTransformation = _ => None)
+        replicatedEventMetadataTransformation = IdentityReplicatedEventMetadataTransformation)
 
     def apply[Event](
         entityType: String,
@@ -63,7 +66,7 @@ object EventProducer {
         producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean],
         transformSnapshot = None,
         replicatedEventOriginFilter = None,
-        replicatedEventMetadataTransformation = _ => None)
+        replicatedEventMetadataTransformation = IdentityReplicatedEventMetadataTransformation)
 
   }
 
@@ -128,6 +131,9 @@ object EventProducer {
     @InternalApi private[akka] def withReplicatedEventMetadataTransformation(
         f: EventEnvelope[Any] => Option[ReplicatedEventMetadata]): EventProducerSource =
       copy(replicatedEventMetadataTransformation = f)
+
+    def hasReplicatedEventMetadataTransformation: Boolean =
+      replicatedEventMetadataTransformation ne EventProducerSource.IdentityReplicatedEventMetadataTransformation
 
     /**
      * INTERNAL API
