@@ -3,6 +3,11 @@
 A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/durable-state/persistence.html). Durable state changes can be consumed in a Projection with
 `changesByTag`, `changesBySlices` or `eventsBySlices` queries.
 
+Note that NOT all changes that occur are guaranteed to be emitted, calls to these methods only guarantee that eventually, the most recent
+change for each object will be emitted. In particular, multiple updates to a given object in quick
+succession are likely to be skipped, with only the last update resulting in a change from this source.
+
+
 @@@ note { title=Alternative }
 When using the R2DBC plugin an alternative to using a Projection is to @extref:[store the query representation](akka-persistence-r2dbc:durable-state-store.html#storing-query-representation) directly from the write side.
 @@@
