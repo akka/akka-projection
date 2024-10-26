@@ -330,7 +330,7 @@ final class GrpcReadJournal private (
           ReplayPersistenceId(Some(PersistenceIdSeqNr(pid, seqNr)), filterAfterSeqNr)
       }.toVector
 
-      // need this for compatibility with 1.5.2
+      // need this for compatibility with 1.6.0
       val protoPersistenceIdOffsets = protoReplayPersistenceIds.map(_.fromPersistenceIdOffset.get)
 
       if (log.isDebugEnabled() && protoReplayPersistenceIds.nonEmpty)

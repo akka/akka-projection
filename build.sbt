@@ -231,7 +231,7 @@ lazy val commonParadoxProperties = Def.settings(
       // Akka Persistence DynamoDB plugin
       "extref.akka-persistence-dynamodb.base_url" -> s"https://doc.akka.io/libraries/akka-persistence-dynamodb/${Dependencies.Versions.AkkaPersistenceDynamodbVersionInDocs}/%s",
       // Akka Guide
-      "extref.akka-guide.base_url" -> "https://developer.lightbend.com/docs/akka-guide/microservices-tutorial/",
+      "extref.akka-guide.base_url" -> "https://doc.akka.io/guide/microservices-tutorial/",
       // Java
       "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
       // Scala
@@ -239,8 +239,7 @@ lazy val commonParadoxProperties = Def.settings(
       "scaladoc.akka.projection.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
       "javadoc.akka.projection.base_url" -> "", // no Javadoc is published
       // Misc
-      "extref.samples.base_url" -> "https://developer.lightbend.com/start/?group=akka&amp;project=%s",
-      "extref.platform-guide.base_url" -> "https://developer.lightbend.com/docs/akka-guide/%s"))
+      "extref.platform-guide.base_url" -> "https://doc.akka.io/guide/%s"))
 
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, SitePreviewPlugin, PreprocessPlugin, PublishRsyncPlugin)

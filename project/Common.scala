@@ -26,7 +26,7 @@ object Common extends AutoPlugin {
       developers += Developer(
           "contributors",
           "Contributors",
-          "https://gitter.im/akka/dev",
+          "akka.official@gmail.com",
           url("https://github.com/akka/akka-projection/graphs/contributors")),
       licenses := {
         val tagOrBranch =

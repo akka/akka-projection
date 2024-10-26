@@ -6,8 +6,7 @@ The @apidoc[SlickProjection$] has support for storing the offset in a relational
 used with Scala.
 
 @@@ warning
-The Slick module in Akka Projections is [community-driven](https://developer.lightbend.com/docs/introduction/getting-help/support-terminology.html#community-driven)
-and not included in Lightbend support.
+The Slick module in Akka Projections is community-driven and not included in Lightbend support.
 Prefer using the @ref[JDBC module](jdbc.md) to implement your projection handler. Slick support in Akka Projections is meant for users 
 migrating from [`Lagom's Slick ReadSideProcessor`](https://www.lagomframework.com/documentation/1.6.x/scala/ReadSideSlick.html).
 @@@
