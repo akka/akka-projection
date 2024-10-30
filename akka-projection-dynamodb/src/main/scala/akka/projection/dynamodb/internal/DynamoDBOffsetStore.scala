@@ -249,7 +249,7 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   private def readTimestampOffset(): Future[TimestampOffsetBySlice] = {
-    implicit val sys = system   // for implicit stream materializer
+    implicit val sys = system // for implicit stream materializer
     val oldState = state.get()
     // retrieve latest timestamp for each slice, and use the earliest
     val offsetBySliceFut =
