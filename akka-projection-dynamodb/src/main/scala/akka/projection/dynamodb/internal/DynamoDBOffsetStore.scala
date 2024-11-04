@@ -28,6 +28,9 @@ import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionId
 import akka.projection.dynamodb.DynamoDBProjectionSettings
 import akka.projection.internal.ManagementState
+import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.Source
+import akka.stream.Materializer.matFromSystem
 import org.slf4j.LoggerFactory
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
@@ -246,11 +249,23 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   private def readTimestampOffset(): Future[TimestampOffsetBySlice] = {
+    implicit val sys = system // for implicit stream materializer
     val oldState = state.get()
     // retrieve latest timestamp for each slice, and use the earliest
-    val futTimestamps =
-      (minSlice to maxSlice).map(slice => dao.loadTimestampOffset(slice).map(optTimestamp => slice -> optTimestamp))
-    val offsetBySliceFut = Future.sequence(futTimestamps).map(_.collect { case (slice, Some(ts)) => slice -> ts }.toMap)
+    val offsetBySliceFut =
+      Source(minSlice to maxSlice)
+        .mapAsyncUnordered(settings.offsetSliceReadParallelism) { slice =>
+          dao
+            .loadTimestampOffset(slice)
+            .map { optTimestampOffset =>
+              optTimestampOffset.map { timestampOffset => slice -> timestampOffset }
+            }(ExecutionContext.parasitic)
+        }
+        .mapConcat(identity)
+        .runWith(Sink.fold(Map.empty[Int, TimestampOffset]) { (offsetMap, sliceAndOffset: (Int, TimestampOffset)) =>
+          offsetMap + sliceAndOffset
+        })
+
     offsetBySliceFut.map { offsetBySlice =>
       val newState = State(offsetBySlice)
       logger.debug(

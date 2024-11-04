@@ -44,6 +44,7 @@ object DynamoDBProjectionSettings {
       evictInterval = config.getDuration("offset-store.evict-interval"),
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
+      offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
       timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")))
   }
 
@@ -63,6 +64,7 @@ final class DynamoDBProjectionSettings private (
     val evictInterval: JDuration,
     val warnAboutFilteredEventsInFlow: Boolean,
     val offsetBatchSize: Int,
+    val offsetSliceReadParallelism: Int,
     val timeToLiveSettings: TimeToLiveSettings) {
 
   def withTimestampOffsetTable(timestampOffsetTable: String): DynamoDBProjectionSettings =
@@ -92,6 +94,9 @@ final class DynamoDBProjectionSettings private (
   def withOffsetBatchSize(offsetBatchSize: Int): DynamoDBProjectionSettings =
     copy(offsetBatchSize = offsetBatchSize)
 
+  def withOffsetSliceReadParallelism(offsetSliceReadParallelism: Int): DynamoDBProjectionSettings =
+    copy(offsetSliceReadParallelism = offsetSliceReadParallelism)
+
   def withTimeToLiveSettings(timeToLiveSettings: TimeToLiveSettings): DynamoDBProjectionSettings =
     copy(timeToLiveSettings = timeToLiveSettings)
 
@@ -103,6 +108,7 @@ final class DynamoDBProjectionSettings private (
       evictInterval: JDuration = evictInterval,
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
       offsetBatchSize: Int = offsetBatchSize,
+      offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
       timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings) =
     new DynamoDBProjectionSettings(
       timestampOffsetTable,
@@ -112,6 +118,7 @@ final class DynamoDBProjectionSettings private (
       evictInterval,
       warnAboutFilteredEventsInFlow,
       offsetBatchSize,
+      offsetSliceReadParallelism,
       timeToLiveSettings)
 
   override def toString =
