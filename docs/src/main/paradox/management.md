@@ -4,6 +4,12 @@
 
 With the @apidoc[ProjectionManagement] API you can manage the offset of a projection.
 
+@@@ note
+
+This management API is only usable with a running projection within the same system.
+
+@@@
+
 To retrieve latest stored offset:
 
 Scala
