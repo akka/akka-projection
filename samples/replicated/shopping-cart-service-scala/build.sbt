@@ -31,10 +31,10 @@ Global / cancelable := false // ctrl-c
 
 val AkkaVersion = sys.props.getOrElse("akka.version", "2.10.0")
 val AkkaHttpVersion = "10.7.0"
-val AkkaManagementVersion = "1.6.0"
+val AkkaManagementVersion = "1.6.1"
 val AkkaPersistenceR2dbcVersion = "1.3.0"
 val AkkaProjectionVersion =
-  sys.props.getOrElse("akka-projection.version", "1.6.0")
+  sys.props.getOrElse("akka-projection.version", "1.6.1")
 val AkkaDiagnosticsVersion = "2.2.0"
 
 enablePlugins(AkkaGrpcPlugin)

@@ -28,7 +28,7 @@ object Dependencies {
     }
     val AkkaGrpcVersionInDocs = "2.5.0"
 
-    val AkkaProjectionVersionInDocs = "1.6.0"
+    val AkkaProjectionVersionInDocs = "1.6.1"
 
     val AkkaPersistenceCassandra = "1.3.0"
     val AkkaPersistenceJdbc = "5.5.0"
