@@ -1559,5 +1559,56 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore3.deleteOldTimestampOffsets().futureValue shouldBe 17
     }
 
+    "test window validation" in {
+      import R2dbcOffsetStore.Validation._
+
+      val projectionName = UUID.randomUUID().toString
+
+      def offsetStore(minSlice: Int, maxSlice: Int) =
+        new R2dbcOffsetStore(
+          ProjectionId(projectionName, s"$minSlice-$maxSlice"),
+          Some(new TestTimestampSourceProvider(minSlice, maxSlice, clock)),
+          system,
+          settings,
+          r2dbcExecutor)
+
+      // one projection at lower scale
+      val offsetStore1 = offsetStore(512, 1023)
+
+      // two projections at higher scale
+      val offsetStore2 = offsetStore(512, 767)
+
+      val p1 = "p-0960" // slice 576
+      val p2 = "p-6009" // slice 640
+      val p3 = "p-3039" // slice 832
+
+      val t0 = clock.instant().minusSeconds(100)
+      def time(step: Int) = t0.plusSeconds(step)
+
+      // starting with 2 projections, testing 512-1023
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time(2), Map(p1 -> 1L)), p1, 1L)).futureValue
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time(100), Map(p3 -> 1L)), p3, 1L)).futureValue
+
+      // scaled up to 4 projections, testing 512-767
+      val startOffset2 = TimestampOffset.toTimestampOffset(offsetStore2.readOffset().futureValue.get)
+      startOffset2.timestamp shouldBe time(2)
+      val latestTime = time(3)
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(latestTime, Map(p1 -> 2L)), p1, 2L)).futureValue
+      offsetStore2.getState().latestTimestamp shouldBe latestTime
+
+      // clock is used by TestTimestampSourceProvider.timestampOf for timestamp of previous seqNr.
+      // rejected if timestamp of previous seqNr within offset store time window
+      clock.setInstant(latestTime.minus(settings.timeWindow.minusSeconds(1)))
+      offsetStore2
+        .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
+        .futureValue shouldBe RejectedBacktrackingSeqNr
+      // accepted if timestamp of previous seqNr before offset store time window
+      clock.setInstant(latestTime.minus(settings.timeWindow.plusSeconds(1)))
+      offsetStore2
+        .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
+        .futureValue shouldBe Accepted
+
+    }
+
   }
 }

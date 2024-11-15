@@ -701,7 +701,7 @@ private[projection] class R2dbcOffsetStore(
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
 
-    def logUnknown(): Unit = {
+    def logUnknown(previousTimestamp: Instant): Unit = {
       if (recordWithOffset.fromPubSub) {
         logger.debug(
           "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
@@ -717,10 +717,11 @@ private[projection] class R2dbcOffsetStore(
           recordWithOffset.offset)
       } else {
         logger.warn(
-          "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}",
+          "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, Previous timestamp [{}]",
           seqNr,
           pid,
-          recordWithOffset.offset)
+          recordWithOffset.offset,
+          previousTimestamp)
       }
     }
 
@@ -741,10 +742,10 @@ private[projection] class R2dbcOffsetStore(
             before)
           Accepted
         } else if (!recordWithOffset.fromBacktracking) {
-          logUnknown()
+          logUnknown(previousTimestamp)
           RejectedSeqNr
         } else {
-          logUnknown()
+          logUnknown(previousTimestamp)
           // This will result in projection restart (with normal configuration)
           RejectedBacktrackingSeqNr
         }
