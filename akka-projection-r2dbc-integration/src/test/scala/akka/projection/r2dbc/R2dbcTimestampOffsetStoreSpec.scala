@@ -73,13 +73,15 @@ class R2dbcTimestampOffsetStoreSpec
   private def createOffsetStore(
       projectionId: ProjectionId,
       customSettings: R2dbcProjectionSettings = settings,
+      offsetStoreClock: TestClock = clock,
       eventTimestampQueryClock: TestClock = clock) =
     new R2dbcOffsetStore(
       projectionId,
       Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, eventTimestampQueryClock)),
       system,
       customSettings,
-      r2dbcExecutor)
+      r2dbcExecutor,
+      offsetStoreClock)
 
   def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] = {
     val entityType = PersistenceId.extractEntityType(pid)
@@ -454,6 +456,11 @@ class R2dbcTimestampOffsetStoreSpec
       val projectionId = genRandomProjectionId()
       val eventTimestampQueryClock = TestClock.nowMicros()
       val offsetStore = createOffsetStore(projectionId, eventTimestampQueryClock = eventTimestampQueryClock)
+
+      // some validation require the startTimestamp, which is set from readOffset
+      offsetStore.getState().startTimestamp shouldBe Instant.EPOCH
+      offsetStore.readOffset().futureValue
+      offsetStore.getState().startTimestamp shouldBe clock.instant()
 
       val startTime = TestClock.nowMicros().instant()
       val offset1 = TimestampOffset(startTime, Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
@@ -1559,7 +1566,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore3.deleteOldTimestampOffsets().futureValue shouldBe 17
     }
 
-    "test window validation" in {
+    "validate timestamp of previous sequence number" in {
       import R2dbcOffsetStore.Validation._
 
       val projectionName = UUID.randomUUID().toString
@@ -1592,18 +1599,19 @@ class R2dbcTimestampOffsetStoreSpec
       // scaled up to 4 projections, testing 512-767
       val startOffset2 = TimestampOffset.toTimestampOffset(offsetStore2.readOffset().futureValue.get)
       startOffset2.timestamp shouldBe time(2)
-      val latestTime = time(3)
+      offsetStore2.getState().startTimestamp shouldBe time(2)
+      val latestTime = time(10)
       offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(latestTime, Map(p1 -> 2L)), p1, 2L)).futureValue
       offsetStore2.getState().latestTimestamp shouldBe latestTime
 
       // clock is used by TestTimestampSourceProvider.timestampOf for timestamp of previous seqNr.
-      // rejected if timestamp of previous seqNr within offset store time window
-      clock.setInstant(latestTime.minus(settings.timeWindow.minusSeconds(1)))
+      // rejected if timestamp of previous seqNr is after start timestamp minus backtracking window
+      clock.setInstant(startOffset2.timestamp.minus(settings.backtrackingWindow.minusSeconds(1)))
       offsetStore2
         .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
         .futureValue shouldBe RejectedBacktrackingSeqNr
-      // accepted if timestamp of previous seqNr before offset store time window
-      clock.setInstant(latestTime.minus(settings.timeWindow.plusSeconds(1)))
+      // accepted if timestamp of previous seqNr is before start timestamp minus backtracking window
+      clock.setInstant(startOffset2.timestamp.minus(settings.timeWindow.plusSeconds(1)))
       offsetStore2
         .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
         .futureValue shouldBe Accepted

@@ -57,6 +57,7 @@ object R2dbcProjectionSettings {
       managementTable = config.getString("offset-store.management-table"),
       useConnectionFactory = config.getString("use-connection-factory"),
       timeWindow = config.getDuration("offset-store.time-window"),
+      backtrackingWindow = config.getDuration("offset-store.backtracking-window"),
       keepNumberOfEntries = config.getInt("offset-store.keep-number-of-entries"),
       evictInterval = config.getDuration("offset-store.evict-interval"),
       deleteInterval,
@@ -82,6 +83,7 @@ final class R2dbcProjectionSettings private (
     val managementTable: String,
     val useConnectionFactory: String,
     val timeWindow: JDuration,
+    val backtrackingWindow: JDuration,
     val keepNumberOfEntries: Int,
     val evictInterval: JDuration,
     val deleteInterval: JDuration,
@@ -115,6 +117,12 @@ final class R2dbcProjectionSettings private (
 
   def withTimeWindow(timeWindow: JDuration): R2dbcProjectionSettings =
     copy(timeWindow = timeWindow)
+
+  def withBacktrackingWindow(backtrackingWindow: FiniteDuration): R2dbcProjectionSettings =
+    copy(backtrackingWindow = backtrackingWindow.toJava)
+
+  def withBacktrackingWindow(backtrackingWindow: JDuration): R2dbcProjectionSettings =
+    copy(backtrackingWindow = backtrackingWindow)
 
   def withKeepNumberOfEntries(keepNumberOfEntries: Int): R2dbcProjectionSettings =
     copy(keepNumberOfEntries = keepNumberOfEntries)
@@ -159,6 +167,7 @@ final class R2dbcProjectionSettings private (
       managementTable: String = managementTable,
       useConnectionFactory: String = useConnectionFactory,
       timeWindow: JDuration = timeWindow,
+      backtrackingWindow: JDuration = backtrackingWindow,
       keepNumberOfEntries: Int = keepNumberOfEntries,
       evictInterval: JDuration = evictInterval,
       deleteInterval: JDuration = deleteInterval,
@@ -174,6 +183,7 @@ final class R2dbcProjectionSettings private (
       managementTable,
       useConnectionFactory,
       timeWindow,
+      backtrackingWindow,
       keepNumberOfEntries,
       evictInterval,
       deleteInterval,

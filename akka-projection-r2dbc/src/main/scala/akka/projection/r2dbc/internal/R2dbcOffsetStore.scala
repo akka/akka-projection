@@ -57,7 +57,7 @@ private[projection] object R2dbcOffsetStore {
   final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
-    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, 0)
+    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, 0, Instant.EPOCH)
 
     def apply(records: immutable.IndexedSeq[Record]): State = {
       if (records.isEmpty) empty
@@ -69,7 +69,8 @@ private[projection] object R2dbcOffsetStore {
       byPid: Map[Pid, Record],
       latest: immutable.IndexedSeq[Record],
       oldestTimestamp: Instant,
-      sizeAfterEvict: Int) {
+      sizeAfterEvict: Int,
+      startTimestamp: Instant) {
 
     def size: Int = byPid.size
 
@@ -315,54 +316,69 @@ private[projection] class R2dbcOffsetStore(
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
     idle.set(false)
     val oldState = state.get()
+
     dao.readTimestampOffset().map { recordsWithKey =>
-      val newState = State(recordsWithKey.map(_.record))
-      logger.debug(
-        "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
-        newState.byPid.size,
-        newState.oldestTimestamp,
-        newState.latestTimestamp)
-      if (!state.compareAndSet(oldState, newState))
-        throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
       clearInflight()
       clearForeignOffsets()
       clearLatestSeen()
-      if (newState == State.empty) {
-        None
-      } else if (moreThanOneProjectionKey(recordsWithKey)) {
-        // When downscaling projection instances (changing slice distribution) there
-        // is a possibility that one of the previous projection instances was further behind than the backtracking
-        // window, which would cause missed events if we started from latest. In that case we use the latest
-        // offset of the earliest slice range (distinct projection key).
-        val latestBySliceWithKey = recordsWithKey
-          .groupBy(_.record.slice)
-          .map {
-            case (_, records) => records.maxBy(_.record.timestamp)
-          }
-          .toVector
-        // Only needed if there's more than one projection key within the latest offsets by slice.
-        // To handle restarts after previous downscaling, and all latest are from the same instance.
-        if (moreThanOneProjectionKey(latestBySliceWithKey)) {
-          if (adoptingForeignOffsets) {
-            val foreignOffsets = latestBySliceWithKey
-              .filter(_.projectionKey != projectionId.key)
-              .sortBy(_.record.timestamp)
-            setForeignOffsets(foreignOffsets)
-          }
-          // Use the earliest of the latest from each projection instance (distinct projection key).
-          val latestByKey =
-            latestBySliceWithKey.groupBy(_.projectionKey).map {
+
+      val newState = State(recordsWithKey.map(_.record))
+
+      val startOffset =
+        if (newState == State.empty) {
+          None
+        } else if (moreThanOneProjectionKey(recordsWithKey)) {
+          // When downscaling projection instances (changing slice distribution) there
+          // is a possibility that one of the previous projection instances was further behind than the backtracking
+          // window, which would cause missed events if we started from latest. In that case we use the latest
+          // offset of the earliest slice range (distinct projection key).
+          val latestBySliceWithKey = recordsWithKey
+            .groupBy(_.record.slice)
+            .map {
               case (_, records) => records.maxBy(_.record.timestamp)
             }
-          val earliest = latestByKey.minBy(_.record.timestamp).record
-          // there could be other with same timestamp, but not important to reconstruct exactly the right `seen`
-          Some(TimestampOffset(earliest.timestamp, Map(earliest.pid -> earliest.seqNr)))
+            .toVector
+          // Only needed if there's more than one projection key within the latest offsets by slice.
+          // To handle restarts after previous downscaling, and all latest are from the same instance.
+          if (moreThanOneProjectionKey(latestBySliceWithKey)) {
+            if (adoptingForeignOffsets) {
+              val foreignOffsets = latestBySliceWithKey
+                .filter(_.projectionKey != projectionId.key)
+                .sortBy(_.record.timestamp)
+              setForeignOffsets(foreignOffsets)
+            }
+            // Use the earliest of the latest from each projection instance (distinct projection key).
+            val latestByKey =
+              latestBySliceWithKey.groupBy(_.projectionKey).map {
+                case (_, records) => records.maxBy(_.record.timestamp)
+              }
+            val earliest = latestByKey.minBy(_.record.timestamp).record
+            // there could be other with same timestamp, but not important to reconstruct exactly the right `seen`
+            Some(TimestampOffset(earliest.timestamp, Map(earliest.pid -> earliest.seqNr)))
+          } else {
+            newState.latestOffset
+          }
         } else {
           newState.latestOffset
         }
-      } else {
-        newState.latestOffset
+
+      logger.debug(
+        "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}], start offset [{}]",
+        newState.byPid.size,
+        newState.oldestTimestamp,
+        newState.latestTimestamp,
+        startOffset)
+
+      val startTimestamp = startOffset match {
+        case None         => clock.instant()
+        case Some(offset) => offset.timestamp
       }
+      val newStateWithStartOffset = newState.copy(startTimestamp = startTimestamp)
+
+      if (!state.compareAndSet(oldState, newStateWithStartOffset))
+        throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
+
+      startOffset
     }
   }
 
@@ -701,56 +717,55 @@ private[projection] class R2dbcOffsetStore(
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
 
-    def logUnknown(previousTimestamp: Instant): Unit = {
-      if (recordWithOffset.fromPubSub) {
-        logger.debug(
-          "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
-          seqNr,
-          pid,
-          recordWithOffset.offset)
-      } else if (!recordWithOffset.fromBacktracking) {
-        // This may happen rather frequently when using `publish-events`, after reconnecting and such.
-        logger.debug(
-          "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
-          seqNr,
-          pid,
-          recordWithOffset.offset)
-      } else {
-        logger.warn(
-          "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, Previous timestamp [{}]",
-          seqNr,
-          pid,
-          recordWithOffset.offset,
-          previousTimestamp)
-      }
-    }
-
     // Haven't see seen this pid within the time window. Since events can be missed
     // when read at the tail we will only accept it if the event with previous seqNr has timestamp
-    // before the time window of the offset store.
-    // Backtracking will emit missed event again.
+    // before the startTimestamp minus backtracking window
     timestampOf(pid, seqNr - 1).map {
       case Some(previousTimestamp) =>
-        val before = currentState.latestTimestamp.minus(settings.timeWindow)
-        if (previousTimestamp.isBefore(before)) {
+        val acceptBefore = currentState.startTimestamp.minus(settings.backtrackingWindow)
+
+        if (previousTimestamp.isBefore(acceptBefore)) {
           logger.debug(
             "Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
-            "is before time window [{}].",
+            "is before start timestamp [{}] minus backtracking window [{}].",
             pid,
             seqNr,
             previousTimestamp,
-            before)
+            currentState.startTimestamp,
+            settings.backtrackingWindow)
           Accepted
-        } else if (!recordWithOffset.fromBacktracking) {
-          logUnknown(previousTimestamp)
+        } else if (recordWithOffset.fromPubSub) {
+          logger.debug(
+            "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
           RejectedSeqNr
-        } else {
-          logUnknown(previousTimestamp)
+        } else if (recordWithOffset.fromBacktracking) {
           // This will result in projection restart (with normal configuration)
+          logger.warn(
+            "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, where previous event timestamp [{}] " +
+            "is after start timestamp [{}] minus backtracking window [{}].",
+            seqNr,
+            pid,
+            recordWithOffset.offset,
+            previousTimestamp,
+            currentState.startTimestamp,
+            settings.backtrackingWindow)
           RejectedBacktrackingSeqNr
+        } else {
+          // This may happen rather frequently when using `publish-events`, after reconnecting and such.
+          logger.debug(
+            "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
+          // Backtracking will emit missed event again.
+          RejectedSeqNr
         }
       case None =>
         // previous not found, could have been deleted
+        logger.debug("Accepting envelope with pid [{}], seqNr [{}], where previous event not found.", pid, seqNr)
         Accepted
     }
   }
