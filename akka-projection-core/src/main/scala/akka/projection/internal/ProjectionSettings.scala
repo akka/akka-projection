@@ -7,11 +7,11 @@ package akka.projection.internal
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters._
-
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.Projection
+import akka.stream.Attributes.LogLevels
 import akka.stream.RestartSettings
 import com.typesafe.config.Config
 
@@ -50,7 +50,12 @@ private[projection] object ProjectionSettings {
       val maxRestarts = restartBackoffConfig.getInt("max-restarts")
       if (maxRestarts >= 0) RestartSettings(minBackoff, maxBackoff, randomFactor)
       else RestartSettings(minBackoff, maxBackoff, randomFactor).withMaxRestarts(maxRestarts, minBackoff)
-    }
+    }.withLogSettings(
+      RestartSettings.LogSettings.defaultSettings
+        .withLogLevel(LogLevels.Warning)
+        // Once we have retried many times, it could still be a transient failure but is
+        // more likely to be a permanent problem, so increase verbosity/include full stack trace
+        .withVerboseLogsAfter(5))
 
     new ProjectionSettings(
       restartSettings,
