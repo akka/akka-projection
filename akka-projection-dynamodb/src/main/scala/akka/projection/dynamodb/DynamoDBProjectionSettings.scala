@@ -6,6 +6,7 @@ package akka.projection.dynamodb
 
 import java.time.{ Duration => JDuration }
 
+import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.jdk.DurationConverters._
@@ -40,8 +41,8 @@ object DynamoDBProjectionSettings {
       timestampOffsetTable = config.getString("offset-store.timestamp-offset-table"),
       useClient = config.getString("use-client"),
       timeWindow = config.getDuration("offset-store.time-window"),
-      keepNumberOfEntries = config.getInt("offset-store.keep-number-of-entries"),
-      evictInterval = config.getDuration("offset-store.evict-interval"),
+      keepNumberOfEntries = 0,
+      evictInterval = JDuration.ZERO,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
       offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
@@ -60,7 +61,9 @@ final class DynamoDBProjectionSettings private (
     val timestampOffsetTable: String,
     val useClient: String,
     val timeWindow: JDuration,
+    @deprecated("Not used, evict is only based on time window", "1.6.2")
     val keepNumberOfEntries: Int,
+    @deprecated("Not used, evict is not periodic", "1.6.2")
     val evictInterval: JDuration,
     val warnAboutFilteredEventsInFlow: Boolean,
     val offsetBatchSize: Int,
@@ -79,14 +82,17 @@ final class DynamoDBProjectionSettings private (
   def withTimeWindow(timeWindow: JDuration): DynamoDBProjectionSettings =
     copy(timeWindow = timeWindow)
 
+  @deprecated("Not used, evict is only based on time window", "1.6.2")
   def withKeepNumberOfEntries(keepNumberOfEntries: Int): DynamoDBProjectionSettings =
-    copy(keepNumberOfEntries = keepNumberOfEntries)
+    this
 
+  @deprecated("Not used, evict is not periodic", "1.6.2")
   def withEvictInterval(evictInterval: FiniteDuration): DynamoDBProjectionSettings =
-    copy(evictInterval = evictInterval.toJava)
+    this
 
+  @deprecated("Not used, evict is not periodic", "1.6.2")
   def withEvictInterval(evictInterval: JDuration): DynamoDBProjectionSettings =
-    copy(evictInterval = evictInterval)
+    this
 
   def withWarnAboutFilteredEventsInFlow(warnAboutFilteredEventsInFlow: Boolean): DynamoDBProjectionSettings =
     copy(warnAboutFilteredEventsInFlow = warnAboutFilteredEventsInFlow)
@@ -100,12 +106,11 @@ final class DynamoDBProjectionSettings private (
   def withTimeToLiveSettings(timeToLiveSettings: TimeToLiveSettings): DynamoDBProjectionSettings =
     copy(timeToLiveSettings = timeToLiveSettings)
 
+  @nowarn("msg=deprecated")
   private def copy(
       timestampOffsetTable: String = timestampOffsetTable,
       useClient: String = useClient,
       timeWindow: JDuration = timeWindow,
-      keepNumberOfEntries: Int = keepNumberOfEntries,
-      evictInterval: JDuration = evictInterval,
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
       offsetBatchSize: Int = offsetBatchSize,
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
@@ -122,7 +127,7 @@ final class DynamoDBProjectionSettings private (
       timeToLiveSettings)
 
   override def toString =
-    s"DynamoDBProjectionSettings($timestampOffsetTable, $useClient, $timeWindow, $keepNumberOfEntries, $evictInterval, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
+    s"DynamoDBProjectionSettings($timestampOffsetTable, $useClient, $timeWindow, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
 }
 
 object TimeToLiveSettings {

@@ -33,6 +33,7 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Validation.Duplicat
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Validation.RejectedBacktrackingSeqNr
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Validation.RejectedSeqNr
 import akka.projection.dynamodb.internal.OffsetPidSeqNr
+import akka.projection.dynamodb.internal.OffsetStoreDao
 import akka.projection.dynamodb.internal.OffsetStoreDao.OffsetStoreAttributes
 import akka.projection.internal.ManagementState
 import com.typesafe.config.Config
@@ -42,13 +43,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
 object DynamoDBTimestampOffsetStoreSpec {
-  val config: Config =
-    ConfigFactory
-      .parseString("""
-        # to be able to test eviction
-        akka.projection.dynamodb.offset-store.keep-number-of-entries = 0
-      """)
-      .withFallback(TestConfig.config)
+  val config: Config = TestConfig.config
 
   def configWithOffsetTTL: Config =
     ConfigFactory
@@ -808,7 +803,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
 
     "evict old records from same slice" in {
       val projectionId = genRandomProjectionId()
-      val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100)).withEvictInterval(JDuration.ofSeconds(10))
+      val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
       import evictSettings._
       val offsetStore = createOffsetStore(projectionId, evictSettings)
 
@@ -827,34 +822,22 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
 
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(startTime, Map(p1 -> 1L)), p1, 1L)).futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(JDuration.ofSeconds(1)), Map(p2 -> 1L)), p2, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(1), Map(p2 -> 1L)), p2, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(JDuration.ofSeconds(2)), Map(p3 -> 1L)), p3, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(2), Map(p3 -> 1L)), p3, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(evictInterval), Map(p4 -> 1L)), p4, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(3), Map(p4 -> 1L)), p4, 1L))
         .futureValue
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(1)), Map(p4 -> 1L)),
-            p4,
-            1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(4), Map(p4 -> 1L)), p4, 1L))
         .futureValue
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(2)), Map(p5 -> 1L)),
-            p5,
-            1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(5), Map(p5 -> 1L)), p5, 1L))
         .futureValue
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(3)), Map(p6 -> 1L)),
-            p6,
-            3L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(4), Map(p6 -> 1L)), p6, 3L))
         .futureValue
       offsetStore.getState().size shouldBe 6
 
@@ -864,81 +847,59 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       offsetStore.getState().size shouldBe 7 // nothing evicted yet
 
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).minusSeconds(3)), Map(p8 -> 1L)),
-            p8,
-            1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.minusSeconds(1)), Map(p8 -> 1L)), p8, 1L))
         .futureValue
       offsetStore.getState().size shouldBe 8 // still nothing evicted yet
 
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(1)), Map(p8 -> 2L)),
-            p8,
-            2L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(4)), Map(p8 -> 2L)), p8, 2L))
         .futureValue
       offsetStore.getState().byPid.keySet shouldBe Set(p5, p6, p7, p8)
 
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(20)), Map(p8 -> 3L)),
-            p8,
-            3L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(20)), Map(p8 -> 3L)), p8, 3L))
         .futureValue
       offsetStore.getState().byPid.keySet shouldBe Set(p7, p8)
     }
 
     "evict old records from different slices" in {
       val projectionId = genRandomProjectionId()
-      val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100)).withEvictInterval(JDuration.ofSeconds(10))
+      val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
       import evictSettings._
       val offsetStore = createOffsetStore(projectionId, evictSettings)
 
       val startTime = TestClock.nowMicros().instant()
       log.debug("Start time [{}]", startTime)
 
-      val p1 = "p500" // slice 645
-      val p2 = "p92" // slice 905
-      val p3 = "p108" // slice 905
-      val p4 = "p863" // slice 645
-      val p5 = "p984" // slice 645
-      val p6 = "p3080" // slice 645
-      val p7 = "p4290" // slice 645
-      val p8 = "p20180" // slice 645
+      // these pids have the same slice 645
+      val p1 = "p500"
+      val p2 = "p621"
+      val p3 = "p742"
+      val p4 = "p863"
+      val p5 = "p984"
+      val p6 = "p3080"
+      val p7 = "p4290"
+      val p8 = "p20180"
+      val p9 = "p-0960" // slice 576
 
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(startTime, Map(p1 -> 1L)), p1, 1L)).futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(JDuration.ofSeconds(1)), Map(p2 -> 1L)), p2, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(1), Map(p2 -> 1L)), p2, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(JDuration.ofSeconds(2)), Map(p3 -> 1L)), p3, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(2), Map(p3 -> 1L)), p3, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(evictInterval), Map(p4 -> 1L)), p4, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(3), Map(p4 -> 1L)), p4, 1L))
         .futureValue
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(1)), Map(p4 -> 1L)),
-            p4,
-            1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(4), Map(p4 -> 1L)), p4, 1L))
         .futureValue
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(2)), Map(p5 -> 1L)),
-            p5,
-            1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(5), Map(p5 -> 1L)), p5, 1L))
         .futureValue
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(evictInterval).plus(JDuration.ofSeconds(3)), Map(p6 -> 1L)),
-            p6,
-            1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusSeconds(4), Map(p6 -> 1L)), p6, 3L))
         .futureValue
       offsetStore.getState().size shouldBe 6
 
@@ -948,31 +909,46 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       offsetStore.getState().size shouldBe 7 // nothing evicted yet
 
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).minusSeconds(3)), Map(p8 -> 1L)),
-            p8,
-            1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.minusSeconds(1)), Map(p8 -> 1L)), p8, 1L))
         .futureValue
       offsetStore.getState().size shouldBe 8 // still nothing evicted yet
 
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(1)), Map(p8 -> 2L)),
-            p8,
-            2L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(4)), Map(p8 -> 2L)), p8, 2L))
         .futureValue
       offsetStore.getState().byPid.keySet shouldBe Set(p5, p6, p7, p8)
 
       offsetStore
-        .saveOffset(
-          OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(timeWindow.plus(evictInterval).plusSeconds(20)), Map(p8 -> 3L)),
-            p8,
-            3L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(20)), Map(p8 -> 3L)), p8, 3L))
         .futureValue
       offsetStore.getState().byPid.keySet shouldBe Set(p7, p8)
+
+      // save same slice, but behind
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(1001), Map(p2 -> 2L)), p2, 2L))
+        .futureValue
+      // it's evicted immediately
+      offsetStore.getState().byPid.keySet shouldBe Set(p7, p8)
+      val dao = new OffsetStoreDao(system, settings, projectionId, client)
+      // but still saved
+      dao.loadSequenceNumber(slice(p2), p2).futureValue.get.seqNr shouldBe 2
+      // the timestamp was earlier than previously used for this slice, and therefore stored timestamp not changed
+      dao.loadTimestampOffset(slice(p2)).futureValue.get.timestamp shouldBe startTime.plus(timeWindow.plusSeconds(20))
+
+      // save another slice that hasn't been used before
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(1002), Map(p9 -> 1L)), p9, 1L))
+        .futureValue
+      offsetStore.getState().byPid.keySet shouldBe Set(p9, p7, p8)
+      dao.loadSequenceNumber(slice(p9), p9).futureValue.get.seqNr shouldBe 1
+      dao.loadTimestampOffset(slice(p9)).futureValue.get.timestamp shouldBe startTime.plusMillis(1002)
+      // and one more of that same slice
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(1003), Map(p9 -> 2L)), p9, 2L))
+        .futureValue
+      offsetStore.getState().byPid.keySet shouldBe Set(p9, p7, p8)
+      dao.loadSequenceNumber(slice(p9), p9).futureValue.get.seqNr shouldBe 2
+      dao.loadTimestampOffset(slice(p9)).futureValue.get.timestamp shouldBe startTime.plusMillis(1003)
     }
 
     "start from slice offset" in {
