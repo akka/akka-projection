@@ -9,6 +9,7 @@ import java.time.{ Duration => JDuration }
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
+import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -43,7 +44,26 @@ private[projection] object DynamoDBOffsetStore {
   type SeqNr = Long
   type Pid = String
 
-  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant)
+  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant) extends Ordered[Record] {
+
+    override def compare(that: Record): Int = {
+      val result = this.timestamp.compareTo(that.timestamp)
+      if (result == 0) {
+        if (this.slice == that.slice)
+          if (this.pid == that.pid)
+            if (this.seqNr == that.seqNr)
+              0
+            else
+              java.lang.Long.compare(this.seqNr, that.seqNr)
+          else
+            this.pid.compareTo(that.pid)
+        else Integer.compare(this.slice, that.slice)
+      } else {
+        result
+      }
+    }
+  }
+
   final case class RecordWithOffset(
       record: Record,
       offset: TimestampOffset,
@@ -53,19 +73,18 @@ private[projection] object DynamoDBOffsetStore {
       fromSnapshot: Boolean)
 
   object State {
-    val empty: State = State(Map.empty, Map.empty, Instant.EPOCH, 0)
+    val empty: State = State(Map.empty, Map.empty, Map.empty)
 
     def apply(offsetBySlice: Map[Int, TimestampOffset]): State =
       if (offsetBySlice.isEmpty) empty
-      else new State(Map.empty, offsetBySlice, Instant.EPOCH, 0)
+      else new State(Map.empty, Map.empty, offsetBySlice)
 
   }
 
   final case class State(
       byPid: Map[Pid, Record],
-      offsetBySlice: Map[Int, TimestampOffset],
-      oldestTimestamp: Instant,
-      sizeAfterEvict: Int) {
+      bySliceSorted: Map[Int, TreeSet[Record]],
+      offsetBySlice: Map[Int, TimestampOffset]) {
 
     def size: Int = byPid.size
 
@@ -77,7 +96,7 @@ private[projection] object DynamoDBOffsetStore {
       if (offsetBySlice.isEmpty) TimestampOffset.Zero
       else offsetBySlice.valuesIterator.maxBy(_.timestamp)
 
-    def add(records: IndexedSeq[Record]): State = {
+    def add(records: Iterable[Record]): State = {
       records.foldLeft(this) {
         case (acc, r) =>
           val newByPid =
@@ -90,6 +109,12 @@ private[projection] object DynamoDBOffsetStore {
               case None =>
                 acc.byPid.updated(r.pid, r)
             }
+
+          val newBySliceSorted =
+            acc.bySliceSorted.updated(r.slice, acc.bySliceSorted.get(r.slice) match {
+              case Some(existing) => existing + r
+              case None           => TreeSet.empty[Record] + r
+            })
 
           val newOffsetBySlice =
             acc.offsetBySlice.get(r.slice) match {
@@ -105,15 +130,7 @@ private[projection] object DynamoDBOffsetStore {
                 acc.offsetBySlice.updated(r.slice, TimestampOffset(r.timestamp, Map(r.pid -> r.seqNr)))
             }
 
-          val newOldestTimestamp =
-            if (acc.oldestTimestamp == Instant.EPOCH)
-              r.timestamp // first record
-            else if (r.timestamp.isBefore(acc.oldestTimestamp))
-              r.timestamp
-            else
-              acc.oldestTimestamp // this is the normal case
-
-          acc.copy(byPid = newByPid, offsetBySlice = newOffsetBySlice, oldestTimestamp = newOldestTimestamp)
+          acc.copy(byPid = newByPid, bySliceSorted = newBySliceSorted, offsetBySlice = newOffsetBySlice)
       }
     }
 
@@ -127,21 +144,22 @@ private[projection] object DynamoDBOffsetStore {
       }
     }
 
-    def window: JDuration =
-      JDuration.between(oldestTimestamp, latestTimestamp)
-
-    private lazy val sortedByTimestamp: Vector[Record] = byPid.valuesIterator.toVector.sortBy(_.timestamp)
-
-    def evict(until: Instant, keepNumberOfEntries: Int): State = {
-      if (oldestTimestamp.isBefore(until) && size > keepNumberOfEntries) {
-        val newState = State(offsetBySlice).add(
-          sortedByTimestamp
-            .take(size - keepNumberOfEntries)
-            .filterNot(_.timestamp.isBefore(until)) ++ sortedByTimestamp
-            .takeRight(keepNumberOfEntries))
-        newState.copy(sizeAfterEvict = newState.size)
-      } else
+    def evict(slice: Int, timeWindow: JDuration): State = {
+      val recordsSortedByTimestamp = bySliceSorted.getOrElse(slice, TreeSet.empty[Record])
+      if (recordsSortedByTimestamp.isEmpty) {
         this
+      } else {
+        val until = recordsSortedByTimestamp.last.timestamp.minus(timeWindow)
+        val filtered = recordsSortedByTimestamp.dropWhile(_.timestamp.isBefore(until))
+        if (filtered.size == recordsSortedByTimestamp.size) {
+          this
+        } else {
+          val byPidOtherSlices = byPid.filterNot { case (_, r) => r.slice == slice }
+          val bySliceOtherSlices = bySliceSorted - slice
+          copy(byPid = byPidOtherSlices, bySliceSorted = bySliceOtherSlices)
+            .add(filtered)
+        }
+      }
     }
 
   }
@@ -189,8 +207,6 @@ private[projection] class DynamoDBOffsetStore(
   private val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
 
   private val dao = new OffsetStoreDao(system, settings, projectionId, client)
-
-  private val evictWindow = settings.timeWindow.plus(settings.evictInterval)
 
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
@@ -268,12 +284,7 @@ private[projection] class DynamoDBOffsetStore(
 
     offsetBySliceFut.map { offsetBySlice =>
       val newState = State(offsetBySlice)
-      logger.debug(
-        "{} readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}]",
-        logPrefix,
-        newState.byPid.size,
-        newState.oldestTimestamp,
-        newState.latestTimestamp)
+
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
       clearInflight()
@@ -283,10 +294,10 @@ private[projection] class DynamoDBOffsetStore(
       } else {
         if (logger.isDebugEnabled)
           logger.debug(
-            "{} readTimestampOffset earliest slice [{}], latest slice [{}]",
+            "{} readTimestampOffset state with [{}] persistenceIds, timestamp per slice [{}]",
             logPrefix,
-            offsetBySlice.minBy(_._1),
-            offsetBySlice.maxBy(_._1))
+            newState.byPid.size,
+            offsetBySlice.iterator.map { case (slice, offset) => s"$slice -> ${offset.timestamp}" }.mkString(", "))
 
         TimestampOffsetBySlice(offsetBySlice)
       }
@@ -392,37 +403,29 @@ private[projection] class DynamoDBOffsetStore(
       } else {
         val newState = oldState.add(filteredRecords)
 
-        // accumulate some more than the timeWindow before evicting, and at least 10% increase of size
-        // for testing keepNumberOfEntries = 0 is used
-        val evictThresholdReached =
-          if (settings.keepNumberOfEntries == 0) true else newState.size > (newState.sizeAfterEvict * 1.1).toInt
-        val evictedNewState =
-          if (newState.size > settings.keepNumberOfEntries && evictThresholdReached && newState.window
-                .compareTo(evictWindow) > 0) {
-            // FIXME maybe this should take the slice into account
-            val evictUntil = newState.latestTimestamp.minus(settings.timeWindow)
-            val s = newState.evict(evictUntil, settings.keepNumberOfEntries)
-            logger.debug(
-              "{} Evicted [{}] records until [{}], keeping [{}] records. Latest [{}].",
-              logPrefix,
-              newState.size - s.size,
-              evictUntil,
-              s.size,
-              newState.latestTimestamp)
-            s
-          } else
-            newState
+        val slices =
+          if (filteredRecords.size == 1) Set(filteredRecords.head.slice)
+          else filteredRecords.iterator.map(_.slice).toSet
+
+        val evictedNewState = slices.foldLeft(newState) {
+          case (s, slice) => s.evict(slice, settings.timeWindow)
+        }
 
         // FIXME we probably don't have to store the latest offset per slice all the time, but can
         //       accumulate some changes and flush on size/time.
-        val changedOffsetBySlice = evictedNewState.offsetBySlice.filter {
-          case (slice, offset) =>
-            offset != oldState.offsetBySlice.getOrElse(slice, TimestampOffset.Zero)
-        }
+        val changedOffsetBySlice = slices.flatMap { slice =>
+          val newOffset = newState.offsetBySlice(slice)
+          val oldOffset = oldState.offsetBySlice.getOrElse(slice, TimestampOffset.Zero)
+          if (newOffset.timestamp.isBefore(oldOffset.timestamp)) None
+          else Some(slice -> newOffset)
+        }.toMap
 
         storeSequenceNumbers(filteredRecords).flatMap { _ =>
           val storeOffsetsResult =
-            if (changedOffsetBySlice.isEmpty) FutureDone else dao.storeTimestampOffsets(changedOffsetBySlice)
+            if (changedOffsetBySlice.isEmpty)
+              FutureDone
+            else
+              dao.storeTimestampOffsets(changedOffsetBySlice)
           storeOffsetsResult.flatMap { _ =>
             if (state.compareAndSet(oldState, evictedNewState)) {
               cleanupInflight(evictedNewState)
