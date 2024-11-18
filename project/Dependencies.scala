@@ -26,9 +26,11 @@ object Dependencies {
     val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
-    val AkkaGrpcVersionInDocs = "2.5.0"
+    val AkkaGrpcVersionInDocs = VersionNumber(akka.grpc.gen.BuildInfo.version).numbers match {
+      case Seq(major, minor, _*) => s"$major.$minor"
+    }
 
-    val AkkaProjectionVersionInDocs = "1.6.1"
+    val AkkaProjectionVersionInDocs = "1.6"
 
     val AkkaPersistenceCassandra = "1.3.0"
     val AkkaPersistenceJdbc = "5.5.0"
@@ -38,7 +40,7 @@ object Dependencies {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val AkkaPersistenceDynamodb = "2.0.0"
+    val AkkaPersistenceDynamodb = "2.0.1"
     val AkkaPersistenceDynamodbVersionInDocs = VersionNumber(AkkaPersistenceDynamodb).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
