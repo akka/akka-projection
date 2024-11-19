@@ -304,3 +304,19 @@ Scala
 
 Java
 :  @@snip [Example.java](/akka-projection-r2dbc/src/test/java/jdocs/home/projection/R2dbcProjectionDocExample.java){#projectionSettings}
+
+## Custom Connection Factory
+
+You can use a custom connection factory by passing it into the projection as part of the `ProjectionSettings`.
+
+@@@ note
+
+When providing a custom connection factory, the existing connection configurations are ignored.
+
+@@@
+
+Scala
+:  @@snip [Example.scala](/akka-projection-r2dbc/src/test/scala/docs/home/projection/R2dbcProjectionDocExample.scala){#customConnectionFactory}
+
+Java
+:  @@snip [Example.java](/akka-projection-r2dbc/src/test/java/jdocs/home/projection/R2dbcProjectionDocExample.java){#customConnectionFactory}

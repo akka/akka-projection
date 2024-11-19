@@ -19,6 +19,8 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
+import io.r2dbc.spi.ConnectionFactory
+
 import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 
 //#handler
@@ -41,8 +43,11 @@ object R2dbcProjectionDocExample {
     }
 
     final case class ItemAdded(cartId: String, itemId: String, quantity: Int) extends Event
+
     final case class ItemRemoved(cartId: String, itemId: String) extends Event
+
     final case class ItemQuantityAdjusted(cartId: String, itemId: String, newQuantity: Int) extends Event
+
     final case class CheckedOut(cartId: String, eventTime: Instant) extends Event
   }
 
@@ -71,6 +76,7 @@ object R2dbcProjectionDocExample {
   //#handler
 
   //#grouped-handler
+
   import scala.collection.immutable
 
   class GroupedShoppingCartHandler()(implicit ec: ExecutionContext)
@@ -106,6 +112,7 @@ object R2dbcProjectionDocExample {
 
   object IllustrateInit {
     // #initProjections
+
     import akka.persistence.query.typed.EventEnvelope
     import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
     import akka.projection.Projection
@@ -154,6 +161,7 @@ object R2dbcProjectionDocExample {
   }
 
   //#sourceProvider
+
   import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
   import akka.projection.eventsourced.scaladsl.EventSourcedProvider
   import akka.projection.scaladsl.SourceProvider
@@ -179,6 +187,7 @@ object R2dbcProjectionDocExample {
 
   object IllustrateExactlyOnce {
     //#exactlyOnce
+
     import akka.projection.ProjectionId
     import akka.projection.r2dbc.scaladsl.R2dbcProjection
 
@@ -192,6 +201,7 @@ object R2dbcProjectionDocExample {
 
   object IllustrateAtLeastOnce {
     //#atLeastOnce
+
     import akka.projection.ProjectionId
     import akka.projection.r2dbc.scaladsl.R2dbcProjection
 
@@ -206,6 +216,7 @@ object R2dbcProjectionDocExample {
 
   object IllustrateGrouped {
     //#grouped
+
     import akka.projection.ProjectionId
     import akka.projection.r2dbc.scaladsl.R2dbcProjection
 
@@ -260,6 +271,26 @@ object R2dbcProjectionDocExample {
       R2dbcProjection
         .atLeastOnce(projectionId, settings = None, sourceProvider, handler = () => new ShoppingCartHandler)
     //#projectionSettings
+  }
+
+  object CustomConnectionFactory {
+
+    //#customConnectionFactory
+
+    import akka.projection.ProjectionId
+    import akka.projection.r2dbc.scaladsl.R2dbcProjection
+
+    val connectionFactory: ConnectionFactory = ???
+
+    val projectionId = ProjectionId("ShoppingCarts", s"carts-$minSlice-$maxSlice")
+
+    val settings = Some(R2dbcProjectionSettings(system).withCustomConnectionFactory(connectionFactory))
+
+    val projection =
+      R2dbcProjection
+        .atLeastOnce(projectionId, settings = None, sourceProvider, handler = () => new ShoppingCartHandler)
+
+    //#customConnectionFactory
   }
 
 }

@@ -12,6 +12,7 @@ import scala.jdk.DurationConverters._
 
 import akka.actor.typed.ActorSystem
 import com.typesafe.config.Config
+import io.r2dbc.spi.ConnectionFactory
 
 object R2dbcProjectionSettings {
 
@@ -62,7 +63,8 @@ object R2dbcProjectionSettings {
       adoptInterval,
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
-      offsetBatchSize = config.getInt("offset-store.offset-batch-size"))
+      offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
+      customConnectionFactory = None)
   }
 
   /**
@@ -86,7 +88,8 @@ final class R2dbcProjectionSettings private (
     val adoptInterval: JDuration,
     val logDbCallsExceeding: FiniteDuration,
     val warnAboutFilteredEventsInFlow: Boolean,
-    val offsetBatchSize: Int) {
+    val offsetBatchSize: Int,
+    val customConnectionFactory: Option[ConnectionFactory]) {
 
   val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
@@ -146,6 +149,9 @@ final class R2dbcProjectionSettings private (
   def withOffsetBatchSize(offsetBatchSize: Int): R2dbcProjectionSettings =
     copy(offsetBatchSize = offsetBatchSize)
 
+  def withCustomConnectionFactory(customConnectionFactory: ConnectionFactory): R2dbcProjectionSettings =
+    copy(customConnectionFactory = Some(customConnectionFactory))
+
   private def copy(
       schema: Option[String] = schema,
       offsetTable: String = offsetTable,
@@ -159,7 +165,8 @@ final class R2dbcProjectionSettings private (
       adoptInterval: JDuration = adoptInterval,
       logDbCallsExceeding: FiniteDuration = logDbCallsExceeding,
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
-      offsetBatchSize: Int = offsetBatchSize) =
+      offsetBatchSize: Int = offsetBatchSize,
+      customConnectionFactory: Option[ConnectionFactory] = customConnectionFactory) =
     new R2dbcProjectionSettings(
       schema,
       offsetTable,
@@ -173,8 +180,9 @@ final class R2dbcProjectionSettings private (
       adoptInterval,
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow,
-      offsetBatchSize)
+      offsetBatchSize,
+      customConnectionFactory)
 
   override def toString =
-    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $keepNumberOfEntries, $evictInterval, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
+    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $keepNumberOfEntries, $evictInterval, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory)"
 }
