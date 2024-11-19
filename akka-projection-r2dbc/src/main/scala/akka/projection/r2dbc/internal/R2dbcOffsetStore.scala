@@ -26,15 +26,18 @@ import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import io.r2dbc.spi.Connection
 import org.slf4j.LoggerFactory
-
 import java.time.Clock
 import java.time.Instant
 import java.time.{ Duration => JDuration }
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
+import java.lang.Boolean.FALSE
+import java.lang.Boolean.TRUE
+
 import scala.annotation.tailrec
 import scala.collection.immutable
+import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -46,7 +49,26 @@ private[projection] object R2dbcOffsetStore {
   type SeqNr = Long
   type Pid = String
 
-  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant)
+  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant) extends Ordered[Record] {
+
+    override def compare(that: Record): Int = {
+      val result = this.timestamp.compareTo(that.timestamp)
+      if (result == 0) {
+        if (this.slice == that.slice)
+          if (this.pid == that.pid)
+            if (this.seqNr == that.seqNr)
+              0
+            else
+              java.lang.Long.compare(this.seqNr, that.seqNr)
+          else
+            this.pid.compareTo(that.pid)
+        else Integer.compare(this.slice, that.slice)
+      } else {
+        result
+      }
+    }
+  }
+
   final case class RecordWithOffset(
       record: Record,
       offset: TimestampOffset,
@@ -57,7 +79,7 @@ private[projection] object R2dbcOffsetStore {
   final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
-    val empty: State = State(Map.empty, Vector.empty, Instant.EPOCH, 0, Instant.EPOCH)
+    val empty: State = State(Map.empty, Map.empty, Instant.EPOCH)
 
     def apply(records: immutable.IndexedSeq[Record]): State = {
       if (records.isEmpty) empty
@@ -65,27 +87,53 @@ private[projection] object R2dbcOffsetStore {
     }
   }
 
-  final case class State(
-      byPid: Map[Pid, Record],
-      latest: immutable.IndexedSeq[Record],
-      oldestTimestamp: Instant,
-      sizeAfterEvict: Int,
-      startTimestamp: Instant) {
+  final case class State(byPid: Map[Pid, Record], bySliceSorted: Map[Int, TreeSet[Record]], startTimestamp: Instant) {
 
     def size: Int = byPid.size
 
-    def latestTimestamp: Instant =
-      if (latest.isEmpty) Instant.EPOCH
-      else latest.head.timestamp
-
-    def latestOffset: Option[TimestampOffset] = {
-      if (latest.isEmpty)
-        None
+    def oldestTimestamp: Instant = {
+      if (bySliceSorted.isEmpty)
+        Instant.EPOCH
       else
-        Some(TimestampOffset(latestTimestamp, latest.map(r => r.pid -> r.seqNr).toMap))
+        bySliceSorted.valuesIterator.map(_.head.timestamp).min
     }
 
-    def add(records: immutable.IndexedSeq[Record]): State = {
+    def latestTimestamp: Instant = {
+      if (bySliceSorted.isEmpty)
+        Instant.EPOCH
+      else
+        bySliceSorted.valuesIterator.map(_.last.timestamp).max
+    }
+
+    def latestOffset: Option[TimestampOffset] = {
+      if (bySliceSorted.isEmpty) {
+        None
+      } else {
+        val t = latestTimestamp
+        // FIXME optimize this collection juggling?
+        val latest =
+          bySliceSorted.valuesIterator.flatMap { records =>
+            if (records.last.timestamp == t)
+              records.toVector.reverseIterator.takeWhile(_.timestamp == t).toVector
+            else
+              Vector.empty
+          }.toVector
+
+        val seen = latest.foldLeft(Map.empty[Pid, SeqNr]) {
+          case (acc, record) =>
+            acc.get(record.pid) match {
+              case None => acc.updated(record.pid, record.seqNr)
+              case Some(existing) =>
+                if (record.seqNr > existing) acc.updated(record.pid, record.seqNr)
+                else acc
+            }
+        }
+
+        Some(TimestampOffset(t, seen))
+      }
+    }
+
+    def add(records: Iterable[Record]): State = {
       records.foldLeft(this) {
         case (acc, r) =>
           val newByPid =
@@ -99,32 +147,17 @@ private[projection] object R2dbcOffsetStore {
                 acc.byPid.updated(r.pid, r)
             }
 
-          val latestTimestamp = acc.latestTimestamp
-          val newLatest =
-            if (r.timestamp.isAfter(latestTimestamp)) {
-              Vector(r)
-            } else if (r.timestamp == latestTimestamp) {
-              acc.latest.find(_.pid == r.pid) match {
-                case None                 => acc.latest :+ r
-                case Some(existingRecord) =>
-                  // keep highest seqNr
-                  if (r.seqNr >= existingRecord.seqNr)
-                    acc.latest.filterNot(_.pid == r.pid) :+ r
-                  else
-                    acc.latest
-              }
-            } else {
-              acc.latest // older than existing latest, keep existing latest
-            }
-          val newOldestTimestamp =
-            if (acc.oldestTimestamp == Instant.EPOCH)
-              r.timestamp // first record
-            else if (r.timestamp.isBefore(acc.oldestTimestamp))
-              r.timestamp
-            else
-              acc.oldestTimestamp // this is the normal case
+          val newBySliceSorted =
+            acc.bySliceSorted.updated(r.slice, acc.bySliceSorted.get(r.slice) match {
+              case Some(existing) =>
+                // we don't remove existing older records for same pid, but they will
+                // be removed by eviction
+                existing + r
+              case None =>
+                TreeSet.empty[Record] + r
+            })
 
-          acc.copy(byPid = newByPid, latest = newLatest, oldestTimestamp = newOldestTimestamp)
+          acc.copy(byPid = newByPid, bySliceSorted = newBySliceSorted)
       }
     }
 
@@ -135,29 +168,23 @@ private[projection] object R2dbcOffsetStore {
       }
     }
 
-    def window: JDuration =
-      JDuration.between(oldestTimestamp, latestTimestamp)
-
-    private lazy val sortedByTimestamp: Vector[Record] = byPid.valuesIterator.toVector.sortBy(_.timestamp)
-
-    lazy val latestBySlice: Vector[Record] = {
-      val builder = scala.collection.mutable.Map[Int, Record]()
-      sortedByTimestamp.reverseIterator.foreach { record =>
-        if (!builder.contains(record.slice))
-          builder.update(record.slice, record)
-      }
-      builder.values.toVector
-    }
-
-    def evict(until: Instant, keepNumberOfEntries: Int): State = {
-      if (oldestTimestamp.isBefore(until) && size > keepNumberOfEntries) {
-        val newState = State(
-          sortedByTimestamp.take(size - keepNumberOfEntries).filterNot(_.timestamp.isBefore(until))
-          ++ sortedByTimestamp.takeRight(keepNumberOfEntries)
-          ++ latestBySlice)
-        newState.copy(sizeAfterEvict = newState.size)
-      } else
+    def evict(slice: Int, timeWindow: JDuration): State = {
+      val recordsSortedByTimestamp = bySliceSorted.getOrElse(slice, TreeSet.empty[Record])
+      if (recordsSortedByTimestamp.isEmpty) {
         this
+      } else {
+        // this will always keep at least one, latest per slice
+        val until = recordsSortedByTimestamp.last.timestamp.minus(timeWindow)
+        val filtered = recordsSortedByTimestamp.dropWhile(_.timestamp.isBefore(until))
+        if (filtered.size == recordsSortedByTimestamp.size) {
+          this
+        } else {
+          val byPidOtherSlices = byPid.filterNot { case (_, r) => r.slice == slice }
+          val bySliceOtherSlices = bySliceSorted - slice
+          copy(byPid = byPidOtherSlices, bySliceSorted = bySliceOtherSlices)
+            .add(filtered)
+        }
+      }
     }
 
   }
@@ -202,8 +229,6 @@ private[projection] class R2dbcOffsetStore(
 
   private val persistenceExt = Persistence(system)
 
-  private val evictWindow = settings.timeWindow.plus(settings.evictInterval)
-
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
   import offsetSerialization.toStorageRepresentation
@@ -224,6 +249,13 @@ private[projection] class R2dbcOffsetStore(
     dialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
   }
 
+  private val (minSlice, maxSlice) = {
+    sourceProvider match {
+      case Some(provider) => (provider.minSlice, provider.maxSlice)
+      case None           => (0, persistenceExt.numberOfSlices - 1)
+    }
+  }
+
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
   // The OffsetStore instance is used by a single projectionId and there shouldn't be any concurrent
@@ -237,17 +269,7 @@ private[projection] class R2dbcOffsetStore(
   private val inflight = new AtomicReference(Map.empty[Pid, SeqNr])
 
   // To avoid delete requests when no new offsets have been stored since previous delete
-  private val idle = new AtomicBoolean(false)
-
-  // To trigger next deletion after in-memory eviction
-  private val triggerDeletion = new AtomicBoolean(false)
-
-  if (!settings.deleteInterval.isZero && !settings.deleteInterval.isNegative)
-    system.scheduler.scheduleWithFixedDelay(
-      settings.deleteInterval,
-      settings.deleteInterval,
-      () => deleteOldTimestampOffsets(),
-      system.executionContext)
+  private val triggerDeletionPerSlice = new ConcurrentHashMap[Int, java.lang.Boolean]
 
   // Foreign offsets (latest by slice offsets from other projection keys) that should be adopted when passed in time.
   // Contains remaining offsets to adopt. Sorted by timestamp. Can be updated concurrently with CAS retries.
@@ -268,6 +290,12 @@ private[projection] class R2dbcOffsetStore(
           () => adoptForeignOffsets(),
           system.executionContext))
     else None
+
+  private def scheduleNextDelete(): Unit = {
+    if (!settings.deleteInterval.isZero && !settings.deleteInterval.isNegative)
+      system.scheduler.scheduleOnce(settings.deleteInterval, () => deleteOldTimestampOffsets(), system.executionContext)
+  }
+  scheduleNextDelete()
 
   private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     sourceProvider match {
@@ -314,7 +342,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
-    idle.set(false)
+    triggerDeletionPerSlice.clear()
     val oldState = state.get()
 
     dao.readTimestampOffset().map { recordsWithKey =>
@@ -322,7 +350,12 @@ private[projection] class R2dbcOffsetStore(
       clearForeignOffsets()
       clearLatestSeen()
 
-      val newState = State(recordsWithKey.map(_.record))
+      val newState = {
+        val s = State(recordsWithKey.map(_.record))
+        (minSlice to maxSlice).foldLeft(s) {
+          case (acc, slice) => acc.evict(slice, settings.timeWindow)
+        }
+      }
 
       val startOffset =
         if (newState == State.empty) {
@@ -470,7 +503,6 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def saveTimestampOffsetInTx(conn: Connection, records: immutable.IndexedSeq[Record]): Future[Done] = {
-    idle.set(false)
     val oldState = state.get()
     val filteredRecords = {
       if (records.size <= 1)
@@ -497,32 +529,21 @@ private[projection] class R2dbcOffsetStore(
     } else {
       val newState = oldState.add(filteredRecords)
 
-      // accumulate some more than the timeWindow before evicting, and at least 10% increase of size
-      // for testing keepNumberOfEntries = 0 is used
-      val evictThresholdReached =
-        if (settings.keepNumberOfEntries == 0) true else newState.size > (newState.sizeAfterEvict * 1.1).toInt
-      val evictedNewState =
-        if (newState.size > settings.keepNumberOfEntries && evictThresholdReached && newState.window
-              .compareTo(evictWindow) > 0) {
-          val evictUntil = newState.latestTimestamp.minus(settings.timeWindow)
-          val s = newState.evict(evictUntil, settings.keepNumberOfEntries)
-          triggerDeletion.set(true)
-          logger.debug(
-            "Evicted [{}] records until [{}], keeping [{}] records. Latest [{}].",
-            newState.size - s.size,
-            evictUntil,
-            s.size,
-            newState.latestTimestamp)
-          s
-        } else
-          newState
+      val slices =
+        if (filteredRecords.size == 1) Set(filteredRecords.head.slice)
+        else filteredRecords.iterator.map(_.slice).toSet
+
+      val evictedNewState = slices.foldLeft(newState) {
+        case (s, slice) => s.evict(slice, settings.timeWindow)
+      }
 
       val offsetInserts = dao.insertTimestampOffsetInTx(conn, filteredRecords)
 
       offsetInserts.map { _ =>
-        if (state.compareAndSet(oldState, evictedNewState))
+        if (state.compareAndSet(oldState, evictedNewState)) {
+          slices.foreach(s => triggerDeletionPerSlice.put(s, TRUE))
           cleanupInflight(evictedNewState)
-        else
+        } else
           throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")
         Done
       }
@@ -806,43 +827,59 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def deleteOldTimestampOffsets(): Future[Long] = {
-    if (idle.getAndSet(true)) {
-      // no new offsets stored since previous delete
-      Future.successful(0)
-    } else {
-      val currentState = getState()
-      if (!triggerDeletion.getAndSet(false) && currentState.window.compareTo(settings.timeWindow) < 0) {
-        // it hasn't filled up the window yet
-        Future.successful(0)
-      } else {
-        val until = currentState.latestTimestamp.minus(settings.timeWindow)
-
-        val notInLatestBySlice = currentState.latestBySlice.collect {
-          case record if record.timestamp.isBefore(until) =>
-            // note that deleteOldTimestampOffsetSql already has `AND timestamp_offset < ?`
-            // and that's why timestamp >= until don't have to be included here
-            LatestBySlice(record.slice, record.pid, record.seqNr)
+    // This is running in the background, so fine to progress slowly one slice at a time
+    def loop(slice: Int, count: Long): Future[Long] = {
+      if (slice > maxSlice)
+        Future.successful(count)
+      else
+        deleteOldTimestampOffsets(slice).flatMap { c =>
+          loop(slice + 1, count + c)
         }
-        val result = dao.deleteOldTimestampOffset(until, notInLatestBySlice)
-        result.failed.foreach { exc =>
-          idle.set(false) // try again next tick
-          logger.warn(
-            "Failed to delete timestamp offset until [{}] for projection [{}]: {}",
-            until,
-            projectionId.id,
-            exc.toString)
-        }
-        if (logger.isDebugEnabled)
-          result.foreach { rows =>
-            logger.debug(
-              "Deleted [{}] timestamp offset rows until [{}] for projection [{}].",
-              rows,
-              until,
-              projectionId.id)
-          }
+    }
 
-        result
+    val result = loop(minSlice, 0L)
+
+    if (logger.isDebugEnabled)
+      result.foreach { rows =>
+        logger.debug("Deleted [{}] timestamp offset rows for projection [{}]", rows, projectionId.id)
       }
+
+    result.andThen(_ => scheduleNextDelete())
+  }
+
+  def deleteOldTimestampOffsets(slice: Int): Future[Long] = {
+    val triggerDeletion = triggerDeletionPerSlice.put(slice, FALSE)
+    val currentState = getState()
+    if ((triggerDeletion == null || triggerDeletion == TRUE) && currentState.bySliceSorted.contains(slice)) {
+      val latest = currentState.bySliceSorted(slice).last
+      val until = latest.timestamp.minus(settings.timeWindow)
+
+      // note that deleteOldTimestampOffsetSql already has `AND timestamp_offset < ?`,
+      // which means that the latest for this slice will not be deleted
+      val result = dao.deleteOldTimestampOffset(slice, until)
+      result.failed.foreach { exc =>
+        triggerDeletionPerSlice.put(slice, TRUE) // try again next tick
+        logger.warn(
+          "Failed to delete timestamp offset for projection [{}], slice [{}], until [{}] : {}",
+          projectionId.id,
+          slice,
+          until,
+          exc.toString)
+      }
+      if (logger.isDebugEnabled)
+        result.foreach { rows =>
+          logger.debug(
+            "Deleted [{}] timestamp offset rows for projection [{}], slice [{}], until [{}]",
+            rows,
+            projectionId.id,
+            slice,
+            until)
+        }
+
+      result
+    } else {
+      // no new offsets stored since previous delete
+      Future.successful(0L)
     }
   }
 
@@ -971,7 +1008,7 @@ private[projection] class R2dbcOffsetStore(
   private def clearTimestampOffset(): Future[Done] = {
     sourceProvider match {
       case Some(_) =>
-        idle.set(false)
+        triggerDeletionPerSlice.clear()
         dao
           .clearTimestampOffset()
           .map { n =>

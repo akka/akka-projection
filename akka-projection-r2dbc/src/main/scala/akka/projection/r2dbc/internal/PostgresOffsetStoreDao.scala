@@ -6,7 +6,6 @@ package akka.projection.r2dbc.internal
 
 import java.time.Instant
 
-import scala.annotation.nowarn
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -93,27 +92,17 @@ private[projection] class PostgresOffsetStoreDao(
   }
 
   /**
-   * delete less than a timestamp
-   * @param notInLatestBySlice not used in postgres, but needed in sql
+   * delete less than a timestamp for a given slice
    */
-  @nowarn
-  protected def deleteOldTimestampOffsetSql(notInLatestBySlice: Seq[LatestBySlice]): String =
+  protected def deleteOldTimestampOffsetSql(): String =
     sql"""
-    DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset < ?
-    AND NOT (persistence_id || '-' || seq_nr) = ANY (?)"""
+    DELETE FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND timestamp_offset < ?"""
 
-  protected def bindDeleteOldTimestampOffsetSql(
-      stmt: Statement,
-      minSlice: Int,
-      maxSlice: Int,
-      until: Instant,
-      notInLatestBySlice: Seq[LatestBySlice]): Statement = {
+  protected def bindDeleteOldTimestampOffsetSql(stmt: Statement, slice: Int, until: Instant): Statement = {
     stmt
-      .bind(0, minSlice)
-      .bind(1, maxSlice)
-      .bind(2, projectionId.name)
-      .bindTimestamp(3, until)
-      .bind(4, notInLatestBySlice.iterator.map(record => s"${record.pid}-${record.seqNr}").toArray[String])
+      .bind(0, slice)
+      .bind(1, projectionId.name)
+      .bindTimestamp(2, until)
   }
 
   // delete greater than or equal a timestamp
@@ -357,12 +346,10 @@ private[projection] class PostgresOffsetStoreDao(
     R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContext.parasitic)
   }
 
-  override def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[LatestBySlice]): Future[Long] = {
-    val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-    val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+  override def deleteOldTimestampOffset(slice: Int, until: Instant): Future[Long] = {
     r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
-      val stmt = conn.createStatement(deleteOldTimestampOffsetSql(notInLatestBySlice))
-      bindDeleteOldTimestampOffsetSql(stmt, minSlice, maxSlice, until, notInLatestBySlice)
+      val stmt = conn.createStatement(deleteOldTimestampOffsetSql())
+      bindDeleteOldTimestampOffsetSql(stmt, slice, until)
     }
   }
 
