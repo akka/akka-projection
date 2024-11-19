@@ -20,3 +20,6 @@ akka-distributed-cluster-docs/src/main/paradox/attachments
 akka-edge-docs/src/main/paradox/attachments
 # needed for aggregate project, but should not be checked in
 akka-projection-integration
+
+# More metals detritus
+project/project
