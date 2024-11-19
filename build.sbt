@@ -282,7 +282,7 @@ lazy val `akka-distributed-cluster-docs` = project
     name := "Akka Distributed Cluster",
     publish / skip := true,
     previewPath := (Paradox / siteSubdirName).value,
-    Paradox / siteSubdirName := s"docs/akka-distributed-cluster/${projectInfoVersion.value}",
+    Paradox / siteSubdirName := s"libraries/akka-distributed-cluster/${projectInfoVersion.value}",
     commonParadoxProperties,
     Compile / paradoxProperties ++= Map(
         "project.url" -> "https://doc.akka.io/libraries/akka-distributed-cluster/current/",
@@ -307,7 +307,7 @@ lazy val `akka-edge-docs` = project
     name := "Akka Edge",
     publish / skip := true,
     previewPath := (Paradox / siteSubdirName).value,
-    Paradox / siteSubdirName := s"docs/akka-edge/${projectInfoVersion.value}",
+    Paradox / siteSubdirName := s"libraries/akka-edge/${projectInfoVersion.value}",
     commonParadoxProperties,
     Compile / paradoxProperties ++= Map(
         "project.url" -> "https://doc.akka.io/libraries/akka-edge/current/",
