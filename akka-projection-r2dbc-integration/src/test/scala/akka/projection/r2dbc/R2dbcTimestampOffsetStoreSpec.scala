@@ -736,7 +736,7 @@ class R2dbcTimestampOffsetStoreSpec
 
     "evict old records from same slice" in {
       val projectionId = genRandomProjectionId()
-      val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
+      val evictSettings = settings.withTimeWindow(100.seconds)
       import evictSettings._
       val offsetStore = createOffsetStore(projectionId, evictSettings)
 
@@ -797,7 +797,7 @@ class R2dbcTimestampOffsetStoreSpec
 
     "evict old records from different slices" in {
       val projectionId = genRandomProjectionId()
-      val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
+      val evictSettings = settings.withTimeWindow(100.seconds)
       import evictSettings._
       val offsetStore = createOffsetStore(projectionId, evictSettings)
 
@@ -882,7 +882,9 @@ class R2dbcTimestampOffsetStoreSpec
 
     "delete old records" in {
       val projectionId = genRandomProjectionId()
-      val deleteSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
+      val deleteSettings = settings
+        .withTimeWindow(100.seconds)
+        .withDeleteAfter(100.seconds)
       import deleteSettings._
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
@@ -914,10 +916,10 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().size shouldBe 4
 
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.minusSeconds(2)), Map(p5 -> 1L)), p5, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.minusSeconds(2)), Map(p5 -> 1L)), p5, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.minusSeconds(1)), Map(p6 -> 1L)), p6, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.minusSeconds(1)), Map(p6 -> 1L)), p6, 1L))
         .futureValue
       // nothing deleted yet
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
@@ -925,10 +927,10 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().size shouldBe 6
 
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(1)), Map(p7 -> 1L)), p7, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.plusSeconds(1)), Map(p7 -> 1L)), p7, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(3)), Map(p8 -> 1L)), p8, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.plusSeconds(3)), Map(p8 -> 1L)), p8, 1L))
         .futureValue
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 3
       offsetStore.readOffset().futureValue // this will load from database
@@ -937,7 +939,9 @@ class R2dbcTimestampOffsetStoreSpec
 
     "delete old records but keep latest for each slice" in {
       val projectionId = genRandomProjectionId()
-      val deleteSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
+      val deleteSettings = settings
+        .withTimeWindow(100.seconds)
+        .withDeleteAfter(100.seconds)
       import deleteSettings._
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
@@ -968,10 +972,10 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().size shouldBe 4
 
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.minusSeconds(2)), Map(p5 -> 1L)), p5, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.minusSeconds(2)), Map(p5 -> 1L)), p5, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.minusSeconds(1)), Map(p6 -> 1L)), p6, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.minusSeconds(1)), Map(p6 -> 1L)), p6, 1L))
         .futureValue
       // nothing deleted yet
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
@@ -979,13 +983,13 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().size shouldBe 6
 
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(1)), Map(p7 -> 1L)), p7, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.plusSeconds(1)), Map(p7 -> 1L)), p7, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(3)), Map(p8 -> 1L)), p8, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.plusSeconds(3)), Map(p8 -> 1L)), p8, 1L))
         .futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(3)), Map(p3 -> 2L)), p3, 2L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.plusSeconds(3)), Map(p3 -> 2L)), p3, 2L))
         .futureValue
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 3
       offsetStore.getState().byPid.keySet shouldBe Set(p3, p4, p5, p6, p7, p8)
@@ -995,13 +999,14 @@ class R2dbcTimestampOffsetStoreSpec
     }
 
     "delete many old records" in {
-      // windowSeconds and totalMillis can be increase for longer/more testing
-      val windowSeconds = 3
+      // deleteAfter and totalMillis can be increase for longer/more testing
+      val deleteAfter = 3
       val totalMillis = 5 * 1000
 
       val projectionId = genRandomProjectionId()
       val deleteSettings = settings
-        .withTimeWindow(JDuration.ofSeconds(windowSeconds))
+        .withTimeWindow(JDuration.ofSeconds(deleteAfter))
+        .withDeleteAfter(JDuration.ofSeconds(deleteAfter))
         .withDeleteInterval(JDuration.ofHours(1)) // don't run the scheduled deletes
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
@@ -1032,7 +1037,8 @@ class R2dbcTimestampOffsetStoreSpec
       val projectionId = genRandomProjectionId()
       val deleteSettings =
         settings
-          .withTimeWindow(JDuration.ofSeconds(100))
+          .withTimeWindow(10.seconds)
+          .withDeleteAfter(100.seconds)
           .withDeleteInterval(JDuration.ofMillis(500))
       import deleteSettings._
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
@@ -1047,7 +1053,7 @@ class R2dbcTimestampOffsetStoreSpec
 
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(startTime, Map(p1 -> 1L)), p1, 1L)).futureValue
       offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.plusSeconds(1)), Map(p2 -> 1L)), p2, 1L))
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(deleteAfter.plusSeconds(1)), Map(p2 -> 1L)), p2, 1L))
         .futureValue
       eventually {
         offsetStore.readOffset().futureValue // this will load from database
@@ -1057,7 +1063,7 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore
         .saveOffset(
           OffsetPidSeqNr(
-            TimestampOffset(startTime.plus(timeWindow.multipliedBy(2).plusSeconds(2)), Map(p3 -> 1L)),
+            TimestampOffset(startTime.plus(deleteAfter.multipliedBy(2).plusSeconds(2)), Map(p3 -> 1L)),
             p3,
             1L))
         .futureValue
@@ -1069,11 +1075,12 @@ class R2dbcTimestampOffsetStoreSpec
 
     "delete old records from different slices" in {
       val projectionId = genRandomProjectionId()
-      val evictSettings = settings
-        .withTimeWindow(JDuration.ofSeconds(100))
-      val offsetStore = createOffsetStore(projectionId, evictSettings)
+      val deleteSettings = settings
+        .withTimeWindow(100.seconds)
+        .withDeleteAfter(100.seconds)
+      val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
-      import evictSettings.timeWindow
+      import deleteSettings.deleteAfter
 
       val t0 = TestClock.nowMicros().instant()
       log.debug("Start time [{}]", t0)
@@ -1107,19 +1114,19 @@ class R2dbcTimestampOffsetStoreSpec
 
       offsetStore.getState().size shouldBe 6
 
-      val t7 = t0.plus(timeWindow.minusSeconds(10))
+      val t7 = t0.plus(deleteAfter.minusSeconds(10))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t7, Map(p7 -> 1L)), p7, 1L)).futureValue
 
       offsetStore.getState().size shouldBe 7 // no eviction
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion (within time window)
 
-      val t8 = t0.plus(timeWindow.plusSeconds(7))
+      val t8 = t0.plus(deleteAfter.plusSeconds(7))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t8, Map(p8 -> 1L)), p8, 1L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p2, p3, p4, p5, p6, p7, p8) // eviction slice 645
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 1 // deleted p1@t1
 
-      val t9 = t0.plus(timeWindow.plusSeconds(13))
+      val t9 = t0.plus(deleteAfter.plusSeconds(13))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t9, Map(p8 -> 2L)), p8, 2L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p2, p3, p6, p7, p8) // eviction slice 645
@@ -1132,11 +1139,12 @@ class R2dbcTimestampOffsetStoreSpec
 
     "delete old records for same slice" in {
       val projectionId = genRandomProjectionId()
-      val evictSettings = settings
-        .withTimeWindow(JDuration.ofSeconds(100))
-      val offsetStore = createOffsetStore(projectionId, evictSettings)
+      val deleteSettings = settings
+        .withTimeWindow(100.seconds)
+        .withDeleteAfter(100.seconds)
+      val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
-      import evictSettings.timeWindow
+      import deleteSettings.deleteAfter
 
       val t0 = TestClock.nowMicros().instant()
       log.debug("Start time [{}]", t0)
@@ -1176,49 +1184,49 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().size shouldBe 6 // no eviction
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion
 
-      val t7 = t0.plus(timeWindow.minusSeconds(10))
+      val t7 = t0.plus(deleteAfter.minusSeconds(10))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t7, Map(p7 -> 1L)), p7, 1L)).futureValue
 
       offsetStore.getState().size shouldBe 7 // no eviction
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // no deletion (within time window)
 
-      val t8 = t0.plus(timeWindow.plusSeconds(13))
+      val t8 = t0.plus(deleteAfter.plusSeconds(13))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t8, Map(p8 -> 1L)), p8, 1L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p4, p5, p6, p7, p8) // evicted p1@t1, p2@t2, and p3@t3
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 3 // deletion triggered by eviction
 
-      val t9 = t0.plus(timeWindow.plusSeconds(30))
+      val t9 = t0.plus(deleteAfter.plusSeconds(30))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t9, Map(p8 -> 2L)), p8, 2L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p7, p8) // evicted
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 3 // deleted p4@t4, p5@t5, p6@t6 (outside window)
 
-      val t10 = t0.plus(timeWindow.plusSeconds(31))
+      val t10 = t0.plus(deleteAfter.plusSeconds(31))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t10, Map(p9 -> 1L)), p9, 1L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p7, p8, p9) // nothing evicted
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // but if deletion triggered nothing to delete
 
-      val t11 = t0.plus(timeWindow.plusSeconds(32))
+      val t11 = t0.plus(deleteAfter.plusSeconds(32))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t11, Map(p10 -> 1L)), p10, 1L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p7, p8, p9, p10) // nothing evicted
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // but if deletion triggered nothing to delete
 
-      val t12 = t0.plus(timeWindow.plusSeconds(33))
+      val t12 = t0.plus(deleteAfter.plusSeconds(33))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t12, Map(p11 -> 1L)), p11, 1L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p7, p8, p9, p10, p11) // nothing evicted
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // but if deletion triggered nothing to delete
 
-      val t13 = t0.plus(timeWindow.plusSeconds(34))
+      val t13 = t0.plus(deleteAfter.plusSeconds(34))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t13, Map(p12 -> 1L)), p12, 1L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p7, p8, p9, p10, p11, p12) // nothing evicted
       offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0 // but if deletion triggered nothing to delete
 
-      val t14 = t7.plus(timeWindow.plusSeconds(1))
+      val t14 = t7.plus(deleteAfter.plusSeconds(1))
       offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t14, Map(p12 -> 2L)), p12, 2L)).futureValue
 
       offsetStore.getState().byPid.keySet shouldBe Set(p8, p9, p10, p11, p12) // evicted p7@t7
@@ -1357,7 +1365,7 @@ class R2dbcTimestampOffsetStoreSpec
           ProjectionId(projectionName, s"$minSlice-$maxSlice"),
           Some(new TestTimestampSourceProvider(minSlice, maxSlice, clock)),
           system,
-          settings.withTimeWindow(JDuration.ofSeconds(10)),
+          settings.withTimeWindow(10.seconds).withDeleteAfter(10.seconds),
           r2dbcExecutor)
 
       // two projections at higher scale
@@ -1585,7 +1593,7 @@ class R2dbcTimestampOffsetStoreSpec
         .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
         .futureValue shouldBe RejectedBacktrackingSeqNr
       // accepted if timestamp of previous seqNr is before start timestamp minus backtracking window
-      clock.setInstant(startOffset2.timestamp.minus(settings.timeWindow.plusSeconds(1)))
+      clock.setInstant(startOffset2.timestamp.minus(settings.deleteAfter.plusSeconds(1)))
       offsetStore2
         .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
         .futureValue shouldBe Accepted
