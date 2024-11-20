@@ -64,8 +64,8 @@ private[projection] class PostgresOffsetStoreDao(
 
   private val selectTimestampOffsetSql: String =
     sql"""
-    SELECT projection_key, slice, persistence_id, seq_nr, timestamp_offset
-    FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
+    SELECT projection_key, persistence_id, seq_nr, timestamp_offset
+    FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? ORDER BY timestamp_offset DESC LIMIT ?"""
 
   protected def createSelectOneTimestampOffsetSql: String =
     sql"""
@@ -192,25 +192,20 @@ private[projection] class PostgresOffsetStoreDao(
           s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
 
-  override def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]] = {
-    val (minSlice, maxSlice) = {
-      sourceProvider match {
-        case Some(provider) => (provider.minSlice, provider.maxSlice)
-        case None           => (0, persistenceExt.numberOfSlices - 1)
-      }
-    }
+  override def readTimestampOffset(
+      slice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]] = {
     r2dbcExecutor.select("read timestamp offset")(
       conn => {
         logger.trace("reading timestamp offset for [{}]", projectionId)
+        val limit = 1000 // FIXME config
         conn
           .createStatement(selectTimestampOffsetSql)
-          .bind(0, minSlice)
-          .bind(1, maxSlice)
-          .bind(2, projectionId.name)
+          .bind(0, slice)
+          .bind(1, projectionId.name)
+          .bind(2, limit)
       },
       row => {
         val projectionKey = row.get("projection_key", classOf[String])
-        val slice = row.get("slice", classOf[java.lang.Integer])
         val pid = row.get("persistence_id", classOf[String])
         val seqNr = row.get("seq_nr", classOf[java.lang.Long])
         val timestamp = row.getTimestamp("timestamp_offset")
