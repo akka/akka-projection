@@ -97,4 +97,4 @@ and loading of events from the database.
 
 `EventsBySliceFirehoseQuery` is used in place of `EventsBySliceQuery` with the `EventSourcedProvider`.
 
-It is typically used together with @extref:[Sharded Daemon Process with colocated processes](akka:typed/cluster-sharded-daemon-process.md#colocate-processes).
+It is typically used together with @extref:[Sharded Daemon Process with colocated processes](akka:typed/cluster-sharded-daemon-process.html#colocate-processes).
