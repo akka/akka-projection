@@ -900,7 +900,7 @@ private[projection] class R2dbcOffsetStore(
     val currentState = getState()
     if ((triggerDeletion == null || triggerDeletion == TRUE) && currentState.bySliceSorted.contains(slice)) {
       val latest = currentState.bySliceSorted(slice).last
-      val until = latest.timestamp.minus(settings.timeWindow)
+      val until = latest.timestamp.minus(settings.deleteAfter)
 
       // note that deleteOldTimestampOffsetSql already has `AND timestamp_offset < ?`,
       // which means that the latest for this slice will not be deleted
