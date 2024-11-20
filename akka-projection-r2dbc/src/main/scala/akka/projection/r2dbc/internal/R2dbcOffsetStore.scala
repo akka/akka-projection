@@ -91,13 +91,6 @@ private[projection] object R2dbcOffsetStore {
 
     def size: Int = byPid.size
 
-    def oldestTimestamp: Instant = {
-      if (bySliceSorted.isEmpty)
-        Instant.EPOCH
-      else
-        bySliceSorted.valuesIterator.map(_.head.timestamp).min
-    }
-
     def latestTimestamp: Instant = {
       if (bySliceSorted.isEmpty)
         Instant.EPOCH
@@ -136,28 +129,20 @@ private[projection] object R2dbcOffsetStore {
     def add(records: Iterable[Record]): State = {
       records.foldLeft(this) {
         case (acc, r) =>
-          val newByPid =
-            acc.byPid.get(r.pid) match {
-              case Some(existingRecord) =>
-                if (r.seqNr > existingRecord.seqNr)
-                  acc.byPid.updated(r.pid, r)
-                else
-                  acc.byPid // older or same seqNr
-              case None =>
-                acc.byPid.updated(r.pid, r)
-            }
-
-          val newBySliceSorted =
-            acc.bySliceSorted.updated(r.slice, acc.bySliceSorted.get(r.slice) match {
-              case Some(existing) =>
-                // we don't remove existing older records for same pid, but they will
-                // be removed by eviction
-                existing + r
-              case None =>
-                TreeSet.empty[Record] + r
-            })
-
-          acc.copy(byPid = newByPid, bySliceSorted = newBySliceSorted)
+          val sorted = acc.bySliceSorted.getOrElse(r.slice, TreeSet.empty[Record])
+          acc.byPid.get(r.pid) match {
+            case Some(existingRecord) =>
+              if (r.seqNr > existingRecord.seqNr)
+                acc.copy(
+                  byPid = acc.byPid.updated(r.pid, r),
+                  bySliceSorted = acc.bySliceSorted.updated(r.slice, sorted - existingRecord + r))
+              else
+                acc // older or same seqNr
+            case None =>
+              acc.copy(
+                byPid = acc.byPid.updated(r.pid, r),
+                bySliceSorted = acc.bySliceSorted.updated(r.slice, sorted + r))
+          }
       }
     }
 
@@ -396,9 +381,8 @@ private[projection] class R2dbcOffsetStore(
         }
 
       logger.debug(
-        "readTimestampOffset state with [{}] persistenceIds, oldest [{}], latest [{}], start offset [{}]",
+        "readTimestampOffset state with [{}] persistenceIds, latest [{}], start offset [{}]",
         newState.byPid.size,
-        newState.oldestTimestamp,
         newState.latestTimestamp,
         startOffset)
 

@@ -34,12 +34,10 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
             createRecord("p1", 3, t0.plusMillis(2))))
       state1.byPid("p1").seqNr shouldBe 3L
       state1.bySliceSorted.size shouldBe 1
-      state1.bySliceSorted(slice("p1")).size shouldBe 3
-      state1.bySliceSorted(slice("p1")).head.seqNr shouldBe 1
-      state1.bySliceSorted(slice("p1")).last.seqNr shouldBe 3
+      state1.bySliceSorted(slice("p1")).size shouldBe 1
+      state1.bySliceSorted(slice("p1")).head.seqNr shouldBe 3
       state1.latestTimestamp shouldBe t0.plusMillis(2)
       state1.latestOffset.get.seen shouldBe Map("p1" -> 3L)
-      state1.oldestTimestamp shouldBe t0
 
       val state2 = state1.add(Vector(createRecord("p2", 2, t0.plusMillis(1))))
       state2.byPid("p1").seqNr shouldBe 3L
@@ -47,17 +45,37 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
       // latest not updated because timestamp of p2 was before latest
       state2.latestTimestamp shouldBe t0.plusMillis(2)
       state2.latestOffset.get.seen shouldBe Map("p1" -> 3L)
-      state2.oldestTimestamp shouldBe t0
 
       val state3 = state2.add(Vector(createRecord("p3", 10, t0.plusMillis(3))))
       state3.byPid("p1").seqNr shouldBe 3L
       state3.byPid("p2").seqNr shouldBe 2L
       state3.byPid("p3").seqNr shouldBe 10L
+      slice("p3") should not be slice("p1")
+      slice("p3") should not be slice("p2")
       state3.bySliceSorted(slice("p3")).last.pid shouldBe "p3"
       state3.bySliceSorted(slice("p3")).last.seqNr shouldBe 10
       state3.latestTimestamp shouldBe t0.plusMillis(3)
       state3.latestOffset.get.seen shouldBe Map("p3" -> 10L)
-      state3.oldestTimestamp shouldBe t0
+
+      slice("p863") shouldBe slice("p984") // both slice 645
+      slice("p863") should not be slice("p1")
+      slice("p863") should not be slice("p2")
+      slice("p863") should not be slice("p3")
+      val state4 = state3
+        .add(Vector(createRecord("p863", 1, t0.plusMillis(10))))
+        .add(Vector(createRecord("p863", 2, t0.plusMillis(11))))
+        .add(Vector(createRecord("p984", 1, t0.plusMillis(12)), createRecord("p984", 2, t0.plusMillis(13))))
+      state4.bySliceSorted(slice("p984")).size shouldBe 2
+      state4.bySliceSorted(slice("p984")).last.pid shouldBe "p984"
+      state4.bySliceSorted(slice("p984")).last.seqNr shouldBe 2
+
+      val state5 = state3
+        .add(Vector(createRecord("p863", 2, t0.plusMillis(13))))
+        .add(Vector(createRecord("p863", 1, t0.plusMillis(12))))
+        .add(Vector(createRecord("p984", 2, t0.plusMillis(11)), createRecord("p984", 1, t0.plusMillis(10))))
+      state5.bySliceSorted(slice("p863")).size shouldBe 2
+      state5.bySliceSorted(slice("p863")).last.pid shouldBe "p863"
+      state5.bySliceSorted(slice("p863")).last.seqNr shouldBe 2
     }
 
     // reproducer of issue #173
@@ -144,7 +162,6 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
         "p4" -> 4L,
         "p5" -> 5L)
       state1.latestOffset.get.seen shouldBe Map("p5" -> 5L)
-      state1.oldestTimestamp shouldBe t0
 
       val timeWindow = JDuration.ofMillis(1)
 
@@ -156,7 +173,6 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
       state2.byPid
         .map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p1" -> 1L, "p108" -> 3L, "p4" -> 4L, "p5" -> 5L)
       state2.latestOffset.get.seen shouldBe Map("p5" -> 5L)
-      state2.oldestTimestamp shouldBe t0
 
       val state3 = slices.foldLeft(state2) {
         case (acc, slice) => acc.evict(slice, timeWindow)
