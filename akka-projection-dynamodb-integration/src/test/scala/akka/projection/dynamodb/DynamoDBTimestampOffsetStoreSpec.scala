@@ -162,7 +162,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
   def slice(pid: String): Int =
     persistenceExt.sliceForPersistenceId(pid)
 
-  s"The DynamoDBOffsetStore for TimestampOffset" must {
+  "The DynamoDBOffsetStore for TimestampOffset" must {
 
     "save TimestampOffset with one entry" in {
       val projectionId = genRandomProjectionId()

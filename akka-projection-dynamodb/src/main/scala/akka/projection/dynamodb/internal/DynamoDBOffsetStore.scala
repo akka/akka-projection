@@ -99,23 +99,6 @@ private[projection] object DynamoDBOffsetStore {
     def add(records: Iterable[Record]): State = {
       records.foldLeft(this) {
         case (acc, r) =>
-          val newByPid =
-            acc.byPid.get(r.pid) match {
-              case Some(existingRecord) =>
-                if (r.seqNr > existingRecord.seqNr)
-                  acc.byPid.updated(r.pid, r)
-                else
-                  acc.byPid // older or same seqNr
-              case None =>
-                acc.byPid.updated(r.pid, r)
-            }
-
-          val newBySliceSorted =
-            acc.bySliceSorted.updated(r.slice, acc.bySliceSorted.get(r.slice) match {
-              case Some(existing) => existing + r
-              case None           => TreeSet.empty[Record] + r
-            })
-
           val newOffsetBySlice =
             acc.offsetBySlice.get(r.slice) match {
               case Some(existing) =>
@@ -130,7 +113,23 @@ private[projection] object DynamoDBOffsetStore {
                 acc.offsetBySlice.updated(r.slice, TimestampOffset(r.timestamp, Map(r.pid -> r.seqNr)))
             }
 
-          acc.copy(byPid = newByPid, bySliceSorted = newBySliceSorted, offsetBySlice = newOffsetBySlice)
+          val sorted = acc.bySliceSorted.getOrElse(r.slice, TreeSet.empty[Record])
+          acc.byPid.get(r.pid) match {
+            case Some(existingRecord) =>
+              if (r.seqNr > existingRecord.seqNr)
+                acc.copy(
+                  byPid = acc.byPid.updated(r.pid, r),
+                  bySliceSorted = acc.bySliceSorted.updated(r.slice, sorted - existingRecord + r),
+                  offsetBySlice = newOffsetBySlice)
+              else
+                // older or same seqNr
+                acc.copy(offsetBySlice = newOffsetBySlice)
+            case None =>
+              acc.copy(
+                byPid = acc.byPid.updated(r.pid, r),
+                bySliceSorted = acc.bySliceSorted.updated(r.slice, sorted + r),
+                offsetBySlice = newOffsetBySlice)
+          }
       }
     }
 
