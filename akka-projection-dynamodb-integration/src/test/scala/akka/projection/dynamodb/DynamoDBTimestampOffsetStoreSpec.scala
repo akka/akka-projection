@@ -100,13 +100,15 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
   private def createOffsetStore(
       projectionId: ProjectionId,
       customSettings: DynamoDBProjectionSettings = settings,
+      offsetStoreClock: TestClock = clock,
       eventTimestampQueryClock: TestClock = clock) =
     new DynamoDBOffsetStore(
       projectionId,
       Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, eventTimestampQueryClock)),
       system,
       customSettings,
-      client)
+      client,
+      offsetStoreClock)
 
   def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] = {
     val entityType = PersistenceId.extractEntityType(pid)
@@ -558,6 +560,11 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       val projectionId = genRandomProjectionId()
       val eventTimestampQueryClock = TestClock.nowMicros()
       val offsetStore = createOffsetStore(projectionId, eventTimestampQueryClock = eventTimestampQueryClock)
+
+      // some validation require the startTimestamp, which is set from readOffset
+      offsetStore.getState().startTimestampBySlice.size shouldBe 0
+      offsetStore.readOffset().futureValue
+      offsetStore.getState().startTimestampBySlice.values.toSet shouldBe Set(clock.instant())
 
       val startTime = TestClock.nowMicros().instant()
       val offset1 = TimestampOffset(startTime, Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
@@ -1032,6 +1039,60 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
     // FIXME more tests, see r2dbc
     //    "set offset" in {
     //    "clear offset" in {
+
+    "validate timestamp of previous sequence number" in {
+      import DynamoDBOffsetStore.Validation._
+
+      val projectionName = UUID.randomUUID().toString
+
+      def offsetStore(minSlice: Int, maxSlice: Int) =
+        new DynamoDBOffsetStore(
+          ProjectionId(projectionName, s"$minSlice-$maxSlice"),
+          Some(new TestTimestampSourceProvider(minSlice, maxSlice, clock)),
+          system,
+          settings,
+          client,
+          clock)
+
+      // one projection at lower scale
+      val offsetStore1 = offsetStore(512, 1023)
+
+      // two projections at higher scale
+      val offsetStore2 = offsetStore(512, 767)
+
+      val p1 = "p-0960" // slice 576
+      val p2 = "p-6009" // slice 640
+      val p3 = "p-3039" // slice 832
+
+      val t0 = clock.instant().minusSeconds(100)
+      def time(step: Int) = t0.plusSeconds(step)
+
+      // starting with 2 projections, testing 512-1023
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time(2), Map(p1 -> 1L)), p1, 1L)).futureValue
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time(100), Map(p3 -> 1L)), p3, 1L)).futureValue
+
+      // scaled up to 4 projections, testing 512-767
+      offsetStore2.readOffset().futureValue
+      offsetStore2.getState().startTimestampBySlice(576) shouldBe time(2)
+      val slice640StartTimestamp = offsetStore2.getState().startTimestampBySlice(640)
+      slice640StartTimestamp shouldBe clock.instant()
+      val latestTime = time(10)
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(latestTime, Map(p1 -> 2L)), p1, 2L)).futureValue
+      offsetStore2.getState().latestTimestamp shouldBe latestTime
+
+      // clock is used by TestTimestampSourceProvider.timestampOf for timestamp of previous seqNr.
+      // rejected if timestamp of previous seqNr is after start timestamp minus backtracking window
+      clock.setInstant(slice640StartTimestamp.minus(settings.backtrackingWindow.minusSeconds(1)))
+      offsetStore2
+        .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
+        .futureValue shouldBe RejectedBacktrackingSeqNr
+      // accepted if timestamp of previous seqNr is before start timestamp minus backtracking window
+      clock.setInstant(slice640StartTimestamp.minus(settings.timeWindow.plusSeconds(1)))
+      offsetStore2
+        .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
+        .futureValue shouldBe Accepted
+
+    }
 
   }
 }
