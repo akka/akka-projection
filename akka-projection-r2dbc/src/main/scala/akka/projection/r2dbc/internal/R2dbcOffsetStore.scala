@@ -41,6 +41,9 @@ import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
+import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.Source
+
 /**
  * INTERNAL API
  */
@@ -330,16 +333,29 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
+    implicit val sys = system // for implicit stream materializer
     triggerDeletionPerSlice.clear()
     val oldState = state.get()
 
-    dao.readTimestampOffset().map { recordsWithKey =>
+    val offsetSliceReadParallelism = 10 // FIXME config
+
+    val recordsWithKeyFut =
+      Source(minSlice to maxSlice)
+        .mapAsyncUnordered(offsetSliceReadParallelism) { slice =>
+          dao.readTimestampOffset(slice)
+        }
+        .mapConcat(identity)
+        .runWith(Sink.seq)
+        .map(_.toVector)(ExecutionContext.parasitic)
+
+    recordsWithKeyFut.map { recordsWithKey =>
       clearInflight()
       clearForeignOffsets()
       clearLatestSeen()
 
       val newState = {
         val s = State(recordsWithKey.map(_.record))
+        // FIXME shall we evict here, or how does that impact the logic for moreThanOneProjectionKey and foreignOffsets?
         (minSlice to maxSlice).foldLeft(s) {
           case (acc, slice) => acc.evict(slice, settings.timeWindow)
         }

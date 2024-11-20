@@ -22,7 +22,7 @@ import akka.projection.r2dbc.internal.R2dbcOffsetStore.LatestBySlice
 @InternalApi
 private[projection] trait OffsetStoreDao {
 
-  def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]]
+  def readTimestampOffset(slice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]]
 
   def readTimestampOffset(slice: Int, pid: String): Future[Option[R2dbcOffsetStore.Record]]
 
