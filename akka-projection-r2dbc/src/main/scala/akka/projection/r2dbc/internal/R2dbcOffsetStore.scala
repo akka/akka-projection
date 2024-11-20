@@ -146,6 +146,9 @@ private[projection] object R2dbcOffsetStore {
       }
     }
 
+    def contains(pid: Pid): Boolean =
+      byPid.contains(pid)
+
     def isDuplicate(record: Record): Boolean = {
       byPid.get(record.pid) match {
         case Some(existingRecord) => record.seqNr <= existingRecord.seqNr
@@ -209,10 +212,17 @@ private[projection] class R2dbcOffsetStore(
 
   import R2dbcOffsetStore._
 
-  // FIXME include projectionId in all log messages
-  private val logger = LoggerFactory.getLogger(this.getClass)
-
   private val persistenceExt = Persistence(system)
+
+  private val (minSlice, maxSlice) = {
+    sourceProvider match {
+      case Some(provider) => (provider.minSlice, provider.maxSlice)
+      case None           => (0, persistenceExt.numberOfSlices - 1)
+    }
+  }
+
+  private val logger = LoggerFactory.getLogger(this.getClass)
+  private val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -230,15 +240,8 @@ private[projection] class R2dbcOffsetStore(
           s"[$unknown] is not a dialect supported by this version of Akka Projection R2DBC")
     }
   val dao: OffsetStoreDao = {
-    logger.debug("Offset store [{}] created, with dialect [{}]", projectionId, dialectName)
+    logger.debug("{} Offset store created, with dialect [{}]", logPrefix, dialectName)
     dialect.createOffsetStoreDao(settings, sourceProvider, system, r2dbcExecutor, projectionId)
-  }
-
-  private val (minSlice, maxSlice) = {
-    sourceProvider match {
-      case Some(provider) => (provider.minSlice, provider.maxSlice)
-      case None           => (0, persistenceExt.numberOfSlices - 1)
-    }
   }
 
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
@@ -381,7 +384,8 @@ private[projection] class R2dbcOffsetStore(
         }
 
       logger.debug(
-        "readTimestampOffset state with [{}] persistenceIds, latest [{}], start offset [{}]",
+        "{} readTimestampOffset state with [{}] persistenceIds, latest [{}], start offset [{}]",
+        logPrefix,
         newState.byPid.size,
         newState.latestTimestamp,
         startOffset)
@@ -422,7 +426,7 @@ private[projection] class R2dbcOffsetStore(
             offsets.find(_.id == projectionId).map(fromStorageRepresentation[Offset, Offset])
           }
 
-        logger.trace("found offset [{}] for [{}]", result, projectionId)
+        logger.trace("{} found offset [{}]", logPrefix, result)
 
         result
       }
@@ -559,7 +563,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
-    logger.trace("saving offset [{}]", offset)
+    logger.trace("{} saving offset [{}]", logPrefix, offset)
 
     if (!settings.isOffsetTableDefined)
       Future.failed(
@@ -632,7 +636,7 @@ private[projection] class R2dbcOffsetStore(
     val duplicate = currentState.isDuplicate(recordWithOffset.record)
 
     if (duplicate) {
-      logger.trace("Filtering out duplicate sequence number [{}] for pid [{}]", seqNr, pid)
+      logger.trace("{} Filtering out duplicate sequence number [{}] for pid [{}]", logPrefix, seqNr, pid)
       // also move latest seen forward, for adopting foreign offsets on replay of duplicates
       if (hasForeignOffsets()) updateLatestSeen(recordWithOffset.offset.timestamp)
       FutureDuplicate
@@ -643,21 +647,24 @@ private[projection] class R2dbcOffsetStore(
       def logUnexpected(): Unit = {
         if (recordWithOffset.fromPubSub)
           logger.debug(
-            "Rejecting pub-sub envelope, unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+            "{} Rejecting pub-sub envelope, unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+            logPrefix,
             seqNr,
             pid,
             prevSeqNr,
             recordWithOffset.offset)
         else if (!recordWithOffset.fromBacktracking)
           logger.debug(
-            "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+            "{] Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+            logPrefix,
             seqNr,
             pid,
             prevSeqNr,
             recordWithOffset.offset)
         else
           logger.warn(
-            "Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+            "{} Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+            logPrefix,
             seqNr,
             pid,
             prevSeqNr,
@@ -711,7 +718,7 @@ private[projection] class R2dbcOffsetStore(
       if (ok) {
         FutureAccepted
       } else {
-        logger.trace("Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", seqNr, pid, prevSeqNr)
+        logger.trace("{} Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", logPrefix, seqNr, pid, prevSeqNr)
         FutureDuplicate
       }
     }
@@ -731,8 +738,9 @@ private[projection] class R2dbcOffsetStore(
 
         if (previousTimestamp.isBefore(acceptBefore)) {
           logger.debug(
-            "Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
+            "{} Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
             "is before start timestamp [{}] minus backtracking window [{}].",
+            logPrefix,
             pid,
             seqNr,
             previousTimestamp,
@@ -741,7 +749,8 @@ private[projection] class R2dbcOffsetStore(
           Accepted
         } else if (recordWithOffset.fromPubSub) {
           logger.debug(
-            "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            "{} Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            logPrefix,
             seqNr,
             pid,
             recordWithOffset.offset)
@@ -749,8 +758,9 @@ private[projection] class R2dbcOffsetStore(
         } else if (recordWithOffset.fromBacktracking) {
           // This will result in projection restart (with normal configuration)
           logger.warn(
-            "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, where previous event timestamp [{}] " +
+            "{} Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, where previous event timestamp [{}] " +
             "is after start timestamp [{}] minus backtracking window [{}].",
+            logPrefix,
             seqNr,
             pid,
             recordWithOffset.offset,
@@ -761,7 +771,8 @@ private[projection] class R2dbcOffsetStore(
         } else {
           // This may happen rather frequently when using `publish-events`, after reconnecting and such.
           logger.debug(
-            "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            "{} Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            logPrefix,
             seqNr,
             pid,
             recordWithOffset.offset)
@@ -770,7 +781,7 @@ private[projection] class R2dbcOffsetStore(
         }
       case None =>
         // previous not found, could have been deleted
-        logger.debug("Accepting envelope with pid [{}], seqNr [{}], where previous event not found.", pid, seqNr)
+        logger.debug("{} Accepting envelope with pid [{}], seqNr [{}], where previous event not found.", logPrefix,pid, seqNr)
         Accepted
     }
   }
@@ -825,7 +836,7 @@ private[projection] class R2dbcOffsetStore(
 
     if (logger.isDebugEnabled)
       result.foreach { rows =>
-        logger.debug("Deleted [{}] timestamp offset rows for projection [{}]", rows, projectionId.id)
+        logger.debug("{} Deleted [{}] timestamp offset rows", logPrefix, rows)
       }
 
     result.andThen(_ => scheduleNextDelete())
@@ -844,8 +855,8 @@ private[projection] class R2dbcOffsetStore(
       result.failed.foreach { exc =>
         triggerDeletionPerSlice.put(slice, TRUE) // try again next tick
         logger.warn(
-          "Failed to delete timestamp offset for projection [{}], slice [{}], until [{}] : {}",
-          projectionId.id,
+          "{} Failed to delete timestamp offset, slice [{}], until [{}] : {}",
+          logPrefix,
           slice,
           until,
           exc.toString)
@@ -853,9 +864,9 @@ private[projection] class R2dbcOffsetStore(
       if (logger.isDebugEnabled)
         result.foreach { rows =>
           logger.debug(
-            "Deleted [{}] timestamp offset rows for projection [{}], slice [{}], until [{}]",
+            "{} Deleted [{}] timestamp offset rows, slice [{}], until [{}]",
+            logPrefix,
             rows,
-            projectionId.id,
             slice,
             until)
         }
@@ -971,10 +982,10 @@ private[projection] class R2dbcOffsetStore(
       if (logger.isDebugEnabled)
         result.foreach { rows =>
           logger.debug(
-            "Deleted [{}] timestamp offset rows >= [{}] for projection [{}].",
+            "{} Deleted [{}] timestamp offset rows >= [{}]",
+            logPrefix,
             rows,
-            timestamp,
-            projectionId.id)
+            timestamp)
         }
 
       result
@@ -996,7 +1007,7 @@ private[projection] class R2dbcOffsetStore(
         dao
           .clearTimestampOffset()
           .map { n =>
-            logger.debug(s"clearing timestamp offset for [{}] - executed statement returned [{}]", projectionId, n)
+            logger.debug("{} clearing timestamp offsets - executed statement returned [{}]", logPrefix, n)
             Done
           }
       case None =>
@@ -1007,7 +1018,7 @@ private[projection] class R2dbcOffsetStore(
   private def clearPrimitiveOffset(): Future[Done] = {
     if (settings.isOffsetTableDefined) {
       dao.clearPrimitiveOffset().map { n =>
-        logger.debug(s"clearing offset for [{}] - executed statement returned [{}]", projectionId, n)
+        logger.debug("{} clearing offsets - executed statement returned [{}]", logPrefix, n)
         Done
       }
     } else {
