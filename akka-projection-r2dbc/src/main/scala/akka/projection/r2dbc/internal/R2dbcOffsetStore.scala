@@ -435,6 +435,46 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
+  def load(pid: Pid): Future[State] = {
+    val oldState = state.get()
+    if (oldState.contains(pid))
+      Future.successful(oldState)
+    else {
+      val slice = persistenceExt.sliceForPersistenceId(pid)
+      logger.trace("{} load [{}]", logPrefix, pid)
+      dao.readTimestampOffset(slice, pid).flatMap {
+        case Some(record) =>
+          val newState = oldState.add(Vector(record))
+          if (state.compareAndSet(oldState, newState))
+            Future.successful(newState)
+          else
+            load(pid) // CAS retry, concurrent update
+        case None => Future.successful(oldState)
+      }
+    }
+  }
+
+  def load(pids: IndexedSeq[Pid]): Future[State] = {
+    val oldState = state.get()
+    val pidsToLoad = pids.filterNot(oldState.contains)
+    if (pidsToLoad.isEmpty)
+      Future.successful(oldState)
+    else {
+      val loadedRecords = pidsToLoad.map { pid =>
+        val slice = persistenceExt.sliceForPersistenceId(pid)
+        logger.trace("{} load [{}]", logPrefix, pid)
+        dao.readTimestampOffset(slice, pid)
+      }
+      Future.sequence(loadedRecords).flatMap { records =>
+        val newState = oldState.add(records.flatten)
+        if (state.compareAndSet(oldState, newState))
+          Future.successful(newState)
+        else
+          load(pids) // CAS retry, concurrent update
+      }
+    }
+  }
+
   /**
    * Like saveOffsetInTx, but in own transaction. Used by atLeastOnce.
    */
@@ -454,7 +494,7 @@ private[projection] class R2dbcOffsetStore(
       case OffsetPidSeqNr(t: TimestampOffset, Some((pid, seqNr))) =>
         val slice = persistenceExt.sliceForPersistenceId(pid)
         val record = Record(slice, pid, seqNr, t.timestamp)
-        saveTimestampOffsetInTx(conn, Vector(record))
+        saveTimestampOffsetInTx(conn, Vector(record), canBeConcurrent = true)
       case OffsetPidSeqNr(_: TimestampOffset, None) =>
         throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
       case _ =>
@@ -465,12 +505,18 @@ private[projection] class R2dbcOffsetStore(
   def saveOffsets(offsets: immutable.IndexedSeq[OffsetPidSeqNr]): Future[Done] = {
     r2dbcExecutor
       .withConnection("save offsets") { conn =>
-        saveOffsetsInTx(conn, offsets)
+        saveOffsetsInTx(conn, offsets, canBeConcurrent = true)
       }
       .map(_ => Done)(ExecutionContext.parasitic)
   }
 
-  def saveOffsetsInTx(conn: Connection, offsets: immutable.IndexedSeq[OffsetPidSeqNr]): Future[Done] = {
+  def saveOffsetsInTx(conn: Connection, offsets: immutable.IndexedSeq[OffsetPidSeqNr]): Future[Done] =
+    saveOffsetsInTx(conn, offsets, canBeConcurrent = false)
+
+  private def saveOffsetsInTx(
+      conn: Connection,
+      offsets: immutable.IndexedSeq[OffsetPidSeqNr],
+      canBeConcurrent: Boolean): Future[Done] = {
     if (offsets.isEmpty)
       FutureDone
     else if (offsets.head.offset.isInstanceOf[TimestampOffset]) {
@@ -482,61 +528,68 @@ private[projection] class R2dbcOffsetStore(
           throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
         case _ =>
           throw new IllegalArgumentException(
-            "Mix of TimestampOffset and other offset type in same transaction isnot supported")
+            "Mix of TimestampOffset and other offset type in same transaction is not supported")
       }
-      saveTimestampOffsetInTx(conn, records)
+      saveTimestampOffsetInTx(conn, records, canBeConcurrent)
     } else {
       savePrimitiveOffsetInTx(conn, offsets.last.offset)
     }
   }
 
-  private def saveTimestampOffsetInTx(conn: Connection, records: immutable.IndexedSeq[Record]): Future[Done] = {
-    val oldState = state.get()
-    val filteredRecords = {
-      if (records.size <= 1)
-        records.filterNot(oldState.isDuplicate)
-      else {
-        // use last record for each pid
-        records
-          .groupBy(_.pid)
-          .valuesIterator
-          .collect {
-            case recordsByPid if !oldState.isDuplicate(recordsByPid.last) => recordsByPid.last
+  private def saveTimestampOffsetInTx(
+      conn: Connection,
+      records: immutable.IndexedSeq[Record],
+      canBeConcurrent: Boolean): Future[Done] = {
+    load(records.map(_.pid)).flatMap { oldState =>
+      val filteredRecords = {
+        if (records.size <= 1)
+          records.filterNot(oldState.isDuplicate)
+        else {
+          // use last record for each pid
+          records
+            .groupBy(_.pid)
+            .valuesIterator
+            .collect {
+              case recordsByPid if !oldState.isDuplicate(recordsByPid.last) => recordsByPid.last
+            }
+            .toVector
+        }
+      }
+      if (hasForeignOffsets() && records.nonEmpty) {
+        val latestTimestamp =
+          if (records.size == 1) records.head.timestamp
+          else records.maxBy(_.timestamp).timestamp
+        updateLatestSeen(latestTimestamp)
+      }
+      if (filteredRecords.isEmpty) {
+        FutureDone
+      } else {
+        val newState = oldState.add(filteredRecords)
+
+        val slices =
+          if (filteredRecords.size == 1) Set(filteredRecords.head.slice)
+          else filteredRecords.iterator.map(_.slice).toSet
+
+        val evictedNewState = slices.foldLeft(newState) {
+          case (s, slice) => s.evict(slice, settings.timeWindow)
+        }
+
+        val offsetInserts = dao.insertTimestampOffsetInTx(conn, filteredRecords)
+
+        offsetInserts.map { _ =>
+          if (state.compareAndSet(oldState, evictedNewState)) {
+            slices.foreach(s => triggerDeletionPerSlice.put(s, TRUE))
+            cleanupInflight(evictedNewState)
+          } else { // concurrent update
+            if (canBeConcurrent) saveTimestampOffsetInTx(conn, records, canBeConcurrent) // CAS retry
+            else throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")
           }
-          .toVector
-      }
-    }
-    if (hasForeignOffsets() && records.nonEmpty) {
-      val latestTimestamp =
-        if (records.size == 1) records.head.timestamp
-        else records.maxBy(_.timestamp).timestamp
-      updateLatestSeen(latestTimestamp)
-    }
-    if (filteredRecords.isEmpty) {
-      FutureDone
-    } else {
-      val newState = oldState.add(filteredRecords)
-
-      val slices =
-        if (filteredRecords.size == 1) Set(filteredRecords.head.slice)
-        else filteredRecords.iterator.map(_.slice).toSet
-
-      val evictedNewState = slices.foldLeft(newState) {
-        case (s, slice) => s.evict(slice, settings.timeWindow)
-      }
-
-      val offsetInserts = dao.insertTimestampOffsetInTx(conn, filteredRecords)
-
-      offsetInserts.map { _ =>
-        if (state.compareAndSet(oldState, evictedNewState)) {
-          slices.foreach(s => triggerDeletionPerSlice.put(s, TRUE))
-          cleanupInflight(evictedNewState)
-        } else
-          throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")
-        Done
+          Done
+        }
       }
     }
   }
+
   @tailrec private def cleanupInflight(newState: State): Unit = {
     val currentInflight = getInflight()
     val newInflight =
@@ -631,95 +684,91 @@ private[projection] class R2dbcOffsetStore(
     import Validation._
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
-    val currentState = getState()
 
-    val duplicate = currentState.isDuplicate(recordWithOffset.record)
+    load(pid).flatMap { currentState =>
+      val duplicate = currentState.isDuplicate(recordWithOffset.record)
 
-    if (duplicate) {
-      logger.trace("{} Filtering out duplicate sequence number [{}] for pid [{}]", logPrefix, seqNr, pid)
-      // also move latest seen forward, for adopting foreign offsets on replay of duplicates
-      if (hasForeignOffsets()) updateLatestSeen(recordWithOffset.offset.timestamp)
-      FutureDuplicate
-    } else if (recordWithOffset.strictSeqNr) {
-      // strictSeqNr == true is for event sourced
-      val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
+      if (duplicate) {
+        logger.trace("{} Filtering out duplicate sequence number [{}] for pid [{}]", logPrefix, seqNr, pid)
+        // also move latest seen forward, for adopting foreign offsets on replay of duplicates
+        if (hasForeignOffsets()) updateLatestSeen(recordWithOffset.offset.timestamp)
+        FutureDuplicate
+      } else if (recordWithOffset.strictSeqNr) {
+        // strictSeqNr == true is for event sourced
+        val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
 
-      def logUnexpected(): Unit = {
-        if (recordWithOffset.fromPubSub)
-          logger.debug(
-            "{} Rejecting pub-sub envelope, unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
-            logPrefix,
-            seqNr,
-            pid,
-            prevSeqNr,
-            recordWithOffset.offset)
-        else if (!recordWithOffset.fromBacktracking)
-          logger.debug(
-            "{] Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
-            logPrefix,
-            seqNr,
-            pid,
-            prevSeqNr,
-            recordWithOffset.offset)
-        else
-          logger.warn(
-            "{} Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
-            logPrefix,
-            seqNr,
-            pid,
-            prevSeqNr,
-            recordWithOffset.offset)
-      }
+        def logUnexpected(): Unit = {
+          if (recordWithOffset.fromPubSub)
+            logger.debug(
+              "{} Rejecting pub-sub envelope, unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+              logPrefix,
+              seqNr,
+              pid,
+              prevSeqNr,
+              recordWithOffset.offset)
+          else if (!recordWithOffset.fromBacktracking)
+            logger.debug(
+              "{} Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+              logPrefix,
+              seqNr,
+              pid,
+              prevSeqNr,
+              recordWithOffset.offset)
+          else
+            logger.warn(
+              "{} Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+              logPrefix,
+              seqNr,
+              pid,
+              prevSeqNr,
+              recordWithOffset.offset)
+        }
 
-      if (prevSeqNr > 0) {
-        // expecting seqNr to be +1 of previously known
-        val ok = seqNr == prevSeqNr + 1
+        if (prevSeqNr > 0) {
+          // expecting seqNr to be +1 of previously known
+          val ok = seqNr == prevSeqNr + 1
+          if (ok) {
+            FutureAccepted
+          } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
+            // currentInFlight contains those that have been processed or about to be processed in Flow,
+            // but offset not saved yet => ok to handle as duplicate
+            FutureDuplicate
+          } else if (recordWithOffset.fromSnapshot) {
+            // snapshots will mean we are starting from some arbitrary offset after last seen offset
+            FutureAccepted
+          } else if (!recordWithOffset.fromBacktracking) {
+            logUnexpected()
+            FutureRejectedSeqNr
+          } else {
+            logUnexpected()
+            // This will result in projection restart (with normal configuration)
+            FutureRejectedBacktrackingSeqNr
+          }
+        } else if (seqNr == 1) {
+          // always accept first event if no other event for that pid has been seen
+          FutureAccepted
+        } else if (recordWithOffset.fromSnapshot) {
+          // always accept starting from snapshots when there was no previous event seen
+          FutureAccepted
+        } else {
+          validateEventTimestamp(currentState, recordWithOffset)
+        }
+      } else {
+        // strictSeqNr == false is for durable state where each revision might not be visible
+        val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
+        val ok = seqNr > prevSeqNr
+
         if (ok) {
           FutureAccepted
-        } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
-          // currentInFlight contains those that have been processed or about to be processed in Flow,
-          // but offset not saved yet => ok to handle as duplicate
-          FutureDuplicate
-        } else if (recordWithOffset.fromSnapshot) {
-          // snapshots will mean we are starting from some arbitrary offset after last seen offset
-          FutureAccepted
-        } else if (!recordWithOffset.fromBacktracking) {
-          logUnexpected()
-          FutureRejectedSeqNr
         } else {
-          logUnexpected()
-          // This will result in projection restart (with normal configuration)
-          FutureRejectedBacktrackingSeqNr
+          logger.trace(
+            "{} Filtering out earlier revision [{}] for pid [{}], previous revision [{}]",
+            logPrefix,
+            seqNr,
+            pid,
+            prevSeqNr)
+          FutureDuplicate
         }
-      } else if (seqNr == 1) {
-        // always accept first event if no other event for that pid has been seen
-        FutureAccepted
-      } else if (recordWithOffset.fromSnapshot) {
-        // always accept starting from snapshots when there was no previous event seen
-        FutureAccepted
-      } else {
-        dao.readTimestampOffset(recordWithOffset.record.slice, pid).flatMap {
-          case Some(loadedRecord) =>
-            if (seqNr == loadedRecord.seqNr + 1)
-              FutureAccepted
-            else if (seqNr <= loadedRecord.seqNr)
-              FutureDuplicate
-            else
-              validateEventTimestamp(currentState, recordWithOffset)
-          case None =>
-            validateEventTimestamp(currentState, recordWithOffset)
-        }
-      }
-    } else {
-      // strictSeqNr == false is for durable state where each revision might not be visible
-      val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
-      val ok = seqNr > prevSeqNr
-
-      if (ok) {
-        FutureAccepted
-      } else {
-        logger.trace("{} Filtering out earlier revision [{}] for pid [{}], previous revision [{}]", logPrefix, seqNr, pid, prevSeqNr)
-        FutureDuplicate
       }
     }
   }
@@ -781,7 +830,11 @@ private[projection] class R2dbcOffsetStore(
         }
       case None =>
         // previous not found, could have been deleted
-        logger.debug("{} Accepting envelope with pid [{}], seqNr [{}], where previous event not found.", logPrefix,pid, seqNr)
+        logger.debug(
+          "{} Accepting envelope with pid [{}], seqNr [{}], where previous event not found.",
+          logPrefix,
+          pid,
+          seqNr)
         Accepted
     }
   }
@@ -863,12 +916,7 @@ private[projection] class R2dbcOffsetStore(
       }
       if (logger.isDebugEnabled)
         result.foreach { rows =>
-          logger.debug(
-            "{} Deleted [{}] timestamp offset rows, slice [{}], until [{}]",
-            logPrefix,
-            rows,
-            slice,
-            until)
+          logger.debug("{} Deleted [{}] timestamp offset rows, slice [{}], until [{}]", logPrefix, rows, slice, until)
         }
 
       result
@@ -981,11 +1029,7 @@ private[projection] class R2dbcOffsetStore(
       val result = dao.deleteNewTimestampOffsetsInTx(conn, timestamp)
       if (logger.isDebugEnabled)
         result.foreach { rows =>
-          logger.debug(
-            "{} Deleted [{}] timestamp offset rows >= [{}]",
-            logPrefix,
-            rows,
-            timestamp)
+          logger.debug("{} Deleted [{}] timestamp offset rows >= [{}]", logPrefix, rows, timestamp)
         }
 
       result
