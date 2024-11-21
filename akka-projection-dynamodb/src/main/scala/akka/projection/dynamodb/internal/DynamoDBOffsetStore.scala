@@ -391,9 +391,8 @@ private[projection] class DynamoDBOffsetStore(
           records
             .groupBy(_.pid)
             .valuesIterator
-            .collect {
-              case recordsByPid if !oldState.isDuplicate(recordsByPid.last) => recordsByPid.last
-            }
+            .map(_.maxBy(_.seqNr))
+            .filterNot(oldState.isDuplicate _)
             .toVector
         }
       }
