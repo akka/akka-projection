@@ -7,18 +7,17 @@ package akka.projection.dynamodb.internal
 import java.time.Instant
 import java.util.Collections
 import java.util.concurrent.CompletionException
-import java.util.concurrent.ThreadLocalRandom
 import java.util.{ HashMap => JHashMap }
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
+import akka.pattern.BackoffSupervisor
 import akka.pattern.after
 import akka.persistence.dynamodb.internal.InstantFactory
 import akka.persistence.query.TimestampOffset
@@ -122,42 +121,39 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
 
   implicit def sys: ActorSystem[_] = system
 
-  def writeWholeBatch(batchReq: BatchWriteItemRequest): Future[List[BatchWriteItemResponse]] =
-    writeWholeBatch(batchReq, settings.batchMaxRetries, settings.batchMinBackoff)
-
-  def writeWholeBatch(
-      batchReq: BatchWriteItemRequest,
-      maxRetries: Int,
-      backoff: FiniteDuration): Future[List[BatchWriteItemResponse]] = {
+  def writeBatchWithRetries(batchReq: BatchWriteItemRequest, attempt: Int = 1): Future[List[BatchWriteItemResponse]] = {
     val result = client.batchWriteItem(batchReq).asScala
 
     result.flatMap { response =>
-      val unprocessed =
-        if (response.hasUnprocessedItems && !response.unprocessedItems.isEmpty) Some(response.unprocessedItems)
-        else None
+      if (response.hasUnprocessedItems && !response.unprocessedItems.isEmpty) {
+        if (attempt > settings.retrySettings.maxRetries) {
+          Future.failed(new BatchWriteFailed(response))
+        } else { // retry after exponential backoff
+          val unprocessed = response.unprocessedItems
 
-      unprocessed.fold(Future.successful(List(response))) { u =>
-        if (log.isDebugEnabled) {
-          val count = u.asScala.valuesIterator.map(_.size).sum
-          log.debug(
-            "Not all writes in batch were applied: [{}] unapplied writes, [{}] retries remaining",
-            count,
-            maxRetries)
-        }
-
-        if (maxRetries < 1) Future.failed(new BatchWriteFailed(response))
-        else {
-          val newReq = batchReq.toBuilder.requestItems(u).build()
-          val factor = 2.0 + ThreadLocalRandom.current().nextDouble(0.3)
-          val nextDelay = {
-            val clamped = (backoff * factor).min(settings.batchMaxBackoff)
-            if (clamped.isFinite) clamped.toMillis.millis else settings.batchMaxBackoff
+          if (log.isDebugEnabled) {
+            val count = unprocessed.asScala.valuesIterator.map(_.size).sum
+            log.debug(
+              "Not all writes in batch were applied, retrying: [{}] unapplied writes, [{}/{}] retries",
+              count,
+              attempt,
+              settings.retrySettings.maxRetries)
           }
 
-          after(backoff) {
-            writeWholeBatch(newReq, maxRetries - 1, nextDelay)
+          val newReq = batchReq.toBuilder.requestItems(unprocessed).build()
+          val nextAttempt = attempt + 1
+          val delay = BackoffSupervisor.calculateDelay(
+            nextAttempt,
+            settings.retrySettings.minBackoff,
+            settings.retrySettings.maxBackoff,
+            settings.retrySettings.randomFactor)
+
+          after(delay) {
+            writeBatchWithRetries(newReq, nextAttempt)
           }.map { responses => response :: responses }(ExecutionContext.parasitic)
         }
+      } else {
+        Future.successful(List(response))
       }
     }
   }
@@ -212,7 +208,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
         .returnConsumedCapacity(ReturnConsumedCapacity.TOTAL)
         .build()
 
-      val result = writeWholeBatch(req)
+      val result = writeBatchWithRetries(req)
 
       if (log.isDebugEnabled()) {
         result.foreach { responses =>
@@ -285,7 +281,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
         .returnConsumedCapacity(ReturnConsumedCapacity.TOTAL)
         .build()
 
-      val result = writeWholeBatch(req)
+      val result = writeBatchWithRetries(req)
 
       if (log.isDebugEnabled()) {
         result.foreach { responses =>
@@ -498,7 +494,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
         .returnConsumedCapacity(ReturnConsumedCapacity.TOTAL)
         .build()
 
-      val result = writeWholeBatch(req)
+      val result = writeBatchWithRetries(req)
 
       if (log.isDebugEnabled()) {
         result.foreach { responses =>
