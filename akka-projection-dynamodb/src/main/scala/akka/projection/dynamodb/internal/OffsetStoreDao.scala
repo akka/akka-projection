@@ -137,6 +137,14 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
         else None
 
       unprocessed.fold(Future.successful(List(response))) { u =>
+        if (log.isDebugEnabled) {
+          val count = u.asScala.valuesIterator.map(_.size).sum
+          log.debug(
+            "Not all writes in batch were applied: [{}] unapplied writes, [{}] retries remaining",
+            count,
+            maxRetries)
+        }
+
         if (maxRetries < 1) Future.failed(new BatchWriteFailed(response))
         else {
           val newReq = batchReq.toBuilder.requestItems(u).build()
@@ -228,7 +236,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
             log.warn(
               "Failed to write latest timestamps for [{}] slices: [{}]",
               unprocessedSlices.size,
-              unprocessedSlices)
+              unprocessedSlices.mkString(", "))
 
             failed.asInstanceOf[Future[Done]] // safe, actually contains Nothing
 
