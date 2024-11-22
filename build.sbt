@@ -211,15 +211,15 @@ lazy val commonParadoxProperties = Def.settings(
   Compile / paradoxProperties ++= Map(
       // Akka
       "extref.akka.base_url" -> s"https://doc.akka.io/libraries/akka-core/${Dependencies.Versions.AkkaVersionInDocs}/%s",
-      "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.Versions.AkkaVersionInDocs}/",
-      "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${Dependencies.Versions.AkkaVersionInDocs}/",
+      "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka-core/${Dependencies.Versions.AkkaVersionInDocs}/",
+      "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka-core/${Dependencies.Versions.AkkaVersionInDocs}/",
       "javadoc.akka.link_style" -> "direct",
       // Alpakka
-      "extref.alpakka.base_url" -> s"https://doc.akka.io/docs/alpakka/${Dependencies.Versions.AlpakkaVersionInDocs}/%s",
+      "extref.alpakka.base_url" -> s"https://doc.akka.io/libraries/alpakka/${Dependencies.Versions.AlpakkaVersionInDocs}/%s",
       "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.Versions.AlpakkaVersionInDocs}/",
       "javadoc.akka.stream.alpakka.base_url" -> "",
       // Alpakka Kafka
-      "extref.alpakka-kafka.base_url" -> s"https://doc.akka.io/docs/alpakka-kafka/${Dependencies.Versions.AlpakkaKafkaVersionInDocs}/%s",
+      "extref.alpakka-kafka.base_url" -> s"https://doc.akka.io/libraries/alpakka-kafka/${Dependencies.Versions.AlpakkaKafkaVersionInDocs}/%s",
       "scaladoc.akka.kafka.base_url" -> s"https://doc.akka.io/api/alpakka-kafka/${Dependencies.Versions.AlpakkaKafkaVersionInDocs}/",
       "javadoc.akka.kafka.base_url" -> "",
       // Akka gRPC
@@ -231,7 +231,7 @@ lazy val commonParadoxProperties = Def.settings(
       // Akka Persistence DynamoDB plugin
       "extref.akka-persistence-dynamodb.base_url" -> s"https://doc.akka.io/libraries/akka-persistence-dynamodb/${Dependencies.Versions.AkkaPersistenceDynamodbVersionInDocs}/%s",
       // Akka Guide
-      "extref.akka-guide.base_url" -> "https://doc.akka.io/guide/microservices-tutorial/",
+      "extref.akka-guide.base_url" -> "https://doc.akka.io/libraries/guide/microservices-tutorial/",
       // Java
       "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
       // Scala
@@ -239,7 +239,7 @@ lazy val commonParadoxProperties = Def.settings(
       "scaladoc.akka.projection.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
       "javadoc.akka.projection.base_url" -> "", // no Javadoc is published
       // Misc
-      "extref.platform-guide.base_url" -> "https://doc.akka.io/guide/%s"))
+      "extref.platform-guide.base_url" -> "https://doc.akka.io/libraries/guide/%s"))
 
 lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, SitePreviewPlugin, PreprocessPlugin, PublishRsyncPlugin)

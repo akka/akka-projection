@@ -1,6 +1,6 @@
 # Messages from and to Kafka
 
-A typical source for Projections is messages from Kafka. Akka Projections supports integration with Kafka using [Alpakka Kafka](https://doc.akka.io/docs/alpakka-kafka/current/).
+A typical source for Projections is messages from Kafka. Akka Projections supports integration with Kafka using @extref:[Alpakka Kafka](alpakka-kafka:).
 
 The @apidoc[KafkaSourceProvider$] uses consumer group assignments from Kafka and can resume from offsets stored in a database.
 
@@ -63,7 +63,7 @@ Scala
 Java
 :  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #imports #sourceProvider }
 
-Please consult the [Alpakka Kafka documentation](https://doc.akka.io/docs/alpakka-kafka/current/consumer.html) for
+Please consult the @extref:[Alpakka Kafka documentation](alpakka-kafka:consumer.html) for
 specifics around the `ConsumerSettings`. The `KafkaSourceProvider` is using `Consumer.plainPartitionedManualOffsetSource`.
 
 The `Projection` can then be defined as:
@@ -94,13 +94,13 @@ Java
 
 The `KafkaSourceProvider` described above stores the Kafka offsets in a database. The main advantage of storing the offsets in a database is that exactly-once processing semantics can be achieved if the target database operations of the projection can be run in the same transaction as the storage of the offset.
 
-However, there is a caveat when chosing for `exactly-once`. When the Kafka Consumer Group rebalance occurs it's possible that some messages from a revoked partitions are still in-flight and have not yet been committed to the offset store. Projections will attempt to filter out such messages, but it's not possible to guarantee it all the time.
+However, there is a caveat when choosing for `exactly-once`. When the Kafka Consumer Group rebalance occurs it's possible that some messages from a revoked partitions are still in-flight and have not yet been committed to the offset store. Projections will attempt to filter out such messages, but it's not possible to guarantee it all the time.
 
 To mitigate that risk, you can increase the value of `akka.projection.kafka.read-offset-delay` (defaults to 500ms). This delay adds a buffer of time between when the Kafka Source Provider starts up, or when it's assigned a new partition, to retrieve the map of partitions to offsets to give any projections running in parallel a chance to drain in-flight messages.
 
 ## Committing offset in Kafka
 
-When using the approach of committing the offsets back to Kafka the [Alpakka Kafka comittableSource](https://doc.akka.io/docs/alpakka-kafka/current/consumer.html) can be used, and Akka Projections is not needed for that usage.
+When using the approach of committing the offsets back to Kafka the @extref:[Alpakka Kafka comittableSource](alpakka-kafka:consumer.html) can be used, and Akka Projections is not needed for that usage.
 
 ## Sending to Kafka
 
@@ -124,7 +124,7 @@ Scala
 Java
 :  @@snip [KafkaDocExample.java](/examples/src/test/java/jdocs/kafka/KafkaDocExample.java) { #imports-producer #sendProducer }
 
-Please consult the [Alpakka Kafka documentation](https://doc.akka.io/docs/alpakka-kafka/current/producer.html) for
+Please consult the @extrefL[Alpakka Kafka documentation](alpakka-kafka:producer.html) for
 specifics around the `ProducerSettings` and `SendProducer`.
 
 The `Projection` is defined as:

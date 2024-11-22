@@ -1,6 +1,6 @@
 # Changes from Durable State
 
-A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in [Akka Persistence](https://doc.akka.io/libraries/akka-core/current/typed/durable-state/persistence.html). Durable state changes can be consumed in a Projection with
+A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in @extref:[Akka Persistence](akka:typed/durable-state/persistence.html). Durable state changes can be consumed in a Projection with
 `changesByTag`, `changesBySlices` or `eventsBySlices` queries.
 
 Note that NOT all changes that occur are guaranteed to be emitted, calls to these methods only guarantee that eventually, the most recent
