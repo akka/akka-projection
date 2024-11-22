@@ -123,19 +123,19 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
 
   private def writeBatchWithRetries(
       batchReq: BatchWriteItemRequest,
-      attempt: Int = 1): Future[List[BatchWriteItemResponse]] = {
+      retries: Int = 0): Future[List[BatchWriteItemResponse]] = {
     val result = client.batchWriteItem(batchReq).asScala
 
     result.flatMap { response =>
       if (response.hasUnprocessedItems && !response.unprocessedItems.isEmpty) {
-        if (attempt > settings.retrySettings.maxRetries) {
+        if (retries >= settings.retrySettings.maxRetries) {
           Future.failed(new BatchWriteFailed(response))
         } else { // retry after exponential backoff
           val unprocessed = response.unprocessedItems
           val newReq = batchReq.toBuilder.requestItems(unprocessed).build()
-          val nextAttempt = attempt + 1
+          val nextRetry = retries + 1
           val delay = BackoffSupervisor.calculateDelay(
-            nextAttempt,
+            retries,
             settings.retrySettings.minBackoff,
             settings.retrySettings.maxBackoff,
             settings.retrySettings.randomFactor)
@@ -146,12 +146,12 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
               "Not all writes in batch were applied, retrying in [{}]: [{}] unapplied writes, [{}/{}] retries",
               delay.toCoarsest,
               count,
-              attempt,
+              nextRetry,
               settings.retrySettings.maxRetries)
           }
 
           after(delay) {
-            writeBatchWithRetries(newReq, nextAttempt)
+            writeBatchWithRetries(newReq, nextRetry)
           }.map { responses => response :: responses }(ExecutionContext.parasitic)
         }
       } else {
