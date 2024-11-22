@@ -7,16 +7,19 @@ package akka.projection.dynamodb.internal
 import java.time.Instant
 import java.util.Collections
 import java.util.concurrent.CompletionException
+import java.util.concurrent.ThreadLocalRandom
 import java.util.{ HashMap => JHashMap }
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
+import akka.pattern.after
 import akka.persistence.dynamodb.internal.InstantFactory
 import akka.persistence.query.TimestampOffset
 import akka.projection.ProjectionId
@@ -36,7 +39,6 @@ import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
-import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
 
 /**
  * INTERNAL API
@@ -61,6 +63,8 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
     val timestampBySlicePid = AttributeValue.fromS("_")
     val managementStateBySlicePid = AttributeValue.fromS("_mgmt")
   }
+
+  final class BatchWriteFailed(val lastResponse: BatchWriteItemResponse) extends Exception
 }
 
 /**
@@ -72,6 +76,7 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
     projectionId: ProjectionId,
     client: DynamoDbAsyncClient) {
   import OffsetStoreDao.log
+  import OffsetStoreDao.BatchWriteFailed
   import OffsetStoreDao.MaxBatchSize
   import OffsetStoreDao.MaxTransactItems
   import system.executionContext
@@ -115,24 +120,36 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
       }(ExecutionContext.parasitic)
   }
 
+  implicit def sys: ActorSystem[_] = system
+
+  def writeWholeBatch(batchReq: BatchWriteItemRequest): Future[List[BatchWriteItemResponse]] =
+    writeWholeBatch(batchReq, settings.batchMaxRetries, settings.batchMinBackoff)
+
   def writeWholeBatch(
       batchReq: BatchWriteItemRequest,
-      maxRetriesOfUnprocessed: Int = 3): Future[List[BatchWriteItemResponse]] = {
+      maxRetries: Int,
+      backoff: FiniteDuration): Future[List[BatchWriteItemResponse]] = {
     val result = client.batchWriteItem(batchReq).asScala
 
     result.flatMap { response =>
-      if (response.hasUnprocessedItems && maxRetriesOfUnprocessed > 0) {
-        val unprocessed = response.unprocessedItems
-        if (!unprocessed.isEmpty) {
-          val newReq = batchReq.toBuilder.requestItems(unprocessed).build()
-          writeWholeBatch(newReq, maxRetriesOfUnprocessed - 1).map { responses =>
-            response :: responses
-          }(ExecutionContext.parasitic)
-        } else Future.successful(List(response))
-      } else {
-        // TODO: return a partial failure?  for now, to check that everything was written, would have to inspect the
-        // last response for unprocessed items
-        Future.successful(List(response))
+      val unprocessed =
+        if (response.hasUnprocessedItems && !response.unprocessedItems.isEmpty) Some(response.unprocessedItems)
+        else None
+
+      unprocessed.fold(Future.successful(List(response))) { u =>
+        if (maxRetries < 1) Future.failed(new BatchWriteFailed(response))
+        else {
+          val newReq = batchReq.toBuilder.requestItems(u).build()
+          val factor = 2.0 + ThreadLocalRandom.current().nextDouble(0.3)
+          val nextDelay = {
+            val clamped = (backoff * factor).min(settings.batchMaxBackoff)
+            if (clamped.isFinite) clamped.toMillis.millis else settings.batchMaxBackoff
+          }
+
+          after(backoff) {
+            writeWholeBatch(newReq, maxRetries - 1, nextDelay)
+          }.map { responses => response :: responses }(ExecutionContext.parasitic)
+        }
       }
     }
   }
@@ -198,24 +215,26 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
         }
       }
       result
-        .flatMap { responses =>
-          val lastResponse = responses.last
-          if (lastResponse.hasUnprocessedItems && !lastResponse.unprocessedItems.isEmpty) {
-            val unprocessedSliceItems =
-              lastResponse.unprocessedItems.get(settings.timestampOffsetTable).asScala.toVector
-            val unprocessedSlices = unprocessedSliceItems.map(_.putRequest.item.get(NameSlice).s)
+        .map(_ => Done)(ExecutionContext.parasitic)
+        .recoverWith {
+          case failed: BatchWriteFailed =>
+            val unprocessedSliceItems = failed.lastResponse.unprocessedItems
+              .get(settings.timestampOffsetTable)
+              .asScala
+              .toVector
+              .map(_.putRequest.item)
+
+            val unprocessedSlices = unprocessedSliceItems.map(_.get(NameSlice).s)
             log.warn(
               "Failed to write latest timestamps for [{}] slices: [{}]",
               unprocessedSlices.size,
               unprocessedSlices)
 
-            Future.failed(new RuntimeException("Failed to save timestamps for all slices"))
-          } else FutureDone
-        }
-        .recoverWith {
+            failed.asInstanceOf[Future[Done]] // safe, actually contains Nothing
+
           case c: CompletionException =>
             Future.failed(c.getCause)
-        }(ExecutionContext.parasitic)
+        }
     }
 
     if (offsetsBySlice.size <= MaxBatchSize) {
@@ -269,22 +288,32 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
         }
       }
 
-      result.flatMap { responses =>
-        val lastResponse = responses.last
-        if (lastResponse.hasUnprocessedItems && !lastResponse.unprocessedItems.isEmpty) {
-          val unprocessedSeqNrItems =
-            lastResponse.unprocessedItems.get(settings.timestampOffsetTable).asScala.toVector.map(_.putRequest.item)
-          val unprocessedSeqNrs = unprocessedSeqNrItems.map { item =>
-            import OffsetStoreDao.OffsetStoreAttributes._
-            s"${item.get(NameSlice).s}: ${item.get(Pid).s}"
-          }
-          log.warn(
-            "Failed to write sequence numbers for [{}] persistence IDs: [{}]",
-            unprocessedSeqNrs.size,
-            unprocessedSeqNrs.mkString(", "))
-          Future.failed(new RuntimeException("Failed to save sequence numbers for all persistence IDs"))
-        } else FutureDone
-      }
+      result
+        .map(_ => Done)(ExecutionContext.parasitic)
+        .recoverWith {
+          case failed: BatchWriteFailed =>
+            val unprocessedSeqNrItems =
+              failed.lastResponse.unprocessedItems
+                .get(settings.timestampOffsetTable)
+                .asScala
+                .toVector
+                .map(_.putRequest.item)
+
+            val unprocessedSeqNrs = unprocessedSeqNrItems.map { item =>
+              import OffsetStoreDao.OffsetStoreAttributes._
+              s"${item.get(NameSlice).s}: ${item.get(Pid).s}"
+            }
+
+            log.warn(
+              "Failed to write sequence numbers for [{}] persistence IDs: [{}]",
+              unprocessedSeqNrs.size,
+              unprocessedSeqNrs.mkString(", "))
+
+            failed.asInstanceOf[Future[Done]]
+
+          case c: CompletionException =>
+            Future.failed(c.getCause)
+        }
     }
 
     if (records.size <= MaxBatchSize) {
@@ -472,25 +501,30 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
         }
       }
       result
-        .flatMap { responses =>
-          val lastResponse = responses.last
-          if (lastResponse.hasUnprocessedItems && !lastResponse.unprocessedItems.isEmpty) {
+        .map(_ => Done)(ExecutionContext.parasitic)
+        .recoverWith {
+          case failed: BatchWriteFailed =>
             val unprocessedStateItems =
-              lastResponse.unprocessedItems.get(settings.timestampOffsetTable).asScala.toVector.map(_.putRequest.item)
+              failed.lastResponse.unprocessedItems
+                .get(settings.timestampOffsetTable)
+                .asScala
+                .toVector
+                .map(_.putRequest.item)
+
             val unprocessedStates = unprocessedStateItems.map { item =>
               s"${item.get(NameSlice).s}-${item.get(Paused).bool}"
             }
+
             log.warn(
               "Failed to write management state for [{}] slices: [{}]",
               unprocessedStates.size,
               unprocessedStates.mkString(", "))
-            Future.failed(new RuntimeException("Failed to save management state for all slices"))
-          } else FutureDone
-        }
-        .recoverWith {
+
+            failed.asInstanceOf[Future[Done]]
+
           case c: CompletionException =>
             Future.failed(c.getCause)
-        }(ExecutionContext.parasitic)
+        }
     }
 
     val sliceRange = (minSlice to maxSlice).toVector

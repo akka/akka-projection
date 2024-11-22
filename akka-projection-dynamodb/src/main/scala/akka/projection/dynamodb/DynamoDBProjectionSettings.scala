@@ -46,7 +46,10 @@ object DynamoDBProjectionSettings {
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
       offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
-      timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")))
+      timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")),
+      batchMaxRetries = config.getInt("offset-store.retries.max-retries"),
+      batchMinBackoff = config.getDuration("offset-store.retries.min-backoff").toScala,
+      batchMaxBackoff = config.getDuration("offset-store.retries.max-backoff").toScala)
   }
 
   /**
@@ -68,7 +71,10 @@ final class DynamoDBProjectionSettings private (
     val warnAboutFilteredEventsInFlow: Boolean,
     val offsetBatchSize: Int,
     val offsetSliceReadParallelism: Int,
-    val timeToLiveSettings: TimeToLiveSettings) {
+    val timeToLiveSettings: TimeToLiveSettings,
+    val batchMaxRetries: Int,
+    val batchMinBackoff: FiniteDuration,
+    val batchMaxBackoff: FiniteDuration) {
 
   def withTimestampOffsetTable(timestampOffsetTable: String): DynamoDBProjectionSettings =
     copy(timestampOffsetTable = timestampOffsetTable)
@@ -106,6 +112,21 @@ final class DynamoDBProjectionSettings private (
   def withTimeToLiveSettings(timeToLiveSettings: TimeToLiveSettings): DynamoDBProjectionSettings =
     copy(timeToLiveSettings = timeToLiveSettings)
 
+  def withBatchRetry(
+      maxRetries: Int,
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration): DynamoDBProjectionSettings =
+    copy(batchMaxRetries = maxRetries, batchMinBackoff = minBackoff, batchMaxBackoff = maxBackoff)
+
+  def withBatchMaxRetries(batchMaxRetries: Int): DynamoDBProjectionSettings =
+    copy(batchMaxRetries = batchMaxRetries)
+
+  def withBatchMinBackoff(batchMinBackoff: FiniteDuration): DynamoDBProjectionSettings =
+    copy(batchMinBackoff = batchMinBackoff)
+
+  def withBatchMaxBackoff(batchMaxBackoff: FiniteDuration): DynamoDBProjectionSettings =
+    copy(batchMaxBackoff = batchMaxBackoff)
+
   @nowarn("msg=deprecated")
   private def copy(
       timestampOffsetTable: String = timestampOffsetTable,
@@ -114,7 +135,10 @@ final class DynamoDBProjectionSettings private (
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
       offsetBatchSize: Int = offsetBatchSize,
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
-      timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings) =
+      timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings,
+      batchMaxRetries: Int = batchMaxRetries,
+      batchMinBackoff: FiniteDuration = batchMinBackoff,
+      batchMaxBackoff: FiniteDuration = batchMaxBackoff) =
     new DynamoDBProjectionSettings(
       timestampOffsetTable,
       useClient,
@@ -124,7 +148,10 @@ final class DynamoDBProjectionSettings private (
       warnAboutFilteredEventsInFlow,
       offsetBatchSize,
       offsetSliceReadParallelism,
-      timeToLiveSettings)
+      timeToLiveSettings,
+      batchMaxRetries,
+      batchMinBackoff,
+      batchMaxBackoff)
 
   override def toString =
     s"DynamoDBProjectionSettings($timestampOffsetTable, $useClient, $timeWindow, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
