@@ -236,7 +236,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
               unprocessedSlices.size,
               unprocessedSlices.mkString(", "))
 
-            failed.asInstanceOf[Future[Done]] // safe, actually contains Nothing
+            Future.failed(failed)
 
           case c: CompletionException =>
             Future.failed(c.getCause)
@@ -315,7 +315,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
               unprocessedSeqNrs.size,
               unprocessedSeqNrs.mkString(", "))
 
-            failed.asInstanceOf[Future[Done]]
+            Future.failed(failed)
 
           case c: CompletionException =>
             Future.failed(c.getCause)
@@ -526,7 +526,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
               unprocessedStates.size,
               unprocessedStates.mkString(", "))
 
-            failed.asInstanceOf[Future[Done]]
+            Future.failed(failed)
 
           case c: CompletionException =>
             Future.failed(c.getCause)
