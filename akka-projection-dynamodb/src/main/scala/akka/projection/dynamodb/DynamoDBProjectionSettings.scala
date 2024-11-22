@@ -41,6 +41,7 @@ object DynamoDBProjectionSettings {
       timestampOffsetTable = config.getString("offset-store.timestamp-offset-table"),
       useClient = config.getString("use-client"),
       timeWindow = config.getDuration("offset-store.time-window"),
+      backtrackingWindow = config.getDuration("offset-store.backtracking-window"),
       keepNumberOfEntries = 0,
       evictInterval = JDuration.ZERO,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
@@ -62,6 +63,7 @@ final class DynamoDBProjectionSettings private (
     val timestampOffsetTable: String,
     val useClient: String,
     val timeWindow: JDuration,
+    val backtrackingWindow: JDuration,
     @deprecated("Not used, evict is only based on time window", "1.6.2")
     val keepNumberOfEntries: Int,
     @deprecated("Not used, evict is not periodic", "1.6.2")
@@ -83,6 +85,12 @@ final class DynamoDBProjectionSettings private (
 
   def withTimeWindow(timeWindow: JDuration): DynamoDBProjectionSettings =
     copy(timeWindow = timeWindow)
+
+  def withBacktrackingWindow(backtrackingWindow: FiniteDuration): DynamoDBProjectionSettings =
+    copy(backtrackingWindow = backtrackingWindow.toJava)
+
+  def withBacktrackingWindow(backtrackingWindow: JDuration): DynamoDBProjectionSettings =
+    copy(backtrackingWindow = backtrackingWindow)
 
   @deprecated("Not used, evict is only based on time window", "1.6.2")
   def withKeepNumberOfEntries(keepNumberOfEntries: Int): DynamoDBProjectionSettings =
@@ -116,6 +124,7 @@ final class DynamoDBProjectionSettings private (
       timestampOffsetTable: String = timestampOffsetTable,
       useClient: String = useClient,
       timeWindow: JDuration = timeWindow,
+      backtrackingWindow: JDuration = backtrackingWindow,
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
       offsetBatchSize: Int = offsetBatchSize,
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
@@ -125,6 +134,7 @@ final class DynamoDBProjectionSettings private (
       timestampOffsetTable,
       useClient,
       timeWindow,
+      backtrackingWindow,
       keepNumberOfEntries,
       evictInterval,
       warnAboutFilteredEventsInFlow,
@@ -134,7 +144,7 @@ final class DynamoDBProjectionSettings private (
       retrySettings)
 
   override def toString =
-    s"DynamoDBProjectionSettings($timestampOffsetTable, $useClient, $timeWindow, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
+    s"DynamoDBProjectionSettings($timestampOffsetTable, $useClient, $timeWindow, $backtrackingWindow, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
 }
 
 object TimeToLiveSettings {

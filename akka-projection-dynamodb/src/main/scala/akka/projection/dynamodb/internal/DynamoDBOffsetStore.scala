@@ -4,6 +4,7 @@
 
 package akka.projection.dynamodb.internal
 
+import java.time.Clock
 import java.time.Instant
 import java.time.{ Duration => JDuration }
 import java.util.concurrent.atomic.AtomicReference
@@ -73,18 +74,21 @@ private[projection] object DynamoDBOffsetStore {
       fromSnapshot: Boolean)
 
   object State {
-    val empty: State = State(Map.empty, Map.empty, Map.empty)
+    val empty: State = State(Map.empty, Map.empty, Map.empty, Map.empty)
 
-    def apply(offsetBySlice: Map[Int, TimestampOffset]): State =
-      if (offsetBySlice.isEmpty) empty
-      else new State(Map.empty, Map.empty, offsetBySlice)
+    def apply(offsetBySlice: Map[Int, TimestampOffset], startTimestampBySlice: Map[Int, Instant]): State =
+      if (offsetBySlice.isEmpty && startTimestampBySlice.isEmpty)
+        empty
+      else
+        new State(Map.empty, Map.empty, offsetBySlice, startTimestampBySlice)
 
   }
 
   final case class State(
       byPid: Map[Pid, Record],
       bySliceSorted: Map[Int, TreeSet[Record]],
-      offsetBySlice: Map[Int, TimestampOffset]) {
+      offsetBySlice: Map[Int, TimestampOffset],
+      startTimestampBySlice: Map[Int, Instant]) {
 
     def size: Int = byPid.size
 
@@ -191,7 +195,8 @@ private[projection] class DynamoDBOffsetStore(
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
     settings: DynamoDBProjectionSettings,
-    client: DynamoDbAsyncClient) {
+    client: DynamoDbAsyncClient,
+    clock: Clock = Clock.systemUTC()) {
 
   import DynamoDBOffsetStore._
 
@@ -282,7 +287,13 @@ private[projection] class DynamoDBOffsetStore(
         })
 
     offsetBySliceFut.map { offsetBySlice =>
-      val newState = State(offsetBySlice)
+      val now = clock.instant()
+      val startTimestampBySlice =
+        (minSlice to maxSlice).map { slice =>
+          slice -> offsetBySlice.get(slice).map(_.timestamp).getOrElse(now)
+        }.toMap
+
+      val newState = State(offsetBySlice, startTimestampBySlice)
 
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
@@ -560,32 +571,6 @@ private[projection] class DynamoDBOffsetStore(
               recordWithOffset.offset)
         }
 
-        def logUnknown(): Unit = {
-          if (recordWithOffset.fromPubSub) {
-            logger.debug(
-              "{} Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
-              logPrefix,
-              seqNr,
-              pid,
-              recordWithOffset.offset)
-          } else if (!recordWithOffset.fromBacktracking) {
-            // This may happen rather frequently when using `publish-events`, after reconnecting and such.
-            logger.debug(
-              "{} Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
-              logPrefix,
-              seqNr,
-              pid,
-              recordWithOffset.offset)
-          } else {
-            logger.warn(
-              "{} Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}",
-              logPrefix,
-              seqNr,
-              pid,
-              recordWithOffset.offset)
-          }
-        }
-
         if (prevSeqNr > 0) {
           // expecting seqNr to be +1 of previously known
           val ok = seqNr == prevSeqNr + 1
@@ -613,35 +598,7 @@ private[projection] class DynamoDBOffsetStore(
           // always accept starting from snapshots when there was no previous event seen
           FutureAccepted
         } else {
-          // Haven't see seen this pid within the time window. Since events can be missed
-          // when read at the tail we will only accept it if the event with previous seqNr has timestamp
-          // before the time window of the offset store.
-          // Backtracking will emit missed event again.
-          timestampOf(pid, seqNr - 1).map {
-            case Some(previousTimestamp) =>
-              val before = currentState.latestTimestamp.minus(settings.timeWindow)
-              if (previousTimestamp.isBefore(before)) {
-                logger.debug(
-                  "{} Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
-                  "is before time window [{}].",
-                  logPrefix,
-                  pid,
-                  seqNr,
-                  previousTimestamp,
-                  before)
-                Accepted
-              } else if (!recordWithOffset.fromBacktracking) {
-                logUnknown()
-                RejectedSeqNr
-              } else {
-                logUnknown()
-                // This will result in projection restart (with normal configuration)
-                RejectedBacktrackingSeqNr
-              }
-            case None =>
-              // previous not found, could have been deleted
-              Accepted
-          }
+          validateEventTimestamp(currentState, recordWithOffset)
         }
       } else {
         // strictSeqNr == false is for durable state where each revision might not be visible
@@ -660,6 +617,66 @@ private[projection] class DynamoDBOffsetStore(
           FutureDuplicate
         }
       }
+    }
+  }
+
+  private def validateEventTimestamp(currentState: State, recordWithOffset: RecordWithOffset) = {
+    import Validation._
+    val pid = recordWithOffset.record.pid
+    val seqNr = recordWithOffset.record.seqNr
+    val slice = recordWithOffset.record.slice
+
+    // Haven't see seen this pid within the time window. Since events can be missed
+    // when read at the tail we will only accept it if the event with previous seqNr has timestamp
+    // before the startTimestamp minus backtracking window
+    timestampOf(pid, seqNr - 1).map {
+      case Some(previousTimestamp) =>
+        val acceptBefore =
+          currentState.startTimestampBySlice(slice).minus(settings.backtrackingWindow)
+
+        if (previousTimestamp.isBefore(acceptBefore)) {
+          logger.debug(
+            "Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
+            "is before start timestamp [{}] minus backtracking window [{}].",
+            pid,
+            seqNr,
+            previousTimestamp,
+            currentState.startTimestampBySlice(slice),
+            settings.backtrackingWindow)
+          Accepted
+        } else if (recordWithOffset.fromPubSub) {
+          logger.debug(
+            "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
+          RejectedSeqNr
+        } else if (recordWithOffset.fromBacktracking) {
+          // This will result in projection restart (with normal configuration)
+          logger.warn(
+            "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, where previous event timestamp [{}] " +
+            "is after start timestamp [{}] minus backtracking window [{}].",
+            seqNr,
+            pid,
+            recordWithOffset.offset,
+            previousTimestamp,
+            currentState.startTimestampBySlice(slice),
+            settings.backtrackingWindow)
+          RejectedBacktrackingSeqNr
+        } else {
+          // This may happen rather frequently when using `publish-events`, after reconnecting and such.
+          logger.debug(
+            "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
+          // Backtracking will emit missed event again.
+          RejectedSeqNr
+        }
+      case None =>
+        // previous not found, could have been deleted
+        logger.debug("Accepting envelope with pid [{}], seqNr [{}], where previous event not found.", pid, seqNr)
+        Accepted
     }
   }
 
