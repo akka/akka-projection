@@ -123,10 +123,12 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
     result.flatMap { response =>
       if (response.hasUnprocessedItems && maxRetriesOfUnprocessed > 0) {
         val unprocessed = response.unprocessedItems
-        val newReq = batchReq.toBuilder.requestItems(unprocessed).build()
-        writeWholeBatch(newReq, maxRetriesOfUnprocessed - 1).map { responses =>
-          response :: responses
-        }(ExecutionContext.parasitic)
+        if (!unprocessed.isEmpty) {
+          val newReq = batchReq.toBuilder.requestItems(unprocessed).build()
+          writeWholeBatch(newReq, maxRetriesOfUnprocessed - 1).map { responses =>
+            response :: responses
+          }(ExecutionContext.parasitic)
+        } else Future.successful(List(response))
       } else {
         // TODO: return a partial failure?  for now, to check that everything was written, would have to inspect the
         // last response for unprocessed items
