@@ -46,7 +46,8 @@ object DynamoDBProjectionSettings {
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
       offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
-      timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")))
+      timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")),
+      retrySettings = RetrySettings(config.getConfig("offset-store.retries")))
   }
 
   /**
@@ -68,7 +69,8 @@ final class DynamoDBProjectionSettings private (
     val warnAboutFilteredEventsInFlow: Boolean,
     val offsetBatchSize: Int,
     val offsetSliceReadParallelism: Int,
-    val timeToLiveSettings: TimeToLiveSettings) {
+    val timeToLiveSettings: TimeToLiveSettings,
+    val retrySettings: RetrySettings) {
 
   def withTimestampOffsetTable(timestampOffsetTable: String): DynamoDBProjectionSettings =
     copy(timestampOffsetTable = timestampOffsetTable)
@@ -106,6 +108,9 @@ final class DynamoDBProjectionSettings private (
   def withTimeToLiveSettings(timeToLiveSettings: TimeToLiveSettings): DynamoDBProjectionSettings =
     copy(timeToLiveSettings = timeToLiveSettings)
 
+  def withRetrySettings(retrySettings: RetrySettings): DynamoDBProjectionSettings =
+    copy(retrySettings = retrySettings)
+
   @nowarn("msg=deprecated")
   private def copy(
       timestampOffsetTable: String = timestampOffsetTable,
@@ -114,7 +119,8 @@ final class DynamoDBProjectionSettings private (
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
       offsetBatchSize: Int = offsetBatchSize,
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
-      timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings) =
+      timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings,
+      retrySettings: RetrySettings = retrySettings) =
     new DynamoDBProjectionSettings(
       timestampOffsetTable,
       useClient,
@@ -124,7 +130,8 @@ final class DynamoDBProjectionSettings private (
       warnAboutFilteredEventsInFlow,
       offsetBatchSize,
       offsetSliceReadParallelism,
-      timeToLiveSettings)
+      timeToLiveSettings,
+      retrySettings)
 
   override def toString =
     s"DynamoDBProjectionSettings($timestampOffsetTable, $useClient, $timeWindow, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
@@ -199,4 +206,49 @@ final class ProjectionTimeToLiveSettings private (val offsetTimeToLive: Option[F
 
   private def copy(offsetTimeToLive: Option[FiniteDuration]): ProjectionTimeToLiveSettings =
     new ProjectionTimeToLiveSettings(offsetTimeToLive)
+}
+
+object RetrySettings {
+  val defaults: RetrySettings =
+    new RetrySettings(maxRetries = 3, minBackoff = 200.millis, maxBackoff = 2.seconds, randomFactor = 0.3)
+
+  def apply(config: Config): RetrySettings = {
+    new RetrySettings(
+      maxRetries = config.getInt("max-retries"),
+      minBackoff = config.getDuration("min-backoff").toScala,
+      maxBackoff = config.getDuration("max-backoff").toScala,
+      randomFactor = config.getDouble("random-factor"))
+  }
+}
+
+final class RetrySettings private (
+    val maxRetries: Int,
+    val minBackoff: FiniteDuration,
+    val maxBackoff: FiniteDuration,
+    val randomFactor: Double) {
+
+  def withMaxRetries(maxRetries: Int): RetrySettings =
+    copy(maxRetries = maxRetries)
+
+  def withMinBackoff(minBackoff: FiniteDuration): RetrySettings =
+    copy(minBackoff = minBackoff)
+
+  def withMinBackoff(minBackoff: JDuration): RetrySettings =
+    copy(minBackoff = minBackoff.toScala)
+
+  def withMaxBackoff(maxBackoff: FiniteDuration): RetrySettings =
+    copy(maxBackoff = maxBackoff)
+
+  def withMaxBackoff(maxBackoff: JDuration): RetrySettings =
+    copy(maxBackoff = maxBackoff.toScala)
+
+  def withRandomFactor(randomFactor: Double): RetrySettings =
+    copy(randomFactor = randomFactor)
+
+  private def copy(
+      maxRetries: Int = maxRetries,
+      minBackoff: FiniteDuration = minBackoff,
+      maxBackoff: FiniteDuration = maxBackoff,
+      randomFactor: Double = randomFactor) =
+    new RetrySettings(maxRetries, minBackoff, maxBackoff, randomFactor)
 }
