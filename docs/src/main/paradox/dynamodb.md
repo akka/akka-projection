@@ -81,6 +81,16 @@ Scala
 
 By default, Akka Projection DynamoDB shares the @extref:[DynamoDB client configuration](akka-persistence-dynamodb:config.html#dynamodb-client-configuration) with Akka Persistence DynamoDB.
 
+### Batch writes
+
+Offsets are written in batches for @ref:[at-least-once](#at-least-once) and @ref:[at-least-once (grouped)](#at-least-once-grouped-).
+To reduce the risk of write throttling it is recommended to save at most 25 offsets at a time. This is configured by:  
+
+```hcon
+akka.projection.at-least-once.save-offset-after-envelopes = 25
+akka.projection.grouped.group-after-envelopes = 25
+```
+
 ### Reference configuration
 
 The following can be overridden in your `application.conf` for projection specific settings:
@@ -164,6 +174,8 @@ defined in the configuration section `akka.projection.at-least-once`. There is a
 offset too often, but the drawback is that there can be more duplicates that will be processed again when the
 projection is restarted.
 
+Offsets are written in batches. To reduce the risk of write throttling it is recommended to save at most 25 offsets at a time.
+
 The @ref:[`ShoppingCartHandler` is shown below](#generic-handler).
 
 ## exactly-once (grouped)
@@ -203,6 +215,9 @@ Java
 
 Scala
 :  @@snip [at least once grouped within](/akka-projection-dynamodb-integration/src/test/scala/projection/docs/scaladsl/ProjectionDocExample.scala) { #at-least-once-grouped-within }
+
+Offsets are written immediately after the group of envelopes has been processed. To reduce the risk of write throttling
+it is recommended to save at most 25 offsets at a time, and therefore not exceed this for the group size.
 
 The @ref:[`GroupedShoppingCartHandler` is shown below](#grouped-handler).
 

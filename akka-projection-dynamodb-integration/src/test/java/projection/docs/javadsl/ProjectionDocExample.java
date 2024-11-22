@@ -382,7 +382,7 @@ public class ProjectionDocExample {
 
     Optional<DynamoDBProjectionSettings> settings = Optional.empty();
 
-    int saveOffsetAfterEnvelopes = 100;
+    int saveOffsetAfterEnvelopes = 25;
     Duration saveOffsetAfterDuration = Duration.ofMillis(500);
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
@@ -407,7 +407,7 @@ public class ProjectionDocExample {
 
     Optional<DynamoDBProjectionSettings> settings = Optional.empty();
 
-    int groupAfterEnvelopes = 20;
+    int groupAfterEnvelopes = 25;
     Duration groupAfterDuration = Duration.ofMillis(500);
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
@@ -433,7 +433,7 @@ public class ProjectionDocExample {
 
     Optional<DynamoDBProjectionSettings> settings = Optional.empty();
 
-    int groupAfterEnvelopes = 20;
+    int groupAfterEnvelopes = 25;
     Duration groupAfterDuration = Duration.ofMillis(500);
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
