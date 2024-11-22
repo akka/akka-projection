@@ -72,6 +72,9 @@ final class DynamoDBProjectionSettings private (
     val timeToLiveSettings: TimeToLiveSettings,
     val retrySettings: RetrySettings) {
 
+  // 25 is a hard limit of batch writes in DynamoDB
+  require(offsetBatchSize <= 25, s"offset-batch-size must be <= 25, was [$offsetBatchSize]")
+
   def withTimestampOffsetTable(timestampOffsetTable: String): DynamoDBProjectionSettings =
     copy(timestampOffsetTable = timestampOffsetTable)
 
