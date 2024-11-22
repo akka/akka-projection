@@ -248,7 +248,7 @@ Same type of handlers can be used with `R2dbcProjection` instead of `CassandraPr
 ### Actor handler
 
 A good alternative for advanced state management is to implement the handler as an
-@extref:[actor](akka:typed/typed/actors.html) which is described in
+@extref:[actor](akka:typed/actors.html) which is described in
 @ref:[Processing with Actor](actor.md).
 
 ### Flow handler

@@ -43,7 +43,7 @@ The table below shows the `akka-projection-durable-state` direct dependencies.Th
 ## SourceProvider for changesByTag
 
 A @apidoc[SourceProvider] defines the source of the envelopes that the `Projection` will process. A `SourceProvider`
-for the `changes` query can be defined with the @apidoc[DurableStateStoreProvider$] like this:
+for the `changes` query can be defined with the @apidoc[DurableStateStoreProvider] like this:
 
 Scala
 :  @@snip [DurableStateStoreDocExample.scala](/examples/src/test/scala/docs/state/DurableStateStoreDocExample.scala) { #changesByTagSourceProvider }
@@ -63,7 +63,7 @@ by the `Projection`. See @apidoc[akka.persistence.query.DurableStateChange] for 
 ## SourceProvider for changesBySlices
 
 A @apidoc[SourceProvider] defines the source of the envelopes that the `Projection` will process. A `SourceProvider`
-for the `changesBySlices` query can be defined with the @apidoc[DurableStateStoreProvider$] like this:
+for the `changesBySlices` query can be defined with the @apidoc[DurableStateStoreProvider] like this:
 
 Scala
 :  @@snip [DurableStateStoreDocExample.scala](/examples/src/test/scala/docs/state/DurableStateStoreDocExample.scala) { #changesBySlicesSourceProvider }
