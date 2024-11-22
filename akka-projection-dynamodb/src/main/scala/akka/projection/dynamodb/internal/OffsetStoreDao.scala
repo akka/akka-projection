@@ -200,7 +200,7 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
       result
         .flatMap { responses =>
           val lastResponse = responses.last
-          if (lastResponse.hasUnprocessedItems) {
+          if (lastResponse.hasUnprocessedItems && !lastResponse.unprocessedItems.isEmpty) {
             val unprocessedSliceItems =
               lastResponse.unprocessedItems.get(settings.timestampOffsetTable).asScala.toVector
             val unprocessedSlices = unprocessedSliceItems.map(_.putRequest.item.get(NameSlice).s)
@@ -271,7 +271,7 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
 
       result.flatMap { responses =>
         val lastResponse = responses.last
-        if (lastResponse.hasUnprocessedItems) {
+        if (lastResponse.hasUnprocessedItems && !lastResponse.unprocessedItems.isEmpty) {
           val unprocessedSeqNrItems =
             lastResponse.unprocessedItems.get(settings.timestampOffsetTable).asScala.toVector.map(_.putRequest.item)
           val unprocessedSeqNrs = unprocessedSeqNrItems.map { item =>
@@ -474,7 +474,7 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.FutureDone
       result
         .flatMap { responses =>
           val lastResponse = responses.last
-          if (lastResponse.hasUnprocessedItems) {
+          if (lastResponse.hasUnprocessedItems && !lastResponse.unprocessedItems.isEmpty) {
             val unprocessedStateItems =
               lastResponse.unprocessedItems.get(settings.timestampOffsetTable).asScala.toVector.map(_.putRequest.item)
             val unprocessedStates = unprocessedStateItems.map { item =>
