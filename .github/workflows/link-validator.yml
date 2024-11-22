@@ -44,3 +44,9 @@ jobs:
 
       - name: Run Link Validator
         run: cs launch net.runne::site-link-validator:0.2.5 -- scripts/link-validator.conf
+
+      - name: Run Link Validator (Distributed cluster)
+        run: cs launch net.runne::site-link-validator:0.2.5 -- scripts/link-validator-distributed-cluster.conf
+
+      - name: Run Link Validator (Edge)
+        run: cs launch net.runne::site-link-validator:0.2.5 -- scripts/link-validator-edge.conf
