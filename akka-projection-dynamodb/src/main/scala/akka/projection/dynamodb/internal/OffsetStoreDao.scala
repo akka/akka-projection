@@ -17,7 +17,7 @@ import scala.jdk.FutureConverters._
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
-import akka.pattern.BackoffSupervisor
+import akka.pattern.RetrySupport
 import akka.pattern.after
 import akka.persistence.dynamodb.internal.InstantFactory
 import akka.persistence.query.TimestampOffset
@@ -131,7 +131,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
           val unprocessed = response.unprocessedItems
           val newReq = batchReq.toBuilder.requestItems(unprocessed).build()
           val nextRetry = retries + 1
-          val delay = BackoffSupervisor.calculateDelay(
+          val delay = RetrySupport.calculateExponentialBackoffDelay(
             retries,
             settings.retrySettings.minBackoff,
             settings.retrySettings.maxBackoff,
