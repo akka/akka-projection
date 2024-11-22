@@ -921,6 +921,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       offsetShouldBeEmpty()
       projectionTestKit.run(projectionFailing) {
         projectedTestValueShouldBe("e1|e2|e3|e4|e5")
+        bogusEventHandler.attempts shouldBe 1
       }
       eventually {
         latestOffsetShouldBe(envelopes.last.offset)
