@@ -17,7 +17,7 @@ object Common extends AutoPlugin {
     Seq(
       organization := "com.lightbend.akka",
       organizationName := "Lightbend Inc.",
-      organizationHomepage := Some(url("https://www.lightbend.com/")),
+      organizationHomepage := Some(url("https://akka.io/")),
       startYear := Some(2020),
       homepage := Some(url("https://akka.io")),
       // apiURL defined in projectSettings because version.value is not correct here
