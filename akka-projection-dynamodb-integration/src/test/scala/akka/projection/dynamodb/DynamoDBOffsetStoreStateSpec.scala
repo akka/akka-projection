@@ -175,15 +175,23 @@ class DynamoDBOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Match
 
     "evict old but only those allowed to be evicted" in {
       val t0 = TestClock.nowMillis().instant()
-      val state1 = State.empty.add(Vector(createRecord("p92", 2, t0.plusMillis(1)), createRecord("p108", 3, t0.plusMillis(20)), createRecord("p229", 4, t0.plusMillis(30))))
+      val state1 = State.empty.add(
+        Vector(
+          createRecord("p92", 2, t0.plusMillis(1)),
+          createRecord("p108", 3, t0.plusMillis(20)),
+          createRecord("p229", 4, t0.plusMillis(30))))
 
       val slices = state1.bySliceSorted.keySet
       slices.size shouldBe 1
 
-      state1.evict(slices.head, JDuration.ofMillis(1), allowAll).byPid
-        .map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p229" -> 4)    // p92 and p108 evicted
+      state1
+        .evict(slices.head, JDuration.ofMillis(1), allowAll)
+        .byPid
+        .map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p229" -> 4) // p92 and p108 evicted
 
-      state1.evict(slices.head, JDuration.ofMillis(1), _.pid == "p108").byPid  // allow only p108 to be evicted
+      state1
+        .evict(slices.head, JDuration.ofMillis(1), _.pid == "p108")
+        .byPid // allow only p108 to be evicted
         .map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p92" -> 2, "p229" -> 4)
     }
 
