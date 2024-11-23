@@ -45,25 +45,10 @@ private[projection] object DynamoDBOffsetStore {
   type SeqNr = Long
   type Pid = String
 
-  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant) extends Ordered[Record] {
+  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant)
 
-    override def compare(that: Record): Int = {
-      val result = this.timestamp.compareTo(that.timestamp)
-      if (result == 0) {
-        if (this.slice == that.slice)
-          if (this.pid == that.pid)
-            if (this.seqNr == that.seqNr)
-              0
-            else
-              java.lang.Long.compare(this.seqNr, that.seqNr)
-          else
-            this.pid.compareTo(that.pid)
-        else Integer.compare(this.slice, that.slice)
-      } else {
-        result
-      }
-    }
-  }
+  // Used only in eviction, does not imply anything about equals
+  private val recordOrdering: Ordering[Record] = Ordering.by(_.timestamp)
 
   final case class RecordWithOffset(
       record: Record,
@@ -117,7 +102,7 @@ private[projection] object DynamoDBOffsetStore {
                 acc.offsetBySlice.updated(r.slice, TimestampOffset(r.timestamp, Map(r.pid -> r.seqNr)))
             }
 
-          val sorted = acc.bySliceSorted.getOrElse(r.slice, TreeSet.empty[Record])
+          val sorted = acc.bySliceSorted.getOrElse(r.slice, TreeSet.empty[Record](recordOrdering))
           acc.byPid.get(r.pid) match {
             case Some(existingRecord) =>
               if (r.seqNr > existingRecord.seqNr)
@@ -147,14 +132,26 @@ private[projection] object DynamoDBOffsetStore {
       }
     }
 
-    def evict(slice: Int, timeWindow: JDuration): State = {
-      val recordsSortedByTimestamp = bySliceSorted.getOrElse(slice, TreeSet.empty[Record])
+    def evict(slice: Int, timeWindow: JDuration, ableToEvictRecord: Record => Boolean): State = {
+      val recordsSortedByTimestamp = bySliceSorted.getOrElse(slice, TreeSet.empty[Record](recordOrdering))
       if (recordsSortedByTimestamp.isEmpty) {
         this
       } else {
         val until = recordsSortedByTimestamp.last.timestamp.minus(timeWindow)
-        val filtered = recordsSortedByTimestamp.dropWhile(_.timestamp.isBefore(until))
-        if (filtered.size == recordsSortedByTimestamp.size) {
+        val filtered = {
+          // Records comparing >= this record by recordOrdering will definitely be kept,
+          // Records comparing < this record by recordOrdering are subject to eviction
+          val untilRecord = Record(slice, "_", 0, until)
+          val newerRecords = recordsSortedByTimestamp.rangeImpl(Some(untilRecord), None) // inclusive of until
+          val olderRecords = recordsSortedByTimestamp.rangeImpl(None, Some(untilRecord)) // exclusive of until
+          val filteredOlder = olderRecords.filterNot(ableToEvictRecord)
+
+          if (filteredOlder.size == olderRecords.size) recordsSortedByTimestamp
+          else newerRecords.union(olderRecords)
+        }
+
+        // adding back filtered is linear in the size of filtered, but so is checking if we're able to evict
+        if (filtered eq recordsSortedByTimestamp) {
           this
         } else {
           val byPidOtherSlices = byPid.filterNot { case (_, r) => r.slice == slice }
@@ -402,9 +399,8 @@ private[projection] class DynamoDBOffsetStore(
           records
             .groupBy(_.pid)
             .valuesIterator
-            .collect {
-              case recordsByPid if !oldState.isDuplicate(recordsByPid.last) => recordsByPid.last
-            }
+            .map(_.maxBy(_.seqNr))
+            .filterNot(oldState.isDuplicate)
             .toVector
         }
       }
@@ -417,8 +413,18 @@ private[projection] class DynamoDBOffsetStore(
           if (filteredRecords.size == 1) Set(filteredRecords.head.slice)
           else filteredRecords.iterator.map(_.slice).toSet
 
+        val currentInflight = getInflight()
         val evictedNewState = slices.foldLeft(newState) {
-          case (s, slice) => s.evict(slice, settings.timeWindow)
+          case (s, slice) =>
+            s.evict(
+              slice,
+              settings.timeWindow,
+              // Only persistence IDs that aren't inflight are evictable,
+              // if only so that those persistence IDs can be removed from
+              // inflight... in the absence of further records from that
+              // persistence ID, the next store will evict (further records
+              // would make that persistence ID recent enough to not be evicted)
+              record => !currentInflight.contains(record.pid))
         }
 
         // FIXME we probably don't have to store the latest offset per slice all the time, but can
@@ -463,7 +469,7 @@ private[projection] class DynamoDBOffsetStore(
     if (newInflight.size >= 10000) {
       throw new IllegalStateException(
         s"Too many envelopes in-flight [${newInflight.size}]. " +
-        "Please report this issue at https://github.com/akka/akka-persistence-dynamodb")
+        "Please report this issue at https://github.com/akka/akka-projection")
     }
     if (!inflight.compareAndSet(currentInflight, newInflight))
       cleanupInflight(newState) // CAS retry, concurrent update of inflight
