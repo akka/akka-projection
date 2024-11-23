@@ -45,10 +45,21 @@ private[projection] object DynamoDBOffsetStore {
   type SeqNr = Long
   type Pid = String
 
-  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant)
-
-  // Used only in eviction, does not imply anything about equals
-  private val recordOrdering: Ordering[Record] = Ordering.by(_.timestamp)
+  final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant) extends Ordered[Record] {
+    override def compare(that: Record): Int =
+      timestamp.compareTo(that.timestamp) match {
+        case 0 =>
+          Integer.compare(slice, that.slice) match {
+            case 0 =>
+              pid.compareTo(that.pid) match {
+                case 0 => java.lang.Long.compare(seqNr, that.seqNr)
+                case result => result
+              }
+            case result => result
+          }
+        case result => result
+      }
+  }
 
   final case class RecordWithOffset(
       record: Record,
@@ -102,7 +113,7 @@ private[projection] object DynamoDBOffsetStore {
                 acc.offsetBySlice.updated(r.slice, TimestampOffset(r.timestamp, Map(r.pid -> r.seqNr)))
             }
 
-          val sorted = acc.bySliceSorted.getOrElse(r.slice, TreeSet.empty[Record](recordOrdering))
+          val sorted = acc.bySliceSorted.getOrElse(r.slice, TreeSet.empty[Record])
           acc.byPid.get(r.pid) match {
             case Some(existingRecord) =>
               if (r.seqNr > existingRecord.seqNr)
@@ -133,7 +144,7 @@ private[projection] object DynamoDBOffsetStore {
     }
 
     def evict(slice: Int, timeWindow: JDuration, ableToEvictRecord: Record => Boolean): State = {
-      val recordsSortedByTimestamp = bySliceSorted.getOrElse(slice, TreeSet.empty[Record](recordOrdering))
+      val recordsSortedByTimestamp = bySliceSorted.getOrElse(slice, TreeSet.empty[Record])
       if (recordsSortedByTimestamp.isEmpty) {
         this
       } else {
@@ -141,7 +152,8 @@ private[projection] object DynamoDBOffsetStore {
         val filtered = {
           // Records comparing >= this record by recordOrdering will definitely be kept,
           // Records comparing < this record by recordOrdering are subject to eviction
-          val untilRecord = Record(slice, "_", 0, until)
+          // Slice will be equal, and pid will compare lexicographically less than any valid pid
+          val untilRecord = Record(slice, "", 0, until)
           val newerRecords = recordsSortedByTimestamp.rangeImpl(Some(untilRecord), None) // inclusive of until
           val olderRecords = recordsSortedByTimestamp.rangeImpl(None, Some(untilRecord)) // exclusive of until
           val filteredOlder = olderRecords.filterNot(ableToEvictRecord)
