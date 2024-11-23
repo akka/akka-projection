@@ -52,7 +52,7 @@ private[projection] object DynamoDBOffsetStore {
           Integer.compare(slice, that.slice) match {
             case 0 =>
               pid.compareTo(that.pid) match {
-                case 0 => java.lang.Long.compare(seqNr, that.seqNr)
+                case 0      => java.lang.Long.compare(seqNr, that.seqNr)
                 case result => result
               }
             case result => result
