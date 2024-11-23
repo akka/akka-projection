@@ -408,12 +408,15 @@ private[projection] class DynamoDBOffsetStore(
           records.filterNot(oldState.isDuplicate)
         else {
           // use last record for each pid
-          records
-            .groupBy(_.pid)
-            .valuesIterator
-            .map(_.maxBy(_.seqNr))
-            .filterNot(oldState.isDuplicate)
-            .toVector
+          val grouped = records.groupBy(_.pid)
+
+          if (grouped.size == records.size)
+            records.filterNot(oldState.isDuplicate)
+          else
+            grouped.valuesIterator
+              .map(_.maxBy(_.seqNr))
+              .filterNot(oldState.isDuplicate)
+              .toVector
         }
       }
       if (filteredRecords.isEmpty) {
