@@ -159,7 +159,7 @@ private[projection] object DynamoDBOffsetStore {
           val filteredOlder = olderRecords.filterNot(ableToEvictRecord)
 
           if (filteredOlder.size == olderRecords.size) recordsSortedByTimestamp
-          else newerRecords.union(olderRecords)
+          else newerRecords.union(filteredOlder)
         }
 
         // adding back filtered is linear in the size of filtered, but so is checking if we're able to evict

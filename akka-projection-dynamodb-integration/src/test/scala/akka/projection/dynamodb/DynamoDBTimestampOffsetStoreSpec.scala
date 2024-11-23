@@ -848,8 +848,6 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
         .futureValue
       offsetStore.getState().size shouldBe 6
 
-      offsetStore.getInflight().size shouldBe 0
-
       offsetStore
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plus(timeWindow.minusSeconds(10)), Map(p7 -> 1L)), p7, 1L))
         .futureValue
