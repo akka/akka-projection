@@ -256,6 +256,9 @@ A good alternative for advanced state management is to implement the handler as 
 An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes,
 which is described in @ref:[Processing with Akka Streams](flow.md).
 
+In addition to the caveats described there a `R2dbcProjection.atLeastOnceFlow` must not filter out envelopes. Always
+emit a `Done` element for each completed envelope, even if application processing was skipped for the envelope.
+
 ### Handler lifecycle
 
 You can override the `start` and `stop` methods of the `R2dbcHandler` to implement initialization
