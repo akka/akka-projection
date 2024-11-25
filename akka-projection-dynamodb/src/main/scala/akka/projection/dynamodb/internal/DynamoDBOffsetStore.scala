@@ -409,7 +409,8 @@ private[projection] class DynamoDBOffsetStore(
         else {
           // Can assume (given other projection guarantees) that records for the same pid
           // have montonically increasing sequence numbers
-          records.groupBy(_.pid)
+          records
+            .groupBy(_.pid)
             .valuesIterator
             .collect {
               case recordsByPid if !oldState.isDuplicate(recordsByPid.last) => recordsByPid.last
