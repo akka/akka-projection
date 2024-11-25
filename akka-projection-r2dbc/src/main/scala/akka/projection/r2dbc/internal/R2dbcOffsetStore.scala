@@ -53,23 +53,19 @@ private[projection] object R2dbcOffsetStore {
   type Pid = String
 
   final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant) extends Ordered[Record] {
-
-    override def compare(that: Record): Int = {
-      val result = this.timestamp.compareTo(that.timestamp)
-      if (result == 0) {
-        if (this.slice == that.slice)
-          if (this.pid == that.pid)
-            if (this.seqNr == that.seqNr)
-              0
-            else
-              java.lang.Long.compare(this.seqNr, that.seqNr)
-          else
-            this.pid.compareTo(that.pid)
-        else Integer.compare(this.slice, that.slice)
-      } else {
-        result
+    override def compare(that: Record): Int =
+      timestamp.compareTo(that.timestamp) match {
+        case 0 =>
+          Integer.compare(slice, that.slice) match {
+            case 0 =>
+              pid.compareTo(that.pid) match {
+                case 0      => java.lang.Long.compare(seqNr, that.seqNr)
+                case result => result
+              }
+            case result => result
+          }
+        case result => result
       }
-    }
   }
 
   final case class RecordWithOffset(
@@ -159,15 +155,28 @@ private[projection] object R2dbcOffsetStore {
       }
     }
 
-    def evict(slice: Int, timeWindow: JDuration): State = {
+    def evict(slice: Int, timeWindow: JDuration, ableToEvictRecord: Record => Boolean): State = {
       val recordsSortedByTimestamp = bySliceSorted.getOrElse(slice, TreeSet.empty[Record])
       if (recordsSortedByTimestamp.isEmpty) {
         this
       } else {
-        // this will always keep at least one, latest per slice
         val until = recordsSortedByTimestamp.last.timestamp.minus(timeWindow)
-        val filtered = recordsSortedByTimestamp.dropWhile(_.timestamp.isBefore(until))
-        if (filtered.size == recordsSortedByTimestamp.size) {
+        val filtered = {
+          // Records comparing >= this record by recordOrdering will definitely be kept,
+          // Records comparing < this record by recordOrdering are subject to eviction
+          // Slice will be equal, and pid will compare lexicographically less than any valid pid
+          val untilRecord = Record(slice, "", 0, until)
+          // this will always keep at least one, latest per slice
+          val newerRecords = recordsSortedByTimestamp.rangeImpl(Some(untilRecord), None) // inclusive of until
+          val olderRecords = recordsSortedByTimestamp.rangeImpl(None, Some(untilRecord)) // exclusive of until
+          val filteredOlder = olderRecords.filterNot(ableToEvictRecord)
+
+          if (filteredOlder.size == olderRecords.size) recordsSortedByTimestamp
+          else newerRecords.union(filteredOlder)
+        }
+
+        // adding back filtered is linear in the size of filtered, but so is checking if we're able to evict
+        if (filtered eq recordsSortedByTimestamp) {
           this
         } else {
           val byPidOtherSlices = byPid.filterNot { case (_, r) => r.slice == slice }
@@ -357,7 +366,7 @@ private[projection] class R2dbcOffsetStore(
         val s = State(recordsWithKey.map(_.record))
         // FIXME shall we evict here, or how does that impact the logic for moreThanOneProjectionKey and foreignOffsets?
         (minSlice to maxSlice).foldLeft(s) {
-          case (acc, slice) => acc.evict(slice, settings.timeWindow)
+          case (acc, slice) => acc.evict(slice, settings.timeWindow, _ => true)
         }
       }
 
@@ -586,8 +595,18 @@ private[projection] class R2dbcOffsetStore(
           if (filteredRecords.size == 1) Set(filteredRecords.head.slice)
           else filteredRecords.iterator.map(_.slice).toSet
 
+        val currentInflight = getInflight()
         val evictedNewState = slices.foldLeft(newState) {
-          case (s, slice) => s.evict(slice, settings.timeWindow)
+          case (s, slice) =>
+            s.evict(
+              slice,
+              settings.timeWindow,
+              // Only persistence IDs that aren't inflight are evictable,
+              // if only so that those persistence IDs can be removed from
+              // inflight... in the absence of further records from that
+              // persistence ID, the next store will evict (further records
+              // would make that persistence ID recent enough to not be evicted)
+              record => !currentInflight.contains(record.pid))
         }
 
         val offsetInserts = dao.insertTimestampOffsetInTx(conn, filteredRecords)
@@ -619,7 +638,7 @@ private[projection] class R2dbcOffsetStore(
     if (newInflight.size >= 10000) {
       throw new IllegalStateException(
         s"Too many envelopes in-flight [${newInflight.size}]. " +
-        "Please report this issue at https://github.com/akka/akka-persistence-r2dbc")
+        "Please report this issue at https://github.com/akka/akka-projection")
     }
     if (!inflight.compareAndSet(currentInflight, newInflight))
       cleanupInflight(newState) // CAS retry, concurrent update of inflight
