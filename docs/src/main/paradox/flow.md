@@ -20,7 +20,8 @@ from previously stored offset some envelopes may be processed more than once.
 There are a few caveats to be aware of:
 
 * If the flow filters out envelopes the corresponding offset will not be stored, and such an envelope
-  will be processed again if the projection is restarted and no later offset was stored.
+  will be processed again if the projection is restarted and no later offset was stored. Instead of filter it
+  is better to skip the processing but still emit the `Done` element.
 * The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
   that the first offset is stored and when the projection is restarted that offset is considered completed even
   though more of the duplicated envelopes were never processed.
