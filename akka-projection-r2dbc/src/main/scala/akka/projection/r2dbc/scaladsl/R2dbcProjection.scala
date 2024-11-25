@@ -344,7 +344,8 @@ object R2dbcProjection {
   }
 
   private def connectionFactory(system: ActorSystem[_], r2dbcSettings: R2dbcProjectionSettings): ConnectionFactory = {
-    ConnectionFactoryProvider(system).connectionFactoryFor(r2dbcSettings.useConnectionFactory)
+    r2dbcSettings.customConnectionFactory.getOrElse(
+      ConnectionFactoryProvider(system).connectionFactoryFor(r2dbcSettings.useConnectionFactory))
   }
 
   private def closeCallsExceeding(

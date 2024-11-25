@@ -56,6 +56,12 @@ import akka.projection.r2dbc.javadsl.R2dbcProjection;
 // #atLeastOnce
 // #exactlyOnce
 
+// #customConnectionFactory
+import io.r2dbc.pool.ConnectionPool;
+import io.r2dbc.pool.ConnectionPoolConfiguration;
+import io.r2dbc.spi.ConnectionFactory;
+// #customConnectionFactory
+
 @SuppressWarnings({"unused", "InnerClassMayBeStatic"})
 class R2dbcProjectionDocExample {
 
@@ -266,5 +272,23 @@ class R2dbcProjectionDocExample {
         R2dbcProjection.atLeastOnce(
             projectionId, settings, sourceProvider, ShoppingCartHandler::new, system);
     //#projectionSettings
+  }
+
+  {
+    ConnectionPoolConfiguration config = null;
+
+    //#customConnectionFactory
+    ProjectionId projectionId =
+            ProjectionId.of("ShoppingCarts", "carts-" + minSlice + "-" + maxSlice);
+
+    ConnectionFactory connectionFactory = new ConnectionPool(config);
+
+    Optional<R2dbcProjectionSettings> settings = Optional.of(
+            R2dbcProjectionSettings.create(system).withCustomConnectionFactory(connectionFactory));
+
+    Projection<EventEnvelope<ShoppingCart.Event>> projection =
+            R2dbcProjection.atLeastOnce(
+                    projectionId, settings, sourceProvider, ShoppingCartHandler::new, system);
+    //#customConnectionFactory
   }
 }
