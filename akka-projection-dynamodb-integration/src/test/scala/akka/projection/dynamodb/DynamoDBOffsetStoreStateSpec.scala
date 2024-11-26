@@ -85,6 +85,8 @@ class DynamoDBOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Match
       state6.offsetBySlice(slice("p10084")) shouldBe TimestampOffset(t0.plusMillis(3), Map("p3" -> 10L, "p10084" -> 9))
     }
 
+    val allowAll: Any => Boolean = _ => true
+
     "evict old" in {
       val p1 = "p500" // slice 645
       val p2 = "p621" // slice 645
@@ -107,17 +109,17 @@ class DynamoDBOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Match
         .map { case (pid, r) => pid -> r.seqNr } shouldBe Map(p1 -> 1L, p2 -> 2L, p3 -> 3L, p4 -> 4L, p6 -> 6L)
 
       // keep all
-      state1.evict(slice = 645, timeWindow = JDuration.ofMillis(1000)) shouldBe state1
+      state1.evict(slice = 645, timeWindow = JDuration.ofMillis(1000), allowAll) shouldBe state1
 
       // evict older than time window
-      val state2 = state1.evict(slice = 645, timeWindow = JDuration.ofMillis(2))
+      val state2 = state1.evict(slice = 645, timeWindow = JDuration.ofMillis(2), allowAll)
       state2.byPid.map { case (pid, r) => pid -> r.seqNr } shouldBe Map(p2 -> 2L, p3 -> 3L, p4 -> 4L, p6 -> 6L)
 
       val state3 = state1.add(Vector(createRecord(p5, 5, t0.plusMillis(100)), createRecord(p7, 7, t0.plusMillis(10))))
-      val state4 = state3.evict(slice = 645, timeWindow = JDuration.ofMillis(2))
+      val state4 = state3.evict(slice = 645, timeWindow = JDuration.ofMillis(2), allowAll)
       state4.byPid.map { case (pid, r) => pid -> r.seqNr } shouldBe Map(p5 -> 5L, p6 -> 6L, p7 -> 7L)
 
-      val state5 = state3.evict(slice = 905, timeWindow = JDuration.ofMillis(2))
+      val state5 = state3.evict(slice = 905, timeWindow = JDuration.ofMillis(2), allowAll)
       state5.byPid.map { case (pid, r) => pid -> r.seqNr } shouldBe Map(
         p1 -> 1L,
         p2 -> 2L,
@@ -156,7 +158,7 @@ class DynamoDBOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Match
       val timeWindow = JDuration.ofMillis(1)
 
       val state2 = slices.foldLeft(state1) {
-        case (acc, slice) => acc.evict(slice, timeWindow)
+        case (acc, slice) => acc.evict(slice, timeWindow, allowAll)
       }
       // note that p92 is evicted because it has same slice as p108
       // p1 is kept because keeping one for each slice
@@ -164,11 +166,33 @@ class DynamoDBOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Match
         .map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p1" -> 1L, "p108" -> 3L, "p4" -> 4L, "p5" -> 5L)
 
       val state3 = slices.foldLeft(state2) {
-        case (acc, slice) => acc.evict(slice, timeWindow)
+        case (acc, slice) => acc.evict(slice, timeWindow, allowAll)
       }
       // still keeping one for each slice
       state3.byPid
         .map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p1" -> 1L, "p108" -> 3L, "p4" -> 4L, "p5" -> 5L)
+    }
+
+    "evict old but only those allowed to be evicted" in {
+      val t0 = TestClock.nowMillis().instant()
+      val state1 = State.empty.add(
+        Vector(
+          createRecord("p92", 2, t0.plusMillis(1)),
+          createRecord("p108", 3, t0.plusMillis(20)),
+          createRecord("p229", 4, t0.plusMillis(30))))
+
+      val slices = state1.bySliceSorted.keySet
+      slices.size shouldBe 1
+
+      state1
+        .evict(slices.head, JDuration.ofMillis(1), allowAll)
+        .byPid
+        .map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p229" -> 4) // p92 and p108 evicted
+
+      state1
+        .evict(slices.head, JDuration.ofMillis(1), _.pid == "p108")
+        .byPid // allow only p108 to be evicted
+        .map { case (pid, r) => pid -> r.seqNr } shouldBe Map("p92" -> 2, "p229" -> 4)
     }
 
     "find duplicate" in {
