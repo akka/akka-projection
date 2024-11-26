@@ -42,14 +42,13 @@ object R2dbcSession {
   }.asJava
 
   /**
-   * Provide a custom connectionFactory and an optional config path to load closeCallsExceeding from.
+   * Provide a custom connectionFactory. The config closeCallsExceeding is loaded from the default path.
    */
   def withSession[A](
       system: ActorSystem[_],
       connectionFactory: ConnectionFactory,
-      configPath: Optional[String],
       fun: JFunction[R2dbcSession, CompletionStage[A]]): CompletionStage[A] = {
-    scaladsl.R2dbcSession.withSession(system, connectionFactory, configPath.toScala) { scaladslSession =>
+    scaladsl.R2dbcSession.withSession(system, connectionFactory) { scaladslSession =>
       val javadslSession = new R2dbcSession(scaladslSession.connection)(system.executionContext, system)
       fun(javadslSession).asScala
     }

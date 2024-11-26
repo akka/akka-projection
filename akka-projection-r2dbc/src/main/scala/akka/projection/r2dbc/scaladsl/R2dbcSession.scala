@@ -38,15 +38,15 @@ object R2dbcSession {
       fun: R2dbcSession => Future[A]): Future[A] = {
     val connectionFactoryProvider = ConnectionFactoryProvider(system)
     val connectionFactory = connectionFactoryProvider.connectionFactoryFor(connectionFactoryConfigPath)
-    withSession(system, connectionFactory, Some(connectionFactoryConfigPath))(fun)
+    withSession(system, connectionFactory)(fun)
   }
 
   /**
-   * Provide a custom connectionFactory and an optional config path to load closeCallsExceeding from.
+   * Provide a custom connectionFactory. The config closeCallsExceeding is loaded from the default path.
    */
-  def withSession[A](system: ActorSystem[_], connectionFactory: ConnectionFactory, configPath: Option[String])(
+  def withSession[A](system: ActorSystem[_], connectionFactory: ConnectionFactory)(
       fun: R2dbcSession => Future[A]): Future[A] = {
-    val poolConfig = system.settings.config.getConfig(configPath.getOrElse(connectionFactoryConfigPath(system)))
+    val poolConfig = system.settings.config.getConfig(connectionFactoryConfigPath(system))
     val poolSettings = new ConnectionPoolSettings(poolConfig)
     val r2dbcExecutor =
       new R2dbcExecutor(connectionFactory, log, logDbCallsDisabled, poolSettings.closeCallsExceeding)(
