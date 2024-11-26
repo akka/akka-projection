@@ -154,8 +154,8 @@ private[projection] object DynamoDBOffsetStore {
           // Records comparing < this record by recordOrdering are subject to eviction
           // Slice will be equal, and pid will compare lexicographically less than any valid pid
           val untilRecord = Record(slice, "", 0, until)
-          val newerRecords = recordsSortedByTimestamp.rangeImpl(Some(untilRecord), None) // inclusive of until
-          val olderRecords = recordsSortedByTimestamp.rangeImpl(None, Some(untilRecord)) // exclusive of until
+          val newerRecords = recordsSortedByTimestamp.rangeFrom(untilRecord) // inclusive of until
+          val olderRecords = recordsSortedByTimestamp.rangeUntil(untilRecord) // exclusive of until
           val filteredOlder = olderRecords.filterNot(ableToEvictRecord)
 
           if (filteredOlder.size == olderRecords.size) recordsSortedByTimestamp
