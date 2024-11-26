@@ -16,6 +16,7 @@ import akka.persistence.r2dbc.ConnectionPoolSettings
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import io.r2dbc.spi.Connection
+import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.Row
 import io.r2dbc.spi.Statement
 import org.slf4j.LoggerFactory
@@ -38,8 +39,25 @@ object R2dbcSession {
     val connectionFactoryProvider = ConnectionFactoryProvider(system)
     val connectionFactory = connectionFactoryProvider.connectionFactoryFor(connectionFactoryConfigPath)
     val poolSettings = new ConnectionPoolSettings(system.settings.config.getConfig(connectionFactoryConfigPath))
+    withSession(system, connectionFactory, poolSettings.closeCallsExceeding)(fun)
+  }
+
+  /**
+   * Provide a custom connectionFactory. The config closeCallsExceeding is loaded from the default path.
+   */
+  def withSession[A](system: ActorSystem[_], connectionFactory: ConnectionFactory)(
+      fun: R2dbcSession => Future[A]): Future[A] = {
+    val poolConfig = system.settings.config.getConfig(connectionFactoryConfigPath(system))
+    val poolSettings = new ConnectionPoolSettings(poolConfig)
+    withSession(system, connectionFactory, poolSettings.closeCallsExceeding)(fun)
+  }
+
+  private def withSession[A](
+      system: ActorSystem[_],
+      connectionFactory: ConnectionFactory,
+      closeCallsExceeding: Option[FiniteDuration])(fun: R2dbcSession => Future[A]): Future[A] = {
     val r2dbcExecutor =
-      new R2dbcExecutor(connectionFactory, log, logDbCallsDisabled, poolSettings.closeCallsExceeding)(
+      new R2dbcExecutor(connectionFactory, log, logDbCallsDisabled, closeCallsExceeding)(
         system.executionContext,
         system)
     r2dbcExecutor.withConnection("R2dbcSession") { connection =>

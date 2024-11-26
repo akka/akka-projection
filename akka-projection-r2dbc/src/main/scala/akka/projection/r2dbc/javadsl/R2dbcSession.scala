@@ -17,6 +17,7 @@ import akka.actor.typed.ActorSystem
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.r2dbc.scaladsl
 import io.r2dbc.spi.Connection
+import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.Row
 import io.r2dbc.spi.Statement
 
@@ -35,6 +36,19 @@ object R2dbcSession {
       connectionFactoryConfigPath: String,
       fun: JFunction[R2dbcSession, CompletionStage[A]]): CompletionStage[A] = {
     scaladsl.R2dbcSession.withSession(system, connectionFactoryConfigPath) { scaladslSession =>
+      val javadslSession = new R2dbcSession(scaladslSession.connection)(system.executionContext, system)
+      fun(javadslSession).asScala
+    }
+  }.asJava
+
+  /**
+   * Provide a custom connectionFactory. The config closeCallsExceeding is loaded from the default path.
+   */
+  def withSession[A](
+      system: ActorSystem[_],
+      connectionFactory: ConnectionFactory,
+      fun: JFunction[R2dbcSession, CompletionStage[A]]): CompletionStage[A] = {
+    scaladsl.R2dbcSession.withSession(system, connectionFactory) { scaladslSession =>
       val javadslSession = new R2dbcSession(scaladslSession.connection)(system.executionContext, system)
       fun(javadslSession).asScala
     }
