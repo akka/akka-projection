@@ -52,7 +52,7 @@ object R2dbcSession {
     withSession(system, connectionFactory, poolSettings.closeCallsExceeding)(fun)
   }
 
-  @InternalApi private[akka] def withSession[A](
+  private def withSession[A](
       system: ActorSystem[_],
       connectionFactory: ConnectionFactory,
       closeCallsExceeding: Option[FiniteDuration])(fun: R2dbcSession => Future[A]): Future[A] = {
