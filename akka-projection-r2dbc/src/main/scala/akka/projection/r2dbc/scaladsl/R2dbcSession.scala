@@ -52,8 +52,10 @@ object R2dbcSession {
     withSession(system, connectionFactory, poolSettings.closeCallsExceeding)(fun)
   }
 
-  @InternalApi private[akka] def withSession[A](system: ActorSystem[_], connectionFactory: ConnectionFactory, closeCallsExceeding: Option[FiniteDuration])(
-    fun: R2dbcSession => Future[A]): Future[A] = {
+  @InternalApi private[akka] def withSession[A](
+      system: ActorSystem[_],
+      connectionFactory: ConnectionFactory,
+      closeCallsExceeding: Option[FiniteDuration])(fun: R2dbcSession => Future[A]): Future[A] = {
     val r2dbcExecutor =
       new R2dbcExecutor(connectionFactory, log, logDbCallsDisabled, closeCallsExceeding)(
         system.executionContext,
