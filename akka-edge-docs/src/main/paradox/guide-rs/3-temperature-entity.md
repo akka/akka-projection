@@ -6,7 +6,7 @@ using Akka Edge Rust.
 
 We will represent a temperature sensor as an Event Sourced entity. If you are unfamiliar with Event Sourcing, refer to the
 @extref[Event Sourcing section in the Akka guide](akka-guide:concepts/event-sourcing.html) for an explanation.
-The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-event-sourcing-video) is also a good starting point for learning about Event Sourcing.
+The [Event Sourcing with Akka video](https://www.youtube.com/watch?v=xWuOGqmR7ow) is also a good starting point for learning about Event Sourcing.
 
 ## Commands and events
 
