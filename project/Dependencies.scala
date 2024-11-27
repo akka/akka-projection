@@ -45,7 +45,7 @@ object Dependencies {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val DynamodbSdk = "2.25.70"
+    val DynamodbSdk = "2.29.22"
 
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "7.0.0")
     val slick = "3.5.2"
