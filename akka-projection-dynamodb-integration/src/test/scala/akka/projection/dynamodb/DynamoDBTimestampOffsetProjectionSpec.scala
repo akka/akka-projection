@@ -1176,6 +1176,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       offsetShouldBeEmpty()
       projectionTestKit.run(projection) {
         projectedTestValueShouldBe("e1|e2|e5")
+        offsetStore.storedSeqNr(pid).futureValue shouldBe 6
       }
       latestOffsetShouldBe(envelopes.last.offset)
     }
