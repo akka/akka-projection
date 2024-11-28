@@ -331,7 +331,8 @@ object EventSourcedProvider {
       extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
-      with LoadEventQuerySourceProvider {
+      with LoadEventQuerySourceProvider
+      with LoadEventsByPersistenceIdSourceProvider[Event] {
 
     override def readJournal: ReadJournal = eventsBySlicesQuery
 
@@ -354,6 +355,21 @@ object EventSourcedProvider {
 
     override def extractCreationTime(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Long =
       envelope.timestamp
+
+    /**
+     * INTERNAL API
+     */
+    @InternalApi override private[akka] def currentEventsByPersistenceId(
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long)
+        : Option[akka.stream.scaladsl.Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      eventsBySlicesQuery match {
+        case q: CurrentEventsByPersistenceIdTypedQuery =>
+          Some(q.currentEventsByPersistenceIdTyped[Event](persistenceId, fromSequenceNr, toSequenceNr).asScala)
+        case _ => None // not supported by this query
+      }
+    }
 
   }
 
