@@ -435,7 +435,8 @@ private[projection] object DynamoDBProjectionImpl {
             val persistenceId = originalEventEnvelope.persistenceId
             offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
               val fromSeqNr = storedSeqNr + 1
-              provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, originalEventEnvelope.sequenceNr) match {
+              val toSeqNr = originalEventEnvelope.sequenceNr
+              provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                 case Some(querySource) =>
                   querySource
                     .mapAsync(1) { envelope =>
@@ -467,8 +468,23 @@ private[projection] object DynamoDBProjectionImpl {
                               s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
                         }
                     }
-                    .run()
-                    .map(_ => true)
+                    .runFold(0) { case (acc, _) => acc + 1 }
+                    .map { count =>
+                      val expected = toSeqNr - fromSeqNr
+                      if (count == expected) {
+                        true
+                      } else {
+                        // it's expected to find all events, otherwise fail the replay attempt
+                        log.warn(
+                          "Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
+                          count,
+                          expected,
+                          persistenceId,
+                          fromSeqNr,
+                          toSeqNr)
+                        false
+                      }
+                    }
                     .recoverWith { exc =>
                       log.warn(
                         "Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
