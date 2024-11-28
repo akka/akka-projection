@@ -37,6 +37,7 @@ import akka.projection.StatusObserver
 import akka.projection.dynamodb.DynamoDBProjectionSettings
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.RejectedEnvelope
 import akka.projection.dynamodb.scaladsl.DynamoDBTransactHandler
+import akka.projection.eventsourced.scaladsl.EventSourcedProvider.LoadEventsByPersistenceIdSourceProvider
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
@@ -202,9 +203,10 @@ private[projection] object DynamoDBProjectionImpl {
             case Duplicate =>
               FutureDone
             case RejectedSeqNr =>
-              triggerReplayIfPossible(sourceProvider, offsetStore, envelope).map(_ => Done)(ExecutionContext.parasitic)
+              replayIfPossible(sourceProvider, offsetStore, envelope, delegate).map(_ => Done)(
+                ExecutionContext.parasitic)
             case RejectedBacktrackingSeqNr =>
-              triggerReplayIfPossible(sourceProvider, offsetStore, envelope).map {
+              replayIfPossible(sourceProvider, offsetStore, envelope, delegate).map {
                 case true  => Done
                 case false => throwRejectedEnvelope(sourceProvider, envelope)
               }
@@ -414,6 +416,69 @@ private[projection] object DynamoDBProjectionImpl {
             }
           case _ =>
             FutureFalse // no replay support for other source providers
+        }
+      case _ =>
+        FutureFalse // no replay support for non typed envelopes
+    }
+  }
+
+  private def replayIfPossible[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
+      offsetStore: DynamoDBOffsetStore,
+      originalEnvelope: Envelope,
+      handler: Handler[Envelope])(implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Boolean] = {
+    originalEnvelope match {
+      case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
+        sourceProvider match {
+          // FIXME config to make this case opt in
+          case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
+            val persistenceId = originalEventEnvelope.persistenceId
+            offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
+              val fromSeqNr = storedSeqNr + 1
+              provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, originalEventEnvelope.sequenceNr) match {
+                case Some(querySource) =>
+                  querySource
+                    .mapAsync(1) { envelope =>
+                      import DynamoDBOffsetStore.Validation._
+                      offsetStore
+                        .validate(envelope)
+                        .flatMap {
+                          case Accepted =>
+                            if (isFilteredEvent(envelope)) {
+                              offsetStore.addInflight(envelope)
+                              FutureDone
+                            } else {
+                              handler
+                                .process(envelope.asInstanceOf[Envelope])
+                                .map { _ =>
+                                  offsetStore.addInflight(envelope)
+                                  Done
+                                }
+                            }
+                          case Duplicate =>
+                            FutureDone
+                          case RejectedSeqNr =>
+                            throwRejectedEnvelope(sourceProvider, envelope.asInstanceOf[Envelope])
+                          case RejectedBacktrackingSeqNr =>
+                            throwRejectedEnvelope(sourceProvider, envelope.asInstanceOf[Envelope])
+                        }
+                    }
+                    .run()
+                    .map(_ => true)
+                    .recoverWith { exc =>
+                      log.warn(
+                        "Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
+                        persistenceId,
+                        fromSeqNr,
+                        originalEventEnvelope.sequenceNr)
+                      triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope)
+                    }
+                case None => FutureFalse
+              }
+            }
+
+          case _ =>
+            triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope)
         }
       case _ =>
         FutureFalse // no replay support for non typed envelopes
