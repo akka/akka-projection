@@ -52,6 +52,7 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Pid
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.SeqNr
 import akka.projection.dynamodb.scaladsl.DynamoDBProjection
 import akka.projection.dynamodb.scaladsl.DynamoDBTransactHandler
+import akka.projection.eventsourced.scaladsl.EventSourcedProvider.LoadEventsByPersistenceIdSourceProvider
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.scaladsl.ProjectionTestKit
@@ -104,11 +105,13 @@ object DynamoDBTimestampOffsetProjectionSpec {
   class TestTimestampSourceProvider(
       envelopes: immutable.IndexedSeq[EventEnvelope[String]],
       testSourceProvider: TestSourceProvider[Offset, EventEnvelope[String]],
-      override val maxSlice: Int)
+      override val maxSlice: Int,
+      enableCurrentEventsByPersistenceId: Boolean)
       extends SourceProvider[Offset, EventEnvelope[String]]
       with BySlicesSourceProvider
       with EventTimestampQuery
-      with LoadEventQuery {
+      with LoadEventQuery
+      with LoadEventsByPersistenceIdSourceProvider[String] {
 
     override def source(offset: () => Future[Option[Offset]]): Future[Source[EventEnvelope[String], NotUsed]] =
       testSourceProvider.source(offset)
@@ -141,6 +144,18 @@ object DynamoDBTimestampOffsetProjectionSpec {
             new NoSuchElementException(
               s"Event with persistenceId [$persistenceId] and sequenceNr [$sequenceNr] not found."))
       }
+    }
+
+    override private[akka] def currentEventsByPersistenceId(
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long): Option[Source[EventEnvelope[String], NotUsed]] = {
+      if (enableCurrentEventsByPersistenceId)
+        Some(Source(envelopes.filter { env =>
+          env.persistenceId == persistenceId && env.sequenceNr >= fromSequenceNr && env.sequenceNr <= toSequenceNr
+        }))
+      else
+        None
     }
   }
 
@@ -282,6 +297,15 @@ class DynamoDBTimestampOffsetProjectionSpec
   def createSourceProvider(
       envelopes: immutable.IndexedSeq[EventEnvelope[String]],
       complete: Boolean = true): TestTimestampSourceProvider = {
+    createSourceProviderWithMoreEnvelopes(envelopes, envelopes, enableCurrentEventsByPersistenceId = false, complete)
+  }
+
+  // envelopes are emitted by the "query" source, but allEnvelopes can be loaded
+  def createSourceProviderWithMoreEnvelopes(
+      envelopes: immutable.IndexedSeq[EventEnvelope[String]],
+      allEnvelopes: immutable.IndexedSeq[EventEnvelope[String]],
+      enableCurrentEventsByPersistenceId: Boolean,
+      complete: Boolean = true): TestTimestampSourceProvider = {
     val sp =
       TestSourceProvider[Offset, EventEnvelope[String]](Source(envelopes), _.offset)
         .withStartSourceFrom {
@@ -294,7 +318,11 @@ class DynamoDBTimestampOffsetProjectionSpec
         }
         .withAllowCompletion(complete)
 
-    new TestTimestampSourceProvider(envelopes, sp, persistenceExt.numberOfSlices - 1)
+    new TestTimestampSourceProvider(
+      allEnvelopes,
+      sp,
+      persistenceExt.numberOfSlices - 1,
+      enableCurrentEventsByPersistenceId)
   }
 
   def createBacktrackingSourceProvider(
@@ -304,7 +332,11 @@ class DynamoDBTimestampOffsetProjectionSpec
       TestSourceProvider[Offset, EventEnvelope[String]](Source(envelopes), _.offset)
         .withStartSourceFrom { (_, _) => false } // include all
         .withAllowCompletion(complete)
-    new TestTimestampSourceProvider(envelopes, sp, persistenceExt.numberOfSlices - 1)
+    new TestTimestampSourceProvider(
+      envelopes,
+      sp,
+      persistenceExt.numberOfSlices - 1,
+      enableCurrentEventsByPersistenceId = false)
   }
 
   private def latestOffsetShouldBe(expected: Any)(implicit offsetStore: DynamoDBOffsetStore) = {
@@ -856,6 +888,37 @@ class DynamoDBTimestampOffsetProjectionSpec
       eventually {
         latestOffsetShouldBe(envelopes.last.offset)
       }
+    }
+
+    "replay rejected sequence numbers" in {
+      val pid1 = UUID.randomUUID().toString
+      val pid2 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val allEnvelopes = createEnvelopes(pid1, 6) ++ createEnvelopes(pid2, 3)
+      val envelopes = allEnvelopes.filterNot { env =>
+        (env.persistenceId == pid1 && (env.sequenceNr == 3 || env.sequenceNr == 4 || env.sequenceNr == 5)) ||
+        (env.persistenceId == pid2 && (env.sequenceNr == 1))
+      }
+
+      val sourceProvider =
+        createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val projectionRef = spawn(
+        ProjectionBehavior(DynamoDBProjection
+          .atLeastOnce(projectionId, Some(settings), sourceProvider, handler = () => new ConcatHandler(repository))))
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e6")(pid1)
+        projectedValueShouldBe("e1|e2|e3")(pid2)
+      }
+
+      eventually {
+        latestOffsetShouldBe(allEnvelopes.last.offset)
+      }
+      projectionRef ! ProjectionBehavior.Stop
     }
   }
 
