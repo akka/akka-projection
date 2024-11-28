@@ -458,9 +458,13 @@ private[projection] object DynamoDBProjectionImpl {
                           case Duplicate =>
                             FutureDone
                           case RejectedSeqNr =>
-                            throwRejectedEnvelope(sourceProvider, envelope.asInstanceOf[Envelope])
+                            // this shouldn't happen
+                            throw new RejectedEnvelope(
+                              s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
                           case RejectedBacktrackingSeqNr =>
-                            throwRejectedEnvelope(sourceProvider, envelope.asInstanceOf[Envelope])
+                            // this shouldn't happen
+                            throw new RejectedEnvelope(
+                              s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
                         }
                     }
                     .run()
@@ -470,8 +474,9 @@ private[projection] object DynamoDBProjectionImpl {
                         "Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
                         persistenceId,
                         fromSeqNr,
-                        originalEventEnvelope.sequenceNr)
-                      triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope)
+                        originalEventEnvelope.sequenceNr,
+                        exc)
+                      Future.failed(exc)
                     }
                 case None => FutureFalse
               }
