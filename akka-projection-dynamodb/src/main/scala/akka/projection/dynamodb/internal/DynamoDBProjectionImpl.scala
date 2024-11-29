@@ -427,16 +427,12 @@ private[projection] object DynamoDBProjectionImpl {
             }
 
           replayDone.flatMap { _ =>
-            val acceptedEnvelopes = isAcceptedEnvelopes.collect {
-              case (env, Accepted) =>
-                env
-            }
 
-            if (acceptedEnvelopes.isEmpty) {
-              FutureDone
-            } else {
-              Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
-                loadedEnvelopes =>
+            def processAcceptedEnvelopes(envelopes: Seq[Envelope]): Future[Done] = {
+              if (envelopes.isEmpty) {
+                FutureDone
+              } else {
+                Future.sequence(envelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap { loadedEnvelopes =>
                   val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
                   val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
                   if (filteredEnvelopes.isEmpty) {
@@ -446,8 +442,35 @@ private[projection] object DynamoDBProjectionImpl {
                       offsetStore.saveOffsets(offsets)
                     }
                   }
+                }
               }
             }
+
+            val acceptedEnvelopes = isAcceptedEnvelopes.collect {
+              case (env, Accepted) =>
+                env
+            }
+            val hasRejected =
+              isAcceptedEnvelopes.exists {
+                case (_, RejectedSeqNr)             => true
+                case (_, RejectedBacktrackingSeqNr) => true
+                case _                              => false
+              }
+
+            if (hasRejected) {
+              // need second validation after replay to remove duplicates
+              offsetStore
+                .validateAll(acceptedEnvelopes)
+                .flatMap { isAcceptedEnvelopes2 =>
+                  val acceptedEnvelopes2 = isAcceptedEnvelopes2.collect {
+                    case (env, Accepted) => env
+                  }
+                  processAcceptedEnvelopes(acceptedEnvelopes2)
+                }
+            } else {
+              processAcceptedEnvelopes(acceptedEnvelopes)
+            }
+
           }
         }
       }

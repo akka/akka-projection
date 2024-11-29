@@ -1571,9 +1571,9 @@ class DynamoDBTimestampOffsetProjectionSpec
       val pid2 = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
 
-      val allEnvelopes = createEnvelopes(pid1, 6) ++ createEnvelopes(pid2, 3)
+      val allEnvelopes = createEnvelopes(pid1, 10) ++ createEnvelopes(pid2, 3)
       val envelopes = allEnvelopes.filterNot { env =>
-        (env.persistenceId == pid1 && (env.sequenceNr == 3 || env.sequenceNr == 4 || env.sequenceNr == 5)) ||
+        (env.persistenceId == pid1 && (env.sequenceNr == 3 || env.sequenceNr == 4 || env.sequenceNr == 5 || env.sequenceNr == 7 || env.sequenceNr == 9)) ||
         (env.persistenceId == pid2 && (env.sequenceNr == 1))
       }
 
@@ -1602,12 +1602,12 @@ class DynamoDBTimestampOffsetProjectionSpec
             Some(settings.withReplayOnRejectedSequenceNumbers(true)),
             sourceProvider,
             handler = () => handler)
-          .withGroup(2, 3.seconds)
+          .withGroup(8, 3.seconds)
 
       offsetShouldBeEmpty()
 
       projectionTestKit.run(projection) {
-        results.get(pid1) shouldBe "|e1|e2|e3|e4|e5|e6|"
+        results.get(pid1) shouldBe "|e1|e2|e3|e4|e5|e6|e7|e8|e9|e10|"
         results.get(pid2) shouldBe "|e1|e2|e3|"
       }
 
