@@ -217,7 +217,7 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   private val logger = LoggerFactory.getLogger(this.getClass)
-  private val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
+  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
 
   private val dao = new OffsetStoreDao(system, settings, projectionId, client)
 

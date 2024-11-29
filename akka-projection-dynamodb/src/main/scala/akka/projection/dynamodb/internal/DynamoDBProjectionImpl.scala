@@ -203,12 +203,15 @@ private[projection] object DynamoDBProjectionImpl {
             case Duplicate =>
               FutureDone
             case RejectedSeqNr =>
-              replayIfPossible(envelope).map(_ => Done)(ExecutionContext.parasitic)
+              replayIfPossible(envelope).map {
+                case true  => Done
+                case false => throwRejectedEnvelopeAfterFailedReplay("query", sourceProvider, envelope)
+              }(ExecutionContext.parasitic)
             case RejectedBacktrackingSeqNr =>
               replayIfPossible(envelope).map {
                 case true  => Done
-                case false => throwRejectedEnvelope(sourceProvider, envelope)
-              }
+                case false => throwRejectedEnvelopeAfterFailedReplay("backtracking", sourceProvider, envelope)
+              }(ExecutionContext.parasitic)
           }
       }
 
@@ -257,13 +260,14 @@ private[projection] object DynamoDBProjectionImpl {
                         }
                         .runFold(0) { case (acc, _) => acc + 1 }
                         .map { count =>
-                          val expected = toSeqNr - fromSeqNr
+                          val expected = toSeqNr - fromSeqNr + 1
                           if (count == expected) {
                             true
                           } else {
                             // it's expected to find all events, otherwise fail the replay attempt
                             log.warn(
-                              "Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
+                              "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
+                              offsetStore.logPrefix,
                               count,
                               expected,
                               persistenceId,
@@ -274,7 +278,8 @@ private[projection] object DynamoDBProjectionImpl {
                         }
                         .recoverWith { exc =>
                           log.warn(
-                            "Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
+                            "{} Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
+                            offsetStore.logPrefix,
                             persistenceId,
                             fromSeqNr,
                             originalEventEnvelope.sequenceNr,
@@ -511,6 +516,20 @@ private[projection] object DynamoDBProjectionImpl {
           s"Rejected envelope from backtracking, persistenceId [$pid], seqNr [$seqNr] due to unexpected sequence number.")
       case OffsetPidSeqNr(_, None) =>
         throw new RejectedEnvelope(s"Rejected envelope from backtracking.")
+    }
+  }
+
+  private def throwRejectedEnvelopeAfterFailedReplay[Offset, Envelope](
+      source: String,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      envelope: Envelope): Nothing = {
+    extractOffsetPidSeqNr(sourceProvider, envelope) match {
+      case OffsetPidSeqNr(_, Some((pid, seqNr))) =>
+        throw new RejectedEnvelope(
+          s"Replay failed, after rejected envelope from $source, persistenceId [$pid], seqNr [$seqNr], due to unexpected sequence number.")
+      case OffsetPidSeqNr(_, None) =>
+        throw new RejectedEnvelope(
+          s"Replay failed, after rejected envelope from $source, due to unexpected sequence number.")
     }
   }
 
