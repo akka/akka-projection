@@ -1565,6 +1565,126 @@ class DynamoDBTimestampOffsetProjectionSpec
         latestOffsetShouldBe(envelopes.last.offset)
       }
     }
+
+    "replay rejected sequence numbers for at-least-once grouped" in {
+      val pid1 = UUID.randomUUID().toString
+      val pid2 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val allEnvelopes = createEnvelopes(pid1, 6) ++ createEnvelopes(pid2, 3)
+      val envelopes = allEnvelopes.filterNot { env =>
+        (env.persistenceId == pid1 && (env.sequenceNr == 3 || env.sequenceNr == 4 || env.sequenceNr == 5)) ||
+        (env.persistenceId == pid2 && (env.sequenceNr == 1))
+      }
+
+      val sourceProvider =
+        createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val results = new ConcurrentHashMap[String, String]()
+
+      val handler: Handler[Seq[EventEnvelope[String]]] =
+        (envelopes: Seq[EventEnvelope[String]]) => {
+          Future {
+            envelopes.foreach { envelope =>
+              results.putIfAbsent(envelope.persistenceId, "|")
+              results.computeIfPresent(envelope.persistenceId, (_, value) => value + envelope.event + "|")
+            }
+          }.map(_ => Done)
+        }
+
+      val projection =
+        DynamoDBProjection
+          .atLeastOnceGroupedWithin(
+            projectionId,
+            Some(settings.withReplayOnRejectedSequenceNumbers(true)),
+            sourceProvider,
+            handler = () => handler)
+          .withGroup(2, 3.seconds)
+
+      offsetShouldBeEmpty()
+
+      projectionTestKit.run(projection) {
+        results.get(pid1) shouldBe "|e1|e2|e3|e4|e5|e6|"
+        results.get(pid2) shouldBe "|e1|e2|e3|"
+      }
+
+      eventually {
+        latestOffsetShouldBe(allEnvelopes.last.offset)
+      }
+    }
+
+    "replay rejected sequence numbers due to clock skew on event write for at-least-once grouped" in {
+      val pid1 = UUID.randomUUID().toString
+      val pid2 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 =
+        createEnvelopesFor(pid1, 1, 2, start) ++
+        createEnvelopesFor(pid1, 3, 4, start.plusSeconds(4)) ++ // gap
+        createEnvelopesFor(pid1, 5, 9, start.plusSeconds(2)) // clock skew, back 2, and then overlapping
+
+      val envelopes2 =
+        createEnvelopesFor(pid2, 1, 3, start.plusSeconds(10)) ++
+        createEnvelopesFor(pid2, 4, 6, start.plusSeconds(1)) ++ // clock skew, back 9
+        createEnvelopesFor(pid2, 7, 9, start.plusSeconds(20)) // and gap
+
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val envelopes = allEnvelopes.sortBy(_.timestamp)
+
+      val sourceProvider =
+        createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val results = new ConcurrentHashMap[String, String]()
+
+      val handler: Handler[Seq[EventEnvelope[String]]] =
+        (envelopes: Seq[EventEnvelope[String]]) => {
+          Future {
+            envelopes.foreach { envelope =>
+              results.putIfAbsent(envelope.persistenceId, "|")
+              results.computeIfPresent(envelope.persistenceId, (_, value) => value + envelope.event + "|")
+            }
+          }.map(_ => Done)
+        }
+
+      val projection =
+        DynamoDBProjection
+          .atLeastOnceGroupedWithin(
+            projectionId,
+            Some(settings.withReplayOnRejectedSequenceNumbers(true)),
+            sourceProvider,
+            handler = () => handler)
+          .withGroup(2, 3.seconds)
+
+      offsetShouldBeEmpty()
+
+      projectionTestKit.run(projection) {
+        results.get(pid1) shouldBe "|e1|e2|e3|e4|e5|e6|e7|e8|e9|"
+        results.get(pid2) shouldBe "|e1|e2|e3|e4|e5|e6|e7|e8|e9|"
+      }
+
+      eventually {
+        latestOffsetShouldBe(allEnvelopes.last.offset)
+      }
+    }
   }
 
   "A DynamoDB flow projection with TimestampOffset" must {
