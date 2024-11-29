@@ -408,18 +408,23 @@ private[projection] object DynamoDBProjectionImpl {
       override def process(envelopes: Seq[Envelope]): Future[Done] = {
         import DynamoDBOffsetStore.Validation._
         offsetStore.validateAll(envelopes).flatMap { isAcceptedEnvelopes =>
+          // FIXME improvement would be to only replay the last for each pid
           val replayDone =
-            Future.sequence(isAcceptedEnvelopes.map {
-              case (env, RejectedSeqNr) =>
-                replayIfPossible(env).map(_ => Done)(ExecutionContext.parasitic)
-              case (env, RejectedBacktrackingSeqNr) =>
-                replayIfPossible(env).map {
-                  case true  => Done
-                  case false => throwRejectedEnvelope(sourceProvider, env)
+            isAcceptedEnvelopes.foldLeft(FutureDone) {
+              case (previous, (env, RejectedSeqNr)) =>
+                previous.flatMap { _ =>
+                  replayIfPossible(env).map(_ => Done)(ExecutionContext.parasitic)
                 }
-              case _ =>
-                FutureDone
-            })
+              case (previous, (env, RejectedBacktrackingSeqNr)) =>
+                previous.flatMap { _ =>
+                  replayIfPossible(env).map {
+                    case true  => Done
+                    case false => throwRejectedEnvelope(sourceProvider, env)
+                  }
+                }
+              case (previous, _) =>
+                previous
+            }
 
           replayDone.flatMap { _ =>
             val acceptedEnvelopes = isAcceptedEnvelopes.collect {
@@ -473,17 +478,14 @@ private[projection] object DynamoDBProjectionImpl {
                             .flatMap {
                               case Accepted =>
                                 // FIXME: should we be grouping the replayed envelopes? based on what?
-                                loadEnvelope(envelope.asInstanceOf[Envelope], sourceProvider).flatMap {
-                                  loadedEnvelope =>
-                                    val offset = extractOffsetPidSeqNr(sourceProvider, loadedEnvelope)
-                                    if (isFilteredEvent(loadedEnvelope)) {
+                                val offset = extractOffsetPidSeqNr(sourceProvider, envelope.asInstanceOf[Envelope])
+                                if (isFilteredEvent(envelope)) {
+                                  offsetStore.saveOffset(offset)
+                                } else {
+                                  delegate
+                                    .process(Seq(envelope.asInstanceOf[Envelope]))
+                                    .flatMap { _ =>
                                       offsetStore.saveOffset(offset)
-                                    } else {
-                                      delegate
-                                        .process(Seq(loadedEnvelope))
-                                        .flatMap { _ =>
-                                          offsetStore.saveOffset(offset)
-                                        }
                                     }
                                 }
                               case Duplicate =>
