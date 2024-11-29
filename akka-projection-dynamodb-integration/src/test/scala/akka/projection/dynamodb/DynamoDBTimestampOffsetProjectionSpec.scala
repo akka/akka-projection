@@ -897,8 +897,9 @@ class DynamoDBTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val allEnvelopes = createEnvelopes(pid1, 6) ++ createEnvelopes(pid2, 3)
+      val skipPid1SeqNrs = Set(3L, 4L, 5L)
       val envelopes = allEnvelopes.filterNot { env =>
-        (env.persistenceId == pid1 && (env.sequenceNr == 3 || env.sequenceNr == 4 || env.sequenceNr == 5)) ||
+        (env.persistenceId == pid1 && skipPid1SeqNrs(env.sequenceNr)) ||
         (env.persistenceId == pid2 && (env.sequenceNr == 1))
       }
 
@@ -1572,8 +1573,9 @@ class DynamoDBTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val allEnvelopes = createEnvelopes(pid1, 10) ++ createEnvelopes(pid2, 3)
+      val skipPid1SeqNrs = Set(3L, 4L, 5L, 7L, 9L)
       val envelopes = allEnvelopes.filterNot { env =>
-        (env.persistenceId == pid1 && (env.sequenceNr == 3 || env.sequenceNr == 4 || env.sequenceNr == 5 || env.sequenceNr == 7 || env.sequenceNr == 9)) ||
+        (env.persistenceId == pid1 && skipPid1SeqNrs(env.sequenceNr)) ||
         (env.persistenceId == pid2 && (env.sequenceNr == 1))
       }
 
@@ -1837,8 +1839,9 @@ class DynamoDBTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
 
       val allEnvelopes = createEnvelopes(pid1, 6) ++ createEnvelopes(pid2, 3)
+      val skipPid1SeqNrs = Set(3L, 4L, 5L)
       val envelopes = allEnvelopes.filterNot { env =>
-        (env.persistenceId == pid1 && (env.sequenceNr == 3 || env.sequenceNr == 4 || env.sequenceNr == 5)) ||
+        (env.persistenceId == pid1 && skipPid1SeqNrs(env.sequenceNr)) ||
         (env.persistenceId == pid2 && (env.sequenceNr == 1))
       }
 
