@@ -610,7 +610,7 @@ private[projection] object DynamoDBProjectionImpl {
                         } else {
                           // FIXME: filtered envelopes are not passed through, so we can't expect all to be replayed here
                           //        and handler could also filter out envelopes
-                          log.warn(
+                          log.debug(
                             "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
                             offsetStore.logPrefix,
                             count,
