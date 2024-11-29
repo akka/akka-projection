@@ -203,20 +203,18 @@ private[projection] object DynamoDBProjectionImpl {
             case Duplicate =>
               FutureDone
             case RejectedSeqNr =>
-              replayIfPossible(envelope).map {
-                case true  => Done
-                case false => throwRejectedEnvelopeAfterFailedReplay("query", sourceProvider, envelope)
-              }(ExecutionContext.parasitic)
+              replayIfPossible("query", envelope).map(_ => Done)(ExecutionContext.parasitic)
             case RejectedBacktrackingSeqNr =>
-              replayIfPossible(envelope).map {
+              replayIfPossible("backtracking", envelope).map {
                 case true  => Done
                 case false => throwRejectedEnvelopeAfterFailedReplay("backtracking", sourceProvider, envelope)
               }(ExecutionContext.parasitic)
           }
       }
 
-      private def replayIfPossible(
-          originalEnvelope: Envelope)(implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Boolean] = {
+      private def replayIfPossible(source: String, originalEnvelope: Envelope)(
+          implicit ec: ExecutionContext,
+          system: ActorSystem[_]): Future[Boolean] = {
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
@@ -273,7 +271,7 @@ private[projection] object DynamoDBProjectionImpl {
                               persistenceId,
                               fromSeqNr,
                               toSeqNr)
-                            false
+                            throwRejectedEnvelopeAfterFailedReplay(source, sourceProvider, originalEnvelope)
                           }
                         }
                         .recoverWith { exc =>
