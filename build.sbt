@@ -180,8 +180,6 @@ lazy val dynamodb =
     .settings(Dependencies.dynamodb)
     .dependsOn(core, eventsourced)
     .disablePlugins(CiReleasePlugin)
-    // FIXME: No previous artifact, disable MiMa until first release
-    .settings(mimaPreviousArtifacts := Set.empty)
 
 lazy val dynamodbIntegration =
   Project(id = "akka-projection-dynamodb-integration", base = file("akka-projection-dynamodb-integration"))
