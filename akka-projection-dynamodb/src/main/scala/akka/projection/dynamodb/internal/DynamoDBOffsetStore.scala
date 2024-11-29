@@ -605,10 +605,14 @@ private[projection] class DynamoDBOffsetStore(
             FutureAccepted
           } else if (!recordWithOffset.fromBacktracking) {
             logUnexpected()
+            // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+            // and SourceProvider supports it.
             FutureRejectedSeqNr
           } else {
             logUnexpected()
-            // This will result in projection restart (with normal configuration)
+            // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+            // and SourceProvider supports it.
+            // Otherwise this will result in projection restart (with normal configuration).
             FutureRejectedBacktrackingSeqNr
           }
         } else if (seqNr == 1) {
@@ -618,6 +622,7 @@ private[projection] class DynamoDBOffsetStore(
           // always accept starting from snapshots when there was no previous event seen
           FutureAccepted
         } else {
+          println(s"# validateEventTimestamp $recordWithOffset") // FIXME
           validateEventTimestamp(currentState, recordWithOffset)
         }
       } else {
@@ -682,6 +687,8 @@ private[projection] class DynamoDBOffsetStore(
             previousTimestamp,
             currentState.startTimestampBySlice(slice),
             settings.backtrackingWindow)
+          // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+          // and SourceProvider supports it.
           RejectedBacktrackingSeqNr
         } else {
           // This may happen rather frequently when using `publish-events`, after reconnecting and such.
@@ -690,6 +697,8 @@ private[projection] class DynamoDBOffsetStore(
             seqNr,
             pid,
             recordWithOffset.offset)
+          // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+          // and SourceProvider supports it.
           // Backtracking will emit missed event again.
           RejectedSeqNr
         }
