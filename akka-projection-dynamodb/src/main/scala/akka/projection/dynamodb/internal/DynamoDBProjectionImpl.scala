@@ -598,19 +598,17 @@ private[projection] object DynamoDBProjectionImpl {
                         import DynamoDBOffsetStore.Validation._
                         offsetStore
                           .validate(envelope)
-                          .flatMap {
+                          .map {
                             case Accepted =>
                               if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
                                 log.info(
                                   "atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.",
                                   envelope)
                               }
-                              loadEnvelope(envelope.asInstanceOf[Envelope], sourceProvider).map { loadedEnvelope =>
-                                offsetStore.addInflight(loadedEnvelope)
-                                Some(loadedEnvelope)
-                              }
+                              offsetStore.addInflight(envelope)
+                              Some(envelope.asInstanceOf[Envelope])
                             case Duplicate =>
-                              Future.successful(None)
+                              None
                             case RejectedSeqNr =>
                               // this shouldn't happen
                               throw new RejectedEnvelope(
