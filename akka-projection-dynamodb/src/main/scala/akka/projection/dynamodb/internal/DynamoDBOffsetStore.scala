@@ -622,7 +622,6 @@ private[projection] class DynamoDBOffsetStore(
           // always accept starting from snapshots when there was no previous event seen
           FutureAccepted
         } else {
-          println(s"# validateEventTimestamp $recordWithOffset") // FIXME
           validateEventTimestamp(currentState, recordWithOffset)
         }
       } else {

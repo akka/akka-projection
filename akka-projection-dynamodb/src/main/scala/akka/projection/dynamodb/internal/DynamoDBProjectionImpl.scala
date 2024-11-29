@@ -87,6 +87,7 @@ private[projection] object DynamoDBProjectionImpl {
   }
 
   private val loadEnvelopeCounter = new AtomicLong
+  private val replayRejectedCounter = new AtomicLong
 
   def loadEnvelope[Envelope](env: Envelope, sourceProvider: SourceProvider[_, Envelope])(
       implicit
@@ -223,12 +224,7 @@ private[projection] object DynamoDBProjectionImpl {
                 offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                   val fromSeqNr = storedSeqNr + 1
                   val toSeqNr = originalEventEnvelope.sequenceNr
-                  log.debug(
-                    s"{} Replaying events after rejected sequence number. PersistenceId [{}], replaying from seqNr [{}] to [{}].",
-                    offsetStore.logPrefix,
-                    persistenceId,
-                    fromSeqNr,
-                    toSeqNr)
+                  logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
@@ -485,12 +481,7 @@ private[projection] object DynamoDBProjectionImpl {
                 offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                   val fromSeqNr = storedSeqNr + 1
                   val toSeqNr = originalEventEnvelope.sequenceNr
-                  log.debug(
-                    s"{} Replaying events after rejected sequence number. PersistenceId [{}], replaying from seqNr [{}] to [{}].",
-                    offsetStore.logPrefix,
-                    persistenceId,
-                    fromSeqNr,
-                    toSeqNr)
+                  logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
@@ -585,12 +576,7 @@ private[projection] object DynamoDBProjectionImpl {
               offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                 val fromSeqNr = storedSeqNr + 1
                 val toSeqNr = originalEventEnvelope.sequenceNr
-                log.debug(
-                  s"{} Replaying events after rejected sequence number. PersistenceId [{}], replaying from seqNr [{}] to [{}].",
-                  offsetStore.logPrefix,
-                  persistenceId,
-                  fromSeqNr,
-                  toSeqNr)
+                logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
                 provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                   case Some(querySource) =>
                     querySource
@@ -697,6 +683,20 @@ private[projection] object DynamoDBProjectionImpl {
           env
       }
       .via(handler)
+  }
+
+  private def logReplayRejected(
+      offsetStore: DynamoDBOffsetStore,
+      persistenceId: String,
+      fromSeqNr: Long,
+      toSeqNr: Long): Unit = {
+    val msg =
+      "{} Replaying events after rejected sequence number. PersistenceId [{}], replaying from seqNr [{}] to [{}]. Replay count [{}]."
+    val c = replayRejectedCounter.incrementAndGet()
+    if (c == 1 || c % 1000 == 0)
+      log.warn(msg, offsetStore.logPrefix, persistenceId, fromSeqNr, toSeqNr, c)
+    else
+      log.debug(msg, offsetStore.logPrefix, persistenceId, fromSeqNr, toSeqNr, c)
   }
 
   private def triggerReplayIfPossible[Offset, Envelope](
