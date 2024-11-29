@@ -431,30 +431,32 @@ private[projection] object DynamoDBProjectionImpl {
       override def process(envelopes: Seq[Envelope]): Future[Done] = {
         import DynamoDBOffsetStore.Validation._
         offsetStore.validateAll(envelopes).flatMap { isAcceptedEnvelopes =>
+          // For simplicity we process the replayed envelopes one by one (group of 1), and also store the
+          // offset for each separately.
+          // Important to replay them sequentially to avoid concurrent processing and offset storage.
           val replayDone =
-            Future.sequence(isAcceptedEnvelopes.map {
-              case (env, RejectedSeqNr) =>
-                triggerReplayIfPossible(sourceProvider, offsetStore, env).map(_ => Done)(ExecutionContext.parasitic)
-              case (env, RejectedBacktrackingSeqNr) =>
-                triggerReplayIfPossible(sourceProvider, offsetStore, env).map {
-                  case true  => Done
-                  case false => throwRejectedEnvelope(sourceProvider, env)
+            isAcceptedEnvelopes.foldLeft(FutureDone) {
+              case (previous, (env, RejectedSeqNr)) =>
+                previous.flatMap { _ =>
+                  replayIfPossible(env).map(_ => Done)(ExecutionContext.parasitic)
                 }
-              case _ =>
-                FutureDone
-            })
-
-          replayDone.flatMap { _ =>
-            val acceptedEnvelopes = isAcceptedEnvelopes.collect {
-              case (env, Accepted) =>
-                env
+              case (previous, (env, RejectedBacktrackingSeqNr)) =>
+                previous.flatMap { _ =>
+                  replayIfPossible(env).map {
+                    case true  => Done
+                    case false => throwRejectedEnvelope(sourceProvider, env)
+                  }
+                }
+              case (previous, _) =>
+                previous
             }
 
-            if (acceptedEnvelopes.isEmpty) {
-              FutureDone
-            } else {
-              Future.sequence(acceptedEnvelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap {
-                loadedEnvelopes =>
+          replayDone.flatMap { _ =>
+            def processAcceptedEnvelopes(envelopes: Seq[Envelope]): Future[Done] = {
+              if (envelopes.isEmpty) {
+                FutureDone
+              } else {
+                Future.sequence(envelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap { loadedEnvelopes =>
                   val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
                   val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
                   if (filteredEnvelopes.isEmpty) {
@@ -464,9 +466,117 @@ private[projection] object DynamoDBProjectionImpl {
                       offsetStore.transactSaveOffsets(writeItems, offsets)
                     }
                   }
+                }
               }
             }
+
+            val acceptedEnvelopes = isAcceptedEnvelopes.collect {
+              case (env, Accepted) =>
+                env
+            }
+            val hasRejected =
+              isAcceptedEnvelopes.exists {
+                case (_, RejectedSeqNr)             => true
+                case (_, RejectedBacktrackingSeqNr) => true
+                case _                              => false
+              }
+
+            if (hasRejected) {
+              // need second validation after replay to remove duplicates
+              offsetStore
+                .validateAll(acceptedEnvelopes)
+                .flatMap { isAcceptedEnvelopes2 =>
+                  val acceptedEnvelopes2 = isAcceptedEnvelopes2.collect {
+                    case (env, Accepted) => env
+                  }
+                  processAcceptedEnvelopes(acceptedEnvelopes2)
+                }
+            } else {
+              processAcceptedEnvelopes(acceptedEnvelopes)
+            }
           }
+        }
+      }
+
+      private def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
+        originalEnvelope match {
+          case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
+            sourceProvider match {
+              case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked]
+                  if offsetStore.settings.replayOnRejectedSequenceNumbers =>
+                val persistenceId = originalEventEnvelope.persistenceId
+                offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
+                  val fromSeqNr = storedSeqNr + 1
+                  val toSeqNr = originalEventEnvelope.sequenceNr
+                  logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
+                  provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
+                    case Some(querySource) =>
+                      querySource
+                        .mapAsync(1) { envelope =>
+                          import DynamoDBOffsetStore.Validation._
+                          offsetStore
+                            .validate(envelope)
+                            .flatMap {
+                              case Accepted =>
+                                val offset = extractOffsetPidSeqNr(sourceProvider, envelope.asInstanceOf[Envelope])
+                                if (isFilteredEvent(envelope)) {
+                                  offsetStore.saveOffset(offset)
+                                } else {
+                                  delegate
+                                    .process(Seq(envelope.asInstanceOf[Envelope]))
+                                    .flatMap { writeItems =>
+                                      offsetStore.transactSaveOffset(writeItems, offset)
+                                    }
+                                }
+                              case Duplicate =>
+                                FutureDone
+                              case RejectedSeqNr =>
+                                // this shouldn't happen
+                                throw new RejectedEnvelope(
+                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                              case RejectedBacktrackingSeqNr =>
+                                // this shouldn't happen
+                                throw new RejectedEnvelope(
+                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                            }
+                        }
+                        .runFold(0) { case (acc, _) => acc + 1 }
+                        .map { count =>
+                          val expected = toSeqNr - fromSeqNr + 1
+                          if (count == expected) {
+                            true
+                          } else {
+                            // it's expected to find all events, otherwise fail the replay attempt
+                            log.warn(
+                              "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
+                              offsetStore.logPrefix,
+                              count,
+                              expected,
+                              persistenceId,
+                              fromSeqNr,
+                              toSeqNr)
+                            throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
+                          }
+                        }
+                        .recoverWith { exc =>
+                          log.warn(
+                            "{} Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
+                            offsetStore.logPrefix,
+                            persistenceId,
+                            fromSeqNr,
+                            originalEventEnvelope.sequenceNr,
+                            exc)
+                          Future.failed(exc)
+                        }
+                    case None => FutureFalse
+                  }
+                }
+
+              case _ =>
+                triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope)
+            }
+          case _ =>
+            FutureFalse // no replay support for non typed envelopes
         }
       }
     }
@@ -484,7 +594,9 @@ private[projection] object DynamoDBProjectionImpl {
       override def process(envelopes: Seq[Envelope]): Future[Done] = {
         import DynamoDBOffsetStore.Validation._
         offsetStore.validateAll(envelopes).flatMap { isAcceptedEnvelopes =>
-          // FIXME improvement would be to only replay the last for each pid
+          // For simplicity we process the replayed envelopes one by one (group of 1), and also store the
+          // offset for each separately.
+          // Important to replay them sequentially to avoid concurrent processing and offset storage.
           val replayDone =
             isAcceptedEnvelopes.foldLeft(FutureDone) {
               case (previous, (env, RejectedSeqNr)) =>
@@ -571,7 +683,6 @@ private[projection] object DynamoDBProjectionImpl {
                             .validate(envelope)
                             .flatMap {
                               case Accepted =>
-                                // FIXME: should we be grouping the replayed envelopes? based on what?
                                 val offset = extractOffsetPidSeqNr(sourceProvider, envelope.asInstanceOf[Envelope])
                                 if (isFilteredEvent(envelope)) {
                                   offsetStore.saveOffset(offset)
@@ -779,6 +890,9 @@ private[projection] object DynamoDBProjectionImpl {
       log.debug(msg, offsetStore.logPrefix, persistenceId, fromSeqNr, toSeqNr, c)
   }
 
+  /**
+   * This replay mechanism is used by GrpcReadJournal
+   */
   private def triggerReplayIfPossible[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
       offsetStore: DynamoDBOffsetStore,
