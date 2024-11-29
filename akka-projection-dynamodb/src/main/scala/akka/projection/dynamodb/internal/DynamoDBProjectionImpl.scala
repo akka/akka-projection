@@ -17,6 +17,7 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.event.LoggingAdapter
+import akka.persistence.dynamodb.internal.EnvelopeOrigin
 import akka.persistence.query.DeletedDurableState
 import akka.persistence.query.DurableStateChange
 import akka.persistence.query.UpdatedDurableState
@@ -203,16 +204,16 @@ private[projection] object DynamoDBProjectionImpl {
             case Duplicate =>
               FutureDone
             case RejectedSeqNr =>
-              replayIfPossible("query", envelope).map(_ => Done)(ExecutionContext.parasitic)
+              replayIfPossible(envelope).map(_ => Done)(ExecutionContext.parasitic)
             case RejectedBacktrackingSeqNr =>
-              replayIfPossible("backtracking", envelope).map {
+              replayIfPossible(envelope).map {
                 case true  => Done
                 case false => throwRejectedEnvelope(sourceProvider, envelope)
               }(ExecutionContext.parasitic)
           }
       }
 
-      private def replayIfPossible(source: String, originalEnvelope: Envelope): Future[Boolean] = {
+      private def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
@@ -275,7 +276,7 @@ private[projection] object DynamoDBProjectionImpl {
                               persistenceId,
                               fromSeqNr,
                               toSeqNr)
-                            throwRejectedEnvelopeAfterFailedReplay(source, sourceProvider, originalEnvelope)
+                            throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                           }
                         }
                         .recoverWith { exc =>
@@ -410,9 +411,9 @@ private[projection] object DynamoDBProjectionImpl {
           val replayDone =
             Future.sequence(isAcceptedEnvelopes.map {
               case (env, RejectedSeqNr) =>
-                replayIfPossible("query", env).map(_ => Done)(ExecutionContext.parasitic)
+                replayIfPossible(env).map(_ => Done)(ExecutionContext.parasitic)
               case (env, RejectedBacktrackingSeqNr) =>
-                replayIfPossible("backtracking", env).map {
+                replayIfPossible(env).map {
                   case true  => Done
                   case false => throwRejectedEnvelope(sourceProvider, env)
                 }
@@ -446,7 +447,7 @@ private[projection] object DynamoDBProjectionImpl {
         }
       }
 
-      private def replayIfPossible(source: String, originalEnvelope: Envelope): Future[Boolean] = {
+      private def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
@@ -512,7 +513,7 @@ private[projection] object DynamoDBProjectionImpl {
                               persistenceId,
                               fromSeqNr,
                               toSeqNr)
-                            throwRejectedEnvelopeAfterFailedReplay(source, sourceProvider, originalEnvelope)
+                            throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                           }
                         }
                         .recoverWith { exc =>
@@ -709,9 +710,9 @@ private[projection] object DynamoDBProjectionImpl {
   }
 
   private def throwRejectedEnvelopeAfterFailedReplay[Offset, Envelope](
-      source: String,
       sourceProvider: SourceProvider[Offset, Envelope],
       envelope: Envelope): Nothing = {
+    val source = envelopeSourceName(envelope)
     extractOffsetPidSeqNr(sourceProvider, envelope) match {
       case OffsetPidSeqNr(_, Some((pid, seqNr))) =>
         throw new RejectedEnvelope(
@@ -719,6 +720,18 @@ private[projection] object DynamoDBProjectionImpl {
       case OffsetPidSeqNr(_, None) =>
         throw new RejectedEnvelope(
           s"Replay failed, after rejected envelope from $source, due to unexpected sequence number.")
+    }
+  }
+
+  private def envelopeSourceName[Envelope](envelope: Envelope): String = {
+    envelope match {
+      case env: EventEnvelope[Any @unchecked] =>
+        if (EnvelopeOrigin.fromQuery(env)) "query"
+        else if (EnvelopeOrigin.fromPubSub(env)) "pubsub"
+        else if (EnvelopeOrigin.fromBacktracking(env)) "backtracking"
+        else if (EnvelopeOrigin.fromSnapshot(env)) "snapshot"
+        else env.source
+      case _ => "unknown"
     }
   }
 
