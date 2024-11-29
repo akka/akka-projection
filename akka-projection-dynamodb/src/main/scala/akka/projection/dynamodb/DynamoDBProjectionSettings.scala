@@ -48,7 +48,8 @@ object DynamoDBProjectionSettings {
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
       offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
       timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")),
-      retrySettings = RetrySettings(config.getConfig("offset-store.retries")))
+      retrySettings = RetrySettings(config.getConfig("offset-store.retries")),
+      replayOnRejectedSequenceNumbers = config.getBoolean("replay-on-rejected-sequence-numbers"))
   }
 
   /**
@@ -72,7 +73,8 @@ final class DynamoDBProjectionSettings private (
     val offsetBatchSize: Int,
     val offsetSliceReadParallelism: Int,
     val timeToLiveSettings: TimeToLiveSettings,
-    val retrySettings: RetrySettings) {
+    val retrySettings: RetrySettings,
+    val replayOnRejectedSequenceNumbers: Boolean) {
 
   // 25 is a hard limit of batch writes in DynamoDB
   require(offsetBatchSize <= 25, s"offset-batch-size must be <= 25, was [$offsetBatchSize]")
@@ -122,6 +124,9 @@ final class DynamoDBProjectionSettings private (
   def withRetrySettings(retrySettings: RetrySettings): DynamoDBProjectionSettings =
     copy(retrySettings = retrySettings)
 
+  def withReplayOnRejectedSequenceNumbers(replayOnRejectedSequenceNumbers: Boolean): DynamoDBProjectionSettings =
+    copy(replayOnRejectedSequenceNumbers = replayOnRejectedSequenceNumbers)
+
   @nowarn("msg=deprecated")
   private def copy(
       timestampOffsetTable: String = timestampOffsetTable,
@@ -132,7 +137,8 @@ final class DynamoDBProjectionSettings private (
       offsetBatchSize: Int = offsetBatchSize,
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
       timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings,
-      retrySettings: RetrySettings = retrySettings) =
+      retrySettings: RetrySettings = retrySettings,
+      replayOnRejectedSequenceNumbers: Boolean = replayOnRejectedSequenceNumbers) =
     new DynamoDBProjectionSettings(
       timestampOffsetTable,
       useClient,
@@ -144,10 +150,24 @@ final class DynamoDBProjectionSettings private (
       offsetBatchSize,
       offsetSliceReadParallelism,
       timeToLiveSettings,
-      retrySettings)
+      retrySettings,
+      replayOnRejectedSequenceNumbers)
 
-  override def toString =
-    s"DynamoDBProjectionSettings($timestampOffsetTable, $useClient, $timeWindow, $backtrackingWindow, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
+  @nowarn("msg=deprecated")
+  override def toString: String =
+    s"DynamoDBProjectionSettings(" +
+    s"timestampOffsetTable=$timestampOffsetTable, " +
+    s"useClient=$useClient, " +
+    s"timeWindow=$timeWindow, " +
+    s"backtrackingWindow=$backtrackingWindow, " +
+    s"keepNumberOfEntries=$keepNumberOfEntries, " +
+    s"evictInterval=$evictInterval, " +
+    s"warnAboutFilteredEventsInFlow=$warnAboutFilteredEventsInFlow, " +
+    s"offsetBatchSize=$offsetBatchSize, " +
+    s"offsetSliceReadParallelism=$offsetSliceReadParallelism, " +
+    s"timeToLiveSettings=$timeToLiveSettings, " +
+    s"retrySettings=$retrySettings, " +
+    s"replayOnRejectedSequenceNumbers=$replayOnRejectedSequenceNumbers)"
 }
 
 object TimeToLiveSettings {
