@@ -212,9 +212,7 @@ private[projection] object DynamoDBProjectionImpl {
           }
       }
 
-      private def replayIfPossible(source: String, originalEnvelope: Envelope)(
-          implicit ec: ExecutionContext,
-          system: ActorSystem[_]): Future[Boolean] = {
+      private def replayIfPossible(source: String, originalEnvelope: Envelope): Future[Boolean] = {
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
@@ -448,9 +446,7 @@ private[projection] object DynamoDBProjectionImpl {
         }
       }
 
-      private def replayIfPossible(source: String, originalEnvelope: Envelope)(
-          implicit ec: ExecutionContext,
-          system: ActorSystem[_]): Future[Boolean] = {
+      private def replayIfPossible(source: String, originalEnvelope: Envelope): Future[Boolean] = {
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
