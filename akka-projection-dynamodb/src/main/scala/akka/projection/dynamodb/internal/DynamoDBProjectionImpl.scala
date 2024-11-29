@@ -215,6 +215,7 @@ private[projection] object DynamoDBProjectionImpl {
       }
 
       private def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
+        val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
@@ -224,7 +225,7 @@ private[projection] object DynamoDBProjectionImpl {
                 offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                   val fromSeqNr = storedSeqNr + 1
                   val toSeqNr = originalEventEnvelope.sequenceNr
-                  logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
+                  logReplayRejected(logPrefix, persistenceId, fromSeqNr, toSeqNr)
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
@@ -264,25 +265,12 @@ private[projection] object DynamoDBProjectionImpl {
                             true
                           } else {
                             // it's expected to find all events, otherwise fail the replay attempt
-                            log.warn(
-                              "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
-                              offsetStore.logPrefix,
-                              count,
-                              expected,
-                              persistenceId,
-                              fromSeqNr,
-                              toSeqNr)
+                            logReplayInvalidCount(logPrefix, persistenceId, fromSeqNr, toSeqNr, count, expected)
                             throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                           }
                         }
                         .recoverWith { exc =>
-                          log.warn(
-                            "{} Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
-                            offsetStore.logPrefix,
-                            persistenceId,
-                            fromSeqNr,
-                            originalEventEnvelope.sequenceNr,
-                            exc)
+                          logReplayException(logPrefix, persistenceId, fromSeqNr, toSeqNr, exc)
                           Future.failed(exc)
                         }
                     case None => FutureFalse
@@ -338,6 +326,7 @@ private[projection] object DynamoDBProjectionImpl {
       }
 
       private def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
+        val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
@@ -347,7 +336,7 @@ private[projection] object DynamoDBProjectionImpl {
                 offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                   val fromSeqNr = storedSeqNr + 1
                   val toSeqNr = originalEventEnvelope.sequenceNr
-                  logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
+                  logReplayRejected(logPrefix, persistenceId, fromSeqNr, toSeqNr)
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
@@ -384,25 +373,12 @@ private[projection] object DynamoDBProjectionImpl {
                             true
                           } else {
                             // it's expected to find all events, otherwise fail the replay attempt
-                            log.warn(
-                              "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
-                              offsetStore.logPrefix,
-                              count,
-                              expected,
-                              persistenceId,
-                              fromSeqNr,
-                              toSeqNr)
+                            logReplayInvalidCount(logPrefix, persistenceId, fromSeqNr, toSeqNr, count, expected)
                             throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                           }
                         }
                         .recoverWith { exc =>
-                          log.warn(
-                            "{} Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
-                            offsetStore.logPrefix,
-                            persistenceId,
-                            fromSeqNr,
-                            originalEventEnvelope.sequenceNr,
-                            exc)
+                          logReplayException(logPrefix, persistenceId, fromSeqNr, toSeqNr, exc)
                           Future.failed(exc)
                         }
                     case None => FutureFalse
@@ -499,6 +475,7 @@ private[projection] object DynamoDBProjectionImpl {
       }
 
       private def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
+        val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
@@ -508,7 +485,7 @@ private[projection] object DynamoDBProjectionImpl {
                 offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                   val fromSeqNr = storedSeqNr + 1
                   val toSeqNr = originalEventEnvelope.sequenceNr
-                  logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
+                  logReplayRejected(logPrefix, persistenceId, fromSeqNr, toSeqNr)
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
@@ -547,25 +524,12 @@ private[projection] object DynamoDBProjectionImpl {
                             true
                           } else {
                             // it's expected to find all events, otherwise fail the replay attempt
-                            log.warn(
-                              "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
-                              offsetStore.logPrefix,
-                              count,
-                              expected,
-                              persistenceId,
-                              fromSeqNr,
-                              toSeqNr)
+                            logReplayInvalidCount(logPrefix, persistenceId, fromSeqNr, toSeqNr, count, expected)
                             throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                           }
                         }
                         .recoverWith { exc =>
-                          log.warn(
-                            "{} Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
-                            offsetStore.logPrefix,
-                            persistenceId,
-                            fromSeqNr,
-                            originalEventEnvelope.sequenceNr,
-                            exc)
+                          logReplayException(logPrefix, persistenceId, fromSeqNr, toSeqNr, exc)
                           Future.failed(exc)
                         }
                     case None => FutureFalse
@@ -664,6 +628,7 @@ private[projection] object DynamoDBProjectionImpl {
       }
 
       private def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
+        val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
@@ -673,7 +638,7 @@ private[projection] object DynamoDBProjectionImpl {
                 offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                   val fromSeqNr = storedSeqNr + 1
                   val toSeqNr = originalEventEnvelope.sequenceNr
-                  logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
+                  logReplayRejected(logPrefix, persistenceId, fromSeqNr, toSeqNr)
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
@@ -712,25 +677,12 @@ private[projection] object DynamoDBProjectionImpl {
                             true
                           } else {
                             // it's expected to find all events, otherwise fail the replay attempt
-                            log.warn(
-                              "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
-                              offsetStore.logPrefix,
-                              count,
-                              expected,
-                              persistenceId,
-                              fromSeqNr,
-                              toSeqNr)
+                            logReplayInvalidCount(logPrefix, persistenceId, fromSeqNr, toSeqNr, count, expected)
                             throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                           }
                         }
                         .recoverWith { exc =>
-                          log.warn(
-                            "{} Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
-                            offsetStore.logPrefix,
-                            persistenceId,
-                            fromSeqNr,
-                            originalEventEnvelope.sequenceNr,
-                            exc)
+                          logReplayException(logPrefix, persistenceId, fromSeqNr, toSeqNr, exc)
                           Future.failed(exc)
                         }
                     case None => FutureFalse
@@ -758,6 +710,7 @@ private[projection] object DynamoDBProjectionImpl {
     implicit val ec: ExecutionContext = system.executionContext
 
     def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
+      val logPrefix = offsetStore.logPrefix
       originalEnvelope match {
         case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
           sourceProvider match {
@@ -767,7 +720,7 @@ private[projection] object DynamoDBProjectionImpl {
               offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                 val fromSeqNr = storedSeqNr + 1
                 val toSeqNr = originalEventEnvelope.sequenceNr
-                logReplayRejected(offsetStore, persistenceId, fromSeqNr, toSeqNr)
+                logReplayRejected(logPrefix, persistenceId, fromSeqNr, toSeqNr)
                 provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                   case Some(querySource) =>
                     querySource
@@ -813,24 +766,17 @@ private[projection] object DynamoDBProjectionImpl {
                           //        and handler could also filter out envelopes
                           log.debug(
                             "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
-                            offsetStore.logPrefix,
+                            logPrefix,
                             count,
                             expected,
                             persistenceId,
                             fromSeqNr,
                             toSeqNr)
-                          // throwRejectedEnvelopeAfterFailedReplay(source, sourceProvider, originalEnvelope)
                           true
                         }
                       }
                       .recoverWith { exc =>
-                        log.warn(
-                          "{} Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
-                          offsetStore.logPrefix,
-                          persistenceId,
-                          fromSeqNr,
-                          originalEventEnvelope.sequenceNr,
-                          exc)
+                        logReplayException(logPrefix, persistenceId, fromSeqNr, toSeqNr, exc)
                         Future.failed(exc)
                       }
                   case None => FutureFalse
@@ -876,18 +822,46 @@ private[projection] object DynamoDBProjectionImpl {
       .via(handler)
   }
 
-  private def logReplayRejected(
-      offsetStore: DynamoDBOffsetStore,
-      persistenceId: String,
-      fromSeqNr: Long,
-      toSeqNr: Long): Unit = {
+  private def logReplayRejected(logPrefix: String, persistenceId: String, fromSeqNr: Long, toSeqNr: Long): Unit = {
     val msg =
       "{} Replaying events after rejected sequence number. PersistenceId [{}], replaying from seqNr [{}] to [{}]. Replay count [{}]."
     val c = replayRejectedCounter.incrementAndGet()
     if (c == 1 || c % 1000 == 0)
-      log.warn(msg, offsetStore.logPrefix, persistenceId, fromSeqNr, toSeqNr, c)
+      log.warn(msg, logPrefix, persistenceId, fromSeqNr, toSeqNr, c)
     else
-      log.debug(msg, offsetStore.logPrefix, persistenceId, fromSeqNr, toSeqNr, c)
+      log.debug(msg, logPrefix, persistenceId, fromSeqNr, toSeqNr, c)
+  }
+
+  private def logReplayInvalidCount(
+      logPrefix: String,
+      persistenceId: String,
+      fromSeqNr: Long,
+      toSeqNr: Long,
+      count: Int,
+      expected: Long): Unit = {
+    log.warn(
+      "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
+      logPrefix,
+      count,
+      expected,
+      persistenceId,
+      fromSeqNr,
+      toSeqNr)
+  }
+
+  private def logReplayException(
+      logPrefix: String,
+      persistenceId: String,
+      fromSeqNr: Long,
+      toSeqNr: Long,
+      exc: Throwable): Unit = {
+    log.warn(
+      "{} Replay due to rejected envelope failed. PersistenceId [{}] from seqNr [{}] to [{}].",
+      logPrefix,
+      persistenceId,
+      fromSeqNr,
+      toSeqNr,
+      exc)
   }
 
   /**
