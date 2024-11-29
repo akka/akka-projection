@@ -203,7 +203,7 @@ private[projection] class DynamoDBOffsetStore(
     projectionId: ProjectionId,
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
-    settings: DynamoDBProjectionSettings,
+    val settings: DynamoDBProjectionSettings,
     client: DynamoDbAsyncClient,
     clock: Clock = Clock.systemUTC()) {
 

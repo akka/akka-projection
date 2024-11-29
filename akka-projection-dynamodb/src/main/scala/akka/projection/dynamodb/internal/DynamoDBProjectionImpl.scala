@@ -217,8 +217,8 @@ private[projection] object DynamoDBProjectionImpl {
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             sourceProvider match {
-              // FIXME config to make this case opt in
-              case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
+              case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked]
+                  if offsetStore.settings.replayOnRejectedSequenceNumbers =>
                 val persistenceId = originalEventEnvelope.persistenceId
                 offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                   val fromSeqNr = storedSeqNr + 1

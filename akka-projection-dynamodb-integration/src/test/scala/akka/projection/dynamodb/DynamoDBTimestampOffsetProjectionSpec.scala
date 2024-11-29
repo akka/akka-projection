@@ -904,12 +904,18 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
       implicit val offsetStore: DynamoDBOffsetStore =
         new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
 
       val projectionRef = spawn(
-        ProjectionBehavior(DynamoDBProjection
-          .atLeastOnce(projectionId, Some(settings), sourceProvider, handler = () => new ConcatHandler(repository))))
+        ProjectionBehavior(
+          DynamoDBProjection
+            .atLeastOnce(
+              projectionId,
+              Some(settings.withReplayOnRejectedSequenceNumbers(true)),
+              sourceProvider,
+              handler = () => new ConcatHandler(repository))))
 
       eventually {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")(pid1)
@@ -960,8 +966,13 @@ class DynamoDBTimestampOffsetProjectionSpec
         new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
 
       val projectionRef = spawn(
-        ProjectionBehavior(DynamoDBProjection
-          .atLeastOnce(projectionId, Some(settings), sourceProvider, handler = () => new ConcatHandler(repository))))
+        ProjectionBehavior(
+          DynamoDBProjection
+            .atLeastOnce(
+              projectionId,
+              Some(settings.withReplayOnRejectedSequenceNumbers(true)),
+              sourceProvider,
+              handler = () => new ConcatHandler(repository))))
 
       eventually {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6|e7|e8|e9")(pid1)
