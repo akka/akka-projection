@@ -48,6 +48,7 @@ import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
+import akka.projection.internal.JavaToScalaBySliceSourceProviderAdapter
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.OffsetStrategy
@@ -218,7 +219,11 @@ private[projection] object DynamoDBProjectionImpl {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
-            sourceProvider match {
+            val underlyingProvider = sourceProvider match {
+              case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
+              case provider                                               => provider
+            }
+            underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked]
                   if offsetStore.settings.replayOnRejectedSequenceNumbers =>
                 val persistenceId = originalEventEnvelope.persistenceId
@@ -329,7 +334,11 @@ private[projection] object DynamoDBProjectionImpl {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
-            sourceProvider match {
+            val underlyingProvider = sourceProvider match {
+              case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
+              case provider                                               => provider
+            }
+            underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked]
                   if offsetStore.settings.replayOnRejectedSequenceNumbers =>
                 val persistenceId = originalEventEnvelope.persistenceId
@@ -478,7 +487,11 @@ private[projection] object DynamoDBProjectionImpl {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
-            sourceProvider match {
+            val underlyingProvider = sourceProvider match {
+              case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
+              case provider                                               => provider
+            }
+            underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked]
                   if offsetStore.settings.replayOnRejectedSequenceNumbers =>
                 val persistenceId = originalEventEnvelope.persistenceId
@@ -631,7 +644,11 @@ private[projection] object DynamoDBProjectionImpl {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
-            sourceProvider match {
+            val underlyingProvider = sourceProvider match {
+              case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
+              case provider                                               => provider
+            }
+            underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked]
                   if offsetStore.settings.replayOnRejectedSequenceNumbers =>
                 val persistenceId = originalEventEnvelope.persistenceId
@@ -713,7 +730,11 @@ private[projection] object DynamoDBProjectionImpl {
       val logPrefix = offsetStore.logPrefix
       originalEnvelope match {
         case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
-          sourceProvider match {
+          val underlyingProvider = sourceProvider match {
+            case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
+            case provider                                               => provider
+          }
+          underlyingProvider match {
             case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked]
                 if offsetStore.settings.replayOnRejectedSequenceNumbers =>
               val persistenceId = originalEventEnvelope.persistenceId
