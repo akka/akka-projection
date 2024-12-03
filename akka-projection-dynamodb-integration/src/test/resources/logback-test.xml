@@ -15,7 +15,7 @@
     <logger name="akka.projection" level="DEBUG" />
     <logger name="akka.projection.dynamodb" level="TRACE" />
     <logger name="akka.persistence.dynamodb" level="DEBUG" />
-    <logger name="software.amazon.awssdk.request" level="DEBUG" />
+    <logger name="software.amazon.awssdk.request" level="INFO" />
 
 
     <root level="INFO">
