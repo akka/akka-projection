@@ -167,8 +167,8 @@ private[projection] object R2dbcOffsetStore {
           // Slice will be equal, and pid will compare lexicographically less than any valid pid
           val untilRecord = Record(slice, "", 0, until)
           // this will always keep at least one, latest per slice
-          val newerRecords = recordsSortedByTimestamp.rangeImpl(Some(untilRecord), None) // inclusive of until
-          val olderRecords = recordsSortedByTimestamp.rangeImpl(None, Some(untilRecord)) // exclusive of until
+          val newerRecords = recordsSortedByTimestamp.rangeFrom(untilRecord) // inclusive of until
+          val olderRecords = recordsSortedByTimestamp.rangeUntil(untilRecord) // exclusive of until
           val filteredOlder = olderRecords.filterNot(ableToEvictRecord)
 
           if (filteredOlder.size == olderRecords.size) recordsSortedByTimestamp
