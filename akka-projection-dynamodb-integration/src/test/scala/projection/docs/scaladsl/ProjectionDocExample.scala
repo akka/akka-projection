@@ -137,6 +137,7 @@ object ProjectionDocExample {
     //#grouped-handler
     import akka.Done
     import akka.persistence.query.typed.EventEnvelope
+    import akka.projection.dynamodb.scaladsl.Retry
     import akka.projection.scaladsl.Handler
     import software.amazon.awssdk.services.dynamodb.model.AttributeValue
     import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
@@ -144,10 +145,10 @@ object ProjectionDocExample {
     import software.amazon.awssdk.services.dynamodb.model.WriteRequest
 
     import scala.concurrent.Future
+    import scala.concurrent.duration._
     import scala.jdk.CollectionConverters._
-    import scala.jdk.FutureConverters._
 
-    class GroupedShoppingCartHandler(client: DynamoDbAsyncClient)(implicit ec: ExecutionContext)
+    class GroupedShoppingCartHandler(client: DynamoDbAsyncClient)(implicit system: ActorSystem[_], ec: ExecutionContext)
         extends Handler[Seq[EventEnvelope[ShoppingCart.Event]]] {
       private val logger = LoggerFactory.getLogger(getClass)
 
@@ -174,12 +175,27 @@ object ProjectionDocExample {
           }
         }.asJava
 
-        client
-          .batchWriteItem(
-            BatchWriteItemRequest.builder
-              .requestItems(Map("orders" -> items).asJava)
-              .build())
-          .asScala
+        val request = BatchWriteItemRequest.builder
+          .requestItems(Map("orders" -> items).asJava)
+          .build()
+
+        // batch write, retrying writes for any unprocessed items (with exponential backoff)
+        Retry
+          .batchWrite(
+            client,
+            request,
+            maxRetries = 3,
+            minBackoff = 200.millis,
+            maxBackoff = 2.seconds,
+            randomFactor = 0.3,
+            onRetry = (response, retry, delay) =>
+              logger.debug(
+                "Retrying batch write in [{} ms], [{}/3] retries, unprocessed items [{}]",
+                delay.toMillis,
+                retry,
+                response.unprocessedItems),
+            failOnMaxRetries = response =>
+              new RuntimeException(s"Failed to write batch, unprocessed items [${response.unprocessedItems}]"))
           .map(_ => Done)
       }
     }

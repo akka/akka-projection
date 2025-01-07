@@ -17,13 +17,12 @@ import scala.jdk.FutureConverters._
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
-import akka.pattern.BackoffSupervisor
-import akka.pattern.after
 import akka.persistence.dynamodb.internal.InstantFactory
 import akka.persistence.query.TimestampOffset
 import akka.projection.ProjectionId
 import akka.projection.dynamodb.DynamoDBProjectionSettings
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Record
+import akka.projection.dynamodb.scaladsl.Retry
 import akka.projection.internal.ManagementState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -118,45 +117,25 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
       }(ExecutionContext.parasitic)
   }
 
-  private def writeBatchWithRetries(
-      batchReq: BatchWriteItemRequest,
-      retries: Int = 0): Future[List[BatchWriteItemResponse]] = {
-    val result = client.batchWriteItem(batchReq).asScala
-
-    result.flatMap { response =>
-      if (response.hasUnprocessedItems && !response.unprocessedItems.isEmpty) {
-        if (retries >= settings.retrySettings.maxRetries) {
-          Future.failed(new BatchWriteFailed(response))
-        } else { // retry after exponential backoff
-          val unprocessed = response.unprocessedItems
-          val newReq = batchReq.toBuilder.requestItems(unprocessed).build()
-          val nextRetry = retries + 1
-          val delay = BackoffSupervisor.calculateDelay(
-            retries,
-            settings.retrySettings.minBackoff,
-            settings.retrySettings.maxBackoff,
-            settings.retrySettings.randomFactor)
-
-          if (log.isDebugEnabled) {
-            val count = unprocessed.asScala.valuesIterator.map(_.size).sum
-            log.debug(
-              "Not all writes in batch were applied, retrying in [{} ms]: [{}] unapplied writes, [{}/{}] retries",
-              delay.toMillis,
-              count,
-              nextRetry,
-              settings.retrySettings.maxRetries)
-          }
-
-          implicit val sys: ActorSystem[_] = system
-          after(delay) {
-            writeBatchWithRetries(newReq, nextRetry)
-          }.map { responses => response :: responses }(ExecutionContext.parasitic)
-        }
-      } else {
-        Future.successful(List(response))
-      }
-    }
-  }
+  private def writeBatchWithRetries(request: BatchWriteItemRequest): Future[Seq[BatchWriteItemResponse]] =
+    Retry.batchWrite(
+      client,
+      request,
+      settings.retrySettings.maxRetries,
+      settings.retrySettings.minBackoff,
+      settings.retrySettings.maxBackoff,
+      settings.retrySettings.randomFactor,
+      onRetry = (response, retry, delay) =>
+        if (log.isDebugEnabled) {
+          val count = response.unprocessedItems.asScala.valuesIterator.map(_.size).sum
+          log.debug(
+            "Not all writes in batch were applied, retrying in [{} ms]: [{}] unapplied writes, [{}/{}] retries",
+            delay.toMillis,
+            count,
+            retry,
+            settings.retrySettings.maxRetries)
+        },
+      failOnMaxRetries = new BatchWriteFailed(_))(system)
 
   def storeTimestampOffsets(offsetsBySlice: Map[Int, TimestampOffset]): Future[Done] = {
     import OffsetStoreDao.OffsetStoreAttributes._

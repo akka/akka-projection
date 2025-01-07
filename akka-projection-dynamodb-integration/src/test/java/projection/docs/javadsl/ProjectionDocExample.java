@@ -33,6 +33,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
 // #handler
 // #grouped-handler
+import akka.projection.dynamodb.javadsl.Retry;
 import akka.projection.javadsl.Handler;
 // #grouped-handler
 // #handler
@@ -207,11 +208,13 @@ public class ProjectionDocExample {
   public class GroupedShoppingCartHandler extends Handler<List<EventEnvelope<ShoppingCart.Event>>> {
 
     private final DynamoDbAsyncClient client;
+    private final ActorSystem<?> system;
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
-    public GroupedShoppingCartHandler(DynamoDbAsyncClient client) {
+    public GroupedShoppingCartHandler(DynamoDbAsyncClient client, ActorSystem<?> system) {
       this.client = client;
+      this.system = system;
     }
 
     @Override
@@ -250,11 +253,38 @@ public class ProjectionDocExample {
                   })
               .collect(Collectors.toList());
 
-      CompletableFuture<BatchWriteItemResponse> response =
-          client.batchWriteItem(
-              BatchWriteItemRequest.builder().requestItems(Map.of("orders", items)).build());
+      BatchWriteItemRequest request =
+          BatchWriteItemRequest.builder().requestItems(Map.of("orders", items)).build();
 
-      return response.thenApply(__ -> Done.getInstance());
+      int maxRetries = 3;
+      Duration minBackoff = Duration.ofMillis(200);
+      Duration maxBackoff = Duration.ofSeconds(2);
+      double randomFactor = 0.3;
+
+      // batch write, retrying writes for any unprocessed items (with exponential backoff)
+      CompletionStage<List<BatchWriteItemResponse>> result =
+          Retry.batchWrite(
+              client,
+              request,
+              maxRetries,
+              minBackoff,
+              maxBackoff,
+              randomFactor,
+              // called on each retry: log that unprocessed items are being retried
+              (response, retry, delay) ->
+                  logger.debug(
+                      "Retrying batch write in [{} ms], [{}/{}] retries, unprocessed items [{}]",
+                      delay.toMillis(),
+                      retry,
+                      maxRetries,
+                      response.unprocessedItems()),
+              // create the exception if max retries is reached
+              response ->
+                  new RuntimeException(
+                      "Failed to write batch, unprocessed items: " + response.unprocessedItems()),
+              system);
+
+      return result.thenApply(__ -> Done.getInstance());
     }
   }
 
@@ -441,7 +471,7 @@ public class ProjectionDocExample {
                 projectionId,
                 settings,
                 sourceProvider,
-                () -> new GroupedShoppingCartHandler(client),
+                () -> new GroupedShoppingCartHandler(client, system),
                 system)
             .withGroup(groupAfterEnvelopes, groupAfterDuration);
     // #at-least-once-grouped-within
