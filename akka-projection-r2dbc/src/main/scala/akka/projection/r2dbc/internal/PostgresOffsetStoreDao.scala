@@ -197,12 +197,11 @@ private[projection] class PostgresOffsetStoreDao(
     r2dbcExecutor.select("read timestamp offset")(
       conn => {
         logger.trace("reading timestamp offset for [{}]", projectionId)
-        val limit = 1000 // FIXME config
         conn
           .createStatement(selectTimestampOffsetSql)
           .bind(0, slice)
           .bind(1, projectionId.name)
-          .bind(2, limit)
+          .bind(2, settings.offsetSliceReadLimit)
       },
       row => {
         val projectionKey = row.get("projection_key", classOf[String])

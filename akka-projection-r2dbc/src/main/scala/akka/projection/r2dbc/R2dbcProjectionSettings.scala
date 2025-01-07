@@ -81,7 +81,9 @@ object R2dbcProjectionSettings {
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
-      customConnectionFactory = None)
+      customConnectionFactory = None,
+      offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
+      offsetSliceReadLimit = config.getInt("offset-store.offset-slice-read-limit"))
   }
 
   /**
@@ -110,7 +112,9 @@ final class R2dbcProjectionSettings private (
     val logDbCallsExceeding: FiniteDuration,
     val warnAboutFilteredEventsInFlow: Boolean,
     val offsetBatchSize: Int,
-    val customConnectionFactory: Option[ConnectionFactory]) {
+    val customConnectionFactory: Option[ConnectionFactory],
+    val offsetSliceReadParallelism: Int,
+    val offsetSliceReadLimit: Int) {
 
   val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
@@ -188,6 +192,12 @@ final class R2dbcProjectionSettings private (
   def withCustomConnectionFactory(customConnectionFactory: ConnectionFactory): R2dbcProjectionSettings =
     copy(customConnectionFactory = Some(customConnectionFactory))
 
+  def withOffsetSliceReadParallelism(offsetSliceReadParallelism: Int): R2dbcProjectionSettings =
+    copy(offsetSliceReadParallelism = offsetSliceReadParallelism)
+
+  def withOffsetSliceReadLimit(offsetSliceReadLimit: Int): R2dbcProjectionSettings =
+    copy(offsetSliceReadLimit = offsetSliceReadLimit)
+
   @nowarn("msg=deprecated")
   private def copy(
       schema: Option[String] = schema,
@@ -203,7 +213,9 @@ final class R2dbcProjectionSettings private (
       logDbCallsExceeding: FiniteDuration = logDbCallsExceeding,
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
       offsetBatchSize: Int = offsetBatchSize,
-      customConnectionFactory: Option[ConnectionFactory] = customConnectionFactory) =
+      customConnectionFactory: Option[ConnectionFactory] = customConnectionFactory,
+      offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
+      offsetSliceReadLimit: Int = offsetSliceReadLimit) =
     new R2dbcProjectionSettings(
       schema,
       offsetTable,
@@ -220,7 +232,9 @@ final class R2dbcProjectionSettings private (
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow,
       offsetBatchSize,
-      customConnectionFactory)
+      customConnectionFactory,
+      offsetSliceReadParallelism,
+      offsetSliceReadLimit)
 
   override def toString =
     s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory)"

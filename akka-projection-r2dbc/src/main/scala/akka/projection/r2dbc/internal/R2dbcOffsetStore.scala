@@ -346,11 +346,9 @@ private[projection] class R2dbcOffsetStore(
     triggerDeletionPerSlice.clear()
     val oldState = state.get()
 
-    val offsetSliceReadParallelism = 10 // FIXME config
-
     val recordsWithKeyFut =
       Source(minSlice to maxSlice)
-        .mapAsyncUnordered(offsetSliceReadParallelism) { slice =>
+        .mapAsyncUnordered(settings.offsetSliceReadParallelism) { slice =>
           dao.readTimestampOffset(slice)
         }
         .mapConcat(identity)
@@ -364,7 +362,6 @@ private[projection] class R2dbcOffsetStore(
 
       val newState = {
         val s = State(recordsWithKey.map(_.record))
-        // FIXME shall we evict here, or how does that impact the logic for moreThanOneProjectionKey and foreignOffsets?
         (minSlice to maxSlice).foldLeft(s) {
           case (acc, slice) => acc.evict(slice, settings.timeWindow, _ => true)
         }
