@@ -102,10 +102,9 @@ private[projection] object R2dbcOffsetStore {
         None
       } else {
         val t = latestTimestamp
-        // FIXME optimize this collection juggling?
         val latest =
           bySliceSorted.valuesIterator.flatMap { records =>
-            if (records.last.timestamp == t)
+            if (records.nonEmpty && records.last.timestamp == t)
               records.toVector.reverseIterator.takeWhile(_.timestamp == t).toVector
             else
               Vector.empty
