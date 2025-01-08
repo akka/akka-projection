@@ -666,11 +666,17 @@ private[projection] class R2dbcOffsetStore(
   /**
    * The stored sequence number for a persistenceId, or 0 if unknown persistenceId.
    */
-  def storedSeqNr(pid: Pid): SeqNr =
+  def storedSeqNr(pid: Pid): Future[SeqNr] = {
     getState().byPid.get(pid) match {
-      case Some(record) => record.seqNr
-      case None         => 0L
+      case Some(record) => Future.successful(record.seqNr)
+      case None =>
+        val slice = persistenceExt.sliceForPersistenceId(pid)
+        dao.readTimestampOffset(slice, pid).map {
+          case Some(record) => record.seqNr
+          case None         => 0L
+        }
     }
+  }
 
   def validateAll[Envelope](envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[(Envelope, Validation)]] = {
     import Validation._
