@@ -103,9 +103,9 @@ final class R2dbcProjectionSettings private (
     val timeWindow: JDuration,
     val backtrackingWindow: JDuration,
     val deleteAfter: JDuration,
-    @deprecated("Not used, evict is only based on time window", "1.6.3")
+    @deprecated("Not used, evict is only based on time window", "1.6.6")
     val keepNumberOfEntries: Int,
-    @deprecated("Not used, evict is not periodic", "1.6.2")
+    @deprecated("Not used, evict is not periodic", "1.6.6")
     val evictInterval: JDuration,
     val deleteInterval: JDuration,
     val adoptInterval: JDuration,
@@ -153,15 +153,15 @@ final class R2dbcProjectionSettings private (
   def withDeleteAfter(deleteAfter: JDuration): R2dbcProjectionSettings =
     copy(deleteAfter = deleteAfter)
 
-  @deprecated("Not used, evict is only based on time window", "1.6.2")
+  @deprecated("Not used, evict is only based on time window", "1.6.6")
   def withKeepNumberOfEntries(keepNumberOfEntries: Int): R2dbcProjectionSettings =
     this
 
-  @deprecated("Not used, evict is not periodic", "1.6.2")
+  @deprecated("Not used, evict is not periodic", "1.6.6")
   def withEvictInterval(evictInterval: FiniteDuration): R2dbcProjectionSettings =
     this
 
-  @deprecated("Not used, evict is not periodic", "1.6.2")
+  @deprecated("Not used, evict is not periodic", "1.6.6")
   def withEvictInterval(evictInterval: JDuration): R2dbcProjectionSettings =
     this
 
