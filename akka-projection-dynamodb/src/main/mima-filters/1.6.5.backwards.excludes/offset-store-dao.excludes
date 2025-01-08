@@ -1,0 +1,2 @@
+# internal
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.dynamodb.internal.OffsetStoreDao$BatchWriteFailed")

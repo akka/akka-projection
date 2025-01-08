@@ -33,7 +33,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
 // #handler
 // #grouped-handler
-import akka.projection.dynamodb.javadsl.Retry;
+import akka.projection.dynamodb.javadsl.Requests;
 import akka.projection.javadsl.Handler;
 // #grouped-handler
 // #handler
@@ -263,26 +263,8 @@ public class ProjectionDocExample {
 
       // batch write, retrying writes for any unprocessed items (with exponential backoff)
       CompletionStage<List<BatchWriteItemResponse>> result =
-          Retry.batchWrite(
-              client,
-              request,
-              maxRetries,
-              minBackoff,
-              maxBackoff,
-              randomFactor,
-              // called on each retry: log that unprocessed items are being retried
-              (response, retry, delay) ->
-                  logger.debug(
-                      "Retrying batch write in [{} ms], [{}/{}] retries, unprocessed items [{}]",
-                      delay.toMillis(),
-                      retry,
-                      maxRetries,
-                      response.unprocessedItems()),
-              // create the exception if max retries is reached
-              response ->
-                  new RuntimeException(
-                      "Failed to write batch, unprocessed items: " + response.unprocessedItems()),
-              system);
+          Requests.batchWriteWithRetries(
+              client, request, maxRetries, minBackoff, maxBackoff, randomFactor, system);
 
       return result.thenApply(__ -> Done.getInstance());
     }

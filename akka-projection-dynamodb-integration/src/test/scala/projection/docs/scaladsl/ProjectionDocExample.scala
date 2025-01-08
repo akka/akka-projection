@@ -137,7 +137,7 @@ object ProjectionDocExample {
     //#grouped-handler
     import akka.Done
     import akka.persistence.query.typed.EventEnvelope
-    import akka.projection.dynamodb.scaladsl.Retry
+    import akka.projection.dynamodb.scaladsl.Requests
     import akka.projection.scaladsl.Handler
     import software.amazon.awssdk.services.dynamodb.model.AttributeValue
     import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
@@ -180,22 +180,14 @@ object ProjectionDocExample {
           .build()
 
         // batch write, retrying writes for any unprocessed items (with exponential backoff)
-        Retry
-          .batchWrite(
+        Requests
+          .batchWriteWithRetries(
             client,
             request,
             maxRetries = 3,
             minBackoff = 200.millis,
             maxBackoff = 2.seconds,
-            randomFactor = 0.3,
-            onRetry = (response, retry, delay) =>
-              logger.debug(
-                "Retrying batch write in [{} ms], [{}/3] retries, unprocessed items [{}]",
-                delay.toMillis,
-                retry,
-                response.unprocessedItems),
-            failOnMaxRetries = response =>
-              new RuntimeException(s"Failed to write batch, unprocessed items [${response.unprocessedItems}]"))
+            randomFactor = 0.3)
           .map(_ => Done)
       }
     }

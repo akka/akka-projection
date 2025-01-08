@@ -21,8 +21,9 @@ import akka.persistence.dynamodb.internal.InstantFactory
 import akka.persistence.query.TimestampOffset
 import akka.projection.ProjectionId
 import akka.projection.dynamodb.DynamoDBProjectionSettings
+import akka.projection.dynamodb.Requests.BatchWriteFailed
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Record
-import akka.projection.dynamodb.scaladsl.Retry
+import akka.projection.dynamodb.scaladsl.Requests
 import akka.projection.internal.ManagementState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -60,8 +61,6 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
     val timestampBySlicePid = AttributeValue.fromS("_")
     val managementStateBySlicePid = AttributeValue.fromS("_mgmt")
   }
-
-  final class BatchWriteFailed(val lastResponse: BatchWriteItemResponse) extends RuntimeException
 }
 
 /**
@@ -73,7 +72,6 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
     projectionId: ProjectionId,
     client: DynamoDbAsyncClient) {
   import OffsetStoreDao.log
-  import OffsetStoreDao.BatchWriteFailed
   import OffsetStoreDao.MaxTransactItems
   import settings.offsetBatchSize
   import system.executionContext
@@ -118,24 +116,13 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
   }
 
   private def writeBatchWithRetries(request: BatchWriteItemRequest): Future[Seq[BatchWriteItemResponse]] =
-    Retry.batchWrite(
+    Requests.batchWriteWithRetries(
       client,
       request,
       settings.retrySettings.maxRetries,
       settings.retrySettings.minBackoff,
       settings.retrySettings.maxBackoff,
-      settings.retrySettings.randomFactor,
-      onRetry = (response, retry, delay) =>
-        if (log.isDebugEnabled) {
-          val count = response.unprocessedItems.asScala.valuesIterator.map(_.size).sum
-          log.debug(
-            "Not all writes in batch were applied, retrying in [{} ms]: [{}] unapplied writes, [{}/{}] retries",
-            delay.toMillis,
-            count,
-            retry,
-            settings.retrySettings.maxRetries)
-        },
-      failOnMaxRetries = new BatchWriteFailed(_))(system)
+      settings.retrySettings.randomFactor)(system)
 
   def storeTimestampOffsets(offsetsBySlice: Map[Int, TimestampOffset]): Future[Done] = {
     import OffsetStoreDao.OffsetStoreAttributes._

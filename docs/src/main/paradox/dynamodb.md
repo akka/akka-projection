@@ -263,8 +263,8 @@ When using @ref:[`DynamoDBProjection.atLeastOnceGroupedWithin`](#at-least-once-g
 
 If a [batch write](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html) to DynamoDB
 is being used, it's possible for items in the batch to fail to be written, and the response should be checked for
-unprocessed items. A @apidoc[akka.projection.dynamodb.*.Retry$] utility is provided, to retry writes (with exponential
-backoff) for any unprocessed items.
+unprocessed items. A @apidoc[akka.projection.dynamodb.*.Requests$] utility is provided, to retry batch writes (with
+exponential backoff) for any unprocessed items.
 
 Java
 :  @@snip [grouped handler](/akka-projection-dynamodb-integration/src/test/java/projection/docs/javadsl/ProjectionDocExample.java) { #grouped-handler }
