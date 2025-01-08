@@ -211,7 +211,7 @@ private[projection] object DynamoDBProjectionImpl {
               replay(envelope).map {
                 case true  => Done
                 case false => throwRejectedEnvelope(sourceProvider, envelope)
-              }(ExecutionContext.parasitic)
+              }
           }
       }
 
@@ -267,7 +267,7 @@ private[projection] object DynamoDBProjectionImpl {
               replay(envelope).map {
                 case true  => Done
                 case false => throwRejectedEnvelope(sourceProvider, envelope)
-              }(ExecutionContext.parasitic)
+              }
           }
       }
 
