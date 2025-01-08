@@ -10,6 +10,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
 
 import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 import akka.pattern.BackoffSupervisor
 import akka.pattern.after
 import org.slf4j.Logger
@@ -22,11 +23,23 @@ object Requests {
       extends RuntimeException(
         s"Failed to batch write all items, [${batchUnprocessedTotal(lastResponse)}] unprocessed items remaining")
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private[akka] val log: Logger = LoggerFactory.getLogger(getClass)
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private[akka] def batchUnprocessedTotal(response: BatchWriteItemResponse): Int =
     response.unprocessedItems.asScala.valuesIterator.map(_.size).sum
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
   private[akka] def retry[Request, Response](
       request: Request,
       attempt: Request => Future[Response],
