@@ -728,7 +728,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       // if the handler is retrying it will be aborted by this,
       // otherwise the stream would not be completed by the killSwitch until after all retries
       projectionState.abort.failure(AbortProjectionException)
-      streamDone
+      streamDone.andThen(_ => offsetStore.stop())(system.executionContext)
     }
 
     // RunningProjectionManagement

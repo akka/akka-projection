@@ -251,7 +251,7 @@ class EventSourcedEndToEndSpec
 
       val projectionName = UUID.randomUUID().toString
       val processedProbe = createTestProbe[Processed]()
-      val projections = startProjections(entityType, projectionName, nrOfProjections = 4, processedProbe.ref)
+      var projections = startProjections(entityType, projectionName, nrOfProjections = 4, processedProbe.ref)
 
       // give them some time to start before writing more events
       Thread.sleep(500)
@@ -271,7 +271,7 @@ class EventSourcedEndToEndSpec
 
         // resume projections again
         if (n == (numberOfEvents / 2) + 20)
-          startProjections(entityType, projectionName, nrOfProjections = 4, processedProbe.ref)
+          projections = startProjections(entityType, projectionName, nrOfProjections = 4, processedProbe.ref)
 
         if (n % 10 == 0)
           Thread.sleep(50)

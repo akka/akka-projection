@@ -41,6 +41,7 @@ import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
+import akka.actor.Cancellable
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 
@@ -207,6 +208,13 @@ private[projection] object R2dbcOffsetStore {
   val FutureDone: Future[Done] = Future.successful(Done)
 
   final case class LatestBySlice(slice: Int, pid: String, seqNr: Long)
+
+  final case class ScheduledTasks(adoptForeignOffsets: Option[Cancellable], deleteOffsets: Option[Cancellable]) {
+    def cancel(): Unit = {
+      adoptForeignOffsets.foreach(_.cancel())
+      deleteOffsets.foreach(_.cancel())
+    }
+  }
 }
 
 /**
@@ -280,21 +288,40 @@ private[projection] class R2dbcOffsetStore(
 
   private val adoptingForeignOffsets = !settings.adoptInterval.isZero && !settings.adoptInterval.isNegative
 
-  private val scheduledAdoptForeignOffsets =
-    if (adoptingForeignOffsets)
-      Some(
-        system.scheduler.scheduleWithFixedDelay(
-          settings.adoptInterval,
-          settings.adoptInterval,
-          () => adoptForeignOffsets(),
-          system.executionContext))
-    else None
+  private val scheduledTasks = new AtomicReference[ScheduledTasks](ScheduledTasks(None, None))
 
-  private def scheduleNextDelete(): Unit = {
-    if (!settings.deleteInterval.isZero && !settings.deleteInterval.isNegative)
-      system.scheduler.scheduleOnce(settings.deleteInterval, () => deleteOldTimestampOffsets(), system.executionContext)
+  @tailrec
+  private def scheduleTasks(): Unit = {
+    val existingTasks = scheduledTasks.get()
+    existingTasks.cancel()
+
+    val foreignOffsets =
+      if (adoptingForeignOffsets)
+        Some(
+          system.scheduler.scheduleWithFixedDelay(
+            settings.adoptInterval,
+            settings.adoptInterval,
+            () => adoptForeignOffsets(),
+            system.executionContext))
+      else None
+
+    val deleteOffsets =
+      if (!settings.deleteInterval.isZero && !settings.deleteInterval.isNegative)
+        Some(
+          system.scheduler.scheduleWithFixedDelay(
+            settings.deleteInterval,
+            settings.deleteInterval,
+            () => deleteOldTimestampOffsets(),
+            system.executionContext))
+      else
+        None
+
+    val newTasks = ScheduledTasks(foreignOffsets, deleteOffsets)
+    if (!scheduledTasks.compareAndSet(existingTasks, newTasks)) {
+      newTasks.cancel()
+      scheduleTasks() // CAS retry, concurrent update
+    }
   }
-  scheduleNextDelete()
 
   private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     sourceProvider match {
@@ -327,6 +354,8 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def readOffset[Offset](): Future[Option[Offset]] = {
+    scheduleTasks()
+
     // look for TimestampOffset first since that is used by akka-persistence-r2dbc,
     // and then fall back to the other more primitive offset types
     sourceProvider match {
@@ -929,7 +958,7 @@ private[projection] class R2dbcOffsetStore(
         logger.debug("{} Deleted [{}] timestamp offset rows", logPrefix, rows)
       }
 
-    result.andThen(_ => scheduleNextDelete())
+    result
   }
 
   def deleteOldTimestampOffsets(slice: Int): Future[Long] = {
@@ -1008,12 +1037,12 @@ private[projection] class R2dbcOffsetStore(
 
   def adoptForeignOffsets(): Future[Long] = {
     if (!hasForeignOffsets()) {
-      scheduledAdoptForeignOffsets.foreach(_.cancel())
+      scheduledTasks.get.adoptForeignOffsets.foreach(_.cancel())
       Future.successful(0)
     } else {
       val latestTimestamp = getLatestSeen()
       val adoptableRecords = takeAdoptableForeignOffsets(latestTimestamp)
-      if (!hasForeignOffsets()) scheduledAdoptForeignOffsets.foreach(_.cancel())
+      if (!hasForeignOffsets()) scheduledTasks.get.adoptForeignOffsets.foreach(_.cancel())
       val adoptableLatestBySlice = adoptableRecords.map { adoptable =>
         LatestBySlice(adoptable.record.slice, adoptable.record.pid, adoptable.record.seqNr)
       }
@@ -1165,6 +1194,11 @@ private[projection] class R2dbcOffsetStore(
           s"DurableStateChange [${change.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-projection/issues")
       case _ => None
     }
+  }
+
+  def stop(): Unit = {
+    scheduledTasks.get.cancel()
+    scheduledTasks.set(ScheduledTasks(None, None))
   }
 
 }
