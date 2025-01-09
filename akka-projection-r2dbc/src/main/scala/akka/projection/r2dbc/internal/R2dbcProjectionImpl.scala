@@ -647,7 +647,13 @@ private[projection] object R2dbcProjectionImpl {
                         logReplayException(logPrefix, persistenceId, fromSeqNr, toSeqNr, exc)
                         Future.failed(exc)
                       }
-                  case None => FutureFalse
+                  case None =>
+                    Future.successful(
+                      triggerReplayIfPossible(
+                        sourceProvider,
+                        persistenceId,
+                        fromSeqNr,
+                        originalEventEnvelope.sequenceNr))
                 }
               }
 
@@ -742,17 +748,33 @@ private[projection] object R2dbcProjectionImpl {
     envelope match {
       case env: EventEnvelope[Any @unchecked] if env.sequenceNr > 1 =>
         sourceProvider match {
-          case provider: CanTriggerReplay =>
+          case _: CanTriggerReplay =>
             offsetStore.storedSeqNr(env.persistenceId).map { storedSeqNr =>
               val fromSeqNr = storedSeqNr + 1
-              provider.triggerReplay(env.persistenceId, fromSeqNr, env.sequenceNr)
-              true
+              triggerReplayIfPossible(sourceProvider, env.persistenceId, fromSeqNr, env.sequenceNr)
             }
           case _ =>
             FutureFalse // no replay support for other source providers
         }
       case _ =>
         FutureFalse // no replay support for non typed envelopes
+    }
+  }
+
+  /**
+   * This replay mechanism is used by GrpcReadJournal
+   */
+  private def triggerReplayIfPossible[Offset, Envelope](
+      sourceProvider: SourceProvider[Offset, Envelope],
+      persistenceId: String,
+      fromSeqNr: Long,
+      triggeredBySeqNr: Long): Boolean = {
+    sourceProvider match {
+      case provider: CanTriggerReplay =>
+        provider.triggerReplay(persistenceId, fromSeqNr, triggeredBySeqNr)
+        true
+      case _ =>
+        false // no replay support for other source providers
     }
   }
 
@@ -814,7 +836,9 @@ private[projection] object R2dbcProjectionImpl {
                       logReplayException(logPrefix, persistenceId, fromSeqNr, toSeqNr, exc)
                       Future.failed(exc)
                     }
-                case None => FutureFalse
+                case None =>
+                  Future.successful(
+                    triggerReplayIfPossible(sourceProvider, persistenceId, fromSeqNr, originalEventEnvelope.sequenceNr))
               }
             }
 
