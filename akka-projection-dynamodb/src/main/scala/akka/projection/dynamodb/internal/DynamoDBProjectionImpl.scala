@@ -601,26 +601,29 @@ private[projection] object DynamoDBProjectionImpl {
   }
 
   private def logReplayRejected(logPrefix: String, originalEventEnvelope: EventEnvelope[Any], fromSeqNr: Long): Unit = {
-    val msg =
-      "{} Replaying events after rejected sequence number from {}. PersistenceId [{}], replaying from seqNr [{}] to [{}]. Replay count [{}]."
-    val c =
-      if (EnvelopeOrigin.fromPubSub(originalEventEnvelope))
-        replayRejectedCounter.get // don't increment counter for pubsub
-      else
-        replayRejectedCounter.incrementAndGet()
-
-    val logLevel =
-      if (c == 1 || c % 1000 == 0) Level.WARN else Level.DEBUG
-    log
-      .atLevel(logLevel)
-      .log(
-        msg,
+    if (EnvelopeOrigin.fromPubSub(originalEventEnvelope)) {
+      log.debug(
+        "{} Replaying events after rejected sequence number from {}. PersistenceId [{}], replaying from seqNr [{}] to [{}].",
         logPrefix,
         envelopeSourceName(originalEventEnvelope),
         originalEventEnvelope.persistenceId,
         fromSeqNr,
-        originalEventEnvelope.sequenceNr,
-        c)
+        originalEventEnvelope.sequenceNr)
+    } else {
+      val c = replayRejectedCounter.incrementAndGet()
+      val logLevel =
+        if (c == 1 || c % 1000 == 0) Level.WARN else Level.DEBUG
+      log
+        .atLevel(logLevel)
+        .log(
+          "{} Replaying events after rejected sequence number from {}. PersistenceId [{}], replaying from seqNr [{}] to [{}]. Replay count [{}].",
+          logPrefix,
+          envelopeSourceName(originalEventEnvelope),
+          originalEventEnvelope.persistenceId,
+          fromSeqNr,
+          originalEventEnvelope.sequenceNr,
+          c)
+    }
   }
 
   private def logReplayInvalidCount(
