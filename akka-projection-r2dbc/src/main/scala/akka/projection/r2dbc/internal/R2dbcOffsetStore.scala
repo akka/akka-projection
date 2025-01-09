@@ -217,7 +217,7 @@ private[projection] class R2dbcOffsetStore(
     projectionId: ProjectionId,
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
-    settings: R2dbcProjectionSettings,
+    val settings: R2dbcProjectionSettings,
     r2dbcExecutor: R2dbcExecutor,
     clock: Clock = Clock.systemUTC()) {
 
@@ -233,7 +233,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private val logger = LoggerFactory.getLogger(this.getClass)
-  private val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
+  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -774,9 +774,14 @@ private[projection] class R2dbcOffsetStore(
             // snapshots will mean we are starting from some arbitrary offset after last seen offset
             FutureAccepted
           } else if (!recordWithOffset.fromBacktracking) {
+            // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+            // and SourceProvider supports it.
             logUnexpected()
             FutureRejectedSeqNr
           } else {
+            // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+            // and SourceProvider supports it.
+            // Otherwise this will result in projection restart (with normal configuration).
             logUnexpected()
             // This will result in projection restart (with normal configuration)
             FutureRejectedBacktrackingSeqNr
@@ -834,6 +839,8 @@ private[projection] class R2dbcOffsetStore(
             settings.backtrackingWindow)
           Accepted
         } else if (recordWithOffset.fromPubSub) {
+          // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+          // and SourceProvider supports it.
           logger.debug(
             "{} Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
             logPrefix,
@@ -842,7 +849,8 @@ private[projection] class R2dbcOffsetStore(
             recordWithOffset.offset)
           RejectedSeqNr
         } else if (recordWithOffset.fromBacktracking) {
-          // This will result in projection restart (with normal configuration)
+          // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+          // and SourceProvider supports it.
           logger.warn(
             "{} Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, where previous event timestamp [{}] " +
             "is after start timestamp [{}] minus backtracking window [{}].",
@@ -862,6 +870,8 @@ private[projection] class R2dbcOffsetStore(
             seqNr,
             pid,
             recordWithOffset.offset)
+          // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+          // and SourceProvider supports it.
           // Backtracking will emit missed event again.
           RejectedSeqNr
         }

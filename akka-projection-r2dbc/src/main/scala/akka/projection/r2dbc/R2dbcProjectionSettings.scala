@@ -83,7 +83,8 @@ object R2dbcProjectionSettings {
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
       customConnectionFactory = None,
       offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
-      offsetSliceReadLimit = config.getInt("offset-store.offset-slice-read-limit"))
+      offsetSliceReadLimit = config.getInt("offset-store.offset-slice-read-limit"),
+      replayOnRejectedSequenceNumbers = config.getBoolean("replay-on-rejected-sequence-numbers"))
   }
 
   /**
@@ -114,7 +115,8 @@ final class R2dbcProjectionSettings private (
     val offsetBatchSize: Int,
     val customConnectionFactory: Option[ConnectionFactory],
     val offsetSliceReadParallelism: Int,
-    val offsetSliceReadLimit: Int) {
+    val offsetSliceReadLimit: Int,
+    val replayOnRejectedSequenceNumbers: Boolean) {
 
   val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
@@ -198,6 +200,9 @@ final class R2dbcProjectionSettings private (
   def withOffsetSliceReadLimit(offsetSliceReadLimit: Int): R2dbcProjectionSettings =
     copy(offsetSliceReadLimit = offsetSliceReadLimit)
 
+  def withReplayOnRejectedSequenceNumbers(replayOnRejectedSequenceNumbers: Boolean): R2dbcProjectionSettings =
+    copy(replayOnRejectedSequenceNumbers = replayOnRejectedSequenceNumbers)
+
   @nowarn("msg=deprecated")
   private def copy(
       schema: Option[String] = schema,
@@ -215,7 +220,8 @@ final class R2dbcProjectionSettings private (
       offsetBatchSize: Int = offsetBatchSize,
       customConnectionFactory: Option[ConnectionFactory] = customConnectionFactory,
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
-      offsetSliceReadLimit: Int = offsetSliceReadLimit) =
+      offsetSliceReadLimit: Int = offsetSliceReadLimit,
+      replayOnRejectedSequenceNumbers: Boolean = replayOnRejectedSequenceNumbers) =
     new R2dbcProjectionSettings(
       schema,
       offsetTable,
@@ -234,8 +240,9 @@ final class R2dbcProjectionSettings private (
       offsetBatchSize,
       customConnectionFactory,
       offsetSliceReadParallelism,
-      offsetSliceReadLimit)
+      offsetSliceReadLimit,
+      replayOnRejectedSequenceNumbers)
 
   override def toString =
-    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory)"
+    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory, &offsetSliceReadParallelism, $offsetSliceReadLimit, $replayOnRejectedSequenceNumbers)"
 }
