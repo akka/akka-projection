@@ -625,25 +625,8 @@ private[projection] object R2dbcProjectionImpl {
                           env -> ProjectionContextImpl(sourceProvider.extractOffset(env), env, null)
                       }
                       .via(handler.asFlow)
-                      .runFold(0) { case (acc, _) => acc + 1 }
-                      .map { count =>
-                        val expected = toSeqNr - fromSeqNr + 1
-                        if (count == expected) {
-                          true
-                        } else {
-                          // FIXME: filtered envelopes are not passed through, so we can't expect all to be replayed here
-                          //        and handler could also filter out envelopes
-                          log.debug(
-                            "{} Replay due to rejected envelope found [{}] events, but expected [{}]. PersistenceId [{}] from seqNr [{}] to [{}].",
-                            logPrefix,
-                            count,
-                            expected,
-                            persistenceId,
-                            fromSeqNr,
-                            toSeqNr)
-                          true
-                        }
-                      }
+                      .run()
+                      .map(_ => true)(ExecutionContext.parasitic)
                       .recoverWith { exc =>
                         logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
                         Future.failed(exc)
