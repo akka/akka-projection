@@ -4,7 +4,6 @@
 
 package akka.projection.dynamodb
 
-import java.lang
 import java.util.UUID
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ConcurrentHashMap
@@ -323,7 +322,7 @@ class EventSourcedEndToEndSpec
 
   private var processedEventsPerProjection: Map[ProjectionId, ConcurrentHashMap[String, java.lang.Boolean]] = Map.empty
 
-  private def processedEvents(projectionId: ProjectionId): ConcurrentHashMap[String, lang.Boolean] = {
+  private def processedEvents(projectionId: ProjectionId): ConcurrentHashMap[String, java.lang.Boolean] = {
     processedEventsPerProjection.get(projectionId) match {
       case None =>
         val processedEvents = new ConcurrentHashMap[String, java.lang.Boolean]
