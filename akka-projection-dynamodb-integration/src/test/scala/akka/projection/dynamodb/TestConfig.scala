@@ -15,7 +15,6 @@ object TestConfig {
       .parseString("""
       akka.loglevel = DEBUG
       akka.persistence.journal.plugin = "akka.persistence.dynamodb.journal"
-      akka.persistence.snapshot-store.plugin = "akka.persistence.dynamodb.snapshot"
       akka.persistence.dynamodb {
         query {
           refresh-interval = 1s
