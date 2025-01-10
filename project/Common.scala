@@ -17,7 +17,7 @@ object Common extends AutoPlugin {
     Seq(
       organization := "com.lightbend.akka",
       organizationName := "Lightbend Inc.",
-      organizationHomepage := Some(url("https://www.lightbend.com/")),
+      organizationHomepage := Some(url("https://akka.io/")),
       startYear := Some(2020),
       homepage := Some(url("https://akka.io")),
       // apiURL defined in projectSettings because version.value is not correct here
@@ -26,7 +26,7 @@ object Common extends AutoPlugin {
       developers += Developer(
           "contributors",
           "Contributors",
-          "https://gitter.im/akka/dev",
+          "akka.official@gmail.com",
           url("https://github.com/akka/akka-projection/graphs/contributors")),
       licenses := {
         val tagOrBranch =
@@ -60,9 +60,15 @@ object Common extends AutoPlugin {
         })
       ++ {
         if (scalaBinaryVersion.value.startsWith("3")) {
-          Seq("-skip-packages:akka.pattern") // different usage in scala3
+          Seq(
+            s"-external-mappings:https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api/java.base/",
+            "-skip-packages:akka.pattern")
         } else {
-          Seq("-skip-packages", "akka.pattern") // for some reason Scaladoc creates this
+          Seq(
+            "-jdk-api-doc-base",
+            s"https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api/java.base/",
+            "-skip-packages",
+            "akka.pattern")
         }
       },
     scalafmtOnCompile := System.getenv("CI") != "true",

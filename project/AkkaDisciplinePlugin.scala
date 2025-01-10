@@ -1,7 +1,3 @@
-/*
- * Copyright (C) 2019-2023 Lightbend Inc. <https://www.lightbend.com>
- */
-
 package akka
 
 import sbt._
@@ -76,6 +72,7 @@ object AkkaDisciplinePlugin extends AutoPlugin {
     "-Ywarn-nullary-unit",
     "-Ywarn-unused:_",
     "-Ypartial-unification",
-    "-Ywarn-extra-implicit")
+    "-Ywarn-extra-implicit",
+    "-Wconf:src=.*.txt.*:silent,src=.*target.*akka-grpc.*:silent")
 
 }

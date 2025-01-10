@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.replication.scaladsl
@@ -21,11 +21,11 @@ import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
 import akka.projection.grpc.replication.internal.ReplicaImpl
 import akka.projection.grpc.replication.scaladsl
-import akka.util.JavaDurationConverters._
-import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.Config
 
 import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters._
+import scala.jdk.DurationConverters._
 
 object ReplicationSettings {
 
@@ -141,7 +141,7 @@ object ReplicationSettings {
       otherReplicas = allReplicas.filter(_.replicaId != selfReplicaId),
       entityEventReplicationTimeout = config
         .getDuration("entity-event-replication-timeout")
-        .asScala,
+        .toScala,
       parallelUpdates = config.getInt("parallel-updates"),
       projectionProvider = replicationProjectionProvider,
       eventProducerInterceptor = None,
@@ -151,9 +151,9 @@ object ReplicationSettings {
       initialConsumerFilter = Vector.empty,
       edgeReplicationDeliveryRetries = replicationConfig.getInt("edge-replication-delivery-retries"),
       edgeReplicationDeliveryMinBackoff =
-        replicationConfig.getDuration("edge-replication-delivery-min-backoff").asScala,
+        replicationConfig.getDuration("edge-replication-delivery-min-backoff").toScala,
       edgeReplicationDeliveryMaxBackoff =
-        replicationConfig.getDuration("edge-replication-delivery-max-backoff").asScala)
+        replicationConfig.getDuration("edge-replication-delivery-max-backoff").toScala)
   }
 
 }

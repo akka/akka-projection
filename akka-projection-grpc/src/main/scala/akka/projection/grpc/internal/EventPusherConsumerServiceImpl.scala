@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2023-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.internal
@@ -8,11 +8,9 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.EntityRef
-import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
 import akka.persistence.FilteredPayload
@@ -214,11 +212,11 @@ private[akka] final class EventPusherConsumerServiceImpl private (
               val interceptedTail = destination.eventProducerPushDestination.interceptor match {
                 case Some(interceptor) =>
                   Source.futureSource(interceptor.intercept(init.streamId, metadata).map { _ =>
-                    logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
+                    logger.info("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
                     eventsAndFiltered
                   })
                 case None =>
-                  logger.info2("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
+                  logger.info("Event stream from [{}] for stream id [{}] started", init.originId, init.streamId)
                   eventsAndFiltered
               }
 
@@ -244,7 +242,7 @@ private[akka] final class EventPusherConsumerServiceImpl private (
                   val transformedEventEnvelope = transformer(originalEnvelope)
 
                   if (logger.isTraceEnabled)
-                    logger.traceN(
+                    logger.trace(
                       "Saw event [{}] for pid [{}]{}",
                       transformedEventEnvelope.sequenceNr,
                       transformedEventEnvelope.persistenceId,
@@ -259,7 +257,7 @@ private[akka] final class EventPusherConsumerServiceImpl private (
                       // ack using the original pid in case it was transformed
                       ConsumeEventOut(ConsumeEventOut.Message.Ack(
                         ConsumerEventAck(originalEnvelope.persistenceId, originalEnvelope.sequenceNr))))(
-                      ExecutionContexts.parasitic)
+                      ExecutionContext.parasitic)
                     .recover {
                       case ex: Throwable =>
                         logger.warn(s"Failing event stream because of event writer error", ex)
@@ -269,7 +267,7 @@ private[akka] final class EventPusherConsumerServiceImpl private (
                 .prepend(Source.future(startEvent.future))
 
             case None =>
-              logger.debug2(
+              logger.debug(
                 "Event producer [{}] wanted to push events for stream id [{}] but that is not among the accepted stream ids",
                 init.originId,
                 init.streamId)

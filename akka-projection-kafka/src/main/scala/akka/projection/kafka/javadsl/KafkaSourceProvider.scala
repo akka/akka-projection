@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.kafka.javadsl
@@ -24,7 +24,7 @@ object KafkaSourceProvider {
       system: ActorSystem[_],
       settings: ConsumerSettings[K, V],
       topics: java.util.Set[String]): SourceProvider[MergeableOffset[JLong], ConsumerRecord[K, V]] = {
-    import akka.util.ccompat.JavaConverters._
+    import scala.jdk.CollectionConverters._
     new KafkaSourceProviderImpl[K, V](
       system,
       settings,

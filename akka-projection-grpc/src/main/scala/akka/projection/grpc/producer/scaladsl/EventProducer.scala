@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.producer.scaladsl
@@ -20,6 +20,7 @@ import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdStartin
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
+import akka.persistence.typed.internal.ReplicatedEventMetadata
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
@@ -33,6 +34,9 @@ import akka.projection.grpc.replication.internal.EventOriginFilter
 object EventProducer {
 
   object EventProducerSource {
+    private val IdentityReplicatedEventMetadataTransformation: EventEnvelope[Any] => Option[ReplicatedEventMetadata] =
+      _ => None
+
     def apply(
         entityType: String,
         streamId: String,
@@ -45,7 +49,8 @@ object EventProducer {
         settings,
         _ => true,
         transformSnapshot = None,
-        replicatedEventOriginFilter = None)
+        replicatedEventOriginFilter = None,
+        replicatedEventMetadataTransformation = IdentityReplicatedEventMetadataTransformation)
 
     def apply[Event](
         entityType: String,
@@ -60,7 +65,8 @@ object EventProducer {
         settings,
         producerFilter.asInstanceOf[EventEnvelope[Any] => Boolean],
         transformSnapshot = None,
-        replicatedEventOriginFilter = None)
+        replicatedEventOriginFilter = None,
+        replicatedEventMetadataTransformation = IdentityReplicatedEventMetadataTransformation)
 
   }
 
@@ -78,7 +84,10 @@ object EventProducer {
       val producerFilter: EventEnvelope[Any] => Boolean,
       val transformSnapshot: Option[Any => Any],
       /** INTERNAL API */
-      @InternalApi private[akka] val replicatedEventOriginFilter: Option[EventOriginFilter]) {
+      @InternalApi private[akka] val replicatedEventOriginFilter: Option[EventOriginFilter],
+      /** INTERNAL API */
+      @InternalApi private[akka] val replicatedEventMetadataTransformation: EventEnvelope[Any] => Option[
+        ReplicatedEventMetadata]) {
     require(entityType.nonEmpty, "Entity type must not be empty")
     require(streamId.nonEmpty, "Stream id must not be empty")
 
@@ -116,14 +125,29 @@ object EventProducer {
     def withReplicatedEventOriginFilter(filter: EventOriginFilter): EventProducerSource =
       copy(replicatedEventOriginFilter = Some(filter))
 
-    def copy(
+    /**
+     * INTERNAL API
+     */
+    @InternalApi private[akka] def withReplicatedEventMetadataTransformation(
+        f: EventEnvelope[Any] => Option[ReplicatedEventMetadata]): EventProducerSource =
+      copy(replicatedEventMetadataTransformation = f)
+
+    def hasReplicatedEventMetadataTransformation: Boolean =
+      replicatedEventMetadataTransformation ne EventProducerSource.IdentityReplicatedEventMetadataTransformation
+
+    /**
+     * INTERNAL API
+     */
+    @InternalApi private[akka] def copy(
         entityType: String = entityType,
         streamId: String = streamId,
         transformation: Transformation = transformation,
         settings: EventProducerSettings = settings,
         producerFilter: EventEnvelope[Any] => Boolean = producerFilter,
         transformSnapshot: Option[Any => Any] = transformSnapshot,
-        replicatedEventOriginFilter: Option[EventOriginFilter] = replicatedEventOriginFilter): EventProducerSource =
+        replicatedEventOriginFilter: Option[EventOriginFilter] = replicatedEventOriginFilter,
+        replicatedEventMetadataTransformation: EventEnvelope[Any] => Option[ReplicatedEventMetadata] =
+          replicatedEventMetadataTransformation): EventProducerSource =
       new EventProducerSource(
         entityType,
         streamId,
@@ -131,7 +155,8 @@ object EventProducer {
         settings,
         producerFilter,
         transformSnapshot,
-        replicatedEventOriginFilter)
+        replicatedEventOriginFilter,
+        replicatedEventMetadataTransformation)
 
   }
 

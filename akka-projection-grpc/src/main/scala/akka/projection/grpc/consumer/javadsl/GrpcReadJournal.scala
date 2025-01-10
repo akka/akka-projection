@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.consumer.javadsl
@@ -7,14 +7,18 @@ package akka.projection.grpc.consumer.javadsl
 import java.time.Instant
 import java.util
 import java.util.Optional
+import java.util.UUID
 import java.util.concurrent.CompletionStage
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
+
+import scala.concurrent.ExecutionContext
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
+import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.grpc.GrpcClientSettings
 import akka.japi.Pair
 import akka.persistence.query.Offset
@@ -68,15 +72,15 @@ object GrpcReadJournal {
       settings: GrpcQuerySettings,
       clientSettings: GrpcClientSettings,
       protobufDescriptors: java.util.List[Descriptors.FileDescriptor]): GrpcReadJournal = {
-    import akka.util.ccompat.JavaConverters._
+    import scala.jdk.CollectionConverters._
+    val protoAnySerialization =
+      new ProtoAnySerialization(
+        system.classicSystem.toTyped,
+        protobufDescriptors.asScala.toVector,
+        ProtoAnySerialization.Prefer.Java)
     new GrpcReadJournal(
       scaladsl
-        .GrpcReadJournal(
-          settings,
-          clientSettings,
-          protobufDescriptors.asScala.toList,
-          ProtoAnySerialization.Prefer.Java,
-          replicationSettings = None)(system))
+        .GrpcReadJournal(settings, clientSettings, protoAnySerialization, replicationSettings = None)(system))
   }
 
 }
@@ -95,6 +99,16 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
   def streamId(): String =
     delegate.streamId
 
+  /**
+   * Correlation id to be used with [[ConsumerFilter.ReplayWithFilter]].
+   * Such replay request will trigger replay in all `eventsBySlices` queries
+   * with the same `streamId` running from this instance of the `GrpcReadJournal`.
+   * Create separate instances of the `GrpcReadJournal` to have separation between
+   * replay requests for the same `streamId`.
+   */
+  val replayCorrelationId: UUID =
+    delegate.replayCorrelationId
+
   @InternalApi
   private[akka] override def triggerReplay(persistenceId: String, fromSeqNr: Long, triggeredBySeqNr: Long): Unit =
     delegate.triggerReplay(persistenceId, fromSeqNr, triggeredBySeqNr)
@@ -110,7 +124,7 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     delegate.sliceForPersistenceId(persistenceId)
 
   override def sliceRanges(numberOfRanges: Int): util.List[Pair[Integer, Integer]] = {
-    import akka.util.ccompat.JavaConverters._
+    import scala.jdk.CollectionConverters._
     delegate
       .sliceRanges(numberOfRanges)
       .map(range => Pair(Integer.valueOf(range.min), Integer.valueOf(range.max)))
@@ -120,11 +134,11 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
   override def timestampOf(persistenceId: String, sequenceNr: Long): CompletionStage[Optional[Instant]] =
     delegate
       .timestampOf(persistenceId, sequenceNr)
-      .map(_.asJava)(ExecutionContexts.parasitic)
-      .toJava
+      .map(_.toJava)(ExecutionContext.parasitic)
+      .asJava
 
   override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): CompletionStage[EventEnvelope[Event]] =
-    delegate.loadEnvelope[Event](persistenceId, sequenceNr).toJava
+    delegate.loadEnvelope[Event](persistenceId, sequenceNr).asJava
 
   /**
    * Close the gRPC client. It will be automatically closed when the `ActorSystem` is terminated,
@@ -132,5 +146,5 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
    * After closing the `GrpcReadJournal` instance cannot be used again.
    */
   def close(): CompletionStage[Done] =
-    delegate.close().toJava
+    delegate.close().asJava
 }

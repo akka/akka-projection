@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2023-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc.internal
@@ -22,7 +22,9 @@ import akka.projection.r2dbc.internal.R2dbcOffsetStore.LatestBySlice
 @InternalApi
 private[projection] trait OffsetStoreDao {
 
-  def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]]
+  def readTimestampOffset(slice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]]
+
+  def readTimestampOffset(slice: Int, pid: String): Future[Option[R2dbcOffsetStore.Record]]
 
   def readPrimitiveOffset(): Future[immutable.IndexedSeq[OffsetSerialization.SingleOffset]]
 
@@ -35,9 +37,11 @@ private[projection] trait OffsetStoreDao {
       timestamp: Instant,
       storageRepresentation: OffsetSerialization.StorageRepresentation): Future[Done]
 
-  def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[LatestBySlice]): Future[Long]
+  def deleteOldTimestampOffset(slice: Int, until: Instant): Future[Long]
 
   def deleteNewTimestampOffsetsInTx(connection: Connection, timestamp: Instant): Future[Long]
+
+  def adoptTimestampOffsets(latestBySlice: Seq[LatestBySlice]): Future[Long]
 
   def clearTimestampOffset(): Future[Long]
 

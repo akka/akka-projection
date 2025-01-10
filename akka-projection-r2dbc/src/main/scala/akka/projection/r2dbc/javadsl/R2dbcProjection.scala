@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2022 - 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc.javadsl
 
 import java.util.Optional
 import java.util.function.Supplier
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters._
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.ApiMayChange
@@ -45,7 +45,7 @@ object R2dbcProjection {
     scaladsl.R2dbcProjection
       .exactlyOnce[Offset, Envelope](
         projectionId,
-        settings.asScala,
+        settings.toScala,
         JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => new R2dbcHandlerAdapter(handler.get()))(system)
       .asInstanceOf[ExactlyOnceProjection[Offset, Envelope]]
@@ -74,7 +74,7 @@ object R2dbcProjection {
     scaladsl.R2dbcProjection
       .atLeastOnce[Offset, Envelope](
         projectionId,
-        settings.asScala,
+        settings.toScala,
         JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => new R2dbcHandlerAdapter(handler.get()))(system)
       .asInstanceOf[AtLeastOnceProjection[Offset, Envelope]]
@@ -104,7 +104,7 @@ object R2dbcProjection {
     scaladsl.R2dbcProjection
       .atLeastOnceAsync[Offset, Envelope](
         projectionId,
-        settings.asScala,
+        settings.toScala,
         JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => HandlerAdapter(handler.get()))(system)
       .asInstanceOf[AtLeastOnceProjection[Offset, Envelope]]
@@ -128,7 +128,7 @@ object R2dbcProjection {
     scaladsl.R2dbcProjection
       .groupedWithin[Offset, Envelope](
         projectionId,
-        settings.asScala,
+        settings.toScala,
         JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => new R2dbcGroupedHandlerAdapter(handler.get()))(system)
       .asInstanceOf[GroupedProjection[Offset, Envelope]]
@@ -156,7 +156,7 @@ object R2dbcProjection {
     scaladsl.R2dbcProjection
       .groupedWithinAsync[Offset, Envelope](
         projectionId,
-        settings.asScala,
+        settings.toScala,
         JavaToScalaBySliceSourceProviderAdapter(sourceProvider),
         () => new GroupedHandlerAdapter(handler.get()))(system)
       .asInstanceOf[GroupedProjection[Offset, Envelope]]
@@ -176,9 +176,9 @@ object R2dbcProjection {
    *
    * The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in that
    * the first offset is stored and when the projection is restarted that offset is considered completed even though
-   * more of the duplicated enveloped were never processed.
+   * more of the duplicated envelopes were never processed.
    *
-   * The flow must not reorder elements, because the offsets may be stored in the wrong order and and when the
+   * The flow must not reorder elements, because the offsets may be stored in the wrong order and when the
    * projection is restarted all envelopes up to the latest stored offset are considered completed even though some of
    * them may not have been processed. This is the reason the flow is restricted to `FlowWithContext` rather than
    * ordinary `Flow`.
@@ -192,7 +192,7 @@ object R2dbcProjection {
     scaladsl.R2dbcProjection
       .atLeastOnceFlow[Offset, Envelope](
         projectionId,
-        settings.asScala,
+        settings.toScala,
         JavaToScalaBySliceSourceProviderAdapter[Offset, Envelope](sourceProvider),
         handler.asScala)(system)
       .asInstanceOf[AtLeastOnceFlowProjection[Offset, Envelope]]

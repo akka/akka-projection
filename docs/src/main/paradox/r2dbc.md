@@ -248,13 +248,16 @@ Same type of handlers can be used with `R2dbcProjection` instead of `CassandraPr
 ### Actor handler
 
 A good alternative for advanced state management is to implement the handler as an
-@extref:[actor](akka:typed/typed/actors.html) which is described in
+@extref:[actor](akka:typed/actors.html) which is described in
 @ref:[Processing with Actor](actor.md).
 
 ### Flow handler
 
 An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes,
 which is described in @ref:[Processing with Akka Streams](flow.md).
+
+In addition to the caveats described there a `R2dbcProjection.atLeastOnceFlow` must not filter out envelopes. Always
+emit a `Done` element for each completed envelope, even if application processing was skipped for the envelope.
 
 ### Handler lifecycle
 
@@ -304,3 +307,19 @@ Scala
 
 Java
 :  @@snip [Example.java](/akka-projection-r2dbc/src/test/java/jdocs/home/projection/R2dbcProjectionDocExample.java){#projectionSettings}
+
+## Custom Connection Factory
+
+You can use a custom connection factory by passing it into the projection as part of the `ProjectionSettings`.
+
+@@@ note
+
+When providing a custom connection factory, the existing connection configurations are ignored.
+
+@@@
+
+Scala
+:  @@snip [Example.scala](/akka-projection-r2dbc/src/test/scala/docs/home/projection/R2dbcProjectionDocExample.scala){#customConnectionFactory}
+
+Java
+:  @@snip [Example.java](/akka-projection-r2dbc/src/test/java/jdocs/home/projection/R2dbcProjectionDocExample.java){#customConnectionFactory}

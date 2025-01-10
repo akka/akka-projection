@@ -1,16 +1,18 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.cassandra
 
 import java.time.Instant
 import java.util.UUID
-import scala.compat.java8.FutureConverters._
+
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.jdk.FutureConverters._
 import scala.util.Try
+
 import akka.Done
 import akka.actor.Scheduler
 import akka.actor.testkit.typed.scaladsl.LogCapturing
@@ -50,9 +52,9 @@ class CassandraOffsetStoreSpec
         s <- session.underlying()
 
         // reason for setSchemaMetadataEnabled is that it speed up tests
-        _ <- s.setSchemaMetadataEnabled(false).toScala
+        _ <- s.setSchemaMetadataEnabled(false).asScala
         _ <- offsetStore.createKeyspaceAndTable()
-        _ <- s.setSchemaMetadataEnabled(null).toScala
+        _ <- s.setSchemaMetadataEnabled(null).asScala
       } yield Done
 
     // the container can takes time to be 'ready',

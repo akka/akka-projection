@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.slick
@@ -98,7 +98,7 @@ object SlickContainerOffsetStoreSpec {
     val name = "MS SQL Server Database"
     override val tag = TestTags.FlakyDb
 
-    val container = initContainer(new MSSQLServerContainer("mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04"))
+    val container = initContainer(new MSSQLServerContainer("mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-22.04"))
 
     override def config: Config =
       super.config.withFallback(ConfigFactory.parseString("""

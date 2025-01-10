@@ -1,14 +1,15 @@
 /*
- * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.producer
 
 import akka.actor.typed.ActorSystem
-import akka.util.JavaDurationConverters.JavaDurationOps
+import akka.annotation.InternalApi
 import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.DurationConverters._
 
 object EventProducerSettings {
 
@@ -23,7 +24,8 @@ object EventProducerSettings {
       transformationParallelism = config.getInt("transformation-parallelism"),
       replayParallelism = config.getInt("filter.replay-parallelism"),
       topicTagPrefix = config.getString("filter.topic-tag-prefix"),
-      keepAliveInterval = config.getDuration("keep-alive-interval").asScala)
+      keepAliveInterval = config.getDuration("keep-alive-interval").toScala,
+      akkaSerializationOnly = false)
   }
 
   /** Java API */
@@ -40,8 +42,23 @@ final class EventProducerSettings private (
     val transformationParallelism: Int,
     val replayParallelism: Int,
     val topicTagPrefix: String,
-    val keepAliveInterval: FiniteDuration) {
+    val keepAliveInterval: FiniteDuration,
+    val akkaSerializationOnly: Boolean) {
   require(transformationParallelism >= 1, "Configuration property [transformation-parallelism] must be >= 1.")
   require(replayParallelism >= 1, "Configuration property [replay-parallelism] must be >= 1.")
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def withAkkaSerializationOnly(): EventProducerSettings = {
+    new EventProducerSettings(
+      queryPluginId,
+      transformationParallelism,
+      replayParallelism,
+      topicTagPrefix,
+      keepAliveInterval,
+      akkaSerializationOnly = true)
+  }
 
 }

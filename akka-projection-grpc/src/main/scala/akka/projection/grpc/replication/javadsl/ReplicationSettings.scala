@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.replication.javadsl
@@ -18,7 +18,7 @@ import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.javadsl.EventProducerInterceptor
 import akka.projection.grpc.replication.internal.ReplicaImpl
 import akka.projection.grpc.replication.scaladsl.{ ReplicationSettings => SReplicationSettings }
-import akka.util.JavaDurationConverters.JavaDurationOps
+
 import com.typesafe.config.Config
 
 import java.time.Duration
@@ -29,11 +29,11 @@ import java.util.{ Set => JSet }
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.internal.TopicMatcher
-import akka.util.ccompat.JavaConverters._
 import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
-import akka.util.JavaDurationConverters.ScalaDurationOps
 
 import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters._
+import scala.jdk.DurationConverters._
 
 object ReplicationSettings {
 
@@ -82,8 +82,8 @@ object ReplicationSettings {
       initialConsumerFilter = Collections.emptyList,
       // no system config to get defaults from, repeating config file defaults
       edgeReplicationDeliveryRetries = 3,
-      edgeReplicationDeliveryMinBackoff = 250.millis.asJava,
-      edgeReplicationDeliveryMaxBackoff = 5.seconds.asJava)
+      edgeReplicationDeliveryMinBackoff = 250.millis.toJava,
+      edgeReplicationDeliveryMaxBackoff = 5.seconds.toJava)
   }
 
   /**
@@ -306,14 +306,14 @@ final class ReplicationSettings[Command] private (
       selfReplicaId = selfReplicaId,
       eventProducerSettings = eventProducerSettings,
       otherReplicas = otherReplicas.asScala.map(_.toScala).toSet,
-      entityEventReplicationTimeout = entityEventReplicationTimeout.asScala,
+      entityEventReplicationTimeout = entityEventReplicationTimeout.toScala,
       parallelUpdates = parallelUpdates,
       replicationProjectionProvider = ReplicationProjectionProviderAdapter.toScala(replicationProjectionProvider))
       .withProducerFilter(producerFilter.test)
       .withEdgeReplication(edgeReplication)
       .withInitialConsumerFilter(initialConsumerFilter.asScala.toVector)
       .withEdgeReplicationDeliveryRetries(edgeReplicationDeliveryRetries)
-      .withEdgeReplicationDeliveryMinBackoff(edgeReplicationDeliveryMinBackoff.asScala)
-      .withEdgeReplicationDeliveryMaxBackoff(edgeReplicationDeliveryMaxBackoff.asScala)
+      .withEdgeReplicationDeliveryMinBackoff(edgeReplicationDeliveryMinBackoff.toScala)
+      .withEdgeReplicationDeliveryMaxBackoff(edgeReplicationDeliveryMaxBackoff.toScala)
 
 }

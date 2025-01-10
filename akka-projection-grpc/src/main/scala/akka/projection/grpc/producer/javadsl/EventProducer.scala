@@ -1,23 +1,24 @@
 /*
- * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.producer.javadsl
 
 import akka.actor.typed.ActorSystem
-import akka.dispatch.ExecutionContexts
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.japi.function.{ Function => JapiFunction }
 import akka.projection.grpc.internal.EventProducerServiceImpl
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
-import akka.util.ccompat.JavaConverters._
 
 import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.CompletionStage
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters.RichOptionalGeneric
+
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
+import scala.concurrent.ExecutionContext
+import scala.jdk.CollectionConverters._
 
 /**
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
@@ -75,14 +76,14 @@ object EventProducer {
       currentEventsByPersistenceIdForStreamIds,
       currentEventsByPersistenceIdStartingFromSnapshotForStreamIds,
       scalaProducerSources,
-      interceptor.asScala.map(new EventProducerInterceptorAdapter(_)))
+      interceptor.toScala.map(new EventProducerInterceptorAdapter(_)))
 
     val handler = EventProducerServicePowerApiHandler(eventProducerService)(system)
     new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
       override def apply(request: HttpRequest): CompletionStage[HttpResponse] =
         handler(request.asInstanceOf[akka.http.scaladsl.model.HttpRequest])
-          .map(_.asInstanceOf[HttpResponse])(ExecutionContexts.parasitic)
-          .toJava
+          .map(_.asInstanceOf[HttpResponse])(ExecutionContext.parasitic)
+          .asJava
     }
   }
 

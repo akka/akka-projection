@@ -1,12 +1,11 @@
 /*
- * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2023-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc.internal
 
 import java.time.Instant
 
-import scala.annotation.nowarn
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -17,9 +16,7 @@ import org.slf4j.LoggerFactory
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.persistence.Persistence
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.internal.Sql.InterpolationWithAdapter
@@ -67,8 +64,17 @@ private[projection] class PostgresOffsetStoreDao(
 
   private val selectTimestampOffsetSql: String =
     sql"""
-    SELECT projection_key, slice, persistence_id, seq_nr, timestamp_offset
-    FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"""
+    SELECT projection_key, persistence_id, seq_nr, timestamp_offset
+    FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? ORDER BY timestamp_offset DESC LIMIT ?"""
+
+  protected def createSelectOneTimestampOffsetSql: String =
+    sql"""
+    SELECT seq_nr, timestamp_offset
+    FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND persistence_id = ?
+    ORDER BY seq_nr DESC
+    LIMIT 1"""
+
+  private val selectOneTimestampOffsetSql: String = createSelectOneTimestampOffsetSql
 
   private val insertTimestampOffsetSql: String =
     sql"""
@@ -86,32 +92,38 @@ private[projection] class PostgresOffsetStoreDao(
   }
 
   /**
-   * delete less than a timestamp
-   * @param notInLatestBySlice not used in postgres, but needed in sql
+   * delete less than a timestamp for a given slice
    */
-  @nowarn
-  protected def deleteOldTimestampOffsetSql(notInLatestBySlice: Seq[LatestBySlice]): String =
+  protected def deleteOldTimestampOffsetSql(): String =
     sql"""
-    DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset < ?
-    AND NOT (persistence_id || '-' || seq_nr) = ANY (?)"""
+    DELETE FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND timestamp_offset < ?"""
 
-  protected def bindDeleteOldTimestampOffsetSql(
-      stmt: Statement,
-      minSlice: Int,
-      maxSlice: Int,
-      until: Instant,
-      notInLatestBySlice: Seq[LatestBySlice]): Statement = {
+  protected def bindDeleteOldTimestampOffsetSql(stmt: Statement, slice: Int, until: Instant): Statement = {
     stmt
-      .bind(0, minSlice)
-      .bind(1, maxSlice)
-      .bind(2, projectionId.name)
-      .bindTimestamp(3, until)
-      .bind(4, notInLatestBySlice.iterator.map(record => s"${record.pid}-${record.seqNr}").toArray[String])
+      .bind(0, slice)
+      .bind(1, projectionId.name)
+      .bindTimestamp(2, until)
   }
 
   // delete greater than or equal a timestamp
   private val deleteNewTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ? AND timestamp_offset >= ?"
+
+  private val adoptTimestampOffsetSql: String =
+    sql"""
+     UPDATE $timestampOffsetTable
+     SET projection_key = ?
+     WHERE projection_name = ? AND slice = ? AND persistence_id = ? AND seq_nr = ?
+   """
+
+  private def adoptTimestampOffsetBatchSql(offsets: Int): String = {
+    val conditions = (1 to offsets).map(_ => "(slice = ? AND persistence_id = ? AND seq_nr = ?)").mkString(" OR ")
+    sql"""
+      UPDATE $timestampOffsetTable
+      SET projection_key = ?
+      WHERE projection_name = ? AND ($conditions)
+    """
+  }
 
   private val clearTimestampOffsetSql: String =
     sql"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN ? AND ? AND projection_name = ?"
@@ -180,29 +192,40 @@ private[projection] class PostgresOffsetStoreDao(
           s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
 
-  override def readTimestampOffset(): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]] = {
-    val (minSlice, maxSlice) = {
-      sourceProvider match {
-        case Some(provider) => (provider.minSlice, provider.maxSlice)
-        case None           => (0, persistenceExt.numberOfSlices - 1)
-      }
-    }
+  override def readTimestampOffset(
+      slice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]] = {
     r2dbcExecutor.select("read timestamp offset")(
       conn => {
         logger.trace("reading timestamp offset for [{}]", projectionId)
         conn
           .createStatement(selectTimestampOffsetSql)
-          .bind(0, minSlice)
-          .bind(1, maxSlice)
-          .bind(2, projectionId.name)
+          .bind(0, slice)
+          .bind(1, projectionId.name)
+          .bind(2, settings.offsetSliceReadLimit)
       },
       row => {
         val projectionKey = row.get("projection_key", classOf[String])
-        val slice = row.get("slice", classOf[java.lang.Integer])
         val pid = row.get("persistence_id", classOf[String])
         val seqNr = row.get("seq_nr", classOf[java.lang.Long])
         val timestamp = row.getTimestamp("timestamp_offset")
         R2dbcOffsetStore.RecordWithProjectionKey(R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp), projectionKey)
+      })
+  }
+
+  def readTimestampOffset(slice: Int, pid: String): Future[Option[R2dbcOffsetStore.Record]] = {
+    r2dbcExecutor.selectOne("read one timestamp offset")(
+      conn => {
+        logger.trace("reading one timestamp offset for [{}] pid [{}]", projectionId, pid)
+        conn
+          .createStatement(selectOneTimestampOffsetSql)
+          .bind(0, slice)
+          .bind(1, projectionId.name)
+          .bind(2, pid)
+      },
+      row => {
+        val seqNr = row.get("seq_nr", classOf[java.lang.Long])
+        val timestamp = row.getTimestamp("timestamp_offset")
+        R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
       })
   }
 
@@ -247,7 +270,7 @@ private[projection] class PostgresOffsetStoreDao(
 
     require(records.nonEmpty)
 
-    logger.trace2("saving timestamp offset [{}], {}", records.last.timestamp, records)
+    logger.trace("saving timestamp offset [{}], {}", records.last.timestamp, records)
 
     if (records.size == 1) {
       val statement = connection.createStatement(insertTimestampOffsetSql)
@@ -283,7 +306,7 @@ private[projection] class PostgresOffsetStoreDao(
           // This "batch" statement is not efficient, see issue #897
           R2dbcExecutor
             .updateBatchInTx(boundStatement)
-            .map(_ + batchResultCount)(ExecutionContexts.parasitic)
+            .map(_ + batchResultCount)(ExecutionContext.parasitic)
         } else
           Future.successful(batchResultCount)
       }
@@ -314,15 +337,13 @@ private[projection] class PostgresOffsetStoreDao(
       case MultipleOffsets(many) => many.map(upsertStmt).toVector
     }
 
-    R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContexts.parasitic)
+    R2dbcExecutor.updateInTx(statements).map(_ => Done)(ExecutionContext.parasitic)
   }
 
-  override def deleteOldTimestampOffset(until: Instant, notInLatestBySlice: Seq[LatestBySlice]): Future[Long] = {
-    val minSlice = timestampOffsetBySlicesSourceProvider.minSlice
-    val maxSlice = timestampOffsetBySlicesSourceProvider.maxSlice
+  override def deleteOldTimestampOffset(slice: Int, until: Instant): Future[Long] = {
     r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
-      val stmt = conn.createStatement(deleteOldTimestampOffsetSql(notInLatestBySlice))
-      bindDeleteOldTimestampOffsetSql(stmt, minSlice, maxSlice, until, notInLatestBySlice)
+      val stmt = conn.createStatement(deleteOldTimestampOffsetSql())
+      bindDeleteOldTimestampOffsetSql(stmt, slice, until)
     }
   }
 
@@ -336,6 +357,39 @@ private[projection] class PostgresOffsetStoreDao(
         .bind(1, maxSlice)
         .bind(2, projectionId.name)
         .bindTimestamp(3, timestamp))
+  }
+
+  override def adoptTimestampOffsets(latestBySlice: Seq[LatestBySlice]): Future[Long] = {
+    def bindCondition(statement: Statement, latest: LatestBySlice, startIndex: Int): Statement = {
+      statement
+        .bind(startIndex + 0, latest.slice)
+        .bind(startIndex + 1, latest.pid)
+        .bind(startIndex + 2, latest.seqNr)
+    }
+    if (latestBySlice.size == 1) {
+      r2dbcExecutor.updateOne("adopt timestamp offset") { connection =>
+        val statement = connection
+          .createStatement(adoptTimestampOffsetSql)
+          .bind(0, projectionId.key)
+          .bind(1, projectionId.name)
+        bindCondition(statement, latestBySlice.head, startIndex = 2)
+      }
+    } else {
+      val batches = latestBySlice.sliding(settings.offsetBatchSize, settings.offsetBatchSize).toIndexedSeq
+      r2dbcExecutor
+        .update("adopt timestamp offsets") { connection =>
+          batches.map { batch =>
+            val batchStatement = connection
+              .createStatement(adoptTimestampOffsetBatchSql(batch.size))
+              .bind(0, projectionId.key)
+              .bind(1, projectionId.name)
+            batch.zipWithIndex.foldLeft(batchStatement) {
+              case (statement, (latest, index)) => bindCondition(statement, latest, startIndex = 2 + index * 3)
+            }
+          }
+        }
+        .map(_.sum)
+    }
   }
 
   override def clearTimestampOffset(): Future[Long] = {

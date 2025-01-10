@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2023-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc.internal
@@ -21,7 +21,6 @@ import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization.SingleOffset
-import akka.projection.r2dbc.internal.R2dbcOffsetStore.LatestBySlice
 
 /**
  * INTERNAL API
@@ -38,6 +37,12 @@ private[projection] class SqlServerOffsetStoreDao(
   override protected implicit def queryAdapter: QueryAdapter = SqlServerQueryAdapter
 
   override protected implicit def timestampCodec: TimestampCodec = SqlServerTimestampCodec
+
+  override protected def createSelectOneTimestampOffsetSql: String =
+    sql"""
+    SELECT TOP(1) seq_nr, timestamp_offset
+    FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND persistence_id = ?
+    ORDER BY seq_nr DESC"""
 
   override protected def createUpsertOffsetSql() =
     sql"""
@@ -91,57 +96,16 @@ private[projection] class SqlServerOffsetStoreDao(
       .bind("@projectionKey", projectionId.key)
   }
 
-  /**
-   * The r2dbc-sqlserver driver seems to not support binding of array[T].
-   * So have to bake the param into the statement instead of binding it.
-   *
-   * @param notInLatestBySlice not used in postgres, but needed in sql
-   * @return
-   */
-  override protected def deleteOldTimestampOffsetSql(notInLatestBySlice: Seq[LatestBySlice]): String = {
-    val base =
-      s"DELETE FROM $timestampOffsetTable WHERE slice BETWEEN @from AND @to AND projection_name = @projectionName AND timestamp_offset < @timestampOffset"
-    if (notInLatestBySlice.isEmpty) {
-      sql"$base"
-    } else {
-
-      val values = (timestampOffsetBySlicesSourceProvider.minSlice to timestampOffsetBySlicesSourceProvider.maxSlice)
-        .map { i =>
-          s"@s$i"
-        }
-        .mkString(", ")
-      sql"""
-        $base
-        AND CONCAT(persistence_id, '-', seq_nr) NOT IN ($values)"""
-    }
+  override protected def deleteOldTimestampOffsetSql(): String = {
+    s"DELETE FROM $timestampOffsetTable WHERE slice = @slice AND projection_name = @projectionName AND timestamp_offset < @timestampOffset"
   }
 
-  override protected def bindDeleteOldTimestampOffsetSql(
-      stmt: Statement,
-      minSlice: Int,
-      maxSlice: Int,
-      until: Instant,
-      notInLatestBySlice: Seq[LatestBySlice]): Statement = {
+  override protected def bindDeleteOldTimestampOffsetSql(stmt: Statement, slice: Int, until: Instant): Statement = {
 
     stmt
-      .bind("@from", minSlice)
-      .bind("@to", maxSlice)
+      .bind("@slice", slice)
       .bind("@projectionName", projectionId.name)
       .bindTimestamp("@timestampOffset", until)
-
-    if (notInLatestBySlice.nonEmpty) {
-      val sliceLookup = notInLatestBySlice.map { item =>
-        item.slice -> item
-      }.toMap
-
-      (timestampOffsetBySlicesSourceProvider.minSlice to timestampOffsetBySlicesSourceProvider.maxSlice).foreach { i =>
-        val bindKey = s"@s$i"
-        sliceLookup.get(i) match {
-          case Some(value) => stmt.bind(bindKey, s"${value.pid}-${value.seqNr}")
-          case None        => stmt.bind(bindKey, "-")
-        }
-      }
-    }
 
     stmt
   }

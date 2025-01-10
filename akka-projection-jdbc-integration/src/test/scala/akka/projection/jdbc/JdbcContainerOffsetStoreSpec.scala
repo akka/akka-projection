@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.jdbc
@@ -94,7 +94,7 @@ object JdbcContainerOffsetStoreSpec {
     val name = "MS SQL Server Database"
     override val tag: Tag = TestTags.FlakyDb
     override def newContainer(): JdbcDatabaseContainer[_] =
-      new MSSQLServerContainer("mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04")
+      new MSSQLServerContainer("mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-22.04")
         .withInitScript("db/default-init.sql")
   }
 

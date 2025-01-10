@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 - 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc
@@ -16,7 +16,6 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
@@ -71,7 +70,7 @@ class ChangeSliceRangesSpec
 
     override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
       val slice = persistenceExt.sliceForPersistenceId(envelope.persistenceId)
-      log.debugN("{} Processed {}, pid {}, slice {}", projectionId.key, envelope.event, envelope.persistenceId, slice)
+      log.debug("{} Processed {}, pid {}, slice {}", projectionId.key, envelope.event, envelope.persistenceId, slice)
       probe ! Processed(projectionId, envelope)
       if (slice == delaySlice)
         akka.pattern.after(3.second)(Future.successful(Done))

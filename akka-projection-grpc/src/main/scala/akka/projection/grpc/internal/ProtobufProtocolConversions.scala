@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.internal
@@ -8,6 +8,7 @@ import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
+import akka.persistence.query.TimestampOffsetBySlice
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
 import akka.projection.grpc.consumer.ConsumerFilter
@@ -48,38 +49,63 @@ import scala.util.Success
 @InternalApi
 private[akka] object ProtobufProtocolConversions {
 
-  def protocolOffsetToOffset(offset: Option[proto.Offset]): Offset =
-    offset match {
-      case None => NoOffset
-      case Some(o) =>
-        val timestamp =
-          o.timestamp.map(_.asJavaInstant).getOrElse(Instant.EPOCH)
-        val seen = o.seen.map {
-          case PersistenceIdSeqNr(pid, seqNr, _) =>
-            pid -> seqNr
-        }.toMap
-        TimestampOffset(timestamp, seen)
+  def protocolOffsetToOffset(offsets: Seq[proto.Offset]): Offset =
+    if (offsets.isEmpty) NoOffset
+    else if (offsets.exists(_.slice.isDefined)) {
+      val offsetBySlice = offsets.flatMap { offset =>
+        offset.slice.map { _ -> protocolOffsetToTimestampOffset(offset) }
+      }.toMap
+      TimestampOffsetBySlice(offsetBySlice)
+    } else {
+      protocolOffsetToTimestampOffset(offsets.head)
     }
 
-  def offsetToProtoOffset(offset: Offset): Option[proto.Offset] = {
+  private def protocolOffsetToTimestampOffset(offset: proto.Offset): TimestampOffset = {
+    val timestamp = offset.timestamp match {
+      case Some(ts) => ts.asJavaInstant
+      case None     => Instant.EPOCH
+    }
+    // optimised for the expected normal case of one element
+    val seen = if (offset.seen.size == 1) {
+      Map(offset.seen.head.persistenceId -> offset.seen.head.seqNr)
+    } else if (offset.seen.nonEmpty) {
+      offset.seen.map {
+        case PersistenceIdSeqNr(pid, seqNr, _) => pid -> seqNr
+      }.toMap
+    } else {
+      Map.empty[String, Long]
+    }
+    TimestampOffset(timestamp, seen)
+  }
+
+  def offsetToProtoOffset(offset: Offset): Seq[proto.Offset] = {
     offset match {
-      case TimestampOffset(timestamp, _, seen) =>
-        val protoTimestamp = Timestamp(timestamp)
-        val protoSeen = seen.iterator.map {
-          case (pid, seqNr) =>
-            PersistenceIdSeqNr(pid, seqNr)
+      case timestampOffset: TimestampOffset =>
+        Seq(timestampOffsetToProtoOffset(timestampOffset))
+      case TimestampOffsetBySlice(offsets) =>
+        offsets.iterator.map {
+          case (slice, timestampOffset) =>
+            timestampOffsetToProtoOffset(timestampOffset, Some(slice))
         }.toSeq
-        Some(proto.Offset(Some(protoTimestamp), protoSeen))
-      case NoOffset => None
+      case NoOffset => Seq.empty
       case other =>
         throw new IllegalArgumentException(s"Unexpected offset type [$other]")
     }
   }
 
+  private def timestampOffsetToProtoOffset(offset: TimestampOffset, slice: Option[Int] = None): proto.Offset = {
+    val protoTimestamp = Timestamp(offset.timestamp)
+    val protoSeen = offset.seen.iterator.map {
+      case (pid, seqNr) =>
+        PersistenceIdSeqNr(pid, seqNr)
+    }.toSeq
+    proto.Offset(Some(protoTimestamp), protoSeen, slice)
+  }
+
   def transformAndEncodeEvent(
       transformation: Transformation,
       env: EventEnvelope[_],
-      protoAnySerialization: ProtoAnySerialization)(
+      protoAnySerialization: ProjectionGrpcSerialization)(
       implicit executionContext: ExecutionContext): Future[Option[Event]] = {
     env.eventOption match {
       case Some(_) =>
@@ -121,22 +147,22 @@ private[akka] object ProtobufProtocolConversions {
     }
   }
 
-  def eventToEnvelope[Evt](event: Event, protoAnySerialization: ProtoAnySerialization): EventEnvelope[Evt] =
+  def eventToEnvelope[Evt](event: Event, protoAnySerialization: ProjectionGrpcSerialization): EventEnvelope[Evt] =
     eventToEnvelope(event, protoAnySerialization, deserializeEvent = true).asInstanceOf[EventEnvelope[Evt]]
 
   def eventToEnvelope(
       event: Event,
-      protoAnySerialization: ProtoAnySerialization,
+      wireSerialization: ProjectionGrpcSerialization,
       deserializeEvent: Boolean): EventEnvelope[Any] = {
     val eventOffset = populateSeenIfNeeded(
       TimestampOffset.toTimestampOffset(protocolOffsetToOffset(event.offset)),
       event.persistenceId,
       event.seqNr)
 
-    val metadata: Option[Any] = event.metadata.map(protoAnySerialization.deserialize)
+    val metadata: Option[Any] = event.metadata.map(wireSerialization.deserialize)
 
     def envelopeWithDeserializedEvent: EventEnvelope[Any] = {
-      val evt = event.payload.map(protoAnySerialization.deserialize)
+      val evt = event.payload.map(wireSerialization.deserialize)
       new EventEnvelope(
         eventOffset,
         event.persistenceId,
@@ -154,7 +180,7 @@ private[akka] object ProtobufProtocolConversions {
     if (deserializeEvent || event.payload.isEmpty) {
       envelopeWithDeserializedEvent
     } else {
-      protoAnySerialization.toSerializedEvent(event.payload.get) match {
+      wireSerialization.toSerializedEvent(event.payload.get) match {
         case Some(serializedEvent) =>
           new EventEnvelope(
             eventOffset,

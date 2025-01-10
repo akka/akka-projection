@@ -525,6 +525,7 @@ public final class ShoppingCart
         .forAnyState()
         .onEvent(
             ItemUpdated.class, (state, event) -> state.updateItem(event.itemId, event.quantity))
+        .onEvent(CustomerMarkedVip.class, (state, event) -> state.markCustomerVip())
         .onEvent(
             Closed.class,
             (state, event) -> {

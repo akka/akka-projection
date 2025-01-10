@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2023-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.internal
@@ -8,17 +8,15 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import scala.util.matching.Regex
-
 import akka.NotUsed
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.persistence.FilteredPayload
 import akka.persistence.Persistence
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.ReplicationId
+import akka.persistence.typed.internal.ReplicatedEventMetadata
 import akka.projection.grpc.internal.proto.EntityIdOffset
 import akka.projection.grpc.internal.proto.FilterCriteria
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
@@ -36,6 +34,8 @@ import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
 import akka.stream.stage.OutHandler
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.ExecutionContext
 
 /**
  * INTERNAL API
@@ -221,14 +221,14 @@ import org.slf4j.LoggerFactory
             // Note: we do not apply the filter before filterAfterSeqNr as that may be what triggered the replay.
             // replicatedEventOriginFilter not used for replay.
             if (env.sequenceNr < filterAfterSeqNr || producerFilter(env) && filter.matches(env)) {
-              log.traceN(
+              log.trace(
                 "Stream [{}]: Push replayed event persistenceId [{}], seqNr [{}]",
                 logPrefix,
                 env.persistenceId,
                 env.sequenceNr)
               push(outEnv, env)
             } else {
-              log.debugN(
+              log.debug(
                 "Stream [{}]: Filter out replayed event persistenceId [{}], seqNr [{}]",
                 logPrefix,
                 env.persistenceId,
@@ -237,20 +237,20 @@ import org.slf4j.LoggerFactory
             }
 
           case ReplayEnvelope(persistenceId, None) =>
-            log.debug2("Stream [{}]: Completed replay of persistenceId [{}]", logPrefix, persistenceId)
+            log.debug("Stream [{}]: Completed replay of persistenceId [{}]", logPrefix, persistenceId)
             replayCompleted()
         }
       }
 
       private def tryPullReplay(pid: String): Unit = {
         if (!replayHasBeenPulled && isAvailable(outEnv) && !hasBeenPulled(inEnv)) {
-          log.trace2("Stream [{}]: tryPullReplay persistenceId [{}]", logPrefix, pid)
+          log.trace("Stream [{}]: tryPullReplay persistenceId [{}]", logPrefix, pid)
           val next =
-            replayInProgress(pid).queue.pull().map(ReplayEnvelope(pid, _))(ExecutionContexts.parasitic)
+            replayInProgress(pid).queue.pull().map(ReplayEnvelope(pid, _))(ExecutionContext.parasitic)
           next.value match {
             case None =>
               replayHasBeenPulled = true
-              next.onComplete(replayCallback.invoke)(ExecutionContexts.parasitic)
+              next.onComplete(replayCallback.invoke)(ExecutionContext.parasitic)
             case Some(Success(replayEnv)) =>
               onReplay(replayEnv)
             case Some(Failure(exc)) =>
@@ -263,14 +263,13 @@ import org.slf4j.LoggerFactory
 
       private def updateFilter(criteria: Iterable[FilterCriteria]): Unit = {
         filter = updateFilterFromProto(filter, criteria, mapEntityIdToPidHandledByThisStream)
-        log.trace2("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
+        log.trace("Stream [{}]: updated filter to [{}}]", logPrefix, filter)
       }
 
       private def replicaIdHandledByThisStream(pid: String): Boolean = {
         replicaId match {
-          case None => true
-          case Some(id) =>
-            !ReplicationId.isReplicationId(pid) || ReplicationId.fromString(pid).replicaId == id
+          case None     => true
+          case Some(id) => ReplicationId.fromString(pid).replicaId == id
         }
       }
 
@@ -337,7 +336,7 @@ import org.slf4j.LoggerFactory
                 // no point in cancel and starting new from same seqNr
                 true
               case Some(replay) =>
-                log.debug2("Stream [{}]: Cancel replay of persistenceId [{}], replaced by new replay", logPrefix, pid)
+                log.debug("Stream [{}]: Cancel replay of persistenceId [{}], replaced by new replay", logPrefix, pid)
                 replay.queue.cancel()
                 replayInProgress -= pid
                 false
@@ -346,7 +345,7 @@ import org.slf4j.LoggerFactory
             }
 
           if (sameInProgress) {
-            log.debugN(
+            log.debug(
               "Stream [{}]: Replay of persistenceId [{}] already in progress from seqNr [{}], replaced by new replay",
               logPrefix,
               pid,
@@ -355,7 +354,7 @@ import org.slf4j.LoggerFactory
               pid,
               replayInProgress(pid).copy(filterAfterSeqNr = replayPersistenceId.filterAfterSeqNr))
           } else if (replayInProgress.size < replayParallelism) {
-            log.debugN("Stream [{}]: Starting replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
+            log.debug("Stream [{}]: Starting replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
             val queue =
               currentEventsByPersistenceId(pid, fromSeqNr)
                 .runWith(Sink.queue())(materializer)
@@ -363,7 +362,7 @@ import org.slf4j.LoggerFactory
               replayInProgress.updated(pid, ReplaySession(fromSeqNr, replayPersistenceId.filterAfterSeqNr, queue))
             tryPullReplay(pid)
           } else {
-            log.debugN("Stream [{}]: Queueing replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
+            log.debug("Stream [{}]: Queueing replay of persistenceId [{}], from seqNr [{}]", logPrefix, pid, fromSeqNr)
             pendingReplayRequests =
               pendingReplayRequests.filterNot(_.fromPersistenceIdOffset.get.persistenceId == pid) :+ replayPersistenceId
           }
@@ -391,18 +390,18 @@ import org.slf4j.LoggerFactory
           override def onPush(): Unit = {
             grab(inReq) match {
               case StreamIn(StreamIn.Message.Filter(filterReq), _) =>
-                log.debug2("Stream [{}]: Filter update requested [{}]", logPrefix, filterReq.criteria)
+                log.debug("Stream [{}]: Filter update requested [{}]", logPrefix, filterReq.criteria)
                 updateFilter(filterReq.criteria)
                 replayFromFilterCriteria(filterReq.criteria)
 
               case StreamIn(StreamIn.Message.Replay(replayReq), _) =>
                 if (replayReq.replayPersistenceIds.nonEmpty) {
-                  log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.replayPersistenceIds)
+                  log.debug("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.replayPersistenceIds)
                   replayAll(replayReq.replayPersistenceIds)
                 }
                 // needed for compatibility with 2.5.2
                 if (replayReq.replayPersistenceIds.isEmpty && replayReq.persistenceIdOffset.nonEmpty) {
-                  log.debug2("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.persistenceIdOffset)
+                  log.debug("Stream [{}]: Replay requested for [{}]", logPrefix, replayReq.persistenceIdOffset)
                   replayAll(replayReq.persistenceIdOffset.map(p =>
                     ReplayPersistenceId(Some(p), filterAfterSeqNr = Long.MaxValue)))
                 }
@@ -412,7 +411,7 @@ import org.slf4j.LoggerFactory
                 throw new IllegalStateException("Init request can only be used as the first message")
 
               case StreamIn(other, _) =>
-                log.warn2("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
+                log.warn("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
             }
 
             pull(inReq)
@@ -427,17 +426,17 @@ import org.slf4j.LoggerFactory
             val pid = env.persistenceId
 
             // replicaId is used for validation of replay requests, to avoid replay for other replicas
-            if (replicaId.isEmpty && ReplicationId.isReplicationId(pid))
+            if (replicaId.isEmpty && env.eventMetadata.exists(_.isInstanceOf[ReplicatedEventMetadata]))
               replicaId = Some(ReplicationId.fromString(pid).replicaId)
 
             if (producerFilter(env) && filter.matches(env)) {
               if (replicatedEventOriginFilter(env)) {
                 // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
                 // can never include them
-                log.traceN("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+                log.trace("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
                 push(outEnv, env)
               } else {
-                log.traceN(
+                log.trace(
                   "Stream [{}]: Filter event, due to origin, persistenceId [{}], seqNr [{}]",
                   logPrefix,
                   pid,
@@ -445,7 +444,7 @@ import org.slf4j.LoggerFactory
                 push(outEnv, env.withEvent(FilteredPayload)) // FilteredPayload will be transformed to FilteredEvent
               }
             } else {
-              log.debugN("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
+              log.debug("Stream [{}]: Filter out event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
               pullInEnvOrReplay()
             }
           }

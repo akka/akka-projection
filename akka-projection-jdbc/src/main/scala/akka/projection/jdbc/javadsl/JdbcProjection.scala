@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.jdbc.javadsl
@@ -7,7 +7,7 @@ package akka.projection.jdbc.javadsl
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.compat.java8.FutureConverters._
+import scala.jdk.FutureConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -244,7 +244,7 @@ object JdbcProjection {
    *
    * The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
    * that the first offset is stored and when the projection is restarted that offset is considered completed even
-   * though more of the duplicated enveloped were never processed.
+   * though more of the duplicated envelopes were never processed.
    *
    * The flow must not reorder elements, because the offsets may be stored in the wrong order and
    * and when the projection is restarted all envelopes up to the latest stored offset are considered
@@ -282,7 +282,7 @@ object JdbcProjection {
   def createTablesIfNotExists[S <: JdbcSession](
       sessionFactory: Supplier[S],
       system: ActorSystem[_]): CompletionStage[Done] =
-    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).createIfNotExists().toJava
+    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).createIfNotExists().asJava
 
   @deprecated("Renamed to createTablesIfNotExists", "1.2.0")
   def createOffsetTableIfNotExists[S <: JdbcSession](
@@ -294,7 +294,7 @@ object JdbcProjection {
    * For testing purposes the projection offset and management tables can be dropped programmatically.
    */
   def dropTablesIfExists[S <: JdbcSession](sessionFactory: Supplier[S], system: ActorSystem[_]): CompletionStage[Done] =
-    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).dropIfExists().toJava
+    JdbcProjectionImpl.createOffsetStore(() => sessionFactory.get())(system).dropIfExists().asJava
 
   @deprecated("Renamed to dropTablesIfExists", "1.2.0")
   def dropOffsetTableIfExists[S <: JdbcSession](

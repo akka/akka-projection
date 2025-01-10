@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.javadsl
@@ -8,8 +8,8 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 
 import scala.concurrent.ExecutionContext
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -28,7 +28,7 @@ class ProjectionManagement(system: ActorSystem[_]) {
    * Get the latest stored offset for the `projectionId`.
    */
   def getOffset[Offset](projectionId: ProjectionId): CompletionStage[Optional[Offset]] =
-    delegate.getOffset[Offset](projectionId).map(_.asJava).toJava
+    delegate.getOffset[Offset](projectionId).map(_.toJava).asJava
 
   /**
    * Update the stored offset for the `projectionId` and restart the `Projection`.
@@ -37,7 +37,7 @@ class ProjectionManagement(system: ActorSystem[_]) {
    * the next offset that is greater than the stored offset.
    */
   def updateOffset[Offset](projectionId: ProjectionId, offset: Offset): CompletionStage[Done] =
-    delegate.updateOffset[Offset](projectionId, offset).toJava
+    delegate.updateOffset[Offset](projectionId, offset).asJava
 
   /**
    * Clear the stored offset for the `projectionId` and restart the `Projection`.
@@ -45,13 +45,13 @@ class ProjectionManagement(system: ActorSystem[_]) {
    * offset.
    */
   def clearOffset(projectionId: ProjectionId): CompletionStage[Done] =
-    delegate.clearOffset(projectionId).toJava
+    delegate.clearOffset(projectionId).asJava
 
   /**
    * Is the given Projection paused or not?
    */
   def isPaused(projectionId: ProjectionId): CompletionStage[java.lang.Boolean] =
-    delegate.isPaused(projectionId).map(java.lang.Boolean.valueOf).toJava
+    delegate.isPaused(projectionId).map(java.lang.Boolean.valueOf).asJava
 
   /**
    * Pause the given Projection. Processing will be stopped.
@@ -63,7 +63,7 @@ class ProjectionManagement(system: ActorSystem[_]) {
    * in case of rebalance or system restart.
    */
   def pause(projectionId: ProjectionId): CompletionStage[Done] =
-    delegate.pause(projectionId).toJava
+    delegate.pause(projectionId).asJava
 
   /**
    * Resume a paused Projection. Processing will be start from previously stored offset.
@@ -72,6 +72,6 @@ class ProjectionManagement(system: ActorSystem[_]) {
    * in case of rebalance or system restart.
    */
   def resume(projectionId: ProjectionId): CompletionStage[Done] =
-    delegate.resume(projectionId).toJava
+    delegate.resume(projectionId).asJava
 
 }

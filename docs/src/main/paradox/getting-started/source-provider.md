@@ -22,7 +22,7 @@ Java
 :  @@snip [ShoppingCartApp.java](/examples/src/test/java/jdocs/guide/ShoppingCartApp.java) { #guideSourceProviderImports }
 
 Create the @apidoc[SourceProvider].
-The @ref:[Event Sourced Source Provider](../eventsourced.md) is using [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/persistence.html) internally (specifically the [eventsByTag](https://doc.akka.io/docs/akka/current/persistence-query.html#eventsbytag-and-currenteventsbytag) API).
+The @ref:[Event Sourced Source Provider](../eventsourced.md) is using [Akka Persistence](https://doc.akka.io/libraries/akka-core/current/typed/persistence.html) internally (specifically the [eventsByTag](https://doc.akka.io/libraries/akka-core/current/persistence-query.html#eventsbytag-and-currenteventsbytag) API).
 To initialize the Source Provider we need to set parameters to choose the Akka Persistence plugin (Cassandra) to use as well as the name of the tag used for events we're interested in from the journal.
 
 Setup the `SourceProvider` in the Guardian `Behavior` defined in `ShoppingCartApp`:

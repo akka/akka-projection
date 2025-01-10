@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.replication.internal
@@ -8,7 +8,6 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.cluster.ClusterActorRefProvider
 import akka.cluster.sharding.typed.ClusterShardingSettings
@@ -36,7 +35,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl.EventProducerPushDestination
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
-import akka.projection.grpc.internal.ProtoAnySerialization
+import akka.projection.grpc.internal.DelegateToAkkaSerialization
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
@@ -48,11 +47,13 @@ import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import akka.stream.scaladsl.FlowWithContext
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.persistence.typed.internal.VersionVector
 
 /**
  * INTERNAL API
@@ -98,9 +99,20 @@ private[akka] object ReplicationImpl {
       settings.entityTypeKey.name,
       settings.streamId,
       Transformation.identity,
-      settings.eventProducerSettings,
+      settings.eventProducerSettings.withAkkaSerializationOnly(),
       settings.producerFilter)
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
+      .withReplicatedEventMetadataTransformation(env =>
+        if (env.eventMetadata.isDefined) None
+        else {
+          // migrated from non-replicated, fill in metadata
+          Some(
+            ReplicatedEventMetadata(
+              originReplica = settings.selfReplicaId,
+              originSequenceNr = env.sequenceNr,
+              version = VersionVector(env.persistenceId, env.sequenceNr),
+              concurrent = false))
+        })
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
@@ -165,13 +177,11 @@ private[akka] object ReplicationImpl {
         case None           => s2
       }
     }
-    val eventsBySlicesQuery = GrpcReadJournal(
-      grpcQuerySettings,
-      remoteReplica.grpcClientSettings,
-      Nil,
-      ProtoAnySerialization.Prefer.Scala,
-      Some(settings))
-    log.infoN(
+
+    val wireSerialization = new DelegateToAkkaSerialization(system)
+    val eventsBySlicesQuery =
+      GrpcReadJournal(grpcQuerySettings, remoteReplica.grpcClientSettings, wireSerialization, Some(settings))
+    log.info(
       "Starting {} projection streams{} consuming events for Replicated Entity [{}] from [{}] (at {}:{})",
       remoteReplica.numberOfConsumers,
       remoteReplica.consumersOnClusterRole.fold("")(role => s" on nodes with cluster role $role"),
@@ -213,7 +223,7 @@ private[akka] object ReplicationImpl {
                         if replicatedEventMetadata.originReplica == settings.selfReplicaId =>
                       // skipping events originating from self replica (break cycle)
                       if (log.isTraceEnabled)
-                        log.traceN(
+                        log.trace(
                           "[{}] ignoring event from replica [{}] with self origin (pid [{}], seq_nr [{}])",
                           projectionKey,
                           remoteReplica.replicaId,
@@ -227,7 +237,7 @@ private[akka] object ReplicationImpl {
                       val entityRef =
                         entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
                       if (log.isTraceEnabled) {
-                        log.traceN(
+                        log.trace(
                           "[{}] forwarding event originating on replica [{}] to [{}] (origin seq_nr [{}]): [{}]",
                           projectionKey,
                           replicatedEventMetadata.originReplica,
@@ -259,7 +269,7 @@ private[akka] object ReplicationImpl {
                 } else {
                   // Events not originating on sending side already are filtered/have no payload and end up here
                   if (log.isTraceEnabled)
-                    log.traceN(
+                    log.trace(
                       "[{}] ignoring filtered event from replica [{}] (pid [{}], seq_nr [{}])",
                       projectionKey,
                       remoteReplica.replicaId,
@@ -300,7 +310,7 @@ private[akka] object ReplicationImpl {
       sharding.entityRefFor(replicatedEntity.entity.typeKey, _)
 
     settings.otherReplicas.foreach { remoteReplica =>
-      log.infoN(
+      log.info(
         "Starting replication for [{}] between replica [{}] and [{}] at [{}:{}]",
         settings.entityTypeKey.name,
         settings.selfReplicaId,
@@ -347,8 +357,19 @@ private[akka] object ReplicationImpl {
       settings.entityTypeKey.name,
       settings.streamId,
       Transformation.identity,
-      settings.eventProducerSettings)
+      settings.eventProducerSettings.withAkkaSerializationOnly())
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
+      .withReplicatedEventMetadataTransformation(env =>
+        if (env.eventMetadata.isDefined) None
+        else {
+          // migrated from non-replicated, fill in metadata
+          Some(
+            ReplicatedEventMetadata(
+              originReplica = settings.selfReplicaId,
+              originSequenceNr = env.sequenceNr,
+              version = VersionVector(env.persistenceId, env.sequenceNr),
+              concurrent = false))
+        })
 
     val epp =
       remoteReplica.additionalQueryRequestMetadata match {

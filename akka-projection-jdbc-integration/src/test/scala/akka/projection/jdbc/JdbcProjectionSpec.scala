@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.jdbc
@@ -360,6 +360,7 @@ class JdbcProjectionSpec
       offsetShouldBeEmpty()
       projectionTestKit.run(projectionFailing) {
         projectedValueShouldBe("e1|e2|e3|e4|e5")
+        bogusEventHandler.attempts shouldBe 1
       }
       eventually {
         offsetShouldBe(6L)

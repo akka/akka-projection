@@ -1,9 +1,8 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection
-import akka.actor.typed.scaladsl.LoggerOps
 import scala.util.Failure
 import scala.util.Success
 
@@ -78,7 +77,7 @@ object ProjectionBehavior {
         projection.actorHandlerInit[Any].foreach { init =>
           val ref = ctx.spawnAnonymous(Behaviors.supervise(init.behavior).onFailure(SupervisorStrategy.restart))
           init.setActor(ref)
-          ctx.log.debug2("Started actor handler [{}] for projection [{}]", ref, projection.projectionId)
+          ctx.log.debug("Started actor handler [{}] for projection [{}]", ref, projection.projectionId)
         }
         val running = projection.run()(ctx.system)
         if (running.isInstanceOf[RunningProjectionManagement[_]])
@@ -133,7 +132,7 @@ object ProjectionBehavior {
           running match {
             case mgmt: RunningProjectionManagement[Offset] @unchecked =>
               if (setOffset.projectionId == projectionId) {
-                context.log.info2(
+                context.log.info(
                   "Offset will be changed to [{}] for projection [{}]. The Projection will be restarted.",
                   setOffset.offset,
                   projectionId)
@@ -146,7 +145,7 @@ object ProjectionBehavior {
           }
 
         case ManagementOperationException(op, exc) =>
-          context.log.warn2("Operation [{}] failed with: {}", op, exc)
+          context.log.warn("Operation [{}] failed with: {}", op, exc)
           Behaviors.same
 
         case isPaused: IsPaused =>
@@ -170,7 +169,7 @@ object ProjectionBehavior {
           running match {
             case mgmt: RunningProjectionManagement[_] =>
               if (setPaused.projectionId == projectionId) {
-                context.log.info2(
+                context.log.info(
                   "Running state will be changed to [{}] for projection [{}].",
                   if (setPaused.paused) "paused" else "resumed",
                   projectionId)
@@ -207,7 +206,7 @@ object ProjectionBehavior {
         Behaviors.same
 
       case SetOffsetResult(replyTo) =>
-        context.log.info2(
+        context.log.info(
           "Starting projection [{}] after setting offset to [{}]",
           projection.projectionId,
           setOffset.offset)
@@ -216,7 +215,7 @@ object ProjectionBehavior {
         stashBuffer.unstashAll(started(running))
 
       case ManagementOperationException(op, exc) =>
-        context.log.warn2("Operation [{}] failed.", op, exc)
+        context.log.warn("Operation [{}] failed.", op, exc)
         // start anyway, but no reply
         val running = projection.run()(context.system)
         stashBuffer.unstashAll(started(running))
@@ -233,7 +232,7 @@ object ProjectionBehavior {
         Behaviors.stopped
 
       case other =>
-        context.log.debug2("Projection [{}] is being stopped. Discarding [{}].", projectionId, other)
+        context.log.debug("Projection [{}] is being stopped. Discarding [{}].", projectionId, other)
         Behaviors.unhandled
     }
 
@@ -255,7 +254,7 @@ object ProjectionBehavior {
         Behaviors.same
 
       case SetPausedResult(replyTo) =>
-        context.log.info2(
+        context.log.info(
           "Starting projection [{}] in {} mode.",
           projection.projectionId,
           if (setPaused.paused) "paused" else "resumed")
@@ -264,7 +263,7 @@ object ProjectionBehavior {
         stashBuffer.unstashAll(started(running))
 
       case ManagementOperationException(op, exc) =>
-        context.log.warn2("Operation [{}] failed.", op, exc)
+        context.log.warn("Operation [{}] failed.", op, exc)
         // start anyway, but no reply
         val running = projection.run()(context.system)
         stashBuffer.unstashAll(started(running))

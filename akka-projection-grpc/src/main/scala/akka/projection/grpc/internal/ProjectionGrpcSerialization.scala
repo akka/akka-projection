@@ -1,35 +1,45 @@
 /*
- * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.internal
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
+import scala.jdk.CollectionConverters._
 import scala.util.Try
-
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.persistence.SerializedEvent
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializer
 import akka.serialization.SerializerWithStringManifest
 import akka.serialization.Serializers
-import akka.util.ccompat.JavaConverters._
 import com.google.common.base.CaseFormat
 import com.google.protobuf.ByteString
 import com.google.protobuf.Descriptors
 import com.google.protobuf.GeneratedMessageV3
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
+import com.google.protobuf.UnsafeByteOperations
 import com.google.protobuf.any.{ Any => ScalaPbAny }
 import com.google.protobuf.{ Any => JavaPbAny }
 import com.google.protobuf.{ Any => PbAny }
 import org.slf4j.LoggerFactory
+
 import scalapb.GeneratedMessage
 import scalapb.GeneratedMessageCompanion
 import scalapb.options.Scalapb
+
+/**
+ * INTERNAL API
+ */
+@InternalApi
+private[akka] trait ProjectionGrpcSerialization {
+  def serialize(event: Any): ScalaPbAny
+  def deserialize(scalaPbAny: ScalaPbAny): Any
+  def toSerializedEvent(scalaPbAny: ScalaPbAny): Option[SerializedEvent]
+}
 
 /**
  * INTERNAL API
@@ -99,15 +109,35 @@ import scalapb.options.Scalapb
         }
     }
 
+  def akkaSerializationTypeUrl(serializerId: Int, manifest: String): String = {
+    if (manifest.isEmpty) s"$AkkaSerializationTypeUrlPrefix$serializerId"
+    else
+      s"$AkkaSerializationTypeUrlPrefix$serializerId$AkkaTypeUrlManifestSeparator$manifest"
+  }
+
+  def akkaSerializerIdAndManifestFromTypeUrl(typeUrl: String): (Int, String) = {
+    val idAndManifest =
+      typeUrl.substring(AkkaSerializationTypeUrlPrefix.length)
+    val i = idAndManifest.indexOf(AkkaTypeUrlManifestSeparator)
+    if (i == -1)
+      idAndManifest.toInt -> ""
+    else
+      idAndManifest.substring(0, i).toInt -> idAndManifest.substring(i + 1)
+  }
+
 }
 
 /**
+ * Primarily intended for direct usage of grpc projections, where there may be a public (protobuf) protocol published
+ * by the producing service.
+ *
  * INTERNAL API
  */
-@InternalApi private[akka] class ProtoAnySerialization(
+@InternalApi private[akka] final class ProtoAnySerialization(
     system: ActorSystem[_],
     descriptors: immutable.Seq[Descriptors.FileDescriptor],
-    prefer: ProtoAnySerialization.Prefer) {
+    prefer: ProtoAnySerialization.Prefer)
+    extends ProjectionGrpcSerialization {
   import ProtoAnySerialization._
 
   private val serialization = SerializationExtension(system.classicSystem)
@@ -138,7 +168,7 @@ import scalapb.options.Scalapb
   def this(system: ActorSystem[_]) =
     this(system, descriptors = Nil, ProtoAnySerialization.Prefer.Scala)
 
-  def serialize(event: Any): ScalaPbAny = {
+  override def serialize(event: Any): ScalaPbAny = {
     event match {
       case scalaPbAny: ScalaPbAny if scalaPbAny.typeUrl.startsWith(GoogleTypeUrlPrefix) =>
         ScalaPbAny(ProtoAnyTypeUrl, scalaPbAny.toByteString)
@@ -153,15 +183,15 @@ import scalapb.options.Scalapb
       case other =>
         // fallback to Akka serialization
         val otherAnyRef = other.asInstanceOf[AnyRef]
-        val bytes = serialization.serialize(otherAnyRef).get
         val serializer = serialization.findSerializerFor(otherAnyRef)
+        val bytes = serializer.toBinary(otherAnyRef)
         val manifest = Serializers.manifestFor(serializer, otherAnyRef)
         val id = serializer.identifier
-        ScalaPbAny(akkaSerializationTypeUrl(id, manifest), ByteString.copyFrom(bytes))
+        ScalaPbAny(akkaSerializationTypeUrl(id, manifest), UnsafeByteOperations.unsafeWrap(bytes))
     }
   }
 
-  def deserialize(scalaPbAny: ScalaPbAny): Any = {
+  override def deserialize(scalaPbAny: ScalaPbAny): Any = {
     val typeUrl = scalaPbAny.typeUrl
     if (typeUrl == ProtoAnyTypeUrl) {
       if (prefer == Prefer.Scala)
@@ -172,6 +202,7 @@ import scalapb.options.Scalapb
       decodeMessage(scalaPbAny)
     } else if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
       val (id, manifest) = akkaSerializerIdAndManifestFromTypeUrl(typeUrl)
+      // FIXME could potentially optimize to use byte buffer here instead of copy to byte array
       serialization.deserialize(scalaPbAny.value.toByteArray, id, manifest).get
     } else if (prefer == Prefer.Scala) {
       // when custom typeUrl
@@ -182,7 +213,7 @@ import scalapb.options.Scalapb
     }
   }
 
-  def toSerializedEvent(scalaPbAny: ScalaPbAny): Option[SerializedEvent] = {
+  override def toSerializedEvent(scalaPbAny: ScalaPbAny): Option[SerializedEvent] = {
     // see corresponding typeUrl cases in `deserialize`
 
     val typeUrl = scalaPbAny.typeUrl
@@ -222,22 +253,6 @@ import scalapb.options.Scalapb
           messageClass.getName)
         None
     }
-  }
-
-  private def akkaSerializationTypeUrl(serializerId: Int, manifest: String): String = {
-    if (manifest.isEmpty) s"$AkkaSerializationTypeUrlPrefix$serializerId"
-    else
-      s"$AkkaSerializationTypeUrlPrefix$serializerId$AkkaTypeUrlManifestSeparator$manifest"
-  }
-
-  private def akkaSerializerIdAndManifestFromTypeUrl(typeUrl: String): (Int, String) = {
-    val idAndManifest =
-      typeUrl.substring(AkkaSerializationTypeUrlPrefix.length)
-    val i = idAndManifest.indexOf(AkkaTypeUrlManifestSeparator)
-    if (i == -1)
-      idAndManifest.toInt -> ""
-    else
-      idAndManifest.substring(0, i).toInt -> idAndManifest.substring(i + 1)
   }
 
   private def strippedFileName(fileName: String) =
@@ -282,7 +297,7 @@ import scalapb.options.Scalapb
 
     } catch {
       case cnfe: ClassNotFoundException =>
-        log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
+        log.debug("Failed to load class [{}] because: {}", className, cnfe.getMessage)
         None
       case nsme: NoSuchElementException =>
         // Not sure this is exception is thrown. NoSuchMethodException is thrown from getMethod("parser").
@@ -338,10 +353,10 @@ import scalapb.options.Scalapb
         Some(new ScalaPbResolvedType(companionObject, clazz))
       } catch {
         case cnfe: ClassNotFoundException =>
-          log.debug2("Failed to load class [{}] because: {}", className, cnfe.getMessage)
+          log.debug("Failed to load class [{}] because: {}", className, cnfe.getMessage)
           None
         case cce: ClassCastException =>
-          log.debug2("Failed to load class [{}] because: {}", className, cce.getMessage)
+          log.debug("Failed to load class [{}] because: {}", className, cce.getMessage)
           None
       }
     })
@@ -418,7 +433,7 @@ import scalapb.options.Scalapb
     val typeUrl = any.typeUrl
     // wrapped concrete protobuf message, parse into the right type
     if (!typeUrl.startsWith(GoogleTypeUrlPrefix)) {
-      log.warn2("Message type [{}] does not match type url prefix [{}]", typeUrl, GoogleTypeUrlPrefix)
+      log.warn("Message type [{}] does not match type url prefix [{}]", typeUrl, GoogleTypeUrlPrefix)
     }
 
     tryResolveTypeUrl(typeUrl) match {
@@ -442,7 +457,7 @@ import scalapb.options.Scalapb
       case Array(_, typeName) =>
         typeName
       case _ =>
-        log.warn2(
+        log.warn(
           "Message type [{}] does not have a url prefix, it should have one that matchers the type url prefix [{}]",
           typeUrl,
           GoogleTypeUrlPrefix)
@@ -450,4 +465,47 @@ import scalapb.options.Scalapb
     }
   }
 
+}
+
+/**
+ * Primarily intended for replication where there is no public protocol
+ *
+ * INTERNAL API
+ */
+@InternalApi
+private[akka] final class DelegateToAkkaSerialization(system: ActorSystem[_]) extends ProjectionGrpcSerialization {
+  import ProtoAnySerialization._
+  private val serialization = SerializationExtension(system.classicSystem)
+
+  override def serialize(event: Any): ScalaPbAny = {
+    val anyRefEvent = event.asInstanceOf[AnyRef]
+    val serializer = serialization.findSerializerFor(anyRefEvent)
+    val bytes = serializer.toBinary(anyRefEvent)
+    val manifest = Serializers.manifestFor(serializer, anyRefEvent)
+    val id = serializer.identifier
+    ScalaPbAny(akkaSerializationTypeUrl(id, manifest), UnsafeByteOperations.unsafeWrap(bytes))
+  }
+
+  override def deserialize(event: ScalaPbAny): Any = {
+    val typeUrl = event.typeUrl
+    if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
+      val (id, manifest) = akkaSerializerIdAndManifestFromTypeUrl(typeUrl)
+      // FIXME could potentially optimize to use byte buffer here instead of copy to byte array
+      serialization.deserialize(event.value.toByteArray, id, manifest).get
+    } else {
+      throw new IllegalArgumentException(
+        s"Got event with type url: [${typeUrl}] but only type urls with Akka serializer prefix ($AkkaSerializationTypeUrlPrefix) supported")
+    }
+  }
+
+  override def toSerializedEvent(event: ScalaPbAny): Option[SerializedEvent] = {
+    val typeUrl = event.typeUrl
+    if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
+      val (id, manifest) = akkaSerializerIdAndManifestFromTypeUrl(typeUrl)
+      Some(new SerializedEvent(event.value.toByteArray, id, manifest))
+    } else {
+      // We don't try to optimize this case. One level of indirection too much, and probably not a common case.
+      None
+    }
+  }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2023-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.producer.javadsl
@@ -17,7 +17,8 @@ import akka.projection.grpc.internal.proto.EventConsumerServiceClient
 import akka.stream.javadsl.FlowWithContext
 
 import java.util.Optional
-import scala.compat.java8.OptionConverters.RichOptionalGeneric
+
+import scala.jdk.OptionConverters._
 
 /**
  * An active producer for event producer push that can be started on the producer to connect to consumers to
@@ -61,7 +62,7 @@ final class EventProducerPush[Event] private (
       : FlowWithContext[EventEnvelope[Event], ProjectionContext, Done, ProjectionContext, NotUsed] = {
     val eventConsumerClient = EventConsumerServiceClient(grpcClientSettings)(system)
     val scalaMeta: akka.grpc.scaladsl.Metadata =
-      connectionMetadata.asScala.map(_.asScala).getOrElse(MetadataBuilder.empty)
+      connectionMetadata.toScala.map(_.asScala).getOrElse(MetadataBuilder.empty)
     EventPusher[Event](originId, eventConsumerClient, eventProducerSource.asScala, scalaMeta)(system).asJava
   }
 

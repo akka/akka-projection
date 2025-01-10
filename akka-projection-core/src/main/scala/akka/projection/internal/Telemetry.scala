@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.internal
@@ -7,13 +7,13 @@ package akka.projection.internal
 import java.util
 
 import scala.collection.immutable
+import scala.jdk.CollectionConverters._
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.annotation.InternalStableApi
 import akka.projection.ProjectionId
-import akka.util.ccompat.JavaConverters._
 
 /**
  * Service Provider Interface (SPI) for collecting metrics from projections.

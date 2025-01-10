@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.producer.javadsl
@@ -10,7 +10,7 @@ import akka.grpc.javadsl.Metadata
 import akka.grpc.scaladsl
 
 import java.util.concurrent.CompletionStage
-import scala.compat.java8.FutureConverters.CompletionStageOps
+import scala.jdk.FutureConverters._
 import scala.concurrent.Future
 
 /**
@@ -37,5 +37,5 @@ private[akka] final class EventProducerInterceptorAdapter(interceptor: EventProd
         streamId,
         // FIXME: Akka gRPC internal class, add public API for Scala to Java metadata there
         new JavaMetadataImpl(requestMetadata))
-      .toScala
+      .asScala
 }

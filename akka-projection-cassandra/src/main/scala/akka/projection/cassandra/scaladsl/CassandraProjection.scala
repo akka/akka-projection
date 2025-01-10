@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.cassandra.scaladsl
@@ -100,7 +100,7 @@ object CassandraProjection {
    *
    * The flow should not duplicate emitted envelopes (`mapConcat`) with same offset, because then it can result in
    * that the first offset is stored and when the projection is restarted that offset is considered completed even
-   * though more of the duplicated enveloped were never processed.
+   * though more of the duplicated envelopes were never processed.
    *
    * The flow must not reorder elements, because the offsets may be stored in the wrong order and
    * and when the projection is restarted all envelopes up to the latest stored offset are considered

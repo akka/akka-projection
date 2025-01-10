@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.kafka.internal
@@ -9,8 +9,8 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -104,7 +104,7 @@ import org.apache.kafka.common.record.TimestampType
 
   override def source(readOffsets: Supplier[CompletionStage[Optional[MergeableOffset[JLong]]]])
       : CompletionStage[akka.stream.javadsl.Source[ConsumerRecord[K, V], NotUsed]] = {
-    source(() => readOffsets.get().toScala.map(_.asScala)).map(_.asJava).toJava
+    source(() => readOffsets.get().asScala.map(_.toScala)).map(_.asJava).asJava
   }
 
   override def extractOffset(record: ConsumerRecord[K, V]): MergeableOffset[JLong] =

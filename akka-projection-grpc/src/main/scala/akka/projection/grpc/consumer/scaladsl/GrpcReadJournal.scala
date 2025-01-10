@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.consumer.scaladsl
@@ -8,7 +8,6 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.InternalApi
 import akka.grpc.GrpcClientSettings
@@ -17,7 +16,6 @@ import akka.grpc.scaladsl.SingleResponseRequestBuilder
 import akka.grpc.scaladsl.StreamResponseRequestBuilder
 import akka.grpc.scaladsl.StringEntry
 import akka.persistence.Persistence
-import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.scaladsl._
@@ -29,10 +27,10 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
+import akka.projection.grpc.internal.ProjectionGrpcSerialization
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.ProtobufProtocolConversions
-import akka.projection.grpc.internal.proto
 import akka.projection.grpc.internal.proto.Event
 import akka.projection.grpc.internal.proto.EventProducerServiceClient
 import akka.projection.grpc.internal.proto.EventTimestampRequest
@@ -50,22 +48,22 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import com.google.protobuf.Descriptors
-import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.config.Config
 import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.time.Instant
-import java.util.concurrent.TimeUnit
 
+import java.time.Instant
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
+
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
 
@@ -111,8 +109,11 @@ object GrpcReadJournal {
       settings: GrpcQuerySettings,
       clientSettings: GrpcClientSettings,
       protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor])(
-      implicit system: ClassicActorSystemProvider): GrpcReadJournal =
-    apply(settings, clientSettings, protobufDescriptors, ProtoAnySerialization.Prefer.Scala, replicationSettings = None)
+      implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
+    val protoAnySerialization =
+      new ProtoAnySerialization(system.classicSystem.toTyped, protobufDescriptors, ProtoAnySerialization.Prefer.Scala)
+    apply(settings, clientSettings, protoAnySerialization, replicationSettings = None)
+  }
 
   /**
    * INTERNAL API
@@ -120,16 +121,12 @@ object GrpcReadJournal {
   @InternalApi private[akka] def apply(
       settings: GrpcQuerySettings,
       clientSettings: GrpcClientSettings,
-      protobufDescriptors: immutable.Seq[Descriptors.FileDescriptor],
-      protobufPrefer: ProtoAnySerialization.Prefer,
+      wireSerialization: ProjectionGrpcSerialization,
       replicationSettings: Option[ReplicationSettings[_]])(
       implicit system: ClassicActorSystemProvider): GrpcReadJournal = {
 
     // FIXME issue #702 This probably means that one GrpcReadJournal instance is created for each Projection instance,
     // and therefore one grpc client for each. Is that fine or should the client be shared for same clientSettings?
-
-    val protoAnySerialization =
-      new ProtoAnySerialization(system.classicSystem.toTyped, protobufDescriptors, protobufPrefer)
 
     if (settings.initialConsumerFilter.nonEmpty) {
       ConsumerFilter(system.classicSystem.toTyped).ref ! ConsumerFilter.UpdateFilter(
@@ -141,7 +138,7 @@ object GrpcReadJournal {
       system.classicSystem.asInstanceOf[ExtendedActorSystem],
       settings,
       withChannelBuilderOverrides(clientSettings),
-      protoAnySerialization,
+      wireSerialization,
       replicationSettings)
   }
 
@@ -161,7 +158,7 @@ final class GrpcReadJournal private (
     system: ExtendedActorSystem,
     settings: GrpcQuerySettings,
     clientSettings: GrpcClientSettings,
-    protoAnySerialization: ProtoAnySerialization,
+    wireSerialization: ProjectionGrpcSerialization,
     replicationSettings: Option[ReplicationSettings[_]])
     extends ReadJournal
     with EventsBySliceQuery
@@ -188,10 +185,19 @@ final class GrpcReadJournal private (
   def this(system: ExtendedActorSystem, config: Config, cfgPath: String) =
     this(system, config, cfgPath, ProtoAnySerialization.Prefer.Scala)
 
+  /**
+   * Correlation id to be used with [[ConsumerFilter.ReplayWithFilter]].
+   * Such replay request will trigger replay in all `eventsBySlices` queries
+   * with the same `streamId` running from this instance of the `GrpcReadJournal`.
+   * Create separate instances of the `GrpcReadJournal` to have separation between
+   * replay requests for the same `streamId`.
+   */
+  val replayCorrelationId: UUID = UUID.randomUUID()
+
   private implicit val typedSystem: akka.actor.typed.ActorSystem[_] = system.toTyped
   private val persistenceExt = Persistence(system)
 
-  lazy val consumerFilter = ConsumerFilter(typedSystem)
+  lazy val consumerFilter: ConsumerFilter = ConsumerFilter(typedSystem)
 
   private val client = EventProducerServiceClient(clientSettings)
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
@@ -208,7 +214,8 @@ final class GrpcReadJournal private (
       streamId,
       Set(
         ConsumerFilter
-          .ReplayPersistenceId(ConsumerFilter.PersistenceIdOffset(persistenceId, fromSeqNr), triggeredBySeqNr + 1)))
+          .ReplayPersistenceId(ConsumerFilter.PersistenceIdOffset(persistenceId, fromSeqNr), triggeredBySeqNr + 1)),
+      replayCorrelationId)
   }
 
   private def addRequestHeaders[Req, Res](
@@ -273,7 +280,7 @@ final class GrpcReadJournal private (
       maxSlice: Int,
       offset: Offset): Source[EventEnvelope[Evt], NotUsed] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    log.debugN(
+    log.debug(
       "Starting eventsBySlices stream from [{}] [{}], slices [{} - {}], offset [{}]",
       clientSettings.serviceName,
       streamId,
@@ -289,20 +296,7 @@ final class GrpcReadJournal private (
       minSlice <= slice && slice <= maxSlice
     }
 
-    val protoOffset =
-      offset match {
-        case o: TimestampOffset =>
-          val protoTimestamp = Timestamp(o.timestamp)
-          val protoSeen = o.seen.iterator.map {
-            case (pid, seqNr) =>
-              PersistenceIdSeqNr(pid, seqNr)
-          }.toSeq
-          Some(proto.Offset(Some(protoTimestamp), protoSeen))
-        case NoOffset =>
-          None
-        case _ =>
-          throw new IllegalArgumentException(s"Expected TimestampOffset or NoOffset, but got [$offset]")
-      }
+    val protoOffset = offsetToProtoOffset(offset)
 
     def inReqSource(initCriteria: immutable.Seq[ConsumerFilter.FilterCriteria]): Source[StreamIn, NotUsed] =
       Source
@@ -315,17 +309,14 @@ final class GrpcReadJournal private (
           case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
             val protoCriteria = toProtoFilterCriteria(criteria)
             if (log.isDebugEnabled)
-              log.debug2("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
+              log.debug("{}: Filter updated [{}]", streamId, criteria.mkString(", "))
             StreamIn(StreamIn.Message.Filter(FilterReq(protoCriteria)))
 
-          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _) =>
+          case r @ ConsumerFilter.ReplayWithFilter(`streamId`, _) if r.correlationId.forall(_ == replayCorrelationId) =>
             streamInReplay(r)
 
-          case ConsumerFilter.Replay(`streamId`, persistenceIdOffsets) =>
-            val replayWithFilter = ConsumerFilter.ReplayWithFilter(
-              streamId,
-              persistenceIdOffsets.map(p => ConsumerFilter.ReplayPersistenceId(p, filterAfterSeqNr = Long.MaxValue)))
-            streamInReplay(replayWithFilter)
+          case r @ ConsumerFilter.Replay(`streamId`, _) if r.correlationId.forall(_ == replayCorrelationId) =>
+            streamInReplay(r.toReplayWithFilter)
         }
         .mapMaterializedValue { ref =>
           consumerFilter.ref ! ConsumerFilter.Subscribe(streamId, initCriteria, ref)
@@ -339,11 +330,11 @@ final class GrpcReadJournal private (
           ReplayPersistenceId(Some(PersistenceIdSeqNr(pid, seqNr)), filterAfterSeqNr)
       }.toVector
 
-      // need this for compatibility with 1.5.2
+      // need this for compatibility with 1.6.0
       val protoPersistenceIdOffsets = protoReplayPersistenceIds.map(_.fromPersistenceIdOffset.get)
 
       if (log.isDebugEnabled() && protoReplayPersistenceIds.nonEmpty)
-        log.debug2(
+        log.debug(
           "{}: Replay triggered for [{}]",
           streamId,
           protoReplayPersistenceIds
@@ -385,11 +376,12 @@ final class GrpcReadJournal private (
         .invoke(streamIn)
         .recover {
           case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
-            // this means we couldn't connect, will be retried, relatively common, so make it less noisy
-            throw new ConnectionException(
-              clientSettings.serviceName,
-              clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString),
-              streamId)
+            // this means we couldn't connect, will be retried, relatively common, so make it less noisy,
+            // Users still want to be able to figure out non-transient errors, so log with full exception details at debug
+            val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
+            if (log.isDebugEnabled)
+              log.debug(s"Connection to ${clientSettings.serviceName}:$port for stream id $streamId failed or lost", ex)
+            throw new ConnectionException(clientSettings.serviceName, port, streamId)
 
           case th: Throwable =>
             throw new RuntimeException(s"Failure to consume gRPC event stream for [${streamId}]", th)
@@ -398,24 +390,24 @@ final class GrpcReadJournal private (
     streamOut.map {
       case StreamOut(StreamOut.Message.Event(event), _) =>
         if (log.isTraceEnabled)
-          log.traceN(
+          log.trace(
             "Received event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
             clientSettings.serviceName,
             event.persistenceId,
             event.seqNr,
-            timestampOffset(event.offset.get).timestamp,
+            timestampOffset(event.offset.head).timestamp,
             event.source)
 
         eventToEnvelope(event, streamId)
 
       case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
         if (log.isTraceEnabled)
-          log.traceN(
+          log.trace(
             "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
             clientSettings.serviceName,
             filteredEvent.persistenceId,
             filteredEvent.seqNr,
-            timestampOffset(filteredEvent.offset.get).timestamp,
+            timestampOffset(filteredEvent.offset.head).timestamp,
             filteredEvent.source)
 
         filteredEventToEnvelope(filteredEvent, streamId)
@@ -431,11 +423,11 @@ final class GrpcReadJournal private (
       // not the normal entity type which is internal to the producing side
       streamId: String): EventEnvelope[Evt] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
-    ProtobufProtocolConversions.eventToEnvelope(event, protoAnySerialization)
+    ProtobufProtocolConversions.eventToEnvelope(event, wireSerialization)
   }
 
   private def filteredEventToEnvelope[Evt](filteredEvent: FilteredEvent, entityType: String): EventEnvelope[Evt] = {
-    val eventOffset = timestampOffset(filteredEvent.offset.get)
+    val eventOffset = timestampOffset(filteredEvent.offset.head)
     new EventEnvelope(
       eventOffset,
       filteredEvent.persistenceId,
@@ -468,7 +460,7 @@ final class GrpcReadJournal private (
 
   //LoadEventQuery
   override def loadEnvelope[Evt](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Evt]] = {
-    log.traceN(
+    log.trace(
       "Loading event from [{}] persistenceId [{}] with seqNr [{}]",
       clientSettings.serviceName,
       persistenceId,

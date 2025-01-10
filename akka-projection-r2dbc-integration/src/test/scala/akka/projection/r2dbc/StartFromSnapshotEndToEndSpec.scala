@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 - 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc
@@ -11,7 +11,6 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
@@ -63,7 +62,7 @@ object StartFromSnapshotEndToEndSpec {
           "", { (_, command) =>
             command match {
               case command: PersistWithAck =>
-                context.log.debugN(
+                context.log.debug(
                   "Persist [{}], pid [{}], seqNr [{}]",
                   command.payload,
                   pid.id,
@@ -92,7 +91,7 @@ object StartFromSnapshotEndToEndSpec {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
-      log.debug2("{} Processed {}", projectionId.key, envelope.event)
+      log.debug("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
     }

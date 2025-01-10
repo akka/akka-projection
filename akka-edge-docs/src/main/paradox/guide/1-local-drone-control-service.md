@@ -7,7 +7,7 @@ for drones using the @extref[Akka Event Sourced Behavior API](akka:typed/persist
 
 We will represent drone as an Event Sourced entity, if you are unfamiliar with Event Sourcing, refer to the
 @extref[Event Sourcing section in the Akka guide](akka-guide:concepts/event-sourcing.html) for an explanation.
-The [Event Sourcing with Akka video](https://akka.io/blog/news/2020/01/07/akka-event-sourcing-video) is also a good starting point for learning Event Sourcing.
+The [Event Sourcing with Akka video](https://www.youtube.com/watch?v=xWuOGqmR7ow) is also a good starting point for learning Event Sourcing.
 
 For drones to communicate their location to the digital twin we will create a gRPC API.
 

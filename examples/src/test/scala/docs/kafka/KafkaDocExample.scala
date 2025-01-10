@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.kafka
@@ -15,7 +15,6 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.projection.MergeableOffset
 import akka.projection.Projection
 import akka.projection.ProjectionBehavior
@@ -73,7 +72,7 @@ object KafkaDocExample {
     override def process(session: HibernateJdbcSession, envelope: ConsumerRecord[String, String]): Unit = {
       val word = envelope.value
       val newCount = state.getOrElse(word, 0) + 1
-      logger.infoN(
+      logger.info(
         "{} consumed from topic/partition {}/{}. Word count for [{}] is {}",
         projectionId,
         envelope.topic,
@@ -119,7 +118,7 @@ object KafkaDocExample {
       val key = word
       val producerRecord = new ProducerRecord(topic, key, word)
       val result = sendProducer.send(producerRecord).map { recordMetadata =>
-        logger.infoN("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition)
+        logger.info("Published word [{}] to topic/partition {}/{}", word, topic, recordMetadata.partition)
         Done
       }
       result

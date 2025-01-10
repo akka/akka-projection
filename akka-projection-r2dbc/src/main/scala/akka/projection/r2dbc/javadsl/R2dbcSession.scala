@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 - 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc.javadsl
@@ -8,16 +8,16 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.{ Function => JFunction }
 
-import scala.compat.java8.FutureConverters._
-import scala.compat.java8.OptionConverters._
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
 import scala.concurrent.ExecutionContext
+import scala.jdk.CollectionConverters._
 
 import akka.actor.typed.ActorSystem
-import akka.dispatch.ExecutionContexts
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.projection.r2dbc.scaladsl
-import akka.util.ccompat.JavaConverters._
 import io.r2dbc.spi.Connection
+import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.Row
 import io.r2dbc.spi.Statement
 
@@ -37,9 +37,22 @@ object R2dbcSession {
       fun: JFunction[R2dbcSession, CompletionStage[A]]): CompletionStage[A] = {
     scaladsl.R2dbcSession.withSession(system, connectionFactoryConfigPath) { scaladslSession =>
       val javadslSession = new R2dbcSession(scaladslSession.connection)(system.executionContext, system)
-      fun(javadslSession).toScala
+      fun(javadslSession).asScala
     }
-  }.toJava
+  }.asJava
+
+  /**
+   * Provide a custom connectionFactory. The config closeCallsExceeding is loaded from the default path.
+   */
+  def withSession[A](
+      system: ActorSystem[_],
+      connectionFactory: ConnectionFactory,
+      fun: JFunction[R2dbcSession, CompletionStage[A]]): CompletionStage[A] = {
+    scaladsl.R2dbcSession.withSession(system, connectionFactory) { scaladslSession =>
+      val javadslSession = new R2dbcSession(scaladslSession.connection)(system.executionContext, system)
+      fun(javadslSession).asScala
+    }
+  }.asJava
 
 }
 
@@ -49,18 +62,18 @@ final class R2dbcSession(val connection: Connection)(implicit ec: ExecutionConte
     connection.createStatement(sql)
 
   def updateOne(statement: Statement): CompletionStage[java.lang.Long] =
-    R2dbcExecutor.updateOneInTx(statement).map(java.lang.Long.valueOf)(ExecutionContexts.parasitic).toJava
+    R2dbcExecutor.updateOneInTx(statement).map(java.lang.Long.valueOf)(ExecutionContext.parasitic).asJava
 
   def update(statements: java.util.List[Statement]): CompletionStage[java.util.List[java.lang.Long]] =
     R2dbcExecutor
       .updateInTx(statements.asScala.toVector)
       .map(results => results.map(java.lang.Long.valueOf).asJava)
-      .toJava
+      .asJava
 
   def selectOne[A](statement: Statement)(mapRow: JFunction[Row, A]): CompletionStage[Optional[A]] =
-    R2dbcExecutor.selectOneInTx(statement, mapRow(_)).map(_.asJava)(ExecutionContexts.parasitic).toJava
+    R2dbcExecutor.selectOneInTx(statement, mapRow(_)).map(_.toJava)(ExecutionContext.parasitic).asJava
 
   def select[A](statement: Statement)(mapRow: JFunction[Row, A]): CompletionStage[java.util.List[A]] =
-    R2dbcExecutor.selectInTx(statement, mapRow(_)).map(_.asJava).toJava
+    R2dbcExecutor.selectInTx(statement, mapRow(_)).map(_.asJava).asJava
 
 }

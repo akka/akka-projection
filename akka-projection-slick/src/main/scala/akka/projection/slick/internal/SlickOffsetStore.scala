@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.slick.internal
@@ -10,7 +10,6 @@ import scala.concurrent.Future
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
@@ -172,7 +171,7 @@ import slick.jdbc.JdbcProfile
           stmt.execute(sql)
         })
     }
-    db.run(DBIO.seq(prepareSchemaDBIO, prepareManagementSchemaDBIO)).map(_ => Done)(ExecutionContexts.parasitic)
+    db.run(DBIO.seq(prepareSchemaDBIO, prepareManagementSchemaDBIO)).map(_ => Done)(ExecutionContext.parasitic)
   }
 
   def dropIfExists(): Future[Done] = {
@@ -188,7 +187,7 @@ import slick.jdbc.JdbcProfile
         stmt.execute(dialect.dropManagementTableStatement)
       }
     }
-    db.run(DBIO.seq(prepareSchemaDBIO, prepareManagementSchemaDBIO)).map(_ => Done)(ExecutionContexts.parasitic)
+    db.run(DBIO.seq(prepareSchemaDBIO, prepareManagementSchemaDBIO)).map(_ => Done)(ExecutionContext.parasitic)
   }
 
   def readManagementState(projectionId: ProjectionId)(
@@ -209,6 +208,6 @@ import slick.jdbc.JdbcProfile
     val action =
       managementTable.insertOrUpdate(ManagementStateRow(projectionId.name, projectionId.key, paused, millisSinceEpoch))
 
-    db.run(action).map(_ => Done)(ExecutionContexts.parasitic)
+    db.run(action).map(_ => Done)(ExecutionContext.parasitic)
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2023-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.internal
@@ -7,7 +7,6 @@ package akka.projection.grpc.internal
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.annotation.InternalApi
 import akka.grpc.scaladsl.BytesEntry
 import akka.grpc.scaladsl.Metadata
@@ -65,13 +64,15 @@ private[akka] object EventPusher {
     import akka.projection.grpc.internal.ProtobufProtocolConversions.transformAndEncodeEvent
 
     implicit val ec: ExecutionContext = system.executionContext
-    val protoAnySerialization = new ProtoAnySerialization(system)
+    val wireSerialization =
+      if (eps.settings.akkaSerializationOnly) new DelegateToAkkaSerialization(system)
+      else new ProtoAnySerialization(system)
 
     def filterAndTransformFlow(filters: Future[proto.ConsumerEventStart])
         : Flow[(EventEnvelope[Event], ProjectionContext), (ConsumeEventIn, ProjectionContext), NotUsed] =
       Flow
         .futureFlow(filters.map { startMessage =>
-          logger.infoN(
+          logger.info(
             "Starting event push flow for [{}], origin id: [{}]{}",
             eps.streamId,
             originId,
@@ -108,24 +109,30 @@ private[akka] object EventPusher {
           Flow[(EventEnvelope[Event], ProjectionContext)]
             .mapAsync(eps.settings.transformationParallelism) {
               case (envelope, projectionContext) =>
+                val envelopeWithMetadata =
+                  eps.replicatedEventMetadataTransformation(envelope.asInstanceOf[EventEnvelope[Any]]) match {
+                    case None           => envelope
+                    case Some(metadata) => envelope.withMetadata(metadata)
+                  }
+
                 val filteredTransformed =
-                  if (replicatedEventOriginFilter(envelope) && eps.producerFilter(
-                        envelope.asInstanceOf[EventEnvelope[Any]]) &&
-                      consumerFilter.matches(envelope)) {
+                  if (replicatedEventOriginFilter(envelopeWithMetadata) && eps.producerFilter(
+                        envelopeWithMetadata.asInstanceOf[EventEnvelope[Any]]) &&
+                      consumerFilter.matches(envelopeWithMetadata)) {
                     if (logger.isTraceEnabled())
                       logger.trace(
                         "Pushing event persistence id [{}], sequence number [{}]{}",
-                        envelope.persistenceId,
-                        envelope.sequenceNr,
+                        envelopeWithMetadata.persistenceId,
+                        envelopeWithMetadata.sequenceNr,
                         startMessage.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
-                    transformAndEncodeEvent(eps.transformation, envelope, protoAnySerialization)
+                    transformAndEncodeEvent(eps.transformation, envelopeWithMetadata, wireSerialization)
                   } else {
                     if (logger.isTraceEnabled())
                       logger.trace(
                         "Filtering event persistence id [{}], sequence number [{}]{}",
-                        envelope.persistenceId,
-                        envelope.sequenceNr,
+                        envelopeWithMetadata.persistenceId,
+                        envelopeWithMetadata.sequenceNr,
                         startMessage.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
                     Future.successful(None)
@@ -135,13 +142,11 @@ private[akka] object EventPusher {
                   case None             =>
                     // Filtered or transformed to None, we still need to push a placeholder to not get seqnr gaps on the receiving side
                     (
-                      ConsumeEventIn(
-                        ConsumeEventIn.Message.FilteredEvent(
-                          FilteredEvent(
-                            persistenceId = envelope.persistenceId,
-                            seqNr = envelope.sequenceNr,
-                            slice = envelope.slice,
-                            offset = offsetToProtoOffset(envelope.offset)))),
+                      ConsumeEventIn(ConsumeEventIn.Message.FilteredEvent(FilteredEvent(
+                        persistenceId = envelopeWithMetadata.persistenceId,
+                        seqNr = envelopeWithMetadata.sequenceNr,
+                        slice = envelopeWithMetadata.slice,
+                        offset = offsetToProtoOffset(envelopeWithMetadata.offset)))),
                       projectionContext)
                 }
             }

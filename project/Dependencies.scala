@@ -5,62 +5,87 @@ import sbt._
 
 object Dependencies {
 
-  val Scala213 = "2.13.13"
-  val Scala3 = "3.3.3"
+  // Java Platform version for JavaDoc creation
+  // sync with Java version in .github/workflows/release.yml#documentation
+  lazy val JavaDocLinkVersion = 17
+
+  val Scala213 = "2.13.15"
+  val Scala3 = "3.3.4"
 
   val Scala2Versions = Seq(Scala213)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
-  val AkkaVersionInDocs = "2.9"
-  val AlpakkaVersionInDocs = "8.0"
-  val AlpakkaKafkaVersionInDocs = "6.0"
-  val AkkaGrpcVersionInDocs = "2.4"
-  val AkkaPersistenceR2dbcVersionInDocs = Versions.akkaPersistenceR2dbc
-  val AkkaProjectionVersionInDocs = "1.5"
-
   object Versions {
-    val akka = sys.props.getOrElse("build.akka.version", "2.9.3")
-    val akkaPersistenceCassandra = "1.2.1"
-    val akkaPersistenceJdbc = "5.4.1"
-    val akkaPersistenceR2dbc = "1.2.4"
-    val alpakka = "8.0.0"
-    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "6.0.0")
-    val slick = "3.5.1"
+    val Akka = sys.props.getOrElse("build.akka.version", "2.10.0")
+    val AkkaVersionInDocs = VersionNumber(Akka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
+
+    val Alpakka = "9.0.0"
+    val AlpakkaVersionInDocs = VersionNumber(Alpakka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
+
+    val AlpakkaKafka = "7.0.0"
+    val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
+      case Seq(major, minor, _*) => s"$major.$minor"
+    }
+    val AkkaGrpcVersionInDocs = VersionNumber(akka.grpc.gen.BuildInfo.version).numbers match {
+      case Seq(major, minor, _*) => s"$major.$minor"
+    }
+
+    val AkkaProjectionVersionInDocs = "1.6"
+
+    val AkkaPersistenceCassandra = "1.3.0"
+    val AkkaPersistenceJdbc = "5.5.0"
+
+    val AkkaPersistenceR2dbc = "1.3.0"
+    val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
+      case Seq(major, minor, _*) => s"$major.$minor"
+    }
+
+    val AkkaPersistenceDynamodb = "2.0.3"
+    val AkkaPersistenceDynamodbVersionInDocs = VersionNumber(AkkaPersistenceDynamodb).numbers match {
+      case Seq(major, minor, _*) => s"$major.$minor"
+    }
+
+    val DynamodbSdk = "2.29.41"
+
+    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "7.0.0")
+    val slick = "3.5.2"
     val scalaTest = "3.2.18"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
-    val jacksonDatabind = "2.15.4" // this should match the version of jackson used by akka-serialization-jackson
+    val jacksonDatabind = "2.17.2" // this should match the version of jackson used by akka-serialization-jackson
   }
 
   object Compile {
-    val akkaActorTyped = "com.typesafe.akka" %% "akka-actor-typed" % Versions.akka
-    val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.akka
-    val akkaPersistence = "com.typesafe.akka" %% "akka-persistence" % Versions.akka
-    val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
-    val akkaStreamTyped = "com.typesafe.akka" %% "akka-stream-typed" % Versions.akka
-    val akkaProtobufV3 = "com.typesafe.akka" %% "akka-protobuf-v3" % Versions.akka
-    val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.akka
-    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
+    val akkaActorTyped = "com.typesafe.akka" %% "akka-actor-typed" % Versions.Akka
+    val akkaStream = "com.typesafe.akka" %% "akka-stream" % Versions.Akka
+    val akkaPersistence = "com.typesafe.akka" %% "akka-persistence" % Versions.Akka
+    val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.Akka
+    val akkaStreamTyped = "com.typesafe.akka" %% "akka-stream-typed" % Versions.Akka
+    val akkaProtobufV3 = "com.typesafe.akka" %% "akka-protobuf-v3" % Versions.Akka
+    val akkaPersistenceQuery = "com.typesafe.akka" %% "akka-persistence-query" % Versions.Akka
+    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.Akka
 
     // TestKit in compile scope for ProjectionTestKit
-    val akkaTypedTestkit = "com.typesafe.akka" %% "akka-actor-testkit-typed" % Versions.akka
-    val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Versions.akka
+    val akkaTypedTestkit = "com.typesafe.akka" %% "akka-actor-testkit-typed" % Versions.Akka
+    val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Versions.Akka
 
     val akkaPersistenceR2dbc =
-      "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.akkaPersistenceR2dbc
+      "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.AkkaPersistenceR2dbc
     val akkaPersistenceR2dbcState =
-      "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.akkaPersistenceR2dbc
+      "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.AkkaPersistenceR2dbc
 
     val h2 = "com.h2database" % "h2" % "2.2.224" % Provided // EPL 1.0
     val r2dbcH2 = "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Provided // ApacheV2
 
     val r2dbcSqlServer = "io.r2dbc" % "r2dbc-mssql" % "1.0.2.RELEASE" % Provided // ApacheV2
 
-    // pin this because testcontainers and slick brings in incompatible SLF4J 2.2
-    val sl4j = "org.slf4j" % "slf4j-api" % "1.7.36"
+    val akkaPersistenceDynamodb = "com.lightbend.akka" %% "akka-persistence-dynamodb" % Versions.AkkaPersistenceDynamodb
+    val dynamodbSdk = "software.amazon.awssdk" % "dynamodb" % Versions.DynamodbSdk
+
+    val slf4j = "org.slf4j" % "slf4j-api" % "2.0.16"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
-    val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.alpakka
+    val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.Alpakka
 
     val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
 
@@ -72,11 +97,12 @@ object Dependencies {
   object Test {
     val akkaTypedTestkit = Compile.akkaTypedTestkit % sbt.Test
     val akkaStreamTestkit = Compile.akkaStreamTestkit % sbt.Test
-    val akkaShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % sbt.Test
-    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka % sbt.Test
-    val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.akka % sbt.Test
-    val akkaDiscovery = "com.typesafe.akka" %% "akka-discovery" % Versions.akka % sbt.Test
-    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka % sbt.Test
+    val akkaShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.Akka % sbt.Test
+    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.Akka % sbt.Test
+    val persistenceTestkit = "com.typesafe.akka" %% "akka-persistence-testkit" % Versions.Akka % sbt.Test
+    val akkaDiscovery = "com.typesafe.akka" %% "akka-discovery" % Versions.Akka % sbt.Test
+    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.Akka % sbt.Test
+    val akkaPki = "com.typesafe.akka" %% "akka-pki" % Versions.Akka % sbt.Test
 
     val scalatest = "org.scalatest" %% "scalatest" % Versions.scalaTest % sbt.Test
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % sbt.Test
@@ -88,7 +114,7 @@ object Dependencies {
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % sbt.Test
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % sbt.Test
 
-    val logback = "ch.qos.logback" % "logback-classic" % "1.2.13" % sbt.Test
+    val logback = "ch.qos.logback" % "logback-classic" % "1.5.7" % sbt.Test
 
     val cassandraContainer =
       "org.testcontainers" % "cassandra" % Versions.testContainers % sbt.Test
@@ -110,12 +136,12 @@ object Dependencies {
   object Examples {
     val hibernate = "org.hibernate" % "hibernate-core" % "6.4.1.Final"
 
-    val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.akka
-    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.akka
+    val akkaPersistenceTyped = "com.typesafe.akka" %% "akka-persistence-typed" % Versions.Akka
+    val akkaClusterShardingTyped = "com.typesafe.akka" %% "akka-cluster-sharding-typed" % Versions.Akka
     val akkaPersistenceCassandra =
-      "com.typesafe.akka" %% "akka-persistence-cassandra" % Versions.akkaPersistenceCassandra
-    val akkaPersistenceJdbc = "com.lightbend.akka" %% "akka-persistence-jdbc" % Versions.akkaPersistenceJdbc
-    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.akka
+      "com.typesafe.akka" %% "akka-persistence-cassandra" % Versions.AkkaPersistenceCassandra
+    val akkaPersistenceJdbc = "com.lightbend.akka" %% "akka-persistence-jdbc" % Versions.AkkaPersistenceJdbc
+    val akkaSerializationJackson = "com.typesafe.akka" %% "akka-serialization-jackson" % Versions.Akka
   }
 
   private val deps = libraryDependencies
@@ -176,9 +202,8 @@ object Dependencies {
 
   val slick =
     deps ++= Seq(
-        // Slick 3.5 pulls in slf4j-api 2.2 which doesn't work with Akka
-        Compile.slick.exclude("org.slf4j", "slf4j-api"),
-        Compile.sl4j,
+        Compile.slick,
+        Compile.slf4j,
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.h2Driver,
@@ -186,9 +211,8 @@ object Dependencies {
 
   val slickIntegration =
     deps ++= Seq(
-        // Slick 3.5 pulls in slf4j-api 2.2 which doesn't work with Akka
-        Compile.slick.exclude("org.slf4j", "slf4j-api"),
-        Compile.sl4j,
+        Compile.slick,
+        Compile.slf4j,
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.h2Driver,
@@ -258,6 +282,7 @@ object Dependencies {
         Test.logback,
         Test.scalatest,
         Test.akkaDiscovery,
+        Test.akkaPki,
         Test.postgresDriver,
         Test.h2Driver,
         Compile.r2dbcH2,
@@ -292,6 +317,21 @@ object Dependencies {
         Test.akkaClusterShardingTyped,
         Test.akkaSerializationJackson,
         Test.akkaDiscovery,
+        Test.logback,
+        Test.scalatest)
+
+  val dynamodb = deps ++= Seq(
+        Compile.dynamodbSdk.exclude("software.amazon.awssdk", "apache-client"),
+        Compile.akkaPersistenceDynamodb,
+        Compile.akkaPersistenceQuery,
+        Compile.akkaPersistenceTyped,
+        Compile.akkaStreamTyped)
+
+  val dynamodbIntegration = deps ++= Seq(
+        Test.akkaStreamTestkit,
+        Test.akkaTypedTestkit,
+        Test.akkaClusterShardingTyped,
+        Test.akkaSerializationJackson,
         Test.logback,
         Test.scalatest)
 

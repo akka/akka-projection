@@ -1,40 +1,41 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.testkit.internal
 
-import akka.util.ccompat.JavaConverters._
-import scala.compat.java8.OptionConverters._
-import scala.compat.java8.FutureConverters._
+import scala.jdk.OptionConverters._
+import scala.jdk.FutureConverters._
 import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
 
 import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
 import akka.projection.testkit.scaladsl.TestOffsetStore
+
 @InternalApi private[projection] class TestOffsetStoreAdapter[Offset](
     delegate: akka.projection.testkit.javadsl.TestOffsetStore[Offset])
     extends TestOffsetStore[Offset] {
 
-  override def lastOffset(): Option[Offset] = delegate.lastOffset().asScala
+  override def lastOffset(): Option[Offset] = delegate.lastOffset().toScala
 
   override def allOffsets(): List[(ProjectionId, Offset)] = delegate.allOffsets().asScala.map(_.toScala).toList
 
   override def readOffsets(): Future[Option[Offset]] = {
-    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
-    delegate.readOffsets().toScala.map(_.asScala)
+    implicit val ec = scala.concurrent.ExecutionContext.parasitic
+    delegate.readOffsets().asScala.map(_.toScala)
   }
 
   override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] =
-    delegate.saveOffset(projectionId, offset).toScala
+    delegate.saveOffset(projectionId, offset).asScala
 
   override def readManagementState(projectionId: ProjectionId): Future[Option[ManagementState]] = {
-    implicit val ec = akka.dispatch.ExecutionContexts.parasitic
-    delegate.readManagementState(projectionId).toScala.map(_.asScala)
+    implicit val ec = scala.concurrent.ExecutionContext.parasitic
+    delegate.readManagementState(projectionId).asScala.map(_.toScala)
   }
 
   override def savePaused(projectionId: ProjectionId, paused: Boolean): Future[Done] =
-    delegate.savePaused(projectionId, paused).toScala
+    delegate.savePaused(projectionId, paused).asScala
 }

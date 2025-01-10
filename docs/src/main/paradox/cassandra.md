@@ -223,7 +223,7 @@ Java
 
 ### Actor handler
 
-A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/docs/akka/current/typed/actors.html),
+A good alternative for advanced state management is to implement the handler as an [actor](https://doc.akka.io/libraries/akka-core/current/typed/actors.html),
 which is described in @ref:[Processing with Actor](actor.md).
 
 ### Flow handler
@@ -307,7 +307,7 @@ One important setting is to configure the database driver to retry the initial c
 
 It is not enabled automatically as it is in the driver's reference.conf and is not overridable in a profile.
 
-It is possible to share the same Cassandra session as [Akka Persistence Cassandra](https://doc.akka.io/docs/akka-persistence-cassandra/current/)
+It is possible to share the same Cassandra session as [Akka Persistence Cassandra](https://doc.akka.io/libraries/akka-persistence-cassandra/current/)
 by setting the `session-config-path`:
 
 ```
@@ -316,7 +316,7 @@ akka.projection.cassandra {
 }
 ```
 
-or share the same Cassandra session as [Alpakka Cassandra](https://doc.akka.io/docs/alpakka/2.0/cassandra.html):
+or share the same Cassandra session as @extref:[Alpakka Cassandra](alpakka:cassandra.html):
 
 ```
 akka.projection.cassandra {
@@ -340,6 +340,6 @@ datastax-java-driver {
 ```
 
 Alternatively, Akka Discovery can be used for finding the Cassandra server contact points as described
-in the [Alpakka Cassandra documentation](https://doc.akka.io/docs/alpakka/2.0/cassandra.html#using-akka-discovery).
+in the @extref:[Alpakka Cassandra documentation](alpakka:cassandra.html#using-akka-discovery).
 
 Without any configuration it will use `localhost:9042` as default.

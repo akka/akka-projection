@@ -51,7 +51,7 @@ jobs:
           jvm: ${{ matrix.jvmName }}
 
       - name: Run all integration tests with default Scala and Java ${{ matrix.jdkVersion }}
-        run: sbt "akka-projection-slick-integration/test" ${{ matrix.extraOpts }}
+        run: sbt "akka-projection-slick-integration/test" ${{ matrix.extraOpts }} -Dakka.warn-on-no-license-key=false
         env: # Disable Ryuk resource reaper since we always spin up fresh VMs
           TESTCONTAINERS_RYUK_DISABLED: true
 

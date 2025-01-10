@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection
 
 import scala.collection.immutable
 
-import akka.util.ccompat.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object ProjectionId {
 

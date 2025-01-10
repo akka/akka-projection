@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.scaladsl
@@ -9,6 +9,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.DurationConverters._
 import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
@@ -18,7 +19,6 @@ import akka.actor.typed.pubsub.Topic
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
-import akka.util.JavaDurationConverters._
 import akka.util.Timeout
 
 import java.net.URLEncoder
@@ -33,10 +33,10 @@ object ProjectionManagement extends ExtensionId[ProjectionManagement] {
 class ProjectionManagement(system: ActorSystem[_]) extends Extension {
   private implicit val sys: ActorSystem[_] = system
   private implicit val askTimeout: Timeout = {
-    system.settings.config.getDuration("akka.projection.management.ask-timeout").asScala
+    system.settings.config.getDuration("akka.projection.management.ask-timeout").toScala
   }
   private val operationTimeout: FiniteDuration =
-    system.settings.config.getDuration("akka.projection.management.operation-timeout").asScala
+    system.settings.config.getDuration("akka.projection.management.operation-timeout").toScala
   private val retryAttempts: Int = math.max(1, (operationTimeout / askTimeout.duration).toInt)
   private implicit val ec: ExecutionContext = system.executionContext
 

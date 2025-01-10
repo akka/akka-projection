@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 - 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc
@@ -363,6 +363,7 @@ class R2dbcProjectionSpec
       offsetShouldBeEmpty()
       projectionTestKit.run(projectionFailing) {
         projectedValueShouldBe("e1|e2|e3|e4|e5")
+        bogusEventHandler.attempts shouldBe 1
       }
       eventually {
         offsetShouldBe(6L)

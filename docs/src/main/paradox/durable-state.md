@@ -1,7 +1,12 @@
 # Changes from Durable State
 
-A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in [Akka Persistence](https://doc.akka.io/docs/akka/current/typed/durable-state/persistence.html). Durable state changes can be consumed in a Projection with
+A typical source for Projections is the change stored with @apidoc[DurableStateBehavior$] in @extref:[Akka Persistence](akka:typed/durable-state/persistence.html). Durable state changes can be consumed in a Projection with
 `changesByTag`, `changesBySlices` or `eventsBySlices` queries.
+
+Note that NOT all changes that occur are guaranteed to be emitted, calls to these methods only guarantee that eventually, the most recent
+change for each object will be emitted. In particular, multiple updates to a given object in quick
+succession are likely to be skipped, with only the last update resulting in a change from this source.
+
 
 @@@ note { title=Alternative }
 When using the R2DBC plugin an alternative to using a Projection is to @extref:[store the query representation](akka-persistence-r2dbc:durable-state-store.html#storing-query-representation) directly from the write side.
@@ -38,7 +43,7 @@ The table below shows the `akka-projection-durable-state` direct dependencies.Th
 ## SourceProvider for changesByTag
 
 A @apidoc[SourceProvider] defines the source of the envelopes that the `Projection` will process. A `SourceProvider`
-for the `changes` query can be defined with the @apidoc[DurableStateStoreProvider$] like this:
+for the `changes` query can be defined with the @apidoc[DurableStateStoreProvider] like this:
 
 Scala
 :  @@snip [DurableStateStoreDocExample.scala](/examples/src/test/scala/docs/state/DurableStateStoreDocExample.scala) { #changesByTagSourceProvider }
@@ -46,7 +51,7 @@ Scala
 Java
 :  @@snip [DurableStateStoreDocExample.java](/examples/src/test/java/jdocs/state/DurableStateStoreDocExample.java) { #changesByTagSourceProvider }
 
-This example is using the [DurableStateStore JDBC plugin for Akka Persistence](https://doc.akka.io/docs/akka-persistence-jdbc/current/durable-state-store.html).
+This example is using the [DurableStateStore JDBC plugin for Akka Persistence](https://doc.akka.io/libraries/akka-persistence-jdbc/current/durable-state-store.html).
 You will use the same plugin that you configured for the write side. The one that is used by the `DurableStateBehavior`.
 
 This source is consuming all the changes from the `Account` `DurableStateBehavior` that are tagged with `"bank-accounts-1"`. In a production application, you would need to start as many instances as the number of different tags you used. That way you consume the changes from all entities.
@@ -58,7 +63,7 @@ by the `Projection`. See @apidoc[akka.persistence.query.DurableStateChange] for 
 ## SourceProvider for changesBySlices
 
 A @apidoc[SourceProvider] defines the source of the envelopes that the `Projection` will process. A `SourceProvider`
-for the `changesBySlices` query can be defined with the @apidoc[DurableStateStoreProvider$] like this:
+for the `changesBySlices` query can be defined with the @apidoc[DurableStateStoreProvider] like this:
 
 Scala
 :  @@snip [DurableStateStoreDocExample.scala](/examples/src/test/scala/docs/state/DurableStateStoreDocExample.scala) { #changesBySlicesSourceProvider }

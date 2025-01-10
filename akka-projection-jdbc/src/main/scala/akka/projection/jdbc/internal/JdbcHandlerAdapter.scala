@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.jdbc.internal
@@ -9,7 +9,8 @@ import akka.annotation.InternalApi
 import akka.projection.jdbc.JdbcSession
 import akka.projection.jdbc.javadsl
 import akka.projection.jdbc.scaladsl
-import akka.util.ccompat.JavaConverters._
+
+import scala.jdk.CollectionConverters._
 
 /**
  * INTERNAL API: Adapter from javadsl.JdbcHandler to scaladsl.JdbcHandler

@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.testkit.javadsl
 
-import scala.compat.java8.FunctionConverters._
+import scala.jdk.FunctionConverters._
 
 import akka.NotUsed
 import akka.projection.OffsetVerification

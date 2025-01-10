@@ -1,19 +1,19 @@
 /*
- * Copyright (C) 2022 - 2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.r2dbc.internal
 
 import scala.collection.immutable
-import scala.compat.java8.FutureConverters._
+import scala.jdk.FutureConverters._
 import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
 
 import akka.Done
 import akka.annotation.InternalApi
 import akka.projection.r2dbc.javadsl
 import akka.projection.r2dbc.javadsl.R2dbcSession
 import akka.projection.r2dbc.scaladsl
-import akka.util.ccompat.JavaConverters._
 
 /**
  * INTERNAL API: Adapter from javadsl.R2dbcHandler to scaladsl.R2dbcHandler
@@ -22,14 +22,14 @@ import akka.util.ccompat.JavaConverters._
     extends scaladsl.R2dbcHandler[Envelope] {
 
   override def process(session: scaladsl.R2dbcSession, envelope: Envelope): Future[Done] = {
-    delegate.process(new R2dbcSession(session.connection)(session.ec, session.system), envelope).toScala
+    delegate.process(new R2dbcSession(session.connection)(session.ec, session.system), envelope).asScala
   }
 
   override def start(): Future[Done] =
-    delegate.start().toScala
+    delegate.start().asScala
 
   override def stop(): Future[Done] =
-    delegate.stop().toScala
+    delegate.stop().asScala
 
 }
 
@@ -42,13 +42,13 @@ import akka.util.ccompat.JavaConverters._
     extends scaladsl.R2dbcHandler[immutable.Seq[Envelope]] {
 
   override def process(session: scaladsl.R2dbcSession, envelopes: immutable.Seq[Envelope]): Future[Done] = {
-    delegate.process(new R2dbcSession(session.connection)(session.ec, session.system), envelopes.asJava).toScala
+    delegate.process(new R2dbcSession(session.connection)(session.ec, session.system), envelopes.asJava).asScala
   }
 
   override def start(): Future[Done] =
-    delegate.start().toScala
+    delegate.start().asScala
 
   override def stop(): Future[Done] =
-    delegate.stop().toScala
+    delegate.stop().asScala
 
 }

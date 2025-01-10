@@ -1,7 +1,3 @@
-/*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
- */
-
 import java.io.File
 import java.io.PrintWriter
 

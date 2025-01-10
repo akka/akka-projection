@@ -3,7 +3,7 @@ project.description: Snapshot builds of Akka Projection.
 ---
 # Snapshots
 
-Snapshots are published to https://repo.akka.io/snapshots repository after every successful build on main.
+Snapshots are published to https://repo.akka.io/snapshots/ repository after every successful build on main.
 Add the following to your project build definition to resolve Akka Projection's snapshots:
 
 ## Configure repository
@@ -42,4 +42,4 @@ Gradle
 
 ## Documentation
 
-The [snapshot documentation](https://doc.akka.io/docs/akka-projection/snapshot) is updated with every snapshot build.
+The [snapshot documentation](https://doc.akka.io/libraries/akka-projection/snapshot) is updated with every snapshot build.

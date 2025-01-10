@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2022-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc
@@ -10,7 +10,6 @@ import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.grpc.GrpcClientSettings
 import akka.grpc.GrpcServiceException
 import akka.grpc.scaladsl.Metadata
@@ -48,6 +47,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.internal.CanTriggerReplay
 
 object IntegrationSpec {
 
@@ -78,7 +78,7 @@ object IntegrationSpec {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(envelope: EventEnvelope[String]): Future[Done] = {
-      log.debug2("{} Processed {}", projectionId.key, envelope.event)
+      log.debug("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
     }
@@ -89,7 +89,7 @@ object IntegrationSpec {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
-      log.debug2("{} Processed {}", projectionId.key, envelope.event)
+      log.debug("{} Processed {}", projectionId.key, envelope.event)
       probe ! Processed(projectionId, envelope)
       Future.successful(Done)
     }
@@ -109,7 +109,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
-  private val numberOfTests = 6
+  private val numberOfTests = 7
 
   // needs to be unique per test case and known up front for setting up the producer
   case class TestSource(entityType: String, streamId: String, pid: PersistenceId)
@@ -448,6 +448,69 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       processedProbe.expectTerminated(projection)
       processedProbe.expectTerminated(entity)
     }
+  }
+
+  "trigger replay for a specific projection instance" in new TestFixture {
+    entity ! TestEntity.Persist("a")
+    entity ! TestEntity.Persist("b")
+    entity ! TestEntity.Ping(replyProbe.ref)
+    replyProbe.receiveMessage()
+
+    // start the projection
+    val projection1 = spawnAtLeastOnceProjection()
+
+    // start another projection with the same streamId
+    val projectionId2 = randomProjectionId()
+    val processedProbe2 = createTestProbe[Processed]()
+    val sourceProvider2 = EventSourcedProvider.eventsBySlices[String](
+      system,
+      GrpcReadJournal(
+        GrpcQuerySettings(streamId) // same streamId
+          .withAdditionalRequestMetadata(new MetadataBuilder().addText("x-secret", "top_secret").build()),
+        GrpcClientSettings
+          .connectToServiceAt("127.0.0.1", grpcPort)
+          .withTls(false),
+        protobufDescriptors = Nil),
+      streamId, // same streamId
+      sliceRange.min,
+      sliceRange.max)
+    val projection2 = spawn(
+      ProjectionBehavior(
+        R2dbcProjection.atLeastOnceAsync(
+          projectionId2,
+          settings = None,
+          sourceProvider = sourceProvider2,
+          handler = () => new TestHandler(projectionId2, processedProbe2.ref))))
+
+    val processedA = processedProbe.receiveMessage()
+    processedA.envelope.persistenceId shouldBe pid.id
+    processedA.envelope.sequenceNr shouldBe 1L
+    processedA.envelope.event shouldBe "A"
+    processedProbe2.receiveMessage().envelope.event shouldBe "A"
+
+    val processedB = processedProbe.receiveMessage()
+    processedB.envelope.persistenceId shouldBe pid.id
+    processedB.envelope.sequenceNr shouldBe 2L
+    processedB.envelope.event shouldBe "B"
+    processedProbe2.receiveMessage().envelope.event shouldBe "B"
+
+    // look for log message to ensure that replay is triggered only once
+    LoggingTestKit.debug(s"Stream [$streamId (0-1023)]: Replay requested").withCheckExcess(true).expect {
+      sourceProvider2
+        .asInstanceOf[CanTriggerReplay]
+        .triggerReplay(pid.id, fromSeqNr = 2L, triggeredBySeqNr = 3L)
+    }
+
+    // no duplicates
+    processedProbe.expectNoMessage()
+    processedProbe2.expectNoMessage()
+
+    projection1 ! ProjectionBehavior.Stop
+    projection2 ! ProjectionBehavior.Stop
+    entity ! TestEntity.Stop(replyProbe.ref)
+    processedProbe.expectTerminated(projection1)
+    processedProbe.expectTerminated(projection2)
+    processedProbe.expectTerminated(entity)
   }
 
 }

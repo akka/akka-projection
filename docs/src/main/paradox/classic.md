@@ -1,7 +1,7 @@
 # Akka Classic
 
-Akka Projections can be used with the [new Actor API](https://doc.akka.io/docs/akka/current/typed/actors.html) or
-the [classic Actor API](https://doc.akka.io/docs/akka/current/index-classic.html). The documentation samples
+Akka Projections can be used with the [new Actor API](https://doc.akka.io/libraries/akka-core/current/typed/actors.html) or
+the [classic Actor API](https://doc.akka.io/libraries/akka-core/current/index-classic.html). The documentation samples
 show the new Actor API, and this page highlights how to use it with the classic Actor API.
 
 ## Actor System
@@ -20,7 +20,7 @@ Java
 @ref:[Events from Akka Classic Persistence](eventsourced.md) can be emitted from `PersistentActor` and consumed by a
 Projection with the @apidoc[EventSourcedProvider$]. The events from the `PersistentActor` must be tagged by wrapping
 them in `akka.persistence.journal.Tagged`, which can be done in the `PersistentActor` or by using
-[Event Adapters](https://doc.akka.io/docs/akka/current/persistence.html#event-adapters).
+[Event Adapters](https://doc.akka.io/libraries/akka-core/current/persistence.html#event-adapters).
 
 ## Running
 

@@ -76,7 +76,7 @@ The charging station is a very limited replicated entity example to keep the gui
 conflicts, stations are created, once, in the central cloud and replicated to the edge, updates related to drones currently 
 charging in the station happen at the edge and are replicated to the cloud. Akka replicated event sourcing provides APIs 
 for both CRDTs where conflicts are automatically handled by the data structure and business domain level conflict resolution. 
-For more details about see the @extref[Akka documentation](akka:replicated-eventsourcing.html).
+For more details about see the @extref[Akka documentation](akka:typed/replicated-eventsourcing.html).
 
 @@@
 

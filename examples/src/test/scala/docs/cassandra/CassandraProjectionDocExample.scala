@@ -1,10 +1,9 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.cassandra
 
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.projection.ProjectionContext
@@ -50,11 +49,11 @@ object CassandraProjectionDocExample {
     override def process(envelope: EventEnvelope[ShoppingCart.Event]): Future[Done] = {
       envelope.event match {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info("Shopping cart {} was checked out at {}", cartId, time)
           Future.successful(Done)
 
         case otherEvent =>
-          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
           Future.successful(Done)
       }
     }
@@ -70,10 +69,10 @@ object CassandraProjectionDocExample {
     override def process(envelopes: immutable.Seq[EventEnvelope[ShoppingCart.Event]]): Future[Done] = {
       envelopes.map(_.event).foreach {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info("Shopping cart {} was checked out at {}", cartId, time)
 
         case otherEvent =>
-          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
       }
       Future.successful(Done)
     }
@@ -128,11 +127,11 @@ object CassandraProjectionDocExample {
       .map(envelope => envelope.event)
       .map {
         case ShoppingCart.CheckedOut(cartId, time) =>
-          logger.info2("Shopping cart {} was checked out at {}", cartId, time)
+          logger.info("Shopping cart {} was checked out at {}", cartId, time)
           Done
 
         case otherEvent =>
-          logger.debug2("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
+          logger.debug("Shopping cart {} changed by {}", otherEvent.cartId, otherEvent)
           Done
       }
 

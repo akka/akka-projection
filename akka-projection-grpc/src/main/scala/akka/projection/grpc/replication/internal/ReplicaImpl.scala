@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.replication.internal
@@ -12,7 +12,7 @@ import akka.projection.grpc.replication.javadsl.{ Replica => JReplica }
 import akka.projection.grpc.replication.scaladsl.{ Replica => SReplica }
 
 import java.util.Optional
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters._
 
 /**
  * INTERNAL API
@@ -27,9 +27,9 @@ private[akka] final case class ReplicaImpl(
     extends JReplica
     with SReplica {
 
-  def getAdditionalQueryRequestMetadata: Optional[Metadata] = additionalQueryRequestMetadata.asJava
+  def getAdditionalQueryRequestMetadata: Optional[Metadata] = additionalQueryRequestMetadata.toJava
 
-  def getConsumersOnClusterRole: Optional[String] = consumersOnClusterRole.asJava
+  def getConsumersOnClusterRole: Optional[String] = consumersOnClusterRole.toJava
 
   override def withReplicaId(replicaId: ReplicaId): ReplicaImpl =
     copy(replicaId = replicaId)

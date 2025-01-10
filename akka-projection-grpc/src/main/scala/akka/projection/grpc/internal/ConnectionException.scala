@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.internal
@@ -13,5 +13,5 @@ import scala.util.control.NoStackTrace
  */
 @InternalApi
 private[akka] final class ConnectionException(host: String, port: String, streamId: String)
-    extends RuntimeException(s"Connection to $host:$port for stream id $streamId failed or lost")
+    extends RuntimeException(s"Connection to $host:$port for stream id $streamId failed or lost, will be retried")
     with NoStackTrace

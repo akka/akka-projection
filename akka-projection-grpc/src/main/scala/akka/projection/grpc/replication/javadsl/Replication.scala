@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.replication.javadsl
@@ -30,7 +30,7 @@ import akka.projection.grpc.replication.internal.ReplicationImpl
 
 import java.util.function.{ Function => JFunction }
 import java.util.Optional
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters._
 
 /**
  * Created using [[Replication.grpcReplication]], which starts sharding with the entity and
@@ -119,7 +119,7 @@ object Replication {
     val jEventProducerSource = EventProducerSource.fromScala(scalaReplication.eventProducerSource)
 
     val jEventProducerPushDestination =
-      scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).asJava
+      scalaReplication.eventProducerPushDestination.map(EventProducerPushDestination.fromScala).toJava
     new Replication[Command] {
       override def eventProducerService: EventProducerSource = jEventProducerSource
 

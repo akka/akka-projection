@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 // #guideEventGeneratorApp
@@ -118,7 +118,7 @@ object EventGeneratorApp extends App {
   /**
    * Construct an Actor that persists shopping cart events for a particular persistence id (cart id) and tag.
    * This is not how real Event Sourced actors should be be implemented. Please look at
-   * https://doc.akka.io/docs/akka/current/typed/persistence.html for more information about `EventSourcedBehavior`.
+   * https://doc.akka.io/libraries/akka-core/current/typed/persistence.html for more information about `EventSourcedBehavior`.
    */
   def cartBehavior(persistenceId: String, tag: String): Behavior[Event] =
     Behaviors.setup { ctx =>

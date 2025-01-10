@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2023 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2024 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.projection.grpc.replication
@@ -12,7 +12,6 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.javadsl.ActorContext
 import akka.actor.typed.javadsl.Behaviors
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.cluster.MemberStatus
 import akka.cluster.sharding.typed.javadsl.ClusterSharding
@@ -45,11 +44,12 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
 import java.time.Duration
-import scala.compat.java8.FutureConverters.CompletionStageOps
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
-import akka.util.ccompat.JavaConverters._
+import scala.jdk.CollectionConverters._
+import scala.jdk.FutureConverters._
 
 import java.util
 
@@ -106,7 +106,7 @@ object ReplicationJavaDSLIntegrationSpec {
     final case class TagChanged(tag: String, timestamp: LwwTime) extends Event
 
     object State {
-      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId("")), "")
+      val initial = State("Hello world", LwwTime(Long.MinValue, ReplicaId.empty), "")
     }
 
     case class State(greeting: String, timestamp: LwwTime, tag: String)
@@ -273,7 +273,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
         case (replica, index) =>
           val system = systems(index)
           logger
-            .infoN(
+            .info(
               "Starting replica [{}], system [{}] on port [{}]",
               replica.replicaId,
               system.name,
@@ -286,7 +286,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
             .get(system)
             .newServerAt("127.0.0.1", grpcPort)
             .bind(started.createSingleServiceHandler())
-            .toScala
+            .asScala
             .map { (binding: ServerBinding) =>
               binding.addToCoordinatedShutdown(Duration.ofSeconds(3), system)
               replica.replicaId -> started
@@ -304,12 +304,12 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
         withClue(s"from ${dc.id}") {
           Future
             .sequence(entityIds.map { entityId =>
-              logger.infoN("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
+              logger.info("Updating greeting for [{}] from dc [{}]", entityId, dc.id)
               ClusterSharding
                 .get(systemPerDc(dc))
                 .entityRefFor(entityTypeKey, entityId)
                 .ask(LWWHelloWorld.SetGreeting(s"hello 1 from ${dc.id}", _), Duration.ofSeconds(3))
-                .toScala
+                .asScala
             })
             .futureValue
 
@@ -326,7 +326,7 @@ class ReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf)
                   probe.awaitAssert({
                     entityRef
                       .ask(LWWHelloWorld.Get.apply, Duration.ofSeconds(10))
-                      .toScala
+                      .asScala
                       .futureValue should ===(s"hello 1 from ${dc.id}")
                   }, 10.seconds)
                 }
