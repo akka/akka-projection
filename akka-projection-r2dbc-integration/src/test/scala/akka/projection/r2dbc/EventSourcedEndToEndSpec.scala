@@ -385,7 +385,7 @@ class EventSourcedEndToEndSpec
         Thread.sleep(1500)
     }
 
-    val projections = startProjectionsFactory()
+    var projections = startProjectionsFactory()
 
     // give them some time to start before writing more events
     Thread.sleep(500)
@@ -411,7 +411,7 @@ class EventSourcedEndToEndSpec
 
       // resume projections again
       if (n == (numberOfEvents / 2) + 20)
-        startProjectionsFactory()
+        projections = startProjectionsFactory()
 
       if (n % 10 == 0)
         Thread.sleep(50)
