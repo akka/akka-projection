@@ -37,6 +37,7 @@ import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcProjection
 import akka.projection.r2dbc.scaladsl.R2dbcSession
+import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.serialization.SerializationExtension
 import akka.stream.scaladsl.FlowWithContext
@@ -119,14 +120,14 @@ object EventSourcedEndToEndSpec {
       nrOfProjections: Int,
       processedProbe: TestProbe[Processed])
 
-  class TestHandler(
+  class AsyncTestHandler(
       projectionId: ProjectionId,
       probe: ActorRef[Processed],
       processedEvents: ConcurrentHashMap[String, java.lang.Boolean],
-      exactlyOnce: Boolean = true)
-      extends R2dbcHandler[EventEnvelope[String]] {
+      exactlyOnce: Boolean = false)
+      extends Handler[EventEnvelope[String]] {
 
-    override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
+    override def process(envelope: EventEnvelope[String]): Future[Done] = {
       log.debug(
         "{} Processed {} [{}], pid [{}], seqNr [{}]",
         projectionId.key,
@@ -144,18 +145,43 @@ object EventSourcedEndToEndSpec {
     }
   }
 
-  class GroupedTestHandler(
+  class R2dbcTestHandler(
+      projectionId: ProjectionId,
+      probe: ActorRef[Processed],
+      processedEvents: ConcurrentHashMap[String, java.lang.Boolean],
+      exactlyOnce: Boolean = true)
+      extends R2dbcHandler[EventEnvelope[String]] {
+
+    val delegate = new AsyncTestHandler(projectionId, probe, processedEvents, exactlyOnce)
+
+    override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] =
+      delegate.process(envelope)
+  }
+
+  class GroupedAsyncTestHandler(
+      projectionId: ProjectionId,
+      probe: ActorRef[Processed],
+      processedEvents: ConcurrentHashMap[String, java.lang.Boolean])
+      extends Handler[Seq[EventEnvelope[String]]] {
+
+    val delegate = new AsyncTestHandler(projectionId, probe, processedEvents)
+
+    override def process(envelopes: Seq[EventEnvelope[String]]): Future[Done] = {
+      envelopes.foreach(delegate.process)
+      Future.successful(Done)
+    }
+  }
+
+  class GroupedR2dbcTestHandler(
       projectionId: ProjectionId,
       probe: ActorRef[Processed],
       processedEvents: ConcurrentHashMap[String, java.lang.Boolean])
       extends R2dbcHandler[Seq[EventEnvelope[String]]] {
 
-    val delegate = new TestHandler(projectionId, probe, processedEvents, exactlyOnce = false)
+    val delegate = new GroupedAsyncTestHandler(projectionId, probe, processedEvents)
 
-    override def process(session: R2dbcSession, envelopes: Seq[EventEnvelope[String]]): Future[Done] = {
-      envelopes.foreach(delegate.process(session, _))
-      Future.successful(Done)
-    }
+    override def process(session: R2dbcSession, envelopes: Seq[EventEnvelope[String]]): Future[Done] =
+      delegate.process(envelopes)
   }
 
   private def flowTestHandler(
@@ -249,7 +275,7 @@ class EventSourcedEndToEndSpec
             Some(projectionSettings),
             sourceProvider = sourceProvider,
             handler =
-              () => new TestHandler(projectionId, startParams.processedProbe.ref, processedEvents(projectionId))))
+              () => new R2dbcTestHandler(projectionId, startParams.processedProbe.ref, processedEvents(projectionId))))
   }
 
   private def startAtLeastOnceProjections(startParams: StartParams): Vector[ActorRef[ProjectionBehavior.Command]] = {
@@ -262,11 +288,25 @@ class EventSourcedEndToEndSpec
             Some(projectionSettings),
             sourceProvider = sourceProvider,
             handler = () =>
-              new TestHandler(
+              new R2dbcTestHandler(
                 projectionId,
                 startParams.processedProbe.ref,
                 processedEvents(projectionId),
                 exactlyOnce = false)))
+  }
+
+  private def startAtLeastOnceAsyncProjections(
+      startParams: StartParams): Vector[ActorRef[ProjectionBehavior.Command]] = {
+    startProjections(
+      startParams,
+      (projectionId, sourceProvider) =>
+        R2dbcProjection
+          .atLeastOnceAsync(
+            projectionId,
+            Some(projectionSettings),
+            sourceProvider = sourceProvider,
+            handler =
+              () => new AsyncTestHandler(projectionId, startParams.processedProbe.ref, processedEvents(projectionId))))
   }
 
   private def startGroupedWithinProjections(startParams: StartParams): Vector[ActorRef[ProjectionBehavior.Command]] = {
@@ -278,8 +318,23 @@ class EventSourcedEndToEndSpec
             projectionId,
             Some(projectionSettings),
             sourceProvider = sourceProvider,
-            handler =
-              () => new GroupedTestHandler(projectionId, startParams.processedProbe.ref, processedEvents(projectionId)))
+            handler = () =>
+              new GroupedR2dbcTestHandler(projectionId, startParams.processedProbe.ref, processedEvents(projectionId)))
+          .withGroup(3, groupAfterDuration = 200.millis))
+  }
+
+  private def startGroupedWithinAsyncProjections(
+      startParams: StartParams): Vector[ActorRef[ProjectionBehavior.Command]] = {
+    startProjections(
+      startParams,
+      (projectionId, sourceProvider) =>
+        R2dbcProjection
+          .groupedWithinAsync(
+            projectionId,
+            Some(projectionSettings),
+            sourceProvider = sourceProvider,
+            handler = () =>
+              new GroupedAsyncTestHandler(projectionId, startParams.processedProbe.ref, processedEvents(projectionId)))
           .withGroup(3, groupAfterDuration = 200.millis))
   }
 
@@ -450,9 +505,19 @@ class EventSourcedEndToEndSpec
       test(startParams, () => startAtLeastOnceProjections(startParams))
     }
 
+    "handle all events atLeastOnceAsync" in {
+      val startParams = newStartParams()
+      test(startParams, () => startAtLeastOnceAsyncProjections(startParams))
+    }
+
     "handle all events groupedWithin" in {
       val startParams = newStartParams()
       test(startParams, () => startGroupedWithinProjections(startParams))
+    }
+
+    "handle all events groupedWithinAsync" in {
+      val startParams = newStartParams()
+      test(startParams, () => startGroupedWithinAsyncProjections(startParams))
     }
 
     "handle all events atLeastOnceFlow" in {
@@ -541,7 +606,7 @@ class EventSourcedEndToEndSpec
             Some(projectionSettings),
             sourceProvider = sourceProvider,
             handler = () =>
-              new TestHandler(projectionId, processedProbe.ref, processedEvents(projectionId), exactlyOnce = true))
+              new R2dbcTestHandler(projectionId, processedProbe.ref, processedEvents(projectionId), exactlyOnce = true))
         spawn(ProjectionBehavior(projection))
       }
 
@@ -587,7 +652,7 @@ class EventSourcedEndToEndSpec
             Some(projectionSettings),
             sourceProvider = sourceProvider,
             handler = () =>
-              new TestHandler(projectionId, processedProbe.ref, processedEvents(projectionId), exactlyOnce = true))
+              new R2dbcTestHandler(projectionId, processedProbe.ref, processedEvents(projectionId), exactlyOnce = true))
         spawn(ProjectionBehavior(projection))
       }
 
