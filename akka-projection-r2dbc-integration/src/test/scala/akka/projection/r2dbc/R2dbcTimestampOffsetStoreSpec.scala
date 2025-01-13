@@ -460,11 +460,6 @@ class R2dbcTimestampOffsetStoreSpec
       val p5 = "p-08192" // slice 101 (same as p1)
       val p6 = "p-08076" // slice 106
 
-      // some validation require the startTimestamp, which is set from readOffset
-      offsetStore.getState().startTimestamp shouldBe Instant.EPOCH
-      offsetStore.readOffset().futureValue
-      offsetStore.getState().startTimestamp shouldBe clock.instant()
-
       val startTime = TestClock.nowMicros().instant()
       val offset1 = TimestampOffset(startTime, Map(p1 -> 3L, p2 -> 1L, p3 -> 5L))
       offsetStore.saveOffset(OffsetPidSeqNr(offset1, p1, 3L)).futureValue
@@ -1589,7 +1584,6 @@ class R2dbcTimestampOffsetStoreSpec
       // scaled up to 4 projections, testing 512-767
       val startOffset2 = TimestampOffset.toTimestampOffset(offsetStore2.readOffset().futureValue.get)
       startOffset2.timestamp shouldBe time(2)
-      offsetStore2.getState().startTimestamp shouldBe time(2)
       val latestTime = time(10)
       offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(latestTime, Map(p1 -> 2L)), p1, 2L)).futureValue
       offsetStore2.getState().latestTimestamp shouldBe latestTime

@@ -79,7 +79,7 @@ private[projection] object R2dbcOffsetStore {
   final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
-    val empty: State = State(Map.empty, Map.empty, Instant.EPOCH)
+    val empty: State = State(Map.empty, Map.empty)
 
     def apply(records: immutable.IndexedSeq[Record]): State = {
       if (records.isEmpty) empty
@@ -87,7 +87,7 @@ private[projection] object R2dbcOffsetStore {
     }
   }
 
-  final case class State(byPid: Map[Pid, Record], bySliceSorted: Map[Int, TreeSet[Record]], startTimestamp: Instant) {
+  final case class State(byPid: Map[Pid, Record], bySliceSorted: Map[Int, TreeSet[Record]]) {
 
     def size: Int = byPid.size
 
@@ -440,13 +440,7 @@ private[projection] class R2dbcOffsetStore(
         newState.latestTimestamp,
         startOffset)
 
-      val startTimestamp = startOffset match {
-        case None         => clock.instant()
-        case Some(offset) => offset.timestamp
-      }
-      val newStateWithStartOffset = newState.copy(startTimestamp = startTimestamp)
-
-      if (!state.compareAndSet(oldState, newStateWithStartOffset))
+      if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
 
       startOffset
@@ -861,12 +855,13 @@ private[projection] class R2dbcOffsetStore(
         if (acceptBefore.exists(timestamp => previousTimestamp.isBefore(timestamp))) {
           logger.debug(
             "{} Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
-            "is before deletion window timestamp [{}].",
+            "is before deletion window timestamp [{}] for slice [{}].",
             logPrefix,
             pid,
             seqNr,
             previousTimestamp,
-            acceptBefore.get)
+            acceptBefore.fold("none")(_.toString),
+            slice)
           Accepted
         } else if (recordWithOffset.fromPubSub) {
           // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
@@ -883,14 +878,14 @@ private[projection] class R2dbcOffsetStore(
           // and SourceProvider supports it.
           logger.warn(
             "{} Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, where previous event timestamp [{}] " +
-            "is after start timestamp [{}] minus backtracking window [{}].",
+            "is after deletion window timestamp [{}] for slice [{}].",
             logPrefix,
             seqNr,
             pid,
             recordWithOffset.offset,
             previousTimestamp,
-            currentState.startTimestamp,
-            settings.backtrackingWindow)
+            acceptBefore.fold("none")(_.toString),
+            slice)
           RejectedBacktrackingSeqNr
         } else {
           // This may happen rather frequently when using `publish-events`, after reconnecting and such.
