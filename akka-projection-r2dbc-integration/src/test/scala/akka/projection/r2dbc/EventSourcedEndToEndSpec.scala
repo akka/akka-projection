@@ -288,13 +288,13 @@ class EventSourcedEndToEndSpec
     }
 
     "accept unknown sequence number if previous is old" in {
-      val entityType = nextEntityType()
-      val pid1 = nextPid(entityType)
-      val pid2 = nextPid(entityType)
-      val pid3 = nextPid(entityType)
+      val entityType = "test-002"
+      val pid1 = s"$entityType|p-08071" // slice 992
+      val pid2 = s"$entityType|p-08192" // slice 992
+      val pid3 = s"$entityType|p-09160" // slice 992
 
       val startTime = TestClock.nowMicros().instant()
-      val oldTime = startTime.minus(projectionSettings.timeWindow).minusSeconds(60)
+      val oldTime = startTime.minus(projectionSettings.deleteAfter).minusSeconds(60)
       writeEvent(pid1, 1L, startTime, "e1-1")
 
       val projectionName = UUID.randomUUID().toString
@@ -306,7 +306,7 @@ class EventSourcedEndToEndSpec
       // old event for pid2, seqN3. will not be picked up by backtracking because outside time window
       writeEvent(pid2, 3L, oldTime, "e2-3")
       // pid2, seqNr 3 is unknown when receiving 4 so will lookup timestamp of 3
-      // and accept 4 because 3 was older than time window
+      // and accept 4 because 3 was older than the deletion window (for tracked slice)
       writeEvent(pid2, 4L, startTime.plusMillis(1), "e2-4")
       processedProbe.receiveMessage().envelope.event shouldBe "e2-4"
 

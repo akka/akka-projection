@@ -4,7 +4,23 @@
 
 package akka.projection.r2dbc.internal
 
+import java.lang.Boolean.FALSE
+import java.lang.Boolean.TRUE
+import java.time.Clock
+import java.time.Instant
+import java.time.{ Duration => JDuration }
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
+
+import scala.annotation.tailrec
+import scala.collection.immutable
+import scala.collection.immutable.TreeSet
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
 import akka.Done
+import akka.actor.Cancellable
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.Persistence
@@ -24,26 +40,10 @@ import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import io.r2dbc.spi.Connection
-import org.slf4j.LoggerFactory
-import java.time.Clock
-import java.time.Instant
-import java.time.{ Duration => JDuration }
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicReference
-import java.lang.Boolean.FALSE
-import java.lang.Boolean.TRUE
-
-import scala.annotation.tailrec
-import scala.collection.immutable
-import scala.collection.immutable.TreeSet
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
-import akka.actor.Cancellable
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
+import io.r2dbc.spi.Connection
+import org.slf4j.LoggerFactory
 
 /**
  * INTERNAL API
@@ -848,24 +848,25 @@ private[projection] class R2dbcOffsetStore(
     import Validation._
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
+    val slice = recordWithOffset.record.slice
 
-    // Haven't see seen this pid within the time window. Since events can be missed
-    // when read at the tail we will only accept it if the event with previous seqNr has timestamp
-    // before the startTimestamp minus backtracking window
+    // Haven't seen this pid in the time window (or lazy loaded from the database).
+    // Only accept it if the event with previous seqNr is outside the deletion window (for tracked slices).
     timestampOf(pid, seqNr - 1).map {
       case Some(previousTimestamp) =>
-        val acceptBefore = currentState.startTimestamp.minus(settings.backtrackingWindow)
+        val acceptBefore = currentState.bySliceSorted.get(slice).map { bySliceSorted =>
+          bySliceSorted.last.timestamp.minus(settings.deleteAfter)
+        }
 
-        if (previousTimestamp.isBefore(acceptBefore)) {
+        if (acceptBefore.exists(timestamp => previousTimestamp.isBefore(timestamp))) {
           logger.debug(
             "{} Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
-            "is before start timestamp [{}] minus backtracking window [{}].",
+            "is before deletion window timestamp [{}].",
             logPrefix,
             pid,
             seqNr,
             previousTimestamp,
-            currentState.startTimestamp,
-            settings.backtrackingWindow)
+            acceptBefore.get)
           Accepted
         } else if (recordWithOffset.fromPubSub) {
           // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
