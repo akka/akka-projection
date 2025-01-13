@@ -650,7 +650,7 @@ private[projection] class DynamoDBOffsetStore(
     val seqNr = recordWithOffset.record.seqNr
     val slice = recordWithOffset.record.slice
 
-    // Haven't see seen this pid within the time window. Since events can be missed
+    // Haven't seen this pid within the time window. Since events can be missed
     // when read at the tail we will only accept it if the event with previous seqNr has timestamp
     // before the startTimestamp minus backtracking window
     timestampOf(pid, seqNr - 1).map {
