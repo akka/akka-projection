@@ -34,7 +34,6 @@ object StartFromSnapshotEndToEndSpec {
 
   val config: Config = ConfigFactory
     .parseString("""
-    akka.persistence.snapshot-store.plugin = "akka.persistence.r2dbc.snapshot"
     akka.persistence.r2dbc {
       query {
         refresh-interval = 500 millis
