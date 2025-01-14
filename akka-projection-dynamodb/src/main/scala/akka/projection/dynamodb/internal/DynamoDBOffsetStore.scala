@@ -13,6 +13,7 @@ import scala.annotation.tailrec
 import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.jdk.DurationConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -70,21 +71,17 @@ private[projection] object DynamoDBOffsetStore {
       fromSnapshot: Boolean)
 
   object State {
-    val empty: State = State(Map.empty, Map.empty, Map.empty, Map.empty)
+    val empty: State = State(Map.empty, Map.empty, Map.empty)
 
-    def apply(offsetBySlice: Map[Int, TimestampOffset], startTimestampBySlice: Map[Int, Instant]): State =
-      if (offsetBySlice.isEmpty && startTimestampBySlice.isEmpty)
-        empty
-      else
-        new State(Map.empty, Map.empty, offsetBySlice, startTimestampBySlice)
-
+    def apply(offsetBySlice: Map[Int, TimestampOffset]): State =
+      if (offsetBySlice.isEmpty) empty
+      else new State(Map.empty, Map.empty, offsetBySlice)
   }
 
   final case class State(
       byPid: Map[Pid, Record],
       bySliceSorted: Map[Int, TreeSet[Record]],
-      offsetBySlice: Map[Int, TimestampOffset],
-      startTimestampBySlice: Map[Int, Instant]) {
+      offsetBySlice: Map[Int, TimestampOffset]) {
 
     def size: Int = byPid.size
 
@@ -221,6 +218,9 @@ private[projection] class DynamoDBOffsetStore(
 
   private val dao = new OffsetStoreDao(system, settings, projectionId, client)
 
+  private val offsetExpiry =
+    settings.timeToLiveSettings.projections.get(projectionId.name).offsetTimeToLive.map(_.toJava)
+
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
   // The OffsetStore instance is used by a single projectionId and there shouldn't be many concurrent
@@ -296,13 +296,7 @@ private[projection] class DynamoDBOffsetStore(
         })
 
     offsetBySliceFut.map { offsetBySlice =>
-      val now = clock.instant()
-      val startTimestampBySlice =
-        (minSlice to maxSlice).map { slice =>
-          slice -> offsetBySlice.get(slice).map(_.timestamp).getOrElse(now)
-        }.toMap
-
-      val newState = State(offsetBySlice, startTimestampBySlice)
+      val newState = State(offsetBySlice)
 
       if (!state.compareAndSet(oldState, newState))
         throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
@@ -622,7 +616,7 @@ private[projection] class DynamoDBOffsetStore(
           // always accept starting from snapshots when there was no previous event seen
           FutureAccepted
         } else {
-          validateEventTimestamp(currentState, recordWithOffset)
+          validateEventTimestamp(recordWithOffset)
         }
       } else {
         // strictSeqNr == false is for durable state where each revision might not be visible
@@ -644,29 +638,28 @@ private[projection] class DynamoDBOffsetStore(
     }
   }
 
-  private def validateEventTimestamp(currentState: State, recordWithOffset: RecordWithOffset) = {
+  private def validateEventTimestamp(recordWithOffset: RecordWithOffset) = {
     import Validation._
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
-    val slice = recordWithOffset.record.slice
 
-    // Haven't seen this pid within the time window. Since events can be missed
-    // when read at the tail we will only accept it if the event with previous seqNr has timestamp
-    // before the startTimestamp minus backtracking window
+    // Haven't seen this pid in the time window (or lazy loaded from the database).
+    // Only accept if the event with previous seqNr is outside the TTL expiry window (if configured).
     timestampOf(pid, seqNr - 1).map {
       case Some(previousTimestamp) =>
-        val acceptBefore =
-          currentState.startTimestampBySlice(slice).minus(settings.backtrackingWindow)
+        val acceptBefore = offsetExpiry.map { expiry =>
+          val now = clock.instant() // expiry is from when an offset was written, consider the window from now
+          now.minus(expiry)
+        }
 
-        if (previousTimestamp.isBefore(acceptBefore)) {
+        if (acceptBefore.exists(timestamp => previousTimestamp.isBefore(timestamp))) {
           logger.debug(
             "Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
-            "is before start timestamp [{}] minus backtracking window [{}].",
+            "is before TTL expiry window timestamp [{}].",
             pid,
             seqNr,
             previousTimestamp,
-            currentState.startTimestampBySlice(slice),
-            settings.backtrackingWindow)
+            acceptBefore.fold("none")(_.toString))
           Accepted
         } else if (recordWithOffset.fromPubSub) {
           logger.debug(
@@ -679,13 +672,12 @@ private[projection] class DynamoDBOffsetStore(
           // This will result in projection restart (with normal configuration)
           logger.warn(
             "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, where previous event timestamp [{}] " +
-            "is after start timestamp [{}] minus backtracking window [{}].",
+            "is after TTL expiry window timestamp [{}].",
             seqNr,
             pid,
             recordWithOffset.offset,
             previousTimestamp,
-            currentState.startTimestampBySlice(slice),
-            settings.backtrackingWindow)
+            acceptBefore.fold("none")(_.toString))
           // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
           // and SourceProvider supports it.
           RejectedBacktrackingSeqNr

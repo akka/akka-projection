@@ -127,10 +127,6 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
   def storeTimestampOffsets(offsetsBySlice: Map[Int, TimestampOffset]): Future[Done] = {
     import OffsetStoreDao.OffsetStoreAttributes._
 
-    val expiry = timeToLiveSettings.offsetTimeToLive.map { timeToLive =>
-      Instant.now().plusSeconds(timeToLive.toSeconds)
-    }
-
     def writeBatch(offsetsBatch: IndexedSeq[(Int, TimestampOffset)]): Future[Done] = {
       val writeItems =
         offsetsBatch.map {
@@ -154,10 +150,6 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
               }
             }
             attributes.put(Seen, AttributeValue.fromM(seen))
-
-            expiry.foreach { timestamp =>
-              attributes.put(Expiry, AttributeValue.fromN(timestamp.getEpochSecond.toString))
-            }
 
             WriteRequest.builder
               .putRequest(
