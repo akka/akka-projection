@@ -376,11 +376,7 @@ final class GrpcReadJournal private (
         .invoke(streamIn)
         .recover {
           case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
-            // this means we couldn't connect, will be retried, relatively common, so make it less noisy,
-            // Users still want to be able to figure out non-transient errors, so log with full exception details at debug
             val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
-            if (log.isDebugEnabled)
-              log.debug(s"Connection to ${clientSettings.serviceName}:$port for stream id $streamId failed or lost", ex)
             throw new ConnectionException(clientSettings.serviceName, port, streamId)
 
           case th: Throwable =>
