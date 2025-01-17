@@ -187,6 +187,20 @@ private[projection] object R2dbcOffsetStore {
       }
     }
 
+    override def toString: String = {
+      val sb = new StringBuilder
+      sb.append("State(")
+      bySliceSorted.toVector.sortBy(_._1).foreach {
+        case (slice, records) =>
+          sb.append("slice ").append(slice).append(": ")
+          records.foreach { r =>
+            sb.append("[").append(r.pid).append("->").append(r.seqNr).append(" ").append(r.timestamp).append("] ")
+          }
+      }
+      sb.append(")")
+      sb.toString
+    }
+
   }
 
   final class RejectedEnvelope(message: String) extends IllegalStateException(message)
@@ -333,10 +347,10 @@ private[projection] class R2dbcOffsetStore(
         timestampQuery.timestampOf(persistenceId, sequenceNr).asScala.map(_.toScala)
       case Some(_) =>
         throw new IllegalArgumentException(
-          s"Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
+          s"$logPrefix Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
       case None =>
         throw new IllegalArgumentException(
-          s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
+          s"$logPrefix Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
   }
 
@@ -351,6 +365,10 @@ private[projection] class R2dbcOffsetStore(
       case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
       case None    => readOffset()
     }
+  }
+
+  private def dumpState(s: State, flight: Map[Pid, SeqNr]): String = {
+    s"$s inFlight [${flight.map { case (pid, seqNr) => s"$pid->$seqNr" }.mkString(",")}]"
   }
 
   def readOffset[Offset](): Future[Option[Offset]] = {
@@ -441,7 +459,9 @@ private[projection] class R2dbcOffsetStore(
         startOffset)
 
       if (!state.compareAndSet(oldState, newState))
-        throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
+        throw new IllegalStateException(
+          s"$logPrefix Unexpected concurrent modification of state from readOffset. " +
+          s"${dumpState(oldState, getInflight())}")
 
       startOffset
     }
@@ -540,7 +560,8 @@ private[projection] class R2dbcOffsetStore(
         val record = Record(slice, pid, seqNr, t.timestamp)
         saveTimestampOffsetInTx(conn, Vector(record), canBeConcurrent = true)
       case OffsetPidSeqNr(_: TimestampOffset, None) =>
-        throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
+        throw new IllegalArgumentException(
+          s"$logPrefix Required EventEnvelope or DurableStateChange for TimestampOffset.")
       case _ =>
         savePrimitiveOffsetInTx(conn, offset.offset)
     }
@@ -569,10 +590,11 @@ private[projection] class R2dbcOffsetStore(
           val slice = persistenceExt.sliceForPersistenceId(pid)
           Record(slice, pid, seqNr, t.timestamp)
         case OffsetPidSeqNr(_: TimestampOffset, None) =>
-          throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
+          throw new IllegalArgumentException(
+            s"$logPrefix Required EventEnvelope or DurableStateChange for TimestampOffset.")
         case _ =>
           throw new IllegalArgumentException(
-            "Mix of TimestampOffset and other offset type in same transaction is not supported")
+            s"$logPrefix Mix of TimestampOffset and other offset type in same transaction is not supported")
       }
       saveTimestampOffsetInTx(conn, records, canBeConcurrent)
     } else {
@@ -630,15 +652,19 @@ private[projection] class R2dbcOffsetStore(
 
         val offsetInserts = dao.insertTimestampOffsetInTx(conn, filteredRecords)
 
-        offsetInserts.map { _ =>
+        offsetInserts.flatMap { _ =>
           if (state.compareAndSet(oldState, evictedNewState)) {
             slices.foreach(s => triggerDeletionPerSlice.put(s, TRUE))
             cleanupInflight(evictedNewState)
+            FutureDone
           } else { // concurrent update
             if (canBeConcurrent) saveTimestampOffsetInTx(conn, records, canBeConcurrent) // CAS retry
-            else throw new IllegalStateException("Unexpected concurrent modification of state from saveOffset.")
+            else
+              throw new IllegalStateException(
+                s"$logPrefix Unexpected concurrent modification of state from saveOffset. " +
+                s"${dumpState(newState, currentInflight)}")
           }
-          Done
+
         }
       }
     }
@@ -656,8 +682,9 @@ private[projection] class R2dbcOffsetStore(
       }
     if (newInflight.size >= 10000) {
       throw new IllegalStateException(
-        s"Too many envelopes in-flight [${newInflight.size}]. " +
-        "Please report this issue at https://github.com/akka/akka-projection")
+        s"$logPrefix Too many envelopes in-flight [${newInflight.size}]. " +
+        "Please report this issue at https://github.com/akka/akka-projection " +
+        s"${dumpState(newState, newInflight)}")
     }
     if (!inflight.compareAndSet(currentInflight, newInflight))
       cleanupInflight(newState) // CAS retry, concurrent update of inflight
@@ -1197,7 +1224,7 @@ private[projection] class R2dbcOffsetStore(
       case change: DurableStateChange[_] if change.offset.isInstanceOf[TimestampOffset] =>
         // in case additional types are added
         throw new IllegalArgumentException(
-          s"DurableStateChange [${change.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-projection/issues")
+          s"$logPrefix DurableStateChange [${change.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-projection/issues")
       case _ => None
     }
   }
