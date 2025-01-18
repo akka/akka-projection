@@ -171,6 +171,20 @@ private[projection] object DynamoDBOffsetStore {
       }
     }
 
+    override def toString: String = {
+      val sb = new StringBuilder
+      sb.append("State(")
+      bySliceSorted.toVector.sortBy(_._1).foreach {
+        case (slice, records) =>
+          sb.append("slice ").append(slice).append(": ")
+          records.foreach { r =>
+            sb.append("[").append(r.pid).append("->").append(r.seqNr).append(" ").append(r.timestamp).append("] ")
+          }
+      }
+      sb.append(")")
+      sb.toString
+    }
+
   }
 
   final class RejectedEnvelope(message: String) extends IllegalStateException(message)
@@ -243,10 +257,10 @@ private[projection] class DynamoDBOffsetStore(
         timestampQuery.timestampOf(persistenceId, sequenceNr).asScala.map(_.toScala)
       case Some(_) =>
         throw new IllegalArgumentException(
-          s"Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
+          s"$logPrefix Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
       case None =>
         throw new IllegalArgumentException(
-          s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
+          s"$logPrefix Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
   }
 
@@ -262,6 +276,10 @@ private[projection] class DynamoDBOffsetStore(
     Future.successful(Some(getState().latestOffset).map(_.asInstanceOf[Offset]))
   }
 
+  private def dumpState(s: State, flight: Map[Pid, SeqNr]): String = {
+    s"$s inFlight [${flight.map { case (pid, seqNr) => s"$pid->$seqNr" }.mkString(",")}]"
+  }
+
   def readOffset[Offset](): Future[Option[Offset]] = {
     // look for TimestampOffset first since that is used by akka-persistence-dynamodb,
     // and then fall back to the other more primitive offset types
@@ -273,7 +291,8 @@ private[projection] class DynamoDBOffsetStore(
         }(ExecutionContext.parasitic)
       case None =>
         // FIXME primitive offsets not supported, maybe we can change the sourceProvider parameter
-        throw new IllegalStateException("BySlicesSourceProvider is required. Primitive offsets not supported.")
+        throw new IllegalStateException(
+          s"$logPrefix BySlicesSourceProvider is required. Primitive offsets not supported.")
     }
   }
 
@@ -299,7 +318,9 @@ private[projection] class DynamoDBOffsetStore(
       val newState = State(offsetBySlice)
 
       if (!state.compareAndSet(oldState, newState))
-        throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
+        throw new IllegalStateException(
+          s"$logPrefix Unexpected concurrent modification of state from readOffset. " +
+          s"${dumpState(oldState, getInflight())}")
       clearInflight()
       if (offsetBySlice.isEmpty) {
         logger.debug("{} readTimestampOffset no stored offset", logPrefix)
@@ -381,14 +402,15 @@ private[projection] class DynamoDBOffsetStore(
           val slice = persistenceExt.sliceForPersistenceId(pid)
           Record(slice, pid, seqNr, t.timestamp)
         case OffsetPidSeqNr(_: TimestampOffset, None) =>
-          throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
+          throw new IllegalArgumentException(
+            s"$logPrefix Required EventEnvelope or DurableStateChange for TimestampOffset.")
         case _ =>
           throw new IllegalArgumentException(
-            "Mix of TimestampOffset and other offset type in same transaction is not supported")
+            s"$logPrefix Mix of TimestampOffset and other offset type in same transaction is not supported")
       }
       storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent)
     } else {
-      throw new IllegalStateException("TimestampOffset is required. Primitive offsets not supported.")
+      throw new IllegalStateException(s"$logPrefix TimestampOffset is required. Primitive offsets not supported.")
     }
   }
 
@@ -456,7 +478,9 @@ private[projection] class DynamoDBOffsetStore(
               FutureDone
             } else { // concurrent update
               if (canBeConcurrent) storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent) // CAS retry
-              else throw new IllegalStateException("Unexpected concurrent modification of state in save offsets.")
+              else
+                throw new IllegalStateException(
+                  s"$logPrefix Unexpected concurrent modification of state in save offsets.")
             }
           }
         }
@@ -477,7 +501,8 @@ private[projection] class DynamoDBOffsetStore(
     if (newInflight.size >= 10000) {
       throw new IllegalStateException(
         s"Too many envelopes in-flight [${newInflight.size}]. " +
-        "Please report this issue at https://github.com/akka/akka-projection")
+        "Please report this issue at https://github.com/akka/akka-projection " +
+        s"${dumpState(newState, newInflight)}")
     }
     if (!inflight.compareAndSet(currentInflight, newInflight))
       cleanupInflight(newState) // CAS retry, concurrent update of inflight
@@ -773,7 +798,7 @@ private[projection] class DynamoDBOffsetStore(
       case change: DurableStateChange[_] if change.offset.isInstanceOf[TimestampOffset] =>
         // in case additional types are added
         throw new IllegalArgumentException(
-          s"DurableStateChange [${change.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-projection/issues")
+          s"$logPrefix DurableStateChange [${change.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-projection/issues")
       case _ => None
     }
   }

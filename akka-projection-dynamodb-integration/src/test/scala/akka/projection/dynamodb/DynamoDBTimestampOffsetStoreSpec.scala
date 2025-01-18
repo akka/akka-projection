@@ -816,6 +816,54 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 20L)
     }
 
+    "cleanup inFlight when saving offset" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val startTime = TestClock.nowMicros().instant()
+      val offset1 = TimestampOffset(startTime, Map("p1" -> 3L))
+      val envelope1 = createEnvelope("p1", 3L, offset1.timestamp, "e1-3")
+      val offset2 = TimestampOffset(startTime.plusMillis(1), Map("p1" -> 4L))
+      val envelope2 = createEnvelope("p1", 4L, offset2.timestamp, "e1-4")
+      val offset3 = TimestampOffset(startTime.plusMillis(2), Map("p1" -> 5L))
+
+      // save same seqNr as inFlight should remove from inFlight
+      offsetStore.addInflight(envelope1)
+      offsetStore.getInflight().get("p1") shouldBe Some(3L)
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+      offsetStore.getInflight().get("p1") shouldBe None
+
+      // clear
+      offsetStore.readOffset().futureValue
+
+      // save lower seqNr than inFlight should not remove from inFlight
+      offsetStore.addInflight(envelope1)
+      offsetStore.getInflight().get("p1") shouldBe Some(3L)
+      offsetStore.addInflight(envelope2)
+      offsetStore.getInflight().get("p1") shouldBe Some(4L)
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+      offsetStore.getInflight().get("p1") shouldBe Some(4L)
+
+      // clear
+      offsetStore.readOffset().futureValue
+
+      // save higher seqNr than inFlight should remove from inFlight
+      offsetStore.addInflight(envelope1)
+      offsetStore.getInflight().get("p1") shouldBe Some(3L)
+      offsetStore.saveOffset(OffsetPidSeqNr(offset2, "p1", 4L)).futureValue
+      offsetStore.getInflight().get("p1") shouldBe None
+
+      // clear
+      offsetStore.readOffset().futureValue
+
+      // save higher seqNr than inFlight should remove from inFlight
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+      offsetStore.addInflight(envelope2)
+      offsetStore.getInflight().get("p1") shouldBe Some(4L)
+      offsetStore.saveOffset(OffsetPidSeqNr(offset3, "p1", 5L)).futureValue
+      offsetStore.getInflight().get("p1") shouldBe None
+    }
+
     "evict old records from same slice" in {
       val projectionId = genRandomProjectionId()
       val evictSettings = settings.withTimeWindow(JDuration.ofSeconds(100))
