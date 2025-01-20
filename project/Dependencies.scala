@@ -40,12 +40,10 @@ object Dependencies {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val AkkaPersistenceDynamodb = "2.0.3"
+    val AkkaPersistenceDynamodb = "2.0.5"
     val AkkaPersistenceDynamodbVersionInDocs = VersionNumber(AkkaPersistenceDynamodb).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
-
-    val DynamodbSdk = "2.29.41"
 
     val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "7.0.0")
     val slick = "3.5.2"
@@ -80,7 +78,6 @@ object Dependencies {
     val r2dbcSqlServer = "io.r2dbc" % "r2dbc-mssql" % "1.0.2.RELEASE" % Provided // ApacheV2
 
     val akkaPersistenceDynamodb = "com.lightbend.akka" %% "akka-persistence-dynamodb" % Versions.AkkaPersistenceDynamodb
-    val dynamodbSdk = "software.amazon.awssdk" % "dynamodb" % Versions.DynamodbSdk
 
     val slf4j = "org.slf4j" % "slf4j-api" % "2.0.16"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
@@ -321,7 +318,6 @@ object Dependencies {
         Test.scalatest)
 
   val dynamodb = deps ++= Seq(
-        Compile.dynamodbSdk.exclude("software.amazon.awssdk", "apache-client"),
         Compile.akkaPersistenceDynamodb,
         Compile.akkaPersistenceQuery,
         Compile.akkaPersistenceTyped,
