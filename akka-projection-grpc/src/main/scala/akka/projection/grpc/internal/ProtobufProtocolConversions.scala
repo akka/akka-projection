@@ -113,7 +113,7 @@ private[akka] object ProtobufProtocolConversions {
 
         def toEvent(transformedEvent: Any): Event = {
           val protoEvent = protoAnySerialization.serialize(transformedEvent)
-          val metadata = env.eventMetadata.map(protoAnySerialization.serialize)
+          val metadata = env.internalEventMetadata.map(protoAnySerialization.serialize)
           Event(
             persistenceId = env.persistenceId,
             seqNr = env.sequenceNr,
@@ -169,7 +169,7 @@ private[akka] object ProtobufProtocolConversions {
         event.seqNr,
         evt,
         eventOffset.timestamp.toEpochMilli,
-        eventMetadata = metadata,
+        _eventMetadata = metadata,
         PersistenceId.extractEntityType(event.persistenceId),
         event.slice,
         filtered = false,
@@ -188,7 +188,7 @@ private[akka] object ProtobufProtocolConversions {
             event.seqNr,
             eventOption = Some(serializedEvent),
             eventOffset.timestamp.toEpochMilli,
-            eventMetadata = metadata,
+            _eventMetadata = metadata,
             PersistenceId.extractEntityType(event.persistenceId),
             event.slice,
             filtered = false,
@@ -213,7 +213,7 @@ private[akka] object ProtobufProtocolConversions {
       filtered.seqNr,
       None,
       eventOffset.timestamp.toEpochMilli,
-      eventMetadata = None,
+      _eventMetadata = None,
       PersistenceId.extractEntityType(filtered.persistenceId),
       filtered.slice,
       filtered = true,

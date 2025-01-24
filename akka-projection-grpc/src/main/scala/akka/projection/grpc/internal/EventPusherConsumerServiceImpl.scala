@@ -78,8 +78,8 @@ private[akka] object EventPusherConsumerServiceImpl {
               log.trace("Ignoring filtered event [{}] for pid [{}]", envelope.sequenceNr, envelope.persistenceId)
               Future.successful(Done)
             } else {
-              envelope.eventMetadata match {
-                case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
+              envelope.metadata[ReplicatedEventMetadata] match {
+                case Some(replicatedEventMetadata) =>
                   // send event to entity in this replica
                   val replicationId = ReplicationId.fromString(envelope.persistenceId)
                   val destinationReplicaId = replicationId.withReplica(replicationSettings.selfReplicaId)
@@ -104,7 +104,8 @@ private[akka] object EventPusherConsumerServiceImpl {
                           Some(
                             new ReplicatedPublishedEventMetaData(
                               replicatedEventMetadata.originReplica,
-                              replicatedEventMetadata.version)),
+                              replicatedEventMetadata.version,
+                              envelope.internalEventMetadata)),
                           Some(replyTo)))
                   }
 
@@ -123,9 +124,9 @@ private[akka] object EventPusherConsumerServiceImpl {
                         error))
                   askResult
 
-                case unexpected =>
+                case None =>
                   throw new IllegalArgumentException(
-                    s"Got unexpected type of event envelope metadata: ${unexpected.getClass} (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
+                    s"Missing replication metadata (pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]" +
                     ", is the remote entity really a Replicated Event Sourced Entity?")
               }
             }
@@ -141,7 +142,7 @@ private[akka] object EventPusherConsumerServiceImpl {
                 event = envelope.eventOption.getOrElse(FilteredPayload),
                 isSnapshotEvent = fromSnapshot(envelope),
                 fillSequenceNumberGaps = fillSequenceNumberGaps,
-                metadata = envelope.eventMetadata,
+                metadata = envelope.internalEventMetadata,
                 tags = envelope.tags,
                 replyTo = replyTo))(d.settings.journalWriteTimeout, system.scheduler)
         }

@@ -103,7 +103,7 @@ private[akka] object ReplicationImpl {
       settings.producerFilter)
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
       .withReplicatedEventMetadataTransformation(env =>
-        if (env.eventMetadata.isDefined) None
+        if (env.metadata[ReplicatedEventMetadata].isDefined) None
         else {
           // migrated from non-replicated, fill in metadata
           Some(
@@ -218,8 +218,8 @@ private[akka] object ReplicationImpl {
               envelope.persistenceId) {
               case (envelope, _) =>
                 if (!envelope.filtered) {
-                  envelope.eventMetadata match {
-                    case Some(replicatedEventMetadata: ReplicatedEventMetadata)
+                  envelope.metadata[ReplicatedEventMetadata] match {
+                    case Some(replicatedEventMetadata)
                         if replicatedEventMetadata.originReplica == settings.selfReplicaId =>
                       // skipping events originating from self replica (break cycle)
                       if (log.isTraceEnabled)
@@ -231,7 +231,7 @@ private[akka] object ReplicationImpl {
                           envelope.sequenceNr)
                       Future.successful(Done)
 
-                    case Some(replicatedEventMetadata: ReplicatedEventMetadata) =>
+                    case Some(replicatedEventMetadata) =>
                       val replicationId = ReplicationId.fromString(envelope.persistenceId)
                       val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
                       val entityRef =
@@ -251,9 +251,11 @@ private[akka] object ReplicationImpl {
                           replicatedEventMetadata.originSequenceNr,
                           envelope.event,
                           envelope.timestamp,
-                          Some(new ReplicatedPublishedEventMetaData(
-                            replicatedEventMetadata.originReplica,
-                            replicatedEventMetadata.version)),
+                          Some(
+                            new ReplicatedPublishedEventMetaData(
+                              replicatedEventMetadata.originReplica,
+                              replicatedEventMetadata.version,
+                              envelope.internalEventMetadata)),
                           Some(replyTo)))
                       askResult.failed.foreach(error =>
                         log.warn(
@@ -360,7 +362,7 @@ private[akka] object ReplicationImpl {
       settings.eventProducerSettings.withAkkaSerializationOnly())
       .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
       .withReplicatedEventMetadataTransformation(env =>
-        if (env.eventMetadata.isDefined) None
+        if (env.metadata[ReplicatedEventMetadata].isDefined) None
         else {
           // migrated from non-replicated, fill in metadata
           Some(

@@ -257,7 +257,7 @@ class EventProducerServiceSpec
     EventProducerSource(entityType7, streamId7, transformation, settings)
       .withReplicatedEventMetadataTransformation(
         env =>
-          if (env.eventMetadata.isDefined) None
+          if (env.metadata[ReplicatedEventMetadata].isDefined) None
           else {
             // migrated from non-replicated, fill in metadata
             Some(

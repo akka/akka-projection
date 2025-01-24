@@ -426,7 +426,7 @@ import scala.concurrent.ExecutionContext
             val pid = env.persistenceId
 
             // replicaId is used for validation of replay requests, to avoid replay for other replicas
-            if (replicaId.isEmpty && env.eventMetadata.exists(_.isInstanceOf[ReplicatedEventMetadata]))
+            if (replicaId.isEmpty && env.metadata[ReplicatedEventMetadata].isDefined)
               replicaId = Some(ReplicationId.fromString(pid).replicaId)
 
             if (producerFilter(env) && filter.matches(env)) {

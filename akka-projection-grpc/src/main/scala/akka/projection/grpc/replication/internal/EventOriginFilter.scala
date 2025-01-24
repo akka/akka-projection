@@ -36,10 +36,10 @@ import akka.projection.grpc.internal.proto.ReplicaInfo
       if (envelope.eventOption.isEmpty)
         true
       else
-        envelope.eventMetadata match {
-          case Some(meta: ReplicatedEventMetadata) =>
+        envelope.metadata[ReplicatedEventMetadata] match {
+          case Some(meta) =>
             !exclude(meta.originReplica)
-          case _ =>
+          case None =>
             throw new IllegalArgumentException(
               s"Got an event without replication metadata, not supported (pid: ${envelope.persistenceId}, seq_nr: ${envelope.sequenceNr})")
         }
