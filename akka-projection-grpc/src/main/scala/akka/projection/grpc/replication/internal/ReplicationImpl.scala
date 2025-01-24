@@ -110,7 +110,7 @@ private[akka] object ReplicationImpl {
             ReplicatedEventMetadata(
               originReplica = settings.selfReplicaId,
               originSequenceNr = env.sequenceNr,
-              version = VersionVector(env.persistenceId, env.sequenceNr),
+              version = VersionVector(settings.selfReplicaId.id, env.sequenceNr),
               concurrent = false))
         })
 
@@ -367,7 +367,7 @@ private[akka] object ReplicationImpl {
             ReplicatedEventMetadata(
               originReplica = settings.selfReplicaId,
               originSequenceNr = env.sequenceNr,
-              version = VersionVector(env.persistenceId, env.sequenceNr),
+              version = VersionVector(settings.selfReplicaId.id, env.sequenceNr),
               concurrent = false))
         })
 

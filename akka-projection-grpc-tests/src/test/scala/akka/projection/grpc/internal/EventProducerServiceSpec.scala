@@ -258,13 +258,15 @@ class EventProducerServiceSpec
       .withReplicatedEventMetadataTransformation(
         env =>
           if (env.eventMetadata.isDefined) None
-          else
+          else {
+            // migrated from non-replicated, fill in metadata
             Some(
               ReplicatedEventMetadata(
                 originReplica = ReplicaId.empty,
                 originSequenceNr = env.sequenceNr,
-                version = VersionVector(env.persistenceId, env.sequenceNr),
-                concurrent = false))))
+                version = VersionVector(ReplicaId.empty.id, env.sequenceNr),
+                concurrent = false))
+          }))
 
   private val eventProducerService =
     new EventProducerServiceImpl(
@@ -611,14 +613,14 @@ class EventProducerServiceSpec
       protoAnySerialization.deserialize(out1.getEvent.metadata.get) shouldBe ReplicatedEventMetadata(
         originReplica = ReplicaId.empty,
         originSequenceNr = env1.sequenceNr,
-        version = VersionVector(env1.persistenceId, env1.sequenceNr),
+        version = VersionVector(ReplicaId.empty.id, env1.sequenceNr),
         concurrent = false)
 
       val out2 = probe.expectNext()
       protoAnySerialization.deserialize(out2.getEvent.metadata.get) shouldBe ReplicatedEventMetadata(
         originReplica = ReplicaId.empty,
         originSequenceNr = env2.sequenceNr,
-        version = VersionVector(env2.persistenceId, env2.sequenceNr),
+        version = VersionVector(ReplicaId.empty.id, env2.sequenceNr),
         concurrent = false)
     }
 
