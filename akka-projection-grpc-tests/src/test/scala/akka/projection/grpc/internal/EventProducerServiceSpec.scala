@@ -258,13 +258,15 @@ class EventProducerServiceSpec
       .withReplicatedEventMetadataTransformation(
         env =>
           if (env.eventMetadata.isDefined) None
-          else
+          else {
+            // migrated from non-replicated, fill in metadata
             Some(
               ReplicatedEventMetadata(
                 originReplica = ReplicaId.empty,
                 originSequenceNr = env.sequenceNr,
-                version = VersionVector(env.persistenceId, env.sequenceNr),
-                concurrent = false))))
+                version = VersionVector(ReplicaId.empty.id, env.sequenceNr),
+                concurrent = false))
+          }))
 
   private val eventProducerService =
     new EventProducerServiceImpl(
