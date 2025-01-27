@@ -9,7 +9,7 @@ object Dependencies {
   // sync with Java version in .github/workflows/release.yml#documentation
   lazy val JavaDocLinkVersion = 17
 
-  val Scala213 = "2.13.16"
+  val Scala213 = "2.13.15"
   val Scala3 = "3.3.4"
 
   val Scala2Versions = Seq(Scala213)
@@ -35,7 +35,7 @@ object Dependencies {
     val AkkaPersistenceCassandra = "1.3.0"
     val AkkaPersistenceJdbc = "5.5.0"
 
-    val AkkaPersistenceR2dbc = "1.3.1+4-d1a01e21-SNAPSHOT"
+    val AkkaPersistenceR2dbc = "1.3.1+5-6499845f-SNAPSHOT"
     val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
