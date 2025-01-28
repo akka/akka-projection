@@ -87,6 +87,11 @@
             <version>${akka.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-pki_${scala.binary.version}</artifactId>
+            <version>${akka.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.lightbend.akka</groupId>
             <artifactId>akka-persistence-r2dbc_${scala.binary.version}</artifactId>
             <version>${akka-persistence-r2dbc.version}</version>
