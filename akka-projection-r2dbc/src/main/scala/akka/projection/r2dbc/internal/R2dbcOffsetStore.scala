@@ -898,9 +898,10 @@ private[projection] class R2dbcOffsetStore(
     // Only accept it if the event with previous seqNr is outside the deletion window (for tracked slices).
     timestampOf(pid, seqNr - 1).map {
       case Some(previousTimestamp) =>
-        val acceptBefore = currentState.bySliceSorted.get(slice).map { bySliceSorted =>
-          bySliceSorted.last.timestamp.minus(settings.deleteAfter)
-        }
+        val acceptBefore =
+          max(currentState.bySliceSorted.get(slice).map { bySliceSorted =>
+            bySliceSorted.last.timestamp.minus(settings.deleteAfter)
+          }, settings.acceptWhenPreviousTimestampBefore)
 
         if (acceptBefore.exists(timestamp => previousTimestamp.isBefore(timestamp))) {
           logger.debug(
@@ -958,6 +959,15 @@ private[projection] class R2dbcOffsetStore(
           pid,
           seqNr)
         Accepted
+    }
+  }
+
+  private def max(a: Option[Instant], b: Option[Instant]): Option[Instant] = {
+    (a, b) match {
+      case (None, None)             => None
+      case (s: Some[Instant], None) => s
+      case (None, s: Some[Instant]) => s
+      case (Some(x), Some(y))       => Some(if (x.isBefore(y)) x else y)
     }
   }
 
