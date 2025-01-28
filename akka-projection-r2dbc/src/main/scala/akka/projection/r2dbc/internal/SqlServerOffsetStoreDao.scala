@@ -38,6 +38,18 @@ private[projection] class SqlServerOffsetStoreDao(
 
   override protected implicit def timestampCodec: TimestampCodec = SqlServerTimestampCodec
 
+  override protected def createSelectTimestampOffsetSql: String =
+    sql"""
+    SELECT TOP(@limit) projection_key, persistence_id, seq_nr, timestamp_offset
+    FROM $timestampOffsetTable WHERE slice = @slice AND projection_name = @projectionName ORDER BY timestamp_offset DESC"""
+
+  override protected def bindSelectTimestampOffsetSql(stmt: Statement, slice: Int): Statement = {
+    stmt
+      .bind("@limit", settings.offsetSliceReadLimit)
+      .bind("@slice", slice)
+      .bind("@projectionName", projectionId.name)
+  }
+
   override protected def createSelectOneTimestampOffsetSql: String =
     sql"""
     SELECT TOP(1) seq_nr, timestamp_offset
