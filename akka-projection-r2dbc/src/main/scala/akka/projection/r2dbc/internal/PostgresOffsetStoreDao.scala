@@ -196,7 +196,7 @@ private[projection] class PostgresOffsetStoreDao(
       slice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]] = {
     r2dbcExecutor.select("read timestamp offset")(
       conn => {
-        logger.trace("reading timestamp offset for [{}]", projectionId)
+        logger.trace("reading timestamp offset slice [{}] for [{}]", slice, projectionId)
         conn
           .createStatement(selectTimestampOffsetSql)
           .bind(0, slice)
