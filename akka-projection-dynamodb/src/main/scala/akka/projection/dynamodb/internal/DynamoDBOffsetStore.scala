@@ -4,6 +4,7 @@
 
 package akka.projection.dynamodb.internal
 
+import java.time.Clock
 import java.time.Instant
 import java.time.{ Duration => JDuration }
 import java.util.concurrent.atomic.AtomicReference
@@ -12,6 +13,7 @@ import scala.annotation.tailrec
 import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.jdk.DurationConverters._
 
 import akka.Done
 import akka.actor.typed.ActorSystem
@@ -45,23 +47,19 @@ private[projection] object DynamoDBOffsetStore {
   type Pid = String
 
   final case class Record(slice: Int, pid: Pid, seqNr: SeqNr, timestamp: Instant) extends Ordered[Record] {
-
-    override def compare(that: Record): Int = {
-      val result = this.timestamp.compareTo(that.timestamp)
-      if (result == 0) {
-        if (this.slice == that.slice)
-          if (this.pid == that.pid)
-            if (this.seqNr == that.seqNr)
-              0
-            else
-              java.lang.Long.compare(this.seqNr, that.seqNr)
-          else
-            this.pid.compareTo(that.pid)
-        else Integer.compare(this.slice, that.slice)
-      } else {
-        result
+    override def compare(that: Record): Int =
+      timestamp.compareTo(that.timestamp) match {
+        case 0 =>
+          Integer.compare(slice, that.slice) match {
+            case 0 =>
+              pid.compareTo(that.pid) match {
+                case 0      => java.lang.Long.compare(seqNr, that.seqNr)
+                case result => result
+              }
+            case result => result
+          }
+        case result => result
       }
-    }
   }
 
   final case class RecordWithOffset(
@@ -78,7 +76,6 @@ private[projection] object DynamoDBOffsetStore {
     def apply(offsetBySlice: Map[Int, TimestampOffset]): State =
       if (offsetBySlice.isEmpty) empty
       else new State(Map.empty, Map.empty, offsetBySlice)
-
   }
 
   final case class State(
@@ -99,23 +96,6 @@ private[projection] object DynamoDBOffsetStore {
     def add(records: Iterable[Record]): State = {
       records.foldLeft(this) {
         case (acc, r) =>
-          val newByPid =
-            acc.byPid.get(r.pid) match {
-              case Some(existingRecord) =>
-                if (r.seqNr > existingRecord.seqNr)
-                  acc.byPid.updated(r.pid, r)
-                else
-                  acc.byPid // older or same seqNr
-              case None =>
-                acc.byPid.updated(r.pid, r)
-            }
-
-          val newBySliceSorted =
-            acc.bySliceSorted.updated(r.slice, acc.bySliceSorted.get(r.slice) match {
-              case Some(existing) => existing + r
-              case None           => TreeSet.empty[Record] + r
-            })
-
           val newOffsetBySlice =
             acc.offsetBySlice.get(r.slice) match {
               case Some(existing) =>
@@ -130,7 +110,23 @@ private[projection] object DynamoDBOffsetStore {
                 acc.offsetBySlice.updated(r.slice, TimestampOffset(r.timestamp, Map(r.pid -> r.seqNr)))
             }
 
-          acc.copy(byPid = newByPid, bySliceSorted = newBySliceSorted, offsetBySlice = newOffsetBySlice)
+          val sorted = acc.bySliceSorted.getOrElse(r.slice, TreeSet.empty[Record])
+          acc.byPid.get(r.pid) match {
+            case Some(existingRecord) =>
+              if (r.seqNr > existingRecord.seqNr)
+                acc.copy(
+                  byPid = acc.byPid.updated(r.pid, r),
+                  bySliceSorted = acc.bySliceSorted.updated(r.slice, sorted - existingRecord + r),
+                  offsetBySlice = newOffsetBySlice)
+              else
+                // older or same seqNr
+                acc.copy(offsetBySlice = newOffsetBySlice)
+            case None =>
+              acc.copy(
+                byPid = acc.byPid.updated(r.pid, r),
+                bySliceSorted = acc.bySliceSorted.updated(r.slice, sorted + r),
+                offsetBySlice = newOffsetBySlice)
+          }
       }
     }
 
@@ -144,14 +140,27 @@ private[projection] object DynamoDBOffsetStore {
       }
     }
 
-    def evict(slice: Int, timeWindow: JDuration): State = {
+    def evict(slice: Int, timeWindow: JDuration, ableToEvictRecord: Record => Boolean): State = {
       val recordsSortedByTimestamp = bySliceSorted.getOrElse(slice, TreeSet.empty[Record])
       if (recordsSortedByTimestamp.isEmpty) {
         this
       } else {
         val until = recordsSortedByTimestamp.last.timestamp.minus(timeWindow)
-        val filtered = recordsSortedByTimestamp.dropWhile(_.timestamp.isBefore(until))
-        if (filtered.size == recordsSortedByTimestamp.size) {
+        val filtered = {
+          // Records comparing >= this record by recordOrdering will definitely be kept,
+          // Records comparing < this record by recordOrdering are subject to eviction
+          // Slice will be equal, and pid will compare lexicographically less than any valid pid
+          val untilRecord = Record(slice, "", 0, until)
+          val newerRecords = recordsSortedByTimestamp.rangeFrom(untilRecord) // inclusive of until
+          val olderRecords = recordsSortedByTimestamp.rangeUntil(untilRecord) // exclusive of until
+          val filteredOlder = olderRecords.filterNot(ableToEvictRecord)
+
+          if (filteredOlder.size == olderRecords.size) recordsSortedByTimestamp
+          else newerRecords.union(filteredOlder)
+        }
+
+        // adding back filtered is linear in the size of filtered, but so is checking if we're able to evict
+        if (filtered eq recordsSortedByTimestamp) {
           this
         } else {
           val byPidOtherSlices = byPid.filterNot { case (_, r) => r.slice == slice }
@@ -160,6 +169,20 @@ private[projection] object DynamoDBOffsetStore {
             .add(filtered)
         }
       }
+    }
+
+    override def toString: String = {
+      val sb = new StringBuilder
+      sb.append("State(")
+      bySliceSorted.toVector.sortBy(_._1).foreach {
+        case (slice, records) =>
+          sb.append("slice ").append(slice).append(": ")
+          records.foreach { r =>
+            sb.append("[").append(r.pid).append("->").append(r.seqNr).append(" ").append(r.timestamp).append("] ")
+          }
+      }
+      sb.append(")")
+      sb.toString
     }
 
   }
@@ -191,8 +214,9 @@ private[projection] class DynamoDBOffsetStore(
     projectionId: ProjectionId,
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
-    settings: DynamoDBProjectionSettings,
-    client: DynamoDbAsyncClient) {
+    val settings: DynamoDBProjectionSettings,
+    client: DynamoDbAsyncClient,
+    clock: Clock = Clock.systemUTC()) {
 
   import DynamoDBOffsetStore._
 
@@ -204,9 +228,12 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   private val logger = LoggerFactory.getLogger(this.getClass)
-  private val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
+  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
 
   private val dao = new OffsetStoreDao(system, settings, projectionId, client)
+
+  private val offsetExpiry =
+    settings.timeToLiveSettings.projections.get(projectionId.name).offsetTimeToLive.map(_.toJava)
 
   private[projection] implicit val executionContext: ExecutionContext = system.executionContext
 
@@ -230,10 +257,10 @@ private[projection] class DynamoDBOffsetStore(
         timestampQuery.timestampOf(persistenceId, sequenceNr).asScala.map(_.toScala)
       case Some(_) =>
         throw new IllegalArgumentException(
-          s"Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
+          s"$logPrefix Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
       case None =>
         throw new IllegalArgumentException(
-          s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
+          s"$logPrefix Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
   }
 
@@ -249,6 +276,10 @@ private[projection] class DynamoDBOffsetStore(
     Future.successful(Some(getState().latestOffset).map(_.asInstanceOf[Offset]))
   }
 
+  private def dumpState(s: State, flight: Map[Pid, SeqNr]): String = {
+    s"$s inFlight [${flight.map { case (pid, seqNr) => s"$pid->$seqNr" }.mkString(",")}]"
+  }
+
   def readOffset[Offset](): Future[Option[Offset]] = {
     // look for TimestampOffset first since that is used by akka-persistence-dynamodb,
     // and then fall back to the other more primitive offset types
@@ -260,7 +291,8 @@ private[projection] class DynamoDBOffsetStore(
         }(ExecutionContext.parasitic)
       case None =>
         // FIXME primitive offsets not supported, maybe we can change the sourceProvider parameter
-        throw new IllegalStateException("BySlicesSourceProvider is required. Primitive offsets not supported.")
+        throw new IllegalStateException(
+          s"$logPrefix BySlicesSourceProvider is required. Primitive offsets not supported.")
     }
   }
 
@@ -286,7 +318,9 @@ private[projection] class DynamoDBOffsetStore(
       val newState = State(offsetBySlice)
 
       if (!state.compareAndSet(oldState, newState))
-        throw new IllegalStateException("Unexpected concurrent modification of state from readOffset.")
+        throw new IllegalStateException(
+          s"$logPrefix Unexpected concurrent modification of state from readOffset. " +
+          s"${dumpState(oldState, getInflight())}")
       clearInflight()
       if (offsetBySlice.isEmpty) {
         logger.debug("{} readTimestampOffset no stored offset", logPrefix)
@@ -368,14 +402,15 @@ private[projection] class DynamoDBOffsetStore(
           val slice = persistenceExt.sliceForPersistenceId(pid)
           Record(slice, pid, seqNr, t.timestamp)
         case OffsetPidSeqNr(_: TimestampOffset, None) =>
-          throw new IllegalArgumentException("Required EventEnvelope or DurableStateChange for TimestampOffset.")
+          throw new IllegalArgumentException(
+            s"$logPrefix Required EventEnvelope or DurableStateChange for TimestampOffset.")
         case _ =>
           throw new IllegalArgumentException(
-            "Mix of TimestampOffset and other offset type in same transaction is not supported")
+            s"$logPrefix Mix of TimestampOffset and other offset type in same transaction is not supported")
       }
       storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent)
     } else {
-      throw new IllegalStateException("TimestampOffset is required. Primitive offsets not supported.")
+      throw new IllegalStateException(s"$logPrefix TimestampOffset is required. Primitive offsets not supported.")
     }
   }
 
@@ -384,11 +419,12 @@ private[projection] class DynamoDBOffsetStore(
       storeSequenceNumbers: IndexedSeq[Record] => Future[Done],
       canBeConcurrent: Boolean): Future[Done] = {
     load(records.map(_.pid)).flatMap { oldState =>
-      val filteredRecords = {
+      val filteredRecords =
         if (records.size <= 1)
           records.filterNot(oldState.isDuplicate)
         else {
-          // use last record for each pid
+          // Can assume (given other projection guarantees) that records for the same pid
+          // have montonically increasing sequence numbers
           records
             .groupBy(_.pid)
             .valuesIterator
@@ -397,7 +433,7 @@ private[projection] class DynamoDBOffsetStore(
             }
             .toVector
         }
-      }
+
       if (filteredRecords.isEmpty) {
         FutureDone
       } else {
@@ -407,8 +443,18 @@ private[projection] class DynamoDBOffsetStore(
           if (filteredRecords.size == 1) Set(filteredRecords.head.slice)
           else filteredRecords.iterator.map(_.slice).toSet
 
+        val currentInflight = getInflight()
         val evictedNewState = slices.foldLeft(newState) {
-          case (s, slice) => s.evict(slice, settings.timeWindow)
+          case (s, slice) =>
+            s.evict(
+              slice,
+              settings.timeWindow,
+              // Only persistence IDs that aren't inflight are evictable,
+              // if only so that those persistence IDs can be removed from
+              // inflight... in the absence of further records from that
+              // persistence ID, the next store will evict (further records
+              // would make that persistence ID recent enough to not be evicted)
+              record => !currentInflight.contains(record.pid))
         }
 
         // FIXME we probably don't have to store the latest offset per slice all the time, but can
@@ -432,7 +478,9 @@ private[projection] class DynamoDBOffsetStore(
               FutureDone
             } else { // concurrent update
               if (canBeConcurrent) storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent) // CAS retry
-              else throw new IllegalStateException("Unexpected concurrent modification of state in save offsets.")
+              else
+                throw new IllegalStateException(
+                  s"$logPrefix Unexpected concurrent modification of state in save offsets.")
             }
           }
         }
@@ -453,7 +501,8 @@ private[projection] class DynamoDBOffsetStore(
     if (newInflight.size >= 10000) {
       throw new IllegalStateException(
         s"Too many envelopes in-flight [${newInflight.size}]. " +
-        "Please report this issue at https://github.com/akka/akka-persistence-dynamodb")
+        "Please report this issue at https://github.com/akka/akka-projection " +
+        s"${dumpState(newState, newInflight)}")
     }
     if (!inflight.compareAndSet(currentInflight, newInflight))
       cleanupInflight(newState) // CAS retry, concurrent update of inflight
@@ -561,32 +610,6 @@ private[projection] class DynamoDBOffsetStore(
               recordWithOffset.offset)
         }
 
-        def logUnknown(): Unit = {
-          if (recordWithOffset.fromPubSub) {
-            logger.debug(
-              "{} Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
-              logPrefix,
-              seqNr,
-              pid,
-              recordWithOffset.offset)
-          } else if (!recordWithOffset.fromBacktracking) {
-            // This may happen rather frequently when using `publish-events`, after reconnecting and such.
-            logger.debug(
-              "{} Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
-              logPrefix,
-              seqNr,
-              pid,
-              recordWithOffset.offset)
-          } else {
-            logger.warn(
-              "{} Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}",
-              logPrefix,
-              seqNr,
-              pid,
-              recordWithOffset.offset)
-          }
-        }
-
         if (prevSeqNr > 0) {
           // expecting seqNr to be +1 of previously known
           val ok = seqNr == prevSeqNr + 1
@@ -601,10 +624,14 @@ private[projection] class DynamoDBOffsetStore(
             FutureAccepted
           } else if (!recordWithOffset.fromBacktracking) {
             logUnexpected()
+            // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+            // and SourceProvider supports it.
             FutureRejectedSeqNr
           } else {
             logUnexpected()
-            // This will result in projection restart (with normal configuration)
+            // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+            // and SourceProvider supports it.
+            // Otherwise this will result in projection restart (with normal configuration).
             FutureRejectedBacktrackingSeqNr
           }
         } else if (seqNr == 1) {
@@ -614,35 +641,7 @@ private[projection] class DynamoDBOffsetStore(
           // always accept starting from snapshots when there was no previous event seen
           FutureAccepted
         } else {
-          // Haven't see seen this pid within the time window. Since events can be missed
-          // when read at the tail we will only accept it if the event with previous seqNr has timestamp
-          // before the time window of the offset store.
-          // Backtracking will emit missed event again.
-          timestampOf(pid, seqNr - 1).map {
-            case Some(previousTimestamp) =>
-              val before = currentState.latestTimestamp.minus(settings.timeWindow)
-              if (previousTimestamp.isBefore(before)) {
-                logger.debug(
-                  "{} Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
-                  "is before time window [{}].",
-                  logPrefix,
-                  pid,
-                  seqNr,
-                  previousTimestamp,
-                  before)
-                Accepted
-              } else if (!recordWithOffset.fromBacktracking) {
-                logUnknown()
-                RejectedSeqNr
-              } else {
-                logUnknown()
-                // This will result in projection restart (with normal configuration)
-                RejectedBacktrackingSeqNr
-              }
-            case None =>
-              // previous not found, could have been deleted
-              Accepted
-          }
+          validateEventTimestamp(recordWithOffset)
         }
       } else {
         // strictSeqNr == false is for durable state where each revision might not be visible
@@ -661,6 +660,68 @@ private[projection] class DynamoDBOffsetStore(
           FutureDuplicate
         }
       }
+    }
+  }
+
+  private def validateEventTimestamp(recordWithOffset: RecordWithOffset) = {
+    import Validation._
+    val pid = recordWithOffset.record.pid
+    val seqNr = recordWithOffset.record.seqNr
+
+    // Haven't seen this pid in the time window (or lazy loaded from the database).
+    // Only accept if the event with previous seqNr is outside the TTL expiry window (if configured).
+    timestampOf(pid, seqNr - 1).map {
+      case Some(previousTimestamp) =>
+        val acceptBefore = offsetExpiry.map { expiry =>
+          val now = clock.instant() // expiry is from when an offset was written, consider the window from now
+          now.minus(expiry)
+        }
+
+        if (acceptBefore.exists(timestamp => previousTimestamp.isBefore(timestamp))) {
+          logger.debug(
+            "Accepting envelope with pid [{}], seqNr [{}], where previous event timestamp [{}] " +
+            "is before TTL expiry window timestamp [{}].",
+            pid,
+            seqNr,
+            previousTimestamp,
+            acceptBefore.fold("none")(_.toString))
+          Accepted
+        } else if (recordWithOffset.fromPubSub) {
+          logger.debug(
+            "Rejecting pub-sub envelope, unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
+          RejectedSeqNr
+        } else if (recordWithOffset.fromBacktracking) {
+          // This will result in projection restart (with normal configuration)
+          logger.warn(
+            "Rejecting unknown sequence number [{}] for pid [{}]. Offset: {}, where previous event timestamp [{}] " +
+            "is after TTL expiry window timestamp [{}].",
+            seqNr,
+            pid,
+            recordWithOffset.offset,
+            previousTimestamp,
+            acceptBefore.fold("none")(_.toString))
+          // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+          // and SourceProvider supports it.
+          RejectedBacktrackingSeqNr
+        } else {
+          // This may happen rather frequently when using `publish-events`, after reconnecting and such.
+          logger.debug(
+            "Rejecting unknown sequence number [{}] for pid [{}] (might be accepted later): {}",
+            seqNr,
+            pid,
+            recordWithOffset.offset)
+          // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+          // and SourceProvider supports it.
+          // Backtracking will emit missed event again.
+          RejectedSeqNr
+        }
+      case None =>
+        // previous not found, could have been deleted
+        logger.debug("Accepting envelope with pid [{}], seqNr [{}], where previous event not found.", pid, seqNr)
+        Accepted
     }
   }
 
@@ -737,7 +798,7 @@ private[projection] class DynamoDBOffsetStore(
       case change: DurableStateChange[_] if change.offset.isInstanceOf[TimestampOffset] =>
         // in case additional types are added
         throw new IllegalArgumentException(
-          s"DurableStateChange [${change.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-projection/issues")
+          s"$logPrefix DurableStateChange [${change.getClass.getName}] not implemented yet. Please report bug at https://github.com/akka/akka-projection/issues")
       case _ => None
     }
   }

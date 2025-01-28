@@ -12,11 +12,13 @@ import scala.concurrent.Future
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.persistence.query.scaladsl.ReadJournal
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
@@ -251,7 +253,8 @@ object EventSourcedProvider {
       extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
-      with LoadEventQuerySourceProvider {
+      with LoadEventQuerySourceProvider
+      with LoadEventsByPersistenceIdSourceProvider[Event] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def readJournal: ReadJournal = eventsBySlicesQuery
@@ -271,6 +274,19 @@ object EventSourcedProvider {
     override def extractCreationTime(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Long =
       envelope.timestamp
 
+    /**
+     * INTERNAL API
+     */
+    @InternalApi override private[akka] def currentEventsByPersistenceId(
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long): Option[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      eventsBySlicesQuery match {
+        case q: CurrentEventsByPersistenceIdTypedQuery =>
+          Some(q.currentEventsByPersistenceIdTyped[Event](persistenceId, fromSequenceNr, toSequenceNr))
+        case _ => None // not supported by this query
+      }
+    }
   }
 
   private class EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
@@ -284,7 +300,8 @@ object EventSourcedProvider {
       extends SourceProvider[Offset, akka.persistence.query.typed.EventEnvelope[Event]]
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
-      with LoadEventQuerySourceProvider {
+      with LoadEventQuerySourceProvider
+      with LoadEventsByPersistenceIdSourceProvider[Event] {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def readJournal: ReadJournal = eventsBySlicesQuery
@@ -308,6 +325,20 @@ object EventSourcedProvider {
 
     override def extractCreationTime(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Long =
       envelope.timestamp
+
+    /**
+     * INTERNAL API
+     */
+    @InternalApi override private[akka] def currentEventsByPersistenceId(
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long): Option[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      eventsBySlicesQuery match {
+        case q: CurrentEventsByPersistenceIdTypedQuery =>
+          Some(q.currentEventsByPersistenceIdTyped[Event](persistenceId, fromSequenceNr, toSequenceNr))
+        case _ => None // not supported by this query
+      }
+    }
 
   }
 
@@ -339,6 +370,20 @@ object EventSourcedProvider {
             new IllegalStateException(
               s"[${readJournal.getClass.getName}] must implement [${classOf[LoadEventQuery].getName}]"))
       }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] trait LoadEventsByPersistenceIdSourceProvider[Event] {
+
+    /**
+     * INTERNAL API
+     */
+    @InternalApi private[akka] def currentEventsByPersistenceId(
+        persistenceId: String,
+        fromSequenceNr: Long,
+        toSequenceNr: Long): Option[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]]
   }
 
 }

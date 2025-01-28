@@ -316,7 +316,7 @@ akka.projection.cassandra {
 }
 ```
 
-or share the same Cassandra session as [Alpakka Cassandra](https://doc.akka.io/docs/alpakka/2.0/cassandra.html):
+or share the same Cassandra session as @extref:[Alpakka Cassandra](alpakka:cassandra.html):
 
 ```
 akka.projection.cassandra {
@@ -340,6 +340,6 @@ datastax-java-driver {
 ```
 
 Alternatively, Akka Discovery can be used for finding the Cassandra server contact points as described
-in the [Alpakka Cassandra documentation](https://doc.akka.io/docs/alpakka/2.0/cassandra.html#using-akka-discovery).
+in the @extref:[Alpakka Cassandra documentation](alpakka:cassandra.html#using-akka-discovery).
 
 Without any configuration it will use `localhost:9042` as default.

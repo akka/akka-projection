@@ -67,7 +67,7 @@ object EventSourcedChaosSpec {
     private val log = LoggerFactory.getLogger(getClass)
 
     override def process(session: R2dbcSession, envelope: EventEnvelope[String]): Future[Done] = {
-      val failCount = failEvents.getOrDefault(envelope.eventOption, 0)
+      val failCount = failEvents.getOrDefault(envelope.event, 0)
       if (failCount > 0) {
         failEvents.put(envelope.event, failCount - 1)
         log.debug(
@@ -120,8 +120,8 @@ class EventSourcedChaosSpec
       val numberOfEntities = 20 + rnd.nextInt(80)
       val numberOfProjections = 1 << rnd.nextInt(4) // 1 to 8 projections
       val entityType = nextEntityType()
-      val failProbability = 0.01
-      val stopProbability = 0.01
+      val failProbability = 0.02
+      val stopProbability = 0.02
 
       var startedEntities = Map.empty[Int, ActorRef[Persister.Command]]
       def entity(i: Int): ActorRef[Persister.Command] = {

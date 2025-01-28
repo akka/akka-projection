@@ -81,6 +81,16 @@ Scala
 
 By default, Akka Projection DynamoDB shares the @extref:[DynamoDB client configuration](akka-persistence-dynamodb:config.html#dynamodb-client-configuration) with Akka Persistence DynamoDB.
 
+### Batch writes
+
+Offsets are written in batches for @ref:[at-least-once](#at-least-once) and @ref:[at-least-once (grouped)](#at-least-once-grouped-).
+To reduce the risk of write throttling it is recommended to save at most 25 offsets at a time. This is configured by:  
+
+```hcon
+akka.projection.at-least-once.save-offset-after-envelopes = 25
+akka.projection.grouped.group-after-envelopes = 25
+```
+
 ### Reference configuration
 
 The following can be overridden in your `application.conf` for projection specific settings:
@@ -164,6 +174,8 @@ defined in the configuration section `akka.projection.at-least-once`. There is a
 offset too often, but the drawback is that there can be more duplicates that will be processed again when the
 projection is restarted.
 
+Offsets are written in batches. To reduce the risk of write throttling it is recommended to save at most 25 offsets at a time.
+
 The @ref:[`ShoppingCartHandler` is shown below](#generic-handler).
 
 ## exactly-once (grouped)
@@ -203,6 +215,9 @@ Java
 
 Scala
 :  @@snip [at least once grouped within](/akka-projection-dynamodb-integration/src/test/scala/projection/docs/scaladsl/ProjectionDocExample.scala) { #at-least-once-grouped-within }
+
+Offsets are written immediately after the group of envelopes has been processed. To reduce the risk of write throttling
+it is recommended to save at most 25 offsets at a time, and therefore not exceed this for the group size.
 
 The @ref:[`GroupedShoppingCartHandler` is shown below](#grouped-handler).
 
@@ -246,6 +261,11 @@ Simple handlers can also be defined as plain functions via the helper @scala[`Dy
 
 When using @ref:[`DynamoDBProjection.atLeastOnceGroupedWithin`](#at-least-once-grouped-) the handler is processing a @scala[`Seq`]@java[`List`] of envelopes.
 
+If a [batch write](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html) to DynamoDB
+is being used, it's possible for items in the batch to fail to be written, and the response should be checked for
+unprocessed items. A @apidoc[akka.projection.dynamodb.*.Requests$] utility is provided, to retry batch writes (with
+exponential backoff) for any unprocessed items.
+
 Java
 :  @@snip [grouped handler](/akka-projection-dynamodb-integration/src/test/java/projection/docs/javadsl/ProjectionDocExample.java) { #grouped-handler }
 
@@ -285,6 +305,9 @@ A good alternative for advanced state management is to implement the handler as 
 
 An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes, which is described in
 @ref:[Processing with Akka Streams](flow.md).
+
+In addition to the caveats described there a `DynamoDBProjection.atLeastOnceFlow` must not filter out envelopes. Always
+emit a `Done` element for each completed envelope, even if application processing was skipped for the envelope.
 
 ### Handler lifecycle
 

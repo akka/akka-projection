@@ -50,6 +50,10 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
             .createJournalTable(typedSystem, dynamoDBSettings, client, deleteIfExists = true),
           10.seconds)
         Await.result(
+          akka.persistence.dynamodb.util.scaladsl.CreateTables
+            .createSnapshotsTable(typedSystem, dynamoDBSettings, client, deleteIfExists = true),
+          10.seconds)
+        Await.result(
           CreateTables.createTimestampOffsetStoreTable(typedSystem, settings, client, deleteIfExists = true),
           10.seconds)
       } catch {

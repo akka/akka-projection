@@ -7,11 +7,13 @@ package akka.projection.r2dbc
 import java.time.{ Duration => JDuration }
 import java.util.Locale
 
+import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters._
 
 import akka.actor.typed.ActorSystem
 import com.typesafe.config.Config
+import io.r2dbc.spi.ConnectionFactory
 
 object R2dbcProjectionSettings {
 
@@ -49,20 +51,40 @@ object R2dbcProjectionSettings {
       case _     => config.getDuration("offset-store.adopt-interval")
     }
 
+    val backtrackingWindow = config.getDuration("offset-store.backtracking-window")
+    val timeWindow = {
+      val d = config.getDuration("offset-store.time-window")
+      // can't be less then backtrackingWindow
+      if (d.compareTo(backtrackingWindow) < 0) backtrackingWindow
+      else d
+    }
+    val deleteAfter = {
+      val d = config.getDuration("offset-store.delete-after")
+      // can't be less then timeWindow
+      if (d.compareTo(timeWindow) < 0) timeWindow
+      else d
+    }
+
     new R2dbcProjectionSettings(
       schema = Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty),
       offsetTable = config.getString("offset-store.offset-table"),
       timestampOffsetTable = config.getString("offset-store.timestamp-offset-table"),
       managementTable = config.getString("offset-store.management-table"),
       useConnectionFactory = config.getString("use-connection-factory"),
-      timeWindow = config.getDuration("offset-store.time-window"),
-      keepNumberOfEntries = config.getInt("offset-store.keep-number-of-entries"),
-      evictInterval = config.getDuration("offset-store.evict-interval"),
+      timeWindow,
+      backtrackingWindow,
+      deleteAfter,
+      keepNumberOfEntries = 0,
+      evictInterval = JDuration.ZERO,
       deleteInterval,
       adoptInterval,
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
-      offsetBatchSize = config.getInt("offset-store.offset-batch-size"))
+      offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
+      customConnectionFactory = None,
+      offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
+      offsetSliceReadLimit = config.getInt("offset-store.offset-slice-read-limit"),
+      replayOnRejectedSequenceNumbers = config.getBoolean("replay-on-rejected-sequence-numbers"))
   }
 
   /**
@@ -80,13 +102,21 @@ final class R2dbcProjectionSettings private (
     val managementTable: String,
     val useConnectionFactory: String,
     val timeWindow: JDuration,
+    val backtrackingWindow: JDuration,
+    val deleteAfter: JDuration,
+    @deprecated("Not used, evict is only based on time window", "1.6.6")
     val keepNumberOfEntries: Int,
+    @deprecated("Not used, evict is not periodic", "1.6.6")
     val evictInterval: JDuration,
     val deleteInterval: JDuration,
     val adoptInterval: JDuration,
     val logDbCallsExceeding: FiniteDuration,
     val warnAboutFilteredEventsInFlow: Boolean,
-    val offsetBatchSize: Int) {
+    val offsetBatchSize: Int,
+    val customConnectionFactory: Option[ConnectionFactory],
+    val offsetSliceReadParallelism: Int,
+    val offsetSliceReadLimit: Int,
+    val replayOnRejectedSequenceNumbers: Boolean) {
 
   val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
@@ -113,14 +143,29 @@ final class R2dbcProjectionSettings private (
   def withTimeWindow(timeWindow: JDuration): R2dbcProjectionSettings =
     copy(timeWindow = timeWindow)
 
+  def withBacktrackingWindow(backtrackingWindow: FiniteDuration): R2dbcProjectionSettings =
+    copy(backtrackingWindow = backtrackingWindow.toJava)
+
+  def withBacktrackingWindow(backtrackingWindow: JDuration): R2dbcProjectionSettings =
+    copy(backtrackingWindow = backtrackingWindow)
+
+  def withDeleteAfter(deleteAfter: FiniteDuration): R2dbcProjectionSettings =
+    copy(deleteAfter = deleteAfter.toJava)
+
+  def withDeleteAfter(deleteAfter: JDuration): R2dbcProjectionSettings =
+    copy(deleteAfter = deleteAfter)
+
+  @deprecated("Not used, evict is only based on time window", "1.6.6")
   def withKeepNumberOfEntries(keepNumberOfEntries: Int): R2dbcProjectionSettings =
-    copy(keepNumberOfEntries = keepNumberOfEntries)
+    this
 
+  @deprecated("Not used, evict is not periodic", "1.6.6")
   def withEvictInterval(evictInterval: FiniteDuration): R2dbcProjectionSettings =
-    copy(evictInterval = evictInterval.toJava)
+    this
 
+  @deprecated("Not used, evict is not periodic", "1.6.6")
   def withEvictInterval(evictInterval: JDuration): R2dbcProjectionSettings =
-    copy(evictInterval = evictInterval)
+    this
 
   def withDeleteInterval(deleteInterval: FiniteDuration): R2dbcProjectionSettings =
     copy(deleteInterval = deleteInterval.toJava)
@@ -146,6 +191,19 @@ final class R2dbcProjectionSettings private (
   def withOffsetBatchSize(offsetBatchSize: Int): R2dbcProjectionSettings =
     copy(offsetBatchSize = offsetBatchSize)
 
+  def withCustomConnectionFactory(customConnectionFactory: ConnectionFactory): R2dbcProjectionSettings =
+    copy(customConnectionFactory = Some(customConnectionFactory))
+
+  def withOffsetSliceReadParallelism(offsetSliceReadParallelism: Int): R2dbcProjectionSettings =
+    copy(offsetSliceReadParallelism = offsetSliceReadParallelism)
+
+  def withOffsetSliceReadLimit(offsetSliceReadLimit: Int): R2dbcProjectionSettings =
+    copy(offsetSliceReadLimit = offsetSliceReadLimit)
+
+  def withReplayOnRejectedSequenceNumbers(replayOnRejectedSequenceNumbers: Boolean): R2dbcProjectionSettings =
+    copy(replayOnRejectedSequenceNumbers = replayOnRejectedSequenceNumbers)
+
+  @nowarn("msg=deprecated")
   private def copy(
       schema: Option[String] = schema,
       offsetTable: String = offsetTable,
@@ -153,13 +211,17 @@ final class R2dbcProjectionSettings private (
       managementTable: String = managementTable,
       useConnectionFactory: String = useConnectionFactory,
       timeWindow: JDuration = timeWindow,
-      keepNumberOfEntries: Int = keepNumberOfEntries,
-      evictInterval: JDuration = evictInterval,
+      backtrackingWindow: JDuration = backtrackingWindow,
+      deleteAfter: JDuration = deleteAfter,
       deleteInterval: JDuration = deleteInterval,
       adoptInterval: JDuration = adoptInterval,
       logDbCallsExceeding: FiniteDuration = logDbCallsExceeding,
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
-      offsetBatchSize: Int = offsetBatchSize) =
+      offsetBatchSize: Int = offsetBatchSize,
+      customConnectionFactory: Option[ConnectionFactory] = customConnectionFactory,
+      offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
+      offsetSliceReadLimit: Int = offsetSliceReadLimit,
+      replayOnRejectedSequenceNumbers: Boolean = replayOnRejectedSequenceNumbers) =
     new R2dbcProjectionSettings(
       schema,
       offsetTable,
@@ -167,14 +229,20 @@ final class R2dbcProjectionSettings private (
       managementTable,
       useConnectionFactory,
       timeWindow,
+      backtrackingWindow,
+      deleteAfter,
       keepNumberOfEntries,
       evictInterval,
       deleteInterval,
       adoptInterval,
       logDbCallsExceeding,
       warnAboutFilteredEventsInFlow,
-      offsetBatchSize)
+      offsetBatchSize,
+      customConnectionFactory,
+      offsetSliceReadParallelism,
+      offsetSliceReadLimit,
+      replayOnRejectedSequenceNumbers)
 
   override def toString =
-    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $keepNumberOfEntries, $evictInterval, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
+    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory, &offsetSliceReadParallelism, $offsetSliceReadLimit, $replayOnRejectedSequenceNumbers)"
 }

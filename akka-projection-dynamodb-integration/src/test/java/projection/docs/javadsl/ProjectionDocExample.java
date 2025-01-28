@@ -33,6 +33,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
 // #handler
 // #grouped-handler
+import akka.projection.dynamodb.javadsl.Requests;
 import akka.projection.javadsl.Handler;
 // #grouped-handler
 // #handler
@@ -207,11 +208,13 @@ public class ProjectionDocExample {
   public class GroupedShoppingCartHandler extends Handler<List<EventEnvelope<ShoppingCart.Event>>> {
 
     private final DynamoDbAsyncClient client;
+    private final ActorSystem<?> system;
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
-    public GroupedShoppingCartHandler(DynamoDbAsyncClient client) {
+    public GroupedShoppingCartHandler(DynamoDbAsyncClient client, ActorSystem<?> system) {
       this.client = client;
+      this.system = system;
     }
 
     @Override
@@ -250,11 +253,20 @@ public class ProjectionDocExample {
                   })
               .collect(Collectors.toList());
 
-      CompletableFuture<BatchWriteItemResponse> response =
-          client.batchWriteItem(
-              BatchWriteItemRequest.builder().requestItems(Map.of("orders", items)).build());
+      BatchWriteItemRequest request =
+          BatchWriteItemRequest.builder().requestItems(Map.of("orders", items)).build();
 
-      return response.thenApply(__ -> Done.getInstance());
+      int maxRetries = 3;
+      Duration minBackoff = Duration.ofMillis(200);
+      Duration maxBackoff = Duration.ofSeconds(2);
+      double randomFactor = 0.3;
+
+      // batch write, retrying writes for any unprocessed items (with exponential backoff)
+      CompletionStage<List<BatchWriteItemResponse>> result =
+          Requests.batchWriteWithRetries(
+              client, request, maxRetries, minBackoff, maxBackoff, randomFactor, system);
+
+      return result.thenApply(__ -> Done.getInstance());
     }
   }
 
@@ -382,7 +394,7 @@ public class ProjectionDocExample {
 
     Optional<DynamoDBProjectionSettings> settings = Optional.empty();
 
-    int saveOffsetAfterEnvelopes = 100;
+    int saveOffsetAfterEnvelopes = 25;
     Duration saveOffsetAfterDuration = Duration.ofMillis(500);
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
@@ -407,7 +419,7 @@ public class ProjectionDocExample {
 
     Optional<DynamoDBProjectionSettings> settings = Optional.empty();
 
-    int groupAfterEnvelopes = 20;
+    int groupAfterEnvelopes = 25;
     Duration groupAfterDuration = Duration.ofMillis(500);
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
@@ -433,7 +445,7 @@ public class ProjectionDocExample {
 
     Optional<DynamoDBProjectionSettings> settings = Optional.empty();
 
-    int groupAfterEnvelopes = 20;
+    int groupAfterEnvelopes = 25;
     Duration groupAfterDuration = Duration.ofMillis(500);
 
     Projection<EventEnvelope<ShoppingCart.Event>> projection =
@@ -441,7 +453,7 @@ public class ProjectionDocExample {
                 projectionId,
                 settings,
                 sourceProvider,
-                () -> new GroupedShoppingCartHandler(client),
+                () -> new GroupedShoppingCartHandler(client, system),
                 system)
             .withGroup(groupAfterEnvelopes, groupAfterDuration);
     // #at-least-once-grouped-within

@@ -6,7 +6,7 @@ licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
-scalaVersion := "2.13.15"
+scalaVersion := "2.13.16"
 
 Compile / scalacOptions ++= Seq(
   "-target:11",
@@ -28,12 +28,12 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.10.0"
+val AkkaVersion = "2.10.1"
 val AkkaHttpVersion = "10.7.0"
 val AkkaManagementVersion = "1.6.0"
-val AkkaPersistenceR2dbcVersion = "1.3.0"
+val AkkaPersistenceR2dbcVersion = "1.3.2"
 val AkkaProjectionVersion =
-  sys.props.getOrElse("akka-projection.version", "1.6.2")
+  sys.props.getOrElse("akka-projection.version", "1.6.7")
 val AkkaDiagnosticsVersion = "2.2.0"
 
 enablePlugins(AkkaGrpcPlugin)
@@ -65,7 +65,7 @@ libraryDependencies ++= Seq(
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.5.7",
-  "org.scalatest" %% "scalatest" % "3.2.18" % Test,
+  "org.scalatest" %% "scalatest" % "3.2.19" % Test,
   // 2. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,

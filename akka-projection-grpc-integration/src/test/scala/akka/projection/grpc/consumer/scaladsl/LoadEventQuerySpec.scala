@@ -122,7 +122,7 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
         .loadEnvelope[String](pid.id, sequenceNr = 1L)
         .futureValue
       env.filtered shouldBe true
-      env.eventMetadata shouldBe None
+      env.internalEventMetadata shouldBe None
       env.eventOption.isEmpty shouldBe true
     }
 

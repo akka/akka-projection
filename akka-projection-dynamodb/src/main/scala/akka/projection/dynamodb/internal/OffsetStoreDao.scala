@@ -21,7 +21,9 @@ import akka.persistence.dynamodb.internal.InstantFactory
 import akka.persistence.query.TimestampOffset
 import akka.projection.ProjectionId
 import akka.projection.dynamodb.DynamoDBProjectionSettings
+import akka.projection.dynamodb.Requests.BatchWriteFailed
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Record
+import akka.projection.dynamodb.scaladsl.Requests
 import akka.projection.internal.ManagementState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -35,6 +37,7 @@ import software.amazon.awssdk.services.dynamodb.model.ReturnConsumedCapacity
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
+import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
 
 /**
  * INTERNAL API
@@ -43,7 +46,6 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest
   private val log: Logger = LoggerFactory.getLogger(classOf[OffsetStoreDao])
 
   // Hard limits in DynamoDB
-  private val MaxBatchSize = 25
   private val MaxTransactItems = 100
 
   object OffsetStoreAttributes {
@@ -70,8 +72,8 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest
     projectionId: ProjectionId,
     client: DynamoDbAsyncClient) {
   import OffsetStoreDao.log
-  import OffsetStoreDao.MaxBatchSize
   import OffsetStoreDao.MaxTransactItems
+  import settings.offsetBatchSize
   import system.executionContext
 
   private val timeToLiveSettings = settings.timeToLiveSettings.projections.get(projectionId.name)
@@ -113,12 +115,17 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest
       }(ExecutionContext.parasitic)
   }
 
+  private def writeBatchWithRetries(request: BatchWriteItemRequest): Future[Seq[BatchWriteItemResponse]] =
+    Requests.batchWriteWithRetries(
+      client,
+      request,
+      settings.retrySettings.maxRetries,
+      settings.retrySettings.minBackoff,
+      settings.retrySettings.maxBackoff,
+      settings.retrySettings.randomFactor)(system)
+
   def storeTimestampOffsets(offsetsBySlice: Map[Int, TimestampOffset]): Future[Done] = {
     import OffsetStoreDao.OffsetStoreAttributes._
-
-    val expiry = timeToLiveSettings.offsetTimeToLive.map { timeToLive =>
-      Instant.now().plusSeconds(timeToLive.toSeconds)
-    }
 
     def writeBatch(offsetsBatch: IndexedSeq[(Int, TimestampOffset)]): Future[Done] = {
       val writeItems =
@@ -144,10 +151,6 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest
             }
             attributes.put(Seen, AttributeValue.fromM(seen))
 
-            expiry.foreach { timestamp =>
-              attributes.put(Expiry, AttributeValue.fromN(timestamp.getEpochSecond.toString))
-            }
-
             WriteRequest.builder
               .putRequest(
                 PutRequest
@@ -163,28 +166,46 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest
         .returnConsumedCapacity(ReturnConsumedCapacity.TOTAL)
         .build()
 
-      val result = client.batchWriteItem(req).asScala
+      val result = writeBatchWithRetries(req)
 
       if (log.isDebugEnabled()) {
-        result.foreach { response =>
+        result.foreach { responses =>
           log.debug(
             "Wrote latest timestamps for [{}] slices, consumed [{}] WCU",
             offsetsBatch.size,
-            response.consumedCapacity.iterator.asScala.map(_.capacityUnits.doubleValue()).sum)
+            responses.iterator.flatMap(_.consumedCapacity.iterator.asScala.map(_.capacityUnits.doubleValue)).sum)
         }
       }
       result
         .map(_ => Done)(ExecutionContext.parasitic)
         .recoverWith {
+          case failed: BatchWriteFailed =>
+            val unprocessedSlices = failed.lastResponse.unprocessedItems
+              .get(settings.timestampOffsetTable)
+              .iterator
+              .asScala
+              .map { req =>
+                val item = req.putRequest.item
+                item.get(NameSlice).s
+              }
+              .toVector
+
+            log.warn(
+              "Failed to write latest timestamps for [{}] slices: [{}]",
+              unprocessedSlices.size,
+              unprocessedSlices.mkString(", "))
+
+            Future.failed(failed)
+
           case c: CompletionException =>
             Future.failed(c.getCause)
-        }(ExecutionContext.parasitic)
+        }
     }
 
-    if (offsetsBySlice.size <= MaxBatchSize) {
+    if (offsetsBySlice.size <= offsetBatchSize) {
       writeBatch(offsetsBySlice.toVector)
     } else {
-      val batches = offsetsBySlice.toVector.sliding(MaxBatchSize, MaxBatchSize)
+      val batches = offsetsBySlice.toVector.sliding(offsetBatchSize, offsetBatchSize)
       Future
         .sequence(batches.map(writeBatch))
         .map(_ => Done)(ExecutionContext.parasitic)
@@ -221,24 +242,49 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest
         .returnConsumedCapacity(ReturnConsumedCapacity.TOTAL)
         .build()
 
-      val result = client.batchWriteItem(req).asScala
+      val result = writeBatchWithRetries(req)
 
       if (log.isDebugEnabled()) {
-        result.foreach { response =>
+        result.foreach { responses =>
           log.debug(
             "Wrote [{}] sequence numbers, consumed [{}] WCU",
             recordsBatch.size,
-            response.consumedCapacity.iterator.asScala.map(_.capacityUnits.doubleValue()).sum)
+            responses.iterator.flatMap(_.consumedCapacity.iterator.asScala.map(_.capacityUnits.doubleValue)).sum)
         }
       }
 
-      result.map(_ => Done)(ExecutionContext.parasitic)
+      result
+        .map(_ => Done)(ExecutionContext.parasitic)
+        .recoverWith {
+          case failed: BatchWriteFailed =>
+            val unprocessedSeqNrs =
+              failed.lastResponse.unprocessedItems
+                .get(settings.timestampOffsetTable)
+                .iterator
+                .asScala
+                .map { req =>
+                  val item = req.putRequest.item
+                  import OffsetStoreDao.OffsetStoreAttributes._
+                  s"${item.get(NameSlice).s}: ${item.get(Pid).s}"
+                }
+                .toVector
+
+            log.warn(
+              "Failed to write sequence numbers for [{}] persistence IDs: [{}]",
+              unprocessedSeqNrs.size,
+              unprocessedSeqNrs.mkString(", "))
+
+            Future.failed(failed)
+
+          case c: CompletionException =>
+            Future.failed(c.getCause)
+        }
     }
 
-    if (records.size <= MaxBatchSize) {
+    if (records.size <= offsetBatchSize) {
       writeBatch(records)
     } else {
-      val batches = records.sliding(MaxBatchSize, MaxBatchSize)
+      val batches = records.sliding(offsetBatchSize, offsetBatchSize)
       Future
         .sequence(batches.map(writeBatch))
         .map(_ => Done)(ExecutionContext.parasitic)
@@ -282,7 +328,7 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest
   def transactStoreSequenceNumbers(writeItems: Iterable[TransactWriteItem])(records: Seq[Record]): Future[Done] = {
     if ((writeItems.size + records.size) > MaxTransactItems)
       throw new IllegalArgumentException(
-        s"Too many transactional write items. Total limit is [${MaxTransactItems}], attempting to store " +
+        s"Too many transactional write items. Total limit is [$MaxTransactItems], attempting to store " +
         s"[${writeItems.size}] write items and [${records.size}] sequence numbers.")
 
     val expiry = timeToLiveSettings.offsetTimeToLive.map { timeToLive =>
@@ -409,29 +455,48 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest
         .returnConsumedCapacity(ReturnConsumedCapacity.TOTAL)
         .build()
 
-      val result = client.batchWriteItem(req).asScala
+      val result = writeBatchWithRetries(req)
 
       if (log.isDebugEnabled()) {
-        result.foreach { response =>
+        result.foreach { responses =>
           log.debug(
             "Wrote management state for [{}] slices, consumed [{}] WCU",
             slices.size,
-            response.consumedCapacity.iterator.asScala.map(_.capacityUnits.doubleValue()).sum)
+            responses.iterator.flatMap(_.consumedCapacity.iterator.asScala.map(_.capacityUnits.doubleValue)).sum)
         }
       }
       result
         .map(_ => Done)(ExecutionContext.parasitic)
         .recoverWith {
+          case failed: BatchWriteFailed =>
+            val unprocessedStates =
+              failed.lastResponse.unprocessedItems
+                .get(settings.timestampOffsetTable)
+                .iterator
+                .asScala
+                .map { req =>
+                  val item = req.putRequest.item
+                  s"${item.get(NameSlice).s}-${item.get(Paused).bool}"
+                }
+                .toVector
+
+            log.warn(
+              "Failed to write management state for [{}] slices: [{}]",
+              unprocessedStates.size,
+              unprocessedStates.mkString(", "))
+
+            Future.failed(failed)
+
           case c: CompletionException =>
             Future.failed(c.getCause)
-        }(ExecutionContext.parasitic)
+        }
     }
 
     val sliceRange = (minSlice to maxSlice).toVector
-    if (sliceRange.size <= MaxBatchSize) {
+    if (sliceRange.size <= offsetBatchSize) {
       writeBatch(sliceRange)
     } else {
-      val batches = sliceRange.sliding(MaxBatchSize, MaxBatchSize)
+      val batches = sliceRange.sliding(offsetBatchSize, offsetBatchSize)
       Future
         .sequence(batches.map(writeBatch))
         .map(_ => Done)(ExecutionContext.parasitic)

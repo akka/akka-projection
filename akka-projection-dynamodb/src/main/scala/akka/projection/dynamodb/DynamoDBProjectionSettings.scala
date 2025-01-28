@@ -41,12 +41,15 @@ object DynamoDBProjectionSettings {
       timestampOffsetTable = config.getString("offset-store.timestamp-offset-table"),
       useClient = config.getString("use-client"),
       timeWindow = config.getDuration("offset-store.time-window"),
+      backtrackingWindow = config.getDuration("offset-store.backtracking-window"),
       keepNumberOfEntries = 0,
       evictInterval = JDuration.ZERO,
       warnAboutFilteredEventsInFlow = config.getBoolean("warn-about-filtered-events-in-flow"),
       offsetBatchSize = config.getInt("offset-store.offset-batch-size"),
       offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
-      timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")))
+      timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")),
+      retrySettings = RetrySettings(config.getConfig("offset-store.retries")),
+      replayOnRejectedSequenceNumbers = config.getBoolean("replay-on-rejected-sequence-numbers"))
   }
 
   /**
@@ -61,6 +64,7 @@ final class DynamoDBProjectionSettings private (
     val timestampOffsetTable: String,
     val useClient: String,
     val timeWindow: JDuration,
+    val backtrackingWindow: JDuration,
     @deprecated("Not used, evict is only based on time window", "1.6.2")
     val keepNumberOfEntries: Int,
     @deprecated("Not used, evict is not periodic", "1.6.2")
@@ -68,7 +72,12 @@ final class DynamoDBProjectionSettings private (
     val warnAboutFilteredEventsInFlow: Boolean,
     val offsetBatchSize: Int,
     val offsetSliceReadParallelism: Int,
-    val timeToLiveSettings: TimeToLiveSettings) {
+    val timeToLiveSettings: TimeToLiveSettings,
+    val retrySettings: RetrySettings,
+    val replayOnRejectedSequenceNumbers: Boolean) {
+
+  // 25 is a hard limit of batch writes in DynamoDB
+  require(offsetBatchSize <= 25, s"offset-batch-size must be <= 25, was [$offsetBatchSize]")
 
   def withTimestampOffsetTable(timestampOffsetTable: String): DynamoDBProjectionSettings =
     copy(timestampOffsetTable = timestampOffsetTable)
@@ -81,6 +90,12 @@ final class DynamoDBProjectionSettings private (
 
   def withTimeWindow(timeWindow: JDuration): DynamoDBProjectionSettings =
     copy(timeWindow = timeWindow)
+
+  def withBacktrackingWindow(backtrackingWindow: FiniteDuration): DynamoDBProjectionSettings =
+    copy(backtrackingWindow = backtrackingWindow.toJava)
+
+  def withBacktrackingWindow(backtrackingWindow: JDuration): DynamoDBProjectionSettings =
+    copy(backtrackingWindow = backtrackingWindow)
 
   @deprecated("Not used, evict is only based on time window", "1.6.2")
   def withKeepNumberOfEntries(keepNumberOfEntries: Int): DynamoDBProjectionSettings =
@@ -106,28 +121,53 @@ final class DynamoDBProjectionSettings private (
   def withTimeToLiveSettings(timeToLiveSettings: TimeToLiveSettings): DynamoDBProjectionSettings =
     copy(timeToLiveSettings = timeToLiveSettings)
 
+  def withRetrySettings(retrySettings: RetrySettings): DynamoDBProjectionSettings =
+    copy(retrySettings = retrySettings)
+
+  def withReplayOnRejectedSequenceNumbers(replayOnRejectedSequenceNumbers: Boolean): DynamoDBProjectionSettings =
+    copy(replayOnRejectedSequenceNumbers = replayOnRejectedSequenceNumbers)
+
   @nowarn("msg=deprecated")
   private def copy(
       timestampOffsetTable: String = timestampOffsetTable,
       useClient: String = useClient,
       timeWindow: JDuration = timeWindow,
+      backtrackingWindow: JDuration = backtrackingWindow,
       warnAboutFilteredEventsInFlow: Boolean = warnAboutFilteredEventsInFlow,
       offsetBatchSize: Int = offsetBatchSize,
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
-      timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings) =
+      timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings,
+      retrySettings: RetrySettings = retrySettings,
+      replayOnRejectedSequenceNumbers: Boolean = replayOnRejectedSequenceNumbers) =
     new DynamoDBProjectionSettings(
       timestampOffsetTable,
       useClient,
       timeWindow,
+      backtrackingWindow,
       keepNumberOfEntries,
       evictInterval,
       warnAboutFilteredEventsInFlow,
       offsetBatchSize,
       offsetSliceReadParallelism,
-      timeToLiveSettings)
+      timeToLiveSettings,
+      retrySettings,
+      replayOnRejectedSequenceNumbers)
 
-  override def toString =
-    s"DynamoDBProjectionSettings($timestampOffsetTable, $useClient, $timeWindow, $warnAboutFilteredEventsInFlow, $offsetBatchSize)"
+  @nowarn("msg=deprecated")
+  override def toString: String =
+    s"DynamoDBProjectionSettings(" +
+    s"timestampOffsetTable=$timestampOffsetTable, " +
+    s"useClient=$useClient, " +
+    s"timeWindow=$timeWindow, " +
+    s"backtrackingWindow=$backtrackingWindow, " +
+    s"keepNumberOfEntries=$keepNumberOfEntries, " +
+    s"evictInterval=$evictInterval, " +
+    s"warnAboutFilteredEventsInFlow=$warnAboutFilteredEventsInFlow, " +
+    s"offsetBatchSize=$offsetBatchSize, " +
+    s"offsetSliceReadParallelism=$offsetSliceReadParallelism, " +
+    s"timeToLiveSettings=$timeToLiveSettings, " +
+    s"retrySettings=$retrySettings, " +
+    s"replayOnRejectedSequenceNumbers=$replayOnRejectedSequenceNumbers)"
 }
 
 object TimeToLiveSettings {
@@ -199,4 +239,49 @@ final class ProjectionTimeToLiveSettings private (val offsetTimeToLive: Option[F
 
   private def copy(offsetTimeToLive: Option[FiniteDuration]): ProjectionTimeToLiveSettings =
     new ProjectionTimeToLiveSettings(offsetTimeToLive)
+}
+
+object RetrySettings {
+  val defaults: RetrySettings =
+    new RetrySettings(maxRetries = 3, minBackoff = 200.millis, maxBackoff = 2.seconds, randomFactor = 0.3)
+
+  def apply(config: Config): RetrySettings = {
+    new RetrySettings(
+      maxRetries = config.getInt("max-retries"),
+      minBackoff = config.getDuration("min-backoff").toScala,
+      maxBackoff = config.getDuration("max-backoff").toScala,
+      randomFactor = config.getDouble("random-factor"))
+  }
+}
+
+final class RetrySettings private (
+    val maxRetries: Int,
+    val minBackoff: FiniteDuration,
+    val maxBackoff: FiniteDuration,
+    val randomFactor: Double) {
+
+  def withMaxRetries(maxRetries: Int): RetrySettings =
+    copy(maxRetries = maxRetries)
+
+  def withMinBackoff(minBackoff: FiniteDuration): RetrySettings =
+    copy(minBackoff = minBackoff)
+
+  def withMinBackoff(minBackoff: JDuration): RetrySettings =
+    copy(minBackoff = minBackoff.toScala)
+
+  def withMaxBackoff(maxBackoff: FiniteDuration): RetrySettings =
+    copy(maxBackoff = maxBackoff)
+
+  def withMaxBackoff(maxBackoff: JDuration): RetrySettings =
+    copy(maxBackoff = maxBackoff.toScala)
+
+  def withRandomFactor(randomFactor: Double): RetrySettings =
+    copy(randomFactor = randomFactor)
+
+  private def copy(
+      maxRetries: Int = maxRetries,
+      minBackoff: FiniteDuration = minBackoff,
+      maxBackoff: FiniteDuration = maxBackoff,
+      randomFactor: Double = randomFactor) =
+    new RetrySettings(maxRetries, minBackoff, maxBackoff, randomFactor)
 }

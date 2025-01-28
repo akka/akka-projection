@@ -23,15 +23,19 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
+import akka.projection.eventsourced.scaladsl.EventSourcedProvider.LoadEventsByPersistenceIdSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
 
-class TestSourceProviderWithInput()(implicit val system: ActorSystem[_])
+class TestSourceProviderWithInput(enableCurrentEventsByPersistenceId: Boolean)(implicit val system: ActorSystem[_])
     extends SourceProvider[TimestampOffset, EventEnvelope[String]]
     with BySlicesSourceProvider
     with EventTimestampQuery
-    with LoadEventQuery {
+    with LoadEventQuery
+    with LoadEventsByPersistenceIdSourceProvider[String] {
+
+  def this()(implicit system: ActorSystem[_]) = this(enableCurrentEventsByPersistenceId = false)
 
   private implicit val ec: ExecutionContext = system.executionContext
   private val persistenceExt = Persistence(system)
@@ -95,5 +99,23 @@ class TestSourceProviderWithInput()(implicit val system: ActorSystem[_])
           new NoSuchElementException(
             s"Event with persistenceId [$persistenceId] and sequenceNr [$sequenceNr] not found."))
     }
+  }
+
+  override private[akka] def currentEventsByPersistenceId(
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long): Option[Source[EventEnvelope[String], NotUsed]] = {
+    if (enableCurrentEventsByPersistenceId)
+      Some(
+        Source(
+          envelopes
+            .iterator()
+            .asScala
+            .filter { env =>
+              env.persistenceId == persistenceId && env.sequenceNr >= fromSequenceNr && env.sequenceNr <= toSequenceNr
+            }
+            .toVector))
+    else
+      None
   }
 }

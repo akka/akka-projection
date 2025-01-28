@@ -40,6 +40,14 @@ object TestClock {
   def setInstant(newInstant: Instant): Unit =
     _instant = newInstant.truncatedTo(resolution)
 
+  def withInstant[T](instant: Instant)(block: => T): T = {
+    val restore = _instant
+    try {
+      setInstant(instant)
+      block
+    } finally setInstant(restore)
+  }
+
   /**
    * Increase the clock with this duration (truncated to the resolution)
    */

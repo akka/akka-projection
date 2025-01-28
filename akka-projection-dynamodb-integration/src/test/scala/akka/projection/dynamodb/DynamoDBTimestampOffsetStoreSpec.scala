@@ -11,6 +11,7 @@ import java.util.UUID
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.jdk.DurationConverters._
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -100,13 +101,15 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
   private def createOffsetStore(
       projectionId: ProjectionId,
       customSettings: DynamoDBProjectionSettings = settings,
+      offsetStoreClock: TestClock = clock,
       eventTimestampQueryClock: TestClock = clock) =
     new DynamoDBOffsetStore(
       projectionId,
       Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, eventTimestampQueryClock)),
       system,
       customSettings,
-      client)
+      client,
+      offsetStoreClock)
 
   def createEnvelope(pid: Pid, seqNr: SeqNr, timestamp: Instant, event: String): EventEnvelope[String] = {
     val entityType = PersistenceId.extractEntityType(pid)
@@ -128,7 +131,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       env.sequenceNr,
       eventOption = None,
       env.timestamp,
-      env.eventMetadata,
+      env.internalEventMetadata,
       env.entityType,
       env.slice,
       env.filtered,
@@ -141,7 +144,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       env.sequenceNr,
       env.eventOption,
       env.timestamp,
-      env.eventMetadata,
+      env.internalEventMetadata,
       env.entityType,
       env.slice,
       filtered = true,
@@ -162,7 +165,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
   def slice(pid: String): Int =
     persistenceExt.sliceForPersistenceId(pid)
 
-  s"The DynamoDBOffsetStore for TimestampOffset" must {
+  "The DynamoDBOffsetStore for TimestampOffset" must {
 
     "save TimestampOffset with one entry" in {
       val projectionId = genRandomProjectionId()
@@ -189,8 +192,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
 
       if (usingOffsetTTL) {
         val expected = System.currentTimeMillis / 1000 + 1.hour.toSeconds
-        val timestampOffsetExpiry = timestampOffsetItem.get(OffsetStoreAttributes.Expiry).value.n.toLong
-        timestampOffsetExpiry should (be <= expected and be > expected - 10) // within 10 seconds
+        timestampOffsetItem.get(OffsetStoreAttributes.Expiry) shouldBe None // no expiry set on latest-by-slice
         val seqNrOffsetExpiry = seqNrOffsetItem.get(OffsetStoreAttributes.Expiry).value.n.toLong
         seqNrOffsetExpiry should (be <= expected and be > expected - 10) // within 10 seconds
       } else {
@@ -350,8 +352,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
 
         if (usingOffsetTTL) {
           val expected = System.currentTimeMillis / 1000 + 1.hour.toSeconds
-          val timestampOffsetExpiry = timestampOffsetItem.get(OffsetStoreAttributes.Expiry).value.n.toLong
-          timestampOffsetExpiry should (be <= expected and be > expected - 10) // within 10 seconds
+          timestampOffsetItem.get(OffsetStoreAttributes.Expiry) shouldBe None // no expiry set on latest-by-slice
           val seqNrOffsetExpiry = seqNrOffsetItem.get(OffsetStoreAttributes.Expiry).value.n.toLong
           seqNrOffsetExpiry should (be <= expected and be > expected - 10) // within 10 seconds
         } else {
@@ -556,10 +557,14 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
 
     "accept known sequence numbers and reject unknown" in {
       val projectionId = genRandomProjectionId()
+      val offsetStoreClock = TestClock.nowMicros()
       val eventTimestampQueryClock = TestClock.nowMicros()
-      val offsetStore = createOffsetStore(projectionId, eventTimestampQueryClock = eventTimestampQueryClock)
+      val offsetStore = createOffsetStore(
+        projectionId,
+        offsetStoreClock = offsetStoreClock,
+        eventTimestampQueryClock = eventTimestampQueryClock)
 
-      val startTime = TestClock.nowMicros().instant()
+      val startTime = offsetStoreClock.instant()
       val offset1 = TimestampOffset(startTime, Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
       offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
       offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p2", 1L)).futureValue
@@ -625,16 +630,20 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       val env7 = createEnvelope("p5", 7L, startTime.plusMillis(8), "e5-7")
       offsetStore.validate(env7).futureValue shouldBe RejectedSeqNr
       offsetStore.validate(backtrackingEnvelope(env7)).futureValue shouldBe RejectedBacktrackingSeqNr
-      // but ok when previous is old
-      eventTimestampQueryClock.setInstant(startTime.minusSeconds(3600))
-      val env8 = createEnvelope("p5", 7L, startTime.plusMillis(5), "e5-7")
-      offsetStore.validate(env8).futureValue shouldBe Accepted
-      eventTimestampQueryClock.setInstant(startTime)
-      offsetStore.addInflight(env8)
-      // and subsequent seqNr is accepted
-      val env9 = createEnvelope("p5", 8L, startTime.plusMillis(9), "e5-8")
-      offsetStore.validate(env9).futureValue shouldBe Accepted
-      offsetStore.addInflight(env9)
+      if (usingOffsetTTL) {
+        // but ok when previous is older than expiry window
+        val now = offsetStoreClock.tick(JDuration.ofSeconds(10))
+        val offsetExpiry = settings.timeToLiveSettings.projections.get(projectionId.name).offsetTimeToLive.value
+        eventTimestampQueryClock.withInstant(now.minusSeconds(offsetExpiry.toSeconds + 1)) {
+          val env8 = createEnvelope("p5", 7L, startTime.plusMillis(5), "e5-7")
+          offsetStore.validate(env8).futureValue shouldBe Accepted
+          offsetStore.addInflight(env8)
+        }
+        // and subsequent seqNr is accepted
+        val env9 = createEnvelope("p5", 8L, startTime.plusMillis(9), "e5-8")
+        offsetStore.validate(env9).futureValue shouldBe Accepted
+        offsetStore.addInflight(env9)
+      }
 
       // reject unknown filtered
       val env10 = filteredEnvelope(createEnvelope("p6", 7L, startTime.plusMillis(10), "e6-7"))
@@ -647,14 +656,20 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
         .futureValue shouldBe RejectedBacktrackingSeqNr
 
       // it's keeping the inflight that are not in the "stored" state
-      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L, "p4" -> 2L, "p5" -> 8L)
+      if (usingOffsetTTL) {
+        offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L, "p4" -> 2L, "p5" -> 8L)
+      } else {
+        offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L, "p4" -> 2L)
+      }
       // and they are removed from inflight once they have been stored
       offsetStore
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(2), Map("p4" -> 2L)), "p4", 2L))
         .futureValue
-      offsetStore
-        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L)), "p5", 8L))
-        .futureValue
+      if (usingOffsetTTL) {
+        offsetStore
+          .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L)), "p5", 8L))
+          .futureValue
+      }
       offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L)
     }
 
@@ -799,6 +814,54 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
         .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L)), "p5", 8L))
         .futureValue
       offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 20L)
+    }
+
+    "cleanup inFlight when saving offset" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val startTime = TestClock.nowMicros().instant()
+      val offset1 = TimestampOffset(startTime, Map("p1" -> 3L))
+      val envelope1 = createEnvelope("p1", 3L, offset1.timestamp, "e1-3")
+      val offset2 = TimestampOffset(startTime.plusMillis(1), Map("p1" -> 4L))
+      val envelope2 = createEnvelope("p1", 4L, offset2.timestamp, "e1-4")
+      val offset3 = TimestampOffset(startTime.plusMillis(2), Map("p1" -> 5L))
+
+      // save same seqNr as inFlight should remove from inFlight
+      offsetStore.addInflight(envelope1)
+      offsetStore.getInflight().get("p1") shouldBe Some(3L)
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+      offsetStore.getInflight().get("p1") shouldBe None
+
+      // clear
+      offsetStore.readOffset().futureValue
+
+      // save lower seqNr than inFlight should not remove from inFlight
+      offsetStore.addInflight(envelope1)
+      offsetStore.getInflight().get("p1") shouldBe Some(3L)
+      offsetStore.addInflight(envelope2)
+      offsetStore.getInflight().get("p1") shouldBe Some(4L)
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+      offsetStore.getInflight().get("p1") shouldBe Some(4L)
+
+      // clear
+      offsetStore.readOffset().futureValue
+
+      // save higher seqNr than inFlight should remove from inFlight
+      offsetStore.addInflight(envelope1)
+      offsetStore.getInflight().get("p1") shouldBe Some(3L)
+      offsetStore.saveOffset(OffsetPidSeqNr(offset2, "p1", 4L)).futureValue
+      offsetStore.getInflight().get("p1") shouldBe None
+
+      // clear
+      offsetStore.readOffset().futureValue
+
+      // save higher seqNr than inFlight should remove from inFlight
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+      offsetStore.addInflight(envelope2)
+      offsetStore.getInflight().get("p1") shouldBe Some(4L)
+      offsetStore.saveOffset(OffsetPidSeqNr(offset3, "p1", 5L)).futureValue
+      offsetStore.getInflight().get("p1") shouldBe None
     }
 
     "evict old records from same slice" in {
@@ -1032,6 +1095,88 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
     // FIXME more tests, see r2dbc
     //    "set offset" in {
     //    "clear offset" in {
+
+    "validate timestamp of previous sequence number" in {
+      import DynamoDBOffsetStore.Validation._
+
+      val projectionName = UUID.randomUUID().toString
+
+      val offsetStoreClock = TestClock.nowMicros()
+      val eventTimestampQueryClock = TestClock.nowMicros()
+
+      def offsetStore(minSlice: Int, maxSlice: Int) =
+        new DynamoDBOffsetStore(
+          ProjectionId(projectionName, s"$minSlice-$maxSlice"),
+          Some(new TestTimestampSourceProvider(minSlice, maxSlice, eventTimestampQueryClock)),
+          system,
+          settings,
+          client,
+          offsetStoreClock)
+
+      // one projection at lower scale
+      val offsetStore1 = offsetStore(512, 1023)
+
+      // two projections at higher scale
+      val offsetStore2 = offsetStore(512, 767)
+
+      val p1 = "p-0960" // slice 576
+      val p2 = "p-6009" // slice 640
+      val p3 = "p-3039" // slice 832
+
+      val t0 = offsetStoreClock.instant().minusSeconds(100)
+      def time(step: Int) = t0.plusSeconds(step)
+
+      // starting with 2 projections, testing 512-1023
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time(2), Map(p1 -> 1L)), p1, 1L)).futureValue
+      offsetStore1.saveOffset(OffsetPidSeqNr(TimestampOffset(time(100), Map(p3 -> 1L)), p3, 1L)).futureValue
+
+      // scaled up to 4 projections, testing 512-767
+      val latestTime = time(10)
+      offsetStore2.saveOffset(OffsetPidSeqNr(TimestampOffset(latestTime, Map(p1 -> 2L)), p1, 2L)).futureValue
+      offsetStore2.getState().latestTimestamp shouldBe latestTime
+
+      // note: eventTimestampQueryClock is used by TestTimestampSourceProvider.timestampOf for timestamp of previous seqNr
+
+      if (usingOffsetTTL) {
+        // if offset TTL is configured, use expiry window (from now) to validate old timestamps
+
+        val now = offsetStoreClock.tick(JDuration.ofSeconds(10))
+        val offsetExpiry = settings.timeToLiveSettings.projections.get(projectionName).offsetTimeToLive.get.toJava
+
+        // rejected if timestamp of previous seqNr is after expiry timestamp for this slice
+        eventTimestampQueryClock.withInstant(now.minus(offsetExpiry.minusSeconds(1))) {
+          offsetStore2
+            .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
+            .futureValue shouldBe RejectedBacktrackingSeqNr
+        }
+
+        // still rejected if timestamp of previous seqNr is before expiry timestamp for latest (slice not tracked)
+        eventTimestampQueryClock.withInstant(now.minus(offsetExpiry.plusSeconds(1))) {
+          offsetStore2
+            .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
+            .futureValue shouldBe Accepted
+        }
+      } else {
+        // when no offset TTL expiry is configured, then always reject
+
+        val now = offsetStoreClock.tick(JDuration.ofSeconds(10))
+        val testOffsetExpiry = JDuration.ofHours(1)
+
+        // rejected if timestamp of previous seqNr is after possible expiry timestamp (but no TTL configured)
+        eventTimestampQueryClock.withInstant(now.minus(testOffsetExpiry.minusSeconds(1))) {
+          offsetStore2
+            .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
+            .futureValue shouldBe RejectedBacktrackingSeqNr
+        }
+
+        // still rejected if timestamp of previous seqNr is before possible expiry timestamp (but no TTL configured)
+        eventTimestampQueryClock.withInstant(now.minus(testOffsetExpiry.plusSeconds(1))) {
+          offsetStore2
+            .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
+            .futureValue shouldBe RejectedBacktrackingSeqNr
+        }
+      }
+    }
 
   }
 }

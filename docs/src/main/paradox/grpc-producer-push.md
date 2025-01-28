@@ -91,7 +91,7 @@ This can be used together with the additional producer metadata to add authentic
 ## Producer set up
 
 The producer is essentially a special projection handler for a projection running on the producer. It could be a single actor system
-running one projection handling all slices, or it could be @extref:[Sharded Daemon Process](akka:typed/cluster-sharded-daemon-process.md)
+running one projection handling all slices, or it could be @extref:[Sharded Daemon Process](akka:typed/cluster-sharded-daemon-process.html)
 pushing events for partitioned slices of the entities.
 
 The producer is created through @apidoc[EventProducerPush], which has a method `handler()` which returns a handler to be plugged into 
