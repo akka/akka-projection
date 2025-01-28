@@ -11,7 +11,7 @@ import scala.jdk.CollectionConverters._
 
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
-import akka.pattern.BackoffSupervisor
+import akka.pattern.RetrySupport
 import akka.pattern.after
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -59,7 +59,7 @@ object Requests {
             Future.failed(failOnMaxRetries(response))
           } else { // retry after exponential backoff
             val nextRetry = retries + 1
-            val delay = BackoffSupervisor.calculateDelay(retries, minBackoff, maxBackoff, randomFactor)
+            val delay = RetrySupport.calculateExponentialBackoffDelay(retries, minBackoff, maxBackoff, randomFactor)
             onRetry(response, nextRetry, delay)
             after(delay) {
               retry(
