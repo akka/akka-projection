@@ -80,10 +80,7 @@ class JdbcOffsetStore[S <: JdbcSession](
 
   def clearOffset(projectionId: ProjectionId): Future[Done] = {
     withConnection(jdbcSessionFactory) { conn =>
-      logger.debug(
-        "clearing offset for [{}], using connection id [{}]",
-        projectionId,
-        System.identityHashCode(conn))
+      logger.debug("clearing offset for [{}], using connection id [{}]", projectionId, System.identityHashCode(conn))
       tryWithResource(conn.prepareStatement(settings.dialect.clearOffsetStatement)) { stmt =>
         stmt.setString(1, projectionId.name)
         stmt.setString(2, projectionId.key)
