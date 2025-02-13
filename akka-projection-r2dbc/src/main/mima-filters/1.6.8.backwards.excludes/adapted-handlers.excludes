@@ -1,0 +1,3 @@
+# internal
+ProblemFilters.exclude[Problem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#AdaptedHandler.*")
+ProblemFilters.exclude[Problem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#AdaptedR2dbcHandler.*")

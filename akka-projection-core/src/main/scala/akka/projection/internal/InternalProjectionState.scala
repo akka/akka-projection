@@ -137,19 +137,19 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         : Flow[ProjectionContextImpl[Offset, Envelope], ProjectionContextImpl[Offset, Envelope], NotUsed] =
       handlerStrategy match {
         case single: SingleHandlerStrategy[Envelope] @unchecked =>
-          val handler = single.handler()
+          val observer =
+            new SingleHandlerObserver[Envelope](
+              projectionId,
+              statusObserver,
+              telemetry,
+              sourceProvider.extractCreationTime)
+
+          val handler = single.handler().observable(observer)
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
           Flow[ProjectionContextImpl[Offset, Envelope]].mapAsync(parallelism = 1) { context =>
-            val measured: () => Future[Done] = { () =>
-              handler.process(context.envelope).map { done =>
-                statusObserver.afterProcess(projectionId, context.envelope)
-                // `telemetry.afterProcess` is invoked immediately after `handler.process`
-                telemetry.afterProcess(context.externalContext)
-                done
-              }
-            }
+            val measured: () => Future[Done] = () => handler.process(context.envelope)
             handlerRecovery
               .applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
               .map { _ =>
@@ -161,7 +161,14 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         case grouped: GroupedHandlerStrategy[Envelope] @unchecked =>
           val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
           val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
-          val handler = grouped.handler()
+
+          val observer = new GroupedHandlerObserver[Envelope](
+            projectionId,
+            statusObserver,
+            telemetry,
+            sourceProvider.extractCreationTime)
+
+          val handler = grouped.handler().observable(observer)
           val handlerRecovery =
             HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
 
@@ -172,19 +179,11 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
               val first = group.head
               val last = group.last
               val envelopes = group.map { _.envelope }
-              val measured: () => Future[Done] = { () =>
-                handler.process(envelopes).map { done =>
-                  group.foreach { ctx =>
-                    statusObserver.afterProcess(projectionId, ctx.envelope)
-                    telemetry.afterProcess(ctx.externalContext)
-                  }
-                  done
-                }
-              }
+              val measured: () => Future[Done] = () => handler.process(envelopes)
               handlerRecovery
                 .applyRecovery(first.envelope, first.offset, last.offset, abort.future, measured)
                 .map { _ =>
-                  last.withGroupSize(envelopes.length)
+                  last.withGroupSize(group.size)
                 }
             }
 
@@ -198,16 +197,15 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
                     futDone
                 }
             }
-          Flow[ProjectionContextImpl[Offset, Envelope]]
-            .map { context => context.envelope -> context }
-            .via(flow)
-            .map {
-              case (_, context) =>
-                val ctx = context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]]
-                statusObserver.afterProcess(projectionId, ctx.envelope)
-                telemetry.afterProcess(ctx.externalContext)
-                ctx
-            }
+
+          val observer =
+            new SingleHandlerObserver[Envelope](
+              projectionId,
+              statusObserver,
+              telemetry,
+              sourceProvider.extractCreationTime)
+
+          ObservableFlowHandler(flow, observer)
       }
 
     if (afterEnvelopes == 1)
@@ -249,15 +247,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
           _.envelope
         }
 
-        val measured: () => Future[Done] = { () =>
-          handler.process(envelopes).map { done =>
-            partitioned.foreach { ctx =>
-              statusObserver.afterProcess(projectionId, ctx.envelope)
-              telemetry.afterProcess(ctx.externalContext)
-            }
-            done
-          }
-        }
+        val measured: () => Future[Done] = () => handler.process(envelopes)
         val onSkip = () => saveOffsetsAndReport(projectionId, partitioned)
         handlerRecovery.applyRecovery(first.envelope, firstOffset, lastOffset, abort.future, measured, onSkip)
       }
@@ -266,7 +256,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         case _: MergeableOffsetSourceProvider[_, _] =>
           val batches = envelopesAndOffsets
             .flatMap {
-              case context @ ProjectionContextImpl(offset: MergeableOffset[_] @unchecked, _, _, _) =>
+              case context @ ProjectionContextImpl(offset: MergeableOffset[_] @unchecked, _, _, _, _) =>
                 offset.entries.toSeq.map {
                   case (key, _) => (key, context)
                 }
@@ -297,15 +287,18 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
 
     handlerStrategy match {
       case single: SingleHandlerStrategy[Envelope] @unchecked =>
-        val handler: Handler[Envelope] = single.handler()
+        val observer =
+          new SingleHandlerObserver[Envelope](
+            projectionId,
+            statusObserver,
+            telemetry,
+            sourceProvider.extractCreationTime)
+
+        val handler: Handler[Envelope] = single.handler().observable(observer)
         source
           .mapAsync(1) { context =>
             val measured: () => Future[Done] = () => {
               handler.process(context.envelope).map { done =>
-                statusObserver.afterProcess(projectionId, context.envelope)
-                // `telemetry.afterProcess` is invoked immediately after `handler.process`
-                telemetry.afterProcess(context.externalContext)
-
                 try {
                   statusObserver.offsetProgress(projectionId, context.envelope)
                 } catch {
@@ -331,7 +324,14 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
       case grouped: GroupedHandlerStrategy[Envelope] @unchecked =>
         val groupAfterEnvelopes = grouped.afterEnvelopes.getOrElse(settings.groupAfterEnvelopes)
         val groupAfterDuration = grouped.orAfterDuration.getOrElse(settings.groupAfterDuration)
-        val handler = grouped.handler()
+
+        val observer = new GroupedHandlerObserver[Envelope](
+          projectionId,
+          statusObserver,
+          telemetry,
+          sourceProvider.extractCreationTime)
+
+        val handler = grouped.handler().observable(observer)
 
         source
           .groupedWithin(groupAfterEnvelopes, groupAfterDuration)
@@ -365,19 +365,18 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
 
     handlerStrategy match {
       case single: SingleHandlerStrategy[Envelope] @unchecked =>
-        val handler = single.handler()
+        val observer =
+          new SingleHandlerObserver[Envelope](
+            projectionId,
+            statusObserver,
+            telemetry,
+            sourceProvider.extractCreationTime)
+
+        val handler = single.handler().observable(observer)
         source
           .mapAsync(parallelism = 1) { context =>
             saveOffsetAndReport(projectionId, context, 1).flatMap { _ =>
-              val measured: () => Future[Done] = { () =>
-                handler.process(context.envelope).map { done =>
-                  statusObserver.afterProcess(projectionId, context.envelope)
-                  // `telemetry.afterProcess` is invoked immediately after `handler.process`
-                  telemetry.afterProcess(context.externalContext)
-                  done
-                }
-              }
-
+              val measured: () => Future[Done] = () => handler.process(context.envelope)
               handlerRecovery
                 .applyRecovery(context.envelope, context.offset, context.offset, abort.future, measured)
             }
@@ -413,9 +412,8 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         })
         .via(killSwitch.flow)
         .map { env =>
-          statusObserver.beforeProcess(projectionId, env)
-          val externalContext = telemetry.beforeProcess(env, sourceProvider.extractCreationTime(env))
-          ProjectionContextImpl(sourceProvider.extractOffset(env), env, externalContext)
+          // note: external context and observer only used for flow handlers
+          ProjectionContextImpl(sourceProvider.extractOffset(env), env)
         }
         .filter { context =>
           sourceProvider match {
