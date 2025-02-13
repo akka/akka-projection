@@ -44,11 +44,14 @@ import akka.projection.internal.AtMostOnce
 import akka.projection.internal.CanTriggerReplay
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
+import akka.projection.internal.HandlerObserver
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.JavaToScalaBySliceSourceProviderAdapter
 import akka.projection.internal.ManagementState
+import akka.projection.internal.ObservableFlowHandler
+import akka.projection.internal.ObservableHandler
 import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.OffsetStrategy
 import akka.projection.internal.ProjectionContextImpl
@@ -64,6 +67,7 @@ import akka.projection.scaladsl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.RestartSettings
+import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
 import org.slf4j.Logger
@@ -185,7 +189,7 @@ private[projection] object R2dbcProjectionImpl {
     () =>
 
       new AdaptedR2dbcHandler(handlerFactory()) {
-        override def process(envelope: Envelope): Future[Done] = {
+        override def adaptedProcess(delegate: R2dbcHandler[Envelope], envelope: Envelope): Future[Done] = {
           import R2dbcOffsetStore.Validation._
           offsetStore
             .validate(envelope)
@@ -211,16 +215,16 @@ private[projection] object R2dbcProjectionImpl {
               case Duplicate =>
                 FutureDone
               case RejectedSeqNr =>
-                replay(envelope).map(_ => Done)(ExecutionContext.parasitic)
+                replay(delegate, envelope).map(_ => Done)(ExecutionContext.parasitic)
               case RejectedBacktrackingSeqNr =>
-                replay(envelope).map {
+                replay(delegate, envelope).map {
                   case true  => Done
                   case false => throwRejectedEnvelope(sourceProvider, envelope)
                 }
             }
         }
 
-        private def replay(originalEnvelope: Envelope): Future[Boolean] = {
+        private def replay(delegate: R2dbcHandler[Envelope], originalEnvelope: Envelope): Future[Boolean] = {
           replayIfPossible(offsetStore, sourceProvider, originalEnvelope) { envelope =>
             val offset = extractOffsetPidSeqNr(sourceProvider, envelope.asInstanceOf[Envelope])
             if (isFilteredEvent(envelope)) {
@@ -251,7 +255,7 @@ private[projection] object R2dbcProjectionImpl {
       system: ActorSystem[_]): () => Handler[immutable.Seq[Envelope]] = { () =>
 
     new AdaptedR2dbcHandler(handlerFactory()) {
-      override def process(envelopes: Seq[Envelope]): Future[Done] = {
+      override def adaptedProcess(delegate: R2dbcHandler[Seq[Envelope]], envelopes: Seq[Envelope]): Future[Done] = {
         import R2dbcOffsetStore.Validation._
         offsetStore.validateAll(envelopes).flatMap { isAcceptedEnvelopes =>
           // For simplicity we process the replayed envelopes one by one (group of 1), and also store the
@@ -261,11 +265,11 @@ private[projection] object R2dbcProjectionImpl {
             isAcceptedEnvelopes.foldLeft(FutureDone) {
               case (previous, (env, RejectedSeqNr)) =>
                 previous.flatMap { _ =>
-                  replay(env).map(_ => Done)(ExecutionContext.parasitic)
+                  replay(delegate, env).map(_ => Done)(ExecutionContext.parasitic)
                 }
               case (previous, (env, RejectedBacktrackingSeqNr)) =>
                 previous.flatMap { _ =>
-                  replay(env).map {
+                  replay(delegate, env).map {
                     case true  => Done
                     case false => throwRejectedEnvelope(sourceProvider, env)
                   }
@@ -325,7 +329,7 @@ private[projection] object R2dbcProjectionImpl {
         }
       }
 
-      private def replay(originalEnvelope: Envelope): Future[Boolean] = {
+      private def replay(delegate: R2dbcHandler[Seq[Envelope]], originalEnvelope: Envelope): Future[Boolean] = {
         replayIfPossible(offsetStore, sourceProvider, originalEnvelope) { envelope =>
           val offset = extractOffsetPidSeqNr(sourceProvider, envelope.asInstanceOf[Envelope])
           if (isFilteredEvent(envelope)) {
@@ -351,7 +355,7 @@ private[projection] object R2dbcProjectionImpl {
       r2dbcExecutor: R2dbcExecutor)(implicit ec: ExecutionContext, system: ActorSystem[_]): () => Handler[Envelope] = {
     () =>
       new AdaptedR2dbcHandler(handlerFactory()) {
-        override def process(envelope: Envelope): Future[Done] = {
+        override def adaptedProcess(delegate: R2dbcHandler[Envelope], envelope: Envelope): Future[Done] = {
           import R2dbcOffsetStore.Validation._
           offsetStore
             .validate(envelope)
@@ -377,16 +381,16 @@ private[projection] object R2dbcProjectionImpl {
               case Duplicate =>
                 FutureDone
               case RejectedSeqNr =>
-                replay(envelope).map(_ => Done)(ExecutionContext.parasitic)
+                replay(delegate, envelope).map(_ => Done)(ExecutionContext.parasitic)
               case RejectedBacktrackingSeqNr =>
-                replay(envelope).map {
+                replay(delegate, envelope).map {
                   case true  => Done
                   case false => throwRejectedEnvelope(sourceProvider, envelope)
                 }
             }
         }
 
-        private def replay(originalEnvelope: Envelope): Future[Boolean] = {
+        private def replay(delegate: R2dbcHandler[Envelope], originalEnvelope: Envelope): Future[Boolean] = {
           replayIfPossible(offsetStore, sourceProvider, originalEnvelope) { envelope =>
             if (isFilteredEvent(envelope)) {
               offsetStore.addInflight(envelope)
@@ -415,7 +419,7 @@ private[projection] object R2dbcProjectionImpl {
       offsetStore: R2dbcOffsetStore)(implicit ec: ExecutionContext, system: ActorSystem[_]): () => Handler[Envelope] = {
     () =>
       new AdaptedHandler(handlerFactory()) {
-        override def process(envelope: Envelope): Future[Done] = {
+        override def adaptedProcess(delegate: Handler[Envelope], envelope: Envelope): Future[Done] = {
           import R2dbcOffsetStore.Validation._
           offsetStore
             .validate(envelope)
@@ -437,16 +441,16 @@ private[projection] object R2dbcProjectionImpl {
               case Duplicate =>
                 FutureDone
               case RejectedSeqNr =>
-                replay(envelope).map(_ => Done)(ExecutionContext.parasitic)
+                replay(delegate, envelope).map(_ => Done)(ExecutionContext.parasitic)
               case RejectedBacktrackingSeqNr =>
-                replay(envelope).map {
+                replay(delegate, envelope).map {
                   case true  => Done
                   case false => throwRejectedEnvelope(sourceProvider, envelope)
                 }
             }
         }
 
-        private def replay(originalEnvelope: Envelope): Future[Boolean] = {
+        private def replay(delegate: Handler[Envelope], originalEnvelope: Envelope): Future[Boolean] = {
           replayIfPossible(offsetStore, sourceProvider, originalEnvelope) { envelope =>
             if (isFilteredEvent(envelope)) {
               offsetStore.addInflight(envelope)
@@ -473,7 +477,7 @@ private[projection] object R2dbcProjectionImpl {
       system: ActorSystem[_]): () => Handler[immutable.Seq[Envelope]] = { () =>
 
     new AdaptedHandler(handlerFactory()) {
-      override def process(envelopes: Seq[Envelope]): Future[Done] = {
+      override def adaptedProcess(delegate: Handler[Seq[Envelope]], envelopes: Seq[Envelope]): Future[Done] = {
         import R2dbcOffsetStore.Validation._
         offsetStore.validateAll(envelopes).flatMap { isAcceptedEnvelopes =>
           // For simplicity we process the replayed envelopes one by one (group of 1), and also store the
@@ -483,11 +487,11 @@ private[projection] object R2dbcProjectionImpl {
             isAcceptedEnvelopes.foldLeft(FutureDone) {
               case (previous, (env, RejectedSeqNr)) =>
                 previous.flatMap { _ =>
-                  replay(env).map(_ => Done)(ExecutionContext.parasitic)
+                  replay(delegate, env).map(_ => Done)(ExecutionContext.parasitic)
                 }
               case (previous, (env, RejectedBacktrackingSeqNr)) =>
                 previous.flatMap { _ =>
-                  replay(env).map {
+                  replay(delegate, env).map {
                     case true  => Done
                     case false => throwRejectedEnvelope(sourceProvider, env)
                   }
@@ -545,7 +549,7 @@ private[projection] object R2dbcProjectionImpl {
         }
       }
 
-      private def replay(originalEnvelope: Envelope): Future[Boolean] = {
+      private def replay(delegate: Handler[Seq[Envelope]], originalEnvelope: Envelope): Future[Boolean] = {
         replayIfPossible(offsetStore, sourceProvider, originalEnvelope) { envelope =>
           val offset = extractOffsetPidSeqNr(sourceProvider, envelope.asInstanceOf[Envelope])
           if (isFilteredEvent(envelope)) {
@@ -572,9 +576,9 @@ private[projection] object R2dbcProjectionImpl {
     import R2dbcOffsetStore.Validation._
     implicit val ec: ExecutionContext = system.executionContext
 
-    // This is similar to DynamoDBProjectionImpl.replayIfPossible but difficult to extract common parts
+    // This is similar to R2dbcProjectionImpl.replayIfPossible but difficult to extract common parts
     // since this is flow processing
-    def replayIfPossible(originalEnvelope: Envelope): Future[Boolean] = {
+    def replayIfPossible(originalEnvelope: Envelope, observer: HandlerObserver[Envelope]): Future[Boolean] = {
       val logPrefix = offsetStore.logPrefix
       originalEnvelope match {
         case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
@@ -619,12 +623,10 @@ private[projection] object R2dbcProjectionImpl {
                           }
                       }
                       .collect {
-                        case Some(env) =>
-                          // FIXME: should we supply a projection context?
-                          // FIXME: add projection telemetry to all replays? (with a new envelope source?)
-                          env -> ProjectionContextImpl(sourceProvider.extractOffset(env), env, null)
+                        // FIXME: use a new envelope source for replays, for observability?
+                        case Some(env) => ProjectionContextImpl(sourceProvider.extractOffset(env), env)
                       }
-                      .via(handler.asFlow)
+                      .via(ObservableFlowHandler(handler.asFlow, observer))
                       .run()
                       .map(_ => true)(ExecutionContext.parasitic)
                       .recoverWith { exc =>
@@ -649,34 +651,40 @@ private[projection] object R2dbcProjectionImpl {
       }
     }
 
-    FlowWithContext[Envelope, ProjectionContext]
-      .mapAsync(1) { env =>
-        offsetStore
-          .validate(env)
-          .flatMap {
-            case Accepted =>
-              if (isFilteredEvent(env) && settings.warnAboutFilteredEventsInFlow) {
-                log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", env)
-              }
-              loadEnvelope(env, sourceProvider).map { loadedEnvelope =>
-                offsetStore.addInflight(loadedEnvelope)
-                Some(loadedEnvelope)
-              }
-            case Duplicate =>
-              Future.successful(None)
-            case RejectedSeqNr =>
-              replayIfPossible(env).map(_ => None)(ExecutionContext.parasitic)
-            case RejectedBacktrackingSeqNr =>
-              replayIfPossible(env).map {
-                case true  => None
-                case false => throwRejectedEnvelope(sourceProvider, env)
-              }
-          }
+    def observer(context: ProjectionContext): HandlerObserver[Envelope] =
+      context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]].observer
+
+    val validate = Flow[(Envelope, ProjectionContext)]
+      .mapAsync(1) {
+        case (env, context) =>
+          offsetStore
+            .validate(env)
+            .flatMap {
+              case Accepted =>
+                if (isFilteredEvent(env) && settings.warnAboutFilteredEventsInFlow) {
+                  log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", env)
+                }
+                loadEnvelope(env, sourceProvider).map { loadedEnvelope =>
+                  offsetStore.addInflight(loadedEnvelope)
+                  Some((loadedEnvelope, context))
+                }
+              case Duplicate =>
+                Future.successful(None)
+              case RejectedSeqNr =>
+                replayIfPossible(env, observer(context)).map(_ => None)(ExecutionContext.parasitic)
+              case RejectedBacktrackingSeqNr =>
+                replayIfPossible(env, observer(context)).map {
+                  case true  => None
+                  case false => throwRejectedEnvelope(sourceProvider, env)
+                }
+            }
       }
       .collect {
-        case Some(env) =>
-          env
+        case Some(envelopeAndContext) => envelopeAndContext
       }
+
+    FlowWithContext[Envelope, ProjectionContext]
+      .via(validate)
       .via(handler)
   }
 
@@ -889,28 +897,68 @@ private[projection] object R2dbcProjectionImpl {
   }
 
   @nowarn("msg=never used")
-  abstract class AdaptedR2dbcHandler[E](val delegate: R2dbcHandler[E])(
+  private abstract class AdaptedR2dbcHandler[E](delegate: R2dbcHandler[E])(
       implicit
       ec: ExecutionContext,
       system: ActorSystem[_])
-      extends Handler[E] {
+      extends Handler[E] { self =>
 
-    override def start(): Future[Done] =
-      delegate.start()
+    override def start(): Future[Done] = delegate.start()
 
-    override def stop(): Future[Done] =
-      delegate.stop()
+    override def stop(): Future[Done] = delegate.stop()
+
+    def adaptedProcess(delegate: R2dbcHandler[E], envelope: E): Future[Done]
+
+    override final def process(envelope: E): Future[Done] = adaptedProcess(delegate, envelope)
+
+    // only observe when the delegate handler process is called
+    override private[projection] def observable(observer: HandlerObserver[E]): Handler[E] = new Handler[E] {
+      val observableDelegate = new ObservableR2dbcHandler(delegate, observer)
+
+      override def start(): Future[Done] = self.start()
+
+      override def stop(): Future[Done] = self.stop()
+
+      override def process(envelope: E): Future[Done] = self.adaptedProcess(observableDelegate, envelope)
+    }
+  }
+
+  private final class ObservableR2dbcHandler[Envelope](
+      handler: R2dbcHandler[Envelope],
+      observer: HandlerObserver[Envelope])
+      extends R2dbcHandler[Envelope] {
+
+    override def start(): Future[Done] = handler.start()
+
+    override def stop(): Future[Done] = handler.stop()
+
+    override def process(session: R2dbcSession, envelope: Envelope): Future[Done] = {
+      ObservableHandler.observeProcess(observer, envelope, handler.process(session, _))
+    }
   }
 
   @nowarn("msg=never used")
-  abstract class AdaptedHandler[E](val delegate: Handler[E])(implicit ec: ExecutionContext, system: ActorSystem[_])
-      extends Handler[E] {
+  private abstract class AdaptedHandler[E](delegate: Handler[E])(implicit ec: ExecutionContext, system: ActorSystem[_])
+      extends Handler[E] { self =>
 
-    override def start(): Future[Done] =
-      delegate.start()
+    override def start(): Future[Done] = delegate.start()
 
-    override def stop(): Future[Done] =
-      delegate.stop()
+    override def stop(): Future[Done] = delegate.stop()
+
+    def adaptedProcess(delegate: Handler[E], envelope: E): Future[Done]
+
+    override final def process(envelope: E): Future[Done] = adaptedProcess(delegate, envelope)
+
+    // only observe when the delegate handler process is called
+    override private[projection] def observable(observer: HandlerObserver[E]): Handler[E] = new Handler[E] {
+      private val observableDelegate = delegate.observable(observer)
+
+      override def start(): Future[Done] = self.start()
+
+      override def stop(): Future[Done] = self.stop()
+
+      override def process(envelope: E): Future[Done] = self.adaptedProcess(observableDelegate, envelope)
+    }
   }
 
 }
@@ -1101,7 +1149,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         offsetStore
           .saveOffsets(offsets)
           .map { done =>
-            val batchSize = acceptedContexts.map { _.groupSize }.sum
+            val batchSize = batch.map { _.groupSize }.sum
             val last = acceptedContexts.last
             try {
               statusObserver.offsetProgress(projectionId, last.envelope)

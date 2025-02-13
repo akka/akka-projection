@@ -31,7 +31,7 @@ abstract class StatusObserver[-Envelope] {
   def stopped(projectionId: ProjectionId): Unit
 
   /**
-   * Called as soon as an envelop is ready to be processed. The envelope processing may
+   * Called as soon as an envelope is ready to be processed. The envelope processing may
    * not start immediately if grouping or batching are enabled.
    */
   def beforeProcess(projectionId: ProjectionId, envelope: Envelope): Unit

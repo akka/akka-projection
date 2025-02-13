@@ -1,0 +1,3 @@
+# internal
+ProblemFilters.exclude[Problem]("akka.projection.dynamodb.internal.DynamoDBProjectionImpl#AdaptedHandler.*")
+ProblemFilters.exclude[Problem]("akka.projection.dynamodb.internal.DynamoDBProjectionImpl#AdaptedDynamoDBTransactHandler.*")

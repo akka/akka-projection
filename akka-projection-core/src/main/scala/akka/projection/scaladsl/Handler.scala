@@ -9,6 +9,8 @@ import scala.util.control.NonFatal
 
 import akka.Done
 import akka.annotation.InternalApi
+import akka.projection.internal.HandlerObserver
+import akka.projection.internal.ObservableHandler
 
 object Handler {
 
@@ -43,6 +45,10 @@ trait Handler[Envelope] extends HandlerLifecycle {
    */
   def process(envelope: Envelope): Future[Done]
 
+  /** INTERNAL API */
+  @InternalApi
+  private[projection] def observable(observer: HandlerObserver[Envelope]): Handler[Envelope] =
+    new ObservableHandler[Envelope](this, observer)
 }
 
 trait HandlerLifecycle {
