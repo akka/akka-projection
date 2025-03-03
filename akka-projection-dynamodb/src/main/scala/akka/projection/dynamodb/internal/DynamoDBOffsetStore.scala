@@ -6,7 +6,7 @@ package akka.projection.dynamodb.internal
 
 import java.time.Clock
 import java.time.Instant
-import java.time.{Duration => JDuration}
+import java.time.{ Duration => JDuration }
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec

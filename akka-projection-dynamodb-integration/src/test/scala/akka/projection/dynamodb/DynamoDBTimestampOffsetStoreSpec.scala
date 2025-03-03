@@ -5,7 +5,7 @@
 package akka.projection.dynamodb
 
 import java.time.Instant
-import java.time.{Duration => JDuration}
+import java.time.{ Duration => JDuration }
 import java.util.UUID
 
 import scala.concurrent.Await
