@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2024 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2024-2025 Lightbend Inc. <https://www.lightbend.com>
  */
+
 package akka.projection
 
 /**
