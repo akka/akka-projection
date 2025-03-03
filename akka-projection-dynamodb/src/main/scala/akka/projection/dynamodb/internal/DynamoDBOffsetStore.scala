@@ -6,7 +6,7 @@ package akka.projection.dynamodb.internal
 
 import java.time.Clock
 import java.time.Instant
-import java.time.{ Duration => JDuration }
+import java.time.{Duration => JDuration}
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
@@ -27,6 +27,7 @@ import akka.persistence.query.TimestampOffsetBySlice
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
+import akka.projection.AllowSeqNrGapsMetadata
 import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionId
 import akka.projection.dynamodb.DynamoDBProjectionSettings
@@ -765,11 +766,13 @@ private[projection] class DynamoDBOffsetStore(
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(eventEnvelope.persistenceId)
+        // Allow gaps if envelope has AllowSeqNrGapsMetadata
+        val strictSeqNr = eventEnvelope.metadata[AllowSeqNrGapsMetadata.type].isEmpty
         Some(
           RecordWithOffset(
             Record(slice, eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp),
             timestampOffset,
-            strictSeqNr = true,
+            strictSeqNr,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(eventEnvelope),
             fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope),
             fromSnapshot = EnvelopeOrigin.fromSnapshot(eventEnvelope)))

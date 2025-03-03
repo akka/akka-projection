@@ -33,6 +33,7 @@ import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.r2dbc.internal.EnvelopeOrigin
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.typed.PersistenceId
+import akka.projection.AllowSeqNrGapsMetadata
 import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
@@ -1213,11 +1214,13 @@ private[projection] class R2dbcOffsetStore(
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(eventEnvelope.persistenceId)
+        // Allow gaps if envelope has AllowSeqNrGapsMetadata
+        val strictSeqNr = eventEnvelope.metadata[AllowSeqNrGapsMetadata.type].isEmpty
         Some(
           RecordWithOffset(
             Record(slice, eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp),
             timestampOffset,
-            strictSeqNr = true,
+            strictSeqNr,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(eventEnvelope),
             fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope),
             fromSnapshot = EnvelopeOrigin.fromSnapshot(eventEnvelope)))

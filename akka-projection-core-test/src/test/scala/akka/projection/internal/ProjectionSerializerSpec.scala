@@ -9,6 +9,7 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
+import akka.projection.AllowSeqNrGapsMetadata
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.serialization.SerializationExtension
@@ -32,7 +33,8 @@ class ProjectionSerializerSpec extends ScalaTestWithActorTestKit with AnyWordSpe
       "SetOffset None" -> SetOffset(projectionId, None, ref),
       "IsPaused" -> IsPaused(projectionId, ref),
       "SetPaused true" -> SetPaused(projectionId, paused = true, ref),
-      "SetPaused false" -> SetPaused(projectionId, paused = false, ref)).foreach {
+      "SetPaused false" -> SetPaused(projectionId, paused = false, ref),
+      "AllowSeqNrGapsMetadata" -> AllowSeqNrGapsMetadata).foreach {
       case (scenario, item) =>
         s"resolve serializer for $scenario" in {
           val serializer = SerializationExtension(classicSystem)

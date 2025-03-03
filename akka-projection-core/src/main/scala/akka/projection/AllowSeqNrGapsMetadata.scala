@@ -1,0 +1,19 @@
+/*
+ * Copyright (C) 2024 Lightbend Inc. <https://www.lightbend.com>
+ */
+package akka.projection
+
+/**
+ * When used as metadata of the EventEnvelope the offset store will allow gaps
+ * in sequence numbers when validating the offset.
+ */
+object AllowSeqNrGapsMetadata extends AllowSeqNrGapsMetadata {
+
+  /**
+   * Java API: The singleton instance
+   */
+  def getInstance: AllowSeqNrGapsMetadata = AllowSeqNrGapsMetadata
+
+}
+
+trait AllowSeqNrGapsMetadata

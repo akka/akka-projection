@@ -10,6 +10,7 @@ import akka.Done
 import akka.actor.typed.ActorRefResolver
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.InternalApi
+import akka.projection.AllowSeqNrGapsMetadata
 import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
@@ -39,23 +40,26 @@ import akka.serialization.SerializerWithStringManifest
   private val SetOffsetManifest = "c"
   private val IsPausedManifest = "d"
   private val SetPausedManifest = "e"
+  private val AllowSeqNrGapsMetadataManifest = "f"
 
   override def manifest(o: AnyRef): String = o match {
-    case _: GetOffset[_]     => GetOffsetManifest
-    case _: CurrentOffset[_] => CurrentOffsetManifest
-    case _: SetOffset[_]     => SetOffsetManifest
-    case _: IsPaused         => IsPausedManifest
-    case _: SetPaused        => SetPausedManifest
+    case _: GetOffset[_]           => GetOffsetManifest
+    case _: CurrentOffset[_]       => CurrentOffsetManifest
+    case _: SetOffset[_]           => SetOffsetManifest
+    case _: IsPaused               => IsPausedManifest
+    case _: SetPaused              => SetPausedManifest
+    case _: AllowSeqNrGapsMetadata => AllowSeqNrGapsMetadataManifest
     case _ =>
       throw new IllegalArgumentException(s"Can't serialize object of type ${o.getClass} in [${getClass.getName}]")
   }
 
   override def toBinary(o: AnyRef): Array[Byte] = o match {
-    case m: GetOffset[_]     => getOffsetToBinary(m)
-    case m: CurrentOffset[_] => currentOffsetToBinary(m)
-    case m: SetOffset[_]     => setOffsetToBinary(m)
-    case m: IsPaused         => isPausedToBinary(m)
-    case m: SetPaused        => setPausedToBinary(m)
+    case m: GetOffset[_]           => getOffsetToBinary(m)
+    case m: CurrentOffset[_]       => currentOffsetToBinary(m)
+    case m: SetOffset[_]           => setOffsetToBinary(m)
+    case m: IsPaused               => isPausedToBinary(m)
+    case m: SetPaused              => setPausedToBinary(m)
+    case _: AllowSeqNrGapsMetadata => Array.emptyByteArray
     case _ =>
       throw new IllegalArgumentException(s"Cannot serialize object of type [${o.getClass.getName}]")
   }
@@ -118,11 +122,12 @@ import akka.serialization.SerializerWithStringManifest
   }
 
   override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = manifest match {
-    case GetOffsetManifest     => getOffsetFromBinary(bytes)
-    case CurrentOffsetManifest => currentOffsetFromBinary(bytes)
-    case SetOffsetManifest     => setOffsetFromBinary(bytes)
-    case IsPausedManifest      => isPausedFromBinary(bytes)
-    case SetPausedManifest     => setPausedFromBinary(bytes)
+    case GetOffsetManifest              => getOffsetFromBinary(bytes)
+    case CurrentOffsetManifest          => currentOffsetFromBinary(bytes)
+    case SetOffsetManifest              => setOffsetFromBinary(bytes)
+    case IsPausedManifest               => isPausedFromBinary(bytes)
+    case SetPausedManifest              => setPausedFromBinary(bytes)
+    case AllowSeqNrGapsMetadataManifest => AllowSeqNrGapsMetadata
     case _ =>
       throw new NotSerializableException(
         s"Unimplemented deserialization of message with manifest [$manifest] in [${getClass.getName}]")
