@@ -591,6 +591,39 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.validate(createEnvelope(pid1, 6L, startTime, "e1-6")).futureValue shouldBe Duplicate
     }
 
+    "accept when previous timestamp is before configured accept-when-previous-timestamp-before" in {
+      import R2dbcOffsetStore.Validation._
+      val projectionId = genRandomProjectionId()
+      val eventTimestampQueryClock = TestClock.nowMicros()
+      val startTime = TestClock.nowMicros().instant()
+
+      val offsetStore = createOffsetStore(
+        projectionId,
+        eventTimestampQueryClock = eventTimestampQueryClock,
+        customSettings = settings.withAcceptWhenPreviousTimestampBefore(startTime.minusSeconds(3600)))
+
+      val startOffset = offsetStore.readOffset[TimestampOffset]().futureValue
+      startOffset.get.timestamp shouldBe startTime.minusSeconds(3600)
+
+      // these pids have the same slice 645
+      val p1 = "p500" // slice 645
+      val p2 = "p621" // same slice 645
+      // reject unknown
+      val offset1 = TimestampOffset(startTime.plusMillis(8), Map(p1 -> 7L))
+      val env1 = createEnvelope(p1, 7L, offset1.timestamp, "e1-7")
+      offsetStore.validate(env1).futureValue shouldBe RejectedSeqNr
+      offsetStore.validate(backtrackingEnvelope(env1)).futureValue shouldBe RejectedBacktrackingSeqNr
+      // but accepted if timestamp of previous sequence number is before accept-when-previous-timestamp-before,
+      // even when there are no previously stored offsets
+      eventTimestampQueryClock.setInstant(startTime.minusSeconds(3600).minusMillis(1))
+      offsetStore.validate(env1).futureValue shouldBe Accepted
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+
+      // and same for another pid of same slice even though there is a stored offset
+      val env2 = createEnvelope(p2, 3L, startTime.plusMillis(9), "e2-3")
+      offsetStore.validate(env2).futureValue shouldBe Accepted
+    }
+
     "update inflight on error and re-accept element" in {
       import R2dbcOffsetStore.Validation._
       val projectionId = genRandomProjectionId()
