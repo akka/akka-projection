@@ -22,6 +22,7 @@ import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.persistence.r2dbc.internal.EnvelopeOrigin
 import akka.persistence.typed.PersistenceId
+import akka.projection.AllowSeqNrGapsMetadata
 import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
@@ -721,6 +722,83 @@ class R2dbcTimestampOffsetStoreSpec
 
       // accept unknown
       val env7 = createUpdatedDurableState("p5", 7L, startTime.plusMillis(8), "s5-7")
+      offsetStore.validate(env7).futureValue shouldBe Accepted
+      offsetStore.addInflight(env7)
+
+      // it's keeping the inflight that are not in the "stored" state
+      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 20L, "p4" -> 2L, "p5" -> 7L)
+      // and they are removed from inflight once they have been stored
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(2), Map("p4" -> 2L)), "p4", 2L))
+        .futureValue
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(9), Map("p5" -> 8L)), "p5", 8L))
+        .futureValue
+      offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 20L)
+    }
+
+    "accept gaps when envelope has AllowSeqNrGapsMetadata" in {
+      import R2dbcOffsetStore.Validation._
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val startTime = TestClock.nowMicros().instant()
+      val offset1 = TimestampOffset(startTime, Map("p1" -> 3L, "p2" -> 1L, "p3" -> 5L))
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p2", 1L)).futureValue
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p3", 5L)).futureValue
+
+      // seqNr 1 is always accepted
+      val env1 = createEnvelope("p4", 1L, startTime.plusMillis(1), "s4-1").withMetadata(AllowSeqNrGapsMetadata)
+      offsetStore.validate(env1).futureValue shouldBe Accepted
+      // but not if already inflight, seqNr 1 was accepted
+      offsetStore.addInflight(env1)
+      offsetStore
+        .validate(createEnvelope("p4", 1L, startTime.plusMillis(1), "s4-1").withMetadata(AllowSeqNrGapsMetadata))
+        .futureValue shouldBe Duplicate
+      // subsequent seqNr is accepted
+      val env2 = createEnvelope("p4", 2L, startTime.plusMillis(2), "s4-2").withMetadata(AllowSeqNrGapsMetadata)
+      offsetStore.validate(env2).futureValue shouldBe Accepted
+      offsetStore.addInflight(env2)
+      // and also ok with gap
+      offsetStore
+        .validate(createEnvelope("p4", 4L, startTime.plusMillis(3), "s4-4").withMetadata(AllowSeqNrGapsMetadata))
+        .futureValue shouldBe Accepted
+      // and not if later already inflight, seqNr 2 was accepted
+      offsetStore
+        .validate(createEnvelope("p4", 1L, startTime.plusMillis(1), "s4-1").withMetadata(AllowSeqNrGapsMetadata))
+        .futureValue shouldBe Duplicate
+
+      // greater than known is accepted
+      val env3 = createEnvelope("p1", 4L, startTime.plusMillis(4), "s1-4").withMetadata(AllowSeqNrGapsMetadata)
+      offsetStore.validate(env3).futureValue shouldBe Accepted
+      // but not same
+      offsetStore
+        .validate(createEnvelope("p3", 5L, startTime, "s3-5").withMetadata(AllowSeqNrGapsMetadata))
+        .futureValue shouldBe Duplicate
+      // but not same, even if it's 1
+      offsetStore
+        .validate(createEnvelope("p2", 1L, startTime, "s2-1").withMetadata(AllowSeqNrGapsMetadata))
+        .futureValue shouldBe Duplicate
+      // and not less
+      offsetStore
+        .validate(createEnvelope("p3", 4L, startTime, "s3-4").withMetadata(AllowSeqNrGapsMetadata))
+        .futureValue shouldBe Duplicate
+      offsetStore.addInflight(env3)
+
+      // greater than known, and then also subsequent are accepted (needed for grouped)
+      val env4 = createEnvelope("p3", 8L, startTime.plusMillis(5), "s3-6").withMetadata(AllowSeqNrGapsMetadata)
+      offsetStore.validate(env4).futureValue shouldBe Accepted
+      offsetStore.addInflight(env4)
+      val env5 = createEnvelope("p3", 9L, startTime.plusMillis(6), "s3-7").withMetadata(AllowSeqNrGapsMetadata)
+      offsetStore.validate(env5).futureValue shouldBe Accepted
+      offsetStore.addInflight(env5)
+      val env6 = createEnvelope("p3", 20L, startTime.plusMillis(7), "s3-8").withMetadata(AllowSeqNrGapsMetadata)
+      offsetStore.validate(env6).futureValue shouldBe Accepted
+      offsetStore.addInflight(env6)
+
+      // accept unknown
+      val env7 = createEnvelope("p5", 7L, startTime.plusMillis(8), "s5-7").withMetadata(AllowSeqNrGapsMetadata)
       offsetStore.validate(env7).futureValue shouldBe Accepted
       offsetStore.addInflight(env7)
 
