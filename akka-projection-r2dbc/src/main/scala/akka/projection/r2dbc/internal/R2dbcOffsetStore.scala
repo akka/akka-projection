@@ -381,7 +381,11 @@ private[projection] class R2dbcOffsetStore(
       case Some(_) =>
         readTimestampOffset().flatMap {
           case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
-          case None    => readPrimitiveOffset()
+          case None =>
+            settings.acceptWhenPreviousTimestampBefore match {
+              case Some(t) => Future.successful(Some(TimestampOffset(t, Map.empty).asInstanceOf[Offset]))
+              case None    => readPrimitiveOffset()
+            }
         }
       case None =>
         readPrimitiveOffset()

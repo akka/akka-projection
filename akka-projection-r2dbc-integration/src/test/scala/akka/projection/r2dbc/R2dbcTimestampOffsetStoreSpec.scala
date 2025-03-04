@@ -602,6 +602,9 @@ class R2dbcTimestampOffsetStoreSpec
         eventTimestampQueryClock = eventTimestampQueryClock,
         customSettings = settings.withAcceptWhenPreviousTimestampBefore(startTime.minusSeconds(3600)))
 
+      val startOffset = offsetStore.readOffset[TimestampOffset]().futureValue
+      startOffset.get.timestamp shouldBe startTime.minusSeconds(3600)
+
       // these pids have the same slice 645
       val p1 = "p500" // slice 645
       val p2 = "p621" // same slice 645
