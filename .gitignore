@@ -13,6 +13,7 @@ akka-projection-slick/src/it/resources/container-license-acceptance.txt
 
 .bsp
 .metals
+metals.sbt
 .vscode
 
 # attachments created by scripts/prepare-downloads.sh

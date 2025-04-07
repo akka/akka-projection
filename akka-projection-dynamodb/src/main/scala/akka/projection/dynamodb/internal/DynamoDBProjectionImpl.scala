@@ -62,6 +62,7 @@ import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.QueryableForMaxOffsetSourceProvider
 import akka.stream.RestartSettings
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.FlowWithContext
@@ -1089,11 +1090,16 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
     }
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new DynamoDBRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
+      new DynamoDBRunningProjection(
+        RunningProjection.withBackoff(() => this.mappedSource(), settings),
+        this,
+        QueryableForMaxOffsetSourceProvider.maybe(sourceProvider))
   }
 
-  private class DynamoDBRunningProjection(source: Source[Done, _], projectionState: DynamoDBInternalProjectionState)(
-      implicit system: ActorSystem[_])
+  private class DynamoDBRunningProjection(
+      source: Source[Done, _],
+      projectionState: DynamoDBInternalProjectionState,
+      maxOffsetSourceProvider: Option[QueryableForMaxOffsetSourceProvider[Offset, _]])(implicit system: ActorSystem[_])
       extends RunningProjection
       with RunningProjectionManagement[Offset] {
 
@@ -1129,6 +1135,23 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =
       offsetStore.savePaused(paused)
+
+    override def getSourceMaxOffset(): Future[Option[Offset]] =
+      maxOffsetSourceProvider match {
+        case Some(provider) => provider.maxOffset()
+        case None =>
+          Future.failed(new IllegalStateException("Source provider does not support querying for max offset"))
+      }
+
+    override def getLag(): Future[Option[Long]] =
+      getSourceMaxOffset().flatMap {
+        _.fold(Future.successful(Option.empty[Long])) { srcOffset =>
+          val provider = maxOffsetSourceProvider.get // safe, future will have already failed if None
+          getOffset().map { maybeCommittedOffset =>
+            maybeCommittedOffset.flatMap(provider.calculateDifference(_, srcOffset))
+          }(system.executionContext)
+        }
+      }(system.executionContext)
   }
 
 }

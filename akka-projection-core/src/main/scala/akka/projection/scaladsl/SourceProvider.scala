@@ -33,3 +33,18 @@ trait VerifiableSourceProvider[Offset, Envelope] extends SourceProvider[Offset, 
 }
 
 trait MergeableOffsetSourceProvider[Offset <: MergeableOffset[_], Envelope] extends SourceProvider[Offset, Envelope]
+
+trait QueryableForMaxOffsetSourceProvider[Offset, Envelope] extends SourceProvider[Offset, Envelope] {
+  def maxOffset(): Future[Option[Offset]]
+  def calculateDifference(consumerOffset: Offset, maxOffset: Offset): Option[Long]
+}
+
+object QueryableForMaxOffsetSourceProvider {
+  def maybe[Offset, Envelope](sourceProvider: SourceProvider[Offset, Envelope])
+      : Option[QueryableForMaxOffsetSourceProvider[Offset, Envelope]] = {
+    sourceProvider match {
+      case queryable: QueryableForMaxOffsetSourceProvider[_, _] => Some(queryable)
+      case _                                                    => None
+    }
+  }
+}

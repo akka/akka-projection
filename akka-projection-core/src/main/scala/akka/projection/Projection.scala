@@ -134,4 +134,22 @@ private[projection] trait RunningProjectionManagement[Offset] {
   def setOffset(offset: Option[Offset]): Future[Done]
   def getManagementState(): Future[Option[ManagementState]]
   def setPaused(paused: Boolean): Future[Done]
+
+  /** Not necessarily available for projections with all sources: future will fail with IllegalStateException
+   *  if source does not support this operation
+   */
+  def getSourceMaxOffset(): Future[Option[Offset]]
+
+  /** Computes the lag between the last saved offset for the projection and the max offset emittable by the
+   *  source.
+   *
+   *  The returned future should fail with IllegalStateException if getSourceMaxOffset() fails with an
+   *  IllegalStateException.
+   *
+   *  The returned future will complete with None if lag could not be computed now, but might be computable later.
+   *  The returned future will complete positive if the saved offset is behind the source max offset.
+   *  The returned future will complete zero if exactly caught up.
+   *  The returned future will complete non-positive if the saved offset is ahead of max offset.
+   */
+  def getLag(): Future[Option[Long]]
 }
