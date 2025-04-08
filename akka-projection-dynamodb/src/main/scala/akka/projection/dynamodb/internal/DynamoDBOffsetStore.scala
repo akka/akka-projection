@@ -474,6 +474,15 @@ private[projection] class DynamoDBOffsetStore(
             else
               dao.storeTimestampOffsets(changedOffsetBySlice)
           storeOffsetsResult.flatMap { _ =>
+            if (logger.isTraceEnabled) {
+              logger.trace(
+                "{} Stored offsets, timestamps per slice [{}], seqNr per pid [{}]",
+                logPrefix,
+                changedOffsetBySlice.iterator
+                  .map { case (slice, offset) => s"$slice -> ${offset.timestamp}" }
+                  .mkString(", "),
+                filteredRecords.iterator.map(record => s"${record.pid} -> ${record.seqNr}").mkString(", "))
+            }
             if (state.compareAndSet(oldState, evictedNewState)) {
               cleanupInflight(evictedNewState)
               FutureDone
@@ -729,6 +738,14 @@ private[projection] class DynamoDBOffsetStore(
   @tailrec final def addInflight[Envelope](envelope: Envelope): Unit = {
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) =>
+        if (logger.isTraceEnabled)
+          logger.trace(
+            "{} Envelope in flight, about to be processed. slice [{}], pid [{}], seqNr [{}], timestamp [{}]",
+            logPrefix,
+            recordWithOffset.record.slice,
+            recordWithOffset.record.pid,
+            recordWithOffset.record.seqNr,
+            recordWithOffset.record.timestamp)
         val currentInflight = getInflight()
         val newInflight = currentInflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr)
         if (!inflight.compareAndSet(currentInflight, newInflight))
@@ -741,6 +758,14 @@ private[projection] class DynamoDBOffsetStore(
     val currentInflight = getInflight()
     val entries = envelopes.iterator.map(createRecordWithOffset).collect {
       case Some(r) =>
+        if (logger.isTraceEnabled)
+          logger.trace(
+            "{} Envelope in flight, about to be processed. slice [{}], pid [{}], seqNr [{}], timestamp [{}]",
+            logPrefix,
+            r.record.slice,
+            r.record.pid,
+            r.record.seqNr,
+            r.record.timestamp)
         r.record.pid -> r.record.seqNr
     }
     val newInflight = currentInflight ++ entries
