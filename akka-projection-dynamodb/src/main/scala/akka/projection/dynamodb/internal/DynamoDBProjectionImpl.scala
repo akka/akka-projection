@@ -506,6 +506,9 @@ private[projection] object DynamoDBProjectionImpl {
     def replayIfPossible(originalEnvelope: Envelope, observer: HandlerObserver[Envelope]): Future[Boolean] = {
       val logPrefix = offsetStore.logPrefix
       originalEnvelope match {
+        case originalEventEnvelope: EventEnvelope[Any @unchecked] if EnvelopeOrigin.fromPubSub(originalEventEnvelope) =>
+          // don't replay from pubsub events
+          FutureFalse
         case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
           val underlyingProvider = sourceProvider match {
             case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
@@ -719,6 +722,9 @@ private[projection] object DynamoDBProjectionImpl {
       system: ActorSystem[_]): Future[Boolean] = {
     val logPrefix = offsetStore.logPrefix
     originalEnvelope match {
+      case originalEventEnvelope: EventEnvelope[Any @unchecked] if EnvelopeOrigin.fromPubSub(originalEventEnvelope) =>
+        // don't replay from pubsub events
+        FutureFalse
       case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
         val underlyingProvider = sourceProvider match {
           case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
