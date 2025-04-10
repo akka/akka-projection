@@ -198,6 +198,11 @@ object ProjectionBehaviorSpec {
       override def setPaused(paused: Boolean): Future[Done] =
         offsetStore.savePaused(projectionId, paused)
 
+      override def getSourceMaxOffset(): Future[Option[Int]] =
+        Future.failed(new NotImplementedError("Not yet implemented"))
+
+      override def getLag(): Future[Option[Long]] =
+        Future.failed(new NotImplementedError("Not yet implemented"))
     }
   }
 }

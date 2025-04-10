@@ -34,6 +34,7 @@ import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.projection.scaladsl.SourceProvider
+import akka.projection.scaladsl.QueryableForMaxOffsetSourceProvider
 import akka.stream.RestartSettings
 import akka.stream.scaladsl.Source
 
@@ -196,7 +197,8 @@ import akka.stream.scaladsl.Source
       new CassandraRunningProjection(
         RunningProjection.withBackoff(() => this.mappedSource(), settings),
         offsetStore,
-        this)
+        this,
+        QueryableForMaxOffsetSourceProvider.maybe(sourceProvider))
     }
 
   }
@@ -204,7 +206,8 @@ import akka.stream.scaladsl.Source
   private class CassandraRunningProjection(
       source: Source[Done, _],
       offsetStore: CassandraOffsetStore,
-      projectionState: CassandraInternalProjectionState)(implicit system: ActorSystem[_])
+      projectionState: CassandraInternalProjectionState,
+      maxOffsetSourceProvider: Option[QueryableForMaxOffsetSourceProvider[Offset, _]])(implicit system: ActorSystem[_])
       extends RunningProjection
       with RunningProjectionManagement[Offset] {
 
@@ -241,6 +244,22 @@ import akka.stream.scaladsl.Source
     override def setPaused(paused: Boolean): Future[Done] =
       offsetStore.savePaused(projectionId, paused)
 
+    override def getSourceMaxOffset(): Future[Option[Offset]] =
+      maxOffsetSourceProvider match {
+        case Some(provider) => provider.maxOffset()
+        case None =>
+          Future.failed(new IllegalStateException("Source provider does not support querying for max offset"))
+      }
+
+    override def getLag(): Future[Option[Long]] =
+      getSourceMaxOffset().flatMap {
+        _.fold(Future.successful(Option.empty[Long])) { srcOffset =>
+          val provider = maxOffsetSourceProvider.get // safe, future would have already failed
+          getOffset().map { maybeCommittedOffset =>
+            maybeCommittedOffset.flatMap(provider.calculateDifference(_, srcOffset))
+          }(system.executionContext)
+        }
+      }(system.executionContext)
   }
 
 }
