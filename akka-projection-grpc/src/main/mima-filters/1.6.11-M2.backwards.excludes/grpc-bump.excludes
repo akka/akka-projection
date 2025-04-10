@@ -1,0 +1,3 @@
+# akka-grpc 2.5.3
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.proto.EventConsumerServiceClient#DefaultEventConsumerServiceClient.this")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.grpc.internal.proto.EventProducerServiceClient#DefaultEventProducerServiceClient.this")
