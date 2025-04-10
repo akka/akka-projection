@@ -2046,9 +2046,13 @@ class R2dbcTimestampOffsetProjectionSpec
     "replay rejected sequence numbers for flow projection" in {
       val pid1 = UUID.randomUUID().toString
       val pid2 = UUID.randomUUID().toString
+      val slice1 = persistenceExt.sliceForPersistenceId(pid1)
+      val slice2 = persistenceExt.sliceForPersistenceId(pid2)
       val projectionId = genRandomProjectionId()
 
-      val allEnvelopes = createEnvelopes(pid1, 6) ++ createEnvelopes(pid2, 3)
+      val pid1Envelopes = createEnvelopes(pid1, 6)
+      val pid2Envelopes = createEnvelopes(pid2, 3)
+      val allEnvelopes = pid1Envelopes ++ pid2Envelopes
       val skipPid1SeqNrs = Set(3L, 4L, 5L)
       val envelopes = allEnvelopes.filterNot { env =>
         (env.persistenceId == pid1 && skipPid1SeqNrs(env.sequenceNr)) ||
@@ -2083,8 +2087,21 @@ class R2dbcTimestampOffsetProjectionSpec
         projectedValueShouldBe("e1|e2|e3")(pid2)
       }
 
+      def createRecord(envelope: EventEnvelope[String]): R2dbcOffsetStore.Record =
+        R2dbcOffsetStore.Record(
+          envelope.slice,
+          envelope.persistenceId,
+          envelope.sequenceNr,
+          envelope.offset.asInstanceOf[TimestampOffset].timestamp)
+
+      val expectedRecord1 = createRecord(pid1Envelopes.last)
+      val expectedRecord2 = createRecord(pid2Envelopes.last)
+
       eventually {
         offsetShouldBe(allEnvelopes.last.offset)
+        offsetStore.getState().bySliceSorted.map { case (slice, records) => slice -> records.last } shouldBe Map(
+          slice1 -> expectedRecord1,
+          slice2 -> expectedRecord2)
       }
     }
 
