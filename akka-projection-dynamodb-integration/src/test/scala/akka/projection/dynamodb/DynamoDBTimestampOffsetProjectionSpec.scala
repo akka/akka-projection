@@ -2249,9 +2249,13 @@ class DynamoDBTimestampOffsetProjectionSpec
     "replay rejected sequence numbers for flow projection" in {
       val pid1 = UUID.randomUUID().toString
       val pid2 = UUID.randomUUID().toString
+      val slice1 = persistenceExt.sliceForPersistenceId(pid1)
+      val slice2 = persistenceExt.sliceForPersistenceId(pid2)
       val projectionId = genRandomProjectionId()
 
-      val allEnvelopes = createEnvelopes(pid1, 6) ++ createEnvelopes(pid2, 3)
+      val pid1Envelopes = createEnvelopes(pid1, 6)
+      val pid2Envelopes = createEnvelopes(pid2, 3)
+      val allEnvelopes = pid1Envelopes ++ pid2Envelopes
       val skipPid1SeqNrs = Set(3L, 4L, 5L)
       val envelopes = allEnvelopes.filterNot { env =>
         (env.persistenceId == pid1 && skipPid1SeqNrs(env.sequenceNr)) ||
@@ -2288,6 +2292,9 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       eventually {
         latestOffsetShouldBe(allEnvelopes.last.offset)
+        offsetStore.getState().offsetBySlice shouldBe Map(
+          slice1 -> pid1Envelopes.last.offset,
+          slice2 -> pid2Envelopes.last.offset)
       }
     }
 

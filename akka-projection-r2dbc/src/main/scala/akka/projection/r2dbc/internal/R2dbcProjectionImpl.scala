@@ -567,6 +567,14 @@ private[projection] object R2dbcProjectionImpl {
     }
   }
 
+  private sealed trait ReplayResult
+  private case object ReplayTriggered extends ReplayResult
+  private case object ReplayedOnRejection extends ReplayResult
+  private case object NotReplayed extends ReplayResult
+
+  private val FutureNotReplayed: Future[ReplayResult] = Future.successful(NotReplayed)
+  private val FutureReplayTriggered: Future[ReplayResult] = Future.successful(ReplayTriggered)
+
   private[projection] def adaptedHandlerForFlow[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
       handler: FlowWithContext[Envelope, ProjectionContext, Done, ProjectionContext, _],
@@ -578,12 +586,12 @@ private[projection] object R2dbcProjectionImpl {
 
     // This is similar to R2dbcProjectionImpl.replayIfPossible but difficult to extract common parts
     // since this is flow processing
-    def replayIfPossible(originalEnvelope: Envelope, observer: HandlerObserver[Envelope]): Future[Boolean] = {
+    def replayIfPossible(originalEnvelope: Envelope, observer: HandlerObserver[Envelope]): Future[ReplayResult] = {
       val logPrefix = offsetStore.logPrefix
       originalEnvelope match {
         case originalEventEnvelope: EventEnvelope[Any @unchecked] if EnvelopeOrigin.fromPubSub(originalEventEnvelope) =>
           // don't replay from pubsub events
-          FutureFalse
+          FutureNotReplayed
         case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
           val underlyingProvider = sourceProvider match {
             case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
@@ -595,7 +603,7 @@ private[projection] object R2dbcProjectionImpl {
               val persistenceId = originalEventEnvelope.persistenceId
               offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
                 val fromSeqNr = storedSeqNr + 1
-                val toSeqNr = originalEventEnvelope.sequenceNr
+                val toSeqNr = originalEventEnvelope.sequenceNr - 1 // replay until the rejected envelope for flows
                 logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
                 provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                   case Some(querySource) =>
@@ -631,31 +639,45 @@ private[projection] object R2dbcProjectionImpl {
                       }
                       .via(ObservableFlowHandler(handler.asFlow, observer))
                       .run()
-                      .map(_ => true)(ExecutionContext.parasitic)
+                      .map(_ => ReplayedOnRejection: ReplayResult)(ExecutionContext.parasitic)
                       .recoverWith { exc =>
                         logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
                         Future.failed(exc)
                       }
                   case None =>
-                    Future.successful(
-                      triggerReplayIfPossible(
-                        sourceProvider,
-                        persistenceId,
-                        fromSeqNr,
-                        originalEventEnvelope.sequenceNr))
+                    if (triggerReplayIfPossible(
+                          sourceProvider,
+                          persistenceId,
+                          fromSeqNr,
+                          originalEventEnvelope.sequenceNr))
+                      FutureReplayTriggered
+                    else FutureNotReplayed
                 }
               }
 
             case _ =>
-              triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope)
+              triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope).map {
+                case true  => ReplayTriggered
+                case false => NotReplayed
+              }(ExecutionContext.parasitic)
           }
         case _ =>
-          FutureFalse // no replay support for non typed envelopes
+          FutureNotReplayed // no replay support for non typed envelopes
       }
     }
 
     def observer(context: ProjectionContext): HandlerObserver[Envelope] =
       context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]].observer
+
+    def accepted(envelope: Envelope, context: ProjectionContext): Future[Option[(Envelope, ProjectionContext)]] = {
+      if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
+        log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", envelope)
+      }
+      loadEnvelope(envelope, sourceProvider).map { loadedEnvelope =>
+        offsetStore.addInflight(loadedEnvelope)
+        Some((loadedEnvelope, context))
+      }
+    }
 
     val validate = Flow[(Envelope, ProjectionContext)]
       .mapAsync(1) {
@@ -664,21 +686,22 @@ private[projection] object R2dbcProjectionImpl {
             .validate(env)
             .flatMap {
               case Accepted =>
-                if (isFilteredEvent(env) && settings.warnAboutFilteredEventsInFlow) {
-                  log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", env)
-                }
-                loadEnvelope(env, sourceProvider).map { loadedEnvelope =>
-                  offsetStore.addInflight(loadedEnvelope)
-                  Some((loadedEnvelope, context))
-                }
+                accepted(env, context)
               case Duplicate =>
                 Future.successful(None)
               case RejectedSeqNr =>
-                replayIfPossible(env, observer(context)).map(_ => None)(ExecutionContext.parasitic)
+                replayIfPossible(env, observer(context)).flatMap {
+                  // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
+                  case ReplayedOnRejection => accepted(env, context)
+                  case ReplayTriggered     => Future.successful(None)
+                  case NotReplayed         => Future.successful(None)
+                }
               case RejectedBacktrackingSeqNr =>
-                replayIfPossible(env, observer(context)).map {
-                  case true  => None
-                  case false => throwRejectedEnvelope(sourceProvider, env)
+                replayIfPossible(env, observer(context)).flatMap {
+                  // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
+                  case ReplayedOnRejection => accepted(env, context)
+                  case ReplayTriggered     => Future.successful(None)
+                  case NotReplayed         => throwRejectedEnvelope(sourceProvider, env)
                 }
             }
       }
