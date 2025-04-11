@@ -53,13 +53,16 @@ import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
+import akka.projection.grpc.internal.proto.LatestEventTimestampRequest
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
@@ -164,7 +167,8 @@ final class GrpcReadJournal private (
     with EventsBySliceQuery
     with EventTimestampQuery
     with LoadEventQuery
-    with CanTriggerReplay {
+    with CanTriggerReplay
+    with LatestEventTimestampQuery {
   import GrpcReadJournal.log
   import ProtobufProtocolConversions._
 
@@ -475,6 +479,20 @@ final class GrpcReadJournal private (
           throw new IllegalArgumentException(s"Unexpected LoadEventResponse [${other.message.getClass.getName}]")
 
       }
+  }
+
+  // LatestEventTimestampQuery
+  override def latestEventTimestamp(
+      // note that this is actually the producer side defined stream_id
+      // not the normal entity type which is internal to the producing side
+      streamId: String,
+      minSlice: Int,
+      maxSlice: Int): Future[Option[Instant]] = {
+    require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
+    import system.dispatcher
+    addRequestHeaders(client.latestEventTimestamp())
+      .invoke(LatestEventTimestampRequest(streamId, minSlice, maxSlice))
+      .map(_.timestamp.map(_.asJavaInstant))
   }
 
   /**
