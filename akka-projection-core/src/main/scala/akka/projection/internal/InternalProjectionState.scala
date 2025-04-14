@@ -16,6 +16,7 @@ import scala.util.control.NonFatal
 
 import akka.Done
 import akka.NotUsed
+import akka.actor.Cancellable
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
@@ -54,6 +55,8 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
 
   private var telemetry: Telemetry = NoopTelemetry
   private[projection] def getTelemetry() = telemetry
+
+  private var backlogStatusChecks: Option[Cancellable] = None
 
   def readPaused(): Future[Boolean]
   def readOffsets(): Future[Option[Offset]]
@@ -393,6 +396,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
     telemetry = TelemetryProvider.start(projectionId, system)
+    backlogStatusChecks = BacklogStatusTelemetry.start(telemetry, sourceProvider, this)
 
     val source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed] =
       Source
@@ -467,7 +471,11 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
       .watchTermination() { (_, futDone) =>
         handlerStrategy.recreateHandlerOnNextAccess()
         futDone
-          .andThen { case _ => handlerLifecycle.tryStop() }
+          .andThen {
+            case _ =>
+              handlerLifecycle.tryStop()
+              backlogStatusChecks.foreach(_.cancel())
+          }
           .andThen {
             case Success(_) =>
               telemetry.stopped()

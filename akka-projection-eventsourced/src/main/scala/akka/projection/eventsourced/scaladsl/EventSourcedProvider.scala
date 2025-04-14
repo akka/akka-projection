@@ -22,10 +22,12 @@ import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQu
 import akka.persistence.query.typed.scaladsl.EventTimestampQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceQuery
 import akka.persistence.query.typed.scaladsl.EventsBySliceStartingFromSnapshotsQuery
+import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.internal.CanTriggerReplay
+import akka.projection.internal.BacklogStatusSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.stream.scaladsl.Source
 
@@ -254,7 +256,8 @@ object EventSourcedProvider {
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
       with LoadEventQuerySourceProvider
-      with LoadEventsByPersistenceIdSourceProvider[Event] {
+      with LoadEventsByPersistenceIdSourceProvider[Event]
+      with BacklogStatusSourceProvider {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def readJournal: ReadJournal = eventsBySlicesQuery
@@ -287,6 +290,16 @@ object EventSourcedProvider {
         case _ => None // not supported by this query
       }
     }
+
+    override private[akka] def supportsLatestEventTimestamp: Boolean =
+      eventsBySlicesQuery.isInstanceOf[LatestEventTimestampQuery]
+
+    override private[akka] def latestEventTimestamp(): Future[Option[Instant]] =
+      eventsBySlicesQuery match {
+        case query: LatestEventTimestampQuery =>
+          query.latestEventTimestamp(entityType, minSlice, maxSlice)
+        case _ => Future.successful(None)
+      }
   }
 
   private class EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
@@ -301,7 +314,8 @@ object EventSourcedProvider {
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
       with LoadEventQuerySourceProvider
-      with LoadEventsByPersistenceIdSourceProvider[Event] {
+      with LoadEventsByPersistenceIdSourceProvider[Event]
+      with BacklogStatusSourceProvider {
     implicit val executionContext: ExecutionContext = system.executionContext
 
     override def readJournal: ReadJournal = eventsBySlicesQuery
@@ -337,6 +351,17 @@ object EventSourcedProvider {
         case q: CurrentEventsByPersistenceIdTypedQuery =>
           Some(q.currentEventsByPersistenceIdTyped[Event](persistenceId, fromSequenceNr, toSequenceNr))
         case _ => None // not supported by this query
+      }
+    }
+
+    override private[akka] def supportsLatestEventTimestamp: Boolean =
+      eventsBySlicesQuery.isInstanceOf[LatestEventTimestampQuery]
+
+    override private[akka] def latestEventTimestamp(): Future[Option[Instant]] = {
+      eventsBySlicesQuery match {
+        case query: LatestEventTimestampQuery =>
+          query.latestEventTimestamp(entityType, minSlice, maxSlice)
+        case _ => Future.successful(None)
       }
     }
 
