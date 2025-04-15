@@ -36,6 +36,9 @@ service EventProducerService {
 
   // Lazy loading of a specific event.
   rpc LoadEvent(LoadEventRequest) returns (LoadEventResponse);
+
+  // Retrieve the latest timestamp for a stream id and slice range.
+  rpc LatestEventTimestamp(LatestEventTimestampRequest) returns (LatestEventTimestampResponse);
 }
 
 message StreamIn {
@@ -304,4 +307,14 @@ message LoadEventResponse {
   }
 }
 
+// Retrieve the latest timestamp for a stream id and slice range.
+message LatestEventTimestampRequest {
+  string stream_id = 1;
+  int32 slice_min = 2;
+  int32 slice_max = 3;
+}
 
+// Response to `LatestEventTimestampRequest`.
+message LatestEventTimestampResponse {
+  google.protobuf.Timestamp timestamp = 1;
+}

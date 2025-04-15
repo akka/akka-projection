@@ -26,6 +26,7 @@ import akka.persistence.query.javadsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.javadsl.EventTimestampQuery
 import akka.persistence.query.typed.javadsl.EventsBySliceQuery
+import akka.persistence.query.typed.javadsl.LatestEventTimestampQuery
 import akka.persistence.query.typed.javadsl.LoadEventQuery
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
@@ -90,7 +91,8 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     with EventsBySliceQuery
     with EventTimestampQuery
     with LoadEventQuery
-    with CanTriggerReplay {
+    with CanTriggerReplay
+    with LatestEventTimestampQuery {
 
   /**
    * The identifier of the stream to consume, which is exposed by the producing/publishing side.
@@ -139,6 +141,15 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
 
   override def loadEnvelope[Event](persistenceId: String, sequenceNr: Long): CompletionStage[EventEnvelope[Event]] =
     delegate.loadEnvelope[Event](persistenceId, sequenceNr).asJava
+
+  override def latestEventTimestamp(
+      entityType: String,
+      minSlice: Int,
+      maxSlice: Int): CompletionStage[Optional[Instant]] =
+    delegate
+      .latestEventTimestamp(entityType, minSlice, maxSlice)
+      .map(_.toJava)(ExecutionContext.parasitic)
+      .asJava
 
   /**
    * Close the gRPC client. It will be automatically closed when the `ActorSystem` is terminated,

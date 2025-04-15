@@ -41,6 +41,9 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.Future
 
 import akka.persistence.FilteredPayload
+import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
+import akka.projection.grpc.internal.proto.LatestEventTimestampRequest
+import akka.projection.grpc.internal.proto.LatestEventTimestampResponse
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 
 /**
@@ -381,6 +384,25 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
             }
         case other =>
           Future.failed(new UnsupportedOperationException(s"loadEvent not supported by [${other.getClass.getName}]"))
+      }
+    }
+  }
+
+  override def latestEventTimestamp(
+      req: LatestEventTimestampRequest,
+      metadata: Metadata): Future[LatestEventTimestampResponse] = {
+    intercept(req.streamId, metadata).flatMap { _ =>
+      val producerSource = streamIdToSourceMap(req.streamId)
+      eventsBySlicesPerStreamId(req.streamId) match {
+        case q: LatestEventTimestampQuery =>
+          import system.executionContext
+          q.latestEventTimestamp(producerSource.entityType, req.sliceMin, req.sliceMax).map {
+            case Some(instant) => LatestEventTimestampResponse(Some(Timestamp(instant)))
+            case None          => LatestEventTimestampResponse.defaultInstance
+          }
+        case other =>
+          Future.failed(
+            new UnsupportedOperationException(s"latestEventTimestamp not supported by [${other.getClass.getName}]"))
       }
     }
   }
