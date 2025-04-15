@@ -1194,8 +1194,6 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       }
     }
 
-    override private[akka] def supportsLatestOffsetTimestamp: Boolean = true
-
     override private[akka] def latestOffsetTimestamp(): Future[Option[Instant]] =
       Future.successful(offsetStore.getState().latestOffset.map(_.timestamp))
 
