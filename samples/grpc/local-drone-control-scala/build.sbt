@@ -35,7 +35,7 @@ val AkkaHttpVersion = "10.7.0"
 val AkkaManagementVersion = "1.6.0"
 val AkkaPersistenceR2dbcVersion = "1.3.4"
 val AkkaProjectionVersion =
-  sys.props.getOrElse("akka-projection.version", "1.6.11")
+  sys.props.getOrElse("akka-projection.version", "1.6.12")
 val AkkaDiagnosticsVersion = "2.2.0"
 
 enablePlugins(AkkaGrpcPlugin)
