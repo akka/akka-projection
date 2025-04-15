@@ -16,7 +16,7 @@ object Dependencies {
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
   object Versions {
-    val Akka = sys.props.getOrElse("build.akka.version", "2.10.3+5-ec392d16+20250411-1110-SNAPSHOT")
+    val Akka = sys.props.getOrElse("build.akka.version", "2.10.4")
     val AkkaVersionInDocs = VersionNumber(Akka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
     val Alpakka = "9.0.0"
@@ -35,7 +35,7 @@ object Dependencies {
     val AkkaPersistenceCassandra = "1.3.0"
     val AkkaPersistenceJdbc = "5.5.0"
 
-    val AkkaPersistenceR2dbc = "1.3.3+8-6d7dc57b-SNAPSHOT"
+    val AkkaPersistenceR2dbc = "1.3.4"
     val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
